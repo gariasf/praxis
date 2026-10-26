@@ -1,0 +1,1211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>GPU Ordering Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume thirteen of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { color: var(--ink-soft); cursor: default; border-color: var(--rule); opacity: 0.7; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* This volume's own parts: the plain opening of each chapter, the two layouts, the race's timeline and tally, and the cuts' steps. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.strip-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.strip-label b { color: var(--ink); font-weight: 600; }
+.bad-text { color: var(--bad); }
+svg .f-panel { fill: var(--panel); } svg .f-accent-wash { fill: var(--accent-wash); } svg .f-warm-wash { fill: var(--warm-wash); }
+
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.compare article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.compare h4 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 10px; }
+.compare ul { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.45; }
+.compare li { border: 1.5px solid var(--rule); border-radius: 5px; padding: 5px 9px; overflow-wrap: anywhere; min-width: 0; }
+.compare li.seen { border-color: var(--accent); background: var(--accent-wash); }
+.compare li.unseen { border-style: dashed; border-color: var(--bad); }
+.compare p { font-size: 15.5px; line-height: 1.5; margin: 0; }
+
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 17px; height: 17px; margin: 0; flex: none; }
+.slider-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.timeline { display: grid; gap: 8px; margin-top: 16px; }
+.lane { display: grid; gap: 3px; min-width: 0; }
+.lane-label { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); }
+.track { position: relative; height: 30px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.timeline-bar { position: absolute; top: 3px; bottom: 3px; box-sizing: border-box; border-radius: 3px; padding: 0 6px; font-family: var(--mono); font-size: 12px; line-height: 22px; color: var(--ink); white-space: nowrap; overflow: hidden; }
+.timeline-bar.cpu, .timeline-bar.build { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.timeline-bar.free { box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink-soft); }
+.timeline-bar.wait { background: repeating-linear-gradient(135deg, var(--warm-wash) 0 6px, transparent 6px 12px); box-shadow: inset 0 0 0 1.5px var(--warm); }
+.timeline-bar.write { background: var(--warm-wash); box-shadow: inset 0 0 0 1.5px var(--warm); }
+.timeline-bar.build.hit { box-shadow: inset 0 0 0 2px var(--good); }
+.timeline-bar.build.missed { background: var(--bad-wash); box-shadow: inset 0 0 0 2px var(--bad); }
+.timeline-bar.trace { box-shadow: inset 0 0 0 1px var(--ink-soft); color: var(--ink-soft); }
+.timeline-bar.other { background: var(--ink-soft); opacity: 0.22; padding: 0; }
+.timeline-tick { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--ink); }
+.timeline-tick::before { content: ""; position: absolute; top: 0; left: -6px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--ink); }
+.timeline-tick.missed { border-left-color: var(--bad); }
+.timeline-tick.missed::before { border-top-color: var(--bad); }
+.timeline-tick.echo { border-left-style: dashed; }
+.track-note { position: absolute; left: 8px; top: 0; line-height: 28px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+.timeline-axis { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--rule); padding-top: 4px; }
+.tally { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; max-width: 520px; margin: 0 0 4px; }
+.tally span { aspect-ratio: 1; max-width: 100%; border-radius: 2px; background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent); }
+.tally span.missed { background: var(--bad); box-shadow: none; }
+.tally span.shown { outline: 2px solid var(--warm); outline-offset: 1px; }
+.legend .swatch { display: inline-block; box-sizing: border-box; width: 16px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1.5px solid var(--rule); }
+.legend .swatch.write { background: var(--warm-wash); border-color: var(--warm); }
+.legend .swatch.build { background: var(--accent-wash); border-color: var(--accent); }
+.legend .swatch.wait { background: repeating-linear-gradient(135deg, var(--warm-wash) 0 4px, transparent 4px 8px); border-color: var(--warm); }
+.legend .swatch.tick { width: 3px; height: 14px; border: 0; border-radius: 0; background: var(--ink); }
+.legend .swatch.missed { background: var(--bad-wash); border: 2px solid var(--bad); }
+.legend .swatch.racing { border: 2px solid var(--bad); }
+.legend .swatch.ordered { border: 2px solid var(--good); }
+
+.cut-choice { font-family: var(--body); font-size: 15px; line-height: 1.4; text-align: left; background: none; border: 0; padding: 0; margin: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.cut-choice[aria-pressed="true"] { color: var(--ink); font-weight: 600; text-decoration: none; }
+.steps { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; padding: 0; margin: 0 0 12px; font-family: var(--mono); font-size: 13px; }
+.steps li { min-width: 0; }
+.steps .step { border-radius: 5px; padding: 6px 10px; background: var(--panel); border: 1.5px solid var(--rule); color: var(--ink); }
+.steps .step.write { background: var(--warm-wash); border-color: var(--warm); }
+.steps .step.read { background: var(--accent-wash); border-color: var(--accent); }
+.steps .step.wait { background: none; border-style: dashed; border-color: var(--warm); }
+.steps .step.trace { color: var(--ink-soft); }
+.steps .step.racing { box-shadow: 0 0 0 2px var(--bad); }
+.steps .step.ordered { box-shadow: 0 0 0 2px var(--good); }
+.steps .step.late { color: var(--bad); }
+.steps .arrow { color: var(--ink-soft); }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #244 &middot; PR #267</div>
+  <h1>How a ray missed a triangle that was there</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A Praxis test sometimes traced a ray at a triangle and hit nothing. On Metal with wgpu 30.0.1, the TLAS that rays search could be built from the triangle's BLAS before the GPU had finished compacting it: a GPU queue orders when work starts, not when it finishes, and nothing told Metal the build reads that BLAS. PR #267 makes the CPU wait for the compaction, only in frames that load Meshes. The idea to keep: when GPU work reads what other GPU work writes, something must order the two.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why a queue orders when work starts, not when it finishes</li>
+      <li>How Vulkan, Direct3D 12 and Metal order a read after a write</li>
+      <li>Why Metal's hazard tracking misses a TLAS build's BLASes</li>
+      <li>How a stress loop and one-step cuts found the race</li>
+      <li>What the CPU wait costs, and how the GPU could order the work instead</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="acceleration-structures.html">Acceleration Structures Explained</a>, <a href="dynamic-tlas.html">Dynamic TLAS Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 3b07d5f (PR #270, 2026-10-23), with PR #267's fix (470221e, 2026-10-23) in place, and quotes the code before the fix from 5a5f075 (PR #265, 2026-10-23). <b>Since then:</b> PR #274 (b8cdb10) gave no BLAS to a Mesh that no ray traces (<a href="crowd-shadows.html">Crowd Shadows Explained</a>). PR #289 (66b5b57) added ticket #209's per-frame refit behind a Render switch, ordered on the GPU by a Metal shared event that the dynamic TLAS's build waits for, and with PR #290 (71918ac) the owner chose the shadow proxies for milestone M7 (<a href="blas-refit.html">BLAS Refit Explained</a>). On main at 270c5e4, <code>compact_blases</code> still waits on the CPU for the copies, and the regression test runs as quoted.</p>
+  </aside>
+  <p class="lede">A test of the Mesh pool traced a ray straight down onto a triangle and, now and then, found nothing. The triangle was there. The <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span> that the ray searched had been built before the GPU finished writing the triangle's <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh's is built to allow updates and never compacted (#209).">BLAS</span>, and on Metal nothing in wgpu 30.0.1 told the GPU to wait. This guide follows that race from the symptom to the fix: why a GPU queue promises the order in which work starts but not the order in which it finishes, how graphics APIs order work that reads what other work wrote, why Metal's automatic tracking cannot see a TLAS build read its BLASes, how the work on #244 found the race by changing one step at a time, and what the fix costs. Two live demos model the race and replay the measured cuts.</p>
+  <p class="status"><b>Provenance.</b> Ticket #244 (M3) is closed. PR #267 fixed it and squash-merged on 2026-10-23 as main 470221e, from two commits: 072c41f, the fix, and 2d7c57e, a review commit that changed only the tests. PR #270 then corrected two of its comments, as main 3b07d5f. Praxis's code is quoted from 3b07d5f, and from 5a5f075 where it shows the code before the fix. The measurements are from the work on #244, on the M4 Pro with Metal, on 2026-10-23. wgpu's code is quoted from wgpu-core and wgpu-hal 30.0.1, the versions Praxis pins. Upstream, gfx-rs/wgpu#9215 is open and its two fence fixes are unmerged.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#symptom">1 &middot; The symptom</a>
+    <a href="#queue">2 &middot; The queue</a>
+    <a href="#hazards">3 &middot; Hazards</a>
+    <a href="#unseen">4 &middot; What Metal cannot see</a>
+    <a href="#load-path">5 &middot; The load path</a>
+    <a href="#finding">6 &middot; Finding it</a>
+    <a href="#fix">7 &middot; The fix</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="symptom">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ticket #244</div>
+    <h2>A ray that sometimes misses</h2>
+    <p class="plain">The test loads a Mesh of one triangle into the <span class="concept" data-term="Pool" data-tip="The central store of one kind of resource (Mesh pool, Material pool). It hands out Handles; components never own resources.">Mesh pool</span>, which builds the Mesh's <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh's is built to allow updates and never compacted (#209).">BLAS</span> and compacts it. It then builds a <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span> with one entry for that BLAS, tagged 7, and traces three rays straight down: one onto the triangle and two beside it. It expects <code>[Some(7), None, None]</code>. On the <span class="concept" data-term="M4 Pro" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> it sometimes got <code>[None, None, None]</code>: the ray aimed at the triangle hit nothing.</p>
+    <p>The test is <code>a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted</code>, in <code>src/assets/pools.rs</code>. Before the triangle it loads a <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span> whose only triangle is degenerate, so that the real triangle's ranges of the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span> start past their first elements. The TLAS places the BLAS with the identity transform and tags the entry with <span class="concept" data-term="Custom data" data-tip="A number a TLAS entry carries and a hit reports. Praxis stores the Instance's slot there; this test stores 7.">custom data</span> 7, which a hit reports. Each ray starts 1 m above its point and looks 2 m down.</p>
+  </div>
+  <figure class="wide">
+    <div class="demo-grid">
+      <div class="fluid">
+        <svg viewBox="0 0 420 320" role="img" aria-labelledby="triangle-title">
+          <title id="triangle-title">The test's triangle seen from above. Ray 1 goes down onto it, at (0.8, 0); rays 2 and 3 go down beside it, at (0, 0) and (0.8, 0.5).</title>
+          <line x1="30" y1="202" x2="400" y2="202" class="s-soft" stroke-width="1" stroke-dasharray="3 4"/>
+          <line x1="72" y1="16" x2="72" y2="284" class="s-soft" stroke-width="1" stroke-dasharray="3 4"/>
+          <text x="404" y="206" class="t-small">x</text>
+          <text x="78" y="24" class="t-small">y</text>
+          <polygon points="240,258 352,258 296,146" class="f-accent-wash s-accent" stroke-width="2" stroke-linejoin="round"/>
+          <text x="296" y="276" class="t-label" text-anchor="middle">the triangle, at z 0</text>
+          <circle cx="296" cy="202" r="7" class="f-accent"/>
+          <text x="334" y="207" class="t-strong halo">1</text>
+          <circle cx="72" cy="202" r="7" class="f-panel s-soft" stroke-width="2"/>
+          <text x="84" y="194" class="t-strong halo">2</text>
+          <circle cx="296" cy="62" r="7" class="f-panel s-soft" stroke-width="2"/>
+          <text x="310" y="58" class="t-strong halo">3</text>
+          <g class="s-soft" stroke-width="1.2"><line x1="72" y1="300" x2="352" y2="300"/><line x1="72" y1="295" x2="72" y2="305"/><line x1="352" y1="295" x2="352" y2="305"/></g>
+          <text x="212" y="316" class="t-small" text-anchor="middle">1 m</text>
+        </svg>
+      </div>
+      <div class="table-wrap">
+        <table class="facts compact">
+          <thead><tr><th class="n">Ray</th><th>Down to</th><th>Expected</th><th>A failing run</th></tr></thead>
+          <tbody>
+            <tr class="focus"><td class="n">1</td><td>(0.8, 0, 0), on the triangle</td><td>7</td><td class="bad-text">none</td></tr>
+            <tr><td class="n">2</td><td>(0, 0, 0), beside it</td><td>none</td><td>none</td></tr>
+            <tr><td class="n">3</td><td>(0.8, 0.5, 0), past its tip</td><td>none</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <figcaption><b>The test's three rays</b>, seen from above and drawn to scale. The triangle's corners are (0.6, &minus;0.2), (1.0, &minus;0.2) and (0.8, 0.2), at z 0. A hit reports the entry's custom data, 7; a miss reports none. A failing run read <code>[None, None, None]</code>, so only ray 1 went wrong.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>#244 records how often. The test first failed on 2026-10-22, during <code>scripts/verify.sh</code> on a branch that changed only a shader and its oracle tests, and passed when rerun alone. That day #244 counted 5 failures in about 16 runs of <code>cargo test --lib</code> and <code>scripts/verify.sh</code>, on branches that touched no BLAS code, and then recorded three more; the next day it failed once in 4 runs. Some failures came while another process was loading the same GPU, and at least one while nothing else was. That left the library's own tests, 115 to 120 of them, which <code>cargo test</code> runs in parallel, as many at a time as the machine has hardware threads, all on one adapter.</p>
+    <p>On 2026-10-23 the project's owner placed the ticket in milestone M3, blocking #211, the milestone's exit, for two reasons recorded on it. Verify runs are not reliable evidence while a test is <span class="concept" data-term="Flaky test" data-tip="A test that passes on some runs and fails on others, with the same code.">flaky</span>. And the BLAS the test traces comes from <code>MeshPool::compact_blases</code>, the engine's own load path, so "the race may be the engine's and not the test's; then shadow rays could miss a Mesh in real scenes." Chapter 5 shows that it was the engine's. The ticket closed the same day, when PR #267 merged.</p>
+  </div>
+</section>
+
+<section class="chapter" id="queue">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; Metal's command queue</div>
+    <h2>A queue is an order, not a timeline</h2>
+    <p class="plain">The CPU records GPU work into <span class="concept" data-term="Command buffer" data-tip="A batch of GPU commands that the CPU records, then submits to a queue in one piece. In wgpu, CommandEncoder::finish returns one.">command buffers</span> and submits them to a <span class="concept" data-term="Queue" data-tip="Where command buffers are submitted. It keeps them in the order of submission; it does not wait for one to finish before the next starts.">queue</span>. The queue keeps them in the order they were submitted, and that order is its whole promise: the GPU starts each command buffer after the ones ahead of it have started. It does not wait for them to finish. Work that does not depend on earlier work, as far as the GPU knows, can run alongside it.</p>
+    <p>Apple's documentation says it in two places. A command queue "maintains an ordered list of command buffers", and of <code>commit()</code>, which submits one: "The GPU starts the command buffer after it starts any command buffers that are ahead of it in the same command queue." Starts, not finishes. Apple's overview of resource synchronization opens with "By design, GPUs can run multiple commands in parallel." And wgpu's Metal backend says it as plainly in a doc comment: "Metal allows independent command buffers in a queue to overlap on the GPU" (wgpu-hal 30.0.1, <code>metal/mod.rs</code>).</p>
+  </div>
+  <figure class="wide">
+    <div class="fluid" style="max-width: 640px; margin: 0 auto">
+      <svg viewBox="0 0 420 206" role="img" aria-labelledby="queue-title">
+        <title id="queue-title">Two command buffers submitted in order, A then B. A writes something that B reads. On the GPU, B starts after A starts and runs while A is still running.</title>
+        <defs><marker id="queue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" class="f-soft"/></marker></defs>
+        <text x="8" y="38" class="t-label">queue</text>
+        <rect x="84" y="22" width="34" height="24" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="101" y="38" class="t-strong" text-anchor="middle">A</text>
+        <rect x="122" y="22" width="34" height="24" rx="3" class="f-panel s-soft" stroke-width="1.5"/>
+        <text x="139" y="38" class="t-strong" text-anchor="middle">B</text>
+        <text x="166" y="38" class="t-small">submitted in this order</text>
+        <text x="8" y="80" class="t-label">GPU</text>
+        <rect x="84" y="64" width="246" height="24" rx="3" class="f-warm-wash s-warm" stroke-width="1.5"/>
+        <text x="207" y="80" class="t-strong" text-anchor="middle">A writes</text>
+        <rect x="140" y="102" width="160" height="24" rx="3" class="f-accent-wash s-accent" stroke-width="1.5"/>
+        <text x="220" y="118" class="t-strong" text-anchor="middle">B reads</text>
+        <line x1="84" y1="56" x2="84" y2="140" class="s-soft" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="140" y1="96" x2="140" y2="140" class="s-soft" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="80" y="152" class="t-small" text-anchor="end">A starts</text>
+        <text x="144" y="152" class="t-small">B starts</text>
+        <g class="s-ink" stroke-width="1.5"><line x1="140" y1="162" x2="330" y2="162"/><line x1="140" y1="157" x2="140" y2="167"/><line x1="330" y1="157" x2="330" y2="167"/></g>
+        <text x="235" y="180" class="t-strong" text-anchor="middle">B runs while A still writes</text>
+        <line x1="84" y1="194" x2="410" y2="194" class="s-soft" stroke-width="1.2" marker-end="url(#queue-arrow)"/>
+        <text x="84" y="205" class="t-small">time; schematic, not to scale</text>
+      </svg>
+    </div>
+    <figcaption><b>Submitted in order, run side by side.</b> A writes something that B reads. The GPU starts B after A starts; unless it knows that B reads what A writes, nothing holds B back until A finishes.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>In wgpu, a command buffer is what <code>CommandEncoder::finish</code> returns, and <code>Queue::submit</code> sends a batch of them as one <span class="concept" data-term="Submission" data-tip="One call to Queue::submit: the command buffers it sends, with wgpu-core's pending writes ahead of them.">submission</span>. <span class="concept" data-term="wgpu-core" data-tip="The layer of wgpu that validates calls, tracks resources and decides where ordering is needed, the same way on every backend.">wgpu-core</span> adds command buffers of its own, among them one of resource transitions ahead of each of yours and one of copies that need no encoder of yours, such as those of <code>Queue::write_buffer</code>. That one is its <span class="concept" data-term="Pending writes" data-tip="wgpu-core's own command buffer of copies that need no encoder of yours, such as those of Queue::write_buffer and Queue::compact_blas. It goes ahead of your command buffers in the next submission.">pending writes</span>, which it puts ahead of them all in the next submission (<code>device/queue.rs</code>). On Metal, <span class="concept" data-term="wgpu-hal" data-tip="The layer of wgpu that turns wgpu-core's requests into one backend's commands: Vulkan, Metal, Direct3D 12 or GL.">wgpu-hal</span> then commits the batch's command buffers one after another, so their order holds, and only their order.</p>
+    <p>The CPU learns that work has finished by asking. <span class="concept" data-term="Poll" data-tip="Device::poll, wgpu's call that handles finished GPU work on the CPU. With PollType::wait_indefinitely() it blocks until the most recent submission has finished."><code>Device::poll</code></span> with <code>PollType::wait_indefinitely()</code> blocks the calling thread until the most recent submission has finished (wgpu-types 30.0.1). That is a CPU wait: it is correct, and the thread does nothing else meanwhile.</p>
+    <h3>The test's submissions</h3>
+    <p>The flaky test makes three submissions. The first sends the <span class="concept" data-term="Load staging" data-tip="Praxis's encoder of load-time copies and the BLAS builds that read them, which Renderer::upload submits ahead of the next frame's work.">load staging</span>, with the copies of the Meshes' data and the BLAS builds that read them. <code>compact_blases</code> then polls until the builds have finished and records each <span class="concept" data-term="Compaction" data-tip="Copying a built BLAS into a smaller one that holds only what it needs; the smaller one replaces it. wgpu-core records the copy into its pending writes.">compaction</span> copy, which wgpu-core keeps in its pending writes. The second submission is the <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span> build's command buffer, with the pending writes just ahead of it. The third traces the rays. Nothing in the second submission says that the TLAS build reads what the copy writes.</p>
+  </div>
+</section>
+
+<section class="chapter" id="hazards">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; hazards and barriers</div>
+    <h2>Read after write</h2>
+    <p class="plain">When one piece of GPU work writes memory that a later piece reads, the reader has to wait until the writer is done, or it may read old or half-written data. That is a <span class="concept" data-term="Read after write" data-tip="The hazard in which work reads memory that earlier work writes: the reader has to wait until the write has finished.">read-after-write</span> <span class="concept" data-term="Hazard" data-tip="Two pieces of GPU work that touch the same memory, at least one of them writing, with nothing to order them: the result depends on which runs first.">hazard</span>. Vulkan and Direct3D 12 leave it to the application, which records a <span class="concept" data-term="Barrier" data-tip="A command recorded between two pieces of GPU work that makes the later one wait for the earlier one's writes. Vulkan and Direct3D 12 rely on them; wgpu-core decides where they go.">barrier</span> between the two. Metal can handle it for you: for the resources it tracks, it holds back work that reads what earlier work is still writing. Either way, something has to know that the second piece reads what the first one writes.</p>
+    <p>Hazards are named by the order of two accesses to the same memory. Read after write is the one here. Write after read is a write that must wait until earlier reads are done, and write after write is two writes that must land in order. Two reads never conflict. In Apple's words: "It's okay for multiple commands to load data from the same resource memory at the same time because they all read from memory without modifying it." Without synchronization, the same page warns, "a load operation from one command can run before, during, or after a store operation."</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th></th><th>Vulkan</th><th>Direct3D 12</th><th>Metal</th></tr></thead>
+        <tbody>
+          <tr><td>Who orders a read after a write</td><td>The application, with a pipeline barrier</td><td>The application, with a resource barrier</td><td>Metal itself, for tracked resources that the work binds directly; the application for anything else, with a barrier, a fence between passes or an event between command buffers</td></tr>
+          <tr class="focus"><td>At an acceleration-structure barrier, in wgpu 30.0.1</td><td>wgpu-core asks for a barrier; wgpu-hal records <code>vkCmdPipelineBarrier</code></td><td>wgpu-core asks for a barrier; wgpu-hal records a UAV barrier</td><td>wgpu-core asks for a barrier; wgpu-hal's function is empty (chapter 4)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Who orders a read after a write</b>, by API, and what wgpu does at an acceleration-structure barrier. From Apple's Resource synchronization and wgpu-hal 30.0.1's <code>place_acceleration_structure_barrier</code> in <code>vulkan/command.rs</code>, <code>dx12/command.rs</code> and <code>metal/command.rs</code>.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Metal's hazard tracking</h3>
+    <p>Every Metal resource is tracked or untracked. Resources made from the device are tracked by default and resources made from a heap are not, and an acceleration structure is a resource like any other; wgpu-hal makes its acceleration structures from the device (<code>metal/device.rs</code>, <code>create_acceleration_structure</code>). When a command writes a <span class="concept" data-term="Tracked resource" data-tip="A Metal resource whose hazards Metal tracks. Resources made from the device are tracked by default; those made from a heap are not.">tracked resource</span>, Apple writes, Metal will "Delay write operations until all previous read operations finish" and "Prevent subsequent commands from running until write operations finish".</p>
+    <p><span class="concept" data-term="Hazard tracking" data-tip="Metal's automatic ordering: for tracked resources that a pass binds directly, it makes reads wait for earlier writes, and writes for earlier reads.">Hazard tracking</span> has an edge, and this whole race sits on it. Before Metal 4, Metal synchronizes access conflicts "only for the resources that" are tracked and that the application binds directly: "You directly bind that resource to an encoder type that adopts the MTLCommandEncoder protocol". A resource that the work reaches any other way, such as through an ID stored in a buffer, is outside it, unless a render or compute pass declares it with <code>useResource</code>; wgpu-hal declares no BLAS that way. Metal 4's own queues track nothing at all; wgpu-hal 30.0.1 still uses the older <code>MTLCommandQueue</code>, where tracking applies.</p>
+    <h3>Barriers, fences and events</h3>
+    <p>Where tracking does not reach, the application orders the work itself. Vulkan and Direct3D 12 do this with barriers recorded between commands. Metal has three tools. A barrier makes later work wait for earlier work: within a render or compute pass, and, since Metal's 26 releases, between passes on one queue, acceleration-structure passes included. A <span class="concept" data-term="Fence" data-tip="MTLFence: orders passes on the GPU. One pass updates it after its stores; a later pass waits for it before running.">fence</span> orders <span class="concept" data-term="Pass" data-tip="A run of commands of one kind inside a command buffer, recorded through one encoder: render, compute, copy or acceleration-structure work.">passes</span>: one pass updates it after its stores, and a later pass waits for it before running. An <span class="concept" data-term="Event" data-tip="MTLEvent: a counter that orders command buffers on the GPU. One signals a value once its earlier work is done; another waits for that value before its next pass. A shared event also reaches the CPU and other devices.">event</span> orders command buffers: one signals a value once its earlier work is done, and another, on the same queue or a different one, waits for that value before its next pass. A shared event also reaches the CPU and other devices.</p>
+  </div>
+</section>
+
+<section class="chapter" id="unseen">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; wgpu-hal 30.0.1, Metal</div>
+    <h2>What Metal cannot see</h2>
+    <p class="plain">A <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform. A ray walks it down to the triangles it meets.">TLAS</span> is built from its <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, built when a Mesh that rays trace loads. Most are then compacted (#202); a refitted Mesh's is built to allow updates and never compacted (#209).">BLASes</span>, so its build has to come after whatever writes them. On Metal, wgpu builds every TLAS from a buffer of entries that name their BLASes by <span class="concept" data-term="Resource ID" data-tip="A number that names a Metal resource from inside a buffer, as a TLAS entry names its BLAS. Metal does not see a resource named this way being read.">resource ID</span>. The build's descriptor names the buffer, not the BLASes, so Metal's tracking never learns that the build reads them. wgpu-core does know, and asks the backend for a barrier at that point. On Metal, the function it calls is empty.</p>
+    <p>Apple's page on the build command shows the ordering it expects: "you can use a single encoder to build multiple geometry acceleration structures and then build the instanced structure that uses them", because "By default, Metal automatically synchronizes GPU access to the acceleration structure and any resources contained in the acceleration descriptor." The words that matter are the last ones: contained in the descriptor.</p>
+    <h3>Two ways to name a BLAS</h3>
+    <p>Metal's descriptor for a TLAS, an instance acceleration structure, takes its entries in one of several layouts. In the default layout, the descriptor carries the BLASes themselves, in <code>instancedAccelerationStructures</code>, and "Each instance in the instance descriptor buffer has an index into this array". In the <span class="concept" data-term="Indirect instance descriptor" data-tip="Metal's layout for TLAS entries that name their BLAS by resource ID, which the GPU can fill in. wgpu-hal 30.0.1 builds every TLAS from entries in this layout.">indirect layout</span>, "An option that enables an instance descriptor memory layout the GPU can populate", each entry holds its BLAS's <code>accelerationStructureID</code>, a resource ID, and the descriptor lists no BLAS at all.</p>
+  </div>
+  <figure class="wide">
+    <div class="compare">
+      <article>
+        <h4>The default layout</h4>
+        <ul>
+          <li class="seen">the build's target: the TLAS, which the build writes</li>
+          <li class="seen">in the descriptor: the buffer of entries; entry 0 holds index 0</li>
+          <li class="seen">in the descriptor: <code>instancedAccelerationStructures</code>, whose element 0 is the BLAS</li>
+        </ul>
+        <p>Metal sees the BLAS, so it orders the build after the work that writes it.</p>
+      </article>
+      <article>
+        <h4>The indirect layout, which wgpu-hal uses</h4>
+        <ul>
+          <li class="seen">the build's target: the TLAS, which the build writes</li>
+          <li class="seen">in the descriptor: the buffer of entries; entry 0 holds the BLAS's <code>accelerationStructureID</code></li>
+          <li class="unseen">nowhere in the descriptor: the BLAS itself, which the build reads by that ID</li>
+        </ul>
+        <p>Metal sees the buffer, not the BLAS, so nothing orders the build after the work that writes it.</p>
+      </article>
+    </div>
+    <figcaption><b>What a TLAS build shows Metal, in each layout.</b> In both, the build reads each entry's BLAS; only in the default layout is the BLAS among the resources Metal synchronizes. Schematic: one entry, one BLAS.</figcaption>
+  </figure>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// metal/conv.rs, map_acceleration_structure_descriptor: every TLAS
+// takes the indirect layout, and a buffer of entries.</span>
+crate::AccelerationStructureEntries::Instances(instances) =&gt; {
+    let descriptor = MTLInstanceAccelerationStructureDescriptor::new();
+    descriptor.setInstanceDescriptorType(
+        MTLAccelerationStructureInstanceDescriptorType::Indirect,
+    );
+    descriptor.setInstanceCount(instances.count as usize);
+    descriptor.setInstanceDescriptorBuffer(Some(&amp;instances.buffer.unwrap().raw));
+    <span class="comment">// &hellip; and the buffer's offset</span>
+}
+
+<span class="comment">// metal/device.rs: what wgpu-core keeps as a BLAS's address is its GPU
+// resource ID ...</span>
+acceleration_structure.raw.gpuResourceID().to_raw()
+
+<span class="comment">// ... and each TLAS entry carries it, beside its custom data.</span>
+userID: instance.custom_data,
+accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },</code></pre>
+    <figcaption><b>How wgpu-hal 30.0.1 describes a TLAS on Metal</b>, abridged from <code>metal/conv.rs</code> (<code>map_acceleration_structure_descriptor</code>) and <code>metal/device.rs</code> (<code>get_acceleration_structure_device_address</code>, <code>tlas_instance_to_bytes</code>). Each entry names its BLAS by the BLAS's GPU resource ID, and the descriptor names no BLAS.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Where wgpu-core asks for a barrier</h3>
+    <p>wgpu is built in layers. Your calls go to <span class="concept" data-term="wgpu-core" data-tip="The layer of wgpu that validates calls, tracks resources and decides where ordering is needed, the same way on every backend.">wgpu-core</span>, which validates them, tracks resources and decides where ordering is needed, the same way for every backend. <span class="concept" data-term="wgpu-hal" data-tip="The layer of wgpu that turns wgpu-core's requests into one backend's commands: Vulkan, Metal, Direct3D 12 or GL.">wgpu-hal</span> turns each of its requests into one backend's commands. For acceleration structures, wgpu-core calls the hal's <code>place_acceleration_structure_barrier</code> before it builds BLASes, after the BLAS builds of a call and before its TLAS builds, and after a TLAS build, before shaders read the TLAS (wgpu-core 30.0.1, <code>command/ray_tracing.rs</code>). What that call becomes depends on the backend:</p>
+  </div>
+  <figure class="wide" id="barrier-figure">
+    <div class="controls" style="margin-top: 0">
+      <span class="control-label">Backend:</span>
+      <div class="seg" role="group" aria-label="Backend" id="barrier-backend">
+        <button type="button" data-choice="vulkan" aria-pressed="false">Vulkan</button>
+        <button type="button" data-choice="direct3d" aria-pressed="false">Direct3D 12</button>
+        <button type="button" data-choice="metal" aria-pressed="true">Metal</button>
+      </div>
+    </div>
+    <div data-panel="vulkan" hidden style="margin-top: 14px">
+<pre class="code"><code><span class="comment">// vulkan/command.rs, paraphrased with full-word names: one pipeline
+// barrier, from the stages and accesses of the usage before it to those
+// of the usage after it.</span>
+let (source_stages, source_access) = map_usage_to_barrier(barrier.usage.from);
+let (destination_stages, destination_access) = map_usage_to_barrier(barrier.usage.to);
+vkCmdPipelineBarrier(
+    command_buffer,
+    source_stages | TOP_OF_PIPE,
+    destination_stages | BOTTOM_OF_PIPE,
+    no_dependency_flags,
+    &amp;[memory_barrier(source_access, destination_access)],
+    &amp;[], <span class="comment">// no buffer barriers</span>
+    &amp;[], <span class="comment">// no image barriers</span>
+);</code></pre>
+      <p class="readout" style="margin-top: 12px">Vulkan: a pipeline barrier, which inserts "a memory dependency" between all commands earlier in submission order and all commands later. Work after it, at the destination stages, waits for work before it at the source stages, such as a BLAS build's writes before a TLAS build's reads.</p>
+    </div>
+    <div data-panel="direct3d" hidden style="margin-top: 14px">
+<pre class="code"><code><span class="comment">// dx12/command.rs, paraphrased with full-word names: one unordered-access
+// (UAV) barrier that names no resource.</span>
+command_list.ResourceBarrier(&amp;[D3D12_RESOURCE_BARRIER {
+    Type: D3D12_RESOURCE_BARRIER_TYPE_UAV,
+    Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
+    UAV: D3D12_RESOURCE_UAV_BARRIER { pResource: no_resource },
+}]);</code></pre>
+      <p class="readout" style="margin-top: 12px">Direct3D 12: a UAV barrier, by which "all UAV accesses must complete before any future UAV accesses can begin"; with no resource named, "any UAV access could require the barrier". The hal's own comment calls it "not very optimal".</p>
+    </div>
+    <div data-panel="metal" style="margin-top: 14px">
+<pre class="code"><code><span class="comment">// metal/command.rs, quoted whole.</span>
+unsafe fn place_acceleration_structure_barrier(
+    &amp;mut self,
+    _barriers: crate::AccelerationStructureBarrier,
+) {
+}</code></pre>
+      <p class="readout" style="margin-top: 12px">Metal: nothing. The request arrives and no command is recorded, so ordering is left to Metal's tracking, which cannot see the BLASes.</p>
+    </div>
+    <figcaption><b>One request, three backends.</b> wgpu-core makes the same call for each; choose a backend to see what wgpu-hal 30.0.1 does with it. The Vulkan and Direct3D 12 bodies are paraphrased with full-word names; Metal's is quoted whole.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>So on Metal, nothing orders a TLAS build after the work that writes its BLASes, beyond whatever the GPU happens to do. At submit, wgpu-hal does one more thing for TLAS users: <code>set_acceleration_structure_dependencies</code> puts the BLASes that each command buffer's TLASes refer to into a <span class="concept" data-term="Residency set" data-tip="Metal's list of resources a command buffer may touch. wgpu makes one for each command buffer that builds or uses a TLAS, holding the BLASes those TLASes refer to. It tracks no hazards.">residency set</span> (<code>metal/command.rs</code>). That keeps them in GPU memory and orders nothing. Apple's page on residency sets says so: "residency sets don't track hazards, so you need to account for hazards with fences and events."</p>
+    <p>The issue upstream, gfx-rs/wgpu#9215, "Metal BLAS -&gt; TLAS builds need synchronisation", was opened in March 2026 and is still open. It says the same from wgpu's side: "On metal, acceleration structure barriers are not inserted (due to metal not having barriers during development of this) however it appears that metal does not serialize them as I would expect an API with little synchronisation to have." Its repro sometimes reads zero where it should read one; #244's test read nothing where it should read 7.</p>
+    <p>The newer of its two fixes, PR #10292, still an open draft, adds regression tests, and a comment in them puts the mechanism in one sentence: "On Metal, acceleration structure builds are not ordered against each other within an encoder, nor across command buffers committed back to back, so a TLAS build could consume a BLAS that is still building." One of those tests, <code>COMPACTED_BLAS_IN_PENDING_WRITES</code>, is #244's case exactly: a BLAS compacted through the pending writes, which are "committed ahead of the command buffers of the next submission", and a TLAS built in that next submission, which "must be ordered after the copy".</p>
+  </div>
+</section>
+
+<section class="chapter" id="load-path">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>Renderer::upload</code></div>
+    <h2>The same race at load</h2>
+    <p class="plain">The test did not invent the race; it follows the engine's own order. In a frame that follows new loads, <code>Renderer::upload</code> submits the <span class="concept" data-term="Load staging" data-tip="Praxis's encoder of load-time copies and the BLAS builds that read them, which Renderer::upload submits ahead of the next frame's work.">load staging</span>, which builds the new Meshes' BLASes; compacts them; and records the <span class="concept" data-term="Static TLAS" data-tip="The top-level acceleration structure over every static Instance whose Mesh rays trace, each placing its Mesh's BLAS and tagged with its slot, in a coordinate frame anchored where the scene loads (#202).">static TLAS</span>'s build into the frame's encoder. <code>compact_blases</code> waited on the CPU for the builds, but not for the <span class="concept" data-term="Compaction" data-tip="Copying a built BLAS into a smaller one that holds only what it needs; the smaller one replaces it. wgpu-core records the copy into its pending writes.">compaction</span> copies. wgpu-core held those in its <span class="concept" data-term="Pending writes" data-tip="wgpu-core's own command buffer of copies that need no encoder of yours, such as those of Queue::write_buffer and Queue::compact_blas. It goes ahead of your command buffers in the next submission.">pending writes</span> until the next submission, and sent them in a command buffer at its head. That submission held the dynamic TLAS's build when the frame built one, or else the frame's own command buffer, and nothing ordered either TLAS build after the copies.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">// Loads staged since the last frame land before its copies and
+// draws, and their BLASes are compacted before the static TLAS
+// takes them.</span>
+self.load_staging.submit(&amp;self.queue);
+self.mesh_pool.compact_blases(&amp;self.queue);
+let mut encoder = create_frame_encoder(&amp;self.device);
+self.static_tlas
+    .update(frame, &amp;self.mesh_pool, &amp;mut encoder);</code></pre>
+    <figcaption><b>The load path</b>, from <code>Renderer::upload</code> in <code>src/render/renderer.rs</code>; the fix changes only its doc comment. <code>render</code> later submits the frame's encoder, with the static TLAS's build in it.</figcaption>
+  </figure>
+  <figure class="wide">
+<pre class="code"><code>pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
+    if self.awaiting_compaction.is_empty() {
+        return;
+    }
+    for &amp;(handle, _) in &amp;self.awaiting_compaction {
+        self.blases[handle.0 as usize].prepare_compaction_async(|_| {});
+    }
+    if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for BLAS builds failed");
+    }
+    for (handle, triangles) in self.awaiting_compaction.drain(..) {
+        let blas = &amp;mut self.blases[handle.0 as usize];
+        <span class="comment">// &hellip; a BLAS that is not ready keeps its build, as logged</span>
+        *blas = queue.compact_blas(blas);
+        <span class="comment">// &hellip; its triangles now count as compacted</span>
+    }
+}</code></pre>
+    <figcaption><b><code>MeshPool::compact_blases</code> before the fix</b>, abridged from <code>src/assets/pools.rs</code> at 5a5f075. <code>prepare_compaction_async</code> asks wgpu for each BLAS's compacted size, and the poll waits for the builds and those answers. <code>Queue::compact_blas</code> records the copy into wgpu-core's pending writes and returns the compacted BLAS at once, before the GPU has written it (wgpu-core 30.0.1, <code>device/queue.rs</code>).</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>A model of the race</h3>
+    <p>The demo below models the submission that carried the race in a frame that builds no dynamic TLAS: the pending writes, holding one compaction copy, and the frame's command buffer, whose TLAS build reads the copy's BLAS. The slider adds other devices' work to the same GPU, and the two switches are the two ways to order the pair. It is a model to watch the mechanism in, not a measurement.</p>
+  </div>
+  <figure class="wide" id="demo-race">
+    <div class="sliders" style="margin-top: 0">
+      <label for="race-devices">Other devices on the GPU</label>
+      <div class="slider-row"><input type="range" id="race-devices" min="0" max="7" step="1" value="7"><output id="race-devices-value" for="race-devices">7</output></div>
+    </div>
+    <div class="controls">
+      <label class="check"><input type="checkbox" id="race-cpu-wait">CPU wait after the copy</label>
+      <label class="check"><input type="checkbox" id="race-gpu-wait">GPU wait: an event, or a barrier that works</label>
+    </div>
+    <div class="timeline" id="race-timeline" role="img" aria-label="The model's timeline">
+      <div class="lane"><div class="lane-label">CPU, the main thread</div><div class="track" id="race-track-cpu"></div></div>
+      <div class="lane"><div class="lane-label">Other devices' work on the GPU</div><div class="track" id="race-track-other"></div></div>
+      <div class="lane"><div class="lane-label">GPU, the pending writes</div><div class="track" id="race-track-copy"></div></div>
+      <div class="lane"><div class="lane-label">GPU, the frame's command buffer</div><div class="track" id="race-track-frame"></div></div>
+      <div class="timeline-axis">time, in the model's own units &rarr;</div>
+    </div>
+    <p class="readout" id="race-outcome" aria-live="polite" style="margin-top: 12px"></p>
+    <p class="strip-label" style="margin-top: 14px">The same settings, 100 runs of the model: <b id="race-tally-count"></b></p>
+    <div class="tally" id="race-tally" role="img" aria-label="100 runs of the model"></div>
+    <div class="controls">
+      <button type="button" class="btn" id="race-next-miss">Show a miss</button>
+      <button type="button" class="btn" id="race-next-hit">Show a hit</button>
+      <button type="button" class="btn" id="race-reroll">New runs</button>
+    </div>
+    <div class="legend">
+      <span><span class="swatch write"></span>the compaction copy, writing the BLAS</span>
+      <span><span class="swatch build"></span>the TLAS build</span>
+      <span><span class="swatch tick"></span>where the build reads the BLAS</span>
+      <span><span class="swatch wait"></span>a wait</span>
+      <span><span class="swatch missed"></span>read too early: the ray misses</span>
+    </div>
+    <figcaption><b>Live demo: an illustrative simulation, not a measurement.</b> The model is this page's own. The frame's command buffer starts a little after the pending writes start, as Metal allows, and its TLAS build reads the BLAS early in its run; other devices' work stretches the copy by a random amount, so the more devices, the more often the copy outlasts the read. Its time units are arbitrary, and its counts of misses are the model's, not measured ones: chapter 6 has those. "CPU wait" submits the pending writes on their own and polls until they finish before submitting the frame, as the fix does. "GPU wait" makes the TLAS build wait on the GPU until the copy is done, as a barrier that works would within one submission, or an event through wgpu-hal 30.0.1 would with the copy in a submission of its own and strict mode on (chapter 7). In the strip, a red square is a run that misses, and the ringed one is the run drawn above; the dashed line in the copy's lane marks when the build reads.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>What it would have cost</h3>
+    <p>The static TLAS is built from the first <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> and rebuilt only in a frame that changes a static Instance or frees one's slot (<code>StaticTlas</code>, <code>src/render/acceleration_structures.rs</code>). A Mesh whose BLAS lost the race would have cast no ray-traced shadow until the static TLAS's next rebuild, which, in a scene where nothing static changes, never comes. The <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS's coordinate frame (#204).">dynamic TLAS</span>, built in <code>render</code> in that same frame, had the same exposure for a <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instance</span> whose Mesh had just loaded. It is rebuilt in every frame (#204), though, so its next build would have read the BLAS again. The fix covers both.</p>
+    <p>The fix changes no <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>: no <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> renders differently with it, by PR #267's verify run. The race needed the GPU busy with other work to show, as in #244's failing runs, where that work came from other processes or from the library's own parallel tests.</p>
+  </div>
+</section>
+
+<section class="chapter" id="finding">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; the work on #244</div>
+    <h2>Make it fail, then cut</h2>
+    <p class="plain">A race that shows once in a few runs is hard to study, since every experiment needs dozens of runs to say anything. So the work on #244 first made it fail often, by running the test's GPU steps on eight threads at once, each with its own <span class="concept" data-term="Device" data-tip="A wgpu Device: an open connection to one GPU, with its own queue, through which resources are made. Each thread of the stress loop drove its own.">device</span>. Then it changed one step at a time and counted the misses. The change that stopped them named the race; the change that did not showed where a wait comes too late.</p>
+    <h3>A loop that fails every run</h3>
+    <p>The loop was a temporary test, ignored by default and never committed. It ran the flaky test's GPU steps, from loading the two Meshes to the trace, on 8 threads, 10 times each, so 80 traces a run, in about 0.7 s. Each iteration made its own headless context, so each thread drove its own wgpu device on the one GPU. Every run of it missed:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Threads &times; iterations</th><th class="n">Misses in each run of 80 traces</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>8 &times; 10</td><td class="n">15, 23, 11, 20, 12, 17</td></tr>
+          <tr><td>2 &times; 40</td><td class="n">5, 6, 5</td></tr>
+          <tr><td>1 &times; 80</td><td class="n">0, 0, 0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The stress loop before the fix</b>, M4 Pro, Metal, 2026-10-23: traces onto the triangle that found nothing, in each run of 80. One thread alone missed none of these 240 traces; in three later runs of 80 on one thread, timed for chapter 7 while other work on the machine loaded the GPU, it missed once.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>So the race needs other devices loading the GPU at the same moment, and the more of them, the more often it loses. The loop was also a test that turned red within a second, every time, which the next step needs.</p>
+    <h3>One step at a time</h3>
+    <p>With a red loop in hand, each variant below changed one thing about the test's steps and ran three times, 80 traces each, on 8 threads. Choose one to see its steps, where the CPU waits, and which write is left unordered with the TLAS build.</p>
+  </div>
+  <figure class="wide" id="demo-cuts">
+    <div class="table-wrap">
+      <table class="facts compact">
+        <thead><tr><th>Variant</th><th class="n">Run 1</th><th class="n">Run 2</th><th class="n">Run 3</th></tr></thead>
+        <tbody>
+          <tr data-variant="test"><td><button type="button" class="cut-choice" aria-pressed="false">As the test</button></td><td class="n">7</td><td class="n">11</td><td class="n">3</td></tr>
+          <tr data-variant="single"><td><button type="button" class="cut-choice" aria-pressed="false">Without the degenerate first Mesh</button></td><td class="n">2</td><td class="n">4</td><td class="n">7</td></tr>
+          <tr data-variant="uncompacted"><td><button type="button" class="cut-choice" aria-pressed="false">Without compaction</button></td><td class="n">7</td><td class="n">16</td><td class="n">20</td></tr>
+          <tr data-variant="uncompacted-waited"><td><button type="button" class="cut-choice" aria-pressed="false">Without compaction, waiting after the build</button></td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+          <tr data-variant="waited-compacted"><td><button type="button" class="cut-choice" aria-pressed="false">Waiting after the build, then compacting</button></td><td class="n">10</td><td class="n">9</td><td class="n">9</td></tr>
+          <tr data-variant="fix"><td><button type="button" class="cut-choice" aria-pressed="false">Waiting after compaction: submit, then poll</button></td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+          <tr data-variant="late"><td><button type="button" class="cut-choice" aria-pressed="false">Waiting after the TLAS build, before the trace</button></td><td class="n">11</td><td class="n">10</td><td class="n">15</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="strip-label" style="margin-top: 16px">Its steps, in order</p>
+    <ol class="steps" id="cut-steps" aria-label="The chosen variant's steps"></ol>
+    <p class="readout" id="cut-note" aria-live="polite"></p>
+    <div class="legend">
+      <span><span class="swatch write"></span>writes the BLAS</span>
+      <span><span class="swatch build"></span>reads it: the TLAS build</span>
+      <span><span class="swatch wait"></span>the CPU waits</span>
+      <span><span class="swatch racing"></span>unordered with the TLAS build</span>
+      <span><span class="swatch ordered"></span>ordered after every write</span>
+    </div>
+    <figcaption><b>Live demo: the cuts</b>, M4 Pro, Metal, 2026-10-23. The counts are measured: misses in each of three runs of 80 traces, on 8 threads with a device each. Choose a variant to see its steps; the steps are this page's reading of each variant's name.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Read together, the cuts name the race. The TLAS build reads its BLAS before the last GPU write to that BLAS has finished: the BLAS build itself when nothing waits after it, the compaction copy when the build is waited for. A CPU wait after that last write ends the misses. A wait after the TLAS build, just before the trace, changes nothing, because by then the TLAS is already built. And the degenerate first Mesh played no part.</p>
+    <h3>The regression test</h3>
+    <p>The loop became a test that stays, <code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code>, in <code>src/assets/pools.rs</code>. Eight threads, each with its own device and a Mesh pool whose Arenas hold 4 KiB each, load a triangle Mesh, compact its BLAS and trace it, 25 times over. Without the fix it failed every run: 20 of 20 with full-size Arenas, then 10 of 10 once the review had shrunk them, since eight pools of full Arenas took 660 MiB. With the fix it passed 20 of 20 both times, and it takes 0.18 s on the M4 Pro. The ticket asked for a reproducer that fails at least one run in four before the fix and passes 20 consecutive runs after it. The stress loop, after the fix, missed 0 of 1,600 traces in 20 runs.</p>
+    <p>The review also made both tests read the BLAS through <code>MeshPool::blas</code>, as the renderer does, rather than from the pool's own list. On CI's <span class="concept" data-term="lavapipe" data-tip="Mesa's software Vulkan driver, which renders on the CPU. CI renders Goldens and records counter Baselines with it.">lavapipe</span> the library's tests now take 38.4 s against main's 24.3 s, about 14 s more. PR #267 first read the new test as a guard for Metal alone, saying Vulkan places the barrier. That holds after a BLAS build, where wgpu-core asks for a barrier (chapter 4), but not after the compaction copy. wgpu-core 30.0.1 records no barrier after it, and the barrier before a TLAS-only build has shader reads as its source. The barriers wgpu-core records around a TLAS's buffer of entries cover only that buffer. So on hardware Vulkan no barrier makes the copy's writes visible to a TLAS build either, and the wait does that on every backend. The PR's text was corrected after merge, and PR #270 corrected the code comment.</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code><span class="comment">/// A TLAS built once `compact_blases` returns holds the compacted BLAS
+/// while other devices load the GPU, as parallel tests do: no barrier
+/// orders a TLAS build after the copies that write its BLASes, so
+/// `compact_blases` waits for them (#244). Eight threads, each with its
+/// own device, load and trace a triangle 25 times.</span>
+#[test]
+fn a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu() {
+    if gpu_context().is_none() {
+        return;
+    }
+    let load_and_trace = || {
+        let context = gpu_context().expect("a GPU adapter, as found above");
+        let mut staging = LoadStaging::new(context.device.clone());
+        <span class="comment">// Room for its 25 triangles; eight pools of full Arenas would
+        // take 660 MiB.</span>
+        let mut pool = MeshPool::new(&amp;context.device, 4 &lt;&lt; 10);
+        (0..25)
+            .map(|_| {
+                let handle = pool
+                    .load(&amp;mut staging, &amp;triangle_about_x(), &amp;[None])
+                    .expect("a triangle fits");
+                staging.submit(&amp;context.queue);
+                pool.compact_blases(&amp;context.queue);
+                let blas = pool.blas(handle).expect("the triangle's BLAS");
+                trace_triangle_about_x(&amp;context, blas)
+            })
+            .collect::&lt;Vec&lt;_&gt;&gt;()
+    };
+    std::thread::scope(|scope| {
+        let threads: Vec&lt;_&gt; = (0..8).map(|_| scope.spawn(load_and_trace)).collect();
+        for thread in threads {
+            for traced in thread.join().expect("a tracing thread finishes") {
+                assert_eq!(traced, [Some(7), None, None]);
+            }
+        }
+    });
+}</code></pre>
+    <figcaption><b>The regression test</b>, from <code>src/assets/pools.rs</code> at 3b07d5f. <code>trace_triangle_about_x</code> builds a TLAS of the one BLAS, tagged 7, and traces chapter 1's three rays; the original test now calls it too, with its assertions unchanged.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>What it does not show</h3>
+    <p>The original scenario did not come back on the day of the fix. With the fix reverted and the new test skipped, 12 runs of <code>cargo test --lib</code> all passed, as did 12 with the fix in. So the evidence that the fix ends #244's <span class="concept" data-term="Flaky test" data-tip="A test that passes on some runs and fails on others, with the same code.">flaky</span> failures is the mechanism, the cuts and the stress loop. The loop stands in for the flaky run because it matches it twice over: the same path, in which Meshes load, the loads are submitted, the BLASes compacted, and a TLAS built in the submission that flushes the pending writes; and the same symptom, <code>[None, None, None]</code>. It is not a before and after of the original failure.</p>
+  </div>
+</section>
+
+<section class="chapter" id="fix">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; PR #267</div>
+    <h2>Wait for the copies, for now</h2>
+    <p class="plain"><code>compact_blases</code> already waited for the BLAS builds. Now it also submits the <span class="concept" data-term="Pending writes" data-tip="wgpu-core's own command buffer of copies that need no encoder of yours, such as those of Queue::write_buffer and Queue::compact_blas. It goes ahead of your command buffers in the next submission.">pending writes</span>, where the copies are, and waits for those. It is a CPU wait, so the thread that loads stops until the GPU has finished the copies. It runs only in frames that load Meshes; in three runs of 80 calls on one thread, it added about 0.3 ms to the median call's time. Work that has to be ordered in every frame could not pay that way, and #209 brought such work, which it orders on the GPU instead (below).</p>
+  </div>
+  <figure class="wide">
+<pre class="code"><code>    <span class="comment">// &hellip; the copies are recorded, as before</span>
+    <span class="comment">// The copies wait in the queue's pending writes until a submit.</span>
+    queue.submit(std::iter::empty());
+    if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for BLAS compaction failed");
+    }
+}</code></pre>
+    <figcaption><b>The fix</b>, at the end of <code>MeshPool::compact_blases</code> in <code>src/assets/pools.rs</code>, at 3b07d5f; the review left it as 072c41f wrote it. Its doc comment, as PR #270 corrected it, says why the wait is there: "Nothing else orders a TLAS build after the copies: wgpu-core 30.0.1 records no barrier after <code>compact_blas</code>'s copy on any backend, and Metal has no acceleration-structure barrier at all (gfx-rs/wgpu#9215)". The last clause is true of wgpu-hal 30.0.1, which records none on Metal, but not of Metal itself, which has had a barrier between passes since its 26 releases (chapter 3). So the wait can go only once wgpu orders the copy on every backend.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The empty submit is what makes the poll useful. The copies sit in wgpu-core's pending writes until something submits, and a <span class="concept" data-term="Poll" data-tip="Device::poll, wgpu's call that handles finished GPU work on the CPU. With PollType::wait_indefinitely() it blocks until the most recent submission has finished.">poll</span> waits only for work already submitted, so a poll alone would return without waiting for them. <code>queue.submit(std::iter::empty())</code> sends the pending writes as a submission of their own, and the poll then waits for it.</p>
+    <h3>What it costs</h3>
+    <p>Timed on one thread, 80 calls a run and three runs, <code>compact_blases</code> took a median of 4.0 to 4.6 ms before the fix and 4.5 to 4.7 ms after, about 0.3 ms more; other work on the machine was loading the GPU at the time. It runs only in frames that load Meshes, which today means frame 0, and on every backend. No bench measures such a frame: every run counts its counters from frame 8, and the runs that record Baselines time their frames after 248 warm-up frames. So no <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI's lavapipe, where only its counters are judged.">Baseline</span> moves, and every counter matches.</p>
+    <h3>Other ways to order the pair</h3>
+    <p>A CPU wait is the bluntest tool. It suits work that happens once, at load, and it does not suit work in every frame. The pair can also be ordered on the GPU, which lets the CPU go on:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Route</th><th>Who waits</th><th>In wgpu 30.0.1</th><th>The catch</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>A CPU wait after the last write: the fix</td><td>The thread that polls; in Praxis, the main thread, which records and submits each frame (ADR 0016)</td><td>Works now, on every backend</td><td>The thread does nothing until the GPU has finished the submission it waits for</td></tr>
+          <tr><td>A <span class="concept" data-term="Fence" data-tip="MTLFence: orders passes on the GPU. One pass updates it after its stores; a later pass waits for it before running.">fence</span> between the acceleration-structure passes: upstream's fix</td><td>The GPU</td><td>Not in a release: PR #9645 is open, and #10292, an open draft, supersedes it</td><td>Needs a wgpu release with it, and a version bump is the owner's call</td></tr>
+          <tr><td>An <span class="concept" data-term="Event" data-tip="MTLEvent: a counter that orders command buffers on the GPU. One signals a value once its earlier work is done; another waits for that value before its next pass. A shared event also reaches the CPU and other devices.">event</span>: signal after the write, wait before the build, through wgpu-hal's <code>add_signal_event</code> and <code>add_wait_event</code></td><td>The GPU</td><td>Available, through <code>Queue::as_hal</code></td><td>Staging is queue-wide, and by default the wait is "best-effort under cross-CB GPU concurrency"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Three ways to order a write to a BLAS before the TLAS build that reads it</b>, on Metal with wgpu 30.0.1. #9215's first comment lists one more, the barrier command Metal added in its 26 releases, which "loses most intel macs"; the fence methods go back to macOS 11 and iOS 14, the releases that brought acceleration structures.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Why the event route is delicate</h3>
+    <p>wgpu-hal 30.0.1's Metal queue can stage a wait or a signal on an <code>MTLSharedEvent</code> for the next submit. Its doc comments carry two warnings. Staging is queue-wide: "any <code>add_wait_event</code> call is consumed by whichever <code>Queue::submit</code> runs next on this queue". And by default the wait is encoded on a command buffer of its own, which "does not strictly gate subsequent user command buffers when those CBs share no Metal-tracked resources with it": this race exactly. Strict ordering needs <code>enable_strict_event_sync</code>, at "one extra <code>encodeWaitForEvent</code> per command buffer plus one extra internal command buffer per submit".</p>
+    <p>#9215's last comment, from 2026-10-13, reports another application's experience. It had built this event workaround and then removed it: a worker thread could submit between staging the signal and submitting the BLAS's command buffer, take the signal, and leave the TLAS waiting for unrelated work. A lock around its own submits could not cover the submits that wgpu-core makes by itself, for example when mapping a buffer with pending writes. It fell back to a CPU poll on Metal after each frame that rebuilds a BLAS, and accepted that the wait "stalls the render thread through the producer and earlier queued GPU work".</p>
+    <h3>What #209 has to solve</h3>
+    <p>#209 refits each crowd Mesh's BLAS in every frame through wgpu-hal on Metal, and the <span class="concept" data-term="Dynamic TLAS" data-tip="The top-level acceleration structure over the Moving Instances, at most 10,000 of them, those in the lowest slots, each tagged with its slot. It is rebuilt every frame, in the static TLAS's coordinate frame (#204).">dynamic TLAS</span>, rebuilt in every frame, is then built from those BLASes. A <span class="concept" data-term="Refit" data-tip="Updating an acceleration structure in place after its contents move: the tree keeps its shape and only its bounds are recomputed. Cheaper than a rebuild, and the tree traces more slowly the further things have moved. wgpu-core 30 does not implement it.">refit</span> writes the BLAS and the TLAS build reads it by ID: the same unordered pair, in every frame instead of at load. A CPU wait there would stall the main thread, which records and submits every frame (ADR 0016), in every frame. So ordering on the GPU is the likely route: the upstream fence fix, if a wgpu release ships it in time, or events through wgpu-hal.</p>
+    <p>For events, Praxis starts with one thing in its favour: only the main thread submits, presents or polls (ADR 0016), so no worker can take a staged signal. The submits that wgpu-core makes by itself remain, so #209 would have to stage and submit with nothing in between that could submit, and choose whether it needs strict mode. (It took events, in strict mode. Since PR #289, merged on 2026-10-26 as 66b5b57, the submission that holds the refits signals a Metal shared event as it completes, and the dynamic TLAS's build waits for that event on the GPU; the frame waits on the CPU only where no shared event can be made. The owner then chose the crowd's per-bone shadow proxies for milestone M7, so the refit stays behind its Render switch. <a href="blas-refit.html">BLAS Refit Explained</a> tells that story.)</p>
+    <p>The project's roadmap issue, #17, keeps the rest as a one-line note for later work, "Metal BLAS-to-TLAS ordering": drop the wait only when a wgpu release orders a TLAS build after compaction copies on every backend. #9215 is Metal's alone, and wgpu-core 30.0.1 records no barrier after the copy on any backend. That is a version bump and so the owner's call. Revisit when milestone M4 streams Meshes during play, "where each load frame stalls on the GPU twice". It ends where this chapter does: #209's per-frame refit "needs an order of its own", which PR #289 has since given it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the repo are pinned to main at 3b07d5f, where PR #270 merged after PR #267, except the one to the code before the fix, at 5a5f075. Links into wgpu are pinned to its v30.0.1 tag, whose sources match the crates Praxis builds. Apple's pages were read on 2026-10-23, and the article on consumer barriers on 2026-10-26.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/244">Ticket #244</a> <span>the failures, their rate, the triage and the bar for done</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/267">PR #267</a> <span>the fix, the cuts, the regression test's runs, the cost and the review</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/270">PR #270</a> <span>the corrected comments: the wait covers every backend</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/src/assets/pools.rs#L274-L310"><code>MeshPool::compact_blases</code></a>, and <a href="https://github.com/gariasf/praxis/blob/5a5f075e1cd4164da85c37276be573d33bf4403e/src/assets/pools.rs#L274-L301">before the fix</a> <span>the wait for the builds, and now for the copies</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/src/assets/pools.rs#L598-L634">The regression test</a> <span>eight devices at once, in 4 KiB Arenas</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/src/render/renderer.rs#L339-L346"><code>Renderer::upload</code></a> <span>the load path: submit the loads, compact, record the static TLAS's build</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/src/render/acceleration_structures.rs#L80-L85"><code>StaticTlas</code></a> <span>when the static TLAS is built and rebuilt</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/docs/adr/0016-the-main-thread-runs-the-frame.md">ADR 0016</a> <span>the main thread records, submits and polls; only it submits, presents or polls</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/3b07d5f85ed73647e2c8589f8f8f708b7b6eaedc/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>a compacted BLAS per Mesh, the static TLAS built at load, the dynamic TLAS rebuilt each frame</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17">Roadmap issue #17</a> <span>its note "Metal BLAS-to-TLAS ordering": when the wait goes, and when to revisit it</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/209">Ticket #209</a> <span>the crowd's BLAS refit through wgpu-hal, every frame: where this race came back, and <a href="https://github.com/gariasf/praxis/pull/289">PR #289</a>, which orders it on the GPU</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>wgpu, upstream</h3>
+      <ul>
+        <li><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215</a> <span>the issue, the ways to fix it, and in its <a href="https://github.com/gfx-rs/wgpu/issues/9215#issuecomment-6147155252">last comment</a> another application's CPU-wait fallback</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/pull/9645">PR #9645</a> <span>fences, splitting the acceleration-structure encoder at each barrier; open</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/pull/10292">PR #10292</a> <span>a seeded-fence rework that supersedes it, an open draft, with regression tests that include <code>COMPACTED_BLAS_IN_PENDING_WRITES</code>, #244's case</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1877-L1917"><code>wgpu-hal/src/metal/command.rs</code></a> <span>the empty barrier, and the residency set at submit</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L379-L395"><code>wgpu-hal/src/metal/conv.rs</code></a> <span>every TLAS in the indirect layout</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2093-L2159"><code>wgpu-hal/src/metal/device.rs</code></a> <span>each entry names its BLAS by resource ID</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/command.rs#L747-L773"><code>vulkan/command.rs</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/command.rs#L1793-L1815"><code>dx12/command.rs</code></a> <span>the barrier on Vulkan and Direct3D 12</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L496-L594"><code>wgpu-hal/src/metal/mod.rs</code></a> <span>the queue's event staging and its warnings</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L1135-L1206"><code>wgpu-core/src/command/ray_tracing.rs</code></a> <span>where wgpu-core asks for the barriers before and after BLAS builds, and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L443-L450">the one after a TLAS build</a></span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1764-L1843"><code>wgpu-core/src/device/queue.rs</code></a> <span>compaction into the pending writes, and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1689-L1695">pending writes ahead of each submission</a></span></li>
+        <li><a href="https://docs.rs/wgpu-types/30.0.1/wgpu_types/enum.PollType.html"><code>PollType</code></a> <span>what a poll waits for, in wgpu-types 30.0.1</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Vulkan and Direct3D 12</h3>
+      <ul>
+        <li><a href="https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdPipelineBarrier.html"><code>vkCmdPipelineBarrier</code></a> <span>the memory dependency a pipeline barrier inserts</span></li>
+        <li><a href="https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_uav_barrier"><code>D3D12_RESOURCE_UAV_BARRIER</code></a> <span>what a UAV barrier waits for, with a resource or none</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Apple's Metal documentation</h3>
+      <ul>
+        <li><a href="https://developer.apple.com/documentation/metal/resource-synchronization">Resource synchronization</a> <span>hazards, and what tracking covers before Metal 4</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode">MTLHazardTrackingMode</a>, its <a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/tracked">tracked</a> and <a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default">default</a> cases <span>tracked and untracked resources, what tracking does, and which is which by default</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlcommandqueue">MTLCommandQueue</a> and <a href="https://developer.apple.com/documentation/metal/mtlcommandbuffer/commit()"><code>MTLCommandBuffer.commit()</code></a> <span>a queue's ordered list, in which a command buffer starts after those ahead of it start</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructurecommandencoder/build(accelerationstructure:descriptor:scratchbuffer:scratchbufferoffset:)">The acceleration-structure build command</a> <span>what a build synchronizes by default, and the fence alternative</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructureinstancedescriptortype">MTLAccelerationStructureInstanceDescriptorType</a>, its <a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructureinstancedescriptortype/indirect">indirect</a> case and <a href="https://developer.apple.com/documentation/metal/mtlinstanceaccelerationstructuredescriptor/instancedaccelerationstructures"><code>instancedAccelerationStructures</code></a> <span>the two ways a TLAS entry names its BLAS</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlfence">MTLFence</a>, <a href="https://developer.apple.com/documentation/metal/mtlevent">MTLEvent</a> and <a href="https://developer.apple.com/documentation/metal/mtlsharedevent">MTLSharedEvent</a> <span>ordering passes, command buffers, and the CPU</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/synchronizing-passes-with-consumer-barriers">Synchronizing passes with consumer barriers</a> <span>the barrier between passes on one queue that Metal added in its 26 releases</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlresidencyset">MTLResidencySet</a> <span>residency without hazard tracking</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books, and in this series</h3>
+      <ul>
+        <li>Gregory, <i>Game Engine Architecture</i>, 3rd ed., chapter 11, The Rendering Engine <span>the engine's shape and its rendering pipeline: where submitting GPU work sits. Architecture, not API synchronization</span></li>
+        <li><a href="acceleration-structures.html">Acceleration Structures Explained</a> <span>BLAS, TLAS and compaction in Praxis (#202)</span></li>
+        <li><a href="dynamic-tlas.html">Dynamic TLAS Explained</a> <span>the TLAS rebuilt every frame, which #209's refitted BLASes feed in the crowd's refit form</span></li>
+        <li><a href="blas-refit.html">BLAS Refit Explained</a> <span>#209's refit, and the shared event that orders the dynamic TLAS's build after it</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Queue</dt><dd>Where command buffers are submitted; it keeps their order of submission and does not wait for one to finish before the next starts.</dd></div>
+    <div><dt>Command buffer</dt><dd>A batch of GPU commands recorded on the CPU and submitted in one piece.</dd></div>
+    <div><dt>Submission</dt><dd>One call to <code>Queue::submit</code>, with wgpu-core's pending writes ahead of its command buffers.</dd></div>
+    <div><dt>Pass</dt><dd>A run of commands of one kind, recorded through one encoder.</dd></div>
+    <div><dt>Pending writes</dt><dd>wgpu-core's own command buffer of copies, sent ahead of yours in the next submission.</dd></div>
+    <div><dt>Poll</dt><dd><code>Device::poll</code>; with a wait, it blocks the CPU until the most recent submission has finished.</dd></div>
+    <div><dt>Hazard</dt><dd>Two accesses to the same memory, at least one a write, with nothing to order them.</dd></div>
+    <div><dt>Read after write</dt><dd>The hazard in which a read must wait for an earlier write to finish.</dd></div>
+    <div><dt>Barrier</dt><dd>A recorded command that makes later GPU work wait for earlier work's writes.</dd></div>
+    <div><dt>Hazard tracking</dt><dd>Metal's automatic ordering, for tracked resources that work binds directly.</dd></div>
+    <div><dt>Tracked resource</dt><dd>A Metal resource whose hazards Metal tracks; device-made resources are tracked by default.</dd></div>
+    <div><dt>Fence</dt><dd><code>MTLFence</code>: one pass updates it after its stores, a later pass waits for it.</dd></div>
+    <div><dt>Event</dt><dd><code>MTLEvent</code>: a counter one command buffer signals and another waits for; a shared event also reaches the CPU.</dd></div>
+    <div><dt>Residency set</dt><dd>Metal's list of resources a command buffer may touch; it tracks no hazards.</dd></div>
+    <div><dt>Resource ID</dt><dd>A number naming a Metal resource from inside a buffer, out of tracking's sight.</dd></div>
+    <div><dt>Indirect instance descriptor</dt><dd>Metal's TLAS entry layout that names its BLAS by resource ID; wgpu-hal uses it for every TLAS.</dd></div>
+    <div><dt>wgpu-core</dt><dd>wgpu's layer that validates calls, tracks resources and asks for barriers, for every backend alike.</dd></div>
+    <div><dt>wgpu-hal</dt><dd>wgpu's layer that turns wgpu-core's requests into one backend's commands.</dd></div>
+    <div><dt>BLAS</dt><dd>Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles.</dd></div>
+    <div><dt>TLAS</dt><dd>Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS with its transform.</dd></div>
+    <div><dt>Static TLAS</dt><dd>The TLAS of every static Instance whose Mesh rays trace, built at load and rebuilt only in a frame that changes one (#202).</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The TLAS of at most 10,000 Moving Instances, rebuilt every frame (#204).</dd></div>
+    <div><dt>Compaction</dt><dd>Copying a built BLAS into a smaller one that replaces it; wgpu-core records the copy into its pending writes.</dd></div>
+    <div><dt>Refit</dt><dd>Recomputing an acceleration structure's bounds in place, keeping its tree; not in wgpu-core 30.</dd></div>
+    <div><dt>Load staging</dt><dd>Praxis's encoder of load-time copies and BLAS builds, submitted ahead of the next frame's work.</dd></div>
+    <div><dt>Custom data</dt><dd>A number a TLAS entry carries and a hit reports; Praxis stores the Instance's slot.</dd></div>
+    <div><dt>Device</dt><dd>A wgpu connection to one GPU, with its own queue.</dd></div>
+    <div><dt>Flaky test</dt><dd>A test that passes on some runs and fails on others, with the same code.</dd></div>
+    <div><dt>Stress loop</dt><dd>A test run many times at once to raise a race's rate until every run fails.</dd></div>
+    <div><dt>Cut</dt><dd>One step of the test changed or removed, to see whether the failures stop.</dd></div>
+    <div><dt>Mesh</dt><dd>An ordered list of Primitives that are rendered together.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU, in a slot of the Instance buffer that the Renderable keeps while it is one.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/244">#244</a> and <a href="https://github.com/gariasf/praxis/pull/267">PR #267</a>, merged as main 470221e, and <a href="https://github.com/gariasf/praxis/pull/270">PR #270</a>, merged as main 3b07d5f, as the work on #244 verified them on 2026-10-23, with wgpu-core and wgpu-hal 30.0.1's sources, gfx-rs/wgpu#9215 and its two fence PRs, Apple's Metal documentation, the note on roadmap issue #17, and ADRs 0016 and 0020; the note on #209's order comes from PRs #289 and #290. Quotes from wgpu, Apple, Khronos and Microsoft are verbatim; Praxis's code is quoted from 3b07d5f, or from 5a5f075 where marked; wgpu's Vulkan and Direct3D 12 barriers are paraphrased with full-word names. The demos are this page's models: the race demo's timings and counts are illustrative, and the cuts demo replays the measured counts.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="dynamic-tlas.html">Previous: Dynamic TLAS Explained</a><a href="index.html">All field guides</a><a href="crowd-shadows.html">Next: Crowd Shadows Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        setPressed(buttons, (other) => other === button);
+        choose(button.dataset[key]);
+      });
+    }
+  }
+
+  /* Figure: what each backend's wgpu-hal does with wgpu-core's barrier. */
+  (function barrierFigure() {
+    const buttons = Array.from(document.querySelectorAll("#barrier-backend button"));
+    if (!buttons.length) return;
+    const panels = Array.from(document.querySelectorAll("#barrier-figure [data-panel]"));
+    segmented(buttons, "choice", (choice) => {
+      for (const panel of panels) panel.hidden = panel.dataset.panel !== choice;
+    });
+  })();
+
+  /* Demo: a model of the pending writes and the frame's command buffer. Illustrative, not measured. */
+  (function raceDemo() {
+    const devicesInput = byId("race-devices");
+    if (!devicesInput) return;
+    const devicesOutput = byId("race-devices-value");
+    const cpuWaitInput = byId("race-cpu-wait");
+    const gpuWaitInput = byId("race-gpu-wait");
+    const timeline = byId("race-timeline");
+    const tracks = {
+      cpu: byId("race-track-cpu"),
+      other: byId("race-track-other"),
+      copy: byId("race-track-copy"),
+      frame: byId("race-track-frame"),
+    };
+    const outcome = byId("race-outcome");
+    const tally = byId("race-tally");
+    const tallyCount = byId("race-tally-count");
+    const nextMiss = byId("race-next-miss");
+    const nextHit = byId("race-next-hit");
+    const reroll = byId("race-reroll");
+    // The model's time axis, in its own units: wide enough for its slowest run.
+    const SPAN = 26;
+    const RUNS = 100;
+    const DRAWS_PER_RUN = 7;
+    const MAXIMUM_OTHER_DEVICES = 7;
+    let draws = [];
+    let runs = [];
+    let shown = 0;
+
+    function rollDraws() {
+      draws = Array.from({ length: RUNS }, () => Array.from({ length: DRAWS_PER_RUN }, () => Math.random()));
+    }
+
+    // One run of the model; each draw is a number in [0, 1).
+    function simulate(otherDevices, cpuWait, gpuWait, draw) {
+      const load = otherDevices / MAXIMUM_OTHER_DEVICES;
+      const copyStart = 1 + draw[0] * 1.5;
+      // Other devices' work stretches the copy, now and then by a lot.
+      const stall = Math.min(4, -Math.log(1 - draw[1]));
+      const copyEnd = copyStart + 1.6 * (0.85 + 0.3 * draw[2]) * (1 + 0.8 * load * stall);
+      const run = { copyStart, copyEnd, waitEnd: null, frameSubmitted: 0, eventWait: null };
+      if (cpuWait) {
+        // The pending writes go alone; the CPU polls until they finish, then submits the frame.
+        run.waitEnd = copyEnd + 1.5 + draw[3];
+        run.frameSubmitted = run.waitEnd + 0.5;
+      }
+      // The frame's command buffer starts once the one ahead of it has started.
+      run.frameStart = (cpuWait ? run.frameSubmitted + 0.5 : copyStart + 1) + draw[4] * 1.5;
+      run.buildStart = run.frameStart;
+      if (gpuWait && run.frameStart < copyEnd + 0.3) {
+        run.eventWait = [run.frameStart, copyEnd + 0.3];
+        run.buildStart = copyEnd + 0.3;
+      }
+      // The build reads each BLAS early in its run.
+      run.readTime = run.buildStart + 1 + draw[5];
+      run.buildEnd = run.buildStart + 4 + draw[6];
+      run.traceEnd = run.buildEnd + 3;
+      run.hit = run.readTime >= copyEnd;
+      return run;
+    }
+
+    const percent = (time) => (time / SPAN) * 100 + "%";
+    function place(track, start, end, className, label) {
+      const bar = document.createElement("span");
+      bar.className = "timeline-bar " + className;
+      bar.style.left = percent(start);
+      bar.style.width = percent(Math.max(end - start, 0.2));
+      if (label) {
+        bar.dataset.label = label;
+        bar.title = label;
+      }
+      track.append(bar);
+    }
+    function mark(track, time, className, label) {
+      const tick = document.createElement("span");
+      tick.className = "timeline-tick " + className;
+      tick.style.left = percent(time);
+      tick.title = label;
+      track.append(tick);
+    }
+    function note(track, text) {
+      const element = document.createElement("span");
+      element.className = "track-note";
+      element.textContent = text;
+      track.append(element);
+    }
+    // Shows each bar's label only where it fits whole.
+    function fitLabels() {
+      for (const bar of timeline.querySelectorAll(".timeline-bar[data-label]")) {
+        bar.textContent = bar.dataset.label;
+        if (bar.scrollWidth > bar.clientWidth + 1) bar.textContent = "";
+      }
+    }
+    // Scattered blocks for each other device, fixed, so the lane fills as devices are added.
+    function otherWork(device, block) {
+      const start = (((device * 37 + block * 53) % 23) / 23) * (SPAN - 5);
+      return [start, start + 2 + ((device * 11 + block * 7) % 5) * 0.6];
+    }
+
+    function describe(run, cpuWait, gpuWait) {
+      if (cpuWait) return ["Hit.", " The pending writes went in a submission of their own, and the CPU polled until they had finished, so the frame was submitted after the copy had written the BLAS. The main thread waited for it."];
+      if (gpuWait && run.eventWait) return ["Hit.", run.frameStart < run.copyEnd ? " The frame's command buffer started while the copy was still running, and its TLAS build waited on the GPU until the copy was done. The CPU went on with its work." : " The frame's command buffer started just after the copy finished, and its TLAS build still waited a moment on the GPU, until the wait saw the copy done. The CPU went on with its work."];
+      if (gpuWait) return ["Hit.", " The copy had finished before the TLAS build was ready to start, so the GPU wait held nothing back this time; in a slower run it would have."];
+      if (run.hit) return ["Hit, by timing alone.", " The copy finished before the TLAS build read the BLAS, but nothing made it so: in another run the order can flip."];
+      return ["Miss.", " The TLAS build read the BLAS while the copy was still writing it. The TLAS keeps an Instance whose BLAS it never saw whole, and the ray down onto the triangle finds nothing."];
+    }
+
+    const cells = Array.from({ length: RUNS }, () => {
+      const cell = document.createElement("span");
+      tally.append(cell);
+      return cell;
+    });
+
+    function draw() {
+      const otherDevices = Number(devicesInput.value);
+      const cpuWait = cpuWaitInput.checked;
+      const gpuWait = gpuWaitInput.checked;
+      devicesOutput.textContent = String(otherDevices);
+      runs = draws.map((each) => simulate(otherDevices, cpuWait, gpuWait, each));
+      const run = runs[shown];
+      for (const track of Object.values(tracks)) track.replaceChildren();
+
+      place(tracks.cpu, 0, 0.8, "cpu", "submit");
+      if (cpuWait) {
+        place(tracks.cpu, 0.8, run.waitEnd, "wait", "waits for the copy (poll)");
+        place(tracks.cpu, run.waitEnd, run.frameSubmitted, "cpu", "submit the frame");
+        place(tracks.cpu, run.frameSubmitted, SPAN, "free", "free");
+      } else {
+        place(tracks.cpu, 0.8, SPAN, "free", "free to prepare the next frame");
+      }
+      if (otherDevices === 0) note(tracks.other, "none");
+      for (let device = 0; device < otherDevices; device += 1) {
+        for (let block = 0; block < 3; block += 1) {
+          const [start, end] = otherWork(device, block);
+          place(tracks.other, start, end, "other", "");
+        }
+      }
+      place(tracks.copy, run.copyStart, run.copyEnd, "write", "compaction copy");
+      mark(tracks.copy, run.readTime, "echo" + (run.hit ? "" : " missed"), "when the TLAS build reads the BLAS");
+      if (run.eventWait) place(tracks.frame, run.eventWait[0], run.eventWait[1], "wait", "waits for the copy");
+      place(tracks.frame, run.buildStart, run.buildEnd, "build " + (run.hit ? "hit" : "missed"), "TLAS build");
+      place(tracks.frame, run.buildEnd, run.traceEnd, "trace", run.hit ? "trace: hit" : "trace: miss");
+      mark(tracks.frame, run.readTime, run.hit ? "" : "missed", "the TLAS build reads the BLAS");
+      fitLabels();
+
+      const [verdict, detail] = describe(run, cpuWait, gpuWait);
+      const verdictElement = document.createElement("b");
+      verdictElement.textContent = verdict;
+      if (!run.hit) verdictElement.className = "bad-text";
+      outcome.replaceChildren(verdictElement, document.createTextNode(detail));
+      timeline.setAttribute("aria-label", "The model's run " + (shown + 1) + " of " + RUNS + ": " + verdict + detail);
+
+      let misses = 0;
+      runs.forEach((each, index) => {
+        if (!each.hit) misses += 1;
+        cells[index].className = (each.hit ? "" : "missed") + (index === shown ? " shown" : "");
+      });
+      const count = (misses === 1 ? "1 miss" : misses + " misses") + " in " + RUNS;
+      tallyCount.textContent = count;
+      tally.setAttribute("aria-label", "100 runs of the model at these settings: " + count);
+      nextMiss.disabled = misses === 0;
+      nextHit.disabled = misses === RUNS;
+    }
+
+    function showNext(wantHit) {
+      for (let step = 1; step <= RUNS; step += 1) {
+        const index = (shown + step) % RUNS;
+        if (runs[index].hit === wantHit) {
+          shown = index;
+          draw();
+          return;
+        }
+      }
+    }
+
+    devicesInput.addEventListener("input", draw);
+    cpuWaitInput.addEventListener("change", draw);
+    gpuWaitInput.addEventListener("change", draw);
+    nextMiss.addEventListener("click", () => showNext(false));
+    nextHit.addEventListener("click", () => showNext(true));
+    reroll.addEventListener("click", () => {
+      rollDraws();
+      shown = 0;
+      draw();
+    });
+    if (window.ResizeObserver) new ResizeObserver(fitLabels).observe(timeline);
+    else window.addEventListener("resize", fitLabels);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLabels);
+
+    rollDraws();
+    draw();
+    // Open on a miss, the case the guide is about, when the first draws hold one.
+    const firstMiss = runs.findIndex((run) => !run.hit);
+    if (firstMiss > 0) {
+      shown = firstMiss;
+      draw();
+    }
+  })();
+
+  /* Demo: the session's cuts. The counts are in the table; the steps are this page's reading of each name. */
+  (function cutsDemo() {
+    const list = byId("cut-steps");
+    if (!list) return;
+    const note = byId("cut-note");
+    const rows = Array.from(document.querySelectorAll("#demo-cuts tr[data-variant]"));
+    const builds = ["write", "BLAS builds, of both Meshes"];
+    const build = ["write", "BLAS build"];
+    const buildAlone = ["write", "BLAS build, of the triangle alone"];
+    const copy = ["write", "compaction copy"];
+    const wait = ["wait", "CPU waits (poll)"];
+    const submitAndWait = ["wait", "submit, then the CPU waits (poll)"];
+    const tlas = ["read", "TLAS build"];
+    const trace = ["trace", "trace"];
+    // `racing` is the index of the write left unordered with the TLAS build, or -1; `late` marks a wait that comes too late.
+    const VARIANTS = {
+      test: {
+        steps: [builds, wait, copy, tlas, trace], racing: 2, late: -1,
+        note: "The test's own steps. compact_blases waits on the CPU for the builds, then records the copies, and nothing waits for those: the TLAS build can read the BLAS while its copy is still writing it.",
+      },
+      single: {
+        steps: [buildAlone, wait, copy, tlas, trace], racing: 2, late: -1,
+        note: "Without the degenerate Mesh, the triangle's ranges start at the Arenas' first elements, and the misses go on: the offsets were not the cause.",
+      },
+      uncompacted: {
+        steps: [build, tlas, trace], racing: 0, late: -1,
+        note: "With no compaction there is no copy, and no wait at all: the TLAS build now races the BLAS build itself, and still misses.",
+      },
+      "uncompacted-waited": {
+        steps: [build, wait, tlas, trace], racing: -1, late: -1,
+        note: "A CPU wait after the build orders the build before the TLAS build. No misses.",
+      },
+      "waited-compacted": {
+        steps: [build, wait, copy, tlas, trace], racing: 2, late: -1,
+        note: "Compaction back after that wait, with nothing waiting for the copies: the misses come back, so now the copies are the unordered write.",
+      },
+      fix: {
+        steps: [build, wait, copy, submitAndWait, tlas, trace], racing: -1, late: -1,
+        note: "Submit the pending writes and wait for them: the copies have finished before the TLAS build is even submitted. No misses. This is the fix.",
+      },
+      late: {
+        steps: [build, wait, copy, tlas, ["wait", "CPU waits (poll): too late"], trace], racing: 2, late: 4,
+        note: "A wait after the TLAS build, before the trace, comes too late: the TLAS was already built while the copy was writing the BLAS. The misses go on.",
+      },
+    };
+
+    function show(name) {
+      const variant = VARIANTS[name];
+      list.replaceChildren();
+      variant.steps.forEach(([kind, label], index) => {
+        if (index > 0) {
+          const arrow = document.createElement("li");
+          arrow.className = "arrow";
+          arrow.setAttribute("aria-hidden", "true");
+          arrow.textContent = "\u2192";
+          list.append(arrow);
+        }
+        const item = document.createElement("li");
+        item.className = "step " + kind;
+        if (index === variant.racing) item.classList.add("racing");
+        if (kind === "read") item.classList.add(variant.racing >= 0 ? "racing" : "ordered");
+        if (index === variant.late) item.classList.add("late");
+        item.textContent = label;
+        list.append(item);
+      });
+      note.textContent = variant.note;
+      for (const row of rows) {
+        const chosen = row.dataset.variant === name;
+        row.classList.toggle("focus", chosen);
+        row.querySelector("button").setAttribute("aria-pressed", String(chosen));
+      }
+    }
+    for (const row of rows) {
+      row.querySelector("button").addEventListener("click", () => show(row.dataset.variant));
+    }
+    show("test");
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

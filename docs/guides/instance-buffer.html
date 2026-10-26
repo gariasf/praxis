@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Instance Buffer Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume one of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --series-branch: #2c56c9;
+  --series-main: #c9771a;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631;
+    --series-branch: #4f7be8; --series-main: #c27a1c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631;
+  --series-branch: #4f7be8; --series-main: #c27a1c; color-scheme: dark;
+}
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, circle:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.scroll { overflow-x: auto; }
+.scroll > svg { display: block; max-width: none; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.term { font-weight: 600; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* SVG text and shapes, all from tokens */
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-line { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-code { font: 12px var(--mono); fill: var(--ink); }
+svg .t-file { font: 11px var(--mono); fill: var(--accent); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 6px; stroke-linejoin: round; }
+svg .t-lane { font: 600 12px var(--mono); letter-spacing: 0.06em; fill: var(--ink-soft); }
+svg .t-bad { font: 600 13px var(--mono); fill: var(--bad); }
+svg .box { fill: var(--panel); stroke: var(--rule); stroke-width: 1.2; }
+svg .box-changed { fill: var(--panel); stroke: var(--accent); stroke-width: 2.5; }
+svg .edge { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+svg .edge-dash { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+
+/* Buttons and segmented controls */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font: inherit; font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; background: var(--panel); color: var(--ink); border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.control-label { color: var(--ink-soft); }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+
+/* Slot demo */
+.demo { display: grid; gap: 16px; }
+.demo-row { display: grid; gap: 6px; min-width: 0; }
+.demo-row > .label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 44px; align-items: flex-start; }
+.chip { font-family: var(--mono); font-size: 13px; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 4px 9px; border-radius: 5px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; line-height: 1.3; }
+.chip b { font-weight: 600; }
+.chip span { font-size: 11px; color: var(--ink-soft); }
+.chip.refused { border-color: var(--bad); }
+.chip.refused span { color: var(--bad); font-weight: 600; }
+.chip.new { border-style: dashed; border-color: var(--accent); }
+.chip.moving { box-shadow: inset 3px 0 0 var(--warm); }
+.chip:disabled { cursor: default; opacity: 0.75; }
+.chip:not(:disabled):hover { border-color: var(--accent); }
+.empty-note { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 10px; }
+.cells { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
+.cell { font-family: var(--mono); border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); padding: 5px 4px 6px; text-align: center; min-width: 0; }
+.cell small { display: block; font-size: 10px; color: var(--ink-soft); }
+.cell span { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell.written { background: var(--accent); border-color: var(--accent); }
+.cell.written small, .cell.written span { color: var(--paper); }
+.cell.free { border-style: dashed; background: transparent; }
+.cell.free span { color: var(--ink-soft); font-weight: 400; }
+.cell.unused { border-style: dotted; background: transparent; }
+.cell.unused span { color: var(--ink-soft); font-weight: 400; }
+.cell.leaving span { text-decoration: line-through; }
+.status-line { font-family: var(--mono); font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--ink-soft); }
+.status-line b { color: var(--ink); }
+.log { list-style: none; margin: 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; min-height: 120px; overflow-x: auto; }
+.log li { white-space: pre-wrap; word-break: break-word; }
+.log li.warn { color: var(--bad); }
+.log li.note { color: var(--ink); font-style: italic; }
+.log li.frame { color: var(--ink-soft); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+.key i { display: inline-block; width: 14px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--rule); background: var(--panel); }
+.key i.k-written { background: var(--accent); border-color: var(--accent); }
+.key i.k-free { border-style: dashed; background: transparent; }
+.key i.k-unused { border-style: dotted; background: transparent; }
+.key i.k-refused { border-color: var(--bad); }
+.key i.k-moving { box-shadow: inset 3px 0 0 var(--warm); }
+
+/* Staging demo */
+.bars { display: grid; gap: 8px; margin-top: 14px; }
+.bar-row { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 10px; align-items: center; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.bar-track { height: 18px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--ink-soft); border-radius: 0 4px 4px 0; transition: width 0.2s ease; }
+.bar-fill.now { background: var(--accent); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 20px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts td.code { font-family: var(--mono); font-size: 13px; }
+table.facts tr.total td { font-weight: 600; border-bottom: 0; }
+table.facts tr.focus td { background: var(--accent-wash); }
+.ledger-bar { height: 10px; background: var(--ink-soft); border-radius: 0 3px 3px 0; opacity: 0.55; }
+tr.focus .ledger-bar { background: var(--accent); opacity: 1; }
+.check { font-family: var(--mono); font-size: 13px; color: var(--good); margin-top: 8px; }
+.check.mismatch { color: var(--bad); }
+
+/* Chart */
+.chart-wrap { position: relative; }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.tooltip { position: absolute; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 5px; padding: 6px 9px; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+details { margin-top: 12px; font-size: 15px; }
+summary { cursor: pointer; font-family: var(--mono); font-size: 13px; color: var(--accent); }
+
+pre.terminal { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; line-height: 1.55; overflow-x: auto; margin: 16px 0; }
+pre.terminal .fail { color: var(--bad); }
+pre.terminal .dim { color: var(--ink-soft); }
+
+/* Reading list and glossary */
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; }
+.reading li span { color: var(--ink-soft); }
+.try { display: grid; gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
+.try li { display: grid; gap: 2px; }
+.try code { font-size: 14px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; overflow-x: auto; white-space: pre; display: block; }
+.try span { font-size: 15.5px; color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .cells { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .bar-row { grid-template-columns: 1fr; gap: 4px; }
+}
+
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M3 · ticket #190 · PR #220</div>
+  <h1>Why the Instance buffer stopped growing</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A GPU buffer cannot grow in place, so Praxis used to grow its Instance buffer, one 128-byte slot per Renderable, by copying it mid-frame into a bigger one and rebuilding every bind group that named it. PR #220 creates it once, with 524,288 slots: 64 MiB, 0.84% of the 8 GB GPU-memory Budget. Renderable 524,289 is refused: not drawn, warned about once, counted and retried every frame. The idea to keep: a fixed capacity that refuses visibly makes memory known at startup and lets bind groups be built once.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>How a Renderable keeps its Instance slot, and how freed slots are reused</li>
+      <li>Why a fixed 524,288-slot buffer replaced growth, and what happens past it</li>
+      <li>How per-frame bytes reach the GPU through three bounded staging slots</li>
+      <li>How the engine counts its own GPU memory, to the byte</li>
+      <li>How to time CPU work without fooling yourself, and prove a test can fail</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> nothing; start here.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at cd8c611 (PR #220, 2026-10-19). <b>Since then:</b> PRs #228 and #230 changed the frame around the slots (<a href="instance-culling.html">Instance Culling Explained</a>): each Instance names its Mesh, a freed slot is emptied and reused only from the next frame, and a compute pass builds the frame's draw, which the main pass issues with <code>draw_indexed_indirect</code>. PR #258 grew the camera uniform to 112 bytes and PR #261 moved the lights into a light buffer (<a href="shadow-rays.html">Shadow Rays Explained</a>, <a href="froxel-lights.html">Froxel Lights Explained</a>), so on main at 270c5e4 a frame of the pbr-sweep scene that writes no Instance uploads 384 bytes, not 288. PRs #234 and #235 added acceleration structures to <code>gpu_memory_bytes</code>, as measured estimates, not exact sizes (<a href="acceleration-structures.html">Acceleration Structures Explained</a>).</p>
+  </aside>
+  <p class="lede">A field guide to the <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span>: how every <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span> keeps a <span class="concept" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slot</span> on the GPU, why that buffer is now created once at 524,288 slots, what happens to Renderable 524,289, and how a frame's bytes reach the GPU. It also works as a map of the frame, because the path from the <span class="concept" data-tip="The container of every entity, component and resource in the entity component system (ECS). It is a code concept; the playable space is the Game world.">ECS World</span> to a <span class="concept" data-tip="One command telling the GPU to draw geometry. At PR #220, Praxis recorded one draw_indexed per Primitive of each Renderable, naming the Renderable's slot.">draw call</span> runs through every part of this PR.</p>
+  <p class="status"><b>Provenance.</b> PR #220 merged on 2026-10-19 as cd8c611, closing #190; the guide describes the code at that commit. The fixed capacity and the refusal rules still hold on main at 270c5e4 (2026-10-26), but the frame around them has changed. PR #223 (b172252) moved the Instance buffer to bind group 2. PR #228 (67bf3c2) put each Instance's Mesh in its 4 bytes of padding, and a freed slot now takes an Instance with no Mesh, which the GPU skips, and is handed out again only from the next frame. PR #230 (926fcc1) took the draws out of Frame data: a compute pass builds the frame's draw, the main pass issues it with <code>draw_indexed_indirect</code>, and the vertex shader finds the slot through a Meshlet record, not <code>instance_index</code>; <a href="instance-culling.html">Instance Culling Explained</a> follows that frame. Byte counts are cd8c611's too: at 270c5e4, a pbr-sweep frame that writes no Instance uploads 384 bytes, not 288.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#frame">1 · The frame</a>
+    <a href="#slots">2 · Instances and slots</a>
+    <a href="#growing">3 · Why stop growing</a>
+    <a href="#refusal">4 · Past capacity</a>
+    <a href="#staging">5 · Staging</a>
+    <a href="#memory">6 · GPU memory</a>
+    <a href="#measuring">7 · Measuring</a>
+    <a href="#tests">8 · Tests</a>
+    <a href="#next">9 · What's next</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="frame">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>The frame, end to end</h2>
+    <p>Praxis renders by pulling. Each frame, <code>State::update</code> runs the fixed-rate simulation, then hands the <span class="concept" data-tip="The container of every entity, component and resource in the entity component system (ECS). It is a code concept; the playable space is the Game world.">ECS World</span> to <span class="concept" data-tip="The step that reads the ECS World once per frame and fills Frame data, choosing each Renderable's slot and which Instances to write."><code>FramePreparer::prepare</code></span>. Prepare reads the camera, the lights and every <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span>, and fills an owned value called <span class="term"><span class="concept" data-tip="The owned per-frame snapshot that prepare fills from the ECS World: camera, lights, the Instances to write and the draws. The Renderer consumes it.">Frame data</span></span>. The Renderer never reads the World. It copies Frame data into <span class="concept" data-term="GPU buffer" data-tip="A block of memory on the GPU whose size and usage flags are fixed when it is created, so making one bigger means creating a new buffer.">GPU buffers</span>, records the <span class="concept" data-term="Draw call" data-tip="One command telling the GPU to draw geometry. At PR #220, Praxis recorded one draw_indexed per Primitive of each Renderable, naming the Renderable's slot.">draws</span> and submits them (<span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0004).</p>
+    <p>The <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span> sits in the middle of that path. Prepare decides which <span class="concept" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slot</span> each Renderable owns and which slots need new bytes. Upload copies those bytes in. Every draw names a slot, and the <span class="concept" data-tip="The GPU program run once per vertex of a draw. Praxis's vertex shader reads the draw's Instance from instances[instance_index] to place each vertex.">vertex shader</span> reads it. PR #220 changed the <span class="concept" data-tip="Prepare's record of which slot each Renderable owns, with the free list and the Renderables refused one. In the code it is InstanceSlots.">slot table</span>, the buffer, the <span class="concept" data-tip="CPU-writable memory that the GPU copies from into GPU buffers. By default wgpu lets the CPU map only buffers made for copying, so uploads pass through staging.">staging</span> that feeds it, and <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, Renderables refused, bytes uploaded, heap allocations and GPU memory.">Frame stats</span>.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 960 372" width="960" role="img" aria-label="One frame: the ECS World is read by prepare, which fills Frame data; upload copies bytes through staging into GPU buffers; the render pass binds them and draws; the vertex shader reads each Instance by its slot. Prepare, upload, the GPU buffers and Frame stats changed in PR 220.">
+        <defs>
+          <marker id="frame-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-soft)"/></marker>
+        </defs>
+        <text x="20" y="24" class="t-lane">CPU · MAIN THREAD</text>
+        <text x="20" y="238" class="t-lane">GPU</text>
+        <line x1="20" y1="220" x2="940" y2="220" stroke="var(--rule)" stroke-dasharray="4 4"/>
+
+        <g transform="translate(20,36)">
+          <rect class="box" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">ECS World</text>
+          <text x="12" y="48" class="t-line">Transform</text>
+          <text x="12" y="66" class="t-line">Mesh Handle</text>
+          <text x="12" y="84" class="t-line">Material Handle</text>
+          <text x="12" y="102" class="t-file">src/state.rs</text>
+        </g>
+        <g transform="translate(260,36)">
+          <rect class="box-changed" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">prepare</text>
+          <text x="12" y="48" class="t-line">FramePreparer</text>
+          <text x="12" y="66" class="t-line">slot table</text>
+          <text x="12" y="84" class="t-line">change detection</text>
+          <text x="12" y="102" class="t-file">render/prepare.rs</text>
+        </g>
+        <g transform="translate(500,36)">
+          <rect class="box" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">Frame data</text>
+          <text x="12" y="48" class="t-line">camera, light</text>
+          <text x="12" y="66" class="t-line">Instance writes</text>
+          <text x="12" y="84" class="t-line">draws</text>
+          <text x="12" y="102" class="t-file">render/prepare.rs</text>
+        </g>
+        <g transform="translate(740,36)">
+          <rect class="box-changed" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">upload</text>
+          <text x="12" y="48" class="t-line">Renderer</text>
+          <text x="12" y="66" class="t-line">FrameStaging</text>
+          <text x="12" y="84" class="t-line">3 slots, bounded</text>
+          <text x="12" y="102" class="t-file">render/staging.rs</text>
+        </g>
+        <line x1="345" y1="148" x2="345" y2="160" stroke="var(--accent)" stroke-width="2"/>
+        <g transform="translate(260,160)">
+          <rect class="box-changed" width="170" height="44" rx="6"/>
+          <text x="12" y="18" class="t-title" style="font-size:13px">Frame stats</text>
+          <text x="12" y="36" class="t-small">renderables_refused</text>
+        </g>
+
+        <g transform="translate(740,246)">
+          <rect class="box-changed" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">GPU buffers</text>
+          <text x="12" y="48" class="t-line">camera 96 B</text>
+          <text x="12" y="66" class="t-line">light 192 B</text>
+          <text x="12" y="84" class="t-line">Instances 64 MiB</text>
+          <text x="12" y="102" class="t-file">render/renderer.rs</text>
+        </g>
+        <g transform="translate(500,246)">
+          <rect class="box" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">Render pass</text>
+          <text x="12" y="48" class="t-line">bind groups 0 to 3</text>
+          <text x="12" y="66" class="t-line">one draw_indexed</text>
+          <text x="12" y="84" class="t-line">per Primitive</text>
+          <text x="12" y="102" class="t-file">render/renderer.rs</text>
+        </g>
+        <g transform="translate(260,246)">
+          <rect class="box" width="170" height="112" rx="6"/>
+          <text x="12" y="26" class="t-title">Vertex shader</text>
+          <text x="12" y="48" class="t-line">reads its slot:</text>
+          <text x="12" y="66" class="t-code">instances[i]</text>
+          <text x="12" y="84" class="t-line">i = instance_index</text>
+          <text x="12" y="102" class="t-file">shaders/main.wgsl</text>
+        </g>
+        <g transform="translate(20,300)">
+          <rect x="0" y="-11" width="22" height="14" rx="3" fill="var(--panel)" stroke="var(--accent)" stroke-width="2.5"/>
+          <text x="32" y="0" class="t-label">changed in PR #220</text>
+        </g>
+
+        <path class="edge" d="M190 92H254" marker-end="url(#frame-arrow)"/>
+        <text x="225" y="84" class="t-small" text-anchor="middle">reads</text>
+        <path class="edge" d="M430 92H494" marker-end="url(#frame-arrow)"/>
+        <text x="465" y="84" class="t-small" text-anchor="middle">fills</text>
+        <path class="edge" d="M670 92H734" marker-end="url(#frame-arrow)"/>
+        <text x="705" y="84" class="t-small" text-anchor="middle">bytes</text>
+        <path class="edge" d="M825 148V240" marker-end="url(#frame-arrow)"/>
+        <text x="833" y="200" class="t-small">GPU copy</text>
+        <path class="edge-dash" d="M585 148V240" marker-end="url(#frame-arrow)"/>
+        <text x="593" y="200" class="t-small">draws</text>
+        <path class="edge" d="M740 302H676" marker-end="url(#frame-arrow)"/>
+        <text x="708" y="294" class="t-small" text-anchor="middle">bound</text>
+        <path class="edge" d="M500 302H436" marker-end="url(#frame-arrow)"/>
+        <text x="468" y="294" class="t-small" text-anchor="middle">runs</text>
+      </svg>
+    </div>
+    <figcaption><b>One frame.</b> The top row runs on the CPU's main thread, the bottom row on the GPU. Blue outlines mark what PR #220 changed; Frame data also lost <code>instance_slot_count</code>, which only the growth path read. Boxes name the file that owns them, under <code>src/</code>.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Where to look in the code</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>File</th><th>What lives there</th></tr></thead>
+      <tbody>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/prepare.rs">render/prepare.rs</a></td><td><code>FramePreparer</code>, the slot table (<code>InstanceSlots</code>), Frame data, and the tests for both</td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/instance.rs">render/instance.rs</a></td><td><code>INSTANCE_CAPACITY</code>, the 128-byte <code>InstanceData</code>, the <span class="concept" data-tip="The integer coordinates of the 64 m grid cell holding a position. With an f32 offset from the cell's corner, it keeps positions precise far from the origin.">anchor</span> and <span class="concept" data-tip="The f32 distance from the corner of its anchor's cell to the position. It stays small, so f32 keeps it precise wherever the cell lies.">offset</span> split</td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/renderer.rs">render/renderer.rs</a></td><td><code>Renderer::new</code> creates the buffers; <code>upload</code> and <code>render</code> run every frame</td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/staging.rs">render/staging.rs</a></td><td><code>FrameStaging</code> for per-frame uploads, <code>LoadStaging</code> for loads</td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/shaders/main.wgsl">render/shaders/main.wgsl</a></td><td>the main pass's <span class="concept" data-term="Shader" data-tip="A program that runs on the GPU, for example once per vertex or per pixel. Praxis writes its shaders in WGSL.">shaders</span>, including <code>instances[instance_index]</code></td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/stats/mod.rs">stats/mod.rs</a></td><td><code>FrameStats</code>, its <code>counts</code> line, and how GPU memory is added up</td></tr>
+        <tr><td class="code"><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/state.rs">state.rs</a></td><td><code>State::update</code>: <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation. Rendered frames draw a blend of the two newest Ticks.">Ticks</span>, <span class="concept" data-term="System" data-tip="A function the ECS runs over the World each frame or Tick, acting on every entity that has the components it queries.">systems</span>, prepare, upload, in that order</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="chapter" id="slots">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2</div>
+    <h2>Instances and their slots</h2>
+    <p>A <span class="term"><span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span></span> is an <span class="concept" data-tip="An ID in the ECS World that components attach to. On its own it holds no data and does nothing.">entity</span> with a <span class="concept" data-tip="The component placing an entity relative to its parent: an f64 translation, a rotation and a scale. Composed with its ancestors' it gives the World transform.">Transform</span> and a <span class="concept" data-tip="A typed index into the Mesh pool, held by a Renderable's MeshRef component in place of the Mesh itself.">Mesh Handle</span>, and optionally a <span class="concept" data-tip="A typed index into the Material pool. A Renderable carrying one, in its MaterialRef component, draws with that Material in place of its Mesh's own.">Material Handle</span> that overrides its <span class="concept" data-tip="An ordered list of Primitives rendered together. Its vertices and indices live in the Mesh pool's two fixed Arenas.">Mesh</span>'s <span class="concept" data-term="Material" data-tip="The appearance of a Primitive: physically based shading factors plus one texture Layer per Channel. The GPU knows it by its Material ID.">Materials</span>. Its <span class="term"><span class="concept" data-tip="A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer: its position as anchor and offset, its rotation-scale and normal matrices, and a Material ID.">Instance</span></span> is its data on the GPU: 128 bytes in one <span class="concept" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slot</span> of the <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span>.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 960 150" width="960" role="img" aria-label="InstanceData is 128 bytes: rotation_scale 48 bytes, normal_matrix 48 bytes, anchor 12, material_id 4, offset 12 and 4 bytes of padding. Each matrix column of 12 bytes is padded to 16.">
+        <defs>
+          <pattern id="pad-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="var(--figure-bg)"/>
+            <line x1="0" y1="0" x2="0" y2="6" stroke="var(--rule)" stroke-width="3"/>
+          </pattern>
+        </defs>
+        <g class="t-small" text-anchor="middle">
+          <text x="32" y="38">0</text><text x="368" y="38">48</text><text x="704" y="38">96</text><text x="788" y="38">108</text><text x="816" y="38">112</text><text x="900" y="38">124</text><text x="928" y="38">128</text>
+        </g>
+        <g>
+          <rect x="32" y="48" width="84" height="48" fill="var(--panel)"/><rect x="116" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="144" y="48" width="84" height="48" fill="var(--panel)"/><rect x="228" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="256" y="48" width="84" height="48" fill="var(--panel)"/><rect x="340" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="368" y="48" width="84" height="48" fill="var(--panel)"/><rect x="452" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="480" y="48" width="84" height="48" fill="var(--panel)"/><rect x="564" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="592" y="48" width="84" height="48" fill="var(--panel)"/><rect x="676" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+          <rect x="704" y="48" width="84" height="48" fill="var(--accent-wash)"/>
+          <rect x="788" y="48" width="28" height="48" fill="var(--panel)"/>
+          <rect x="816" y="48" width="84" height="48" fill="var(--accent-wash)"/>
+          <rect x="900" y="48" width="28" height="48" fill="url(#pad-hatch)"/>
+        </g>
+        <g stroke="var(--rule)" stroke-width="1">
+          <path d="M144 48V96M256 48V96M480 48V96M592 48V96M788 48V96M816 48V96M900 48V96"/>
+        </g>
+        <path d="M368 48V96M704 48V96" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <rect x="32" y="48" width="896" height="48" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <g class="t-code" text-anchor="middle">
+          <text x="74" y="77">x</text><text x="186" y="77">y</text><text x="298" y="77">z</text>
+          <text x="410" y="77">x</text><text x="522" y="77">y</text><text x="634" y="77">z</text>
+          <text x="746" y="77">i32 ×3</text><text x="802" y="77" style="font-size:11px">u32</text><text x="858" y="77">f32 ×3</text>
+        </g>
+        <g class="t-label" text-anchor="middle">
+          <text x="200" y="118">rotation_scale · mat3 · 48 B</text>
+          <text x="536" y="118">normal_matrix · mat3 · 48 B</text>
+          <text x="746" y="118">anchor · 12 B</text>
+          <text x="858" y="118">offset · 12 B</text>
+          <text x="802" y="142">material_id · 4 B</text>
+          <text x="914" y="142">pad · 4 B</text>
+        </g>
+        <path d="M802 96V128M914 96V128" stroke="var(--ink-soft)" stroke-width="1"/>
+      </svg>
+    </div>
+    <figcaption><b>What one slot holds</b> (<code>InstanceData</code>). WGSL lays out each <code>vec3</code> column of a <code>mat3x3</code> in 16 bytes, so each matrix carries 12 bytes of <span class="concept" data-tip="Unused bytes placed so each field starts where the shader's memory layout expects it. The Rust struct matches them, padding columns and adding fields that start with an underscore.">padding</span> (hatched), and the struct is padded to a multiple of 16. The two tinted fields are the position, split into an integer <span class="concept" data-tip="The integer coordinates of the 64 m grid cell holding a position. With an f32 offset from the cell's corner, it keeps positions precise far from the origin.">anchor</span> and a float <span class="concept" data-tip="The f32 distance from the corner of its anchor's cell to the position. It stays small, so f32 keeps it precise wherever the cell lies.">offset</span>.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The position is split into an integer <span class="term">anchor</span>, a cell of a 64 m grid, and an <span class="concept" data-tip="Rust's single-precision float, the number type GPUs mostly compute in. Its absolute precision falls as values grow, so large positions lose detail.">f32</span> <span class="term">offset</span> from that cell's corner (<span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0014). The camera's position travels separately, in the <span class="concept" data-term="Uniform" data-tip="A small GPU buffer of values that stay the same for every vertex and pixel of a pass, such as the camera and the lights. Both are rewritten every frame.">camera uniform</span>, and the <span class="concept" data-tip="A program that runs on the GPU, for example once per vertex or per pixel. Praxis writes its shaders in WGSL.">shader</span> subtracts the two. A camera that moves therefore changes no Instance, and a frame where only the camera moves writes no Instances at all.</p>
+    <h3>Slots persist</h3>
+    <p>A slot belongs to its Renderable (ADR 0003) until prepare stops finding it: the entity is <span class="concept" data-term="Despawn" data-tip="To remove an entity and all its components from the ECS World. A despawned Renderable's slot goes onto the free list.">despawned</span>, or loses its Mesh Handle or its <code>WorldTransform</code>, the component prepare reads in place of the Transform. Removing only the Transform leaves the <code>WorldTransform</code> that came with it, so the slot stays. Each frame, <span class="concept" data-tip="The step that reads the ECS World once per frame and fills Frame data, choosing each Renderable's slot and which Instances to write.">prepare</span> writes only the slots whose contents changed. That means Renderables that are new, whose <span class="concept" data-tip="Where an entity sits in the Game world: its Transform composed with every ancestor's, in f64. It is always derived from the hierarchy.">World transform</span> or Material changed, or that move between simulation <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation. Rendered frames draw a blend of the two newest Ticks.">Ticks</span> and are <span class="concept" data-tip="Drawn part way between its two newest Ticks, by the frame's blend weight, so motion stays smooth at any frame rate. Its Instance is rewritten every frame.">blended</span> every frame (ADR 0022). Every other slot keeps what an earlier frame wrote.</p>
+    <p>Prepare finds those changes with bevy_ecs <span class="term"><span class="concept" data-tip="bevy_ecs records the tick at which each component last changed, so prepare can ask what changed, and which entities lost a component, since the last frame.">change detection</span></span>. Every <span class="concept" data-tip="Plain data attached to an entity, such as a Transform or a Mesh Handle. Systems find entities by the components they carry.">component</span> remembers the <span class="concept" data-term="Change tick" data-tip="A counter bevy_ecs advances each time a system runs and at each World::clear_trackers, separate from simulation Ticks. A change stamps the current tick on its component, so comparing that stamp with the tick of the last check shows whether it changed.">tick</span> it last changed. A <code>Ref&lt;T&gt;</code> in a <span class="concept" data-tip="A request for every entity that has a given set of components, yielding those components for each. Prepare's query finds every Renderable.">query</span> answers <code>is_changed()</code>, and <code>RemovedComponents</code> lists entities that lost a component. bevy_ecs used on its own, outside the full Bevy engine, has to close each change window itself with <code>World::clear_trackers()</code>. Prepare does that as its last step, which is why it must be the frame's last read of the <span class="concept" data-term="ECS World" data-tip="The container of every entity, component and resource in the entity component system (ECS). It is a code concept; the playable space is the Game world.">World</span>.</p>
+    <h3>The free list</h3>
+    <p>When a Renderable goes away, prepare pushes its slot onto a <span class="term"><span class="concept" data-tip="The stack of slots given back by Renderables that left. The most recently freed slot is reused first, before any fresh slot.">free list</span></span>. A new Renderable takes the most recently freed slot first. It takes a fresh slot, one past the highest ever used, only when the free list is empty. Slot numbers stay dense, and a Renderable's slot never moves while it lives.</p>
+  </div>
+</section>
+
+<section class="chapter" id="growing">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3</div>
+    <h2>Why stop growing</h2>
+    <p>Before this PR the <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span> started with 16 <span class="concept" data-term="Slot" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slots</span> (2 KiB) and doubled whenever a frame needed a slot past its end. A <span class="concept" data-tip="A block of memory on the GPU whose size and usage flags are fixed when it is created, so making one bigger means creating a new buffer.">GPU buffer</span> cannot grow in place, so growing meant replacing it: create a bigger buffer, copy the old one into it on the GPU, and rebuild every <span class="concept" data-tip="A fixed set of resources, such as buffers and textures, handed to shaders together. It is a snapshot that keeps naming the resources it was made from.">bind group</span> that named the old one. A <span class="term">bind group</span> is a <span class="concept" data-term="Bind group snapshot" data-tip="wgpu bind groups cannot be edited: each keeps the exact buffers and textures it was created with. Using a replacement buffer takes a new bind group.">snapshot</span> of specific resources. Replace a buffer and every bind group made from it still points at the old one, which is why the <code>CLAUDE.md</code> review checklist has a line for it.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 960 250" width="960" role="img" aria-label="Before: a 16-slot buffer is copied into a new 32-slot buffer and bind group 3 is rebuilt to name it. After: one 524,288-slot buffer created once, its bind group never rebuilt, and Renderable 524,289 refused.">
+        <defs>
+          <marker id="grow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-soft)"/></marker>
+        </defs>
+        <text x="20" y="24" class="t-title">Before: double when full</text>
+        <rect x="40" y="44" width="128" height="24" fill="var(--panel)" stroke="var(--ink-soft)"/>
+        <path d="M48 44V68M56 44V68M64 44V68M72 44V68M80 44V68M88 44V68M96 44V68M104 44V68M112 44V68M120 44V68M128 44V68M136 44V68M144 44V68M152 44V68M160 44V68" stroke="var(--rule)"/>
+        <text x="40" y="86" class="t-small">16 slots · 2 KiB</text>
+        <path class="edge" d="M104 70V122" marker-end="url(#grow-arrow)"/>
+        <text x="114" y="104" class="t-small">GPU copy</text>
+        <rect x="40" y="128" width="256" height="24" fill="var(--panel)" stroke="var(--ink-soft)"/>
+        <path d="M48 128V152M56 128V152M64 128V152M72 128V152M80 128V152M88 128V152M96 128V152M104 128V152M112 128V152M120 128V152M128 128V152M136 128V152M144 128V152M152 128V152M160 128V152M168 128V152M176 128V152M184 128V152M192 128V152M200 128V152M208 128V152M216 128V152M224 128V152M232 128V152M240 128V152M248 128V152M256 128V152M264 128V152M272 128V152M280 128V152M288 128V152" stroke="var(--rule)"/>
+        <text x="40" y="170" class="t-small">32 slots · 4 KiB</text>
+        <rect x="300" y="40" width="140" height="28" rx="4" fill="var(--panel)" stroke="var(--ink-soft)"/>
+        <text x="370" y="59" class="t-code" text-anchor="middle">bind group 3</text>
+        <path class="edge-dash" d="M300 56H176" marker-end="url(#grow-arrow)"/>
+        <text x="236" y="50" class="t-small" text-anchor="middle">stale</text>
+        <path class="edge" d="M370 68V140H304" marker-end="url(#grow-arrow)"/>
+        <text x="378" y="110" class="t-small">rebuilt</text>
+        <text x="40" y="206" class="t-label">Both buffers exist while the copy runs, and the</text>
+        <text x="40" y="226" class="t-label">copy needs the old buffer to allow COPY_SRC.</text>
+
+        <line x1="478" y1="16" x2="478" y2="236" stroke="var(--rule)"/>
+
+        <text x="500" y="24" class="t-title">After: created once, refuses when full</text>
+        <rect x="520" y="44" width="400" height="24" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="520" y="86" class="t-small">524,288 slots · 64 MiB · made in Renderer::new</text>
+        <rect x="800" y="98" width="120" height="28" rx="4" fill="var(--panel)" stroke="var(--ink-soft)"/>
+        <text x="860" y="117" class="t-code" text-anchor="middle">bind group 3</text>
+        <path class="edge" d="M860 98V74" marker-end="url(#grow-arrow)"/>
+        <text x="790" y="117" class="t-small" text-anchor="end">never rebuilt</text>
+        <rect x="520" y="150" width="168" height="30" rx="4" fill="var(--panel)" stroke="var(--ink-soft)"/>
+        <text x="604" y="170" class="t-code" text-anchor="middle">Renderable 524,289</text>
+        <path class="edge" d="M688 165H742" marker-end="url(#grow-arrow)"/>
+        <rect x="748" y="150" width="172" height="30" rx="4" fill="var(--panel)" stroke="var(--bad)" stroke-width="1.5"/>
+        <text x="834" y="170" class="t-bad" text-anchor="middle">refused</text>
+        <text x="520" y="206" class="t-label">Warned about once, counted every frame,</text>
+        <text x="520" y="226" class="t-label">retried every frame until a slot frees.</text>
+      </svg>
+    </div>
+    <figcaption><b>The difference.</b> Growth replaced the buffer and everything that pointed at it, mid-frame. The fixed buffer is made once, and the only new behaviour is at the edge: a <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span> that finds no slot.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Now <code>Renderer::new</code> creates the buffer once, with 524,288 slots: 64 <span class="concept" data-term="Mebibyte" data-tip="A binary unit of bytes, counted in powers of two: 64 MiB is exactly 524,288 slots of 128 bytes.">MiB</span> at 128 bytes each. The growth function, its copy, its bind-group rebuild and the <span class="concept" data-tip="The buffer usage flag that lets a buffer be the source of a GPU copy. wgpu requires each buffer's usages to be declared when it is created."><code>COPY_SRC</code></span> usage the copy needed are gone.</p>
+    <h3>What a fixed size buys</h3>
+    <ul class="keypoints">
+      <li><b>Memory is known at startup.</b> <span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0013 gives the GPU an 8 GB <span class="concept" data-tip="A numeric limit on one metric of a Reference scene, such as CPU time, GPU time or GPU memory, that a change must not regress. ADR 0013 sets them.">Budget</span>. Milestone M4 splits it into a Budget per kind of memory and replaces every provisional <span class="concept" data-tip="How much a fixed-size buffer holds, set when it is created. The Instance buffer's capacity is 524,288 slots until M4 sizes it.">capacity</span>, this one included.</li>
+      <li><b>No frame pays for a resize.</b> Growth allocated, copied and rebuilt in the middle of a frame, with both buffers alive during the copy.</li>
+      <li><b>Bind groups can be built once.</b> The next groundwork ticket (#213) builds the bind group that holds the Instance buffer once, at startup, because every buffer in it has a fixed capacity.</li>
+      <li><b>A full buffer is visible.</b> Running out is refused, warned about and counted, instead of quietly costing more memory.</li>
+    </ul>
+    <p>The price is 64 MiB in every scene, even a scene with one helmet. That is 0.84% of the 8 GB Budget. M3's dense <code>town</code> scene aims at about 250,000 <span class="concept" data-term="Instance" data-tip="A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer: its position as anchor and offset, its rotation-scale and normal matrices, and a Material ID.">Instances</span>, under half the capacity. (PRs #273 and #275 have since built it, with 254,256 Instances; <a href="town.html">Town Explained</a> covers it.) 64 MiB also fits inside the 128 MiB that wgpu's default limits allow one <span class="concept" data-term="Storage buffer" data-tip="A GPU buffer that shaders index like an array, as instances[i]. wgpu limits how many bytes one binding of it may expose to shaders.">storage-buffer binding</span>, and the <span class="concept" data-tip="The GPU features and limits Praxis requires to start. An adapter below it is refused with every gap named, and nothing in it has a fallback (ADR 0021).">Capability floor</span> keeps that default (ADR 0021), so no limit had to be raised.</p>
+  </div>
+</section>
+
+<section class="chapter" id="refusal">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4</div>
+    <h2>Renderable 524,289</h2>
+    <p>When every <span class="concept" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slot</span> is taken and a new <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span> arrives, <span class="concept" data-tip="The step that reads the ECS World once per frame and fills Frame data, choosing each Renderable's slot and which Instances to write.">prepare</span> refuses it. The ticket and the owner's follow-up comment set four rules:</p>
+    <ul class="keypoints">
+      <li><b>No slot</b>, so no <span class="concept" data-tip="A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer: its position as anchor and offset, its rotation-scale and normal matrices, and a Material ID.">Instance</span> is written and nothing draws it. The other 524,288 render as before.</li>
+      <li><b>Warned about once</b>, in the first frame it is refused: <code>WARN Renderable refused: the Instance buffer is full entity=… capacity=524288</code>.</li>
+      <li><b>Counted every frame</b>, in a new <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, Renderables refused, bytes uploaded, heap allocations and GPU memory.">Frame stat</span>: <code>renderables_refused</code>.</li>
+      <li><b>Retried every frame</b>, so it takes the next slot another Renderable leaves.</li>
+    </ul>
+    <p>The demo below runs the same rules on a buffer of 12 slots, with the same data structures as the Rust code. <span class="concept" data-term="Entity" data-tip="An ID in the ECS World that components attach to. On its own it holds no data and does nothing.">Entities</span> appear in <span class="concept" data-tip="bevy_ecs keeps entities with the same set of components in one table, a row each. Removing one moves the table's last row into its place, a swap-remove.">ECS table</span> order, which is the order prepare visits them. Click an entity to <span class="concept" data-tip="To remove an entity and all its components from the ECS World. A despawned Renderable's slot goes onto the free list.">despawn</span> it or to make it start moving, then step a frame.</p>
+  </div>
+  <figure class="wide" id="slot-demo">
+    <div class="demo">
+      <div class="demo-row">
+        <div class="label">Still entities · table A, visited first</div>
+        <div class="chips" id="table-still"></div>
+      </div>
+      <div class="demo-row">
+        <div class="label">Moving entities · table B, carry PreviousWorldTransform, written every frame</div>
+        <div class="chips" id="table-moving"></div>
+      </div>
+      <div class="demo-row">
+        <div class="label">Instance buffer · 12 slots (the real one has 524,288)</div>
+        <div class="cells" id="slot-cells" aria-label="Instance buffer slots"></div>
+        <div class="key">
+          <span><i class="k-written"></i>written this frame</span>
+          <span><i></i>kept from an earlier frame</span>
+          <span><i class="k-free"></i>on the free list</span>
+          <span><i class="k-unused"></i>never used</span>
+          <span><i class="k-refused"></i>refused entity</span>
+          <span><i class="k-moving"></i>moving entity</span>
+        </div>
+      </div>
+      <div class="status-line" aria-live="polite">
+        <span id="frame-readout"></span>
+        <span>free list, next out first: <b id="free-list">empty</b></span>
+      </div>
+      <div class="controls">
+        <button type="button" class="btn primary" id="next-frame">Next frame</button>
+        <button type="button" class="btn" id="spawn-one">Spawn 1</button>
+        <button type="button" class="btn" id="spawn-three">Spawn 3</button>
+        <button type="button" class="btn" id="lose-writes">Lose this frame's uploads</button>
+      </div>
+      <div class="controls">
+        <span class="control-label">Clicking an entity:</span>
+        <div class="seg" role="group" aria-label="What clicking an entity does">
+          <button type="button" id="click-despawn" aria-pressed="true">despawns it</button>
+          <button type="button" id="click-move" aria-pressed="false">starts it moving</button>
+        </div>
+      </div>
+      <div class="controls">
+        <span class="control-label">After lost uploads:</span>
+        <div class="seg" role="group" aria-label="How lost uploads are recovered">
+          <button type="button" id="recovery-keep" aria-pressed="true">keep slots, rewrite all (merged)</button>
+          <button type="button" id="recovery-reset" aria-pressed="false">reset the table (first draft)</button>
+        </div>
+      </div>
+      <div class="controls">
+        <button type="button" class="btn" id="replay-bug">Replay the review bug</button>
+        <button type="button" class="btn" id="start-over">Start over</button>
+      </div>
+      <ol class="log" id="demo-log" aria-label="Log"></ol>
+    </div>
+    <figcaption><b>Live demo.</b> It opens two frames in: 12 Renderables fill the buffer, and E13 and E14 arrive to find it full. Step frames and watch them stay refused without a second warning. Despawn one with a slot and a refused one takes it on the next frame. <b>Replay the review bug</b> plays the sequence below under whichever recovery is selected.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The bug the review found</h3>
+    <p>If a frame's uploads fail, because a <span class="concept" data-tip="One of FrameStaging's three buffers. A frame writes its uploads into the next one in turn, and it is mapped again once the GPU has finished the frame that copied from it.">staging slot</span> failed to <span class="concept" data-term="Map and unmap" data-tip="Mapping lets the CPU read or write a buffer's memory directly; unmapping hands the buffer back to the GPU. A wgpu map completes once the GPU has finished with it.">map</span>, the GPU never receives that frame's Instance writes. The recovery, <code>rewrite_all_instances</code>, makes the next prepare write every Instance again. The first draft of this PR did that by resetting the <span class="concept" data-tip="Prepare's record of which slot each Renderable owns, with the free list and the Renderables refused one. In the code it is InstanceSlots.">slot table</span>, as the code before it had done.</p>
+    <p>Resetting was harmless while the buffer could grow: every Renderable got a slot again, in whatever order. At a fixed <span class="concept" data-tip="How much a fixed-size buffer holds, set when it is created. The Instance buffer's capacity is 524,288 slots until M4 sizes it.">capacity</span> it is wrong, because prepare hands out slots in table order, and table order changes. bevy removes an entity from a table by moving the table's last entity into its row. An entity that gains a <span class="concept" data-tip="Plain data attached to an entity, such as a Transform or a Mesh Handle. Systems find entities by the components they carry.">component</span>, as a moving one gains <span class="concept" data-tip="The component holding an entity's World transform at the previous Tick. Everything the fixed schedule moves carries it, so frames can blend between the two newest Ticks."><code>PreviousWorldTransform</code></span>, moves to another table that is visited later. After a reset, a refused Renderable that now sits earlier in table order takes a slot, a Renderable that held one is refused and vanishes, and the warnings fire again.</p>
+    <p>The fix keeps the table and sets a flag, so the next prepare writes every Renderable into the slot it already owns. The test caught the first draft with <code>left: 2, right: 1</code>: two warnings where one was allowed.</p>
+  </div>
+</section>
+
+<section class="chapter" id="staging">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5</div>
+    <h2>Getting bytes to the GPU</h2>
+    <p>The CPU writes <span class="concept" data-term="Instance" data-tip="A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer: its position as anchor and offset, its rotation-scale and normal matrices, and a Material ID.">Instances</span> into memory it can <span class="concept" data-term="Map and unmap" data-tip="Mapping lets the CPU read or write a buffer's memory directly; unmapping hands the buffer back to the GPU. A wgpu map completes once the GPU has finished with it.">map</span>, and the GPU then copies them into the <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span>. That in-between memory is <span class="term"><span class="concept" data-tip="CPU-writable memory that the GPU copies from into GPU buffers. By default wgpu lets the CPU map only buffers made for copying, so uploads pass through staging.">staging</span></span>. wgpu's <code>Queue::write_buffer</code> provides it for you, but its own documentation says that on native platforms "the staging memory will be a new allocation", released after the next submission. It suggests a <code>StagingBelt</code>, or "buffers you explicitly create, map, and unmap yourself", to avoid short-lived allocations.</p>
+    <p>Praxis does the second. <code>FrameStaging</code> keeps three <span class="concept" data-term="Staging slot" data-tip="One of FrameStaging's three buffers. A frame writes its uploads into the next one in turn, and it is mapped again once the GPU has finished the frame that copied from it.">staging slots</span> and cycles through them: the window lets up to two frames be <span class="concept" data-term="Frames in flight" data-tip="Frames submitted to the GPU but not yet finished. Here at most two, so the CPU can prepare the next frame while the GPU draws earlier ones.">in flight</span> on the GPU while the CPU writes the next. Each frame writes the camera and light <span class="concept" data-term="Uniform" data-tip="A small GPU buffer of values that stay the same for every vertex and pixel of a pass, such as the camera and the lights. Both are rewritten every frame.">uniforms</span> (96 and 192 bytes) and the Instances it changed into the next slot, records one <span class="concept" data-tip="A copy command recorded with the frame's other commands and run by the GPU, moving bytes between buffers, such as from a staging slot into the Instance buffer.">GPU copy</span> per run of consecutive <span class="concept" data-term="Slot" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">Instance slots</span>, unmaps it, and asks for it to be mapped again once the GPU has finished that frame, its draws included. If the CPU laps the GPU, it waits.</p>
+  </div>
+  <figure class="wide">
+    <div class="scroll">
+      <svg viewBox="0 0 960 186" width="960" role="img" aria-label="Frames 1 to 6 on the CPU use staging slots 0, 1, 2, 0, 1, 2. The GPU runs each frame two frames later. Frame 4 reuses slot 0 once the GPU has finished frame 1.">
+        <defs>
+          <marker id="ring-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker>
+        </defs>
+        <text x="20" y="73" class="t-lane">CPU WRITES</text>
+        <text x="20" y="153" class="t-lane">GPU RUNS</text>
+        <g class="t-code" text-anchor="middle">
+          <rect x="110" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/><text x="172" y="73">frame 1 · slot 0</text>
+          <rect x="250" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="312" y="73">frame 2 · slot 1</text>
+          <rect x="390" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="452" y="73">frame 3 · slot 2</text>
+          <rect x="530" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/><text x="592" y="73">frame 4 · slot 0</text>
+          <rect x="670" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="732" y="73">frame 5 · slot 1</text>
+          <rect x="810" y="50" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="872" y="73">frame 6 · slot 2</text>
+          <rect x="390" y="130" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/><text x="452" y="153">frame 1</text>
+          <rect x="530" y="130" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="592" y="153">frame 2</text>
+          <rect x="670" y="130" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="732" y="153">frame 3</text>
+          <rect x="810" y="130" width="124" height="36" rx="5" fill="var(--panel)" stroke="var(--rule)"/><text x="872" y="153">frame 4</text>
+        </g>
+        <path d="M514 128C522 112 524 102 532 90" stroke="var(--accent)" stroke-width="1.8" fill="none" marker-end="url(#ring-arrow)"/>
+        <text x="110" y="28" class="t-small">time →</text>
+      </svg>
+    </div>
+    <figcaption><b>Three slots, two frames in flight.</b> While the CPU writes frame 3, the GPU still holds frames 1 and 2. Frame 4 can reuse slot 0 only once the GPU has finished frame 1; if it has not, the CPU waits for it.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Bounded, on demand</h3>
+    <p>A staging slot grows when a frame needs more bytes than it holds, to the next power of two, and it never shrinks. Before this PR nothing bounded it. Now the bound is the most one frame can write: every buffer <code>upload</code> writes, in full. That is the Instance buffer plus the two uniforms, 67,109,152 bytes. <code>FrameStaging::write</code> asserts that no frame goes past it, and growth stops there instead of rounding up to 128 <span class="concept" data-term="Mebibyte" data-tip="A binary unit of bytes, counted in powers of two: 64 MiB is exactly 524,288 slots of 128 bytes.">MiB</span>.</p>
+  </div>
+  <figure class="wide">
+    <label for="written-slider" class="readout">Instances written in one frame: <b id="written-count">10</b></label>
+    <div><input type="range" id="written-slider" min="0" max="1000" step="1" value="0"></div>
+    <div class="controls">
+      <button type="button" class="btn" data-written="0">camera moves only</button>
+      <button type="button" class="btn" data-written="10">pbr-sweep's first frame</button>
+      <button type="button" class="btn" data-written="250000">a 250,000-Instance first frame</button>
+      <button type="button" class="btn" data-written="524288">every slot</button>
+    </div>
+    <dl class="figures">
+      <div><dt>bytes this frame</dt><dd id="needed-bytes"></dd></div>
+      <div><dt>one slot, before PR #220</dt><dd id="slot-before"></dd></div>
+      <div><dt>one slot, now</dt><dd id="slot-now"></dd></div>
+    </dl>
+    <div class="bars" aria-hidden="true">
+      <div class="bar-row"><span>3 slots before</span><div class="bar-track"><div class="bar-fill" id="bar-before"></div></div></div>
+      <div class="bar-row"><span>3 slots now</span><div class="bar-track"><div class="bar-fill now" id="bar-now"></div></div></div>
+    </div>
+    <p class="readout" id="staging-total" style="margin-top:10px"></p>
+    <figcaption><b>Live demo.</b> Bars are to scale, full width = 384 MiB. The two only differ near the top: a frame that writes every slot needs 64 MiB and 288 bytes, which the old growth rounded up to a 128 MiB slot, three times over.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Most frames write almost nothing: a frame where only the camera moves uploads 288 bytes. The large frames are a scene's first, when every <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span> is new, and the recovery after lost uploads.</p>
+    <p>Loads take a different path. <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives rendered together. Its vertices and indices live in the Mesh pool's two fixed Arenas.">Meshes</span> and Textures go through <code>LoadStaging</code>, a wgpu <code>StagingBelt</code> that lives only until that load's copies are submitted, so load staging never stays resident (<span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0017).</p>
+  </div>
+</section>
+
+<section class="chapter" id="memory">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6</div>
+    <h2>Counting GPU memory</h2>
+    <p><span class="concept" data-tip="The Frame stat summing the bytes of every GPU buffer and texture the State created, Pools included, the same way on every backend (ADR 0013)."><code>gpu_memory_bytes</code></span> is the engine's own ledger. It adds up the size of every buffer and texture the State creates, the same way on every backend, because wgpu has no allocator report on Metal (<span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0013). For pbr-sweep at the bench's 2560 × 1440 it adds up to the byte:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts" id="ledger">
+        <thead><tr><th>Resource</th><th>What sets its size</th><th class="n">Before</th><th class="n">After</th><th style="width:22%">After, to scale</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="check" id="ledger-check"></div>
+    <figcaption><b>pbr-sweep's GPU memory, row by row.</b> The page adds these rows itself and compares the sums with the committed M4 Pro <span class="concept" data-term="Baseline" data-tip="A committed bench result for one Reference scene on one adapter, which new runs are compared with. On CI's lavapipe only its counters are judged.">Baselines</span> before and after the PR. The <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span> is now the largest item: 58% of the scene's GPU memory.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Every scene but texture-wall gains 67,106,816 bytes: 64 <span class="concept" data-term="Mebibyte" data-tip="A binary unit of bytes, counted in powers of two: 64 MiB is exactly 524,288 slots of 128 bytes.">MiB</span>, less the 2 KiB that the 16 starting <span class="concept" data-term="Slot" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slots</span> held. texture-wall gains 67,092,480 bytes, 14 KiB less, because its 100 quads had already grown the old buffer to 128 slots, 16 KiB. CI's <span class="concept" data-term="lavapipe" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">software Vulkan</span> runs the bench at 640 × 360, so its <span class="concept" data-tip="An image holding each pixel's nearest depth so far, so nearer surfaces hide farther ones. Its size follows the render resolution.">depth texture</span> is 13,824,000 bytes smaller, and its totals are lower by exactly that.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts" id="scene-memory">
+        <thead><tr><th>Scene</th><th class="n">M4 Pro before</th><th class="n">M4 Pro after</th><th class="n">lavapipe before</th><th class="n">lavapipe after</th><th class="n">Change</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <figcaption><b>Every Baseline's <code>gpu_memory_bytes</code></b>, in bytes. CI does not bench the helmet, whose model is fetched rather than committed.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="measuring">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7</div>
+    <h2>Measuring without fooling yourself</h2>
+    <p>Every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Goldens and Baselines are made from them.">Reference scene</span> has a <span class="term"><span class="concept" data-tip="A committed bench result for one Reference scene on one adapter, which new runs are compared with. On CI's lavapipe only its counters are judged.">Baseline</span></span> per <span class="concept" data-tip="wgpu's handle to one GPU and its driver, such as the M4 Pro's GPU or lavapipe. Baselines are kept per adapter.">adapter</span>: a committed result of <code>praxis bench</code>, rendered at 2560 × 1440 for 248 warm-up and 1,800 measured frames on the M4 Pro. The helmet has a Baseline on the M4 Pro only. <code>praxis compare</code> judges a new run against the Baseline and against the <span class="term"><span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene, such as CPU time, GPU time or GPU memory, that a change must not regress. ADR 0013 sets them.">Budgets</span></span> of <span class="concept" data-term="Architecture Decision Record" data-tip="A short document in docs/adr/ that records a decision which is hard to reverse, with its reasons. A change that contradicts one must say so.">ADR</span> 0013: 6 ms of CPU and 12 ms of GPU per frame, and 8 GB of GPU memory.</p>
+    <ul class="keypoints">
+      <li><b><span class="concept" data-term="Counter" data-tip="A Frame stat that counts something, such as draw calls or bytes uploaded, and so repeats exactly between runs. Any increase over its Baseline fails.">Counters</span></b> (<span class="concept" data-term="Draw call" data-tip="One command telling the GPU to draw geometry. At PR #220, Praxis recorded one draw_indexed per Primitive of each Renderable, naming the Renderable's slot.">draw calls</span>, uploaded bytes, GPU memory, <span class="concept" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which the Mesh pool sub-allocates ranges. One holds vertices, one holds indices.">Arena</span> bytes in use, heap allocations) repeat exactly from run to run, so any increase fails.</li>
+      <li><b>Times</b> vary, so they are judged by the <span class="concept" data-tip="The middle value once the frames' times are sorted, so half the frames were faster and half slower. A few slow frames barely move it.">median</span> frame; the <span class="concept" data-tip="The 95th percentile: the time that 95% of frames beat, so one frame in twenty is slower. It shows hitches the median hides.">p95</span>, the slowest frame in twenty, is recorded beside it. A median 5% over its Baseline warns and 10% over fails, and a CPU median must also be more than 10 µs over to fail.</li>
+    </ul>
+    <p>Times need care. Other work on the machine slows a run, so an <span class="concept" data-tip="Running the old and new builds alternately, interleaved round by round, so background load affects both alike. The quietest round is then compared.">A/B comparison</span> alternates the two binaries in rounds and compares the quietest, and Baselines are recorded only while no other work loads the machine. CI cannot time the M4 Pro, but it records counter Baselines on <span class="term"><span class="concept" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span></span>, Mesa's software Vulkan driver, which renders on the CPU and repeats exactly.</p>
+    <h3>A trap found while recording</h3>
+    <p>uv-grid's CPU frame took 38.8 to 48.3 µs, about 39 µs at the median, in every run that benched it right after texture-wall in the same process, and 20.0 to 23.2 µs, about 22 µs at the median, when it ran alone or before texture-wall. Both binaries moved together, so the PR was not the cause. texture-wall binds 10,000 Textures, and something it leaves behind slows the frames after it, now noted on #183. Listing the scenes alphabetically, as <code>scripts/verify.sh</code> does, puts texture-wall just before uv-grid; <code>praxis bench</code> without a scene list runs texture-wall last, and the Baselines were recorded that way.</p>
+  </div>
+  <figure class="wide">
+    <div class="legend">
+      <span><i style="background:var(--series-main)"></i>main (28294f4)</span>
+      <span><i style="background:var(--series-branch)"></i>PR #220</span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="order-chart" viewBox="0 0 900 250" role="img" aria-label="uv-grid CPU frame medians: about 39 microseconds when benched after texture-wall, about 22 when not, for both binaries."></svg>
+      <div class="tooltip" id="order-tooltip" hidden></div>
+    </div>
+    <details>
+      <summary>All 31 runs as a table</summary>
+      <div class="table-wrap">
+        <table class="facts" id="order-table">
+          <thead><tr><th>Run</th><th>Binary</th><th>Where uv-grid ran</th><th class="n">CPU median (µs)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+    <figcaption><b>uv-grid's CPU frame, median of 1,800 frames per run</b>, on the M4 Pro. Each dot is one run; hover or focus a dot for its value. Both binaries shift by the same amount: the cause is the scene order. The per-run values come from the work on #190; <a href="https://github.com/gariasf/praxis/issues/183#issuecomment-6278324760">the note on #183</a> records their ranges and the 11 runs per binary after texture-wall.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Bias like this is a known hazard. Mytkowicz and colleagues showed that changing only the link order, or the size of the environment variables, can move measured performance enough to reverse a conclusion (ASPLOS 2009).</p>
+    <h3>CPU frame time, main against this PR</h3>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts" id="cpu-ab">
+        <thead>
+          <tr><th></th><th class="n" colspan="2">Quietest of four rounds</th><th class="n" colspan="2">Baseline round</th></tr>
+          <tr><th>Scene</th><th class="n">main</th><th class="n">PR #220</th><th class="n">main</th><th class="n">PR #220</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <figcaption><b>Medians in µs.</b> Left: four interleaved rounds of main (28294f4) and this change on the same base, <span class="concept" data-term="Load average" data-tip="About how many processes were running or waiting for a CPU, averaged over recent minutes. Higher load makes timings noisier.">load</span> 3 to 7, scenes listed alphabetically, so uv-grid carries the texture-wall penalty. Right: one round each in the default scene order at load 3.3, main (28294f4) against this change on fde4ac5, which also carries #216 and #218; the change's round became the new M4 Pro Baselines. The two binaries agree within noise in every scene: main's orrery took 33.0 µs in that one round but 24.0 µs in its quietest round.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="tests">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8</div>
+    <h2>Proving the tests can fail</h2>
+    <p>Tests here sit at agreed <span class="term"><span class="concept" data-term="Seam" data-tip="A public boundary agreed for testing, where behaviour can be observed from outside. Tests at a seam keep passing when the code behind it is refactored.">seams</span></span>: public boundaries where behaviour can be observed without reaching inside. For this ticket the seam is <span class="concept" data-tip="The step that reads the ECS World once per frame and fills Frame data, choosing each Renderable's slot and which Instances to write."><code>FramePreparer::prepare</code></span>. A <span class="concept" data-term="ECS World" data-tip="The container of every entity, component and resource in the entity component system (ECS). It is a code concept; the playable space is the Game world.">World</span> of <span class="concept" data-term="Renderable" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderables</span> goes in, and <span class="concept" data-term="Slot" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">slots</span>, Instance writes or a refusal come out. The test uses the real <span class="concept" data-tip="How much a fixed-size buffer holds, set when it is created. The Instance buffer's capacity is 524,288 slots until M4 sizes it.">capacity</span>, one constant for the app, tests, bench and CI, so it spawns 524,288 Renderables and then one more. It takes 2.8 s in a debug build.</p>
+    <p>It checks the refused Renderable over three frames: one warning that names it, a count of 1 each frame, nothing written, nothing drawn. Then it calls <code>rewrite_all_instances</code> and checks that every slot stayed where it was. Finally it <span class="concept" data-term="Despawn" data-tip="To remove an entity and all its components from the ECS World. A despawned Renderable's slot goes onto the free list.">despawns</span> the Renderable in slot 7 and checks that the refused one takes it. To read the warning, the test installs a <code>tracing</code> subscriber that writes into a buffer, the <code>logged</code> helper the Mesh pool's tests already used.</p>
+    <p>A test is only evidence if it can fail. So each guarantee was broken on purpose and the test run against the broken code:</p>
+    <pre class="terminal"><span class="dim">main's growth path (the test's first version, on main plus the constant):</span>
+<span class="fail">  past capacity, wrote slots [524288]</span>
+<span class="dim">this branch, slots handed out past capacity:</span>
+<span class="fail">  past capacity, wrote slots [524288]</span>
+<span class="dim">this branch, rewrite_all_instances resetting the slot table:</span>
+<span class="fail">  assertion `left == right` failed (warnings), left: 2, right: 1</span></pre>
+    <p>Breaking code on purpose to check that a test notices is what <span class="term"><span class="concept" data-tip="Breaking code on purpose, automatically, to check that tests notice. Each change no test catches points at a gap in the tests.">mutation testing</span></span> automates. Tools such as cargo-mutants make many small changes to the code and report each one that no test catches.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9</div>
+    <h2>What builds on fixed slots</h2>
+    <ul class="keypoints">
+      <li><b>#213</b> defines <span class="concept" data-term="Bind group" data-tip="A fixed set of resources, such as buffers and textures, handed to shaders together. It is a snapshot that keeps naming the resources it was made from.">bind groups</span> once, in Rust, and builds the ones that hold <span class="concept" data-term="Capacity" data-tip="How much a fixed-size buffer holds, set when it is created. The Instance buffer's capacity is 524,288 slots until M4 sizes it.">fixed-capacity</span> buffers, the <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span> among them, a single time at startup.</li>
+      <li><b>#194</b> replaces the per-<span class="concept" data-tip="One contiguous range of a Mesh's vertices and indices, which may name its own Material. At PR #220 a Renderable drew every Primitive with one Material, its override or the one its Mesh's first Primitive names, and each Primitive of each Renderable was one draw call.">Primitive</span> draw loop with a <span class="concept" data-tip="GPU work that runs a compute shader, a general-purpose program outside the triangle pipeline, such as one that writes draw arguments into a buffer.">compute pass</span> that reads every <span class="concept" data-term="Slot" data-tip="An index into the Instance buffer. A Renderable keeps its slot while it is one, and each draw passes it to the shader as instance_index.">Instance slot</span> in use and writes one <span class="concept" data-tip="A draw whose arguments, such as index and instance counts, the GPU reads from a buffer, so a compute pass can decide what is drawn.">indirect draw</span>. A freed slot keeps whatever it last held, so freed slots will carry a <span class="concept" data-tip="A reserved value marking an entry as empty, here a Mesh reference no real Mesh uses, so the pass can skip freed slots.">sentinel</span> <span class="concept" data-tip="An ordered list of Primitives rendered together. Its vertices and indices live in the Mesh pool's two fixed Arenas.">Mesh</span> reference that the pass skips.</li>
+      <li><b>#204</b> adds a dynamic <span class="concept" data-term="Top-level acceleration structure" data-tip="The GPU-searchable index of Instances that ray tracing queries. A dynamic one is rebuilt as its Instances move.">TLAS</span> of <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span> for ray-traced shadows, fixed at 10,000. Past it, Moving Instances are left out, counted in <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, Renderables refused, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> and warned about: the pattern this PR set.</li>
+      <li><b>Milestone M4</b> splits the 8 GB <span class="concept" data-tip="A numeric limit on one metric of a Reference scene, such as CPU time, GPU time or GPU memory, that a change must not regress. ADR 0013 sets them.">Budget</span> per kind of memory and replaces every provisional capacity, 524,288 included.</li>
+    </ul>
+    <h3>Try it yourself</h3>
+    <ul class="try">
+      <li><code>cargo test --lib render::prepare</code><span>The <span class="concept" data-term="Slot table" data-tip="Prepare's record of which slot each Renderable owns, with the free list and the Renderables refused one. In the code it is InstanceSlots.">slot-table</span> tests, including the one that fills all 524,288 slots.</span></li>
+      <li><code>RUST_LOG=praxis=debug cargo run --release</code><span>Opens the window. G spawns a helmet three metres in front of the camera and H <span class="concept" data-term="Despawn" data-tip="To remove an entity and all its components from the ECS World. A despawned Renderable's slot goes onto the free list.">despawns</span> the last one: each is a <span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span> taking or freeing a slot, logged as "helmet spawned" and "helmet despawned".</span></li>
+      <li><code>cargo run --release -- bench target/bench</code><br><code>cargo run --release -- compare target/bench</code><span>Benches every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Goldens and Baselines are made from them.">Reference scene</span> in the default order and compares it with the M4 Pro <span class="concept" data-term="Baseline" data-tip="A committed bench result for one Reference scene on one adapter, which new runs are compared with. On CI's lavapipe only its counters are judged.">Baselines</span>. Close other heavy work first.</span></li>
+      <li><code>cargo run --release -- capture pbr-sweep target/pbr-sweep.png</code><span>Renders one scene headless to a PNG.</span></li>
+      <li><code>scripts/verify.sh</code><span>The full gate: format, lint, build, tests with <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span>, and bench <span class="concept" data-term="Counter" data-tip="A Frame stat that counts something, such as draw calls or bytes uploaded, and so repeats exactly between runs. Any increase over its Baseline fails.">counters</span> against the Baselines.</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by concept, in three kinds: what the repo already decided and measured, primary sources outside it, and chapters of books. Book chapter numbers are for the editions named.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>Persistent Instances and GPU-driven rendering</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0003-persistent-scene-transform-buffer.md">ADR 0003</a> <span>Persistent <span class="concept" data-tip="The GPU storage buffer holding every Instance, one 128-byte slot per Renderable. Since PR #220 it is created once, in Renderer::new, with 524,288 slots.">Instance buffer</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0005-instance-data-in-a-structured-buffer.md">ADR 0005</a> <span><span class="concept" data-tip="A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer: its position as anchor and offset, its rotation-scale and normal matrices, and a Material ID.">Instance</span> data in a <span class="concept" data-term="Storage buffer" data-tip="A GPU buffer that shaders index like an array, as instances[i]. wgpu limits how many bytes one binding of it may expose to shaders.">structured buffer</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the <span class="concept" data-tip="Rendering where the GPU decides what to draw, culling Instances and writing its own draw arguments, so CPU cost stays flat as scenes grow.">GPU-driven</span> main pass M3 builds</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/research/visibility-and-gpu-driven-main-pass.md">Research note: visibility and the GPU-driven main pass</a></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>Haar and Aaltonen, <a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf">GPU-Driven Rendering Pipelines</a>, SIGGRAPH 2015 Advances <span>(pp. 53–54: 250,000 moving objects in two <span class="concept" data-term="Indirect draw" data-tip="A draw whose arguments, such as index and instance counts, the GPU reads from a buffer, so a compute pass can decide what is drawn.">indirect draws</span>)</span></li>
+        <li>Wihlidal, <a href="https://media.gdcvault.com/gdc2016/Presentations/Wihlidal_Graham_OptimizingTheGraphics.pdf">Optimizing the Graphics Pipeline with Compute</a>, GDC 2016</li>
+        <li>Unity 6 manual, <a href="https://docs.unity3d.com/6000.0/Documentation/Manual/urp/gpu-resident-drawer.html">GPU Resident Drawer</a> <span>a shipped engine keeping instance data on the GPU</span></li>
+        <li>Learn Wgpu, <a href="https://sotrh.github.io/learn-wgpu/beginner/tutorial7-instancing/">Instancing</a> <span>instance buffers in wgpu, from scratch</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed.: ch. 18 Pipeline Optimization, ch. 19 Acceleration Algorithms</li>
+        <li><a href="https://foundationsofgameenginedev.com/"><i>Foundations of Game Engine Development</i></a>, vol. 2: ch. 5 Graphics Processing, ch. 9 Visibility and Occlusion</li>
+        <li><a href="https://www.gameenginebook.com/"><i>Game Engine Architecture</i></a>, 3rd ed.: ch. 11 The Rendering Engine</li>
+      </ul>
+    </article>
+    <article>
+      <h3>Slots, free lists and handles</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/CONTEXT.md">CONTEXT.md</a> <span><span class="concept" data-tip="An entity with a Transform and a Mesh Handle, and optionally a Material Handle that overrides its Mesh's Materials. The renderer pulls Renderables; entities never render themselves.">Renderable</span>, Instance, <span class="concept" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which the Mesh pool sub-allocates ranges. One holds vertices, one holds indices.">Arena</span>, <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, Renderables refused, bytes uploaded, heap allocations and GPU memory.">Frame stats</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/render/prepare.rs">render/prepare.rs</a> <span><span class="concept" data-tip="Prepare's record of which slot each Renderable owns, with the free list and the Renderables refused one. In the code it is InstanceSlots."><code>InstanceSlots</code></span> and its tests</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/src/assets/pools.rs">assets/pools.rs</a> <span>the Arenas: the same refuse-instead-of-grow rule for geometry</span></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>Catherine West, <a href="https://kyren.github.io/2018/09/14/rustconf-talk.html">RustConf 2018 closing keynote</a> <span>generational indices and <span class="concept" data-term="Entity component system" data-tip="A way to organise game state: entities are plain IDs, components are plain data attached to them, and systems query and update those components.">ECS</span> in Rust</span></li>
+        <li><a href="https://docs.rs/slotmap/latest/slotmap/">slotmap</a> crate docs <span>slots with generations, the general form of this table</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Game Engine Architecture</i>, 3rd ed.: ch. 6 on memory management (pool allocators, fragmentation); ch. 16 on object references and handles</li>
+      </ul>
+    </article>
+    <article>
+      <h3>Change detection in bevy_ecs</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0009-bevy-ecs-as-a-standalone-crate.md">ADR 0009</a> <span>bevy_ecs as a standalone crate</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0022-fixed-64-hz-simulation-with-interpolation.md">ADR 0022</a> <span>why <span class="concept" data-tip="Drawn part way between its two newest Ticks, by the frame's blend weight, so motion stays smooth at any frame rate. Its Instance is rewritten every frame.">blended</span> Renderables are written every frame</span></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>bevy_ecs 0.18.1: <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/change_detection/index.html">change_detection</a>, <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/change_detection/struct.Ref.html">Ref</a>, <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/lifecycle/struct.RemovedComponents.html">RemovedComponents</a>, <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/world/struct.World.html">World</a> <span>(see <code>clear_trackers</code>)</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Game Engine Architecture</i>, 3rd ed.: ch. 8 The Game Loop and Real-Time Simulation</li>
+      </ul>
+    </article>
+    <article>
+      <h3>Buffers, bind groups, staging, frames in flight</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md">ADR 0017</a> <span>fixed Arenas, the StagingBelt for streaming</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/research/gpu-memory-residency-streaming.md">Research note: GPU memory, residency and streaming</a></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/research/job-systems-and-frame-threading.md">Research note: job systems and frame threading</a></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>wgpu 30.0.1: <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Buffer.html">Buffer</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.BufferUsages.html">BufferUsages</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.BindGroup.html">BindGroup</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Queue.html#method.write_buffer">Queue::write_buffer</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/util/struct.StagingBelt.html">StagingBelt</a></li>
+        <li><a href="https://www.w3.org/TR/webgpu/">WebGPU specification</a> <span>buffers, <span class="concept" data-term="Map and unmap" data-tip="Mapping lets the CPU read or write a buffer's memory directly; unmapping hands the buffer back to the GPU. A wgpu map completes once the GPU has finished with it.">mapping</span> and <span class="concept" data-term="Bind group" data-tip="A fixed set of resources, such as buffers and textures, handed to shaders together. It is a snapshot that keeps naming the resources it was made from.">bind groups</span>, as wgpu models them</span></li>
+        <li>Vulkan Tutorial, <a href="https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Frames_in_flight">Frames in flight</a></li>
+        <li>Apple, <a href="https://developer.apple.com/documentation/metal/synchronizing-cpu-and-gpu-work">Synchronizing CPU and GPU work</a> <span>the same idea on Metal</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed.: ch. 3 The Graphics Processing Unit, ch. 23 Graphics Hardware</li>
+      </ul>
+    </article>
+    <article>
+      <h3>GPU memory, Budgets and limits</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0013-reference-hardware-and-provisional-budgets.md">ADR 0013</a> <span>reference hardware and <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene, such as CPU time, GPU time or GPU memory, that a change must not regress. ADR 0013 sets them.">Budgets</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/adr/0021-capability-floor.md">ADR 0021</a> <span>the <span class="concept" data-tip="The GPU features and limits Praxis requires to start. An adapter below it is refused with every gap named, and nothing in it has a fallback (ADR 0021).">Capability floor</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/bench/budgets.json">bench/budgets.json</a> and <a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/research/wgpu-capability-matrix.md">the wgpu capability matrix</a></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>wgpu 30.0.1, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Limits.html">Limits</a> <span><code>max_storage_buffer_binding_size</code> defaults to 128 <span class="concept" data-term="Mebibyte" data-tip="A binary unit of bytes, counted in powers of two: 64 MiB is exactly 524,288 slots of 128 bytes.">MiB</span></span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Measuring performance</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/performance.md">docs/performance.md</a> <span>each milestone's profile</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/cd8c611/bench/baselines">bench/baselines</a> <span>one JSON per scene and <span class="concept" data-tip="wgpu's handle to one GPU and its driver, such as the M4 Pro's GPU or lavapipe. Baselines are kept per adapter.">adapter</span></span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/183#issuecomment-6278324760">The scene-order note on #183</a></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li>Mytkowicz, Diwan, Hauswirth and Sweeney, <a href="https://doi.org/10.1145/1508244.1508275">Producing Wrong Data Without Doing Anything Obviously Wrong!</a>, ASPLOS 2009</li>
+        <li>Mesa, <a href="https://docs.mesa3d.org/drivers/llvmpipe.html">llvmpipe</a> <span>the CPU rasterizer under <span class="concept" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span>, CI's software Vulkan</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed.: ch. 18 Pipeline Optimization, on locating bottlenecks</li>
+      </ul>
+    </article>
+    <article>
+      <h3>Tests that can fail</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/tests/frame_stats.rs">tests/frame_stats.rs</a> <span>Frame stats checked to the byte</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/cd8c611/docs/agents/workflow.md">docs/agents/workflow.md</a> <span><span class="concept" data-term="Seam" data-tip="A public boundary agreed for testing, where behaviour can be observed from outside. Tests at a seam keep passing when the code behind it is refactored.">seams</span> and independent expected values (Correctness)</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/220">PR #220</a> <span>the <span class="concept" data-term="Red run" data-tip="A test run against deliberately broken code, which must fail. It shows that the test can catch that kind of break.">red runs</span> and the review's findings</span></li>
+      </ul>
+      <h4>Primary sources</h4>
+      <ul>
+        <li><a href="https://mutants.rs/">cargo-mutants</a> <span><span class="concept" data-tip="Breaking code on purpose, automatically, to check that tests notice. Each change no test catches points at a gap in the tests.">mutation testing</span> for Rust</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Renderable</dt><dd>An entity with a Transform and a Mesh Handle, optionally a Material Handle.</dd></div>
+    <div><dt>Instance</dt><dd>A Renderable's 128 bytes on the GPU, in its slot of the Instance buffer.</dd></div>
+    <div><dt>Slot</dt><dd>An index into the Instance buffer; draws pass it as <code>instance_index</code>.</dd></div>
+    <div><dt>Free list</dt><dd>Slots given back by Renderables that left; the latest is reused first.</dd></div>
+    <div><dt>Capacity</dt><dd>The fixed number of slots: 524,288 (2<sup>19</sup>) until milestone M4 sizes it.</dd></div>
+    <div><dt>Refused</dt><dd>A Renderable that found no free slot: not drawn, warned about once, retried.</dd></div>
+    <div><dt>Frame data</dt><dd>The owned per-frame snapshot that prepare fills and the Renderer consumes.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine, now including Renderables refused.</dd></div>
+    <div><dt>Change detection</dt><dd>bevy_ecs's per-component change ticks, read through <code>Ref</code> and removals.</dd></div>
+    <div><dt>Bind group</dt><dd>A fixed set of resources handed to shaders; a snapshot, never updated.</dd></div>
+    <div><dt>Storage buffer</dt><dd>A GPU buffer shaders index like an array, as <code>instances[i]</code>.</dd></div>
+    <div><dt>Staging</dt><dd>CPU-writable memory the GPU copies from into GPU buffers.</dd></div>
+    <div><dt>Frames in flight</dt><dd>Frames submitted to the GPU but not yet finished; here at most two.</dd></div>
+    <div><dt>Arena</dt><dd>A fixed-size GPU buffer of vertices or indices that Meshes are packed into.</dd></div>
+    <div><dt>Baseline</dt><dd>A committed bench result per scene and adapter that new runs are compared with.</dd></div>
+    <div><dt>Budget</dt><dd>A limit from ADR 0013: 6 ms CPU, 12 ms GPU, 8 GB of GPU memory.</dd></div>
+    <div><dt>Median, p95</dt><dd>The typical frame, and the slowest frame in twenty.</dd></div>
+    <div><dt>lavapipe</dt><dd>Mesa's software Vulkan driver; CI renders Goldens and counts with it.</dd></div>
+    <div><dt>Seam</dt><dd>A public boundary agreed for testing, where behaviour can be observed.</dd></div>
+    <div><dt>Mutation testing</dt><dd>Breaking code on purpose, automatically, to check that tests notice.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from <a href="https://github.com/gariasf/praxis/pull/220">PR #220</a>, merged as cd8c611, and ticket <a href="https://github.com/gariasf/praxis/issues/190">#190</a> with the owner's <a href="https://github.com/gariasf/praxis/issues/190#issuecomment-6275844282">added rules</a>. Numbers come from the committed Baselines and the PR's A/B runs on the M4 Pro; code facts were read at that commit.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides">
+  <a href="index.html">All field guides</a>
+  <a href="distant-textures.html">Next: Distant Textures Explained</a>
+</nav>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const svgNS = "http://www.w3.org/2000/svg";
+  const make = (tag, attributes, parent, text) => {
+    const node = document.createElementNS(svgNS, tag);
+    for (const key in attributes) node.setAttribute(key, attributes[key]);
+    if (text !== undefined) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  const bytes = (value) => value.toLocaleString("en-US");
+  const mebibytes = (value) => (value / 1048576).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MiB";
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const DATA = {"memory":[{"scene":"helmet","m4":[67902524,135009340],"lp":null},{"scene":"pbr-sweep","m4":[48329012,115435828],"lp":[34505012,101611828]},{"scene":"uv-grid","m4":[53916836,121023652],"lp":[40092836,107199652]},{"scene":"normal-tangent","m4":[67897916,135004732],"lp":[54073916,121180732]},{"scene":"far-coplanar","m4":[48325940,115432756],"lp":[34501940,101608756]},{"scene":"orrery","m4":[53918372,121025188],"lp":[40094372,107201188]},{"scene":"minification","m4":[48586628,115693444],"lp":[34762628,101869444]},{"scene":"texture-wall","m4":[48866356,115958836],"lp":[35042356,102134836]}],"ab":[{"scene":"helmet","quietMain":24.625,"quietBranch":23.292,"finalMain":25.041999999999998,"finalBranch":24.916},{"scene":"pbr-sweep","quietMain":22.708,"quietBranch":22.625,"finalMain":23.666999999999998,"finalBranch":23.0},{"scene":"uv-grid","quietMain":39.458,"quietBranch":38.917,"finalMain":22.5,"finalBranch":21.667},{"scene":"normal-tangent","quietMain":22.166,"quietBranch":21.5,"finalMain":22.833,"finalBranch":21.875},{"scene":"far-coplanar","quietMain":23.167,"quietBranch":23.834,"finalMain":23.833000000000002,"finalBranch":22.833},{"scene":"orrery","quietMain":24.0,"quietBranch":23.917,"finalMain":33.042,"finalBranch":24.375},{"scene":"minification","quietMain":23.208,"quietBranch":22.166,"finalMain":23.167,"finalBranch":23.166},{"scene":"texture-wall","quietMain":1574.917,"quietBranch":1482.125,"finalMain":1196.584,"finalBranch":1185.958}],"uvgrid":[{"binary":"main","order":"after","us":39.458},{"binary":"branch","order":"after","us":39.625},{"binary":"main","order":"after","us":41.25},{"binary":"branch","order":"after","us":39.166},{"binary":"main","order":"after","us":40.25},{"binary":"branch","order":"after","us":38.917},{"binary":"main","order":"after","us":43.917},{"binary":"branch","order":"after","us":39.0},{"binary":"main","order":"after","us":48.333},{"binary":"branch","order":"after","us":38.917},{"binary":"main","order":"after","us":39.833999999999996},{"binary":"branch","order":"after","us":40.708999999999996},{"binary":"main","order":"after","us":44.542},{"binary":"branch","order":"after","us":39.625},{"binary":"main","order":"after","us":42.291},{"binary":"branch","order":"after","us":39.167},{"binary":"main","order":"after","us":38.75},{"binary":"branch","order":"after","us":39.084},{"binary":"main","order":"after","us":39.083},{"binary":"branch","order":"after","us":39.166},{"binary":"main","order":"after","us":39.25},{"binary":"branch","order":"after","us":38.958000000000006},{"binary":"main","order":"last","us":23.208},{"binary":"main","order":"last","us":22.0},{"binary":"main","order":"last","us":20.75},{"binary":"main","order":"last","us":20.041999999999998},{"binary":"main","order":"last","us":22.166999999999998},{"binary":"main","order":"last","us":22.5},{"binary":"branch","order":"last","us":20.208000000000002},{"binary":"branch","order":"last","us":22.25},{"binary":"branch","order":"last","us":21.667}]};
+
+  // Chapter 4: the slot table, as InstanceSlots and FramePreparer::prepare run it.
+  (function slotDemo() {
+    const CAPACITY = 12;
+    const UNIFORM_BYTES = 96 + 192;
+    const INSTANCE_BYTES = 128;
+    const element = (id) => document.getElementById(id);
+    const stillRow = element("table-still");
+    const movingRow = element("table-moving");
+    const cellsRow = element("slot-cells");
+    const freeOut = element("free-list");
+    const readout = element("frame-readout");
+    const logOut = element("demo-log");
+    const actionButtons = ["next-frame", "spawn-one", "spawn-three", "lose-writes", "replay-bug", "start-over"].map(element);
+    let clickAction = "despawn";
+    let recovery = "keep";
+    let replaying = false;
+    let state;
+
+    function blank() {
+      return { still: [], moving: [], nextId: 1, slots: new Map(), free: [], end: 0, refused: new Set(), removed: [], rewrite: false, frame: 0, written: [], refusedCount: 0, log: [] };
+    }
+    function addLog(text, kind) {
+      state.log.push({ text: text, kind: kind });
+      if (state.log.length > 10) state.log.shift();
+    }
+    function spawn(count) {
+      for (let index = 0; index < count; index++) state.still.push(state.nextId++);
+    }
+    // bevy moves a table's last entity into the row of the one leaving it.
+    function swapRemove(list, entity) {
+      const index = list.indexOf(entity);
+      if (index < 0) return false;
+      const last = list.pop();
+      if (last !== entity) list[index] = last;
+      return true;
+    }
+    function despawn(entity) {
+      if (swapRemove(state.still, entity) || swapRemove(state.moving, entity)) state.removed.push(entity);
+    }
+    // Gaining PreviousWorldTransform moves an entity to another archetype's table.
+    function startMoving(entity) {
+      if (swapRemove(state.still, entity)) state.moving.push(entity);
+    }
+    function loseWrites() {
+      if (recovery === "keep") state.rewrite = true;
+      else { state.slots = new Map(); state.free = []; state.end = 0; state.refused = new Set(); }
+    }
+    function prepare() {
+      state.frame += 1;
+      const visiting = state.still.concat(state.moving);
+      for (const entity of state.removed) {
+        if (visiting.includes(entity)) continue;
+        state.refused.delete(entity);
+        if (state.slots.has(entity)) { state.free.push(state.slots.get(entity)); state.slots.delete(entity); }
+      }
+      state.removed = [];
+      const written = [];
+      let refused = 0;
+      for (const entity of visiting) {
+        let slot = state.slots.get(entity);
+        let isNew = false;
+        if (slot === undefined) {
+          const fresh = state.end < CAPACITY ? state.end : undefined;
+          slot = state.free.length > 0 ? state.free.pop() : fresh;
+          if (slot === undefined) {
+            if (!state.refused.has(entity)) {
+              state.refused.add(entity);
+              addLog("frame " + state.frame + "  WARN Renderable refused: the Instance buffer is full entity=E" + entity + " capacity=" + CAPACITY, "warn");
+            }
+            refused += 1;
+            continue;
+          }
+          state.end = Math.max(state.end, slot + 1);
+          state.slots.set(entity, slot);
+          state.refused.delete(entity);
+          isNew = true;
+        }
+        if (state.rewrite || isNew || state.moving.includes(entity)) written.push(slot);
+      }
+      state.rewrite = false;
+      state.written = written;
+      state.refusedCount = refused;
+      addLog("frame " + state.frame + "  " + written.length + " Instances written, " + refused + " refused, " + bytes(UNIFORM_BYTES + INSTANCE_BYTES * written.length) + " bytes staged", "frame");
+    }
+
+    function chip(entity, table) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const slot = state.slots.get(entity);
+      let status, kind;
+      if (slot !== undefined) { status = "slot " + slot; kind = "slotted"; }
+      else if (state.refused.has(entity)) { status = "refused"; kind = "refused"; }
+      else { status = "new"; kind = "new"; }
+      button.className = "chip " + kind + (table === "moving" ? " moving" : "");
+      const name = document.createElement("b");
+      name.textContent = "E" + entity;
+      const note = document.createElement("span");
+      note.textContent = status;
+      button.append(name, note);
+      const canAct = !replaying && !(clickAction === "move" && table === "moving");
+      button.disabled = !canAct;
+      button.setAttribute("aria-label", "E" + entity + ", " + status + (table === "moving" ? ", moving" : "") + (canAct ? (clickAction === "despawn" ? ". Despawn it" : ". Make it start moving") : ""));
+      button.addEventListener("click", () => {
+        if (clickAction === "despawn") despawn(entity); else startMoving(entity);
+        render();
+      });
+      return button;
+    }
+    function fillRow(row, entities, table) {
+      row.replaceChildren();
+      if (entities.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "empty-note";
+        empty.textContent = table === "moving" ? "none: switch clicks to \"starts it moving\" and click a still entity" : "none";
+        row.appendChild(empty);
+        return;
+      }
+      entities.forEach((entity) => row.appendChild(chip(entity, table)));
+    }
+    function render() {
+      fillRow(stillRow, state.still, "still");
+      fillRow(movingRow, state.moving, "moving");
+      const owners = new Map();
+      state.slots.forEach((slot, entity) => owners.set(slot, entity));
+      const leaving = new Set(state.removed);
+      cellsRow.replaceChildren();
+      for (let slot = 0; slot < CAPACITY; slot++) {
+        const cell = document.createElement("div");
+        const owner = owners.get(slot);
+        let label, kind, description;
+        if (owner !== undefined) {
+          label = "E" + owner;
+          kind = leaving.has(owner) ? "leaving" : "taken";
+          description = "slot " + slot + ", held by E" + owner + (leaving.has(owner) ? ", freed next frame" : "");
+        } else if (state.free.includes(slot)) {
+          label = "free"; kind = "free"; description = "slot " + slot + ", on the free list";
+        } else {
+          label = "·"; kind = "unused"; description = "slot " + slot + ", never used";
+        }
+        if (owner !== undefined && state.written.includes(slot)) { kind += " written"; description += ", written this frame"; }
+        cell.className = "cell " + kind;
+        cell.setAttribute("aria-label", description);
+        const number = document.createElement("small");
+        number.textContent = String(slot);
+        const text = document.createElement("span");
+        text.textContent = label;
+        cell.append(number, text);
+        cellsRow.appendChild(cell);
+      }
+      freeOut.textContent = state.free.length ? state.free.slice().reverse().join(", ") : "empty";
+      readout.innerHTML = "frame <b>" + state.frame + "</b> · Instances written <b>" + state.written.length + "</b> · Renderables refused <b>" + state.refusedCount + "</b> · staged <b>" + bytes(UNIFORM_BYTES + INSTANCE_BYTES * state.written.length) + " B</b>";
+      logOut.replaceChildren();
+      state.log.forEach((entry) => {
+        const line = document.createElement("li");
+        line.className = entry.kind;
+        line.textContent = entry.text;
+        logOut.appendChild(line);
+      });
+      actionButtons.forEach((button) => { button.disabled = replaying; });
+      element("click-despawn").setAttribute("aria-pressed", String(clickAction === "despawn"));
+      element("click-move").setAttribute("aria-pressed", String(clickAction === "move"));
+      element("recovery-keep").setAttribute("aria-pressed", String(recovery === "keep"));
+      element("recovery-reset").setAttribute("aria-pressed", String(recovery === "reset"));
+    }
+    function startOver() {
+      state = blank();
+      spawn(12); prepare();
+      spawn(2); prepare();
+      render();
+    }
+    function replay() {
+      replaying = true;
+      state = blank();
+      const steps = [
+        () => { addLog("12 Renderables spawn and take the 12 slots.", "note"); spawn(12); prepare(); },
+        () => { addLog("E13 and E14 spawn and find no slot left.", "note"); spawn(2); prepare(); },
+        () => { addLog("E2 starts moving: it gains PreviousWorldTransform and changes table. E14, last in the still table, moves into E2's row.", "note"); startMoving(2); prepare(); },
+        () => {
+          addLog(recovery === "keep" ? "A staging slot fails to map and this frame's uploads are lost. Recovery keeps the slot table and flags a full rewrite." : "A staging slot fails to map and this frame's uploads are lost. Recovery resets the slot table, as the first draft did.", "note");
+          loseWrites(); prepare();
+          addLog(recovery === "keep" ? "Every Renderable was rewritten in its own slot. E13 and E14 stay refused, with no new warning." : "Slots went out again in table order: E14 took E2's slot, E2 lost its slot and vanished, and E13 was warned about a second time.", "note");
+        },
+      ];
+      let index = 0;
+      function next() {
+        steps[index](); index += 1;
+        if (index >= steps.length) replaying = false;
+        render();
+        if (index < steps.length) setTimeout(next, reduceMotion ? 0 : 900);
+      }
+      next();
+    }
+
+    element("next-frame").addEventListener("click", () => { prepare(); render(); });
+    element("spawn-one").addEventListener("click", () => { spawn(1); render(); });
+    element("spawn-three").addEventListener("click", () => { spawn(3); render(); });
+    element("lose-writes").addEventListener("click", () => {
+      loseWrites();
+      addLog("frame " + state.frame + "  uploads lost; " + (recovery === "keep" ? "the next frame rewrites every slot in place" : "the slot table was reset"), "note");
+      render();
+    });
+    element("replay-bug").addEventListener("click", replay);
+    element("start-over").addEventListener("click", startOver);
+    element("click-despawn").addEventListener("click", () => { clickAction = "despawn"; render(); });
+    element("click-move").addEventListener("click", () => { clickAction = "move"; render(); });
+    element("recovery-keep").addEventListener("click", () => { recovery = "keep"; render(); });
+    element("recovery-reset").addEventListener("click", () => { recovery = "reset"; render(); });
+    startOver();
+  })();
+
+  // Chapter 5: staging slot sizing, before and after the bound.
+  (function stagingDemo() {
+    const UNIFORM_BYTES = 96 + 192;
+    const INSTANCE_BYTES = 128;
+    const CAPACITY = 524288;
+    const BOUND = UNIFORM_BYTES + INSTANCE_BYTES * CAPACITY;
+    const SLOTS = 3;
+    const SCALE = SLOTS * 134217728;
+    const slider = document.getElementById("written-slider");
+    const count = document.getElementById("written-count");
+    const toWritten = (position) => position <= 0 ? 0 : position >= 1000 ? CAPACITY : Math.max(1, Math.round(Math.pow(2, 19 * position / 1000)));
+    const toPosition = (written) => written <= 0 ? 0 : written >= CAPACITY ? 1000 : Math.round(1000 * Math.log2(written) / 19);
+    const nextPowerOfTwo = (value) => { let power = 1; while (power < value) power *= 2; return power; };
+    const sized = (value) => bytes(value) + " B" + (value >= 1048576 ? " (" + mebibytes(value) + ")" : "");
+    function show(written) {
+      const needed = UNIFORM_BYTES + INSTANCE_BYTES * written;
+      const before = nextPowerOfTwo(needed);
+      const now = Math.min(before, BOUND);
+      count.textContent = bytes(written);
+      document.getElementById("needed-bytes").textContent = "288 + 128 × " + bytes(written) + " = " + bytes(needed) + " B";
+      document.getElementById("slot-before").textContent = sized(before);
+      document.getElementById("slot-now").textContent = sized(now) + (now < before ? ", the bound" : "");
+      document.getElementById("bar-before").style.width = (100 * SLOTS * before / SCALE) + "%";
+      document.getElementById("bar-now").style.width = (100 * SLOTS * now / SCALE) + "%";
+      document.getElementById("staging-total").innerHTML = "Three slots: <b>" + sized(SLOTS * before) + "</b> before, <b>" + sized(SLOTS * now) + "</b> now.";
+    }
+    slider.addEventListener("input", () => show(toWritten(Number(slider.value))));
+    document.querySelectorAll("[data-written]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const written = Number(button.dataset.written);
+        slider.value = String(toPosition(written));
+        show(written);
+      });
+    });
+    slider.value = String(toPosition(10));
+    show(10);
+  })();
+
+  // Chapter 6: the ledger, checked against the committed Baselines, and every scene's change.
+  (function memoryTables() {
+    const rows = [
+      { name: "Instance buffer", basis: "524,288 slots × 128 B (was 16 slots)", before: 2048, after: 67108864, focus: true },
+      { name: "Vertex Arena", basis: "fixed 16 MiB (ADR 0017)", before: 16777216, after: 16777216 },
+      { name: "Index Arena", basis: "fixed 16 MiB", before: 16777216, after: 16777216 },
+      { name: "Depth texture", basis: "2560 × 1440 × 4 B", before: 14745600, after: 14745600 },
+      { name: "Material buffer", basis: "256 Materials × 80 B", before: 20480, after: 20480 },
+      { name: "Frame staging", basis: "3 slots × 2,048 B", before: 6144, after: 6144 },
+      { name: "Camera and light", basis: "96 B + 192 B uniforms", before: 288, after: 288 },
+      { name: "Neutral Textures", basis: "5 Channels × one RGBA8 texel", before: 20, after: 20 },
+    ];
+    const body = document.querySelector("#ledger tbody");
+    const largest = 67108864;
+    let totalBefore = 0, totalAfter = 0;
+    rows.forEach((row) => {
+      totalBefore += row.before; totalAfter += row.after;
+      const line = document.createElement("tr");
+      if (row.focus) line.className = "focus";
+      line.innerHTML = "<td>" + row.name + "</td><td>" + row.basis + "</td><td class=\"n\">" + bytes(row.before) + "</td><td class=\"n\">" + bytes(row.after) + "</td><td><div class=\"ledger-bar\" style=\"width:" + (100 * row.after / largest) + "%\"></div></td>";
+      body.appendChild(line);
+    });
+    const total = document.createElement("tr");
+    total.className = "total";
+    total.innerHTML = "<td>Total</td><td></td><td class=\"n\">" + bytes(totalBefore) + "</td><td class=\"n\">" + bytes(totalAfter) + "</td><td></td>";
+    body.appendChild(total);
+    const baseline = DATA.memory.find((scene) => scene.scene === "pbr-sweep").m4;
+    const check = document.getElementById("ledger-check");
+    const matches = totalBefore === baseline[0] && totalAfter === baseline[1];
+    check.textContent = matches ? "Both sums equal pbr-sweep's committed Baselines: " + bytes(baseline[0]) + " and " + bytes(baseline[1]) + " bytes." : "The sums do not match the Baselines (" + bytes(baseline[0]) + ", " + bytes(baseline[1]) + ").";
+    if (!matches) check.classList.add("mismatch");
+
+    const sceneBody = document.querySelector("#scene-memory tbody");
+    DATA.memory.forEach((scene) => {
+      const line = document.createElement("tr");
+      const lavapipe = scene.lp ? [bytes(scene.lp[0]), bytes(scene.lp[1])] : ["not benched", "not benched"];
+      line.innerHTML = "<td>" + scene.scene + "</td><td class=\"n\">" + bytes(scene.m4[0]) + "</td><td class=\"n\">" + bytes(scene.m4[1]) + "</td><td class=\"n\">" + lavapipe[0] + "</td><td class=\"n\">" + lavapipe[1] + "</td><td class=\"n\">+" + bytes(scene.m4[1] - scene.m4[0]) + "</td>";
+      sceneBody.appendChild(line);
+    });
+  })();
+
+  // Chapter 7: uv-grid's CPU frame by scene order, and the CPU A/B table.
+  (function orderChart() {
+    const svg = document.getElementById("order-chart");
+    const tooltip = document.getElementById("order-tooltip");
+    const wrap = svg.parentElement;
+    const left = 20, right = 880, low = 15, high = 50;
+    const x = (value) => left + (value - low) / (high - low) * (right - left);
+    const rows = [
+      { order: "after", y: 84, title: "benched right after texture-wall, same process: 11 runs per binary" },
+      { order: "last", y: 178, title: "benched alone or before texture-wall: main 6 runs, PR #220 3 runs" },
+    ];
+    for (let tick = low; tick <= high; tick += 5) {
+      make("line", { x1: x(tick), y1: 40, x2: x(tick), y2: 214, stroke: "var(--rule)", "stroke-width": 1 }, svg);
+      make("text", { x: x(tick), y: 234, "text-anchor": "middle", class: "t-small" }, svg, tick + " µs");
+    }
+    const median = (values) => { const sorted = values.slice().sort((a, b) => a - b); const middle = sorted.length / 2; return sorted.length % 2 ? sorted[Math.floor(middle)] : (sorted[middle - 1] + sorted[middle]) / 2; };
+    const tableBody = document.querySelector("#order-table tbody");
+    rows.forEach((row) => {
+      make("text", { x: left, y: row.y - 34, class: "t-label halo" }, svg, row.title);
+      const runs = DATA.uvgrid.filter((run) => run.order === row.order);
+      const middle = median(runs.map((run) => run.us));
+      make("line", { x1: x(middle), y1: row.y - 26, x2: x(middle), y2: row.y + 26, stroke: "var(--ink-soft)", "stroke-width": 1.5, "stroke-dasharray": "3 3" }, svg);
+      make("text", { x: x(middle) + 6, y: row.y + 34, class: "t-small halo" }, svg, "median " + middle.toFixed(1) + " µs");
+      ["main", "branch"].forEach((binary, lane) => {
+        runs.filter((run) => run.binary === binary).forEach((run, index) => {
+          const y = row.y + (lane === 0 ? -11 : 11) + ((index % 3) - 1) * 3;
+          const label = (binary === "main" ? "main" : "PR #220") + " · " + (row.order === "after" ? "after texture-wall" : "alone or before it") + " · " + run.us.toFixed(2) + " µs";
+          const dot = make("circle", { cx: x(run.us), cy: y, r: 5, fill: binary === "main" ? "var(--series-main)" : "var(--series-branch)", stroke: "var(--figure-bg)", "stroke-width": 2, tabindex: 0, "aria-label": label }, svg);
+          const showTip = () => {
+            tooltip.textContent = label;
+            tooltip.hidden = false;
+            const box = wrap.getBoundingClientRect();
+            const point = dot.getBoundingClientRect();
+            const width = tooltip.offsetWidth;
+            const leftEdge = Math.min(Math.max(point.left - box.left + point.width / 2 - width / 2, 0), box.width - width);
+            tooltip.style.left = leftEdge + "px";
+            tooltip.style.top = (point.top - box.top - 38) + "px";
+          };
+          const hideTip = () => { tooltip.hidden = true; };
+          dot.addEventListener("pointerenter", showTip);
+          dot.addEventListener("focus", showTip);
+          dot.addEventListener("pointerleave", hideTip);
+          dot.addEventListener("blur", hideTip);
+        });
+      });
+    });
+    DATA.uvgrid.forEach((run, index) => {
+      const line = document.createElement("tr");
+      line.innerHTML = "<td class=\"n\">" + (index + 1) + "</td><td>" + (run.binary === "main" ? "main" : "PR #220") + "</td><td>" + (run.order === "after" ? "after texture-wall" : "alone or before it") + "</td><td class=\"n\">" + run.us.toFixed(2) + "</td>";
+      tableBody.appendChild(line);
+    });
+
+    const abBody = document.querySelector("#cpu-ab tbody");
+    DATA.ab.forEach((scene) => {
+      const line = document.createElement("tr");
+      line.innerHTML = "<td>" + scene.scene + "</td><td class=\"n\">" + scene.quietMain.toFixed(1) + "</td><td class=\"n\">" + scene.quietBranch.toFixed(1) + "</td><td class=\"n\">" + scene.finalMain.toFixed(1) + "</td><td class=\"n\">" + scene.finalBranch.toFixed(1) + "</td>";
+      abBody.appendChild(line);
+    });
+  })();
+})();
+</script>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1932 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Instance Culling Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume six of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.16);
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.18); --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.18); --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, canvas:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.term { font-weight: 600; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+ol.steps { margin: 0 0 16px; padding-left: 26px; display: grid; gap: 8px; }
+ol.steps li { padding-left: 4px; }
+.keypoints li, ol.steps li { min-width: 0; }
+.prose code, figcaption code, .readout code { overflow-wrap: anywhere; }
+ol.steps li::marker { font-family: var(--mono); font-size: 0.85em; color: var(--accent); font-weight: 600; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .grid { stroke: var(--rule); stroke-width: 1; }
+svg .axis { stroke: var(--ink-soft); stroke-width: 1.2; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn:disabled:hover { border-color: var(--rule); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 18px; height: 12px; vertical-align: -1px; margin-right: 7px; border-radius: 2px; }
+.legend i.drawn { background: var(--accent-wash); border: 2px solid var(--accent); }
+.legend i.phase-two { background: var(--warm-wash); border: 2px solid var(--warm); }
+.legend i.kept { border: 2px solid var(--warm); }
+.legend i.culled { border: 2px dashed var(--ink-soft); }
+.legend i.occluded { border: 2px dashed var(--bad); }
+.legend i.read { background: var(--accent-wash); border: 2px solid var(--accent); }
+.legend i.box { border: 2px solid var(--ink); }
+.legend i.grown { border: 2px dashed var(--warm); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 14px; }
+.demo-grid > div { min-width: 0; }
+ol.work { margin: 12px 0 0; padding: 10px 12px 10px 34px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink-soft); display: grid; gap: 4px; }
+ol.work b { color: var(--ink); font-weight: 600; }
+ol.work li::marker { color: var(--accent); font-weight: 600; }
+ol.work li.current { background: var(--accent-wash); border-radius: 4px; padding: 2px 6px; margin-left: -6px; color: var(--ink); }
+.demo-grid ol.work { margin-top: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts td.c, table.facts th.c { text-align: center; font-family: var(--mono); font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.facts.compact th, table.facts.compact td { padding: 5px 8px; font-size: 13.5px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.frames { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; margin-top: 14px; }
+.frame-cell { flex: 0 0 auto; width: 150px; min-width: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.45; color: var(--ink-soft); display: grid; gap: 4px; align-content: start; text-align: left; cursor: pointer; }
+.frame-cell b { color: var(--ink); font-weight: 600; }
+.frame-cell[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.frame-cell:hover { border-color: var(--accent); }
+
+.passes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; counter-reset: pass; }
+.passes li { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; font-size: 15px; line-height: 1.45; min-width: 0; counter-increment: pass; }
+.passes li::before { content: counter(pass); display: block; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); }
+.passes .pass-name { display: block; font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.passes .pass-kind { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.bitfield { display: grid; grid-template-columns: 26fr 6fr; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; font-family: var(--mono); font-size: 13px; background: var(--panel); }
+.bitfield > div { padding: 10px 12px; min-width: 0; }
+.bitfield .record { background: var(--accent-wash); }
+.bitfield .vertex { border-left: 2px solid var(--accent); }
+.bitfield b { display: block; color: var(--ink); font-weight: 600; }
+.bitfield span { color: var(--ink-soft); overflow-wrap: anywhere; }
+.rec-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; font-family: var(--mono); font-size: 12px; }
+.rec { min-width: 30px; text-align: center; padding: 4px 6px; border: 1px solid var(--rule); border-radius: 3px; background: var(--panel); color: var(--ink); }
+.rec.even { background: var(--accent-wash); }
+.rec.first { border-left: 3px solid var(--accent); }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+svg .grid-fine { stroke: var(--rule); stroke-width: 1; fill: none; }
+svg .grid-coarse { stroke: var(--ink-soft); stroke-width: 1.6; fill: none; }
+svg .texel-read { fill: var(--accent-wash); stroke: var(--accent); stroke-width: 2.4; }
+svg .screen-box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.6; }
+svg .screen-rect { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 2 3; }
+svg .grown-rect { fill: none; stroke: var(--warm); stroke-width: 2; stroke-dasharray: 6 4; }
+svg .corner { fill: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) {
+  .demo-grid { grid-template-columns: minmax(0, 1fr); }
+  .passes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M3 · tickets #194, #196, #198</div>
+  <h1>Letting the GPU choose what to draw</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Recording a draw call per object makes the CPU's work grow with the scene. Praxis lets a compute pass choose each frame which Instances to draw and append their triangles, in slot order, to one indirect draw, so every run renders the same image. It skips Instances wholly outside the view frustum, then, in two phases, those wholly hidden behind the Instances visible the frame before, which it draws first. The idea to keep: culling may cost work but must never change the image, so every test errs towards drawing.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>How one indirect draw spans every Instance through packed Meshlet indices</li>
+      <li>Why the draw is built in slot order, not in the order atomics land</li>
+      <li>How a conservative frustum test works on clip-space boxes</li>
+      <li>How two-phase occlusion culling works against a depth pyramid</li>
+      <li>How tests check that culling never changes the image, and what it costs</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-buffer.html">Instance Buffer Explained</a>, <a href="depth-pyramid.html">Depth Pyramid Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at fe08baa (PR #242, 2026-10-22), with notes on later changes as of fd2ee9b (PR #298, 2026-10-26). <b>Since then:</b> PR #251 added the tonemapping pass, PR #262 the Froxel pass after phase one and PR #277, with shadow rays on, phase two's depth pass and the shadow mask pass (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>, <a href="froxel-lights.html">Froxel Lights Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a>); four Render switches joined the <code>culling</code> one: <code>froxel_lights</code> (PR #263), <code>shadow_rays</code> (PR #258), <code>count_point_lights</code> (PR #272) and <code>crowd_form</code> (PR #289). PR #272 also doubled the frame's draw to 2^25 packed indices, so that town, which PRs #273 and #275 built as the first scene that hides Instances, fits with culling off (<a href="town.html">Town Explained</a>). Since PR #298 a test compares town's images with culling on and off at eight frames of its path.</p>
+  </aside>
+  <p class="lede">A field guide to Praxis's <span class="concept" data-tip="The compute pass that builds the frame's draw from the Instances, in two phases, appending the Meshlets of each Instance it draws in slot order (src/render/culling_pass.rs)." data-term="Culling pass">culling pass</span>, the compute pass that decides each frame which <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> to draw and writes the one <span class="concept" data-tip="A draw whose arguments, the index count, first index and the rest, the GPU reads from a buffer when the draw runs, so a compute pass can write them. Praxis's calls are draw_indexed_indirect." data-term="Indirect draw">indirect draw</span> that holds them. It covers the frame's draw from #194, the frustum test and <span class="concept" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the crowd scene's form in the TLAS. Their defaults are what ships. Culling, from #196, came first.">Render switches</span> from #196, and the two-phase occlusion culling from #198, with what each costs on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>.</p>
+  <p class="status"><b>Provenance.</b> All seven PRs are merged: #229, #228 and #230 for #194; #232 and #239 for #196; #241 and #242 for #198, after #240 built the depth pyramid. The guide describes main at fe08baa, where no <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scene</span> hid an Instance, so occlusion culling culled nothing yet; <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, with building blocks as occluders."><code>town</code></span> (#206), built since in PRs #272, #273 and #275 and covered in <a href="town.html">Town Explained</a>, is the first scene that does. Later work has also added passes around the five in chapter 1, four more Render switches and room for twice as many packed indices, and, with shadow rays on, moved phase two's depth into a pass of its own; notes in the text say where, as of main at fd2ee9b. The depth pyramid has a guide of its own, <a href="depth-pyramid.html">Depth Pyramid Explained</a>, which comes before this one.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 · Why the GPU builds the draw</a>
+    <a href="#one-draw">2 · One draw for every Instance</a>
+    <a href="#slot-order">3 · Slot order</a>
+    <a href="#frustum">4 · The frustum test</a>
+    <a href="#checks">5 · Switches and checks</a>
+    <a href="#phases">6 · Two phases</a>
+    <a href="#occlusion">7 · The occlusion test</a>
+    <a href="#cost">8 · What it costs</a>
+    <a href="#next">9 · What comes next</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>Why the GPU builds the draw</h2>
+    <p>Until #194, the Renderer drew each <span class="concept" data-tip="One contiguous range of a Mesh's vertices and indices.">Primitive</span> of each <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> with a <code>draw_indexed</code> of its own. The helmet scene made 11 draw calls a frame, pbr-sweep 10 and texture-wall 100. Every one of those calls was recorded on the CPU, so the CPU's work grew with the number of Instances. M3's dense <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>, <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, with building blocks as occluders."><code>town</code></span> (#206), planned about 250k Instances, and its median frame must draw at least 100,000 Instances and 5,000,000 triangles after culling.</p>
+    <p>ADR 0019 moves the choice to the GPU. A compute pass, the <span class="concept" data-tip="The compute pass that builds the frame's draw from the Instances, in two phases, appending the Meshlets of each Instance it draws in slot order (src/render/culling_pass.rs)." data-term="Culling pass">culling pass</span>, reads every Instance slot in use, decides which Instances to draw, and writes their triangles into one index buffer, with the arguments of an <span class="concept" data-tip="A draw whose arguments, the index count, first index and the rest, the GPU reads from a buffer when the draw runs, so a compute pass can write them. Praxis's calls are draw_indexed_indirect." data-term="Indirect draw">indirect draw</span> beside them. The render passes draw that buffer with <code>draw_indexed_indirect</code>, which reads its arguments from GPU memory when it runs. <span class="concept" data-tip="The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>, the renderer's input each frame, therefore "lists no draws: the GPU culls Instances and builds its own", in the glossary's words. It carries the count of Instance slots in use, which the Renderer uploads only when it changes.</p>
+    <p>Three tickets built the choice:</p>
+    <ul class="keypoints">
+      <li><b>#194</b> (PRs #229, #228, #230): the culling pass and the frame's draw. Every Instance in use is drawn.</li>
+      <li><b>#196</b> (PRs #232, #239): the frustum test, which skips Instances that lie wholly outside the view, and the <span class="concept" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the crowd scene's form in the TLAS. Their defaults are what ships. Culling, from #196, came first." data-term="Render switches">Render switch</span> that turns culling off.</li>
+      <li><b>#198</b> (PRs #240, #241, #242): two-phase occlusion culling against the <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float texture whose level 0 is half the target's size, each texel holding the minimum depth, the farthest, of the depth beneath it. Each level halves the one below, to 1×1." data-term="Depth pyramid">depth pyramid</span>, which skips Instances that lie wholly behind what is already drawn.</li>
+    </ul>
+    <p>At fe08baa every frame ran five passes, in this order, and <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, draw calls, Instances and triangles drawn, Instances the draw had no room for, bytes uploaded, GPU memory and more.">Frame stats</span> timed each one separately, under its own name:</p>
+  </div>
+  <figure class="wide">
+    <ol class="passes">
+      <li><span class="pass-kind">compute</span><span class="pass-name">culling_phase_one</span>Draws the Instances in view that were visible the frame before.</li>
+      <li><span class="pass-kind">render</span><span class="pass-name">depth_prepass</span>Clears the 4x depth to 0 and draws phase one's Instances into it, depth only.</li>
+      <li><span class="pass-kind">compute</span><span class="pass-name">depth_pyramid_pass</span>Reduces that depth into the depth pyramid.</li>
+      <li><span class="pass-kind">compute</span><span class="pass-name">culling_phase_two</span>Tests every Instance in view against the pyramid, draws what phase one did not, and records what is visible.</li>
+      <li><span class="pass-kind">render</span><span class="pass-name">lit_pass</span>Draws phase two's Instances into depth, then shades both phases at depth equal.</li>
+    </ol>
+    <figcaption><b>The frame's passes</b>, as <code>Renderer::render</code> records them and <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/renderer.rs#L19-L25"><code>TIMED_PASSES</code></a> names them. Chapters 2 to 5 build the culling pass with one phase; chapter 6 splits it in two. Later work has added passes around these five, among them the Froxel pass after phase one (#262), phase two's depth pass and the shadow mask pass between phase two and the lit pass when shadow rays are on (#277), and the tonemapping pass after the lit pass (#251); <a href="froxel-lights.html">Froxel Lights Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a> and <a href="tonemapping-pass.html">Tonemapping Pass Explained</a> cover them.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Culling must never change the image. With culling on, a Reference scene must render what it renders with culling off, and chapter 5 shows the tests that check it. A test that removes an Instance only when the Instance cannot show is <span class="concept" data-tip="Never culling an Instance that would show. Where the test cannot be sure, it draws." data-term="Conservative">conservative</span>, and both of Praxis's tests are.</p>
+  </div>
+</section>
+
+<section class="chapter" id="one-draw">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 · PRs #229, #228, #230</div>
+    <h2>One draw for every Instance</h2>
+    <p>One draw can span every <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> because of how Meshes are cooked. Since #192 the cooker cuts each <span class="concept" data-tip="One contiguous range of a Mesh's vertices and indices.">Primitive</span> into <span class="concept" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one. Praxis's hold at most 64 vertices and 124 triangles." data-term="Meshlet">Meshlets</span> of at most 64 vertices and 124 triangles. On the GPU a Meshlet lists its vertices as indices into the vertex <span class="concept" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>, and its triangles as three one-byte corners into that list, in cooked order. #194 then came in three PRs, along the path the data takes:</p>
+    <ol class="steps">
+      <li><b>Tables at load (#229).</b> When a <span class="concept" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span> loads, the Mesh pool writes an entry of the Mesh table at its <span class="concept" data-tip="A typed index into a Pool, held by components in place of the resource.">Handle</span>'s index, with its Meshlets, its first triangle, its triangle count and its bounds. It fills three new Arenas: the Meshlets, each with its first vertex, first triangle, triangle count and its Primitive's <span class="concept" data-tip="The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.">Material ID</span>; their vertices; and their triangles. The table holds 65,536 Meshes, and each new Arena takes the same provisional 16 MiB as the vertex and index Arenas.</li>
+      <li><b>An Instance names its Mesh (#228).</b> The Instance stays 128 bytes: four bytes that were padding now hold its Mesh, so the culling pass finds an Instance's Meshlets from its <span class="concept" data-tip="An index into the Instance buffer, which a Renderable keeps while it is one. A freed slot is taken again from the next frame." data-term="Slot">slot</span>. A freed slot gets an Instance with no Mesh, <span class="concept" data-tip="The Mesh reference u32::MAX, which prepare writes into a freed slot's Instance. The culling pass draws nothing from such a slot."><code>NO_MESH</code></span> (<code>u32::MAX</code>), written once at the end of the frame that frees it, and is taken again from the next frame.</li>
+      <li><b>One indirect draw (#230).</b> For each Instance it draws, the <span class="concept" data-tip="The compute pass that builds the frame's draw from the Instances, in two phases, appending the Meshlets of each Instance it draws in slot order (src/render/culling_pass.rs)." data-term="Culling pass">culling pass</span> writes a <span class="concept" data-tip="Three u32s for one Meshlet of one drawn Instance: the Instance's slot, the Meshlet, and the Material ID it is drawn with." data-term="Meshlet record">Meshlet record</span> per Meshlet and a <span class="concept" data-tip="One 32-bit index of the frame's draw: a Meshlet record's number in the high 26 bits, and a vertex of that record's Meshlet in the low six." data-term="Packed index">packed index</span> per triangle corner. The main pass then drew them all with one <code>draw_indexed_indirect</code>; chapter 6 counts the three a frame made at fe08baa.</li>
+    </ol>
+    <p>A packed index holds a Meshlet record's number above six bits of vertex. Six bits count 64 vertices, a Meshlet's most, which leaves 26 bits for the record. The record names the Instance's slot, the Meshlet, and the Material ID to draw it with: the Instance's own where its <span class="concept" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh's Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span> overrides its Mesh's Materials, else the Meshlet's Primitive's. So each Primitive draws with its own Material unless its Instance overrides it, and the loader's warning about Meshes of mixed Materials is gone.</p>
+  </div>
+  <figure class="wide">
+    <div class="bitfield" role="img" aria-label="A packed index: bits 31 to 6 hold the Meshlet record, bits 5 to 0 the vertex within the record's Meshlet.">
+      <div class="record"><b>Meshlet record</b><span>bits 31 to 6 · fewer than 2<sup>26</sup> records</span></div>
+      <div class="vertex"><b>vertex</b><span>bits 5 to 0 · 0 to 63</span></div>
+    </div>
+    <pre class="code" style="margin-top:14px"><code><span class="comment">// The record in the bits above MESHLET_VERTEX_BITS, which is declared from
+// Rust's Meshlet vertex limit (src/render/shaders/mod.rs), the vertex below.</span>
+fn pack_index(record: u32, vertex: u32) -&gt; u32 {
+    return (record &lt;&lt; MESHLET_VERTEX_BITS) | vertex;
+}
+
+fn unpack_index(index: u32) -&gt; PackedIndex {
+    return PackedIndex(index &gt;&gt; MESHLET_VERTEX_BITS, index &amp; ((1u &lt;&lt; MESHLET_VERTEX_BITS) - 1u));
+}</code></pre>
+    <figcaption><b>A packed index</b>, and <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/common.wgsl#L104-L112"><code>src/render/shaders/common.wgsl</code>, lines 104 to 112</a> at fe08baa. <code>MESHLET_VERTEX_BITS</code> is the base-2 logarithm of <code>MESHLET_MAX_VERTICES</code>, 64, so 6. <code>CullingPass::new</code> asserts the record capacity stays below 2<sup>26</sup>.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The draw has no base vertex, so a vertex's index is its packed index. The vertex shader unpacks it, reads the record, reads the Instance from the record's slot, finds the vertex through the Meshlet's vertex list, pulls it from the vertex Arena, and composes its position relative to the camera from the <span class="concept" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position." data-term="Anchor">Anchors</span> (ADR 0014).</p>
+    <p>The frame's draw has fixed capacities, provisional until milestone M4 splits the 8 GB <span class="concept" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress.">Budget</span>: at fe08baa, 2<sup>24</sup> packed indices, 64 MiB, enough for 5.6 million triangles against <code>town</code>'s 5 million, and 2<sup>20</sup> Meshlet records, 12 MiB. (Since #272, merged as 2059535, it holds 2<sup>25</sup> packed indices, 128 MiB, the most one storage binding holds at the Capability floor, so that all of <code>town</code>, about 10 million triangles, fits when the Goldens test draws it with culling off.) A frame past either draws the Instances that fit, in slot order, and counts the rest as overflowed.</p>
+    <p>The draw's arguments and counts live in one small buffer, <code>FrameDraw</code>. Beside the indirect arguments it counts the Instances the draw holds and the Instances it had no room for. Each frame's copy reaches the CPU a few frames late, through a ring of buffers the CPU maps for reading, which #195 added; the main thread never waits on one while it renders (ADR 0016). <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, draw calls, Instances and triangles drawn, Instances the draw had no room for, bytes uploaded, GPU memory and more.">Frame stats</span> show <code>instances_drawn</code>, <code>triangles_drawn</code> (the draw's index count over 3) and <code>instances_overflowed</code>.</p>
+    <p>The <span class="concept" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> moved with it (ADR 0021). <code>COMPUTE_SHADERS</code> and <code>INDIRECT_EXECUTION</code> joined it, since wgpu-core refuses compute pipelines and indirect draws without them. <code>INDIRECT_FIRST_INSTANCE</code> left it: the one draw spans every Instance through packed indices and draws from first instance 0.</p>
+  </div>
+</section>
+
+<section class="chapter" id="slot-order">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 · PR #230</div>
+    <h2>Slot order</h2>
+    <p>Each drawn <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> needs to know where its records and indices start: after those of every Instance drawn before it. The culling pass works that out with an <span class="concept" data-tip="Exclusive scan, or prefix sum: for each element, the sum of every element before it. Here it gives each drawn Instance the place where its Meshlets start." data-term="Exclusive scan">exclusive scan</span>, a running sum, in three dispatches:</p>
+    <ol class="steps">
+      <li><code>offset_slots</code> runs a <span class="concept" data-tip="A group of compute-shader invocations that run together and share workgroup memory and barriers. The culling pass's scan workgroups hold 256.">workgroup</span> per block of 256 slots. Each invocation takes one slot's counts of <span class="concept" data-tip="Three u32s for one Meshlet of one drawn Instance: the Instance's slot, the Meshlet, and the Material ID it is drawn with." data-term="Meshlet record">Meshlet records</span> and <span class="concept" data-tip="One 32-bit index of the frame's draw: a Meshlet record's number in the high 26 bits, and a vertex of that record's Meshlet in the low six." data-term="Packed index">packed indices</span>, zero where the slot is not drawn. A Hillis and Steele scan across the workgroup gives each slot the sum of the counts before it in its block, and the block's total goes after the slots' entries.</li>
+      <li><code>offset_blocks</code> runs one workgroup, which turns the blocks' totals into each block's start. At the Instance buffer's 2<sup>19</sup> slots there are 2,048 blocks, 8 to an invocation.</li>
+      <li><code>append_meshlets</code> runs a workgroup per slot, with an invocation per triangle of a Meshlet, 124 at most. Each drawn Instance writes its records and packed indices from its block's start plus its own offset.</li>
+    </ol>
+    <p>Every position in the draw then follows from the slots' order and counts alone. PR #230's first version appended with atomics instead, so an Instance's place depended on when its workgroup reached the shared count. Metal captures of orrery then moved 64 to 97 pixels from run to run, and equal arguments no longer gave equal images.</p>
+    <p>The geometry was the same in every run: each Meshlet triangle mapped back to the cooked index stream, 2,208 of 2,208, corners in order. With <code>textureSampleLevel(.., 0)</code> forced, which names the mip level explicitly, orrery rendered bit-identical three runs out of three. What moved was <span class="concept" data-tip="How fast a value such as a texture coordinate changes from one pixel to the next. Fragment shaders compute them from neighbouring invocations in 2×2 quads, and textureSample uses them to choose a mip level." data-term="Implicit derivatives">implicit derivatives</span> at triangle edges. WGSL computes these from neighbouring invocations in a 2×2 quad, and on the M4 Pro they depend on how the GPU batches a draw's triangles. Appending in slot order makes each frame's index stream the same on every run, and the image with it.</p>
+  </div>
+  <figure class="wide" id="demo-scan">
+    <div class="controls" style="margin-top:0">
+      <span class="control-label">Append in:</span>
+      <div class="seg" role="group" aria-label="Order of appending" id="s-mode">
+        <button type="button" data-mode="slot" aria-pressed="true">slot order</button>
+        <button type="button" data-mode="atomic" aria-pressed="false">atomic order</button>
+      </div>
+      <button type="button" class="btn primary" id="s-run">Run again</button>
+    </div>
+    <div class="table-wrap" style="margin-top:14px">
+      <table class="facts compact" id="s-table">
+        <thead><tr><th class="n">Slot</th><th>Instance</th><th class="n">Meshlets</th><th class="n">Offset in its block</th><th class="n">Block's start</th><th class="n">First record</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="rec-strip" id="s-strip" role="img" aria-label="The frame's Meshlet records in order."></div>
+    <p class="readout" id="s-status" aria-live="polite" style="margin:12px 0 0"></p>
+    <figcaption><b>Live demo.</b> Eight slots in two blocks of four, where Praxis's blocks hold 256, and only the Meshlet records counted; the pass scans packed indices alongside them. <i>Slot order</i> runs the scan: each slot's offset in its block, plus its block's start, gives its first record. <i>Atomic order</i> models appending through a shared atomic count, so each Instance's place depends on which workgroup gets there first, which differs from run to run. Slot 2 is freed (<code>NO_MESH</code>) and slot 5 culled, so both take <code>NOT_DRAWN</code> and add nothing. Each square is one record, labelled with its Instance's slot.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Slot order still moved one <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>. With all five of orrery's spheres in one draw, the M4 Pro batches their triangles differently than before, and 80 of the capture's 230,400 pixels moved by more than one step, at most 24, all on the grid texture's lines at triangle edges. Software Vulkan's Goldens did not move. The project's owner accepted the rewritten Metal Golden and accepted slot order as a rule: the project's review checklist, in <code>CLAUDE.md</code>, now says the GPU builds the frame's draw "in slot order within each culling phase, never in the order atomics land".</p>
+    <p>Atomics remain where order cannot matter. The draw's index count is an <code>atomicMax</code>, its Instance counts are <code>atomicAdd</code>s, and phase two's visibility words, in chapter 6, are <code>atomicOr</code>s. Each ends at the same value whatever order the invocations run in.</p>
+  </div>
+</section>
+
+<section class="chapter" id="frustum">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 · PR #232</div>
+    <h2>The frustum test</h2>
+    <p>The <span class="concept" data-tip="The region the camera sees: inside four side planes and beyond the near plane. Praxis's has no far plane." data-term="View frustum">view frustum</span> is the region the camera sees: inside four side planes and beyond the near plane, 0.1 m ahead. It has no far plane. ADR 0015's <span class="concept" data-tip="Depth that is 1 at the near plane and falls towards 0 at infinity, cleared to 0 and compared with Greater, so nearer is greater (ADR 0015)." data-term="Reverse-Z">reverse-Z</span> projection puts a point d metres ahead at depth 0.1/d, 1 at the near plane and falling towards 0 at infinity, so nothing is too far to draw.</p>
+    <p>The test runs in <span class="concept" data-tip="The four-component positions a vertex shader outputs, before the GPU divides by w. Inside Praxis's frustum, −w ≤ x ≤ w, −w ≤ y ≤ w and z ≤ w." data-term="Clip space">clip space</span>, where the vertex shader's outputs live before the GPU divides them by w. There the side planes are −w ≤ x ≤ w and −w ≤ y ≤ w, and the near plane is z ≤ w. Every point past the near plane lands at z ≥ 0, so there is no sixth plane to test.</p>
+    <p>Each Mesh carries cooked bounds, a box in its own space. <code>clip_space_bounds</code> composes the box's centre relative to the camera from the <span class="concept" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position." data-term="Anchor">Anchors</span>, as the vertex shader composes vertices (ADR 0014). It takes the box's three half axes, the Instance's rotation-scale columns times the half extents, into clip space as directions. A plane's distance is linear in clip space, so the farthest the box reaches inside a plane is its centre's distance plus each half axis's, taken whole. Where that is negative for some plane, the box lies wholly beyond it and is culled.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>fn in_view_frustum(bounds: ClipBox) -&gt; bool {
+    let side_reach = side_plane_distances(bounds.centre)
+        + abs(side_plane_distances(bounds.half_axes[0]))
+        + abs(side_plane_distances(bounds.half_axes[1]))
+        + abs(side_plane_distances(bounds.half_axes[2]));
+    let near_reach = near_plane_distance(bounds.centre)
+        + abs(near_plane_distance(bounds.half_axes[0]))
+        + abs(near_plane_distance(bounds.half_axes[1]))
+        + abs(near_plane_distance(bounds.half_axes[2]));
+    return all(side_reach &gt;= vec4&lt;f32&gt;(0.0)) &amp;&amp; near_reach &gt;= 0.0;
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L131-L141"><code>src/render/shaders/culling.wgsl</code>, lines 131 to 141</a> at fe08baa. <code>side_plane_distances</code> returns w + x, w − x, w + y and w − y at once, and <code>near_plane_distance</code> returns w − z.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The test is exact for each plane alone. A box past the corner where two planes meet can be outside both without lying wholly beyond either, and the test keeps it. That costs a little drawing and never an Instance that shows, so the test is <span class="concept" data-tip="Never culling an Instance that would show. Where the test cannot be sure, it draws." data-term="Conservative">conservative</span>.</p>
+    <p>A culled slot adds nothing to the scan. It takes the offsets a freed slot takes, <span class="concept" data-tip="The offsets a slot takes when the phase does not draw it, freed or culled: all ones, past every capacity, so append_meshlets skips it."><code>NOT_DRAWN</code></span>, all ones, past every capacity, and <code>append_meshlets</code> skips it before its capacity check. The Instances left draw in slot order, as before. The five planes are tested with neither a branch nor a loop; against a loop over an array of planes, that saved 0.5 to 0.7 µs on pbr-sweep and uv-grid.</p>
+  </div>
+  <figure class="wide" id="demo-frustum">
+    <div class="canvas-frame"><canvas id="f-canvas" class="demo" tabindex="0" role="img" aria-label="A top-down view of a camera's frustum over a field of Instance bounding boxes. Use the arrow keys to turn and move the camera."></canvas></div>
+    <div class="legend"><span><i class="drawn"></i>drawn</span><span><i class="kept"></i>drawn, though outside the frustum</span><span><i class="culled"></i>culled</span></div>
+    <div class="controls">
+      <span class="control-label">Render switch <code>culling</code>:</span>
+      <div class="seg" role="group" aria-label="Render switch culling" id="f-switch">
+        <button type="button" data-culling="on" aria-pressed="true">on</button>
+        <button type="button" data-culling="off" aria-pressed="false">off</button>
+      </div>
+      <button type="button" class="btn" id="f-next">Inspect the next Instance</button>
+    </div>
+    <div class="sliders">
+      <label for="f-heading" class="control-label">Camera heading</label>
+      <input type="range" id="f-heading" min="0" max="359" value="0">
+    </div>
+    <p class="readout" id="f-counts" aria-live="polite" style="margin:12px 0 0"></p>
+    <ol class="work" id="f-inspect"></ol>
+    <figcaption><b>Live demo.</b> A top-down view, so two of the four side planes show, with the near plane; the other two work the same way in y. Drag the camera, or press elsewhere to turn it towards the pointer; with the picture focused, the arrow keys turn and move it. Tap a box to inspect it. Each box is an Instance's bounds, turned and scaled, and the test is <code>in_view_frustum</code>'s, run on the same clip-space terms with a horizontal field of view of about 73°, which Praxis's 45° vertical one gives at 16:9. The near plane is drawn 60 units out so that it shows; Praxis's is 0.1 m. The thin box at the left end of the near plane, at the start, lies outside the frustum, and the test keeps it. With the switch off, every Instance in use is drawn.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="checks">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 · PRs #232, #239</div>
+    <h2>Switches and checks</h2>
+    <p>Culling arrived with a way to turn it off. <code>RenderSwitches</code> is one value, fixed when the Renderer is created, whose defaults are what ships, and its first switch, <code>culling</code>, is on by default. The glossary's <span class="concept" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the crowd scene's form in the TLAS. Their defaults are what ships. Culling, from #196, came first.">Render switches</span> also planned switches for Froxel light culling, shadow rays and the <code>crowd</code> scene's form in the TLAS; at fe08baa only culling existed in code. Four have joined it since: <code>froxel_lights</code> (#263) and <code>shadow_rays</code> (#258), which reach WGSL as overrides, as culling does, and <code>count_point_lights</code> (#272) and <code>crowd_form</code> (#289), which no shader reads. Capture and bench take switches; at fe08baa the window and the <code>praxis</code> commands passed the defaults.</p>
+    <p>Culling reaches WGSL as an <span class="concept" data-tip="A WGSL constant that a pipeline sets when it is created. The shader compiles with the value fixed, so a switch costs the shipping pipeline no branch." data-term="Override constant">override constant</span>, like every switch a shader reads. Every shader module declares one per such switch, generated from the switches' Rust definition and without a default, so a pipeline that uses a switch must set it. The culling pass's pipelines set them from the Renderer's switches, and each shader compiles with the value fixed, so the shipping pipeline pays for no branch:</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>visible = !CULLING || in_view_frustum(bounds);</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L236"><code>culling.wgsl</code>, line 236</a>, in <code>offset_slots</code>. <code>CULLING</code> is declared by <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/mod.rs#L150-L152"><code>ShaderModule::assemble</code></a> from <code>RenderSwitches::constants</code>.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Culling off must match culling on</h3>
+    <p>The <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span> test captures every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> twice, with culling on and off, and requires the two to match within the Goldens' tolerance, one step per channel. So culling removes no visible Instance on any scene. (Since #298, merged on 2026-10-26 as fd2ee9b, <code>town</code> takes the check at eight frames of its camera path, and on software Vulkan one pixel a frame may differ: at <code>town</code>'s frame 1200, lavapipe resolves one sample differently depending on which triangles the draw holds, and probes showed that culling drops nothing visible there. Metal must still match.) The helmet scene has no Golden, since its source is fetched, and takes the check wherever it is fetched. PR #239 showed the check failing with a wrong plane test, the left plane missing its w term, so that it tests x ≥ 0:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>Scene, culling off against on</th><th class="n">Pixels that differ</th><th class="n">Largest channel difference</th></tr></thead>
+      <tbody>
+        <tr><td>pbr-sweep</td><td class="n">13,395</td><td class="n">166</td></tr>
+        <tr><td>orrery</td><td class="n">5,178</td><td class="n">146</td></tr>
+        <tr><td>texture-wall</td><td class="n">29,000</td><td class="n">138</td></tr>
+        <tr><td>helmet</td><td class="n">19,726</td><td class="n">166</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>A test that ignores the box's half axes and checks its centre alone passes this check, because no Reference scene has a visible Instance whose centre is off-screen. The pass-level test catches it.</p>
+    <h3>The pass-level test</h3>
+    <p><code>the_culling_pass_draws_the_instances_whose_bounds_reach_into_the_frustum</code> drives the pass's inputs and reads its outputs. It places 1,000 Instances about a camera 100 km out along x and 70 km along z, turned and scaled unevenly, across four scan blocks, with every 97th slot freed. Its oracle is independent of the shader: each box's eight corners in f64, from World positions without Anchors, tested against the five clip planes. Instances within 10<sup>−3</sup> of a plane are left out, so f32 rounding cannot tip a verdict.</p>
+    <ul class="keypoints">
+      <li>Each plane alone must cull some Instance, so every plane is exercised.</li>
+      <li>With culling on, the draw must hold exactly the oracle's Instances, in slot order; with it off, every Instance in use.</li>
+      <li><span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, draw calls, Instances and triangles drawn, Instances the draw had no room for, bytes uploaded, GPU memory and more.">Frame stats</span>' <code>instances_drawn</code> must equal the oracle's count, a check #239 added. With culling ignored, it fails with 990 against 454.</li>
+      <li>It fails under each of ten broken plane tests, among them a dropped half axis, swapped x and y extents, a flipped near plane and ignored Anchors.</li>
+    </ul>
+    <h3>Overflow, from the GPU's own count</h3>
+    <p>Before #239, the "frame's draw is full" warning came from the CPU's sums over every Instance in use. With culling those sums only bound the draw, so a frame whose visible Instances fit could still warn. The warning now comes from the read-back <code>instances_overflowed</code>, once until a frame read back has room for all; a skipped readback neither warns nor clears it.</p>
+    <p>Its test renders 70,000 Instances into a draw that holds all but one. With culling off, the last Instance overflows and the frame warns. With culling on, the 69,998 off-screen Instances are culled, the two left draw, and nothing warns. The old sums would have warned there, with 210,000 indices against room for 209,997.</p>
+    <p>Frame stats count what the frame drew and carry no count of Instances in use, so a frame's culled Instances are those in use less <code>instances_drawn</code> and <code>instances_overflowed</code> (and, since #276, less the <code>crowd</code> scene's shadow proxies, whose Mesh has no Meshlets, so that no pass draws them). At fe08baa every Reference scene drew all of its Instances in every frame: helmet 11, pbr-sweep 10, texture-wall 100, orrery 5, far-coplanar 2, and uv-grid, minification and normal-tangent 1 each. <code>town</code>, added since, does not: its M4 Pro Baseline's median frame draws 137,730 of its 254,256.</p>
+  </div>
+</section>
+
+<section class="chapter" id="phases">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 · PR #241</div>
+    <h2>Two phases</h2>
+    <p>The frustum test needs only the camera. Occlusion needs to know what lies in front, which the depth buffer records, and the depth buffer fills only as things are drawn. ADR 0019 answers with two phases that rely on frames being alike: most <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> visible in one frame are still visible in the next.</p>
+    <ol class="steps">
+      <li><b><span class="concept" data-tip="The culling pass's first run each frame: it draws the Instances in view that were visible the frame before.">Phase one</span></b> reads one <span class="concept" data-tip="One bit per Instance slot, in a 64 KiB buffer. Phase two sets it where it found the Instance visible; the next frame's phase one reads it." data-term="Visibility bit">visibility bit</span> per Instance slot and draws the Instances in view whose bit is set. The bits live in a 64 KiB buffer, zeroed when it is created, so no Instance counts as visible before the first frame.</li>
+      <li><b>The <span class="concept" data-tip="ADR 0019's first render pass: it clears the 4x MSAA depth to 0 and draws phase one's Instances into it, depth only." data-term="Depth pre-pass">depth pre-pass</span></b> clears the 4x <span class="concept" data-tip="Multisample anti-aliasing: four depth and colour samples per pixel in Praxis's main pass (ADR 0019)." data-term="MSAA">MSAA</span> depth to 0, draws phase one's Instances into it with <code>Greater</code>, and stores it.</li>
+      <li><b>The depth pyramid pass</b> reduces that depth into the <span class="concept" data-tip="ADR 0019's Hi-Z pyramid: an R32Float texture whose level 0 is half the target's size, each texel holding the minimum depth, the farthest, of the depth beneath it. Each level halves the one below, to 1×1." data-term="Depth pyramid">depth pyramid</span>: each texel holds the minimum depth, the farthest, of every sample beneath its share of the screen. <a href="depth-pyramid.html">Depth Pyramid Explained</a> shows how.</li>
+      <li><b><span class="concept" data-tip="The culling pass's second run, after the depth pyramid: it tests every Instance in view against the pyramid, records which are visible, and draws those phase one did not.">Phase two</span></b> tests every Instance in view against the pyramid, those phase one drew included, and records each slot's bit: set where the Instance is in view and not hidden. It draws those it finds visible that phase one did not draw.</li>
+      <li><b>The <span class="concept" data-tip="ADR 0019's shading pass: it draws phase two's Instances into depth, then shades both phases at depth equal into 4x colour, which it resolves into the target. Since #251 it resolves into an HDR target that a tonemapping pass reads, and since #277, with shadow rays on, phase two's depth has a pass of its own." data-term="Lit pass">lit pass</span></b> draws phase two's Instances into depth, then shades both phases' at <span class="concept" data-tip="The lit pipeline compares with Equal and writes no depth, so it shades only samples whose depth an earlier draw put there." data-term="Depth equal">depth equal</span>.</li>
+    </ol>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>visible = !CULLING || in_view_frustum(bounds);
+if PHASE_TWO {
+    <span class="comment">// Behind what phase one drew, it is not visible.</span>
+    visible = visible &amp;&amp; !(CULLING &amp;&amp; occluded(bounds));
+    <span class="comment">// Phase one's offsets for the slot, before this phase's replace them.</span>
+    drawn = CULLING &amp;&amp; visible &amp;&amp; all(instance_offsets[slot] == NOT_DRAWN);
+} else {
+    drawn = visible &amp;&amp; (!CULLING || visible_before(slot));
+}</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L236-L244"><code>culling.wgsl</code>, lines 236 to 244</a>: each slot's decision in <code>offset_slots</code>. <code>PHASE_TWO</code> is an override each phase's pipelines set. Phase two then writes <code>visible</code> as the slot's bit for the next frame.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Phase two tests the Instances phase one drew too, so the bits record what is visible now. An Instance that became hidden is drawn by phase one one last time, loses its bit, and leaves phase one in the next frame. Phase two writes the bits through workgroup atomics, so each workgroup writes only its own block's eight words.</p>
+    <p>By these rules the image stays right. An Instance that shows this frame is either drawn by phase one, or tested by phase two against depth made only of Instances drawn this frame; if any part of it is nearer than that depth, phase two draws it. An Instance that phase one draws although it is now hidden costs some work, and the depth test hides it.</p>
+    <p>The first frame has no bits. Phase one draws nothing, the pyramid is all 0, the far plane, nothing can lie behind it, and phase two draws everything in view. With culling off, phase one draws every Instance in use, and phase two draws none and sets every bit. When the view changes a lot, at a camera cut for example, last frame's bits predict little: phase one draws few Instances, the pyramid holds little, and phase two draws most of the view. That frame culls less and still renders right. Karis's Nanite deck says of the same scheme that it "only falls apart under extreme visibility changes".</p>
+    <h3>Phase two's depth, inside the lit pass</h3>
+    <p>The lit pass shades at depth equal: a sample is shaded only where the depth buffer holds exactly its own depth. Phase two's Instances are missing from the depth the pre-pass stored, so the lit pass first draws them into depth, with a pipeline made of the pre-pass's vertex stage and an empty fragment stage. Without that draw, an Instance that phase two adds fails depth equal and shows the background, as one of PR #241's failing tests showed. Drawing them in a pass of their own would load and store the 4x depth once more every frame. (Since #277, merged on 2026-10-23 as bd7b988, Praxis does so with shadow rays on, as it ships: phase two's depth pass draws them, loading and storing the 4x depth, so that the shadow mask pass can read every Instance's depth before the lit pass. With shadow rays off, the lit pass still draws them, as below. <a href="shadow-rays.html">Shadow Rays Explained</a> covers it.)</p>
+    <p>The lit pass loads the depth and discards it at its end, since no later pass reads it. Storing it would cost about 50 µs at 1440p on the M4 Pro, 730 µs against 679 µs on pbr-sweep: once a pass holds a pipeline that writes depth, the whole target is written back, even when phase two draws nothing. (Since #272, merged as 2059535, one later pass can read it: a light count pass behind the <code>count_point_lights</code> Render switch, off by default, and with that switch on the lit pass stores the depth; <a href="town.html">Town Explained</a> covers it.)</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>self.bind(&amp;mut lit_pass, bind_groups.iter().copied(), packed_indices);
+lit_pass.set_pipeline(&amp;self.lit_pass_depth_pipeline);
+lit_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
+lit_pass.set_pipeline(&amp;self.lit_pipeline);
+lit_pass.draw_indexed_indirect(frame_draw, 0);</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/main_pass.rs#L213-L217"><code>src/render/main_pass.rs</code>, lines 213 to 217</a>: the lit pass's two draws, phase two's into depth, then both phases' at depth equal.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>One draw that grows</h3>
+    <p>Both phases append to the same index buffer. Phase one's indices start at index 0, and phase two's follow at phase one's index total, where phase one's sums say. <code>FrameDraw</code> holds two sets of indirect arguments over those indices, 56 bytes in all:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th class="n">Bytes</th><th>Field</th><th>Read by</th></tr></thead>
+      <tbody>
+        <tr><td class="n">0 to 19</td><td><code>draw</code>: index count, instance count, first index, base vertex, first instance</td><td>the pre-pass, as phase one leaves it; the lit pass, with both phases</td></tr>
+        <tr><td class="n">20 to 27</td><td><code>instances_drawn</code>, <code>instances_overflowed</code></td><td>Frame stats, read back</td></tr>
+        <tr class="focus"><td class="n">28 to 47</td><td><code>phase_two_draw</code>: the same five arguments, from phase one's index total</td><td>the lit pass's depth draw</td></tr>
+        <tr><td class="n">48 to 55</td><td><code>phase_two_offsets</code>: where phase two's records and indices start</td><td>phase two</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The byte offsets are this guide's arithmetic from the <code>#[repr(C)]</code> struct in <code>culling_pass.rs</code>, five 4-byte arguments per draw; <code>PHASE_TWO_DRAW_OFFSET</code> is its <code>offset_of!</code>. Phase one's <code>offset_blocks</code> writes its totals into <code>phase_two_offsets</code>; phase two's appends then raise <code>draw</code>'s index count and fill <code>phase_two_draw</code>. Within each phase the draw is in slot order, so an Instance that enters the view sits after all of phase one's, for that one frame. One slot order across both phases was declined: phase two's Instances would need a third index list of 64 MiB, or gaps of degenerate triangles, and the order already repeats from run to run. Overflow works as before: once phase one fills the draw, phase two's Instances count as overflowed.</p>
+    <p>That made three draw calls a frame at fe08baa, one in the pre-pass and two in the lit pass. There was one per Primitive per Instance before #194, one after PR #230, and two once #197's depth pre-pass landed (PR #233). Since #251, merged on 2026-10-22 as 32e4877, the tonemapping pass makes a fourth.</p>
+    <p>The bits cost the <span class="concept" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> one limit. The culling pass's compute stage now binds nine storage buffers, so <code>max_storage_buffers_per_shader_stage</code> rose from 8 to 9 (ADR 0021). wgpu-hal 30.0.1 reports 29 on Metal, 262,144 on DX12 at Resource Binding Tier 3, and 48 on lavapipe (Mesa 25.2.8), whose 104 combined fragment output resources wgpu-hal divides among storage buffers, storage textures and colour attachments. Folding the bits into the per-slot offsets would have avoided the raise, at the price of mixing one frame's scratch with state kept between frames.</p>
+  </div>
+  <figure class="wide" id="demo-phases">
+    <div class="canvas-frame"><canvas id="p-world" class="demo" role="img" aria-label="A top-down view of a camera, a wall and seven other Instances, coloured by what the culling pass's two phases did with them."></canvas></div>
+    <div class="legend"><span><i class="drawn"></i>drawn by phase one</span><span><i class="phase-two"></i>drawn by phase two</span><span><i class="occluded"></i>occluded</span><span><i class="culled"></i>outside the frustum</span></div>
+    <div class="canvas-frame" style="margin-top:10px"><canvas id="p-screen" role="img" aria-label="The screen's 64 columns: the image, the pre-pass depth and the six levels of the depth pyramid."></canvas></div>
+    <div class="controls">
+      <span class="control-label">Step:</span>
+      <div class="seg" role="group" aria-label="Step of the frame" id="p-stages">
+        <button type="button" data-stage="0" aria-pressed="false">1 bits</button>
+        <button type="button" data-stage="1" aria-pressed="false">2 phase one</button>
+        <button type="button" data-stage="2" aria-pressed="false">3 pyramid</button>
+        <button type="button" data-stage="3" aria-pressed="true">4 phase two</button>
+        <button type="button" data-stage="4" aria-pressed="false">5 lit pass</button>
+      </div>
+    </div>
+    <div class="controls">
+      <button type="button" class="btn primary" id="p-run">Run the next frame</button>
+      <button type="button" class="btn" id="p-reset">Start over</button>
+      <span class="readout" id="p-pending" aria-live="polite"></span>
+    </div>
+    <div class="sliders">
+      <label for="p-heading" class="control-label">Camera heading</label>
+      <input type="range" id="p-heading" min="-80" max="80" value="0">
+      <label for="p-wall" class="control-label">Wall position</label>
+      <input type="range" id="p-wall" min="250" max="760" value="430">
+    </div>
+    <div class="controls">
+      <span class="control-label">Inspect:</span>
+      <div class="seg" role="group" aria-label="Instance to inspect" id="p-inspect"></div>
+    </div>
+    <div class="demo-grid">
+      <div><ol class="work" id="p-steps"></ol></div>
+      <div class="table-wrap">
+        <table class="facts compact" id="p-bits">
+          <thead><tr><th class="n">Slot</th><th class="c">In view</th><th class="c">Bit before</th><th class="c">Phase one</th><th class="c">Phase two</th><th class="c">Bit after</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="frames" id="p-frames" role="group" aria-label="Frames run so far"></div>
+    <figcaption><b>Live demo.</b> Frames 0 to 2 have run; the view shows frame 2's phase two. Move the wall or turn the camera, with the sliders or by dragging the wall, then run the next frame: changes apply from that frame, as a game's do. The steps show one frame's passes in order, and the frame buttons show earlier frames. Simplified: the view is top-down, so the screen is one row of 64 columns with one sample each, and the pyramid is one-dimensional, 32 texels down to 1; each Instance's Mesh is its box. Once written, a depth cell is the more solid the nearer its depth, and empty at depth 0, the far plane. The rest follows <code>occluded</code>: the box's corners give its nearest depth and its columns, grown by a pixel, the level is where they span at most two texels, and the box is occluded where its nearest depth is less than those texels' minimum. The f32 rounding margins are left out.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>PR #241's test drives the same sequence through the Renderer with two Instances, the lower one out of view and then moved into it. In its first frame the draw holds 3 indices. In the second it holds 6, with phase two's draw starting at index 3 and holding 3. In the third, phase two draws none. Every frame's image equals culling off's. The test fails if the lit pass skips phase two's depth draw, if phase one ignores the bits, or if phase two never sets one.</p>
+  </div>
+</section>
+
+<section class="chapter" id="occlusion">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 · PR #242</div>
+    <h2>The occlusion test</h2>
+    <p>Phase two asks whether an <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> in view lies wholly behind what phase one drew. <code>occluded</code> in <code>culling.wgsl</code> answers from the same <span class="concept" data-tip="The four-component positions a vertex shader outputs, before the GPU divides by w. Inside Praxis's frustum, −w ≤ x ≤ w, −w ≤ y ≤ w and z ≤ w." data-term="Clip space">clip-space</span> box as the frustum test, in five steps:</p>
+    <ol class="steps">
+      <li><b>Eight corners.</b> It projects the box's corners. For a box in front of the camera, depth (z over w) and reach across the screen are both extreme at a corner, so the corners bound the whole box. A box with a corner at or behind the camera's plane is never occluded.</li>
+      <li><b>The nearest depth, with margins.</b> The box's nearest depth is its largest corner depth, since nearer is greater under <span class="concept" data-tip="Depth that is 1 at the near plane and falls towards 0 at infinity, cleared to 0 and compared with Greater, so nearer is greater (ADR 0015)." data-term="Reverse-Z">reverse-Z</span>. Each corner first moves towards the camera by 1/16384 of the box's clip-space terms plus 0.1 mm, past ADR 0014's worst case of 0.041 mm for composing the box and for composing its vertices, so f32 rounding cannot make the box look farther than its drawn triangles.</li>
+      <li><b>A screen rectangle, grown by a pixel.</b> The corners' x and y give a rectangle, in texture coordinates with rows top first. It grows by a pixel, half a level-0 texel, past where rasterisation rounds vertices, so every sample a covered pixel holds lies in the texels read.</li>
+      <li><b>The level.</b> It picks the pyramid level where the rectangle spans at most two texels per axis: the base-2 logarithm of the rectangle's larger side in level-0 texels, rounded up. If rounding still leaves it over more than two texels, the box is not occluded.</li>
+      <li><b>Four texels.</b> It loads the 2×2 texels the rectangle covers and takes their minimum, the farthest depth anything drawn reaches there. The box is occluded where its nearest depth is less than that.</li>
+    </ol>
+  </div>
+  <figure class="wide">
+    <div class="fluid">
+      <svg viewBox="0 0 420 262" role="img" aria-label="A grid of level-0 texels with a coarser grid of level-2 texels over it. A box's screen rectangle, grown by a pixel, spans two level-2 texels in each direction, and those four texels are highlighted.">
+        <rect class="texel-read" x="34" y="30" width="176" height="176"></rect>
+        <g class="grid-fine">
+          <path d="M56 30V206M78 30V206M100 30V206M144 30V206M166 30V206M188 30V206M232 30V206M254 30V206M276 30V206M320 30V206M342 30V206M364 30V206"></path>
+          <path d="M34 52H386M34 74H386M34 96H386M34 140H386M34 162H386M34 184H386"></path>
+        </g>
+        <g class="grid-coarse">
+          <rect x="34" y="30" width="352" height="176"></rect>
+          <path d="M122 30V206M210 30V206M298 30V206M34 118H386"></path>
+        </g>
+        <polygon class="screen-box" points="91.2,110 112,96 150,98.5 152.8,119 133,131.2 94,126"></polygon>
+        <g class="corner">
+          <circle cx="91.2" cy="110" r="3"></circle><circle cx="112" cy="96" r="3"></circle><circle cx="150" cy="98.5" r="3"></circle><circle cx="152.8" cy="119" r="3"></circle>
+          <circle cx="133" cy="131.2" r="3"></circle><circle cx="94" cy="126" r="3"></circle><circle cx="118" cy="114" r="2.4"></circle><circle cx="129" cy="110" r="2.4"></circle>
+        </g>
+        <rect class="screen-rect" x="91.2" y="96" width="61.6" height="35.2"></rect>
+        <rect class="grown-rect" x="80.2" y="85" width="83.6" height="57.2"></rect>
+        <text class="t-small halo" x="216" y="46">bold lines: level-2 texels</text>
+        <text class="t-small halo" x="216" y="60">faint lines: level-0 texels</text>
+        <text class="t-warm halo" x="171" y="152">grown by a pixel</text>
+        <text class="t-accent halo" x="40" y="198">the 2×2 texels read</text>
+        <text class="t-label" x="34" y="226">nearest depth: the largest of the 8 corners' depths</text>
+        <text class="t-label" x="34" y="244">occluded if it is less than the 4 texels' minimum</text>
+      </svg>
+    </div>
+    <div class="legend"><span><i class="box"></i>the box's 8 projected corners and their rectangle</span><span><i class="grown"></i>grown by a pixel</span><span><i class="read"></i>texels read</span></div>
+    <figcaption><b>Choosing the texels.</b> A drawing to scale in level-0 texels, each 2×2 pixels. The grown rectangle runs from 2.1 to 5.9 texels across and 2.5 to 5.1 down, so its larger side is 3.8 texels, and ⌈log<sub>2</sub> 3.8⌉ = 2. At level 2, where a texel covers 4×4 level-0 texels, it spans two texels each way, and the test reads those four.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Every step errs towards drawing, which keeps the test <span class="concept" data-tip="Never culling an Instance that would show. Where the test cannot be sure, it draws." data-term="Conservative">conservative</span>. The pyramid keeps the farthest depth over every sample beneath a texel, the box's nearest corner stands for all of the box, the margins move it nearer, and the rectangle grows. If even the box's nearest point is farther than the farthest depth drawn anywhere it could cover, all of it lies behind what was drawn.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">// Each level halves the one below, rounded down, as a mip chain does:
+// computed, since lavapipe (Mesa 25.2.8) answers a size query whose
+// level varies across a workgroup's invocations with one invocation's.</span>
+let size = max(level_zero_texels &gt;&gt; vec2&lt;u32&gt;(level), vec2&lt;u32&gt;(1u));
+let first = min(vec2&lt;u32&gt;(first_coordinates * vec2&lt;f32&gt;(size)), size - 1u);
+let last = min(vec2&lt;u32&gt;(last_coordinates * vec2&lt;f32&gt;(size)), size - 1u);
+if any(last &gt; first + 1u) {
+    return false;
+}
+let farthest = min(
+    min(textureLoad(depth_pyramid, first, level).r, textureLoad(depth_pyramid, vec2&lt;u32&gt;(last.x, first.y), level).r),
+    min(textureLoad(depth_pyramid, vec2&lt;u32&gt;(first.x, last.y), level).r, textureLoad(depth_pyramid, last, level).r)
+);
+return nearest_depth &lt; farthest;</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl#L194-L207"><code>culling.wgsl</code>, lines 194 to 207</a>, the end of <code>occluded</code>: the level's size, the texels, and the comparison.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The evidence</h3>
+    <p><code>an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears</code> creates its Renderer at 24×24 and resizes it to 16×16 first, so a pyramid or bind group left at the old size would cull wrongly. Quads are seen from the origin: a near one over the upper left quarter of the view; one wholly behind it, green; one partly behind it; one turned 60° to reach through it, its left edge 0.22 m in front and its right edge 0.22 m behind; and one elsewhere.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>Frame</th><th class="n">Drawn, culling on</th><th class="n">Off</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td class="n">5</td><td class="n">5</td><td>No bits: phase two draws all five against an empty pyramid.</td></tr>
+        <tr><td>1</td><td class="n">5</td><td class="n">5</td><td>Phase one draws all five, so phase two culls nothing; the hidden quad loses its bit.</td></tr>
+        <tr class="focus"><td>2</td><td class="n">4</td><td class="n">5</td><td>Phase two culls the hidden quad. Pixel (4, 4) is the near quad's red.</td></tr>
+        <tr><td>3</td><td class="n">4</td><td class="n">5</td><td>The near quad moves behind the camera; phase two draws the hidden one again in that frame. Pixel (4, 4) is its green.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Every frame's image equals culling off's. The test fails when the pyramid keeps the maximum ([5, 5, 3, 3]), when texture rows run upward ([5, 5, 5, 4]), when the test takes the farthest corner ([5, 5, 3, 4], the turned quad culled), and when <code>resize</code> leaves the culling pass or the pyramid pass bound to the old targets ([5, 5, 5, 4]).</p>
+    <p>The ticket also asked for #196's culled-against-unculled check to fail with a pyramid that keeps the maximum depth, which is not conservative. On Metal it fails on four <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scenes</span>: pbr-sweep with 25,247 pixels differing (largest channel difference 166), orrery 2,742 (146), texture-wall 29,519 (130) and helmet 28,774 (166). <a href="https://github.com/gariasf/praxis/pull/242">PR #242</a> shows the images. With the minimum, every scene matches, culling on and off, and at 100 km.</p>
+    <p>The margin's absolute 0.1 mm came from review: a margin relative to the box alone fell short within about 0.7 m of the camera.</p>
+    <h3>A bug only lavapipe had</h3>
+    <p>CI's first run of the new test on <span class="concept" data-tip="Mesa's software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span>, Mesa 25.2.8, drew [5, 5, 2, 4]: two visible quads culled. On lavapipe, <code>textureDimensions(.., level)</code> answers all the invocations it runs together in one SIMD vector with the size at the first one's level, a gap that Mesa's code marks with a FIXME. Every Instance read the 1×1 level's size, so its rectangle collapsed to texel (0, 0).</p>
+    <p>Temporary probes in CI, dropped afterwards, narrowed it down. Loads through the view of every level read the right texels, texel by texel. A copy of <code>occluded</code> run one invocation per workgroup got every step right. Inside the culling pass, the queried size was 1 for every level. The fix, in the excerpt above, computes each level's size from level 0's, halved per level, rounded down and at least 1, as the mip chain makes it. It replaced one texture query with a shift, so PR #242's measurements, taken before it, stand.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 · all three tickets</div>
+    <h2>What it costs</h2>
+    <p>Every figure here is a PR's own measurement on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 2560×1440: <span class="concept" data-tip="The middle value once the frames' times are sorted, so a few slow frames barely move it." data-term="Median">medians</span>, in µs, of its branch against main. Other work on the machine sometimes loaded it during these measurements; PRs #232, #241 and #242 give the load average, and PR #230 does not.</p>
+    <h3>The frame's draw (#194)</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>Scene</th><th class="n">CPU frame</th><th class="n">Main pass alone</th><th class="n">Culling pass alone</th></tr></thead>
+      <tbody>
+        <tr><td>helmet</td><td class="n">30 → 42</td><td class="n">356 → 360</td><td class="n">140</td></tr>
+        <tr><td>pbr-sweep</td><td class="n">27 → 41</td><td class="n">166 → 170</td><td class="n">25</td></tr>
+        <tr><td>orrery</td><td class="n">28 → 44</td><td class="n">80 → 82</td><td class="n">24</td></tr>
+        <tr><td>texture-wall</td><td class="n">~2,000 → ~2,000</td><td class="n">443 → 443</td><td class="n">51</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <ul class="keypoints">
+      <li>The main pass costs the same with one draw, even with texture-wall's 100 Materials mixed in it.</li>
+      <li>CPU rises 12 to 16 µs a frame: three dispatches and wgpu's validation of the indirect draw cost more than ten draws do. PR #230 expects that to pay off at <code>town</code>'s scale.</li>
+      <li>Heap allocations rise by 39 a frame, 59 to 98 on pbr-sweep. GPU memory grows by 83,902,488 B: packed indices 67,108,864, records 12,582,912, slot offsets 4,210,688, and the slot count with the indirect arguments 24.</li>
+    </ul>
+    <h3>The frustum test (#196)</h3>
+    <p>1 to 2 µs of GPU, under 1%, on scenes of 1 to 10 Instances, where <code>offset_slots</code> is a single workgroup and its latency shows. CPU medians moved within the load's noise, and heap allocations went from 98 to 99 a frame. The culling-off captures add about 7 s to the Goldens test.</p>
+    <h3>Two phases and the occlusion test (#198)</h3>
+  </div>
+  <div class="table-wrap">
+    <table class="facts">
+      <thead><tr><th>Scene</th><th class="n">Before #198</th><th class="n">After #241</th><th class="n">After #242</th><th class="n">Rise over before</th><th class="n"><code>depth_pyramid_pass</code></th><th class="n"><code>culling_phase_two</code></th></tr></thead>
+      <tbody>
+        <tr><td>far-coplanar</td><td class="n">604.4</td><td class="n">862.2</td><td class="n">878.5</td><td class="n">+274.1</td><td class="n">245.8</td><td class="n">18.3</td></tr>
+        <tr><td>helmet</td><td class="n">882.1</td><td class="n">1,174.7</td><td class="n">1,189.1</td><td class="n">+307.0</td><td class="n">215.5</td><td class="n">18.0</td></tr>
+        <tr><td>minification</td><td class="n">682.2</td><td class="n">936.4</td><td class="n">964.6</td><td class="n">+282.4</td><td class="n">265.5</td><td class="n">17.1</td></tr>
+        <tr><td>normal-tangent</td><td class="n">536.0</td><td class="n">747.1</td><td class="n">774.7</td><td class="n">+238.6</td><td class="n">188.2</td><td class="n">17.9</td></tr>
+        <tr><td>orrery</td><td class="n">374.3</td><td class="n">590.5</td><td class="n">606.6</td><td class="n">+232.3</td><td class="n">180.0</td><td class="n">17.0</td></tr>
+        <tr><td>pbr-sweep</td><td class="n">469.7</td><td class="n">693.5</td><td class="n">722.5</td><td class="n">+252.8</td><td class="n">191.0</td><td class="n">17.2</td></tr>
+        <tr><td>texture-wall</td><td class="n">16,168.6</td><td class="n">16,255.8</td><td class="n">16,369.8</td><td class="n">+201.2</td><td class="n">486.7</td><td class="n">36.4</td></tr>
+        <tr><td>uv-grid</td><td class="n">452.5</td><td class="n">680.3</td><td class="n">710.7</td><td class="n">+258.2</td><td class="n">203.0</td><td class="n">17.9</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p style="font-size:15px;color:var(--ink-soft);margin-top:10px">GPU frame medians from PR #242: the median of three interleaved runs' medians each of 93355f1 (before #198), 7be466e (after #241) and #242's branch, at a load average of 6 to 10. The last two columns are #242's own times for those two passes. texture-wall spends GPU time outside its passes' timestamps (#183), so its pass times do not add up.</p>
+    <ul class="keypoints">
+      <li>Over 93355f1, the light scenes' GPU frame rose by 232 to 307 µs. The pyramid pass is 180 to 266 µs of that, and phase two's pass about 17 µs.</li>
+      <li>The rest comes from passes now running one after another. The lit pass reads phase two's draw, so it waits for phase two, which waits for the pyramid; before, the lit pass's geometry work overlapped the pyramid, which nothing read. On helmet, #241 alone added 80 µs this way, and removing the lit pass's depth draw changed nothing.</li>
+      <li>The occlusion test itself adds little: short-circuiting its result changes the frame by under 10 µs.</li>
+      <li>#198 in all added 15 to 65 µs of CPU, at load averages that make those figures loose. Heap allocations went from 138 to 232 a frame, draw calls from 2 to 3, and GPU memory grew by 4,980,984 B: the pyramid 4,915,052, the bits 65,536, the frame draw 28 and the readback 368.</li>
+    </ul>
+    <p>The ticket said not to regress the GPU frame total "beyond the pyramid's measured cost", and #198 went past that line, so PR #242 put the cost to the owner. It recommended accepting it: most of the pyramid's cost is reading every sample of the 4x depth, 59 MB at 1440p, near the M4 Pro's bandwidth; the passes running in order is what two phases mean; the whole is about 2.5% of the 12 ms <span class="concept" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress.">Budget</span>; and it pays back once <code>town</code> hides Instances. The owner accepted on 2026-10-22. Until <code>town</code> arrived, the Reference scenes paid the cost and gained nothing.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9</div>
+    <h2>What comes next</h2>
+    <ul class="keypoints">
+      <li><b><a href="https://github.com/gariasf/praxis/issues/206">#206</a></b> builds <span class="concept" data-tip="M3's dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, with building blocks as occluders."><code>town</code></span>: about 1 × 1 km, with building blocks as occluders, street props of 12 to 200 triangles, and about 250k <span class="concept" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> of 10 to 20 Meshes, tuned so the median frame draws at least 100,000 Instances and 5,000,000 triangles after culling. It is the first Reference scene that hides Instances, so the first where occlusion culling can earn its cost. (#206 has since built it, in PRs #272, #273 and #275: 244,256 Instances of 18 Meshes, and 10,000 birds. Its M4 Pro Baseline's median frame draws 137,730 Instances and 5,552,214 triangles after culling; <a href="town.html">Town Explained</a> covers it.)</li>
+      <li><b><code>append_meshlets</code> at scale.</b> It runs a workgroup per slot, each walking its Mesh's Meshlets one after another. On helmet, 11 Instances of about 300 Meshlets each take 140 µs, with only 11 workgroups in flight on a 16-core GPU. <code>town</code>'s 250k Instances would launch 250k workgroups of 124 invocations, most of them idle on small props. A comment in the shader names the fix, a pass per Instance for records and a pass per Meshlet for triangles, and #206 was to measure it on <code>town</code> before ADR 0019's gate was judged. (#206 closed on 2026-10-24 without that measurement; PR #275 timed <code>town</code>'s culling phases one and two at 1.51 and 0.90 ms.)</li>
+      <li><b>ADR 0019's gate.</b> The main-pass decision reopens if the opaque main pass takes more than 6 ms of GPU on a Reference scene at 1440p with 4x MSAA, as the median over its camera path, timed from the first culling dispatch to the end of the lit pass with shadow rays off. Culling per Meshlet waits for a profile that shows the pass raster-bound. (On 2026-10-26 the project's owner recorded on #207 that <code>town</code> breaches the gate, so a visibility pre-pass and a visibility buffer, ADR 0019's options B and D, are to be prototyped there.)</li>
+      <li><b>Benching the switches.</b> #207 benches with switches on and off. A Measurement does not yet record which switches it ran with, and #207 can add that with the Baseline form it needs.</li>
+      <li><b>Deferred.</b> ADR 0014 hands camera-relative composition from the vertex shader to the culling pass once draws are GPU-driven. Today the pass composes each box for its tests and the vertex shader still composes every vertex; handing the composed transform over needs a per-Instance buffer, another compute storage buffer. It waits, unscheduled, on the project's planning issue (#17).</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Every link resolved when the guide was written; repo links are pinned to main at fe08baa. Slide decks are cited by PDF page, since none of the three prints slide numbers.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>These PRs and their sources</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/pull/229">PR #229</a>, <a href="https://github.com/gariasf/praxis/pull/228">#228</a>, <a href="https://github.com/gariasf/praxis/pull/230">#230</a> <span>Meshlet tables, Instances naming their Mesh, one indirect draw and slot order</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/232">PR #232</a>, <a href="https://github.com/gariasf/praxis/pull/239">#239</a> <span>the frustum test, Render switches, the checks</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/240">PR #240</a>, <a href="https://github.com/gariasf/praxis/pull/241">#241</a>, <a href="https://github.com/gariasf/praxis/pull/242">#242</a> <span>the pyramid, the two phases, the occlusion test and its cost</span></li>
+        <li>Tickets <a href="https://github.com/gariasf/praxis/issues/194">#194</a>, <a href="https://github.com/gariasf/praxis/issues/196">#196</a>, <a href="https://github.com/gariasf/praxis/issues/198">#198</a> <span>the asks, their splits and the slot-order finding</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the GPU-driven main pass, both phases, the 6 ms gate</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0015-reverse-z-depth-with-an-infinite-far-plane.md">ADR 0015</a>, <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md">ADR 0014</a>, <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/adr/0021-capability-floor.md">ADR 0021</a> <span>no far plane and a minimum pyramid; camera-relative boxes; nine storage buffers</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/docs/research/visibility-and-gpu-driven-main-pass.md">The visibility survey</a> <span>rows 6 and 9: GPU-driven culling and occlusion culling in shipped engines</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/shaders/culling.wgsl">culling.wgsl</a>, <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/culling_pass.rs">culling_pass.rs</a>, <a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/main_pass.rs">main_pass.rs</a> <span>the pass, its buffers, and the draws that read them</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/fe08baafce3ef4c064f5792e93ed681557f802e1/src/render/renderer.rs#L620-L1005">renderer.rs, the culling tests</a> <span>overflow, occlusion, entering the view, the frustum oracle</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>GPU-driven rendering</h3>
+      <ul>
+        <li>Haar and Aaltonen, <a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf">GPU-Driven Rendering Pipelines</a>, SIGGRAPH 2015 Advances <span>PDF pp. 51 to 52, two-phase occlusion culling; their first phase culls against last frame's depth pyramid</span></li>
+        <li>Wihlidal, <a href="https://www.wihlidal.com/projects/fb-gdc16/">Optimizing the Graphics Pipeline with Compute</a>, GDC 2016 <span>culling in compute, compaction by prefix sum, indirect draws; slides at <a href="https://archive.org/details/GDC2016Wihlidal">archive.org</a></span></li>
+        <li>Geffroy, Gneiting and Wang, <a href="https://advances.realtimerendering.com/s2020/RenderingDoomEternal.pdf">Rendering the Hellscape of Doom Eternal</a>, SIGGRAPH 2020 Advances <span>PDF pp. 45, 47 and 48: surviving triangles of many models merged into one indirect index buffer, with vertex and instance IDs packed into each 32-bit index</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Occlusion culling</h3>
+      <ul>
+        <li>Greene, Kass and Miller, <a href="https://doi.org/10.1145/166117.166147">Hierarchical Z-Buffer Visibility</a>, SIGGRAPH 1993 <span>the z-pyramid this all descends from</span></li>
+        <li>Karis, Stubbe and Wihlidal, <a href="https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf">A Deep Dive into Nanite Virtualized Geometry</a>, SIGGRAPH 2021 Advances <span>PDF p. 17, testing the lowest mip where the rectangle is at most 4×4 pixels; p. 19, two-pass occlusion culling; p. 75, Nanite's own variant</span></li>
+        <li>NVIDIA, <a href="https://github.com/nvpro-samples/vk_lod_clusters/blob/20352f04a5bce46938ca63871c1389b0fac921fa/docs/raster_twopass_culling.md">Two-Pass Culling</a> in vk_lod_clusters <span>why one test against last frame's Hi-Z leaves newly visible geometry missing for a frame</span></li>
+        <li>Kapoulkine, <a href="https://github.com/zeux/niagara/blob/567ebe331247e122425eaf1a6319d8c64daf816d/src/shaders/drawcull.comp.glsl">niagara's drawcull.comp.glsl</a> <span>an early and a late cull with a visibility flag per draw, a 2×2 minimum read, reverse-Z; MIT</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Scans and derivatives</h3>
+      <ul>
+        <li>Hillis and Steele, <a href="https://doi.org/10.1145/7902.7903">Data Parallel Algorithms</a>, Communications of the ACM, 1986 <span>the scan <code>exclusive_scan</code> runs</span></li>
+        <li>Harris, Sengupta and Owens, <a href="https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda">Parallel Prefix Sum (Scan) with CUDA</a>, GPU Gems 3, ch. 39 <span>§39.2.1 the naive scan after Hillis and Steele; §39.2.4 scanning blocks, then the block sums</span></li>
+        <li>WGSL, <a href="https://www.w3.org/TR/WGSL/#fragment-shaders-helper-invocations">fragment shaders and helper invocations</a> and <a href="https://www.w3.org/TR/WGSL/#derivatives">derivatives</a> <span>2×2 quads, helper invocations at a primitive's edge, and the derivatives that help pick <code>textureSample</code>'s mip level; the spec does not say how a GPU batches a draw's triangles</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>API references</h3>
+      <ul>
+        <li>wgpu 30.0.1: <a href="https://docs.rs/wgpu/30.0.1/wgpu/util/struct.DrawIndexedIndirectArgs.html">DrawIndexedIndirectArgs</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.RenderPass.html#method.draw_indexed_indirect">RenderPass::draw_indexed_indirect</a> <span>the five arguments; first instance must be 0 without <code>INDIRECT_FIRST_INSTANCE</code></span></li>
+        <li>Vulkan: <a href="https://docs.vulkan.org/refpages/latest/refpages/source/VkDrawIndexedIndirectCommand.html">VkDrawIndexedIndirectCommand</a> <span>the same five, natively</span></li>
+        <li>Metal: <a href="https://developer.apple.com/documentation/metal/mtldrawindexedprimitivesindirectarguments">MTLDrawIndexedPrimitivesIndirectArguments</a> <span>and on the M4 Pro</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed., ch. 19 Acceleration Algorithms: §19.2 Culling Techniques, §19.4 View Frustum Culling, §19.7 Occlusion Culling, with hierarchical z-buffering on pp. 846 to 850 by the index, and §19.8 Culling Systems. §3.8 The Pixel Shader for 2×2 quads and derivatives; §23.7 Depth Culling, Testing, and Buffering for the hardware's own coarse depth tests.</li>
+        <li><i>Foundations of Game Engine Development</i>, Vol. 2: Rendering, ch. 9 Visibility and Occlusion: §9.3 Bounding Volumes and §9.4 Frustum Culling, with §9.4.3 Box Visibility. §6.3.2 Infinite Projection Matrices and §6.3.5 Frustum Plane Extraction for the projection behind reverse-Z.</li>
+        <li><i>Game Engine Architecture</i>, 3rd ed., ch. 11 The Rendering Engine <span>where culling sits in an engine's pipeline</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Culling pass</dt><dd>The compute pass that builds the frame's draw from the Instances, in two phases, in slot order.</dd></div>
+    <div><dt>Frame's draw</dt><dd>Packed indices, their Meshlet records, and the indirect arguments and counts in <code>FrameDraw</code>.</dd></div>
+    <div><dt>Indirect draw</dt><dd>A draw whose arguments the GPU reads from a buffer when it runs.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU, in its slot of the Instance buffer.</dd></div>
+    <div><dt>Slot</dt><dd>An index into the Instance buffer, kept while a Renderable is one; a freed one is taken again from the next frame.</dd></div>
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive's triangles: at most 64 vertices and 124 triangles.</dd></div>
+    <div><dt>Meshlet record</dt><dd>An Instance's slot, a Meshlet and the Material ID to draw it with.</dd></div>
+    <div><dt>Packed index</dt><dd>A record's number in the high 26 bits, a vertex of its Meshlet in the low six.</dd></div>
+    <div><dt>NO_MESH, NOT_DRAWN</dt><dd>A freed slot's Mesh reference; the offsets of a slot a phase does not draw.</dd></div>
+    <div><dt>Exclusive scan</dt><dd>For each element, the sum of every element before it: where each Instance's Meshlets start.</dd></div>
+    <div><dt>Implicit derivatives</dt><dd>Rates of change between neighbouring pixels, from 2×2 quads, that pick a mip level.</dd></div>
+    <div><dt>Clip space</dt><dd>Positions before the divide by w; the frustum is −w ≤ x, y ≤ w and z ≤ w.</dd></div>
+    <div><dt>View frustum</dt><dd>Inside four side planes and beyond the near plane; Praxis's has no far plane.</dd></div>
+    <div><dt>Reverse-Z</dt><dd>Depth 1 at the near plane, falling to 0 at infinity; nearer is greater.</dd></div>
+    <div><dt>Conservative</dt><dd>Never culling an Instance that would show.</dd></div>
+    <div><dt>Render switches</dt><dd>The variants a Renderer is created with and keeps; the first, <code>culling</code>, is on by default.</dd></div>
+    <div><dt>Override constant</dt><dd>A WGSL constant a pipeline fixes at creation, so a switch costs no branch.</dd></div>
+    <div><dt>Visibility bit</dt><dd>One bit per slot, set by phase two where the Instance was visible, read by the next phase one.</dd></div>
+    <div><dt>Phase one, phase two</dt><dd>The culling pass's runs before and after the depth pyramid.</dd></div>
+    <div><dt>Depth pyramid</dt><dd>ADR 0019's Hi-Z pyramid: each texel the farthest depth beneath it.</dd></div>
+    <div><dt>Depth pre-pass, lit pass</dt><dd>The main pass's first and last render passes: depth only, then shading at depth equal.</dd></div>
+    <div><dt>Frame data</dt><dd>What the renderer consumes each frame in place of the ECS World; it lists no draws.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine, among it the Instances drawn.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from PRs <a href="https://github.com/gariasf/praxis/pull/229">#229</a>, <a href="https://github.com/gariasf/praxis/pull/228">#228</a>, <a href="https://github.com/gariasf/praxis/pull/230">#230</a>, <a href="https://github.com/gariasf/praxis/pull/232">#232</a>, <a href="https://github.com/gariasf/praxis/pull/239">#239</a>, <a href="https://github.com/gariasf/praxis/pull/241">#241</a> and <a href="https://github.com/gariasf/praxis/pull/242">#242</a>, with <a href="https://github.com/gariasf/praxis/pull/240">#240</a> and <a href="https://github.com/gariasf/praxis/pull/233">#233</a> for context, their tickets <a href="https://github.com/gariasf/praxis/issues/194">#194</a>, <a href="https://github.com/gariasf/praxis/issues/196">#196</a>, <a href="https://github.com/gariasf/praxis/issues/198">#198</a> and <a href="https://github.com/gariasf/praxis/issues/206">#206</a>, and the code at main <a href="https://github.com/gariasf/praxis/tree/fe08baafce3ef4c064f5792e93ed681557f802e1">fe08baa</a>. Decisions come from ADRs 0014, 0015, 0019 and 0021, the vocabulary from <code>CONTEXT.md</code>. Measurements are the PRs' own, on the M4 Pro; where the guide does its own arithmetic, it says so. The demos model the rules in <code>culling.wgsl</code> in 2D and run none of the engine's code.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="depth-pyramid.html">Previous: Depth Pyramid Explained</a><a href="index.html">All field guides</a><a href="lit-pass.html">Next: Lit Pass Explained</a></nav>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const reduceMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  // <pure> Geometry and rules shared by the demos, free of the DOM.
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  function seededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let mixed = state;
+      mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+      mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+      return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // Praxis's 45° vertical field of view at 16:9, across: about 36.4° to each side.
+  const HALF_FIELD_OF_VIEW = Math.atan(Math.tan(Math.PI / 8) * 16 / 9);
+  // A camera seen from above, in a world whose y runs down the page: heading in
+  // degrees clockwise from up, and the distance to its near plane.
+  function makeCamera(x, y, headingDegrees, near) {
+    const heading = (headingDegrees * Math.PI) / 180;
+    return {
+      x: x, y: y, near: near, heading: headingDegrees,
+      forward: { x: Math.sin(heading), y: -Math.cos(heading) },
+      right: { x: Math.cos(heading), y: Math.sin(heading) },
+      scale: 1 / Math.tan(HALF_FIELD_OF_VIEW),
+    };
+  }
+  // An Instance's bounds: a box with half sides along its turned axes.
+  function makeBox(x, y, halfWidth, halfDepth, turnDegrees) {
+    const turn = (turnDegrees * Math.PI) / 180;
+    return {
+      x: x, y: y, halfWidth: halfWidth, halfDepth: halfDepth, turn: turn,
+      axes: [
+        { x: Math.cos(turn) * halfWidth, y: Math.sin(turn) * halfWidth },
+        { x: -Math.sin(turn) * halfDepth, y: Math.cos(turn) * halfDepth },
+      ],
+    };
+  }
+  function boxCorners(box) {
+    const [first, second] = box.axes;
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([along, across]) => ({
+      x: box.x + along * first.x + across * second.x,
+      y: box.y + along * first.y + across * second.y,
+    }));
+  }
+  function insideBox(box, point) {
+    const dx = point.x - box.x;
+    const dy = point.y - box.y;
+    const along = dx * Math.cos(box.turn) + dy * Math.sin(box.turn);
+    const across = -dx * Math.sin(box.turn) + dy * Math.cos(box.turn);
+    return Math.abs(along) <= box.halfWidth && Math.abs(across) <= box.halfDepth;
+  }
+  // Clip space seen from above, as Praxis's infinite reverse-Z projection makes it:
+  // x across the view, w the distance ahead, and z the near distance for a point
+  // and 0 for a direction.
+  function clipPoint(camera, point) {
+    const dx = point.x - camera.x;
+    const dy = point.y - camera.y;
+    return {
+      x: camera.scale * (dx * camera.right.x + dy * camera.right.y),
+      z: camera.near,
+      w: dx * camera.forward.x + dy * camera.forward.y,
+    };
+  }
+  function clipDirection(camera, direction) {
+    return {
+      x: camera.scale * (direction.x * camera.right.x + direction.y * camera.right.y),
+      z: 0,
+      w: direction.x * camera.forward.x + direction.y * camera.forward.y,
+    };
+  }
+  // How far inside each plane a clip-space position lies, or a direction moves:
+  // x ≥ −w, x ≤ w and the near plane z ≤ w, as side_plane_distances and
+  // near_plane_distance give them.
+  const planeDistances = (clip) => [clip.w + clip.x, clip.w - clip.x, clip.w - clip.z];
+  const PLANE_NAMES = ["left plane, x ≥ −w", "right plane, x ≤ w", "near plane, z ≤ w"];
+  // in_view_frustum's terms: the farthest the box reaches inside each plane is
+  // its centre's distance plus each half axis's, whole.
+  function planeTerms(camera, box) {
+    const centre = planeDistances(clipPoint(camera, box));
+    const axes = box.axes.map((axis) => planeDistances(clipDirection(camera, axis)));
+    return centre.map((distance, plane) => ({
+      centre: distance,
+      axes: axes.map((axis) => Math.abs(axis[plane])),
+      reach: distance + Math.abs(axes[0][plane]) + Math.abs(axes[1][plane]),
+    }));
+  }
+  const inViewFrustum = (camera, box) => planeTerms(camera, box).every((term) => term.reach >= 0);
+  // Whether the box truly overlaps the frustum: its outline, clipped by each
+  // plane in turn, keeps some area.
+  function overlapsFrustum(camera, box) {
+    let polygon = boxCorners(box);
+    for (let plane = 0; plane < 3; plane++) {
+      const distance = (point) => planeDistances(clipPoint(camera, point))[plane];
+      const kept = [];
+      polygon.forEach((point, index) => {
+        const following = polygon[(index + 1) % polygon.length];
+        const here = distance(point);
+        const there = distance(following);
+        if (here >= 0) kept.push(point);
+        if ((here >= 0) !== (there >= 0)) {
+          const t = here / (here - there);
+          kept.push({ x: point.x + (following.x - point.x) * t, y: point.y + (following.y - point.y) * t });
+        }
+      });
+      polygon = kept;
+      if (polygon.length < 3) return false;
+    }
+    let area = 0;
+    polygon.forEach((point, index) => {
+      const following = polygon[(index + 1) % polygon.length];
+      area += point.x * following.y - following.x * point.y;
+    });
+    return Math.abs(area) / 2 > 1e-3;
+  }
+
+  // Demo 2's screen: one row of columns, a sample each.
+  const SCREEN_COLUMNS = 64;
+  // The view ray through a column's centre, its forward part 1, so that a
+  // distance along it is the distance ahead.
+  function columnRay(camera, column) {
+    const across = (((column + 0.5) / SCREEN_COLUMNS) * 2 - 1) / camera.scale;
+    return { x: camera.forward.x + camera.right.x * across, y: camera.forward.y + camera.right.y * across };
+  }
+  // The distance ahead at which a column's ray enters a box, from the near
+  // plane on, or null.
+  function rayEntersBoxAt(camera, ray, box) {
+    const cos = Math.cos(box.turn);
+    const sin = Math.sin(box.turn);
+    const ox = (camera.x - box.x) * cos + (camera.y - box.y) * sin;
+    const oy = -(camera.x - box.x) * sin + (camera.y - box.y) * cos;
+    const dx = ray.x * cos + ray.y * sin;
+    const dy = -ray.x * sin + ray.y * cos;
+    let enter = -Infinity;
+    let leave = Infinity;
+    for (const [origin, direction, half] of [[ox, dx, box.halfWidth], [oy, dy, box.halfDepth]]) {
+      if (Math.abs(direction) < 1e-12) {
+        if (Math.abs(origin) > half) return null;
+        continue;
+      }
+      let low = (-half - origin) / direction;
+      let high = (half - origin) / direction;
+      if (low > high) [low, high] = [high, low];
+      enter = Math.max(enter, low);
+      leave = Math.min(leave, high);
+    }
+    if (enter > leave || leave < camera.near) return null;
+    return Math.max(enter, camera.near);
+  }
+  // The boxes `drawn` marks, one sample per column: reverse-Z depth, near over
+  // distance, 0 where nothing is drawn, and which slot is nearest there.
+  function rasterise(camera, boxes, drawn) {
+    const depth = new Array(SCREEN_COLUMNS).fill(0);
+    const nearest = new Array(SCREEN_COLUMNS).fill(-1);
+    for (let column = 0; column < SCREEN_COLUMNS; column++) {
+      const ray = columnRay(camera, column);
+      boxes.forEach((box, slot) => {
+        if (!drawn[slot]) return;
+        const distance = rayEntersBoxAt(camera, ray, box);
+        if (distance === null) return;
+        const value = camera.near / distance;
+        if (value > depth[column]) {
+          depth[column] = value;
+          nearest[column] = slot;
+        }
+      });
+    }
+    return { depth: depth, nearest: nearest };
+  }
+  // Level 0 has half the columns, each texel the minimum, the farthest, of the
+  // two below; each level halves the one below, to one texel.
+  function buildPyramid(depth) {
+    const levels = [];
+    let below = depth;
+    while (below.length > 1) {
+      const level = [];
+      for (let texel = 0; texel < below.length / 2; texel++) level.push(Math.min(below[2 * texel], below[2 * texel + 1]));
+      levels.push(level);
+      below = level;
+    }
+    return levels;
+  }
+  // occluded, step for step, in one dimension and without the rounding margins.
+  function occludedTest(camera, box, levels) {
+    let nearestDepth = 0;
+    let low = 1;
+    let high = -1;
+    for (const corner of boxCorners(box)) {
+      const clip = clipPoint(camera, corner);
+      if (clip.w <= 0) return { occluded: false, reason: "a corner at or behind the camera's plane" };
+      nearestDepth = Math.max(nearestDepth, clip.z / clip.w);
+      low = Math.min(low, clip.x / clip.w);
+      high = Math.max(high, clip.x / clip.w);
+    }
+    const levelZeroSize = levels[0].length;
+    const pixelMargin = 0.5 / levelZeroSize;
+    const first = clamp(0.5 * low + 0.5 - pixelMargin, 0, 1);
+    const last = clamp(0.5 * high + 0.5 + pixelMargin, 0, 1);
+    const extent = (last - first) * levelZeroSize;
+    const level = Math.min(Math.ceil(Math.log2(Math.max(extent, 1))), levels.length - 1);
+    const size = Math.max(levelZeroSize >> level, 1);
+    const firstTexel = Math.min(Math.floor(first * size), size - 1);
+    const lastTexel = Math.min(Math.floor(last * size), size - 1);
+    const result = { nearestDepth: nearestDepth, level: level, firstTexel: firstTexel, lastTexel: lastTexel, first: first, last: last };
+    if (lastTexel > firstTexel + 1) return Object.assign(result, { occluded: false, reason: "over more than two texels" });
+    const farthest = Math.min(levels[level][firstTexel], levels[level][lastTexel]);
+    return Object.assign(result, { farthest: farthest, occluded: nearestDepth < farthest });
+  }
+  // One frame of the culling pass's two phases, from the bits the frame before left.
+  function runFrame(camera, boxes, bitsBefore) {
+    const inView = boxes.map((box) => inViewFrustum(camera, box));
+    const phaseOne = boxes.map((box, slot) => inView[slot] && bitsBefore[slot]);
+    const prepass = rasterise(camera, boxes, phaseOne);
+    const levels = buildPyramid(prepass.depth);
+    const tests = boxes.map((box, slot) => (inView[slot] ? occludedTest(camera, box, levels) : null));
+    const bitsAfter = boxes.map((box, slot) => inView[slot] && !tests[slot].occluded);
+    const phaseTwo = bitsAfter.map((visible, slot) => visible && !phaseOne[slot]);
+    const image = rasterise(camera, boxes, phaseOne.map((one, slot) => one || phaseTwo[slot]));
+    const unculled = rasterise(camera, boxes, boxes.map(() => true));
+    const matches = image.nearest.every((slot, column) => slot === unculled.nearest[column]);
+    return { camera: camera, boxes: boxes, inView: inView, bitsBefore: bitsBefore, phaseOne: phaseOne, prepass: prepass, levels: levels, tests: tests, phaseTwo: phaseTwo, bitsAfter: bitsAfter, image: image, matches: matches };
+  }
+  // Demo 3: where each slot's Meshlet records start, in slot order by a scan of
+  // blocks, or in the order its workgroup happens to arrive.
+  function slotOrder(slots, blockSize) {
+    const counts = slots.map((slot) => (slot.state === "drawn" ? slot.meshlets : 0));
+    const offsets = [];
+    const blockSums = [];
+    counts.forEach((count, index) => {
+      const block = Math.floor(index / blockSize);
+      if (index % blockSize === 0) blockSums.push(0);
+      offsets.push(blockSums[block]);
+      blockSums[block] += count;
+    });
+    const blockStarts = [];
+    blockSums.reduce((start, sum) => {
+      blockStarts.push(start);
+      return start + sum;
+    }, 0);
+    return slots.map((slot, index) => {
+      const block = Math.floor(index / blockSize);
+      const drawn = slot.state === "drawn";
+      return { offset: drawn ? offsets[index] : null, blockStart: blockStarts[block], first: drawn ? blockStarts[block] + offsets[index] : null };
+    });
+  }
+  function arrivalOrder(slots, run) {
+    const drawn = slots.map((slot, index) => index).filter((index) => slots[index].state === "drawn");
+    const random = seededRandom(run * 7919 + 17);
+    for (let index = drawn.length - 1; index > 0; index--) {
+      const other = Math.floor(random() * (index + 1));
+      [drawn[index], drawn[other]] = [drawn[other], drawn[index]];
+    }
+    return drawn;
+  }
+  // </pure>
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name) => style.getPropertyValue(name).trim();
+    return {
+      panel: token("--panel"), paper: token("--paper"), ink: token("--ink"), inkSoft: token("--ink-soft"),
+      rule: token("--rule"), accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"),
+      warmWash: token("--warm-wash"), bad: token("--bad"), good: token("--good"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  function canvasView(canvas, height) {
+    const width = Math.max(1, canvas.parentElement.clientWidth);
+    const pixels = typeof height === "function" ? height(width) : Math.round(width * height);
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = pixels + "px";
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(pixels * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context: context, width: width, height: pixels };
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  function line(context, from, to) {
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  }
+  function polygonPath(context, points) {
+    context.beginPath();
+    points.forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
+    context.closePath();
+  }
+  const signed = (value) => (value >= 0 ? "+" : "−") + Math.abs(value).toFixed(1);
+  const listOf = (numbers) => (!numbers.length ? "none" : numbers.length === 1 ? String(numbers[0]) : numbers.slice(0, -1).join(", ") + " and " + numbers[numbers.length - 1]);
+
+  // The frustum from above: the near plane, the side planes beyond it, and no far plane.
+  function drawFrustum(context, colours, camera, toCanvas, labels) {
+    const sideways = (sign) => ({ x: camera.forward.x + (sign * camera.right.x) / camera.scale, y: camera.forward.y + (sign * camera.right.y) / camera.scale });
+    const at = (direction, distance) => ({ x: camera.x + direction.x * distance, y: camera.y + direction.y * distance });
+    const left = sideways(-1);
+    const right = sideways(1);
+    const nearLeft = at(left, camera.near);
+    const nearRight = at(right, camera.near);
+    const farLeft = at(left, 4000);
+    const farRight = at(right, 4000);
+    context.fillStyle = colours.accentWash;
+    polygonPath(context, [nearLeft, farLeft, farRight, nearRight].map(toCanvas));
+    context.fill();
+    context.strokeStyle = colours.accent;
+    context.lineWidth = 1.6;
+    line(context, toCanvas(nearLeft), toCanvas(farLeft));
+    line(context, toCanvas(nearRight), toCanvas(farRight));
+    context.lineWidth = 2.4;
+    line(context, toCanvas(nearLeft), toCanvas(nearRight));
+    context.save();
+    context.setLineDash([3, 4]);
+    context.lineWidth = 1;
+    context.strokeStyle = colours.inkSoft;
+    line(context, toCanvas(camera), toCanvas(nearLeft));
+    line(context, toCanvas(camera), toCanvas(nearRight));
+    context.restore();
+    if (labels) {
+      context.font = "11px " + colours.mono;
+      context.fillStyle = colours.accent;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      const nearLabel = toCanvas(at(camera.forward, camera.near + 14));
+      context.fillText("near plane", nearLabel.x, nearLabel.y);
+    }
+  }
+  function drawCamera(context, colours, camera, toCanvas) {
+    const centre = toCanvas(camera);
+    const tip = toCanvas({ x: camera.x + camera.forward.x * 26, y: camera.y + camera.forward.y * 26 });
+    context.strokeStyle = colours.ink;
+    context.lineWidth = 2;
+    line(context, centre, tip);
+    context.fillStyle = colours.ink;
+    context.strokeStyle = colours.panel;
+    context.beginPath();
+    context.arc(centre.x, centre.y, 7, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
+  // Where the frustum's forward line meets the edge of a world `width` × `height`.
+  function forwardEdge(camera, width, height, margin) {
+    let reach = Infinity;
+    for (const [position, direction, size] of [[camera.x, camera.forward.x, width], [camera.y, camera.forward.y, height]]) {
+      if (direction > 1e-9) reach = Math.min(reach, (size - position) / direction);
+      else if (direction < -1e-9) reach = Math.min(reach, -position / direction);
+    }
+    return { x: camera.x + camera.forward.x * (reach - margin), y: camera.y + camera.forward.y * (reach - margin) };
+  }
+
+  /* Demo 1: the frustum test, seen from above. */
+  (function frustumDemo() {
+    const canvas = byId("f-canvas");
+    if (!canvas) return;
+    const WIDTH = 1000;
+    const HEIGHT = 620;
+    const NEAR = 60;
+    const START = { x: 500, y: 560 };
+    const random = seededRandom(196);
+    // A thin box at the left end of the near plane, outside the frustum but
+    // wholly beyond neither the left nor the near plane.
+    const boxes = [makeBox(455.8, 506, 45, 3, 10)];
+    while (boxes.length < 34) {
+      const box = makeBox(40 + random() * (WIDTH - 80), 40 + random() * (HEIGHT - 80), 10 + random() * 30, 8 + random() * 26, random() * 180);
+      if (Math.hypot(box.x - START.x, box.y - START.y) < 120) continue;
+      boxes.push(box);
+    }
+    const switchButtons = Array.from(document.querySelectorAll("#f-switch button"));
+    const heading = byId("f-heading");
+    const state = { x: START.x, y: START.y, heading: 0, culling: true, inspected: 0 };
+    let camera = null;
+    let verdicts = [];
+
+    function evaluate() {
+      camera = makeCamera(state.x, state.y, state.heading, NEAR);
+      verdicts = boxes.map((box) => {
+        const terms = planeTerms(camera, box);
+        const passes = terms.every((term) => term.reach >= 0);
+        return { terms: terms, passes: passes, overlaps: overlapsFrustum(camera, box) };
+      });
+    }
+    function report() {
+      const culled = verdicts.filter((verdict) => !verdict.passes);
+      const byPlane = [0, 1, 2].map((plane) => culled.filter((verdict) => verdict.terms[plane].reach < 0).length);
+      const kept = verdicts.filter((verdict) => verdict.passes && !verdict.overlaps).length;
+      byId("f-counts").textContent = state.culling
+        ? boxes.length + " Instances in use: " + (boxes.length - culled.length) + " drawn, " + culled.length + " culled (beyond the left plane " + byPlane[0] + ", the right " + byPlane[1] + ", the near " + byPlane[2] + "; a box can lie beyond two). " +
+          (kept ? kept + (kept === 1 ? " drawn box lies" : " drawn boxes lie") + " outside the frustum, since no single plane has " + (kept === 1 ? "it" : "them") + " wholly beyond." : "Every drawn box reaches into the frustum.")
+        : "Culling off: all " + boxes.length + " Instances in use are drawn. With it on, " + culled.length + " would be culled.";
+      const list = byId("f-inspect");
+      list.replaceChildren();
+      const verdict = verdicts[state.inspected];
+      const add = (head, text) => {
+        const item = element("li");
+        item.append(element("b", "", head), document.createTextNode(text));
+        list.append(item);
+      };
+      verdict.terms.forEach((term, plane) => {
+        add(PLANE_NAMES[plane] + ": ", "centre " + signed(term.centre) + ", half axes " + term.axes.map((value) => value.toFixed(1)).join(" and ") + ", reach " + signed(term.reach) + (term.reach < 0 ? ", wholly beyond it." : "."));
+      });
+      const beyond = verdict.terms.map((term, plane) => (term.reach < 0 ? PLANE_NAMES[plane].split(",")[0] : null)).filter(Boolean);
+      add("Instance " + state.inspected + ": ", !state.culling
+        ? "drawn, since culling is off."
+        : !verdict.passes ? "culled, wholly beyond the " + beyond.join(" and the ") + "."
+          : verdict.overlaps ? "drawn: it reaches inside every plane." : "drawn, though outside the frustum: no single plane has it wholly beyond.");
+      canvas.setAttribute("aria-label", "A top-down view of a camera's frustum over " + boxes.length + " Instance bounding boxes. " + byId("f-counts").textContent + " Use the arrow keys to turn and move the camera.");
+    }
+    function draw() {
+      const view = canvasView(canvas, HEIGHT / WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const scale = view.width / WIDTH;
+      const toCanvas = (point) => ({ x: point.x * scale, y: point.y * scale });
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      drawFrustum(context, colours, camera, toCanvas, true);
+      boxes.forEach((box, index) => {
+        const verdict = verdicts[index];
+        const corners = boxCorners(box).map(toCanvas);
+        // The inspected box gets a wide ink outline beneath its own stroke.
+        if (index === state.inspected) {
+          context.save();
+          polygonPath(context, corners);
+          context.strokeStyle = colours.ink;
+          context.lineWidth = 6;
+          context.lineJoin = "round";
+          context.stroke();
+          context.fillStyle = colours.panel;
+          context.fill();
+          context.restore();
+        }
+        context.save();
+        polygonPath(context, corners);
+        if (!state.culling || (verdict.passes && verdict.overlaps)) {
+          context.fillStyle = colours.accentWash;
+          context.fill();
+          context.strokeStyle = colours.accent;
+          context.lineWidth = 1.6;
+        } else if (verdict.passes) {
+          context.strokeStyle = colours.warm;
+          context.lineWidth = 2.2;
+        } else {
+          context.setLineDash([4, 3]);
+          context.strokeStyle = colours.inkSoft;
+          context.lineWidth = 1.2;
+        }
+        context.stroke();
+        context.restore();
+        const centre = toCanvas(box);
+        context.font = (index === state.inspected ? "600 " : "") + "10px " + colours.mono;
+        context.fillStyle = index === state.inspected ? colours.ink : colours.inkSoft;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(String(index), centre.x, centre.y);
+      });
+      const edge = toCanvas(forwardEdge(camera, WIDTH, HEIGHT, 26));
+      context.font = "11px " + colours.mono;
+      context.fillStyle = colours.accent;
+      context.textAlign = "center";
+      context.fillText("no far plane", clamp(edge.x, 50, view.width - 50), clamp(edge.y, 12, view.height - 12));
+      drawCamera(context, colours, camera, toCanvas);
+    }
+    function update() {
+      evaluate();
+      report();
+      draw();
+    }
+    let dragging = null;
+    let activePointer = null;
+    const toWorld = (event) => {
+      const box = canvas.getBoundingClientRect();
+      const scale = WIDTH / box.width;
+      return { x: (event.clientX - box.left) * scale, y: (event.clientY - box.top) * scale, grab: 30 * scale };
+    };
+    const face = (point) => {
+      state.heading = Math.round(((Math.atan2(point.x - state.x, state.y - point.y) * 180) / Math.PI + 360) % 360);
+      heading.value = String(state.heading);
+    };
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      const point = toWorld(event);
+      if (Math.hypot(point.x - state.x, point.y - state.y) <= point.grab) {
+        dragging = "camera";
+      } else {
+        let hit = -1;
+        boxes.forEach((box, index) => {
+          if (insideBox(box, point)) hit = index;
+        });
+        if (hit >= 0) {
+          state.inspected = hit;
+          dragging = null;
+          update();
+          return;
+        }
+        dragging = "turn";
+        face(point);
+        update();
+      }
+      activePointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== activePointer || !dragging) return;
+      const point = toWorld(event);
+      if (dragging === "camera") {
+        state.x = clamp(point.x, 10, WIDTH - 10);
+        state.y = clamp(point.y, 10, HEIGHT - 10);
+      } else {
+        face(point);
+      }
+      update();
+    });
+    const stop = (event) => {
+      if (event.pointerId === activePointer) {
+        activePointer = null;
+        dragging = null;
+      }
+    };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    canvas.addEventListener("keydown", (event) => {
+      const step = { ArrowLeft: [-4, 0], ArrowRight: [4, 0], ArrowUp: [0, 16], ArrowDown: [0, -16] }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      state.heading = (state.heading + step[0] + 360) % 360;
+      heading.value = String(state.heading);
+      const forward = makeCamera(0, 0, state.heading, NEAR).forward;
+      state.x = clamp(state.x + forward.x * step[1], 10, WIDTH - 10);
+      state.y = clamp(state.y + forward.y * step[1], 10, HEIGHT - 10);
+      update();
+    });
+    heading.addEventListener("input", () => {
+      state.heading = Number(heading.value);
+      update();
+    });
+    for (const button of switchButtons) {
+      button.addEventListener("click", () => {
+        state.culling = button.dataset.culling === "on";
+        setPressed(switchButtons, (other) => other === button);
+        update();
+      });
+    }
+    byId("f-next").addEventListener("click", () => {
+      state.inspected = (state.inspected + 1) % boxes.length;
+      update();
+    });
+    evaluate();
+    report();
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Demo 2: two phases over a few frames. */
+  (function phasesDemo() {
+    const world = byId("p-world");
+    const screen = byId("p-screen");
+    if (!world || !screen) return;
+    const WIDTH = 1000;
+    const HEIGHT = 600;
+    const NEAR = 20;
+    const CAMERA = { x: 500, y: 560 };
+    const STAGES = ["Bits from the frame before", "Phase one draws", "Pre-pass depth and pyramid", "Phase two tests and draws", "Lit pass, and the bits it leaves"];
+    const headingSlider = byId("p-heading");
+    const wallSlider = byId("p-wall");
+    const stageButtons = Array.from(document.querySelectorAll("#p-stages button"));
+    const inspectGroup = byId("p-inspect");
+    // Slot 0 is the wall; the others sit behind it, beside it, or out of view.
+    const scene = (wallX) => [
+      makeBox(wallX, 330, 150, 12, 0),
+      makeBox(420, 190, 40, 28, 0),
+      makeBox(600, 200, 45, 30, 0),
+      makeBox(690, 250, 30, 30, 20),
+      makeBox(130, 430, 32, 24, -15),
+      makeBox(470, 70, 60, 18, 0),
+      makeBox(930, 470, 24, 24, 10),
+      makeBox(500, 594, 24, 4, 0),
+    ];
+    const NAMES = ["the wall", "behind the wall", "partly behind it", "apart", "out to the left", "far behind the wall", "out to the right", "behind the camera"];
+    const SLOT_COUNT = NAMES.length;
+    const state = { frames: [], viewing: 0, stage: 3, inspected: 1, pending: { heading: 0, wallX: 430 } };
+
+    function runNext() {
+      const before = state.frames.length ? state.frames[state.frames.length - 1].result.bitsAfter : new Array(SLOT_COUNT).fill(false);
+      const camera = makeCamera(CAMERA.x, CAMERA.y, state.pending.heading, NEAR);
+      const frame = { number: state.frames.length ? state.frames[state.frames.length - 1].number + 1 : 0, heading: state.pending.heading, wallX: state.pending.wallX, result: runFrame(camera, scene(state.pending.wallX), before) };
+      state.frames.push(frame);
+      if (state.frames.length > 16) state.frames.shift();
+      state.viewing = state.frames.length - 1;
+    }
+    function start() {
+      state.frames = [];
+      for (let frame = 0; frame < 3; frame++) runNext();
+    }
+    const current = () => state.frames[state.viewing];
+    const slotsWhere = (flags) => flags.map((flag, slot) => (flag ? slot : -1)).filter((slot) => slot >= 0);
+
+    function shade(colours, value) {
+      if (value <= 0) return null;
+      const near = NEAR / 120;
+      const far = NEAR / 700;
+      return clamp(Math.log(value / far) / Math.log(near / far), 0, 1);
+    }
+    function drawWorld() {
+      const frame = current();
+      const result = frame.result;
+      const view = canvasView(world, HEIGHT / WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const scale = view.width / WIDTH;
+      const toCanvas = (point) => ({ x: point.x * scale, y: point.y * scale });
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      drawFrustum(context, colours, result.camera, toCanvas, false);
+      if (state.stage === 2) {
+        context.save();
+        context.strokeStyle = colours.accent;
+        context.globalAlpha = 0.35;
+        context.lineWidth = 1;
+        for (let column = 0; column < SCREEN_COLUMNS; column++) {
+          const ray = columnRay(result.camera, column);
+          const depth = result.prepass.depth[column];
+          const distance = depth > 0 ? NEAR / depth : 1400;
+          line(context, toCanvas(CAMERA), toCanvas({ x: CAMERA.x + ray.x * distance, y: CAMERA.y + ray.y * distance }));
+        }
+        context.restore();
+      }
+      result.boxes.forEach((box, slot) => {
+        const corners = boxCorners(box).map(toCanvas);
+        // The inspected box gets a wide ink outline beneath its own stroke.
+        if (slot === state.inspected) {
+          context.save();
+          polygonPath(context, corners);
+          context.strokeStyle = colours.ink;
+          context.lineWidth = 6;
+          context.lineJoin = "round";
+          context.stroke();
+          context.fillStyle = colours.panel;
+          context.fill();
+          context.restore();
+        }
+        context.save();
+        polygonPath(context, corners);
+        const test = result.tests[slot];
+        let style = "plain";
+        if (state.stage === 0) style = result.bitsBefore[slot] ? "bit" : "plain";
+        else if (state.stage === 4) style = result.bitsAfter[slot] ? "bit" : result.phaseOne[slot] || result.phaseTwo[slot] ? "one" : !result.inView[slot] ? "outside" : "occluded";
+        else if (result.phaseOne[slot]) style = "one";
+        else if (!result.inView[slot]) style = "outside";
+        else if (state.stage === 3) style = result.phaseTwo[slot] ? "two" : test && test.occluded ? "occluded" : "plain";
+        if (style === "one") {
+          context.fillStyle = colours.accentWash;
+          context.fill();
+          context.strokeStyle = colours.accent;
+          context.lineWidth = 1.8;
+        } else if (style === "two") {
+          context.fillStyle = colours.warmWash;
+          context.fill();
+          context.strokeStyle = colours.warm;
+          context.lineWidth = 2;
+        } else if (style === "bit") {
+          context.strokeStyle = colours.accent;
+          context.lineWidth = 2.6;
+        } else if (style === "occluded") {
+          context.setLineDash([5, 4]);
+          context.strokeStyle = colours.bad;
+          context.lineWidth = 1.8;
+        } else if (style === "outside") {
+          context.setLineDash([3, 4]);
+          context.strokeStyle = colours.inkSoft;
+          context.lineWidth = 1.2;
+        } else {
+          context.strokeStyle = colours.inkSoft;
+          context.lineWidth = 1.4;
+        }
+        context.stroke();
+        context.restore();
+        const centre = toCanvas(box);
+        context.font = (slot === state.inspected ? "600 " : "") + "11px " + colours.mono;
+        context.fillStyle = slot === state.inspected ? colours.ink : colours.inkSoft;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        const label = state.stage === 0 || state.stage === 4 ? slot + ":" + ((state.stage === 0 ? result.bitsBefore : result.bitsAfter)[slot] ? "1" : "0") : String(slot);
+        context.fillText(label, centre.x, centre.y);
+      });
+      // Changes that wait for the next frame, dashed.
+      context.save();
+      context.setLineDash([6, 5]);
+      context.strokeStyle = colours.ink;
+      context.globalAlpha = 0.6;
+      context.lineWidth = 1.2;
+      if (state.pending.wallX !== frame.wallX) {
+        polygonPath(context, boxCorners(makeBox(state.pending.wallX, 330, 150, 12, 0)).map(toCanvas));
+        context.stroke();
+      }
+      if (state.pending.heading !== frame.heading) {
+        const next = makeCamera(CAMERA.x, CAMERA.y, state.pending.heading, NEAR);
+        line(context, toCanvas(CAMERA), toCanvas({ x: CAMERA.x + next.forward.x * 220, y: CAMERA.y + next.forward.y * 220 }));
+      }
+      context.restore();
+      drawCamera(context, colours, result.camera, toCanvas);
+    }
+    function drawScreen() {
+      const frame = current();
+      const result = frame.result;
+      const colours = readTokens();
+      const levelCount = result.levels.length;
+      const rowHeight = 16;
+      const gap = 5;
+      const top = 6;
+      const rows = 2 + levelCount;
+      const view = canvasView(screen, () => top + rows * (rowHeight + gap) + 4);
+      const context = view.context;
+      const labelWidth = view.width < 520 ? 44 : 112;
+      const cellWidth = (view.width - labelWidth - 8) / SCREEN_COLUMNS;
+      const x0 = labelWidth;
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const rowY = (row) => top + row * (rowHeight + gap);
+      const narrow = view.width < 520;
+      const label = (row, wide, short) => {
+        context.font = "11px " + colours.mono;
+        context.fillStyle = colours.inkSoft;
+        context.textAlign = "left";
+        context.textBaseline = "middle";
+        context.fillText(narrow ? short : wide, 6, rowY(row) + rowHeight / 2);
+      };
+      const cell = (row, from, span, fill, alpha) => {
+        context.save();
+        context.globalAlpha = alpha;
+        context.fillStyle = fill;
+        context.fillRect(x0 + from * cellWidth + 0.5, rowY(row), span * cellWidth - 1, rowHeight);
+        context.restore();
+      };
+      const outline = (row, from, span, stroke, width) => {
+        context.save();
+        context.strokeStyle = stroke;
+        context.lineWidth = width;
+        context.strokeRect(x0 + from * cellWidth + 0.5, rowY(row) + 0.5, span * cellWidth - 1, rowHeight - 1);
+        context.restore();
+      };
+      // Row 0: the image the lit pass shades, by the phase that drew each column's nearest Instance.
+      label(0, "lit pass image", "image");
+      if (state.stage === 4) {
+        let runStart = 0;
+        for (let column = 0; column <= SCREEN_COLUMNS; column++) {
+          const slot = column < SCREEN_COLUMNS ? result.image.nearest[column] : -2;
+          const previous = column > 0 ? result.image.nearest[column - 1] : -2;
+          if (column > 0 && slot !== previous) {
+            if (previous >= 0) {
+              const colour = result.phaseOne[previous] ? colours.accent : colours.warm;
+              cell(0, runStart, column - runStart, colour, 0.85);
+              if ((column - runStart) * cellWidth >= 12) {
+                context.font = "600 10px " + colours.mono;
+                context.fillStyle = colours.paper;
+                context.textAlign = "center";
+                context.fillText(String(previous), x0 + ((runStart + column) / 2) * cellWidth, rowY(0) + rowHeight / 2 + 0.5);
+              }
+            }
+            runStart = column;
+          }
+        }
+      } else {
+        for (let column = 0; column < SCREEN_COLUMNS; column++) outline(0, column, 1, colours.rule, 1);
+      }
+      // Row 1: the depth the pre-pass stored, phase one's.
+      label(1, "pre-pass depth", "depth");
+      for (let column = 0; column < SCREEN_COLUMNS; column++) {
+        const value = state.stage >= 1 ? shade(colours, result.prepass.depth[column]) : null;
+        if (value === null) outline(1, column, 1, colours.rule, 1);
+        else cell(1, column, 1, colours.ink, 0.12 + 0.78 * value);
+      }
+      // Rows 2 on: the pyramid's levels.
+      const test = result.tests[state.inspected];
+      result.levels.forEach((level, index) => {
+        label(2 + index, "pyramid L" + index, "L" + index);
+        const span = SCREEN_COLUMNS / level.length;
+        level.forEach((texel, position) => {
+          const value = state.stage >= 2 ? shade(colours, texel) : null;
+          if (value === null) outline(2 + index, position * span, span, colours.rule, 1);
+          else cell(2 + index, position * span, span, colours.ink, 0.12 + 0.78 * value);
+        });
+        if (state.stage === 3 && test && test.level === index && test.farthest !== undefined) {
+          for (let texel = test.firstTexel; texel <= test.lastTexel; texel++) outline(2 + index, texel * span, span, colours.warm, 2.6);
+        }
+      });
+      if (state.stage === 3 && test && test.first !== undefined) {
+        const from = x0 + test.first * SCREEN_COLUMNS * cellWidth;
+        const to = x0 + test.last * SCREEN_COLUMNS * cellWidth;
+        context.save();
+        context.strokeStyle = colours.warm;
+        context.setLineDash([4, 3]);
+        context.lineWidth = 1.5;
+        context.strokeRect(from, rowY(1) - 2, Math.max(to - from, 1), rowY(1 + levelCount) + rowHeight - rowY(1) + 4);
+        context.restore();
+      }
+      const stageNote = ["The depth is cleared to 0 and the pyramid not yet built.", "Phase one's depth, in the pre-pass; the pyramid is not yet built.", "The more solid a cell, the nearer its depth; an empty cell is depth 0, the far plane.", "The dashed outline is the inspected box's columns, grown by a pixel; the bold texels are the ones its test reads.", "The image row shows which phase drew each column's nearest Instance."][state.stage];
+      screen.setAttribute("aria-label", "The screen's 64 columns: the image, the pre-pass depth and the depth pyramid's " + levelCount + " levels. " + stageNote);
+    }
+    function describeTest(slot) {
+      const result = current().result;
+      const test = result.tests[slot];
+      if (!result.inView[slot]) return "outside the frustum, so not tested.";
+      if (test.farthest === undefined) return "not occluded: " + test.reason + ".";
+      return "nearest depth " + test.nearestDepth.toFixed(3) + (test.occluded ? " < " : " ≥ ") + test.farthest.toFixed(3) + ", the minimum of level " + test.level + "'s texel" + (test.firstTexel === test.lastTexel ? " " + test.firstTexel : "s " + test.firstTexel + " and " + test.lastTexel) + (test.occluded ? ": occluded." : ": visible.");
+    }
+    function report() {
+      const frame = current();
+      const result = frame.result;
+      const steps = byId("p-steps");
+      steps.replaceChildren();
+      const inView = slotsWhere(result.inView);
+      const occluded = inView.filter((slot) => result.tests[slot].occluded);
+      // "slots 0, 2 and 3", "slot 4" or "no slot".
+      const slotsText = (slots) => (!slots.length ? "no slot" : (slots.length === 1 ? "slot " : "slots ") + listOf(slots));
+      const lines = [
+        result.bitsBefore.some(Boolean) ? "Bits set from frame " + (frame.number - 1) + ": " + slotsText(slotsWhere(result.bitsBefore)) + "." : "No bits are set: " + (frame.number === 0 ? "the buffer is zeroed when it is created." : "nothing was visible in the frame before."),
+        "Phase one draws " + slotsText(slotsWhere(result.phaseOne)) + ": in view, with a bit. Outside the frustum: " + slotsText(slotsWhere(result.inView.map((flag) => !flag))) + ".",
+        "The pre-pass draws " + (result.phaseOne.some(Boolean) ? "them" : "nothing") + " into depth, and the pyramid reduces it to " + result.levels.length + " levels, 32 texels down to 1.",
+        "Phase two tests " + slotsText(inView) + ". Occluded: " + slotsText(occluded) + ". It draws " + slotsText(slotsWhere(result.phaseTwo)) + ". Slot " + state.inspected + ", " + NAMES[state.inspected] + ": " + describeTest(state.inspected),
+        "The lit pass draws phase two's into depth, then both phases at depth equal. " + (result.matches ? "The image matches culling off." : "The image differs from culling off.") + " Bits for frame " + (frame.number + 1) + ": " + slotsText(slotsWhere(result.bitsAfter)) + ".",
+      ];
+      lines.forEach((text, index) => {
+        const item = element("li", index === state.stage ? "current" : "");
+        item.append(element("b", "", STAGES[index] + ". "), document.createTextNode(text));
+        steps.append(item);
+      });
+      const body = byId("p-bits").tBodies[0];
+      body.replaceChildren();
+      const mark = (flag) => (flag ? "yes" : "–");
+      for (let slot = 0; slot < SLOT_COUNT; slot++) {
+        const row = element("tr", slot === state.inspected ? "focus" : "");
+        const test = result.tests[slot];
+        const two = result.phaseTwo[slot] ? "draws" : result.inView[slot] && test.occluded ? "occluded" : result.inView[slot] ? "visible" : "–";
+        [String(slot), mark(result.inView[slot]), result.bitsBefore[slot] ? "1" : "0", result.phaseOne[slot] ? "draws" : "–", two, result.bitsAfter[slot] ? "1" : "0"].forEach((text, column) => {
+          row.append(element("td", column === 0 ? "n" : "c", text));
+        });
+        body.append(row);
+      }
+      const strip = byId("p-frames");
+      strip.replaceChildren();
+      state.frames.forEach((entry, index) => {
+        const counts = entry.result;
+        const button = element("button", "frame-cell");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(index === state.viewing));
+        button.append(element("b", "", "Frame " + entry.number), element("span", "", "phase one " + slotsWhere(counts.phaseOne).length), element("span", "", "phase two " + slotsWhere(counts.phaseTwo).length), element("span", "", "occluded " + slotsWhere(counts.inView).filter((slot) => counts.tests[slot].occluded).length));
+        button.addEventListener("click", () => {
+          state.viewing = index;
+          update();
+        });
+        strip.append(button);
+      });
+      const viewed = strip.children[state.viewing];
+      if (viewed && viewed.scrollIntoView && state.viewing === state.frames.length - 1) strip.scrollTo({ left: strip.scrollWidth, behavior: reduceMotion ? "auto" : "smooth" });
+      const latest = state.frames[state.frames.length - 1];
+      const waiting = state.pending.heading !== latest.heading || state.pending.wallX !== latest.wallX;
+      byId("p-pending").textContent = "Showing frame " + frame.number + "." + (waiting ? " Your changes apply from frame " + (latest.number + 1) + "." : "");
+      setPressed(stageButtons, (button) => Number(button.dataset.stage) === state.stage);
+      setPressed(Array.from(inspectGroup.children), (button) => Number(button.dataset.slot) === state.inspected);
+      world.setAttribute("aria-label", "Frame " + frame.number + ", " + STAGES[state.stage].toLowerCase() + ". " + lines[state.stage]);
+    }
+    function update() {
+      report();
+      drawWorld();
+      drawScreen();
+    }
+    for (let slot = 0; slot < SLOT_COUNT; slot++) {
+      const button = element("button", "", String(slot));
+      button.type = "button";
+      button.dataset.slot = String(slot);
+      button.setAttribute("aria-label", "slot " + slot + ", " + NAMES[slot]);
+      button.addEventListener("click", () => {
+        state.inspected = slot;
+        update();
+      });
+      inspectGroup.append(button);
+    }
+    for (const button of stageButtons) {
+      button.addEventListener("click", () => {
+        state.stage = Number(button.dataset.stage);
+        update();
+      });
+    }
+    byId("p-run").addEventListener("click", () => {
+      runNext();
+      update();
+    });
+    byId("p-reset").addEventListener("click", () => {
+      state.pending = { heading: 0, wallX: 430 };
+      headingSlider.value = "0";
+      wallSlider.value = "430";
+      start();
+      state.stage = 3;
+      update();
+    });
+    headingSlider.addEventListener("input", () => {
+      state.pending.heading = Number(headingSlider.value);
+      update();
+    });
+    wallSlider.addEventListener("input", () => {
+      state.pending.wallX = Number(wallSlider.value);
+      update();
+    });
+    let draggingWall = null;
+    const toWorld = (event) => {
+      const box = world.getBoundingClientRect();
+      const scale = WIDTH / box.width;
+      return { x: (event.clientX - box.left) * scale, y: (event.clientY - box.top) * scale };
+    };
+    world.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      const point = toWorld(event);
+      const wall = makeBox(state.pending.wallX, 330, 150, 12, 0);
+      if (!insideBox(makeBox(wall.x, wall.y, wall.halfWidth + 10, wall.halfDepth + 14, 0), point)) {
+        let hit = -1;
+        current().result.boxes.forEach((box, slot) => {
+          if (insideBox(box, point)) hit = slot;
+        });
+        if (hit >= 0) {
+          state.inspected = hit;
+          update();
+        }
+        return;
+      }
+      draggingWall = { pointer: event.pointerId, offset: point.x - state.pending.wallX };
+      if (world.setPointerCapture) world.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    world.addEventListener("pointermove", (event) => {
+      if (!draggingWall || event.pointerId !== draggingWall.pointer) return;
+      state.pending.wallX = Math.round(clamp(toWorld(event).x - draggingWall.offset, 250, 760));
+      wallSlider.value = String(state.pending.wallX);
+      update();
+    });
+    const stop = (event) => {
+      if (draggingWall && event.pointerId === draggingWall.pointer) draggingWall = null;
+    };
+    world.addEventListener("pointerup", stop);
+    world.addEventListener("pointercancel", stop);
+    start();
+    report();
+    watchWidth(world.parentElement, drawWorld);
+    watchWidth(screen.parentElement, drawScreen);
+  })();
+
+  /* Demo 3: slot order against atomic order. */
+  (function scanDemo() {
+    const table = byId("s-table");
+    if (!table) return;
+    const BLOCK = 4;
+    const SLOTS = [
+      { meshlets: 2, state: "drawn" },
+      { meshlets: 3, state: "drawn" },
+      { meshlets: 0, state: "freed" },
+      { meshlets: 1, state: "drawn" },
+      { meshlets: 4, state: "drawn" },
+      { meshlets: 2, state: "culled" },
+      { meshlets: 2, state: "drawn" },
+      { meshlets: 1, state: "drawn" },
+    ];
+    const modeButtons = Array.from(document.querySelectorAll("#s-mode button"));
+    const state = { mode: "slot", run: 1, firstRun: { slot: null, atomic: null } };
+    const placed = slotOrder(SLOTS, BLOCK);
+    function sequence() {
+      const order = state.mode === "slot" ? SLOTS.map((slot, index) => index).filter((index) => SLOTS[index].state === "drawn") : arrivalOrder(SLOTS, state.run);
+      const records = [];
+      for (const slot of order) for (let meshlet = 0; meshlet < SLOTS[slot].meshlets; meshlet++) records.push({ slot: slot, meshlet: meshlet });
+      return { order: order, records: records };
+    }
+    function render() {
+      const result = sequence();
+      const firstOf = new Map();
+      result.records.forEach((record, index) => {
+        if (!firstOf.has(record.slot)) firstOf.set(record.slot, index);
+      });
+      const body = table.tBodies[0];
+      body.replaceChildren();
+      SLOTS.forEach((slot, index) => {
+        const row = element("tr");
+        const drawn = slot.state === "drawn";
+        const cells = [
+          [String(index), "n"],
+          [drawn ? "drawn" : slot.state === "freed" ? "freed, NO_MESH" : "culled", ""],
+          [drawn || slot.state === "culled" ? String(slot.meshlets) : "–", "n"],
+          [state.mode === "slot" ? (drawn ? String(placed[index].offset) : "NOT_DRAWN") : "–", "n"],
+          [state.mode === "slot" ? String(placed[index].blockStart) : "–", "n"],
+          [drawn ? String(firstOf.get(index)) : "–", "n"],
+        ];
+        for (const [text, className] of cells) row.append(element("td", className, text));
+        body.append(row);
+      });
+      const strip = byId("s-strip");
+      strip.replaceChildren();
+      let parity = 0;
+      result.records.forEach((record, index) => {
+        const isFirst = record.meshlet === 0;
+        if (isFirst && index > 0) parity ^= 1;
+        const square = element("span", "rec" + (parity ? " even" : "") + (isFirst ? " first" : ""), "s" + record.slot);
+        square.title = "Record " + index + ": slot " + record.slot + ", its Meshlet " + record.meshlet;
+        strip.append(square);
+      });
+      const key = result.records.map((record) => record.slot).join(",");
+      if (state.firstRun[state.mode] === null) state.firstRun[state.mode] = { run: state.run, key: key };
+      const reference = state.firstRun[state.mode];
+      const same = reference.key === key;
+      byId("s-status").textContent = "Run " + state.run + ", " + (state.mode === "slot" ? "slot order" : "atomic order") + ": " + result.records.length + " Meshlet records, Instances in the order " + result.order.join(", ") + ". " +
+        (reference.run === state.run ? "Run again to compare." : same ? "The same as run " + reference.run + "." : "It differs from run " + reference.run + ", so the index stream, and on the M4 Pro the image, would too.");
+      strip.setAttribute("aria-label", "The frame's Meshlet records in order, by slot: " + result.records.map((record) => record.slot).join(", ") + ".");
+      setPressed(modeButtons, (button) => button.dataset.mode === state.mode);
+    }
+    for (const button of modeButtons) {
+      button.addEventListener("click", () => {
+        state.mode = button.dataset.mode;
+        render();
+      });
+    }
+    byId("s-run").addEventListener("click", () => {
+      state.run += 1;
+      render();
+    });
+    render();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

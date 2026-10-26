@@ -1,0 +1,1865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Acceleration Structures Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume four of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.term { font-weight: 600; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+ol.steps { margin: 0 0 16px; padding-left: 26px; display: grid; gap: 8px; }
+ol.steps li { padding-left: 4px; }
+.keypoints li, ol.steps li { min-width: 0; }
+.prose code, figcaption code, .readout code { overflow-wrap: anywhere; }
+ol.steps li::marker { font-family: var(--mono); font-size: 0.85em; color: var(--accent); font-weight: 600; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .grid { stroke: var(--rule); stroke-width: 1; }
+svg .axis { stroke: var(--ink-soft); stroke-width: 1.2; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn:disabled:hover { border-color: var(--rule); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+input[type="text"] { font-family: var(--mono); font-size: 14px; width: 12ch; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 5px; background: var(--panel); color: var(--ink); }
+input[aria-invalid="true"] { border-color: var(--bad); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+.demo-grid .readout { margin: 8px 0 0; }
+ol.work { margin: 12px 0 0; padding: 10px 12px 10px 34px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink-soft); display: grid; gap: 4px; }
+ol.work b { color: var(--ink); font-weight: 600; }
+ol.work li::marker { color: var(--accent); font-weight: 600; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+.prose.table-wrap { margin-bottom: 16px; }
+.table-wrap.counts { max-width: 560px; margin-top: 14px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.bars { display: grid; gap: 10px; margin-top: 14px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr) minmax(0, 11em); gap: 10px; align-items: center; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.bar-row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar-row .value { text-align: right; font-variant-numeric: tabular-nums; }
+.bar-track { height: 18px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 0 4px 4px 0; transition: width 0.2s ease; }
+.bar-fill.built { background: var(--ink-soft); }
+.bar-fill.compacted { background: var(--accent); }
+.bar-fill.lavapipe { background: var(--warm); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 12px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.frames { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; margin-top: 14px; }
+.frame-cell { flex: 0 0 auto; width: 168px; min-width: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 12px; line-height: 1.45; color: var(--ink-soft); display: grid; gap: 6px; align-content: start; }
+.frame-cell h4 { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+.frame-cell.pending { border-style: dashed; border-color: var(--accent); }
+.frame-cell ul { margin: 0; padding-left: 14px; }
+.frame-cell .badge { justify-self: start; border-radius: 4px; padding: 1px 7px; font-weight: 600; }
+.badge.rebuild { background: var(--accent); color: var(--paper); }
+.badge.none { border: 1px solid var(--rule); color: var(--ink-soft); }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .bar-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .bar-row .value { text-align: left; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">← Praxis field guides</a></div>
+  <div class="eyebrow">Praxis · M3 · ticket #202 · PRs #234, #235</div>
+  <h1>Giving rays an index of the scene</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A shadow ray must find what blocks a light without testing every triangle, so GPUs search two levels of acceleration structure: a bottom-level one (BLAS) over each piece of geometry, and a top-level one (TLAS) placing BLASes in the world. PRs #234 and #235 gave Praxis a compacted BLAS per Mesh and a static TLAS over the Instances that do not move, indexed by slot, with its origin fixed at load. The idea to keep: in wgpu 30 a TLAS costs CPU and memory for every slot, filled or not.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>How a bounding volume hierarchy lets a ray skip most triangles</li>
+      <li>What a BLAS and a TLAS hold, and how a ray passes between them</li>
+      <li>How a BLAS is built from a Mesh's Arena ranges, then compacted</li>
+      <li>How Praxis estimates the memory its acceleration structures take</li>
+      <li>Why the static TLAS is indexed by slot, anchored at load, with 2^18 slots</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-buffer.html">Instance Buffer Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 6f607e8 (PR #234) and 93355f1 (PR #235), both merged on 2026-10-20. <b>Since then:</b> Shadow rays first searched these structures from the lit pass in PR #258, and since PR #277 from a compute pass, into a shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>); PR #264 added a dynamic TLAS for the Instances that move (<a href="dynamic-tlas.html">Dynamic TLAS Explained</a>) and PR #267 made compaction wait for its copies (<a href="gpu-ordering.html">GPU Ordering Explained</a>). Since PR #274 only a Mesh that rays trace gets a BLAS, and since PR #289 a refitted one is never compacted (<a href="crowd-shadows.html">Crowd Shadows Explained</a>, <a href="blas-refit.html">BLAS Refit Explained</a>); PRs #273 and #275 built town, whose 254,256 Instances fit the 2^18 slots (<a href="town.html">Town Explained</a>). PR #303 now picks the memory estimate's figures by adapter, an RTX 2070 SUPER's for NVIDIA GPUs, which no later volume covers.</p>
+  </aside>
+  <p class="lede">A field guide to the two PRs that built Praxis's first <span class="concept" data-tip="A GPU-side search structure that lets a ray find the triangles it hits without testing them all. Its layout is opaque and driver-specific, and wgpu 30 exposes no size for it." data-term="Acceleration structure">acceleration structures</span>: a compacted <span class="concept" data-tip="Bottom-level acceleration structure: the acceleration structure over one piece of geometry, in its own local space. Praxis builds one for each Mesh that rays trace, from the Mesh&#x27;s ranges of the vertex and index Arenas.">BLAS</span> for every <span class="concept" data-tip="An ordered list of Primitives that are rendered together. Its vertices and indices live in ranges of the Mesh pool&#x27;s Arenas.">Mesh</span>, and a <span class="concept" data-tip="Praxis&#x27;s TLAS over every Instance whose entity carries no PreviousWorldTransform. It is built from the first Frame data and rebuilt only in a frame that writes a static Instance or frees one&#x27;s slot." data-term="Static TLAS">static TLAS</span> over every <span class="concept" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> that does not move. M3's <span class="concept" data-tip="A ray from a shaded point toward a light. If anything lies between them, the point is in shadow from that light." data-term="Shadow ray">shadow rays</span> search them for whatever blocks the light. The guide covers what each structure holds, when it is built, and what it costs in memory and CPU time.</p>
+  <p class="status"><b>Provenance.</b> Both PRs merged on 2026-10-20, #234 as 6f607e8 and #235 as 93355f1, each after re-recording its <span class="concept" data-tip="A committed bench result for one Reference scene on one adapter, which new runs are compared with." data-term="Baseline">Baselines</span> with the new estimates. The guide was written from their draft heads, f1fc071 and 1ca54c2, rebased onto main at 0b29a3c; their code merged as written there, and the code links point at the merges. No frame traced a ray until #258 (0db5e46, 2026-10-23), which traced directional lights' shadow rays from the lit pass. Later work changed parts of what this guide describes: #267 (470221e) made compaction wait for its copies, #277 (bd7b988) moved every shadow ray out of the lit pass into a compute pass that writes a shadow mask, since #274 (b8cdb10) only a Mesh that rays trace gets a BLAS, and #303 (4a7ab0b) picks the memory estimate's figures by adapter instead of by backend. Notes in the chapters below, checked against main at 270c5e4 on 2026-10-26, say where.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#why">1 · Why rays need an index</a>
+    <a href="#levels">2 · Two levels</a>
+    <a href="#blas">3 · A BLAS per Mesh</a>
+    <a href="#bytes">4 · Counting bytes</a>
+    <a href="#tlas">5 · The static TLAS</a>
+    <a href="#rebuilds">6 · When it rebuilds</a>
+    <a href="#capacity">7 · Why 2<sup>18</sup> slots</a>
+    <a href="#cost">8 · What it costs</a>
+    <a href="#next">9 · What this unlocks</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="why">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1</div>
+    <h2>Why rays need an index</h2>
+    <p><span class="concept" data-tip="Architecture Decision Record: a short document in docs/adr/ recording a decision that is hard to reverse, with its reasons.">ADR</span> 0020 decides how Praxis will light a frame. Indirect light comes from ray-traced irradiance probes, and direct light from one hard <span class="concept" data-tip="A ray from a shaded point toward a light. If anything lies between them, the point is in shadow from that light." data-term="Shadow ray">shadow ray</span> per pixel per light. A shadow ray asks whether anything lies between a shaded point and the light. Testing every triangle for every ray would not scale. The helmet's one <span class="concept" data-tip="An ordered list of Primitives that are rendered together. Its vertices and indices live in ranges of the Mesh pool&#x27;s Arenas.">Mesh</span> alone has 23,358 triangles, and <span class="concept" data-tip="M3&#x27;s dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, 10,000 of them Moving."><code>town</code></span>, M3's dense <span class="concept" data-tip="A scene paired with a fixed camera path and injected time, so every run produces the same frames. Goldens and Baselines are made from them.">Reference scene</span>, plans about 250k <span class="concept" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one." data-term="Instance">Instances</span> of 10 to 20 Meshes.</p>
+    <p>The usual answer is a <span class="concept" data-tip="Bounding volume hierarchy: a tree of nested bounding boxes over primitives. A ray descends only into boxes it hits, so a query costs roughly logarithmic rather than linear time in the primitive count." data-term="BVH">bounding volume hierarchy</span>, or BVH, a tree of nested boxes over the triangles. A ray tests a box before anything inside it and skips every box it misses, along with everything that box holds. A query then costs roughly logarithmic time in the number of triangles, where testing them all costs linear time.</p>
+    <p>GPUs build and search such trees themselves, behind the API's <span class="concept" data-tip="A GPU-side search structure that lets a ray find the triangles it hits without testing them all. Its layout is opaque and driver-specific, and wgpu 30 exposes no size for it." data-term="Acceleration structure">acceleration structures</span>. The application hands over triangles and gets back an object it can build, copy and trace rays against. The APIs leave the form of the tree to the driver; Real-Time Rendering's ray-tracing chapter calls DXR's acceleration structure "mostly opaque to the user". wgpu 30 does not even have a call that returns how many bytes one takes, which chapter 4 deals with.</p>
+    <p>Rays will come from <span class="concept" data-tip="Tracing a ray inline from an ordinary shader, compute or fragment, and looping over its candidate hits in that shader, with no ray-tracing pipeline or hit shaders. wgpu needs EXPERIMENTAL_RAY_QUERY for it." data-term="Ray query">ray queries</span>. An ordinary shader starts a query against a <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created.">TLAS</span>, steps it until it is done, and reads its <span class="concept" data-tip="The hit a ray query has accepted as closest, read with rayQueryGetCommittedIntersection once the query is done. With opaque geometry every candidate is accepted." data-term="Committed hit">committed hit</span>, the closest one it accepted. wgpu offers them behind <code>EXPERIMENTAL_RAY_QUERY</code>, which the <span class="concept" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> has required since M1 (ADR 0021).</p>
+  </div>
+  <figure class="wide" id="demo-brute">
+    <div class="canvas-frame"><canvas id="d1-canvas" class="demo" role="img" aria-label="A shadow ray from a shaded point to a light among about two hundred short line segments, with the boxes of a BVH that the ray tested drawn over them."></canvas></div>
+    <div class="controls">
+      <span class="control-label">Search:</span>
+      <div class="seg" role="group" aria-label="Search" id="d1-mode">
+        <button type="button" data-mode="brute" aria-pressed="false">Brute force</button>
+        <button type="button" data-mode="tree" aria-pressed="true">Box tree</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="d1-origin" class="control-label">Shaded point</label>
+      <input type="range" id="d1-origin" min="0" max="1000" value="60">
+      <label for="d1-light" class="control-label">Light</label>
+      <input type="range" id="d1-light" min="0" max="1000" value="960">
+    </div>
+    <div class="table-wrap counts">
+      <table class="facts" id="d1-table">
+        <thead><tr><th>Search</th><th class="n">Boxes tested</th><th class="n">Triangles tested</th></tr></thead>
+        <tbody>
+          <tr data-mode="brute"><td>Brute force</td><td class="n">0</td><td class="n" id="d1-brute-triangles">197</td></tr>
+          <tr data-mode="tree" class="focus"><td>Box tree</td><td class="n" id="d1-tree-boxes">41</td><td class="n" id="d1-tree-triangles">22</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="readout" id="d1-result" style="margin:12px 0 4px"></p>
+    <p class="readout" id="d1-size"></p>
+    <figcaption><b>Live demo.</b> Each short line stands in for a triangle; a flat picture keeps it readable, and the counting works the same way in 3D. Drag the dot, the shaded point, or the ring, the light, or use the sliders. <i>Brute force</i> tests every triangle against the ray. <i>Box tree</i> builds a BVH by splitting the triangles at the median along the wider side, up to four to a leaf, and tests each box before what it holds. Boxes the ray entered are outlined in blue, and boxes it tested and missed are dashed. Both searches find the same closest hit. The table counts the tests for this one ray; M3 will trace one per pixel per light.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Two lessons carry over to the real structures. A better-built tree sends a ray through fewer boxes, and spending build time on that is what <span class="concept" data-tip="A build hint: spend more build time so that tracing runs faster. wgpu recommends it for geometry that is unlikely to change."><code>PREFER_FAST_TRACE</code></span> asks for. A tree also fits one arrangement of triangles, so when they move it must be <span class="concept" data-tip="A rebuild constructs the tree from scratch. A refit keeps the tree&#x27;s shape and only recomputes its boxes, which is cheaper but loses quality as things move far; wgpu-core 30 always rebuilds." data-term="Refit and rebuild">refitted or rebuilt</span>; chapter 6 covers which of the two wgpu 30 allows.</p>
+  </div>
+</section>
+
+<section class="chapter" id="levels">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2</div>
+    <h2>Two levels</h2>
+    <p>Ray-tracing APIs split the index in two. A <span class="concept" data-tip="Bottom-level acceleration structure: the acceleration structure over one piece of geometry, in its own local space. Praxis builds one for each Mesh that rays trace, from the Mesh&#x27;s ranges of the vertex and index Arenas." data-term="BLAS">bottom-level acceleration structure</span>, or BLAS, covers one piece of geometry in its own local space; Praxis builds one per <span class="concept" data-tip="An ordered list of Primitives that are rendered together. Its vertices and indices live in ranges of the Mesh pool&#x27;s Arenas.">Mesh</span> that rays trace. A <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created." data-term="TLAS">top-level acceleration structure</span>, or TLAS, holds a list of entries, and each entry points at a BLAS through a 3×4 transform that places it in the world. Metal calls the two levels primitive and instance acceleration structures.</p>
+    <p>wgpu calls an entry a <code>TlasInstance</code>, and Vulkan an instance. This guide says <span class="concept" data-tip="One slot of a TLAS, wgpu&#x27;s TlasInstance: a BLAS, a 3×4 row-major transform, 24 bits of custom data and an 8-bit mask. An empty slot holds None.">TLAS entry</span>, as the PRs' code does, because in Praxis's glossary an <span class="concept" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> is one <span class="concept" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s data on the GPU. An entry holds a BLAS, the transform as <span class="concept" data-tip="Stored row by row. A TLAS entry&#x27;s transform is three rows of four f32: each row holds three rotation-and-scale values, then that axis&#x27;s translation." data-term="Row-major">three rows of four f32</span>, 24 bits of <span class="concept" data-tip="The 24-bit value stored in a TLAS entry and returned with a hit. The static TLAS stores the Instance slot there, so a hit names the Instance it struck." data-term="instance_custom_data">custom data</span> and an 8-bit <span class="concept" data-tip="An 8-bit tag on each TLAS entry. A ray carries an 8-bit cull mask, and a hit counts only if the two share a set bit; 0xff on both means every ray sees every entry." data-term="Instance mask">mask</span>.</p>
+    <p>Two levels make copies cheap. The helmet scene shows 11 Instances of one Mesh, so it builds one BLAS and points 11 entries at it. Moving or adding a copy changes entries and leaves every BLAS untouched.</p>
+    <p>A ray starts at the TLAS, whose boxes enclose the entries in world space. For each entry whose box it enters, the ray is moved into that entry's local space by the inverse of its transform, and the search continues down the entry's BLAS. A hit there is a hit on that entry. The query keeps the closest hit and reports the entry's custom data with it.</p>
+  </div>
+  <figure class="wide" id="demo-levels">
+    <div class="demo-grid">
+      <div>
+        <div class="canvas-frame"><canvas id="d2-world" class="demo" role="img" aria-label="Six TLAS entries of three Meshes placed in a world, the TLAS boxes around them, and a shadow ray crossing some of them."></canvas></div>
+      </div>
+      <div>
+        <div class="canvas-frame"><canvas id="d2-local" role="img" aria-label="The selected entry's Mesh in its own local space, with its BLAS boxes and the ray after the inverse transform."></canvas></div>
+        <p class="readout" id="d2-local-title"></p>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="d2-origin" class="control-label">Shaded point</label>
+      <input type="range" id="d2-origin" min="0" max="1000" value="920">
+      <label for="d2-light" class="control-label">Light</label>
+      <input type="range" id="d2-light" min="0" max="1000" value="40">
+    </div>
+    <div class="controls">
+      <span class="control-label">Seen from inside:</span>
+      <div class="seg" role="group" aria-label="Entry shown in its own space" id="d2-entries"></div>
+    </div>
+    <ol class="work" id="d2-order"></ol>
+    <p class="readout" id="d2-summary" style="margin-top:10px"></p>
+    <figcaption><b>Live demo.</b> Six TLAS entries of three Meshes: entries 0, 2 and 5 share Mesh A's BLAS, and entries 1 and 4 share Mesh B's. Drag the dot or the ring, or use the sliders. Left, the world: solid boxes are the entries' boxes, dashed boxes group them, and boxes the ray entered are blue. Right, one entry's BLAS in its own space, with the ray as that entry sees it after the inverse transform; the arrows on the left show the same entry's local axes in the world. The numbered list is the order of work. Pick any entry the ray entered to see it from inside.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="blas">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 · PR #234</div>
+    <h2>One BLAS per Mesh, at load</h2>
+    <p>PR #234 gives each <span class="concept" data-tip="An ordered list of Primitives that are rendered together. Its vertices and indices live in ranges of the Mesh pool&#x27;s Arenas.">Mesh</span> a <span class="concept" data-tip="Bottom-level acceleration structure: the acceleration structure over one piece of geometry, in its own local space. Praxis builds one for each Mesh that rays trace, from the Mesh&#x27;s ranges of the vertex and index Arenas.">BLAS</span> when the Mesh loads. (Since #274, #276 and #289, each Mesh is loaded for a use: one the GPU bends and only draws gets no BLAS, a shadow proxy gets a BLAS but no Meshlets, and a refitted Mesh's BLAS allows updates and is never compacted. <a href="crowd-shadows.html">Crowd Shadows Explained</a> and <a href="blas-refit.html">BLAS Refit Explained</a> cover them.) <code>MeshPool::load</code> creates the BLAS and records its build, which reads the Mesh where it already lives, in its ranges of the vertex and index <span class="concept" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges. The Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles." data-term="Arena">Arenas</span>.</p>
+    <p>A cooked vertex is 28 bytes: a position of three f32, a uv of two f32 and a qtangent of four i16. The build reads <code>Float32x3</code> at a <span class="concept" data-tip="The distance in bytes from one vertex to the next in a buffer: 28 for Praxis&#x27;s cooked vertex." data-term="Vertex stride">vertex stride</span> of 28, so it sees each vertex's leading 12 bytes, the position, and nothing else. <code>first_vertex</code> is the Mesh's offset into the vertex Arena, counted in vertices, and wgpu multiplies it by the stride. <code>first_index</code> skips the indices before the Mesh's range. The cooked indices count from the Mesh's own first vertex, so they land on the right positions.</p>
+    <p>The BLAS is created with <code>PREFER_FAST_TRACE | ALLOW_COMPACTION</code>. <span class="concept" data-tip="A build hint: spend more build time so that tracing runs faster. wgpu recommends it for geometry that is unlikely to change."><code>PREFER_FAST_TRACE</code></span> asks the driver to spend build time on faster tracing, which suits geometry built once and traced every frame. <span class="concept" data-tip="The build flag that lets a BLAS be compacted after its build. Without it, wgpu refuses to compact."><code>ALLOW_COMPACTION</code></span> permits the copy described below. The triangles are flagged <span class="concept" data-tip="A geometry flag meaning there is no alpha test, so every hit counts as soon as it is found. Without it, a hit stays a candidate until the shader confirms it."><code>OPAQUE</code></span>, with no alpha test, so a hit counts as soon as the traversal finds it. Without the flag, a hit would reach the shader as a candidate and count only once the shader confirmed it with <code>rayQueryConfirmIntersection</code>, unless the ray's own flags force every BLAS opaque. wgpu-types' own doc for the flag says a BLAS without it has no hits, since <span class="concept" data-tip="wgpu&#x27;s shader compiler, which translates WGSL for each backend.">naga</span> has no candidate intersections yet; naga 30.0.1 has them.</p>
+    <p>The build is recorded into the <span class="concept" data-tip="LoadStaging&#x27;s command encoder, which records a load&#x27;s copies into the Arenas, and now its BLAS builds, until they are submitted." data-term="Load encoder">load encoder</span> after the copies that fill the Arenas, "so it reads what they write" (<code>LoadStaging::build_blas</code>). Both Arenas gain the <code>BLAS_INPUT</code> usage for it. The vertex Arena becomes <code>STORAGE | BLAS_INPUT</code>, and the index Arena trades <code>INDEX</code>, which nothing used, for <code>BLAS_INPUT</code>. <code>Arena::new</code> adds <code>COPY_DST</code> to both, as to every Arena, for the copies that fill them.</p>
+    <p>For the memory estimate in chapter 4, a BLAS counts its triangles from the Mesh's index range, <code>mesh.indices.len() / 3</code>. <span class="concept" data-tip="A small group of one Primitive&#x27;s triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one." data-term="Meshlet">Meshlets</span> play no part in it.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code><span class="comment">// The position leads each vertex; the cooked indices count from the
+// Mesh's first vertex.</span>
+staging.build_blas(&amp;wgpu::BlasBuildEntry {
+    blas: &amp;blas,
+    geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
+        size: &amp;geometry,
+        vertex_buffer: &amp;self.vertex_arena.buffer,
+        first_vertex: vertices.offset,
+        vertex_stride: size_of::&lt;CookedVertex&gt;() as u64,
+        index_buffer: Some(&amp;self.index_arena.buffer),
+        first_index: Some(indices.offset),
+        transform_buffer: None,
+        transform_buffer_offset: None,
+    }]),
+});</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/6f607e83121951a03b94ad17f73b689ca2163f71/src/assets/pools.rs#L241-L255"><code>src/assets/pools.rs</code>, lines 241 to 255</a> at 6f607e8, the merge of #234, indented less. The build entry: the Mesh's ranges of both Arenas, the 28-byte stride, and no transform.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Compaction, step by step</h3>
+    <p>A BLAS's exact size is known only once it is built. <span class="concept" data-tip="Copying a built BLAS into a tighter allocation, once its exact size is known, and freeing the original. In wgpu 30 only BLASes compact, and a compacted BLAS cannot be rebuilt or compacted again.">Compaction</span> then copies it into a tighter allocation and frees the original. Metal splits it into <code>writeCompactedSize</code> and <code>copyAndCompact</code>, and Vulkan has a compacting copy mode. <code>MeshPool::compact_blases</code> runs it in wgpu 30:</p>
+    <ol class="steps">
+      <li>Create each BLAS with <code>ALLOW_COMPACTION</code>. Without it, wgpu refuses to compact.</li>
+      <li>Build it. <code>Renderer::upload</code> now submits the staged loads, builds included, at its start; before PR #234 they went at the end of <code>render</code>.</li>
+      <li>Call <code>prepare_compaction_async</code> on every new BLAS.</li>
+      <li>Wait. <span class="concept" data-tip="wgpu&#x27;s call that processes finished GPU work. With PollType::wait_indefinitely() it blocks the CPU until the GPU has finished what was submitted." data-term="device.poll"><code>device.poll(PollType::wait_indefinitely())</code></span> blocks the CPU until the GPU has finished the builds and everything submitted with them.</li>
+      <li>Replace each BLAS that reports <code>ready_for_compaction()</code> with <code>queue.compact_blas(&amp;blas)</code>. One that is not ready keeps its uncompacted BLAS, and a warning is logged.</li>
+      <li>Wait again, before any TLAS reads them. <code>queue.compact_blas</code> only records each copy into the queue's pending writes, which go to the GPU at the start of the next submission, and wgpu-core 30.0.1 records no barrier after it; on Metal, wgpu-hal's acceleration-structure barrier is empty anyway (<a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215</a>). These PRs stopped at the step above, so a TLAS built in the next submission could read a BLAS before its copy finished. PR #267, merged on 2026-10-23 as 470221e, made <code>compact_blases</code> submit those writes and wait for them too; <a href="gpu-ordering.html">GPU Ordering Explained</a> follows the race.</li>
+      <li>Keep the copy for good. wgpu documents the returned BLAS as "more restricted than a normal BLAS because it may not be rebuilt or compacted."</li>
+    </ol>
+    <p>wgpu-types' own doc for <code>ALLOW_COMPACTION</code> names <code>Blas::prepare_for_compaction</code> and <code>CommandEncoder::compact_blas</code>. Neither exists in 30.0.1; the names above do.</p>
+  </div>
+  <figure class="wide">
+    <pre class="code"><code>for &amp;(handle, _) in &amp;self.awaiting_compaction {
+    self.blases[handle.0 as usize].prepare_compaction_async(|_| {});
+}
+if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+    tracing::error!(%error, "waiting for BLAS builds failed");
+}
+for (handle, triangles) in self.awaiting_compaction.drain(..) {
+    let blas = &amp;mut self.blases[handle.0 as usize];
+    if !blas.ready_for_compaction() {
+        <span class="comment">// lines 291 to 294: tracing::warn!(…, "BLAS not compacted: not ready after its build")</span>
+        continue;
+    }
+    *blas = queue.compact_blas(blas);
+    self.uncompacted_blas_triangles -= triangles;
+    self.compacted_blas_triangles += triangles;</code></pre>
+    <figcaption><a href="https://github.com/gariasf/praxis/blob/6f607e83121951a03b94ad17f73b689ca2163f71/src/assets/pools.rs#L282-L299"><code>src/assets/pools.rs</code>, lines 282 to 299</a> at 6f607e8, the merge of #234, indented less, with the warning on lines 291 to 294 shortened. The two triangle counts feed the memory estimate in chapter 4.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Compaction needs each build finished, so the frame that completes a load now waits for every load submitted with it, Textures included. texture-wall shows it most. Its first frame went from 75.5–76.6 ms to 88.1–92.8 ms, "waiting for its 10,000 Textures' copies before compacting". M4's streaming takes this wait off the critical path, together with the static TLAS's rebuild.</p>
+    <p>A build also needs a <span class="concept" data-tip="Temporary GPU memory a build needs while it runs, discarded afterwards. wgpu 30 allocates it inside each build call, so the engine never sees it." data-term="Scratch buffer">scratch buffer</span> while it runs. wgpu 30 allocates one inside each build call, sized for everything that call builds, and the engine never sees it. Each Mesh's BLAS is its own call here. The PR's review raised batching them to share scratch, and the PR declined: <code>town</code> has 10 to 20 Meshes, and M4 reworks load submission.</p>
+    <p>The test loads a Mesh made of one <span class="concept" data-tip="A triangle with no area, its corners coincident or in one line, so no ray can hit it." data-term="Degenerate triangle">degenerate triangle</span>, then the Mesh under test, a triangle around (0.8, 0). It builds a one-entry <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created.">TLAS</span> over that Mesh's compacted BLAS and traces rays down −Z with a <span class="concept" data-tip="Tracing a ray inline from an ordinary shader, compute or fragment, and looping over its candidate hits in that shader, with no ray-tracing pipeline or hit shaders. wgpu needs EXPERIMENTAL_RAY_QUERY for it." data-term="Ray query">ray query</span>. The ray through (0.8, 0, 0) hits and returns the entry's custom data, 7; the rays through (0, 0, 0) and (0.8, 0.5, 0) miss. The PR shows the test failing three ways: with <code>first_vertex</code> 0, with <code>first_index</code> 0, and without <code>ALLOW_COMPACTION</code>.</p>
+  </div>
+</section>
+
+<section class="chapter" id="bytes">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 · PR #234</div>
+    <h2>Counting bytes nobody reports</h2>
+    <p><span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, bytes uploaded, heap allocations, GPU memory and more. PR #235 adds the static Instances left out of the static TLAS.">Frame stats</span> carry <code>gpu_memory_bytes</code>, the GPU memory the engine allocates, and the bench compares it with committed <span class="concept" data-tip="A committed bench result for one Reference scene on one adapter, which new runs are compared with." data-term="Baseline">Baselines</span>. wgpu 30 has no call that returns an <span class="concept" data-tip="A GPU-side search structure that lets a ray find the triangles it hits without testing them all. Its layout is opaque and driver-specific, and wgpu 30 exposes no size for it." data-term="Acceleration structure">acceleration structure</span>'s size. wgpu-core keeps the size crate-private, and its internal counters track acceleration structures only on DX12. On Vulkan, wgpu's allocator report lists the memory behind each one by name, which is how lavapipe's figures below were measured; on Metal, wgpu gives no allocator report. M3's decision was to count them anyway, from sizes measured once per <span class="concept" data-tip="The native graphics API wgpu runs on: Metal on the M4 Pro, Vulkan on lavapipe." data-term="Backend">backend</span> and labelled as estimates, and to leave exact sizes to M4.</p>
+    <p><code>AccelerationStructureBytes::estimate(backend)</code> picks the figures. It returns <span class="concept" data-tip="Mesa&#x27;s software Vulkan driver, which renders on the CPU and repeats exactly. CI renders Goldens and records counter Baselines with it.">lavapipe</span>'s on Vulkan, software or not, and the <span class="concept" data-tip="The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>'s on every other backend, as the <span class="concept" data-tip="A numeric limit from ADR 0013 on one metric of a Reference scene: CPU time, GPU time, or GPU memory at 8 GB." data-term="Budget">Budgets</span>' reference machine. (Since #303, merged on 2026-10-26 as 4a7ab0b, it takes the adapter instead of the backend: an NVIDIA GPU, on any backend, gets figures measured on an RTX 2070 SUPER, and every other adapter gets lavapipe's or the M4 Pro's as before.)</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Bytes</th><th class="n">M4 Pro, Metal</th><th class="n">lavapipe, Vulkan</th></tr></thead>
+        <tbody>
+          <tr><td>BLAS, per triangle as built</td><td class="n">94</td><td class="n">104</td></tr>
+          <tr><td>BLAS, per triangle compacted</td><td class="n">45.5</td><td class="n">104</td></tr>
+          <tr><td>TLAS, per entry of capacity</td><td class="n">288.5</td><td class="n">240 = 176 + 64</td></tr>
+          <tr><td>Measured with</td><td>Metal's <code>currentAllocatedSize</code> around creation, in the GI survey's scratch program</td><td>wgpu's allocator report, in PR #231's CI probe</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The engine's estimates</b>, in <a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/src/render/acceleration_structures.rs#L25-L53"><code>AccelerationStructureBytes</code></a> and ADR 0017's ledger. lavapipe is Mesa 25.2.8.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The M4 Pro's figures come from the <span class="concept" data-tip="The research note docs/research/global-illumination-and-lighting.md. Its one-off scratch program measured acceleration-structure sizes and build times on the M4 Pro.">GI survey</span>'s one-off scratch program, which read Metal's <span class="concept" data-tip="Metal&#x27;s count of the bytes a device has allocated. Reading it before and after creating something measures that thing."><code>currentAllocatedSize</code></span> before and after creating its structures. 199,098,368 bytes for 2,117,632 triangles gave 94 B per triangle, and 28,868,608 bytes for a TLAS of 100,064 entries gave 288.5. The survey states 45.5 after <code>compact_blas</code> without a raw byte count. The program is not in the repo, so committed code cannot re-run it.</p>
+    <p>lavapipe's come from PR #231, a throwaway that ran in CI's software-Vulkan job and summed wgpu's <span class="concept" data-tip="wgpu&#x27;s list of a Vulkan device&#x27;s memory allocations by name, which PR #231&#x27;s throwaway probe summed." data-term="Allocator report">allocator report</span> by allocation name. From 2,048 triangles up, a BLAS took 104.0 B per triangle, and each compacted copy came out 56 B larger; 2 triangles took 248 B either way. A TLAS took 240.1 B per entry at 1,024 entries and 240.0 B at 100,064 and 262,144, made of 176 B of acceleration structure and 64 B of wgpu-core's buffer of entries.</p>
+    <p class="callout"><b>Open question.</b> Whether the M4 Pro's 288.5 B includes wgpu-core's buffer of entries was never measured apart. On Metal that buffer holds a 72-byte <code>MTLIndirectAccelerationStructureInstanceDescriptor</code> per slot, not the 64 bytes it holds on Vulkan. wgpu-core creates the buffer with the TLAS, so a device-wide count around creation would take it in, and the code's comment says the figure includes it; the survey did not separate the two.</p>
+    <p>PR #234 adds a Frame stat of its own, <code>estimated_acceleration_structure_bytes</code>, whose name says what it is, and adds it into <code>gpu_memory_bytes</code>. After a load, each BLAS counts at its compacted figure, or at its built figure if compaction failed. PR #235 adds the static TLAS to the same stat, at full capacity.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n">Triangles in its BLASes</th><th class="n"><code>gpu_memory_bytes</code> change</th></tr></thead>
+        <tbody>
+          <tr><td>helmet</td><td class="n">23,358</td><td class="n">+1,062,789 B</td></tr>
+          <tr><td>pbr-sweep, orrery</td><td class="n">2,208</td><td class="n">+100,464 B</td></tr>
+          <tr><td>normal-tangent</td><td class="n">7,774</td><td class="n">+353,717 B</td></tr>
+          <tr><td>every quad scene</td><td class="n">2</td><td class="n">+91 B</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>PR #234 on the M4 Pro.</b> Each change is the scene's triangles × 45.5 B, the compacted figure. The helmet scene's 11 Instances share one Mesh, so one BLAS. On CI's lavapipe, far-coplanar's quad added 208 B, 2 × 104, and CI's bench job reported far-coplanar failing by exactly that.</figcaption>
+  </figure>
+  <figure class="wide" id="demo-bytes">
+    <div class="controls" style="margin-top:0">
+      <span class="control-label">Mesh:</span>
+      <div class="seg" role="group" aria-label="Mesh" id="d3-presets">
+        <button type="button" data-triangles="23358" aria-pressed="true">helmet</button>
+        <button type="button" data-triangles="7774" aria-pressed="false">NormalTangentTest</button>
+        <button type="button" data-triangles="2208" aria-pressed="false">sphere</button>
+        <button type="button" data-triangles="2" aria-pressed="false">quad</button>
+      </div>
+      <label for="d3-count" class="control-label">Triangles</label>
+      <input type="text" id="d3-count" value="23358" inputmode="numeric" autocomplete="off" aria-describedby="d3-help">
+    </div>
+    <p class="readout" id="d3-help" style="margin-top:8px">Type a whole number from 1 to 268,435,456 (2<sup>28</sup>), the most triangles one BLAS may have under the Capability floor's limits.</p>
+    <div class="bars" id="d3-bars"></div>
+    <p class="readout" id="d3-saving" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> The engine's estimates for one BLAS: triangles × 94 B as built and × 45.5 B compacted on the M4 Pro, and × 104 B on lavapipe either way, rounded to whole bytes as <code>AccelerationStructureBytes</code> rounds them. They are estimates; wgpu 30 reports no size to check them against. The sphere is pbr-sweep's and orrery's, and the quad is every quad scene's. For scale, the static TLAS at capacity adds 75,628,544 B on the M4 Pro and 62,914,560 B on lavapipe to every scene.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="tlas">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 · PR #235</div>
+    <h2>The static TLAS</h2>
+    <p>PR #235 gives the Renderer a <code>StaticTlas</code>, a <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created.">TLAS</span> over every <span class="concept" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> whose entity carries no <span class="concept" data-tip="The component holding an entity&#x27;s World transform from the previous Tick. It stays on every entity the fixed schedule moves, which makes that entity&#x27;s Instance a Moving Instance."><code>PreviousWorldTransform</code></span>. The glossary calls those Instances static and the rest <span class="concept" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static." data-term="Moving Instance">Moving Instances</span>. The TLAS is created in <code>Renderer::new</code> with 2<sup>18</sup> = 262,144 slots and updated at the end of <code>Renderer::upload</code> from that frame's Instance writes (since #258, first in the frame's encoder, so that the camera uniform can carry the load Anchor). Chapter 7 explains the size.</p>
+    <p>Its entries are indexed by Instance <span class="concept" data-tip="An index into the Instance buffer, which a Renderable keeps while it is one. The static TLAS gives each Instance the entry with the same index." data-term="Slot">slot</span>, so the Instance in slot 7 gets entry 7. Each static Instance's entry comes from <code>TlasInstance::new(blas, transform, custom_data, mask)</code>, given:</p>
+    <ul class="keypoints">
+      <li>its Mesh's compacted <span class="concept" data-tip="Bottom-level acceleration structure: the acceleration structure over one piece of geometry, in its own local space. Praxis builds one for each Mesh that rays trace, from the Mesh&#x27;s ranges of the vertex and index Arenas.">BLAS</span>, from PR #234;</li>
+      <li>its transform, the <span class="concept" data-tip="Stored row by row. A TLAS entry&#x27;s transform is three rows of four f32: each row holds three rotation-and-scale values, then that axis&#x27;s translation." data-term="Row-major">three rows</span> of a 3×4 matrix measured from the <span class="concept" data-tip="The corner of the camera&#x27;s Anchor cell in the first Frame data the static TLAS takes. It is the origin of the static TLAS&#x27;s frame and never moves in M3." data-term="Load Anchor">load Anchor</span>, below;</li>
+      <li>its slot, as the <span class="concept" data-tip="The 24-bit value stored in a TLAS entry and returned with a hit. The static TLAS stores the Instance slot there, so a hit names the Instance it struck." data-term="instance_custom_data">custom data</span>;</li>
+      <li><code>0xff</code>, as the <span class="concept" data-tip="An 8-bit tag on each TLAS entry. A ray carries an 8-bit cull mask, and a hit counts only if the two share a set bit; 0xff on both means every ray sees every entry." data-term="Instance mask">mask</span>, commented "Every ray's cull mask".</li>
+    </ul>
+    <p>A freed slot's Instance names no Mesh (<code>NO_MESH</code>), so it has no BLAS and its entry is empty, <code>None</code>.</p>
+    <p>A hit returns its entry's custom data as <code>instance_custom_data</code>, so a shader will know which Instance its ray struck. The field holds 24 bits, <span class="concept" data-tip="The layer of wgpu between its public API and the backends, which validates calls and tracks resources.">wgpu-core</span> rejects larger values at build time, and 2<sup>18</sup> slots fit. Storing the slot has a reason the PRs do not state; what follows is this guide's reading of wgpu-core. wgpu-core uploads only the filled entries, so a hit's own instance index counts filled entries. That index drifts from the slot as soon as a lower slot is empty or holds a Moving Instance.</p>
+    <p>The mask filters hits. A ray carries an 8-bit cull mask, and an entry counts only if the two share a set bit. With <code>0xff</code> every ray sees every entry. Masks could later keep some geometry out of shadow rays and other geometry out of probe rays.</p>
+    <h3>A frame anchored at load</h3>
+    <p>ADR 0014 keeps f32 World positions off the GPU. <span class="concept" data-tip="A 32-bit floating-point number. Neighbouring f32 values are 2^(⌊log2 d⌋ − 23) apart at magnitude d, so precision falls as numbers grow.">f32</span> positions lose precision beyond 512 m from their origin, and Praxis's worlds must work at 10 by 10 km and more. Positions travel as an <span class="concept" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell&#x27;s corner, never as one f32 position.">Anchor</span>, the 64 m grid cell that holds them, plus an f32 offset from the cell's corner. Subsystems that compute in f32 "convert at their boundary into a local frame they own", and ADR 0014 lists ray-tracing acceleration structures among them. A TLAS transform is twelve f32, so the static TLAS owns such a frame.</p>
+    <p>Its origin is the load Anchor, the corner of the camera's Anchor cell in the first <span class="concept" data-tip="The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> the TLAS takes, and it is never re-anchored in M3. Each entry's translation is composed in <span class="concept" data-tip="A 64-bit floating-point number, with 29 more bits of precision than f32. Praxis keeps World positions in f64 (ADR 0014).">f64</span> and rounded to f32 once, in <code>anchored_transform</code>:</p>
+    <p class="callout"><code>translation = (Instance Anchor − load Anchor) × 64 m + Instance offset</code></p>
+    <p>The rows come out as <code>[R | t]</code>, row-major as wgpu expects; Metal's layer transposes them into its own column-major record. The Instance's offset is itself an f32 from prepare, but it is under 64 m, so its own rounding is at most 2<sup>−19</sup> m, about 1.9 µm, by this guide's arithmetic.</p>
+    <p>Item 3 of the M3 decision on issue #17 anchors the static TLAS at load "so M1's 100 km check holds for shadows". The <span class="concept" data-tip="The goldens test that renders each Reference scene that has a Golden, shifted 100 km from the World origin, and requires it to match that Golden. The helmet scene, whose source is fetched, has none.">100 km check</span> renders each Reference scene that has a <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance, so the tests catch any larger change to the frame it shows.">Golden</span>, shifted 100 km from the World origin, and requires it to match that Golden; the helmet scene, whose source is fetched, has none. Placed by raw World position, entries 100 km out would step 7.81 mm in f32. Measured from the load Anchor, a scene within about 2 km of it steps at most 0.24 mm.</p>
+    <p>That 0.24 mm is an upper bound. The <span class="concept" data-tip="The gap between neighbouring f32 values near a number. Rounding to f32 is off by at most half of it.">f32 step</span> at distance d is 2<sup>(⌊log<sub>2</sub> d⌋ − 23)</sup> m: at most 0.122 mm below 2,048 m, and 0.244 mm from 2,048 to 4,095 m. A coordinate "about 2 km" out can pass 2,048 m once the up to 64 m between the camera and its cell's corner is added. For comparison, ADR 0014's bar for drawn positions is 0.043 mm, for a point 0.3 m from the camera at 1440p.</p>
+  </div>
+  <figure class="wide" id="demo-f32">
+    <label for="d4-distance" class="readout">Distance from the load Anchor <b id="d4-distance-value">2,000 m</b></label>
+    <div><input type="range" id="d4-distance" min="0" max="500" step="1" value="330"></div>
+    <div class="controls" id="d4-jumps">
+      <span class="control-label">Jump to:</span>
+      <button type="button" class="btn" data-distance="64">64 m</button>
+      <button type="button" class="btn" data-distance="512">512 m</button>
+      <button type="button" class="btn" data-distance="2000">2,000 m</button>
+      <button type="button" class="btn" data-distance="2048">2,048 m</button>
+      <button type="button" class="btn" data-distance="100000">100 km</button>
+    </div>
+    <div class="controls">
+      <span class="control-label">Load Anchor:</span>
+      <div class="seg" role="group" aria-label="Where the load Anchor sits" id="d4-offset">
+        <button type="button" data-offset="100000" aria-pressed="true">100 km from the World origin</button>
+        <button type="button" data-offset="0" aria-pressed="false">at the World origin</button>
+      </div>
+    </div>
+    <div class="legend"><span><i></i>one f32 measured from the load Anchor</span><span><i class="dashed"></i>one f32 measured from the World origin</span></div>
+    <div class="fluid"><svg id="d4-chart" role="img" aria-label="The f32 step against distance, both on log scales."></svg></div>
+    <dl class="figures">
+      <div><dt>Step, measured from the load Anchor</dt><dd id="d4-step-anchor">0.122 mm</dd></div>
+      <div><dt>Largest rounding error there</dt><dd id="d4-error">0.061 mm</dd></div>
+      <div><dt>Step as one f32 from the World origin</dt><dd id="d4-step-world">7.81 mm</dd></div>
+    </dl>
+    <figcaption><b>Live demo.</b> The f32 step, 2<sup>(⌊log<sub>2</sub> d⌋ − 23)</sup> m, for a coordinate d metres from the load Anchor (blue), and for the same point stored as one f32 from the World origin (orange, dashed), with the load Anchor 100 km out as in the 100 km check. Both axes are logarithmic, and each stair is one power of two. Rounding to f32 is off by at most half a step. The marks show one Anchor cell, 64 m; ADR 0014's 512 m; about 2 km, where the step reaches decision item 3's bound at 2,048 m; and 100 km.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>PR #235's test runs the anchoring 100 km out. It puts the load Anchor at cell [1562, 0, −3], whose x is 1562 × 64 = 99,968 m, and writes three Instances: a static one "turned and doubled", a Moving one, and an unturned static one at x 5. Only the two static ones get entries, tagged with their slots, 0 and 2. The turned one's Anchor [1563, −1, −3] and offset [0.25, 63.5, 10.0] give a translation of (64.25, −0.5, 10), and its rows come out as <code>[0, −2, 0, 64.25, 2, 0, 0, −0.5, 0, 0, 2, 10]</code>. A ray at (64.25, 1.1, 10) hits it. A ray at (64.25, −2.1, 10), where a transposed rotation would have put it, misses.</p>
+  </div>
+</section>
+
+<section class="chapter" id="rebuilds">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 · PR #235</div>
+    <h2>When it rebuilds</h2>
+    <p>wgpu 30 cannot update a <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created.">TLAS</span> in place. <code>ALLOW_UPDATE</code> exists, but its documentation reads "currently this is unimplemented and will build as normal", and wgpu-core always passes <code>Build</code>, although Metal's and Vulkan's layers below it implement updates. Every change to the <span class="concept" data-tip="Praxis&#x27;s TLAS over every Instance whose entity carries no PreviousWorldTransform. It is built from the first Frame data and rebuilt only in a frame that writes a static Instance or frees one&#x27;s slot." data-term="Static TLAS">static TLAS</span> is therefore a full <span class="concept" data-tip="A rebuild constructs the tree from scratch. A refit keeps the tree&#x27;s shape and only recomputes its boxes, which is cheaper but loses quality as things move far; wgpu-core 30 always rebuilds." data-term="Refit and rebuild">rebuild</span>, so PR #235 rebuilds only when it must:</p>
+    <ul class="keypoints">
+      <li><b>The first <span class="concept" data-tip="The per-frame collection of changed Instances, lights and camera that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> always builds it</b>, even with no static <span class="concept" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any. It sits in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span>. wgpu refuses to submit a pass that binds an unbuilt TLAS, which #203's shadow rays will do. The orrery exposed the gap: its bodies all move, so until the PR's second commit its static TLAS was never built.</li>
+      <li><b>After that, a frame rebuilds it only if it writes a static Instance or frees one's slot.</b> In the PR's words, a static Instance is written when it is "spawned, moved, or given another Mesh or Material". A <span class="concept" data-tip="Adding an entity to the ECS World, or removing it with all its components. A despawned Renderable frees its Instance slot." data-term="Spawn and despawn">despawn</span> frees its slot, and a static Instance that turns Moving empties its entry the same way. The code rebuilds on any write of a static Instance, even one whose data did not change, such as the rewrite of every Instance after lost uploads. The review weighed rebuilding on a Material-only change and kept it, as "right and rare".</li>
+      <li><b>Nothing else does.</b> A Moving Instance's write, freeing a Moving Instance's slot (its entry was already empty), a write past capacity, and a frame that writes no Instance, such as one where only the camera moves, all leave it alone.</li>
+    </ul>
+    <p>A <span class="concept" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instance</span> is one whose entity carries <code>PreviousWorldTransform</code>, which stays on every entity the <span class="concept" data-tip="The ECS schedule that runs game-state changes in fixed time steps, called Ticks (ADR 0022)." data-term="Fixed schedule">fixed schedule</span> moves. When these PRs merged, only the orrery's five bodies carried it; <code>town</code>'s 10,000 pigeons (#275) and the crowd's 1,600 shadow proxies (#276) have joined them since. <span class="concept" data-tip="The step that reads the ECS World once per frame and fills Frame data, choosing each Renderable&#x27;s slot and which Instances to write.">Prepare</span> flags each run of Instance writes with <code>InstanceWrite::moving</code> and splits runs where the flag changes, so the static TLAS can skip them. #204's <span class="concept" data-tip="The TLAS of Moving Instances that ticket #204 adds, rebuilt every frame in the static TLAS&#x27;s frame and capped at 10,000 entries." data-term="Dynamic TLAS">dynamic TLAS</span> will take them from there.</p>
+    <p>Each rebuild costs about 4.3 to 4.7 ms of CPU at 2<sup>18</sup> slots on the <span class="concept" data-tip="The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>, as PR #235 measured in scenes of 5 to 100 Instances (chapter 8).</p>
+  </div>
+  <figure class="wide" id="demo-rebuilds">
+    <div class="controls" id="d5-events" style="margin-top:0">
+      <button type="button" class="btn" data-event="camera">Camera moves</button>
+      <button type="button" class="btn" data-event="moving-move">A Moving Instance moves</button>
+      <button type="button" class="btn" data-event="static-spawn">A static Instance spawns</button>
+      <button type="button" class="btn" data-event="static-despawn">A static Instance despawns</button>
+      <button type="button" class="btn" data-event="material">A static Instance's Material override changes</button>
+      <button type="button" class="btn" data-event="moving-despawn">A Moving Instance despawns</button>
+    </div>
+    <div class="controls">
+      <button type="button" class="btn primary" id="d5-run">Run the frame</button>
+      <button type="button" class="btn" id="d5-reset">Start over</button>
+      <span class="readout" id="d5-counts"></span>
+    </div>
+    <div class="frames" id="d5-frames" role="list" aria-label="Frames, oldest first"></div>
+    <p class="readout" id="d5-status" aria-live="polite"></p>
+    <figcaption><b>Live demo.</b> Frame 0 is the first Frame data, which always builds. Each button adds an event to the next frame, and <i>Run the frame</i> closes it. A frame rebuilds when it writes a static Instance or frees a slot that held one. Moving Instances are rewritten every frame and never rebuild it. The scene starts with four static Instances and two Moving ones, and three frames already run. The CPU figure is PR #235's, at 2<sup>18</sup> slots on the M4 Pro.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="capacity">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 · PR #235</div>
+    <h2>Why 2<sup>18</sup> slots</h2>
+    <p>A <span class="concept" data-tip="Top-level acceleration structure: the acceleration structure over a list of entries, each pointing at a BLAS through a transform. Rays are traced against it, and its capacity is fixed when it is created.">TLAS</span>'s <span class="concept" data-tip="The number of slots a fixed-size buffer or TLAS is created with. The static TLAS has 2^18, provisional until M4&#x27;s split of the 8 GB Budget." data-term="Capacity">capacity</span> is fixed when it is created, as <code>max_instances</code>, and in wgpu 30 every rebuild walks all of it, filled or not:</p>
+    <ul class="keypoints">
+      <li><code>Device::create_tlas</code> allocates one <code>None</code> per slot, so a <code>Tlas</code> always holds a <code>Vec</code> as long as its capacity.</li>
+      <li>Recording a build maps every element of that <code>Vec</code>, and <span class="concept" data-tip="The layer of wgpu between its public API and the backends, which validates calls and tracks resources.">wgpu-core</span> then resolves and collects every element into a new one.</li>
+      <li>When the encoder is processed, which the PR times as <span class="concept" data-tip="Closing a command encoder into a command buffer. wgpu-core does much of a TLAS build&#x27;s CPU work here." data-term="Finish">finish</span>, wgpu-core converts each filled entry into the bytes the GPU reads. The build itself counts only the filled entries.</li>
+      <li>wgpu tracks the lowest unmodified slot, but wgpu-core 30.0.1 only passes it through and never builds part of a TLAS.</li>
+    </ul>
+    <p>Ticket #202's split comment measured the effect on the <span class="concept" data-tip="The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span>. Rebuilding a TLAS holding 11 Instances took 0.8 ms of record plus finish at 2<sup>16</sup> slots, 4.3 ms at 2<sup>18</sup> and 9.7 ms at 2<sup>19</sup>.</p>
+  </div>
+  <figure class="wide" id="capacity-chart">
+    <div class="fluid"><svg id="d7-chart" role="img" aria-label="Three measured points: 0.8 ms at 2^16 slots, 4.3 ms at 2^18 and 9.7 ms at 2^19, CPU for record plus finish on the M4 Pro with 11 Instances in the TLAS."></svg></div>
+    <figcaption><b>Measured points only</b>, from #202's split comment: CPU time to record and finish one rebuild, M4 Pro, 11 Instances in the TLAS. No line joins them, because three points do not show how the cost grows in between.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>By this guide's arithmetic, that is about 16.4 ns per slot at 2<sup>18</sup>. The <span class="concept" data-tip="The research note docs/research/global-illumination-and-lighting.md. Its one-off scratch program measured acceleration-structure sizes and build times on the M4 Pro.">GI survey</span> timed a TLAS of 100,064 entries at 4.8 to 6.4 ms of record plus finish, about 48 to 64 ns per entry by the same arithmetic; it did not record whether that TLAS's capacity exceeded its entries. Empty slots look cheaper than filled ones, but at 2<sup>18</sup> they make up nearly all of the cost.</p>
+    <p>So the static TLAS has 2<sup>18</sup> slots, sized for <span class="concept" data-tip="M3&#x27;s dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, 10,000 of them Moving."><code>town</code></span>'s planned 250k Instances and no larger. At 2<sup>19</sup>, the <span class="concept" data-tip="The GPU buffer that holds every Instance, one 128-byte slot per Renderable: 2^19 slots in M3.">Instance buffer</span>'s size, every static spawn would cost about 10 ms of CPU even in an 11-Instance scene, by the PR's estimate from the 9.7 ms point.</p>
+    <p>The TLAS is indexed by <span class="concept" data-tip="An index into the Instance buffer, which a Renderable keeps while it is one. The static TLAS gives each Instance the entry with the same index." data-term="Slot">slot</span>, so its capacity caps slot numbers. A static Instance in slot 262,144 or above is left out even when fewer Instances than that are static, and <span class="concept" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static." data-term="Moving Instance">Moving Instances</span> hold slots too. In prepare, "a slot freed in an earlier frame is taken again before a fresh one", so slot numbers grow only when no freed slot is waiting. All of <code>town</code>'s about 250k Instances, its 10,000 Moving ones included, must fit below slot 262,144, which leaves 12,144 slots of headroom by this guide's arithmetic. As built in #273 and #275, <code>town</code> has 254,256 Instances, which leaves 7,888.</p>
+    <p>Past capacity, a static Instance is left out, so it will cast no shadow. <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, bytes uploaded, heap allocations, GPU memory and more. PR #235 adds the static Instances left out of the static TLAS.">Frame stats</span> count it in <code>static_instances_left_out</code>, shown on the counts line, and the log warns once each time the count rises from zero: "Static Instances left out of the static TLAS: their slots are past its capacity, so they cast no shadow". A test with a capacity of 2 writes static Instances to slots 0 to 3, then checks that 2 are left out, that freeing slot 3 leaves 1, and that one warning appears.</p>
+    <p>Memory follows capacity as well. wgpu-core sizes both the TLAS and its buffer of entries by capacity, so the estimate counts the static TLAS full, whatever it holds.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Capacity</th><th class="n">M4 Pro, 288.5 B per entry</th><th class="n">lavapipe, 240 B per entry</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>2<sup>18</sup> = 262,144, the static TLAS</td><td class="n">75,628,544 B (72.125 MiB)</td><td class="n">62,914,560 B (60 MiB)</td></tr>
+          <tr><td>2<sup>19</sup> = 524,288, for comparison</td><td class="n">151,257,088 B</td><td class="n">125,829,120 B</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Estimated bytes at capacity.</b> The 2<sup>18</sup> row is what PR #235 adds to every scene's <code>gpu_memory_bytes</code>; between the two PRs' CI runs, every lavapipe scene moved by exactly 62,914,560 B.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The capacity is provisional, like every GPU buffer M3 adds. M4's split of the 8 GB <span class="concept" data-tip="A numeric limit from ADR 0013 on one metric of a Reference scene: CPU time, GPU time, or GPU memory at 8 GB.">Budget</span> sizes them all (spec #188, story 44).</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 · both PRs</div>
+    <h2>What it costs today</h2>
+    <p>Both PRs were benched with <span class="concept" data-tip="The engine&#x27;s benchmark command: it renders each Reference scene and records median times and counters over 1,800 measured frames."><code>praxis bench</code></span> on the <span class="concept" data-tip="The Apple M4 Pro on which the project&#x27;s Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 2560×1440, as <span class="concept" data-tip="The middle value once the frames&#x27; times are sorted, so a few slow frames barely move it." data-term="Median">medians</span> over 1,800 frames. Main ran before and after each branch, at a <span class="concept" data-tip="A Unix measure of how many processes are running or waiting to run, averaged over recent minutes. Higher load makes timings noisier." data-term="Load average">load average</span> of 6 to 25, while other work on the machine held the GPU. Steady frames did not move:</p>
+    <ul class="keypoints">
+      <li>GPU medians equal main's within 2 µs, after each part.</li>
+      <li>CPU medians are 38 to 43 µs after part 1 and 41 to 44 µs after part 2, within main's own spread of 39 to 51 µs across its two runs. texture-wall, which is load-sensitive (#183), measured 1,984 µs and then 2,053 µs, against main's 1,957 and 1,994.</li>
+      <li>Draw calls, uploaded bytes, <span class="concept" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges. The Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span> bytes in use and heap allocations (98 a frame in these runs, 138 in the Baselines both PRs recorded on main as of c77647f, after other PRs had added 40) are unchanged, so a steady frame does not rebuild the <span class="concept" data-tip="Praxis&#x27;s TLAS over every Instance whose entity carries no PreviousWorldTransform. It is built from the first Frame data and rebuilt only in a frame that writes a static Instance or frees one&#x27;s slot." data-term="Static TLAS">static TLAS</span>, orrery's Moving Instances included.</li>
+      <li><code>gpu_memory_bytes</code> grows by each scene's BLASes, as in chapter 4, and by a further 75,628,544 B in every scene for the static TLAS at capacity.</li>
+    </ul>
+    <p>The cost lands in two kinds of frame: one that rebuilds the static TLAS, and the first frame, where the load completes.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n">Steady frame</th><th class="n">Static spawn's frame</th><th class="n">Despawn's frame</th><th class="n">First frame, main → PR</th><th class="n"><code>State::new</code>, main → PR</th></tr></thead>
+        <tbody>
+          <tr><td>texture-wall, 100 Instances, the largest</td><td class="n">16.9–17.8</td><td class="n">21.8–22.4</td><td class="n">22.1–22.3</td><td class="n">75–80 → 95–97</td><td class="n">~1,380, unchanged</td></tr>
+          <tr><td>helmet, 11 Instances of 23,358 triangles</td><td class="n">1.35–1.41</td><td class="n">6.1–6.2</td><td class="n">6.3–6.8</td><td class="n">9.4–10.9 → 20.2–21.8</td><td class="n">39–57 → 41–48</td></tr>
+          <tr><td>orrery</td><td class="n">0.37–0.44</td><td class="n">6.8–6.9</td><td class="n">5.2–5.4</td><td class="n">8.6–9.1 → 9.5–11.3</td><td class="n">14–15, unchanged</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>PR #235, both parts against main</b>, in ms of wall time from <code>update</code> to the frame's completion. Medians of 7 per round, two interleaved rounds.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>CPU of a static spawn or despawn: about 4.3 to 4.7 ms.</b> Recording takes 3.5 to 3.7 ms in <code>upload</code>, finish 0.6 to 1.1 ms in <code>encode</code>, and <span class="concept" data-tip="Handing recorded command buffers to the GPU&#x27;s queue to run." data-term="Submit">submit</span> under 0.1 ms. The PR puts all of it down to wgpu walking the 2<sup>18</sup> slots.</li>
+      <li><b>GPU: the rest of the frame's growth.</b> On texture-wall and helmet it is 0.25 to 0.56 ms. On orrery's spawn it is about 2 ms, because these runs predate the first-build fix, so that spawn built orrery's TLAS for the first time. The build sits outside the passes' timestamps, so <span class="concept" data-tip="What one frame cost, measured by the engine itself: CPU and GPU times, draw calls, Instances written, bytes uploaded, heap allocations, GPU memory and more. PR #235 adds the static Instances left out of the static TLAS.">Frame stats</span>' GPU total leaves it out.</li>
+      <li><b>First frame.</b> In the PR's words, this is where the load completes. It now builds the BLASes, waits for them and compacts them (part 1), then builds the TLAS for the first time, which costs more than a rebuild. On helmet that is about 9 ms more than part 1 alone.</li>
+    </ul>
+    <p>Part 1 alone moved setup and the first frame as below. These were separate runs from the table above, so the main columns differ.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Scene</th><th class="n"><code>State::new</code>, main → part 1</th><th class="n">First frame, main → part 1</th></tr></thead>
+        <tbody>
+          <tr><td>helmet</td><td class="n">40 → 41 (noise)</td><td class="n">9.4–10.3 → 11.5–12.0</td></tr>
+          <tr><td>orrery</td><td class="n">14.2–14.8 → 14.6–14.8</td><td class="n">8.7 → 9.5–10.1</td></tr>
+          <tr><td>texture-wall</td><td class="n">1,405–1,454 → 1,411 (one outlier at 1,636)</td><td class="n">75.5–76.6 → 88.1–92.8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>PR #234</b>, in ms: setup, and the first frame before the next one starts. Medians of 7, in two interleaved rounds against main.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>For scale, the GI survey's scratch program, whose figures spec #188 repeats, measured 4.8 to 6.4 ms of CPU to record and finish, plus 1.1 to 1.4 ms of submit, for a TLAS rebuild of 100,064 entries. ADR 0020 keeps a rebuild of that size, 6 to 8 ms of CPU, out of the frame, with the near field's radius and the move off the critical path both settled in M4. Until then a static spawn or despawn is a hitch, and spec #188 asks for it to be measured until M4 moves the rebuild.</p>
+    <p><span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance, so the tests catch any larger change to the frame it shows." data-term="Golden">Goldens</span> are unchanged on Metal and on CI's software Vulkan. Nothing renders differently, because nothing traces a ray until #258.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9</div>
+    <h2>What this unlocks</h2>
+    <ul class="keypoints">
+      <li><b><a href="https://github.com/gariasf/praxis/issues/203">#203</a></b> traces the first rays. Every directional light gets one hard <span class="concept" data-tip="A ray from a shaded point toward a light. If anything lies between them, the point is in shadow from that light." data-term="Shadow ray">shadow ray</span> per pixel from the <span class="concept" data-tip="ADR 0019&#x27;s shading pass, run at depth equal after a 4x MSAA depth pre-pass; it loops over its Froxel&#x27;s lights. #203 and #205 traced shadow rays in it inline; since #277 it reads each light&#x27;s shadow from the shadow mask that a compute pass traces." data-term="Lit pass">lit pass</span>, an inline <span class="concept" data-tip="Tracing a ray inline from an ordinary shader, compute or fragment, and looping over its candidate hits in that shader, with no ray-tracing pipeline or hit shaders. wgpu needs EXPERIMENTAL_RAY_QUERY for it." data-term="Ray query">ray query</span> against the static TLAS from a normal-offset origin, skipped where N·L ≤ 0, with a render switch to turn shadow rays off. It adds the <code>shadows</code> <span class="concept" data-tip="A scene paired with a fixed camera path and injected time, so every run produces the same frames. Goldens and Baselines are made from them.">Reference scene</span>, a sphere over a plane checked against an <span class="concept" data-tip="An expected result computed from a formula, independent of the code under test, such as the exact shadow of a sphere over a plane." data-term="Analytic oracle">analytic oracle</span>, and the <span class="concept" data-tip="The goldens test that renders each Reference scene that has a Golden, shifted 100 km from the World origin, and requires it to match that Golden. The helmet scene, whose source is fetched, has none.">100 km check</span> must pass with shadows on every scene. PR #235's first-build fix exists for it. (#258, merged on 2026-10-23 as 0db5e46, traced them that way. Later that day #277, merged as bd7b988, moved every shadow ray into a compute pass that writes a shadow mask of up to 59 lights per pixel, which the lit pass reads; <a href="shadow-rays.html">Shadow Rays Explained</a> covers both.)</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/204">#204</a></b> adds the <span class="concept" data-tip="The TLAS of Moving Instances that ticket #204 adds, rebuilt every frame in the static TLAS&#x27;s frame and capped at 10,000 entries." data-term="Dynamic TLAS">dynamic TLAS</span>: the <span class="concept" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static." data-term="Moving Instance">Moving Instances</span>, rebuilt each frame in the static TLAS's load-anchored frame, with a fixed capacity of 10,000. Past it they are left out, counted and warned about. It starts from the writes that <code>InstanceWrite::moving</code> flags, and the orrery's planets begin to cast shadows. (As #264 built it, merged on 2026-10-23 as 79cdabb, prepare also lists each Moving Instance it writes, with its slot, in <code>moving_instances</code>, and the dynamic TLAS is built from that list; <a href="dynamic-tlas.html">Dynamic TLAS Explained</a> covers it.)</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/205">#205</a></b> adds point-light shadow rays, one per light in the pixel's <span class="concept" data-tip="A cell of a 3D grid over the view frustum. ADR 0019&#x27;s lit pass loops over the lights listed in a pixel&#x27;s Froxel.">Froxel</span> list, against both TLAS.</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/206">#206</a></b> builds <span class="concept" data-tip="M3&#x27;s dense Reference scene (#206): about 1 × 1 km, about 250k Instances of 10 to 20 Meshes, 10,000 of them Moving."><code>town</code></span>: about 1 × 1 km within 2 km of its TLAS anchor, about 250k Instances of 10 to 20 Meshes, 10,000 of them Moving. It checks that 2<sup>18</sup> slots fit. <b><a href="https://github.com/gariasf/praxis/issues/207">#207</a></b> then records its Baselines and the dynamic TLAS's CPU and GPU ceilings. (#273 and #275 built it, with 254,256 Instances of 19 Meshes, below the 262,144 slots, and #275 recorded its first Baselines; #207 is still open. <a href="town.html">Town Explained</a> covers it.)</li>
+      <li><b><a href="https://github.com/gariasf/praxis/issues/208">#208</a> and <a href="https://github.com/gariasf/praxis/issues/209">#209</a></b> measure a crowd: 100 meshes of 5,120 triangles deformed on the GPU each frame, each BLAS refitted through <span class="concept" data-tip="wgpu&#x27;s lowest layer, a thin unsafe wrapper over each native API such as Metal and Vulkan.">wgpu-hal</span> on Metal in one documented <code>unsafe</code> block on the bench path, against rigid per-bone proxies in the dynamic TLAS. The crowd's acceleration-structure update has a budget of at most 1.0 ms of GPU and 0.5 ms of CPU per frame, and the owner picks M7's form at M3's exit. (The owner picked the per-bone proxies on 2026-10-26: they update in 597 to 603 µs of GPU and 319 to 326 µs of CPU, where the refit, merged in #289 behind the <code>crowd_form</code> Render switch, took 1.37 to 1.38 ms of GPU, on Metal only. <a href="crowd-shadows.html">Crowd Shadows Explained</a> and <a href="blas-refit.html">BLAS Refit Explained</a> cover them.)</li>
+      <li><b>M4</b> sets the TLAS's <span class="concept" data-tip="The part of the world around the camera that ADR 0020&#x27;s TLAS holds, with merged far proxies beyond it. M4 decides its radius." data-term="Near field">near field</span> and merged far proxies with <span class="concept" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit. M4 streams them and decides the TLAS&#x27;s near-field radius with them.">Chunk</span> streaming, re-anchors the static TLAS, takes its rebuild and compaction's wait off the frame's critical path, and replaces the <span class="concept" data-tip="Bytes counted from figures measured once per backend, since wgpu 30 reports no acceleration-structure size. Frame stats label them as estimated." data-term="Estimate">estimates</span> with exact sizes in its 8 GB split.</li>
+      <li><b>M5</b>'s probe GI will read the same TLAS as the shadow rays.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Every link below resolved when the guide was written. wgpu links are pinned to v30.0.1, and repo links to the PRs' merge commits or to main at 0b29a3c.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>These PRs and their sources</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/pull/234">PR #234</a> <span>the BLAS per Mesh, compaction and the estimate</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/235">PR #235</a> <span>the static TLAS, its rebuild rule and its costs</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/202">Ticket #202</a> and <a href="https://github.com/gariasf/praxis/issues/202#issuecomment-6293313044">its split comment</a> <span>the ask, and the capacity measurements</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/231">PR #231</a> and <a href="https://github.com/gariasf/praxis/pull/231#issuecomment-6292954696">its result</a> <span>how lavapipe's sizes were measured</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>probe GI and hard shadow rays; the static and dynamic TLAS</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md">ADR 0014</a> <span>why the static TLAS owns an f32 frame</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/6f607e83121951a03b94ad17f73b689ca2163f71/docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md">ADR 0017</a> <span>the memory ledger, now with acceleration structures</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0021-capability-floor.md">ADR 0021</a> <span>ray queries in the Capability floor</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/0b29a3c067a405f8e4e7b35b0c41b3cad78432c3/docs/research/global-illumination-and-lighting.md?plain=1#L86-L97">The GI survey's measurements</a> <span>where 94, 45.5 and 288.5 come from</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/src/render/acceleration_structures.rs">acceleration_structures.rs</a> <span>the estimate, <code>StaticTlas</code> and its tests</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/188">Spec #188</a> <span>M3's stories 26 to 36, on shadows and the TLAS</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6273209752">The M3 decision</a> <span>items 3, 8, 14 and 15</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>wgpu 30.0.1</h3>
+      <ul>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs">api/blas.rs</a> <span><code>TlasInstance</code>'s fields, <code>first_vertex</code> and <code>first_index</code>, compaction</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs">api/tlas.rs</a> <span>a <code>Tlas</code> as a <code>Vec</code> of optional entries</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/docs/api-specs/ray_tracing.md">ray_tracing.md</a> <span>wgpu's own explainer: scratch, compaction, ray queries</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/tests/tests/wgpu-gpu/ray_tracing/as_build.rs">as_build.rs</a> <span><code>blas_compaction</code>, lines 166 to 199, the reference compaction sequence</span></li>
+        <li><a href="https://github.com/gfx-rs/wgpu/tree/v30.0.1/examples/features/src/ray_shadows">ray_shadows</a> <span>the example closest to #203; also <a href="https://github.com/gfx-rs/wgpu/tree/v30.0.1/examples/features/src/ray_scene">ray_scene</a>, <a href="https://github.com/gfx-rs/wgpu/tree/v30.0.1/examples/features/src/ray_cube_compute">ray_cube_compute</a> and <a href="https://github.com/gfx-rs/wgpu/tree/v30.0.1/examples/features/src/ray_traced_triangle">ray_traced_triangle</a>, none of which compacts</span></li>
+        <li>docs.rs: <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.TlasInstance.html">TlasInstance</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Blas.html">Blas</a>, <a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Tlas.html">Tlas</a>, <a href="https://docs.rs/wgpu-types/30.0.1/wgpu_types/struct.AccelerationStructureFlags.html">AccelerationStructureFlags</a></li>
+        <li>Where every slot is walked: <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L782">create_tlas</a>, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/backend/wgpu_core.rs#L2874-L2893">the frontend's map</a>, wgpu-core's <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L163-L187">collect</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L235-L300">conversion</a></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Vulkan</h3>
+      <ul>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_acceleration_structure.html">VK_KHR_acceleration_structure</a> <span>what wgpu's Vulkan backend builds with</span></li>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_ray_query.html">VK_KHR_ray_query</a> <span>inline ray queries, the model wgpu exposes</span></li>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VkAccelerationStructureInstanceKHR.html">VkAccelerationStructureInstanceKHR</a> <span>the 64-byte entry: 24-bit custom index, 8-bit mask</span></li>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VkTransformMatrixKHR.html">VkTransformMatrixKHR</a> <span>the 3×4 row-major transform</span></li>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VkBuildAccelerationStructureFlagBitsKHR.html">VkBuildAccelerationStructureFlagBitsKHR</a> <span>PREFER_FAST_TRACE, ALLOW_COMPACTION, ALLOW_UPDATE</span></li>
+        <li><a href="https://registry.khronos.org/vulkan/specs/latest/man/html/vkCmdCopyAccelerationStructureKHR.html">vkCmdCopyAccelerationStructureKHR</a> <span>the compacting copy</span></li>
+        <li>Spec chapters <a href="https://docs.vulkan.org/spec/latest/chapters/accelstructures.html">Acceleration Structures</a> and <a href="https://docs.vulkan.org/spec/latest/chapters/raytraversal.html">Ray Traversal</a> <span>building and copying; masks, opaque flags and committed hits</span></li>
+        <li>Khronos, <a href="https://www.khronos.org/blog/ray-tracing-in-vulkan">Ray Tracing In Vulkan</a> <span>a readable overview of the two levels</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Metal</h3>
+      <ul>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructure">MTLAccelerationStructure</a> <span>Apple's object for both levels</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlprimitiveaccelerationstructuredescriptor">MTLPrimitiveAccelerationStructureDescriptor</a> and <a href="https://developer.apple.com/documentation/metal/mtlinstanceaccelerationstructuredescriptor">MTLInstanceAccelerationStructureDescriptor</a> <span>Metal's BLAS and TLAS</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">MTLIndirectAccelerationStructureInstanceDescriptor</a> <span>the entry record wgpu-hal writes on Metal</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructurecommandencoder">MTLAccelerationStructureCommandEncoder</a> and <a href="https://developer.apple.com/documentation/metal/mtlaccelerationstructurecommandencoder/copyandcompact(sourceaccelerationstructure:destinationaccelerationstructure:)">copyAndCompact</a> <span>build, copy, compact, and the refit wgpu-core never calls</span></li>
+        <li><a href="https://developer.apple.com/documentation/metal/ray_tracing_with_acceleration_structures">Ray tracing with acceleration structures</a> <span>Apple's topic hub</span></li>
+        <li>WWDC20, <a href="https://developer.apple.com/videos/play/wwdc2020/10012/">Discover ray tracing with Metal</a> <span>the two kinds of structure, and compaction</span></li>
+        <li>WWDC22, <a href="https://developer.apple.com/videos/play/wwdc2022/10105/">Maximize your Metal ray tracing performance</a> <span>build and refit costs</span></li>
+        <li>WWDC23, <a href="https://developer.apple.com/videos/play/wwdc2023/10128/">Your guide to Metal ray tracing</a> <span>compaction, step by step</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>BVH research</h3>
+      <ul>
+        <li>Wald, <a href="https://www.sci.utah.edu/~wald/Publications/2007/ParallelBVHBuild/fastbuild.pdf">On fast Construction of SAH-based Bounding Volume Hierarchies</a>, 2007 <span>the surface area heuristic, and fast full rebuilds in place of refits</span></li>
+        <li>Karras, <a href="https://research.nvidia.com/publication/2012-06_maximizing-parallelism-construction-bvhs-octrees-and-k-d-trees">Maximizing Parallelism in the Construction of BVHs, Octrees, and k-d Trees</a>, HPG 2012 <span>how a GPU builds a BVH in parallel</span></li>
+        <li>Meister, Ogaki, Benthin, Doyle, Guthe and Bittner, <a href="https://meistdan.github.io/publications/bvh_star/paper.pdf">A Survey on Bounding Volume Hierarchies for Ray Tracing</a>, 2021 <span>§3 the SAH, §5.3 refit against rebuild and two-level hierarchies, §5.5 compact layouts</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Books</h3>
+      <ul>
+        <li><a href="https://www.routledge.com/Real-Time-Rendering-Fourth-Edition/Akenine-Moller-Haines-Hoffman/p/book/9781138627000"><i>Real-Time Rendering</i></a>, 4th ed.: ch. 19 Acceleration Algorithms, with BVHs in §19.1.1; ch. 22 Intersection Test Methods; ch. 4 Transforms, for 3×4 affine matrices</li>
+        <li><i>Real-Time Rendering</i>, 4th ed., online <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-Real-Time_Ray_Tracing.pdf">ch. 26 Real-Time Ray Tracing</a> <span>§26.3 Top and Bottom Level Acceleration Structures; §26.4 Coherency, for grids, k-d trees and BVHs</span></li>
+        <li><i>Physically Based Rendering</i>, 3rd ed.: <a href="https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies">§4.3 Bounding Volume Hierarchies</a>, 4.3.1 to 4.3.5, and §4.1.2 on object instancing, the TLAS idea offline. 4th ed.: <a href="https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies">§7.3</a> and §7.1.2</li>
+        <li><a href="https://www.gameenginebook.com/toc.html"><i>Game Engine Architecture</i></a>, 4th ed., by the book's site: §12.6 Lighting with Stochastic Ray Tracing and §14.3 The Collision Detection System <span>marginal here; the 3rd edition's numbers were not checked</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Acceleration structure</dt><dd>A GPU search structure that finds what a ray hits without testing every triangle; driver-specific and opaque.</dd></div>
+    <div><dt>BVH</dt><dd>A tree of nested bounding boxes; a ray descends only into boxes it hits.</dd></div>
+    <div><dt>BLAS</dt><dd>Bottom-level acceleration structure: one Mesh's triangles, in the Mesh's own space.</dd></div>
+    <div><dt>TLAS</dt><dd>Top-level acceleration structure: entries that each place a BLAS by a transform.</dd></div>
+    <div><dt>TLAS entry</dt><dd>wgpu's <code>TlasInstance</code>: a BLAS, a 3×4 row-major transform, 24 bits of custom data, an 8-bit mask.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU, in its slot of the Instance buffer.</dd></div>
+    <div><dt>Moving Instance</dt><dd>An Instance whose entity carries its previous World transform; every other Instance is static.</dd></div>
+    <div><dt>Static TLAS</dt><dd>The TLAS over static Instances, built from the first Frame data and rebuilt when they change.</dd></div>
+    <div><dt>Dynamic TLAS</dt><dd>The TLAS of Moving Instances that #204 adds, rebuilt every frame, capped at 10,000.</dd></div>
+    <div><dt>Anchor</dt><dd>The integer coordinates of the 64 m grid cell that holds a World position.</dd></div>
+    <div><dt>Load Anchor</dt><dd>The corner of the camera's Anchor cell in the first Frame data; the static TLAS's origin in M3.</dd></div>
+    <div><dt>Compaction</dt><dd>Copying a built BLAS into a tighter allocation once its size is known.</dd></div>
+    <div><dt>Scratch buffer</dt><dd>Temporary GPU memory for a build, allocated inside each wgpu build call.</dd></div>
+    <div><dt>Ray query</dt><dd>A ray traced inline from an ordinary shader, which loops over its candidate hits itself.</dd></div>
+    <div><dt>PREFER_FAST_TRACE</dt><dd>A build hint that spends build time on faster tracing.</dd></div>
+    <div><dt>Refit, rebuild</dt><dd>Recomputing a tree's boxes in place, or building it again; wgpu-core 30 only rebuilds.</dd></div>
+    <div><dt>Instance mask</dt><dd>An 8-bit tag per entry; a hit counts only if it shares a bit with the ray's cull mask.</dd></div>
+    <div><dt>instance_custom_data</dt><dd>The 24-bit value an entry returns with a hit; here, the Instance slot.</dd></div>
+    <div><dt>Capacity</dt><dd>The slots a TLAS is created with; in wgpu 30 every rebuild walks them all.</dd></div>
+    <div><dt>Estimate</dt><dd>Bytes counted from figures measured once per backend, since wgpu 30 reports no size.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start; ray queries are among them.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from <a href="https://github.com/gariasf/praxis/pull/234">PR #234</a> and <a href="https://github.com/gariasf/praxis/pull/235">PR #235</a> at their draft heads, f1fc071 and 1ca54c2, rebased onto main at 0b29a3c (their code merged as written in <a href="https://github.com/gariasf/praxis/tree/6f607e83121951a03b94ad17f73b689ca2163f71">6f607e8</a> and <a href="https://github.com/gariasf/praxis/tree/93355f150544f6f0437c3239cf90b217e9ff8541">93355f1</a>), and ticket <a href="https://github.com/gariasf/praxis/issues/202">#202</a> with its split comment. Decisions come from ADRs <a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md">0014</a>, <a href="https://github.com/gariasf/praxis/blob/6f607e83121951a03b94ad17f73b689ca2163f71/docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md">0017</a>, <a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">0020</a> and <a href="https://github.com/gariasf/praxis/blob/93355f150544f6f0437c3239cf90b217e9ff8541/docs/adr/0021-capability-floor.md">0021</a>, spec #188 and the M3 decision on #17; the M4 Pro's sizes and timings from the <a href="https://github.com/gariasf/praxis/blob/0b29a3c067a405f8e4e7b35b0c41b3cad78432c3/docs/research/global-illumination-and-lighting.md">GI survey note</a>, and lavapipe's from PR #231's CI probe. Code facts were read at those commits and wgpu facts at v30.0.1; the notes on later work were checked against main at 270c5e4. Where the guide does its own arithmetic, it says so. The demos are toy 2D models of the ideas, not the engine's code.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="hdr-pipeline.html">Previous: HDR Pipeline Explained</a><a href="index.html">All field guides</a><a href="depth-pyramid.html">Next: Depth Pyramid Explained</a></nav>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const make = (tag, attributes, parent, text) => {
+    const node = document.createElementNS(svgNS, tag);
+    for (const key in attributes) node.setAttribute(key, attributes[key]);
+    if (text !== undefined) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const integer = (value) => Math.round(value).toLocaleString("en-US");
+  const reduceMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  // <pure> Geometry and rules shared by the demos, free of the DOM.
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  function boxOfPoints(points) {
+    const box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (const point of points) {
+      box.minX = Math.min(box.minX, point.x);
+      box.minY = Math.min(box.minY, point.y);
+      box.maxX = Math.max(box.maxX, point.x);
+      box.maxY = Math.max(box.maxY, point.y);
+    }
+    return box;
+  }
+  function unionBox(first, second) {
+    return {
+      minX: Math.min(first.minX, second.minX), minY: Math.min(first.minY, second.minY),
+      maxX: Math.max(first.maxX, second.maxX), maxY: Math.max(first.maxY, second.maxY),
+    };
+  }
+  // A ray is origin + t × direction for t in [0, 1]: from the shaded point to the light.
+  function rayEntersBox(ray, box, tMax) {
+    let near = 0;
+    let far = tMax;
+    const axes = [[ray.ox, ray.dx, box.minX, box.maxX], [ray.oy, ray.dy, box.minY, box.maxY]];
+    for (const [origin, direction, low, high] of axes) {
+      if (Math.abs(direction) < 1e-12) {
+        if (origin < low || origin > high) return false;
+        continue;
+      }
+      let enter = (low - origin) / direction;
+      let leave = (high - origin) / direction;
+      if (enter > leave) [enter, leave] = [leave, enter];
+      near = Math.max(near, enter);
+      far = Math.min(far, leave);
+      if (near > far) return false;
+    }
+    return true;
+  }
+  // Where the ray crosses a segment, as t, or null.
+  function raySegment(ray, segment) {
+    const edgeX = segment.b.x - segment.a.x;
+    const edgeY = segment.b.y - segment.a.y;
+    const denominator = ray.dx * edgeY - ray.dy * edgeX;
+    if (Math.abs(denominator) < 1e-12) return null;
+    const toStartX = segment.a.x - ray.ox;
+    const toStartY = segment.a.y - ray.oy;
+    const t = (toStartX * edgeY - toStartY * edgeX) / denominator;
+    const along = (toStartX * ray.dy - toStartY * ray.dx) / denominator;
+    return t > 1e-6 && t <= 1 && along >= 0 && along <= 1 ? t : null;
+  }
+  // Splits at the median centre along the wider side until a leaf holds leafSize items or fewer.
+  function buildTree(items, leafSize) {
+    const nodes = [];
+    function build(indices) {
+      let box = items[indices[0]].box;
+      for (const index of indices) box = unionBox(box, items[index].box);
+      const node = { id: nodes.length, box: box, items: null, left: null, right: null, axis: 0 };
+      nodes.push(node);
+      if (indices.length <= leafSize) {
+        node.items = indices;
+        return node;
+      }
+      const centres = boxOfPoints(indices.map((index) => items[index].centre));
+      node.axis = centres.maxX - centres.minX >= centres.maxY - centres.minY ? 0 : 1;
+      const key = node.axis === 0 ? "x" : "y";
+      const sorted = indices.slice().sort((first, second) => items[first].centre[key] - items[second].centre[key] || first - second);
+      const middle = Math.floor(sorted.length / 2);
+      node.left = build(sorted.slice(0, middle));
+      node.right = build(sorted.slice(middle));
+      return node;
+    }
+    return { root: build(items.map((item, index) => index)), nodes: nodes };
+  }
+  const newRecord = () => ({ boxesTested: 0, entered: new Set(), missed: new Set() });
+  // Closest-hit search: tests a box before what it holds, nearer child first, and shrinks
+  // tMax at each hit so boxes beyond it are skipped. visitItem returns the new tMax.
+  function traverse(tree, ray, tMax, visitItem, record) {
+    const stack = [tree.root];
+    while (stack.length) {
+      const node = stack.pop();
+      record.boxesTested += 1;
+      if (!rayEntersBox(ray, node.box, tMax)) {
+        record.missed.add(node.id);
+        continue;
+      }
+      record.entered.add(node.id);
+      if (node.items) {
+        for (const item of node.items) tMax = visitItem(item, tMax);
+        continue;
+      }
+      const direction = node.axis === 0 ? ray.dx : ray.dy;
+      if (direction >= 0) stack.push(node.right, node.left);
+      else stack.push(node.left, node.right);
+    }
+    return tMax;
+  }
+  function seededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let mixed = state;
+      mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+      mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+      return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const segmentItems = (segments) => segments.map((segment) => ({
+    box: boxOfPoints([segment.a, segment.b]),
+    centre: { x: (segment.a.x + segment.b.x) / 2, y: (segment.a.y + segment.b.y) / 2 },
+  }));
+  // Demo 1's triangles: short segments scattered in clusters, the same on every load.
+  function scatterSegments(seed, width, height) {
+    const random = seededRandom(seed);
+    const segments = [];
+    for (let cluster = 0; cluster < 15; cluster++) {
+      const centreX = 60 + random() * (width - 120);
+      const centreY = 80 + random() * (height - 180);
+      const radius = 30 + random() * 55;
+      const count = 10 + Math.floor(random() * 8);
+      for (let index = 0; index < count; index++) {
+        const angle = random() * Math.PI * 2;
+        const distance = radius * Math.sqrt(random());
+        const middle = { x: centreX + Math.cos(angle) * distance, y: centreY + Math.sin(angle) * distance };
+        const turn = random() * Math.PI;
+        const half = 6 + random() * 9;
+        if (middle.x < 30 || middle.x > width - 30 || middle.y < 70 || middle.y > height - 80) continue;
+        segments.push({
+          a: { x: middle.x - Math.cos(turn) * half, y: middle.y - Math.sin(turn) * half },
+          b: { x: middle.x + Math.cos(turn) * half, y: middle.y + Math.sin(turn) * half },
+        });
+      }
+    }
+    return segments;
+  }
+  function entryToWorld(entry, point) {
+    const cos = Math.cos(entry.angle);
+    const sin = Math.sin(entry.angle);
+    return { x: entry.x + entry.scale * (cos * point.x - sin * point.y), y: entry.y + entry.scale * (sin * point.x + cos * point.y) };
+  }
+  // The inverse transform: what the GPU does to a ray before it enters an entry's BLAS.
+  function entryLocalRay(entry, ray) {
+    const cos = Math.cos(entry.angle);
+    const sin = Math.sin(entry.angle);
+    const offsetX = ray.ox - entry.x;
+    const offsetY = ray.oy - entry.y;
+    return {
+      ox: (cos * offsetX + sin * offsetY) / entry.scale, oy: (-sin * offsetX + cos * offsetY) / entry.scale,
+      dx: (cos * ray.dx + sin * ray.dy) / entry.scale, dy: (-sin * ray.dx + cos * ray.dy) / entry.scale,
+    };
+  }
+  // Demo 2's scene: three Meshes in local space, each with its own BLAS, and six TLAS entries.
+  function twoLevelScene() {
+    const at = (x, y) => ({ x: x, y: y });
+    const outline = (points) => points.map((point, index) => ({ a: point, b: points[(index + 1) % points.length] }));
+    const meshes = [
+      { name: "A", colour: "good", segments: outline([at(-1, 0.2), at(-0.6, -0.6), at(0.1, -0.85), at(0.8, -0.4), at(1, 0.3), at(0.4, 0.8), at(-0.5, 0.7)]) },
+      { name: "B", colour: "warm", segments: outline([at(-0.8, -0.8), at(0.8, -0.8), at(0.8, 0.8), at(-0.8, 0.8)]).concat([{ a: at(-0.8, -0.8), b: at(0.8, 0.8) }, { a: at(0.8, -0.8), b: at(-0.8, 0.8) }]) },
+      { name: "C", colour: "ink", segments: outline([at(-0.9, 0.1), at(0, -1), at(0.9, 0.1)]).concat([{ a: at(-0.12, 0.1), b: at(-0.12, 1) }, { a: at(0.12, 0.1), b: at(0.12, 1) }, { a: at(-0.4, 1), b: at(0.4, 1) }]) },
+    ];
+    for (const mesh of meshes) mesh.tree = buildTree(segmentItems(mesh.segments), 2);
+    const degrees = Math.PI / 180;
+    const entries = [
+      { mesh: 0, x: 190, y: 410, scale: 72, angle: 15 * degrees },
+      { mesh: 1, x: 380, y: 200, scale: 52, angle: 20 * degrees },
+      { mesh: 0, x: 540, y: 420, scale: 88, angle: -40 * degrees },
+      { mesh: 2, x: 700, y: 250, scale: 76, angle: 0 },
+      { mesh: 1, x: 845, y: 450, scale: 56, angle: -15 * degrees },
+      { mesh: 0, x: 870, y: 130, scale: 46, angle: 75 * degrees },
+    ];
+    for (const entry of entries) {
+      const root = meshes[entry.mesh].tree.root.box;
+      const corners = [at(root.minX, root.minY), at(root.maxX, root.minY), at(root.maxX, root.maxY), at(root.minX, root.maxY)];
+      entry.box = boxOfPoints(corners.map((point) => entryToWorld(entry, point)));
+    }
+    const tlas = buildTree(entries.map((entry) => ({
+      box: entry.box,
+      centre: { x: (entry.box.minX + entry.box.maxX) / 2, y: (entry.box.minY + entry.box.maxY) / 2 },
+    })), 1);
+    return { meshes: meshes, entries: entries, tlas: tlas };
+  }
+  // Two-level closest hit, logging the order of work: TLAS boxes, then each entry entered.
+  function traceTwoLevel(scene, ray) {
+    const events = [];
+    const tlasRecord = newRecord();
+    const perEntry = new Map();
+    let best = null;
+    let tMax = 1;
+    const stack = [scene.tlas.root];
+    while (stack.length) {
+      const node = stack.pop();
+      tlasRecord.boxesTested += 1;
+      const entered = rayEntersBox(ray, node.box, tMax);
+      events.push({ kind: "tlas", entered: entered });
+      if (!entered) {
+        tlasRecord.missed.add(node.id);
+        continue;
+      }
+      tlasRecord.entered.add(node.id);
+      if (node.items) {
+        for (const entryIndex of node.items) {
+          const entry = scene.entries[entryIndex];
+          const mesh = scene.meshes[entry.mesh];
+          const localRay = entryLocalRay(entry, ray);
+          const record = newRecord();
+          const tested = new Set();
+          let hit = null;
+          tMax = traverse(mesh.tree, localRay, tMax, (segmentIndex, currentMax) => {
+            tested.add(segmentIndex);
+            const t = raySegment(localRay, mesh.segments[segmentIndex]);
+            if (t !== null && t < currentMax) {
+              hit = { segment: segmentIndex, t: t };
+              return t;
+            }
+            return currentMax;
+          }, record);
+          perEntry.set(entryIndex, { record: record, localRay: localRay, tested: tested, hit: hit });
+          if (hit) best = { entry: entryIndex, segment: hit.segment, t: hit.t };
+          events.push({ kind: "entry", entry: entryIndex, boxes: record.boxesTested, triangles: tested.size, hit: hit });
+        }
+        continue;
+      }
+      const direction = node.axis === 0 ? ray.dx : ray.dy;
+      if (direction >= 0) stack.push(node.right, node.left);
+      else stack.push(node.left, node.right);
+    }
+    return { events: events, tlasRecord: tlasRecord, perEntry: perEntry, best: best };
+  }
+  // The f32 step at magnitude value is 2^(floor(log2 value) - 23) m.
+  function exponentOf(value) {
+    let exponent = Math.floor(Math.log2(value));
+    if (Math.pow(2, exponent) > value) exponent -= 1;
+    else if (Math.pow(2, exponent + 1) <= value) exponent += 1;
+    return exponent;
+  }
+  const stepExponent = (value) => exponentOf(value) - 23;
+  // Steps of constant f32 spacing for (offset + d), d from lowest to highest.
+  function staircase(offset, lowest, highest) {
+    const steps = [];
+    let start = lowest;
+    while (start < highest) {
+      const exponent = exponentOf(offset + start);
+      const end = Math.min(highest, Math.pow(2, exponent + 1) - offset);
+      steps.push({ from: start, to: end, exponent: exponent - 23 });
+      start = end;
+    }
+    return steps;
+  }
+  // Demo 5's rule, as PR #235's StaticTlas::update applies it.
+  const FRAME_EVENTS = {
+    "camera": { label: "camera moves", effect: "writes no Instance", rebuilds: false },
+    "moving-move": { label: "a Moving Instance moves", effect: "writes only a Moving Instance, which the static TLAS skips", rebuilds: false, needs: "moving" },
+    "static-spawn": { label: "a static Instance spawns", effect: "writes a static Instance", rebuilds: true },
+    "static-despawn": { label: "a static Instance despawns", effect: "frees a slot that held a static Instance", rebuilds: true, needs: "static" },
+    "material": { label: "a static Instance's Material override changes", effect: "writes a static Instance", rebuilds: true, needs: "static" },
+    "moving-despawn": { label: "a Moving Instance despawns", effect: "frees a Moving Instance's slot, whose entry was already empty", rebuilds: false, needs: "moving" },
+  };
+  function rebuildReason(frame) {
+    if (frame.first) return "is the first Frame data";
+    for (const name of frame.events) if (FRAME_EVENTS[name].rebuilds) return FRAME_EVENTS[name].effect;
+    return null;
+  }
+  // </pure>
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name) => style.getPropertyValue(name).trim();
+    return {
+      panel: token("--panel"), paper: token("--paper"), ink: token("--ink"), inkSoft: token("--ink-soft"),
+      rule: token("--rule"), accent: token("--accent"), warm: token("--warm"), bad: token("--bad"),
+      good: token("--good"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  function canvasView(canvas, aspect) {
+    const width = Math.max(1, canvas.parentElement.clientWidth);
+    const height = Math.round(width * aspect);
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+
+  /* Demos 1 and 2 share a world 1000 × 600 units, a shaded point and a light. */
+  const WORLD_WIDTH = 1000;
+  const WORLD_HEIGHT = 600;
+  const EDGE = 40;
+  function rayControl(canvas, originSlider, lightSlider, state, changed) {
+    const along = (value) => EDGE + (value / 1000) * (WORLD_WIDTH - 2 * EDGE);
+    const sliderValue = (x) => String(Math.round(clamp((x - EDGE) / (WORLD_WIDTH - 2 * EDGE), 0, 1) * 1000));
+    let dragging = "light";
+    let activePointer = null;
+    const toWorld = (event) => {
+      const box = canvas.getBoundingClientRect();
+      const scale = WORLD_WIDTH / box.width;
+      return { x: (event.clientX - box.left) * scale, y: (event.clientY - box.top) * scale, grab: 26 * scale };
+    };
+    const place = (point) => {
+      state[dragging] = { x: clamp(point.x, 8, WORLD_WIDTH - 8), y: clamp(point.y, 8, WORLD_HEIGHT - 8) };
+      originSlider.value = sliderValue(state.origin.x);
+      lightSlider.value = sliderValue(state.light.x);
+      changed();
+    };
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      const point = toWorld(event);
+      const near = (handle) => Math.hypot(point.x - handle.x, point.y - handle.y) <= point.grab;
+      dragging = near(state.origin) ? "origin" : "light";
+      activePointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      place(point);
+      event.preventDefault();
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId === activePointer) place(toWorld(event));
+    });
+    const stop = (event) => {
+      if (event.pointerId === activePointer) activePointer = null;
+    };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    originSlider.addEventListener("input", () => {
+      state.origin = { x: along(Number(originSlider.value)), y: WORLD_HEIGHT - EDGE };
+      changed();
+    });
+    lightSlider.addEventListener("input", () => {
+      state.light = { x: along(Number(lightSlider.value)), y: EDGE };
+      changed();
+    });
+    state.origin = { x: along(Number(originSlider.value)), y: WORLD_HEIGHT - EDGE };
+    state.light = { x: along(Number(lightSlider.value)), y: EDGE };
+  }
+  const rayOf = (state) => ({ ox: state.origin.x, oy: state.origin.y, dx: state.light.x - state.origin.x, dy: state.light.y - state.origin.y });
+  function line(context, from, to) {
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  }
+  function strokeBox(context, box, toCanvas) {
+    const corner = toCanvas({ x: box.minX, y: box.minY });
+    const opposite = toCanvas({ x: box.maxX, y: box.maxY });
+    context.strokeRect(corner.x, corner.y, opposite.x - corner.x, opposite.y - corner.y);
+  }
+  function label(context, colours, text, point, width) {
+    context.font = "11px " + colours.mono;
+    context.fillStyle = colours.inkSoft;
+    context.textBaseline = "middle";
+    const right = point.x > width - 110;
+    context.textAlign = right ? "right" : "left";
+    context.fillText(text, point.x + (right ? -18 : 18), point.y);
+    context.textAlign = "left";
+  }
+  // The ray from the shaded point, solid up to its hit and dashed beyond, then both handles.
+  function drawRay(context, colours, origin, light, hitT, width) {
+    const end = hitT === null ? light : { x: origin.x + (light.x - origin.x) * hitT, y: origin.y + (light.y - origin.y) * hitT };
+    context.lineCap = "round";
+    context.strokeStyle = colours.accent;
+    context.lineWidth = 2.2;
+    line(context, origin, end);
+    if (hitT !== null) {
+      context.save();
+      context.setLineDash([5, 5]);
+      context.globalAlpha = 0.75;
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.5;
+      line(context, end, light);
+      context.restore();
+      context.fillStyle = colours.bad;
+      context.beginPath();
+      context.arc(end.x, end.y, 4.5, 0, Math.PI * 2);
+      context.fill();
+    }
+    context.strokeStyle = colours.warm;
+    context.lineWidth = 2.4;
+    context.beginPath();
+    context.arc(light.x, light.y, 8, 0, Math.PI * 2);
+    context.stroke();
+    for (let spoke = 0; spoke < 8; spoke++) {
+      const angle = (spoke * Math.PI) / 4;
+      line(context, { x: light.x + Math.cos(angle) * 11.5, y: light.y + Math.sin(angle) * 11.5 }, { x: light.x + Math.cos(angle) * 15, y: light.y + Math.sin(angle) * 15 });
+    }
+    context.fillStyle = colours.accent;
+    context.strokeStyle = colours.panel;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(origin.x, origin.y, 6.5, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    label(context, colours, "light", light, width);
+    label(context, colours, "shaded point", origin, width);
+  }
+
+  /* Demo 1: brute force against a box tree. */
+  (function bruteForceDemo() {
+    const canvas = byId("d1-canvas");
+    if (!canvas) return;
+    const segments = scatterSegments(202, WORLD_WIDTH, WORLD_HEIGHT);
+    const tree = buildTree(segmentItems(segments), 4);
+    const modeButtons = Array.from(document.querySelectorAll("#d1-mode button"));
+    const state = { origin: null, light: null, mode: "tree" };
+    let result = null;
+
+    function trace() {
+      const ray = rayOf(state);
+      let bruteHit = null;
+      let bruteT = 1;
+      segments.forEach((segment, index) => {
+        const t = raySegment(ray, segment);
+        if (t !== null && t < bruteT) {
+          bruteT = t;
+          bruteHit = index;
+        }
+      });
+      const record = newRecord();
+      const tested = new Set();
+      traverse(tree, ray, 1, (index, tMax) => {
+        tested.add(index);
+        const t = raySegment(ray, segments[index]);
+        return t !== null && t < tMax ? t : tMax;
+      }, record);
+      return { hit: bruteHit, t: bruteHit === null ? null : bruteT, record: record, tested: tested };
+    }
+    function report() {
+      byId("d1-tree-boxes").textContent = integer(result.record.boxesTested);
+      byId("d1-tree-triangles").textContent = integer(result.tested.size);
+      for (const row of document.querySelectorAll("#d1-table tbody tr")) row.classList.toggle("focus", row.dataset.mode === state.mode);
+      byId("d1-result").textContent = result.hit === null
+        ? "Nothing blocks the ray, so the shaded point is lit by this light."
+        : "The ray is blocked " + Math.max(1, Math.round(result.t * 100)) + "% of the way to the light, so the shaded point is in shadow.";
+    }
+    function draw() {
+      const view = canvasView(canvas, WORLD_HEIGHT / WORLD_WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const scale = view.width / WORLD_WIDTH;
+      const toCanvas = (point) => ({ x: point.x * scale, y: point.y * scale });
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      if (state.mode === "tree") {
+        context.save();
+        context.setLineDash([4, 3]);
+        context.lineWidth = 1;
+        context.strokeStyle = colours.inkSoft;
+        context.globalAlpha = 0.5;
+        for (const id of result.record.missed) strokeBox(context, tree.nodes[id].box, toCanvas);
+        context.restore();
+        context.strokeStyle = colours.accent;
+        context.lineWidth = 1.4;
+        for (const id of result.record.entered) strokeBox(context, tree.nodes[id].box, toCanvas);
+      }
+      context.lineCap = "round";
+      segments.forEach((segment, index) => {
+        const tested = state.mode === "brute" || result.tested.has(index);
+        context.globalAlpha = tested ? 1 : 0.5;
+        context.strokeStyle = index === result.hit ? colours.bad : tested ? colours.warm : colours.inkSoft;
+        context.lineWidth = index === result.hit ? 3 : tested ? 2 : 1.5;
+        line(context, toCanvas(segment.a), toCanvas(segment.b));
+      });
+      context.globalAlpha = 1;
+      drawRay(context, colours, toCanvas(state.origin), toCanvas(state.light), result.t, view.width);
+    }
+    function update() {
+      result = trace();
+      report();
+      draw();
+    }
+    rayControl(canvas, byId("d1-origin"), byId("d1-light"), state, update);
+    for (const button of modeButtons) {
+      button.addEventListener("click", () => {
+        state.mode = button.dataset.mode;
+        setPressed(modeButtons, (other) => other === button);
+        update();
+      });
+    }
+    byId("d1-brute-triangles").textContent = integer(segments.length);
+    byId("d1-size").textContent = "The box tree holds these " + integer(segments.length) + " triangles in " + integer(tree.nodes.length) + " boxes, at most four triangles to a leaf.";
+    result = trace();
+    report();
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Demo 2: two levels. Three Meshes, six TLAS entries placed by transforms. */
+  (function twoLevelDemo() {
+    const worldCanvas = byId("d2-world");
+    const localCanvas = byId("d2-local");
+    if (!worldCanvas || !localCanvas) return;
+    const scene = twoLevelScene();
+    const at = (x, y) => ({ x: x, y: y });
+    const sharers = (meshIndex) => scene.entries.map((entry, index) => (entry.mesh === meshIndex ? index : -1)).filter((index) => index >= 0);
+    const listOf = (numbers) => (numbers.length < 2 ? String(numbers[0]) : numbers.slice(0, -1).join(", ") + " and " + numbers[numbers.length - 1]);
+    const entryButtons = byId("d2-entries");
+    const state = { origin: null, light: null };
+    let result = null;
+    let selected = null;
+
+    function reportOrder() {
+      const list = byId("d2-order");
+      list.replaceChildren();
+      const add = (parts) => {
+        const item = element("li");
+        for (const part of parts) item.append(typeof part === "string" ? document.createTextNode(part) : part);
+        list.append(item);
+      };
+      let tested = 0;
+      let entered = 0;
+      let hitSoFar = false;
+      const flush = () => {
+        if (!tested) return;
+        add([element("b", "", "TLAS"), ": " + tested + (tested === 1 ? " box" : " boxes") + " tested, " + entered + " entered."]);
+        tested = 0;
+        entered = 0;
+      };
+      for (const event of result.events) {
+        if (event.kind === "tlas") {
+          tested += 1;
+          if (event.entered) entered += 1;
+          continue;
+        }
+        flush();
+        const entry = scene.entries[event.entry];
+        const mesh = scene.meshes[entry.mesh];
+        const others = sharers(entry.mesh).filter((index) => index !== event.entry);
+        let text = ", Mesh " + mesh.name + (others.length ? ", whose BLAS also serves entr" + (others.length === 1 ? "y " : "ies ") + listOf(others) : "") +
+          ". The ray moves into its space, and the BLAS tests " + event.boxes + (event.boxes === 1 ? " box" : " boxes") + " and " + event.triangles + (event.triangles === 1 ? " triangle" : " triangles");
+        if (event.hit) {
+          text += ": a hit " + Math.max(1, Math.round(event.hit.t * 100)) + "% of the way.";
+          hitSoFar = true;
+        } else {
+          text += hitSoFar ? ": nothing nearer than the hit so far." : ": no hit.";
+        }
+        add([element("b", "", "Entry " + event.entry), text]);
+      }
+      flush();
+      if (result.best) add([element("b", "", "Closest hit"), ": entry " + result.best.entry + ", so the query reports its custom data, " + result.best.entry + "."]);
+      else add([element("b", "", "No hit"), ": the light reaches the shaded point."]);
+      let blasBoxes = 0;
+      let triangles = 0;
+      for (const visit of result.perEntry.values()) {
+        blasBoxes += visit.record.boxesTested;
+        triangles += visit.tested.size;
+      }
+      const totalTriangles = scene.entries.reduce((sum, entry) => sum + scene.meshes[entry.mesh].segments.length, 0);
+      byId("d2-summary").textContent = "TLAS boxes tested: " + result.tlasRecord.boxesTested + " of " + scene.tlas.nodes.length +
+        ". Entries entered: " + result.perEntry.size + " of " + scene.entries.length + ". BLAS boxes tested: " + blasBoxes +
+        ". Triangles tested: " + triangles + " of the " + totalTriangles + " the six entries place.";
+    }
+
+    function reportEntries() {
+      const visited = Array.from(result.perEntry.keys());
+      if (selected === null || !result.perEntry.has(selected)) selected = result.best ? result.best.entry : visited.length ? visited[0] : null;
+      entryButtons.replaceChildren();
+      if (!visited.length) {
+        entryButtons.append(element("span", "control-label", "none: the ray entered no entry's box"));
+        return;
+      }
+      for (const entryIndex of visited) {
+        const button = element("button", "", "Entry " + entryIndex + " · " + scene.meshes[scene.entries[entryIndex].mesh].name);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(entryIndex === selected));
+        button.addEventListener("click", () => {
+          selected = entryIndex;
+          setPressed(entryButtons.querySelectorAll("button"), (other) => other === button);
+          drawWorld();
+          drawLocal();
+        });
+        entryButtons.append(button);
+      }
+    }
+
+    function drawWorld() {
+      const view = canvasView(worldCanvas, WORLD_HEIGHT / WORLD_WIDTH);
+      const context = view.context;
+      const colours = readTokens();
+      const scale = view.width / WORLD_WIDTH;
+      const toCanvas = (point) => ({ x: point.x * scale, y: point.y * scale });
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      for (const node of scene.tlas.nodes) {
+        const entered = result.tlasRecord.entered.has(node.id);
+        context.save();
+        if (!node.items) context.setLineDash([5, 4]);
+        context.strokeStyle = entered ? colours.accent : colours.inkSoft;
+        context.globalAlpha = entered ? 1 : 0.45;
+        context.lineWidth = entered ? 1.6 : 1;
+        strokeBox(context, node.box, toCanvas);
+        context.restore();
+      }
+      context.lineCap = "round";
+      scene.entries.forEach((entry, entryIndex) => {
+        const mesh = scene.meshes[entry.mesh];
+        mesh.segments.forEach((segment, segmentIndex) => {
+          const isHit = Boolean(result.best && result.best.entry === entryIndex && result.best.segment === segmentIndex);
+          context.strokeStyle = isHit ? colours.bad : colours[mesh.colour];
+          context.lineWidth = isHit ? 3.2 : 2;
+          line(context, toCanvas(entryToWorld(entry, segment.a)), toCanvas(entryToWorld(entry, segment.b)));
+        });
+        context.font = "600 11px " + colours.mono;
+        context.fillStyle = colours.ink;
+        context.textBaseline = "bottom";
+        context.fillText(entryIndex + " · " + mesh.name, entry.box.minX * scale + 2, entry.box.minY * scale - 3);
+      });
+      if (selected !== null) {
+        const entry = scene.entries[selected];
+        const origin = toCanvas(entryToWorld(entry, at(0, 0)));
+        context.strokeStyle = colours.ink;
+        context.fillStyle = colours.ink;
+        context.lineWidth = 1.6;
+        for (const [axis, name] of [[at(0.9, 0), "x"], [at(0, 0.9), "y"]]) {
+          const tip = toCanvas(entryToWorld(entry, axis));
+          line(context, origin, tip);
+          const angle = Math.atan2(tip.y - origin.y, tip.x - origin.x);
+          context.beginPath();
+          context.moveTo(tip.x, tip.y);
+          context.lineTo(tip.x - 7 * Math.cos(angle - 0.4), tip.y - 7 * Math.sin(angle - 0.4));
+          context.lineTo(tip.x - 7 * Math.cos(angle + 0.4), tip.y - 7 * Math.sin(angle + 0.4));
+          context.closePath();
+          context.fill();
+          context.font = "11px " + colours.mono;
+          context.textBaseline = "middle";
+          context.fillText(name, tip.x + 6 * Math.cos(angle) + 1, tip.y + 6 * Math.sin(angle));
+        }
+      }
+      drawRay(context, colours, toCanvas(state.origin), toCanvas(state.light), result.best ? result.best.t : null, view.width);
+    }
+
+    function drawLocal() {
+      const view = canvasView(localCanvas, 1);
+      const context = view.context;
+      const colours = readTokens();
+      const meshIndex = selected === null ? 0 : scene.entries[selected].mesh;
+      const mesh = scene.meshes[meshIndex];
+      const visit = selected === null ? null : result.perEntry.get(selected);
+      const half = 1.35;
+      const scale = view.width / (2 * half);
+      const toCanvas = (point) => ({ x: (point.x + half) * scale, y: (point.y + half) * scale });
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      for (const node of mesh.tree.nodes) {
+        const entered = Boolean(visit && visit.record.entered.has(node.id));
+        context.save();
+        if (!node.items) context.setLineDash([5, 4]);
+        context.strokeStyle = entered ? colours.accent : colours.inkSoft;
+        context.globalAlpha = entered ? 1 : 0.45;
+        context.lineWidth = entered ? 1.6 : 1;
+        strokeBox(context, node.box, toCanvas);
+        context.restore();
+      }
+      const origin = toCanvas(at(0, 0));
+      context.strokeStyle = colours.inkSoft;
+      context.fillStyle = colours.inkSoft;
+      context.lineWidth = 1;
+      context.font = "11px " + colours.mono;
+      context.textBaseline = "middle";
+      line(context, origin, toCanvas(at(1.2, 0)));
+      line(context, origin, toCanvas(at(0, 1.2)));
+      context.fillText("x", toCanvas(at(1.24, 0)).x, origin.y);
+      context.fillText("y", origin.x + 4, toCanvas(at(0, 1.27)).y);
+      context.lineCap = "round";
+      mesh.segments.forEach((segment, segmentIndex) => {
+        const isHit = Boolean(result.best && result.best.entry === selected && result.best.segment === segmentIndex);
+        const tested = Boolean(visit && visit.tested.has(segmentIndex));
+        context.strokeStyle = isHit ? colours.bad : colours[mesh.colour];
+        context.lineWidth = isHit ? 3.4 : tested ? 2.8 : 1.8;
+        line(context, toCanvas(segment.a), toCanvas(segment.b));
+      });
+      if (visit) {
+        const ray = visit.localRay;
+        const point = (t) => toCanvas(at(ray.ox + ray.dx * t, ray.oy + ray.dy * t));
+        const stop = result.best ? result.best.t : 1;
+        context.strokeStyle = colours.accent;
+        context.lineWidth = 2.2;
+        line(context, point(0), point(stop));
+        if (stop < 1) {
+          context.save();
+          context.setLineDash([5, 5]);
+          context.globalAlpha = 0.75;
+          context.strokeStyle = colours.inkSoft;
+          context.lineWidth = 1.5;
+          line(context, point(stop), point(1));
+          context.restore();
+        }
+        if (result.best && result.best.entry === selected) {
+          const hit = point(result.best.t);
+          context.fillStyle = colours.bad;
+          context.beginPath();
+          context.arc(hit.x, hit.y, 4.5, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+      const users = sharers(meshIndex);
+      byId("d2-local-title").textContent = "BLAS of Mesh " + mesh.name + ", shared by entr" + (users.length === 1 ? "y " : "ies ") + listOf(users) + ". " +
+        (visit ? "The ray as entry " + selected + " sees it, after the inverse of entry " + selected + "'s transform." : "The ray entered no entry's box.");
+    }
+
+    function update() {
+      result = traceTwoLevel(scene, rayOf(state));
+      reportEntries();
+      reportOrder();
+      drawWorld();
+      drawLocal();
+    }
+    rayControl(worldCanvas, byId("d2-origin"), byId("d2-light"), state, update);
+    result = traceTwoLevel(scene, rayOf(state));
+    reportEntries();
+    reportOrder();
+    watchWidth(worldCanvas.parentElement, drawWorld);
+    watchWidth(localCanvas.parentElement, drawLocal);
+  })();
+
+  /* Demo 3: what a BLAS costs, by the engine's per-backend estimates. */
+  (function blasBytesDemo() {
+    const bars = byId("d3-bars");
+    if (!bars) return;
+    const input = byId("d3-count");
+    const help = byId("d3-help");
+    const saving = byId("d3-saving");
+    const presets = Array.from(document.querySelectorAll("#d3-presets button"));
+    const MAX_TRIANGLES = 268435456;
+    const HELP = help.textContent;
+    const ROWS = [
+      { label: "M4 Pro, as built", note: "94 B per triangle", perTriangle: 94, kind: "built" },
+      { label: "M4 Pro, compacted", note: "45.5 B per triangle, counted after load", perTriangle: 45.5, kind: "compacted" },
+      { label: "lavapipe, either way", note: "104 B per triangle, counted after load", perTriangle: 104, kind: "lavapipe" },
+    ];
+    for (const row of ROWS) {
+      const node = element("div", "bar-row");
+      const name = element("span");
+      name.append(element("b", "", row.label), document.createElement("br"), document.createTextNode(row.note));
+      const track = element("div", "bar-track");
+      row.fill = element("div", "bar-fill " + row.kind);
+      track.append(row.fill);
+      row.value = element("span", "value");
+      node.append(name, track, row.value);
+      bars.append(node);
+    }
+    // AccelerationStructureBytes rounds its f64 product to whole bytes; Math.round agrees for these.
+    function show(triangles) {
+      const bytes = ROWS.map((row) => Math.round(triangles * row.perTriangle));
+      const largest = Math.max.apply(null, bytes);
+      ROWS.forEach((row, index) => {
+        row.fill.style.width = (bytes[index] / largest) * 100 + "%";
+        row.value.replaceChildren(element("b", "", integer(bytes[index]) + " B"));
+      });
+      saving.textContent = "For " + integer(triangles) + (triangles === 1 ? " triangle" : " triangles") + ", compaction saves " + integer(bytes[0] - bytes[1]) +
+        " B on the M4 Pro and none on lavapipe. After a load, gpu_memory_bytes counts " + integer(bytes[1]) + " B on the M4 Pro and " + integer(bytes[2]) + " B on lavapipe.";
+      setPressed(presets, (button) => Number(button.dataset.triangles) === triangles);
+    }
+    for (const button of presets) {
+      button.addEventListener("click", () => {
+        input.value = button.dataset.triangles;
+        input.removeAttribute("aria-invalid");
+        help.textContent = HELP;
+        show(Number(button.dataset.triangles));
+      });
+    }
+    input.addEventListener("input", () => {
+      const text = input.value.replace(/[,\s]/g, "");
+      const triangles = /^\d+$/.test(text) ? Number(text) : NaN;
+      if (!(triangles >= 1 && triangles <= MAX_TRIANGLES)) {
+        input.setAttribute("aria-invalid", "true");
+        help.textContent = "That is not a whole number from 1 to 268,435,456, so the bars keep the last valid count.";
+        return;
+      }
+      input.removeAttribute("aria-invalid");
+      help.textContent = HELP;
+      show(triangles);
+    });
+    show(Number(input.value));
+  })();
+
+  /* Demo 4: f32 steps away from an anchor. */
+  (function floatStepDemo() {
+    const svg = byId("d4-chart");
+    if (!svg) return;
+    const slider = byId("d4-distance");
+    const offsetButtons = Array.from(document.querySelectorAll("#d4-offset button"));
+    const jumpButtons = Array.from(document.querySelectorAll("#d4-jumps button"));
+    const LOWEST = 1;
+    const HIGHEST = 100000;
+    let distance = 2000;
+    let anchorOffset = 100000;
+    const millimetres = (exponent) => Math.pow(2, exponent) * 1000;
+    const decimal = (value) => String(parseFloat(value.toPrecision(3)));
+    const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+    const power = (exponent) => "2" + String(exponent).split("").map((character) => (character === "-" ? "⁻" : SUPERSCRIPT_DIGITS[Number(character)])).join("") + " m";
+    const metres = (value) => (value < 10 ? value.toFixed(2) : integer(value)) + " m";
+
+    function render() {
+      const colours = readTokens();
+      const width = Math.max(300, svg.parentElement.clientWidth);
+      const narrow = width < 520;
+      const height = narrow ? 280 : 300;
+      const plot = { left: narrow ? 50 : 64, right: width - 14, top: 34, bottom: height - 40 };
+      const xOf = (value) => plot.left + (Math.log10(value) / 5) * (plot.right - plot.left);
+      const yOf = (value) => plot.bottom - ((Math.log10(value) + 4) / 6) * (plot.bottom - plot.top);
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      svg.replaceChildren();
+      for (const [value, text] of [[1, "1 m"], [10, "10 m"], [100, "100 m"], [1000, "1 km"], [10000, "10 km"], [100000, "100 km"]]) {
+        make("line", { x1: xOf(value), y1: plot.top, x2: xOf(value), y2: plot.bottom, class: "grid" }, svg);
+        make("text", { x: xOf(value), y: plot.bottom + 16, class: "t-small", "text-anchor": value === 1 ? "start" : value === HIGHEST ? "end" : "middle" }, svg, text);
+      }
+      for (const [value, text] of [[0.0001, "0.0001"], [0.001, "0.001"], [0.01, "0.01"], [0.1, "0.1"], [1, "1"], [10, "10"], [100, "100"]]) {
+        make("line", { x1: plot.left, y1: yOf(value), x2: plot.right, y2: yOf(value), class: "grid" }, svg);
+        make("text", { x: plot.left - 6, y: yOf(value) + 4, class: "t-small", "text-anchor": "end" }, svg, text);
+      }
+      make("line", { x1: plot.left, y1: plot.bottom, x2: plot.right, y2: plot.bottom, class: "axis" }, svg);
+      make("line", { x1: plot.left, y1: plot.top, x2: plot.left, y2: plot.bottom, class: "axis" }, svg);
+      make("text", { x: 4, y: 14, class: "t-small" }, svg, "f32 step in mm, log scale");
+      make("text", { x: plot.right, y: height - 4, class: "t-small", "text-anchor": "end" }, svg, "distance d, log scale");
+      make("line", { x1: plot.left, y1: yOf(0.244140625), x2: plot.right, y2: yOf(0.244140625), stroke: colours.warm, "stroke-dasharray": "2 4", "stroke-width": 1.2 }, svg);
+      make("text", { x: plot.left + 6, y: yOf(0.244140625) - 6, class: "t-warm halo" }, svg, narrow ? "0.244 mm bound" : "0.244 mm, decision item 3's 0.24 mm bound");
+      [[64, "64 m"], [512, "512 m"], [2000, "2 km"], [HIGHEST, "100 km"]].forEach(([value, text], index) => {
+        const last = value === HIGHEST;
+        make("line", { x1: xOf(value), y1: plot.top, x2: xOf(value), y2: plot.bottom, stroke: colours.inkSoft, "stroke-dasharray": "4 3", "stroke-width": 1 }, svg);
+        make("text", { x: xOf(value) + (last ? -4 : 4), y: plot.top + 10 + (index % 2) * 14, class: "t-small halo", "text-anchor": last ? "end" : "start" }, svg, text);
+      });
+      const path = (offset) => {
+        let d = "";
+        for (const step of staircase(offset, LOWEST, HIGHEST)) {
+          const y = yOf(millimetres(step.exponent)).toFixed(1);
+          d += (d ? " L" : "M") + xOf(step.from).toFixed(1) + " " + y + " L" + xOf(step.to).toFixed(1) + " " + y;
+        }
+        return d;
+      };
+      if (anchorOffset > 0) make("path", { d: path(anchorOffset), fill: "none", stroke: colours.warm, "stroke-width": 2.2, "stroke-dasharray": "7 4" }, svg);
+      make("path", { d: path(0), fill: "none", stroke: colours.accent, "stroke-width": 2.4 }, svg);
+      make("line", { x1: xOf(distance), y1: plot.top, x2: xOf(distance), y2: plot.bottom, stroke: colours.ink, "stroke-width": 1.2 }, svg);
+      if (anchorOffset > 0) make("circle", { cx: xOf(distance), cy: yOf(millimetres(stepExponent(anchorOffset + distance))), r: 5, fill: colours.warm, stroke: colours.panel, "stroke-width": 2 }, svg);
+      make("circle", { cx: xOf(distance), cy: yOf(millimetres(stepExponent(distance))), r: 5, fill: colours.accent, stroke: colours.panel, "stroke-width": 2 }, svg);
+    }
+    function report() {
+      byId("d4-distance-value").textContent = metres(distance);
+      const anchorExponent = stepExponent(distance);
+      const worldExponent = stepExponent(anchorOffset + distance);
+      byId("d4-step-anchor").textContent = decimal(millimetres(anchorExponent)) + " mm, " + power(anchorExponent);
+      byId("d4-error").textContent = decimal(millimetres(anchorExponent) / 2) + " mm";
+      byId("d4-step-world").textContent = anchorOffset > 0
+        ? decimal(millimetres(worldExponent)) + " mm, " + power(worldExponent)
+        : "the same, since the load Anchor is the World origin";
+      svg.setAttribute("aria-label", "The f32 step against distance, both on log scales. At " + metres(distance) + " from the load Anchor the step is " + decimal(millimetres(anchorExponent)) + " mm" +
+        (anchorOffset > 0 ? "; as one f32 from the World origin, with the load Anchor 100 km out, it is " + decimal(millimetres(worldExponent)) + " mm." : "."));
+    }
+    function update() {
+      report();
+      render();
+    }
+    slider.addEventListener("input", () => {
+      distance = Math.pow(10, Number(slider.value) / 100);
+      update();
+    });
+    for (const button of jumpButtons) {
+      button.addEventListener("click", () => {
+        distance = Number(button.dataset.distance);
+        slider.value = String(Math.round(Math.log10(distance) * 100));
+        update();
+      });
+    }
+    for (const button of offsetButtons) {
+      button.addEventListener("click", () => {
+        anchorOffset = Number(button.dataset.offset);
+        setPressed(offsetButtons, (other) => other === button);
+        update();
+      });
+    }
+    report();
+    watchWidth(svg.parentElement, render);
+  })();
+
+  /* Demo 5: which frames rebuild the static TLAS. */
+  (function rebuildDemo() {
+    const strip = byId("d5-frames");
+    if (!strip) return;
+    const status = byId("d5-status");
+    const eventButtons = Array.from(document.querySelectorAll("#d5-events button"));
+    let frames;
+    let pending;
+    let counts;
+    function add(name) {
+      const event = FRAME_EVENTS[name];
+      if (event.needs && counts[event.needs] === 0) return;
+      if (name === "static-spawn") counts.static += 1;
+      if (name === "static-despawn") counts.static -= 1;
+      if (name === "moving-despawn") counts.moving -= 1;
+      pending.events.push(name);
+    }
+    function run() {
+      frames.push({ number: pending.number, events: pending.events, first: false, moving: counts.moving });
+      if (frames.length > 40) frames.shift();
+      pending = { number: pending.number + 1, events: [], first: false };
+    }
+    function start(example) {
+      counts = { static: 4, moving: 2 };
+      frames = [{ number: 0, events: [], first: true, moving: counts.moving }];
+      pending = { number: 1, events: [], first: false };
+      if (example) {
+        for (const name of ["camera", "static-spawn", "moving-move"]) {
+          add(name);
+          run();
+        }
+      }
+    }
+    function cell(frame, isPending) {
+      const node = element("div", "frame-cell" + (isPending ? " pending" : ""));
+      node.setAttribute("role", "listitem");
+      node.append(element("h4", "", "Frame " + frame.number + (isPending ? ", next" : "")));
+      const list = element("ul");
+      if (frame.first) list.append(element("li", "", "first Frame data"));
+      for (const name of frame.events) list.append(element("li", "", FRAME_EVENTS[name].label));
+      const moving = isPending ? counts.moving : frame.moving;
+      if (!frame.first && moving > 0) list.append(element("li", "", moving + " Moving rewritten"));
+      if (!list.children.length) list.append(element("li", "", "nothing written"));
+      node.append(list);
+      const reason = rebuildReason(frame);
+      node.append(element("span", "badge " + (reason ? "rebuild" : "none"), frame.first ? "builds" : reason ? "rebuilds" : "no rebuild"));
+      return node;
+    }
+    function render() {
+      strip.replaceChildren();
+      for (const frame of frames) strip.append(cell(frame, false));
+      strip.append(cell(pending, true));
+      if (strip.scrollTo) strip.scrollTo({ left: strip.scrollWidth, behavior: reduceMotion ? "auto" : "smooth" });
+      const reason = rebuildReason(pending);
+      const rebuilt = frames.filter((frame) => !frame.first && rebuildReason(frame)).length;
+      status.textContent = (reason
+        ? "Frame " + pending.number + " rebuilds the static TLAS, because it " + reason + ". Each rebuild costs about 4.3 to 4.7 ms of CPU at 2¹⁸ slots, as PR #235 measured on the M4 Pro."
+        : "Frame " + pending.number + " does not rebuild the static TLAS, since nothing in it writes a static Instance or frees one's slot.") +
+        " Rebuilds since frame 0: " + rebuilt + ".";
+      for (const button of eventButtons) {
+        const needs = FRAME_EVENTS[button.dataset.event].needs;
+        button.disabled = Boolean(needs && counts[needs] === 0);
+      }
+      byId("d5-counts").textContent = "In the scene now: " + counts.static + " static and " + counts.moving + " Moving Instances.";
+    }
+    for (const button of eventButtons) {
+      button.addEventListener("click", () => {
+        add(button.dataset.event);
+        render();
+      });
+    }
+    byId("d5-run").addEventListener("click", () => {
+      run();
+      render();
+    });
+    byId("d5-reset").addEventListener("click", () => {
+      start(false);
+      render();
+    });
+    start(true);
+    render();
+  })();
+
+  /* Chapter 7: the three measured rebuild times. Points only; no curve is fitted to them. */
+  (function capacityChart() {
+    const svg = byId("d7-chart");
+    if (!svg) return;
+    const POINTS = [
+      { exponent: 16, slots: "65,536", milliseconds: 0.8 },
+      { exponent: 18, slots: "262,144", milliseconds: 4.3 },
+      { exponent: 19, slots: "524,288", milliseconds: 9.7 },
+    ];
+    const SUPERSCRIPT = { 16: "¹⁶", 17: "¹⁷", 18: "¹⁸", 19: "¹⁹" };
+    const NAMES = { 18: "static TLAS", 19: "Instance buffer" };
+    function render() {
+      const colours = readTokens();
+      const width = Math.max(300, svg.parentElement.clientWidth);
+      const narrow = width < 520;
+      const height = narrow ? 300 : 320;
+      const plot = { left: 44, right: width - (narrow ? 12 : 24), top: 40, bottom: height - (narrow ? 62 : 66) };
+      const xOf = (exponent) => plot.left + ((exponent - 15.5) / 4) * (plot.right - plot.left);
+      const yOf = (milliseconds) => plot.bottom - (milliseconds / 12) * (plot.bottom - plot.top);
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      svg.replaceChildren();
+      for (let milliseconds = 0; milliseconds <= 12; milliseconds += 2) {
+        make("line", { x1: plot.left, y1: yOf(milliseconds), x2: plot.right, y2: yOf(milliseconds), class: "grid" }, svg);
+        make("text", { x: plot.left - 8, y: yOf(milliseconds) + 4, class: "t-small", "text-anchor": "end" }, svg, String(milliseconds));
+      }
+      make("text", { x: 4, y: 14, class: "t-small" }, svg, "ms of CPU, record + finish");
+      make("circle", { cx: plot.left + 6, cy: plot.top - 14, r: 5, fill: colours.accent, stroke: colours.panel, "stroke-width": 2 }, svg);
+      make("text", { x: plot.left + 16, y: plot.top - 10, class: "t-small" }, svg, narrow ? "measured, M4 Pro, 11 Instances" : "measured on the M4 Pro, 11 Instances in the TLAS (#202)");
+      make("line", { x1: plot.left, y1: plot.bottom, x2: plot.right, y2: plot.bottom, class: "axis" }, svg);
+      for (const exponent of [16, 17, 18, 19]) {
+        const x = xOf(exponent);
+        make("line", { x1: x, y1: plot.bottom, x2: x, y2: plot.bottom + 5, class: "axis" }, svg);
+        make("text", { x: x, y: plot.bottom + 19, class: "t-strong", "text-anchor": "middle" }, svg, "2" + SUPERSCRIPT[exponent]);
+        const point = POINTS.find((entry) => entry.exponent === exponent);
+        if (point && !narrow) make("text", { x: x, y: plot.bottom + 34, class: "t-small", "text-anchor": "middle" }, svg, point.slots);
+        if (NAMES[exponent]) make("text", { x: x, y: plot.bottom + (narrow ? 34 : 49), class: "t-small", "text-anchor": narrow && exponent === 19 ? "end" : "middle" }, svg, NAMES[exponent]);
+      }
+      make("text", { x: plot.right, y: height - 4, class: "t-small", "text-anchor": "end" }, svg, "TLAS capacity in slots, log scale");
+      for (const point of POINTS) {
+        const x = xOf(point.exponent);
+        const y = yOf(point.milliseconds);
+        make("line", { x1: x, y1: y, x2: x, y2: plot.bottom, stroke: colours.accent, "stroke-dasharray": "2 3", "stroke-width": 1 }, svg);
+        make("circle", { cx: x, cy: y, r: 6, fill: colours.accent, stroke: colours.panel, "stroke-width": 2 }, svg);
+        make("text", { x: x - 11, y: y + 4, class: "t-accent halo", "text-anchor": "end" }, svg, point.milliseconds + " ms");
+      }
+    }
+    watchWidth(svg.parentElement, render);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Praxis Field Guides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the series' lab-notebook reading column. A numbered reading order of guide cards, the frame on main as a list of passes, then the project line. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 680px; margin: 0 auto; display: grid; gap: 32px; }
+header.intro { padding-block: 56px 0; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+.lede { font-size: 21px; color: var(--ink-soft); margin: 0; }
+section { display: grid; gap: 12px; }
+.section-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0; }
+.note { font-size: 17px; color: var(--ink-soft); margin: 0; }
+.frame { margin: 0; padding-left: 1.6em; display: grid; gap: 8px; font-size: 16.5px; line-height: 1.55; }
+.frame li::marker { font-family: var(--display); font-weight: 700; color: var(--accent); }
+code { font-family: var(--mono); font-size: 0.88em; }
+.guides { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: guide; }
+.guide { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+ol.guides > .guide { counter-increment: guide; display: grid; grid-template-columns: 1.4em minmax(0, 1fr); column-gap: 10px; align-items: baseline; }
+ol.guides > .guide::before { content: counter(guide); font: 800 22px/1 var(--display); color: var(--accent); }
+.guide h3 { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.guide h3 a { color: var(--ink); text-decoration-color: var(--rule); }
+.guide h3 a:hover { color: var(--accent); text-decoration-color: currentColor; }
+.meta { font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; color: var(--ink-soft); margin: 4px 0 0; }
+.summary { font-size: 16.5px; line-height: 1.55; margin: 10px 0 0; }
+.read { display: inline-block; margin-top: 10px; font-family: var(--mono); font-size: 14px; font-weight: 600; }
+footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font-size: 15px; }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  .guide { padding: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro">
+  <div class="eyebrow">Praxis</div>
+  <h1>Field guides</h1>
+  <p class="lede">Praxis is a 3D engine in Rust for large open-world games. Each guide teaches the ideas behind one part of it through the tickets and pull requests that built that part, with live demos. Each is dated: it names the commit it describes and says what has changed on main since.</p>
+</header>
+
+<section aria-labelledby="order">
+  <h2 id="order" class="section-label">Suggested reading order</h2>
+  <p class="note">Start with <a href="instance-buffer.html">Instance Buffer Explained</a>. The path it follows, from the ECS World through prepare and upload to the GPU, still holds, but its map of the frame is from 2026-10-19, when one render pass issued a draw call per Primitive of each Renderable; <a href="#frame">the frame on main</a>, after the guides, lists its passes now. Each card names its milestone, tickets and pull requests.</p>
+  <ol class="guides" role="list">
+    <li class="guide">
+      <div>
+        <h3><a href="instance-buffer.html">Instance Buffer Explained</a></h3>
+        <p class="meta">M3 · ticket #190 · PR #220</p>
+        <p class="summary">Follows one frame from the ECS World to the draw call as PR #220 left it, then shows how each Renderable keeps a slot in an Instance buffer fixed at 524,288 slots. It covers what happens past that capacity, per-frame staging, GPU memory accounting, measuring performance, and tests that can fail.</p>
+        <a class="read" href="instance-buffer.html" aria-label="Read Instance Buffer Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="distant-textures.html">Distant Textures Explained</a></h3>
+        <p class="meta">M2 · ticket #153 · PRs #173, #174</p>
+        <p class="summary">Starts from texels and mips, explains anisotropic filtering, and shows why distant normal maps need Toksvig. It walks through the minification and texture-wall Reference scenes and what it costs to keep 10,000 textures bound.</p>
+        <a class="read" href="distant-textures.html" aria-label="Read Distant Textures Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="hdr-pipeline.html">HDR Pipeline Explained</a></h3>
+        <p class="meta">M3 · ticket #189 · PR #219</p>
+        <p class="summary">Covers light units, exposure, fp16 render targets and tonemapping operators, which you can try in live demos. It also explains the MSAA resolve, dither, colour spaces and HDR displays, and sets out the seven decisions PR #219 put to the owner, all taken as recommended and carried out by #200.</p>
+        <a class="read" href="hdr-pipeline.html" aria-label="Read HDR Pipeline Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="acceleration-structures.html">Acceleration Structures Explained</a></h3>
+        <p class="meta">M3 · ticket #202 · PRs #234, #235</p>
+        <p class="summary">Shows how rays find triangles through a tree of boxes, then the two levels Praxis builds: a compacted BLAS per Mesh and a static TLAS anchored at load. It covers the memory the engine estimates, when the static TLAS rebuilds and why it holds 2^18 entries, and the shadow rays, dynamic TLAS, town and crowd that have built on the two structures since, with live demos.</p>
+        <a class="read" href="acceleration-structures.html" aria-label="Read Acceleration Structures Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="depth-pyramid.html">Depth Pyramid Explained</a></h3>
+        <p class="meta">M3 · ticket #198 · PRs #240, #241, #242</p>
+        <p class="summary">Shows how Praxis reduces its 4x MSAA depth into a chain of ever coarser levels every frame, each texel the farthest depth over its share of the screen. It covers why reverse-Z keeps the minimum, how odd sizes share the screen, what reading every sample costs on the M4 Pro, and how phase two of the culling pass bounds any box with four reads, with live demos.</p>
+        <a class="read" href="depth-pyramid.html" aria-label="Read Depth Pyramid Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="instance-culling.html">Instance Culling Explained</a></h3>
+        <p class="meta">M3 · tickets #194, #196, #198 · PRs #228 to #230, #232, #239, #241, #242</p>
+        <p class="summary">Follows the culling pass as it builds the frame's one indirect draw in slot order, tests each Instance against the view frustum, and culls in two phases against the depth pyramid. It covers the Render switch that turns culling off, the checks that culling never changes the image, and what each step costs, with live demos.</p>
+        <a class="read" href="instance-culling.html" aria-label="Read Instance Culling Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="lit-pass.html">Lit Pass Explained</a></h3>
+        <p class="meta">M3 · ticket #199 · PRs #243, #245, #246, #247</p>
+        <p class="summary">Builds the lit pass's shading up one term at a time: what a BRDF is, metals and dielectrics in glTF 2.0's Appendix B, Fresnel, D and V, and why Praxis mixes them by lobe. It covers point lights that fall off by inverse square inside KHR_lights_punctual's range window, each scene's ambient and background, the oracles behind every term and what it all costs, with live demos.</p>
+        <a class="read" href="lit-pass.html" aria-label="Read Lit Pass Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="tonemapping-pass.html">Tonemapping Pass Explained</a></h3>
+        <p class="meta">M3 · ticket #200 · PRs #250 to #256</p>
+        <p class="summary">Follows a pixel from measured light to the 8-bit value on screen: photometric lights and an EV100 exposure, the weighted MSAA resolve, Gran Turismo 7's tonemapping curve and Peters's blue-noise dither. It covers why the tonemapping pass alone encodes sRGB, into an 8-bit UNORM target, with live demos.</p>
+        <a class="read" href="tonemapping-pass.html" aria-label="Read Tonemapping Pass Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="anisotropy.html">Anisotropy Explained</a></h3>
+        <p class="meta">M3 · ticket #184 · PR #257</p>
+        <p class="summary">Explains how #184, measuring minification's floor, split Praxis's anisotropic filtering: 16x for colour textures, 4x for data textures such as normal maps. It covers the probe rule, what 16x cost on the M4 Pro, and why fewer probes removed the sparkle, with live demos.</p>
+        <a class="read" href="anisotropy.html" aria-label="Read Anisotropy Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="froxel-lights.html">Froxel Lights Explained</a></h3>
+        <p class="meta">M3 · ticket #201 · PRs #261, #262, #263</p>
+        <p class="summary">Shows how the Froxel pass lists each Froxel's point lights from the light buffer, so a pixel shades only the point lights that may reach it. It covers the oracle that checks the lists against brute force, and what the lists cost on each scene and where they pay, with live demos.</p>
+        <a class="read" href="froxel-lights.html" aria-label="Read Froxel Lights Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="shadow-rays.html">Shadow Rays Explained</a></h3>
+        <p class="meta">M3 · tickets #203, #205, #260 · PRs #258, #259, #265, #277</p>
+        <p class="summary">Traces one hard shadow ray per pixel toward each light: where it starts, where it ends, and why it moved out of the lit pass into the shadow mask's compute pass, with live demos.</p>
+        <a class="read" href="shadow-rays.html" aria-label="Read Shadow Rays Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="dynamic-tlas.html">Dynamic TLAS Explained</a></h3>
+        <p class="meta">M3 · ticket #204 · PRs #264, #266</p>
+        <p class="summary">Shows how Praxis traces shadow rays against Moving Instances: a second TLAS, rebuilt every frame from at most 10,000 of them, which a ray the static TLAS lets through is traced against. It covers the cap and which Instances it leaves out, timing the build on the CPU and the GPU, and what it costs on the orrery and on town, with live demos.</p>
+        <a class="read" href="dynamic-tlas.html" aria-label="Read Dynamic TLAS Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="gpu-ordering.html">GPU Ordering Explained</a></h3>
+        <p class="meta">M3 · ticket #244 · PRs #267, #270</p>
+        <p class="summary">Follows a flaky test's missed ray to a race on Metal between the writes to a BLAS and the TLAS build that reads them. It shows how #244 narrowed the race down and why the fix waits for BLAS compaction on every backend, with live demos.</p>
+        <a class="read" href="gpu-ordering.html" aria-label="Read GPU Ordering Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="crowd-shadows.html">Crowd Shadows Explained</a></h3>
+        <p class="meta">M3 · ticket #208 · PRs #269, #271, #274, #276</p>
+        <p class="summary">Follows the crowd scene's 100 figures, which the GPU bends every frame from a rest Mesh, and why their shadows come from rigid per-bone shadow proxies, the form the owner picked for M7: a BLAS built when its Mesh loads keeps the rest shape, and rebuilding 100 figures' BLASes every frame would take 7.8 to 9.3 ms of GPU against a Budget of 1.0 ms. It covers the bend pass, Bends blended between Ticks, the 1,600 proxies in the dynamic TLAS and what they cost, with live demos.</p>
+        <a class="read" href="crowd-shadows.html" aria-label="Read Crowd Shadows Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="town.html">Town Explained</a></h3>
+        <p class="meta">M3 · ticket #206 · PRs #272, #273, #275</p>
+        <p class="summary">Builds M3's dense Reference scene: a 1 &times; 1 km town placed by hash, 10,000 pigeons as Moving Instances, and a camera path from street level to a circle over the rooftops. It covers culling at target scale, counting lights per lit pixel without the side-effect trap, why the wires need 4x MSAA, and what town costs in its first M4 Pro Baseline, with live demos.</p>
+        <a class="read" href="town.html" aria-label="Read Town Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="blas-refit.html">BLAS Refit Explained</a></h3>
+        <p class="meta">M3 · ticket #209 · PRs #289, #290</p>
+        <p class="summary">Follows the crowd's figures to form (a): each one's BLAS refitted every frame through wgpu-hal on Metal, which wgpu's safe API cannot do. It covers rebuild against refit, wgpu's three layers and the snatch lock, the unsafe block's invariants one by one, the Metal shared event that orders the dynamic TLAS's build after the refits, the test that compares refit with rebuild, and timing the refits with a marker pass, with live demos. The refit form's update took 1.37 to 1.38 ms of GPU against a Budget of 1.0 ms, and the owner picked the per-bone proxies for M7; the refit stays behind its Render switch as the reference for the shapes.</p>
+        <a class="read" href="blas-refit.html" aria-label="Read BLAS Refit Explained">Read</a>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section aria-labelledby="frame">
+  <h2 id="frame" class="section-label">The frame on main</h2>
+  <p class="note">One frame as the main branch runs it at commit 270c5e4 (2026-10-26), with the guide that explains each step. On the CPU, prepare reads the ECS World into Frame data, and upload writes the frame's uniforms, lights and Instance writes into per-frame staging (<a href="instance-buffer.html">Instance Buffer Explained</a>). Upload records their copies into GPU buffers at the head of the frame's commands, with the static TLAS's rebuild in a frame that writes or frees a static Instance (<a href="acceleration-structures.html">Acceleration Structures Explained</a>). The GPU receives the steps below in this order, though on Metal a step can run beside the steps around it, or even start before an earlier one, where neither writes what the other binds:</p>
+  <ol class="frame">
+    <li>The dynamic TLAS's build over the frame's Moving Instances, in frames that have any and once more, empty, when the last one goes, in a command buffer submitted ahead of the frame's commands (<a href="dynamic-tlas.html">Dynamic TLAS Explained</a>).</li>
+    <li>The bend pass, in frames that bend Meshes, which only the <code>crowd</code> scene does: each figure bent from its rest Mesh (<a href="crowd-shadows.html">Crowd Shadows Explained</a>). With the crowd's refit form, chosen by a Render switch and available on Metal only, the frame's commands up to the bend pass are submitted first, with the refit of each figure's BLAS, and the dynamic TLAS's build follows them (<a href="blas-refit.html">BLAS Refit Explained</a>).</li>
+    <li>Phase one of the culling pass, which builds the draw of the Instances in view that were visible the frame before (<a href="instance-culling.html">Instance Culling Explained</a>).</li>
+    <li>The Froxel pass, which lists for each Froxel the point lights that may reach it (<a href="froxel-lights.html">Froxel Lights Explained</a>).</li>
+    <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target (<a href="instance-culling.html">Instance Culling Explained</a>).</li>
+    <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen (<a href="depth-pyramid.html">Depth Pyramid Explained</a>).</li>
+    <li>Phase two of the culling pass, which builds the draw of the other Instances in view that the pyramid does not hide (<a href="instance-culling.html">Instance Culling Explained</a>).</li>
+    <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth, then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>).</li>
+    <li>The lit pass, which shades both phases' Instances, reading each pixel's point lights from its Froxel's list and its shadows from the shadow mask, and resolves its 4x MSAA colour into the HDR target (<a href="lit-pass.html">Lit Pass Explained</a>).</li>
+    <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</li>
+    <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats (<a href="town.html">Town Explained</a>).</li>
+  </ol>
+  <p class="note">Four guides explain what these passes rest on: <a href="distant-textures.html">Distant Textures Explained</a> and <a href="anisotropy.html">Anisotropy Explained</a>, how Praxis cooks and samples textures; <a href="hdr-pipeline.html">HDR Pipeline Explained</a>, the survey behind the light units, the HDR target and the tonemapping; and <a href="gpu-ordering.html">GPU Ordering Explained</a>, why a frame that loads Meshes first waits for their BLASes to be compacted.</p>
+</section>
+
+<footer class="project">
+  <span class="section-label">Project</span>
+  <a href="https://github.com/gariasf/praxis" target="_blank" rel="noopener">github.com/gariasf/praxis</a>
+  <a href="https://github.com/gariasf/praxis/issues/17" target="_blank" rel="noopener">Map issue #17, roadmap and decisions</a>
+</footer>
+</div>
+</body>
+</html>

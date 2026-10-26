@@ -21,6 +21,13 @@ Each scene's Golden on Metal, rendered on the M4 Pro at 640×360 with
 | <img src="tests/goldens/metal/shadows.png" width="320" alt="shadows"> | **shadows**: a sphere over a plane under the sun and one point light, its ray-traced shadow matching the analytic one. |
 | <img src="tests/goldens/metal/town.png" width="320" alt="town"> | **town**: a procedural 1 km town of about 250,000 Instances, with flocks of pigeons and 1,024 street lamps, seen from street level. |
 
+## Field guides
+
+Illustrated explainers, written alongside the tickets, of what each
+change does and why, with live demos. Start at the
+[hub](https://gariasf.github.io/praxis/guides/); each guide names the
+commit it describes and what has changed since.
+
 ## License
 
 [MIT](LICENSE)

@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Tonemapping Pass Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume eight of the series. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+
+/* This volume's own parts: the plain opening of each chapter, the chain, colour swatches, number inputs and magnified pixels. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+ol.chain { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+ol.chain li { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; font-size: 15px; line-height: 1.45; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.chain-step { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+.chain-ref { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); margin-top: auto; padding-top: 4px; }
+.swatch { display: inline-block; width: 30px; height: 18px; border-radius: 3px; border: 1px solid var(--rule); vertical-align: -4px; margin-right: 6px; background: var(--panel); }
+.swatch.big { width: 64px; height: 40px; margin-right: 0; flex: none; }
+.figures dd.with-swatch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.num-input { font-family: var(--mono); font-size: 14px; width: 5.5em; max-width: 100%; padding: 4px 6px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; text-align: right; }
+canvas.pixelated { image-rendering: crisp-edges; image-rendering: pixelated; }
+.strip-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 12px 0 6px; }
+.strip-label:first-child { margin-top: 0; }
+.mask-row { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; margin-top: 16px; }
+.mask-frame { width: 130px; flex: none; }
+.mask-row .figures { flex: 1 1 260px; margin: 0; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #200 &middot; PRs #250 to #256</div>
+  <h1>How measured light becomes an 8-bit pixel</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>With lights in real units, exposed colour runs into the thousands, but a screen shows 8-bit codes. Praxis scales luminance by a camera-style exposure and stores it in 16-bit floats, weighted so the hardware's average of a pixel's four samples keeps one bright sample from whitening an edge; the tonemapping pass undoes the weighting, applies Gran Turismo 7's tone mapping, GT7, encodes sRGB and adds a fixed blue-noise dither. The idea to keep: do each step where it belongs, the dither where the 8-bit rounding happens.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>What photometric light units and EV100 exposure mean</li>
+      <li>Why exposed colour is clamped to 65504 and stored in fp16</li>
+      <li>How Karis's reversible weighting works in the MSAA resolve</li>
+      <li>What GT7's toe, linear section, shoulder and path to white do</li>
+      <li>How triangular blue-noise dither works in the sRGB-encoded domain</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="hdr-pipeline.html">HDR Pipeline Explained</a>, <a href="lit-pass.html">Lit Pass Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 064d2ba (PR #256, 2026-10-22), the last of ticket #200's PRs #250 to #256, with the code it quotes checked again at 69e02dc (PR #275, 2026-10-24). <b>Since then:</b> PR #273 (2026-10-23) added the town scene, whose 1,024 lamps of 2,000,000 cd each are, like the scenes' other lights, set relative to the sun's 100,000 lx (<a href="town.html">Town Explained</a>).</p>
+  </aside>
+  <p class="lede">Ticket #200 built the path from the <span class="concept" data-tip="The pass that shades each pixel. Since #200 it writes exposed colour, weighted for the resolve, into a 4x MSAA Rgba16Float attachment." data-term="Lit pass">lit pass</span> to the screen. Lights now carry real units; an <span class="concept" data-tip="The scale the lit pass multiplies luminance by, 1/(1.2 &middot; 2^EV100), so that the luminance that saturates a sensor at that EV100 lands near display white." data-term="Exposure">exposure</span> set like a camera's scales them; an <span class="concept" data-tip="The single-sample Rgba16Float texture that the resolve writes and the tonemapping pass reads: exposed colour, weighted for the resolve." data-term="HDR target">HDR target</span> keeps their range; a weighted <span class="concept" data-tip="Averaging a pixel's 4 samples into one at the end of the pass. The hardware's resolve is a box average: each sample weighs a quarter." data-term="MSAA resolve">MSAA resolve</span> keeps one bright sample from whitening an edge; the tone mapping of Polyphony Digital's Gran Turismo 7, GT7, maps the result to the display; and a <span class="concept" data-tip="Noise without low frequencies: neighbouring values differ, so it has no clumps and reads as fine, even grain." data-term="Blue noise">blue-noise</span> <span class="concept" data-tip="Noise added before rounding, so that a gradient which would round into bands becomes fine grain whose average follows the gradient." data-term="Dither">dither</span> hides the steps of 8-bit output. This guide follows one pixel along that path, with live demos of the exposure, the resolve, the tone curve and the dither.</p>
+  <p class="status"><b>Provenance.</b> #200 landed in seven parts, all merged on 2026-10-22. Part 1, PR #250, gave the <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scenes</span>' lights photometric units and each scene an EV100; part 2, PR #251, added the HDR target and a tonemapping pass that only clamped; part 3, PR #252, weights the lit pass's colour for the resolve; part 4, PR #253, ports GT7 under its oracles; and parts 5 to 7, PRs #254 to #256, put GT7 in the pass, encode sRGB in the shader and add the dither. Every number here was verified in the work on #200 on 2026-10-22, and the code it quotes was checked again against main at 69e02dc on 2026-10-24.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#units">1 &middot; Light in real units</a>
+    <a href="#exposure">2 &middot; Exposure</a>
+    <a href="#storage">3 &middot; Storing HDR</a>
+    <a href="#resolve">4 &middot; The resolve</a>
+    <a href="#gt7">5 &middot; GT7</a>
+    <a href="#dither">6 &middot; sRGB and dither</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#later">8 &middot; What is not in M3</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="units">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; PR #250</div>
+    <h2>Light in real units</h2>
+    <p class="plain">Before #200 the scenes' lights had no units: the sun's illuminance was 1, and every other light was a multiple of it. #200 gives them the units glTF defines for light. A camera-style exposure, the subject of chapter 2, then brings the results back to the range a display shows.</p>
+    <p>ADR 0023 measures light as glTF does, in <span class="concept" data-tip="Measured as the eye sees: radiometric quantities weighted by the eye's sensitivity. Lux, candela and cd/m&sup2; are photometric." data-term="Photometric">photometric</span> units. Three quantities cover every light:</p>
+    <ul class="keypoints">
+      <li><span class="concept" data-tip="Light arriving at a surface, per square metre, in lux (lm/m&sup2;)." data-term="Illuminance">Illuminance</span>, light arriving at a surface, in lux: the sun, a <code>DirectionalLight</code>, and the ambient light that every surface receives from all around.</li>
+      <li><span class="concept" data-tip="Light a point source sends into one direction, per steradian, in candela (lm/sr). KHR_lights_punctual gives point lights in it." data-term="Luminous intensity">Luminous intensity</span>, what a point light sends into each direction, in candela, as KHR_lights_punctual gives a <code>PointLight</code>.</li>
+      <li><span class="concept" data-tip="Light leaving a surface in one direction, per square metre and per steradian, in cd/m&sup2;: what a pixel shows." data-term="Luminance">Luminance</span>, light leaving a surface towards the eye, in cd/m&sup2;: emissive surfaces, the background, and what the <span class="concept" data-tip="The pass that shades each pixel. Since #200 it writes exposed colour, weighted for the resolve, into a 4x MSAA Rgba16Float attachment." data-term="Lit pass">lit pass</span> computes for each pixel.</li>
+    </ul>
+    <p>Every <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scene</span> is lit from one figure, the sun's 100,000 lx, "direct sunlight" (<code>SUN_ILLUMINANCE</code> in <code>src/scenes/mod.rs</code>). The other lights keep the ratios to the sun that they had before they had units (lights added since are given against it too: town's 1,024 lamps, from PR #273, are 2,000,000 cd each; see <a href="town.html">Town Explained</a>).</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Light</th><th>Quantity</th><th class="n">Value</th><th>Against the sun</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>The sun, a <code>DirectionalLight</code></td><td>illuminance</td><td class="n">100,000 lx</td><td>"direct sunlight"</td></tr>
+          <tr><td>Ambient</td><td>illuminance</td><td class="n">10,000 lx</td><td>a tenth</td></tr>
+          <tr><td>Background, R G B</td><td>luminance</td><td class="n">10,000 &middot; 20,000 &middot; 30,000 cd/m&sup2;</td><td>a tenth to three tenths of its figure</td></tr>
+          <tr><td>Each of the four coloured point lights</td><td>luminous intensity</td><td class="n">900,000 cd</td><td>the sun's illuminance 3 m away</td></tr>
+          <tr><td>minification's light</td><td>luminous intensity</td><td class="n">30,000,000 cd</td><td>the sun's illuminance about 17.3 m away</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The Reference scenes' lights</b>, as part 1 authored them in <code>src/scenes/mod.rs</code>. A point light of intensity I gives the sun's 100,000 lx at the distance &radic;(I / 100,000).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>For lamps, the point lights look extreme. A point light's illuminance falls with the square of the distance, so matching the sun 3 m away takes 900,000 cd: 900,000 / 3&sup2; = 100,000 lx. Those are the ratios the scenes had before units, when the sun's illuminance was 1; part 1 wrote them out in lux and candela. minification's light, 300 times the sun's figure, matches the sun about 17.3 m away, since &radic;300 &asymp; 17.3.</p>
+    <p>The lit pass computes each pixel's luminance from these numbers, in f32. The rest of this guide follows that luminance to the screen, through the chain #200 built:</p>
+  </div>
+  <figure class="wide">
+    <ol class="chain">
+      <li><span class="chain-step">1 &middot; Lit pass</span><span>Luminance in f32, times the exposure, clamped to 65504 and weighted by 1/(1&nbsp;+&nbsp;Y)</span><span class="chain-ref">chapters 1 to 4</span></li>
+      <li><span class="chain-step">2 &middot; 4x MSAA colour</span><span><code>Rgba16Float</code>, transient: memoryless on Apple GPUs</span><span class="chain-ref">chapter 3</span></li>
+      <li><span class="chain-step">3 &middot; Hardware resolve</span><span>A box average of each pixel's 4 samples</span><span class="chain-ref">chapter 4</span></li>
+      <li><span class="chain-step">4 &middot; HDR target</span><span><code>Rgba16Float</code>, one sample: 29,491,200 bytes at 2560&nbsp;&times;&nbsp;1440</span><span class="chain-ref">chapter 3</span></li>
+      <li><span class="chain-step">5 &middot; Tonemapping pass</span><span>One full-screen triangle: undo the weighting, GT7, sRGB encoding, blue-noise dither</span><span class="chain-ref">chapters 4 to 6</span></li>
+      <li><span class="chain-step">6 &middot; 8-bit target</span><span>8-bit UNORM, which stores the shader's codes as they are, so the dither lands on its steps</span><span class="chain-ref">chapter 6</span></li>
+    </ol>
+    <figcaption><b>What #200 built</b>, in the order a frame runs it. The tonemapping pass (<code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>) is new: it reads each pixel of the HDR target and writes its display colour.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="exposure">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; PR #250</div>
+    <h2>Exposure</h2>
+    <p class="plain">A camera does not show luminance as it is. Its exposure decides which luminance comes out as white, and a bright scene needs less exposure than a dim one. Praxis sets its exposure as photographers do, as an EV100, and multiplies each pixel's luminance by the resulting scale before storing it.</p>
+    <p>The scale comes from Lagarde and de Rousiers's course notes, "Moving Frostbite to Physically Based Rendering 3.0" (2014, pp. 85&ndash;86). An <span class="concept" data-tip="Exposure value at ISO 100. One more EV100 halves the exposure, so a scene twice as bright looks the same.">EV100</span> gives the <span class="concept" data-tip="The scale the lit pass multiplies luminance by, 1/(1.2 &middot; 2^EV100), so that the luminance that saturates a sensor at that EV100 lands near display white." data-term="Exposure">exposure</span>:</p>
+    <div class="formula">exposure = 1 / (1.2 &middot; 2^EV100)</div>
+    <p>The 1.2 is a luminance: 1.2 cd/m&sup2; = 78 / (100 &middot; 0.65), the luminance that saturates an ISO 100 sensor at EV100 0, with the notes' lens and vignetting factor q = 0.65. At EV100 0, 1.2 cd/m&sup2; therefore exposes to 1. Each EV100 more halves the scale, so the luminance that exposes to 1 doubles. <code>Camera::exposure</code> computes the scale and <code>ev100_for_exposure</code> inverts it (<code>src/camera/mod.rs</code>).</p>
+    <p><span class="concept" data-tip="A sunny day's exposure: EV100 15, the default of Camera::new.">Sunny 16</span>, a sunny day's exposure, is EV100 15, the default of <code>Camera::new</code>; it scales by 1/39,321.6. The <span class="concept" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines." data-term="Reference scene">Reference scenes</span> set their own: each sets EV100 = log2(100,000 / 1.2) &asymp; 16.35, an exposure of 10&#x207B;&#x2075;, one over the sun's illuminance in lux, which was 1 before units. Every value grew by 100,000 and the exposure divides by 100,000, so the lit pass's results came out as before. Part 1 changed no <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Golden</span>: at most 110 pixels of a scene moved by one 8-bit step.</p>
+  </div>
+  <figure class="wide" id="demo-exposure">
+    <div class="sliders">
+      <label for="e-ev100" class="control-label">EV100 <output id="e-ev100-out" for="e-ev100"></output></label>
+      <input type="range" id="e-ev100" min="0" max="20" step="0.01" value="16.35">
+    </div>
+    <div class="controls">
+      <span class="control-label">Presets:</span>
+      <div class="seg" role="group" aria-label="EV100 presets" id="e-presets">
+        <button type="button" data-ev100="scene" aria-pressed="true">16.35, the scenes</button>
+        <button type="button" data-ev100="15" aria-pressed="false">15, Sunny 16</button>
+        <button type="button" data-ev100="0" aria-pressed="false">0</button>
+      </div>
+    </div>
+    <dl class="figures">
+      <div><dt>Exposure, 1 / (1.2 &middot; 2^EV100)</dt><dd id="e-scale"></dd></div>
+      <div><dt>Luminance that exposes to 1</dt><dd id="e-unit"></dd></div>
+    </dl>
+    <div class="table-wrap" style="margin-top:14px">
+      <table class="facts compact">
+        <thead><tr><th>Subject</th><th class="n">Luminance, cd/m&sup2;</th><th class="n">Exposed</th><th>On screen, sRGB codes</th></tr></thead>
+        <tbody>
+          <tr><td>A white diffuse surface facing the sun</td><td class="n">31,831</td><td class="n" id="e-white"></td><td><span class="swatch" id="e-white-swatch"></span><span class="num" id="e-white-codes"></span></td></tr>
+          <tr><td>The background</td><td class="n">10,000 &middot; 20,000 &middot; 30,000</td><td class="n" id="e-background"></td><td><span class="swatch" id="e-background-swatch"></span><span class="num" id="e-background-codes"></span></td></tr>
+          <tr><td>A sun glint at its peak</td><td class="n">1.24&times;10&#x2078;</td><td class="n" id="e-glint"></td><td><span class="swatch" id="e-glint-swatch"></span><span class="num" id="e-glint-codes"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="readout" id="e-note" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> The exposure at an EV100, and what three luminances of the scenes expose to. A white diffuse surface facing the sun reflects 100,000 / &pi; &asymp; 31,831 cd/m&sup2;, by this guide's arithmetic, since an ideal diffuse surface's BRDF is its colour over &pi;; the background is the scenes'; the glint is ADR 0023's peak for a sun glint. Exposed values are clamped to 65504, as the lit pass clamps them (chapter 3). On screen is this page's port of the tonemapping pass, GT7 and sRGB encoding, without the dither (chapters 5 and 6); at 16.35 it shows the background as the codes 88, 123 and 149 that GT7's reference outputs give. Simplified: the page computes in f64, and leaves out the resolve.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="storage">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; PR #251</div>
+    <h2>Storing HDR</h2>
+    <p class="plain"><span class="concept" data-tip="Luminance times the exposure. Praxis reads exposed 1 as GT7's paper white." data-term="Exposed colour">Exposed</span> values still span a wide range. At the scenes' exposure, a sun glint exposes to 1,240 and a white surface in sunlight to about 0.32, by this guide's arithmetic. So the lit pass stores colour as 16-bit floating-point numbers, which keep that range, and leaves the step down to the display's 0 to 1 to a later pass.</p>
+    <p>The <span class="concept" data-tip="The pass that shades each pixel. Since #200 it writes exposed colour, weighted for the resolve, into a 4x MSAA Rgba16Float attachment." data-term="Lit pass">lit pass</span> computes luminance in f32, and needs to: a sun glint reaches 1.24 &times; 10&#x2078; cd/m&sup2; before exposure (ADR 0023), far past the largest finite value of <span class="concept" data-tip="A 16-bit floating-point number, half precision. Its largest finite value is 65504.">fp16</span>, 65504. It multiplies by the exposure first, then clamps to 65504. The clamp settles what the backends would otherwise disagree on: on overflow, Vulkan may store infinity, while the M4 Pro saturates, as measured (ADR 0023); Metal's specification does not say which.</p>
+    <p>It then weights the clamped colour for the resolve, chapter 4's c / (1 + Y(c)), where Y is luminance by ITU-R BT.709-6's coefficients, and writes it into a 4x <span class="concept" data-tip="Multisample anti-aliasing: each pixel keeps 4 samples, which a resolve averages into one at the end of the pass." data-term="MSAA">MSAA</span> <code>Rgba16Float</code> colour attachment:</p>
+    <div class="formula">exposed = min(luminance &times; exposure, 65504)
+stored  = exposed / (1 + Y(exposed))
+Y(c)    = 0.2126 R + 0.7152 G + 0.0722 B</div>
+    <p>That attachment is <span class="concept" data-tip="A render-pass attachment whose contents are discarded when the pass ends, so they never need to reach memory. On Apple GPUs it is memoryless." data-term="Transient attachment">transient</span>. The pass resolves it into the HDR target before it ends and discards its samples, so they never need to reach memory; on Apple GPUs it is memoryless. The clear colour, which is the background pre-exposed, is weighted the same way.</p>
+    <p>The hardware resolve writes the single-sample <code>Rgba16Float</code> <span class="concept" data-tip="The single-sample Rgba16Float texture that the resolve writes and the tonemapping pass reads: exposed colour, weighted for the resolve." data-term="HDR target">HDR target</span>, 8 bytes a pixel: 2560 &times; 1440 &times; 8 = 29,491,200 bytes at 1440p. It has the frame's size, so <code>src/render/targets.rs</code> creates it again with the other render targets on every resize. The tonemapping pass then loads it, one texel per pixel.</p>
+  </div>
+</section>
+
+<section class="chapter" id="resolve">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; PR #252</div>
+    <h2>The resolve</h2>
+    <p class="plain">A pixel on an edge holds four samples that can see different things, and the hardware averages them. If one sample catches a glint far brighter than the rest, the plain average is mostly glint, and once tone-mapped the whole pixel shows white: edges and highlights smaller than a pixel whiten. Averaging with weights that shrink as a sample gets brighter keeps the edge looking as it should.</p>
+    <p>The hardware's <span class="concept" data-tip="Averaging a pixel's 4 samples into one at the end of the pass. The hardware's resolve is a box average: each sample weighs a quarter." data-term="MSAA resolve">MSAA resolve</span> is a box average: each of the four samples weighs a quarter. Over exposed HDR values, one sample of 100 over three of 0.05 averages to 25.04, which GT7 shows as white, as does a clamp to 1. PR #251, which resolved HDR that way, measured the effect: sub-pixel highlights whitened, and one pbr-sweep pixel went from sRGB code 228 to 255.</p>
+    <p>Karis's blog post "Tone mapping" (2013) gives a way to get a weighted average out of the hardware's plain one, a <span class="concept" data-tip="Storing c/(1 + Y) before the hardware's box resolve and computing w/(1 &minus; Y) after it, which weights the average by 1/(1 + luminance)." data-term="Reversible weighting">reversible weighting</span>. The lit pass stores w = c / (1 + Y(c)) (chapter 3), the hardware averages the stored values, and the tonemapping pass undoes the weighting, c = w / (1 &minus; Y(w)), clamped to 65504 (<code>resolve_weighted</code> and <code>resolve_unweighted</code>). What comes out is the samples' average weighted by 1 / (1 + luminance):</p>
+    <div class="formula">resolved = &Sigma; w&#x1D62; c&#x1D62; / &Sigma; w&#x1D62;,    w&#x1D62; = 1 / (1 + Y&#x1D62;)</div>
+    <p>The proof takes one line. Y is linear, so Y(avg of c/(1+Y)) = avg of Y/(1+Y), and 1 &minus; Y(avg) = avg of 1/(1+Y); dividing the stored average by that leaves &Sigma; w c / &Sigma; w. A stored luminance, Y/(1 + Y), stays below 1, so the attachment never holds a large value. It still needs fp16: a saturated colour's channels can pass 1, and every bright sample's luminance is stored just below 1, where only fine steps tell one from another.</p>
+    <p>The same four samples resolve to 0.395 weighted, against 25.04 boxed. In the scenes, part 3's weighting pulls partially covered highlight pixels back down, for example from code 200 to 180.</p>
+  </div>
+  <figure class="wide" id="demo-resolve">
+    <div class="demo-grid">
+      <div>
+        <div class="table-wrap">
+          <table class="facts compact">
+            <thead><tr><th>Sample</th><th class="n">Exposed</th><th class="n">Stored</th><th>On screen</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td class="n"><input class="num-input" type="text" id="r-0" inputmode="decimal" autocomplete="off" spellcheck="false" value="100" aria-label="Sample 1, exposed grey"></td><td class="n" id="r-0-stored"></td><td><span class="swatch" id="r-0-swatch"></span><span class="num" id="r-0-code"></span></td></tr>
+              <tr><td>2</td><td class="n"><input class="num-input" type="text" id="r-1" inputmode="decimal" autocomplete="off" spellcheck="false" value="0.05" aria-label="Sample 2, exposed grey"></td><td class="n" id="r-1-stored"></td><td><span class="swatch" id="r-1-swatch"></span><span class="num" id="r-1-code"></span></td></tr>
+              <tr><td>3</td><td class="n"><input class="num-input" type="text" id="r-2" inputmode="decimal" autocomplete="off" spellcheck="false" value="0.05" aria-label="Sample 3, exposed grey"></td><td class="n" id="r-2-stored"></td><td><span class="swatch" id="r-2-swatch"></span><span class="num" id="r-2-code"></span></td></tr>
+              <tr><td>4</td><td class="n"><input class="num-input" type="text" id="r-3" inputmode="decimal" autocomplete="off" spellcheck="false" value="0.05" aria-label="Sample 4, exposed grey"></td><td class="n" id="r-3-stored"></td><td><span class="swatch" id="r-3-swatch"></span><span class="num" id="r-3-code"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="controls">
+          <button type="button" class="btn" id="r-example">Reset to 100 over three of 0.05</button>
+        </div>
+      </div>
+      <div>
+        <dl class="figures">
+          <div><dt>Box average of exposed values, as PR #251 resolved</dt><dd class="with-swatch"><span class="swatch big" id="r-box-swatch"></span><span id="r-box"></span></dd></div>
+          <div><dt>Weighted, as part 3 resolves</dt><dd class="with-swatch"><span class="swatch big" id="r-weighted-swatch"></span><span id="r-weighted"></span></dd></div>
+        </dl>
+      </div>
+    </div>
+    <p class="readout" id="r-note" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> One pixel's four samples, as exposed greys, so each sample's luminance Y equals its value. Type any values; each is clamped to 65504 as the lit pass clamps it. Stored is what the lit pass writes, c / (1 + Y). The box average is the hardware's resolve of exposed values; the weighted resolve is the box average of the stored values, undone. On screen is this page's port of the tonemapping pass, GT7 and sRGB encoding, without the dither. Simplified: the page computes in f64 where the attachment stores fp16, and uses greys where the shader weights each sample by its luminance.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The weighting is cheap. Ticket #189's HDR survey, which <a href="hdr-pipeline.html">HDR Pipeline Explained</a> follows, timed it with its probe on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 1440p: at most 0.009 ms in a lit pass and 0.018 ms in the final pass. Part 3 measured +4.6 to +7.6 &micro;s a frame (chapter 7).</p>
+    <p>It has an image cost, which the survey's row 18 records. Sub-pixel highlights lose energy: a glint that covers one sample counts for less than its quarter of the pixel. And blending in the weighted space darkens 50% blends, which will matter for M6's transparency.</p>
+  </div>
+</section>
+
+<section class="chapter" id="gt7">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; PRs #253 and #254</div>
+    <h2>GT7</h2>
+    <p class="plain"><span class="concept" data-tip="Luminance times the exposure. Praxis reads exposed 1 as GT7's paper white." data-term="Exposed colour">Exposed colour</span> runs from 0 into the thousands; an SDR display shows 0 to 1. A tone curve maps the one onto the other. GT7's darkens the darks along a toe, leaves the mid-tones as the exposure set them and rolls the brights over a smooth shoulder towards white. It also handles colour: a very bright colour fades towards white instead of staying a pure primary.</p>
+    <h3>Units and paper white</h3>
+    <p>Polyphony Digital presented GT7's tone mapping in the SIGGRAPH 2025 Physically Based Shading course, with a sample implementation, <code>gt7_tone_mapping.cpp</code> 1.0, under the MIT licence; Praxis ports its SDR path. GT7 works in <span class="concept" data-tip="GT7's unit of luminance: 1.0 is 100 cd/m&sup2;." data-term="Frame-buffer units">frame-buffer units</span>, 1.0 = 100 cd/m&sup2;. It takes an SDR display's <span class="concept" data-tip="The luminance given to SDR white: 250 cd/m&sup2; in GT7, 2.5 frame-buffer units. Praxis reads exposed 1 as it." data-term="Paper white">paper white</span> to be 250 cd/m&sup2;, 2.5 units, and its SDR output is 0.4 &middot; min(blended, 2.5), which runs from 0 to 1.</p>
+    <h3>The curve</h3>
+    <p>The <span class="concept" data-tip="A map from scene values to display values: a toe for the darks, a linear section for the mid-tones and a shoulder that rolls the brights towards the peak." data-term="Tone curve">tone curve</span> is the GT tone curve v2, <code>gt7_curve</code>, at GT7's parameters: peak 2.5, alpha 0.25, mid point 0.538, linear section 0.444 and toe strength 1.28. The linear section ends at 0.444 &times; 2.5 = 1.11, and the curve has three parts:</p>
+    <div class="formula">x &lt; 1.11:  (1 &minus; s) &middot; 0.538 &middot; (x / 0.538)^1.28 + s &middot; x
+           s = smoothstep(0, 0.538, x)
+x &ge; 1.11:  k_A + k_B &middot; e^(k_C &middot; x)
+
+k   = (0.444 &minus; 1) / (0.25 &minus; 1) = 0.7413
+k_A = 2.5 &middot; 0.444 + 2.5 &middot; k = 2.963, 1.19 &times; the peak
+k_B = &minus;2.5 &middot; k &middot; e^(0.444 / k)
+k_C = &minus;1 / (2.5 &middot; k)</div>
+    <p>Below the mid point, a power toe, x<sup>1.28</sup> scaled by the mid point, blends by smoothstep into the identity. From 0.538 to 1.11 the curve is the identity itself. Above 1.11 an exponential shoulder rises towards k_A = 2.963, and the final min clamps the result to the peak. k_B and k_C make the shoulder meet the identity at 1.11 with the same value and slope, by this guide's arithmetic.</p>
+  </div>
+  <figure class="wide" id="demo-curve">
+    <div class="canvas-frame"><canvas id="c-canvas" class="demo" role="img" aria-label="GT7's tone curve from frame-buffer 0 to 6."></canvas></div>
+    <div class="legend"><span><i></i><code>gt7_curve</code></span><span><i class="dotted"></i>the identity, and k_A</span><span><i class="dashed"></i>the peak, 2.5</span></div>
+    <div class="sliders">
+      <label for="c-exposed" class="control-label">Exposed grey <output id="c-exposed-out" for="c-exposed"></output></label>
+      <input type="range" id="c-exposed" min="0" max="2.4" step="0.01" value="1">
+    </div>
+    <dl class="figures">
+      <div><dt>Frame buffer, 2.5 &times; exposed</dt><dd id="c-x"></dd></div>
+      <div><dt><code>gt7_curve</code> there</dt><dd id="c-curve"></dd></div>
+      <div><dt>Shown, display-linear and sRGB code</dt><dd id="c-shown"></dd></div>
+    </dl>
+    <p class="readout" id="c-note" aria-live="polite" style="margin-top:12px"></p>
+    <figcaption><b>Live demo.</b> <code>gt7_curve</code> as the shader writes it, from frame-buffer 0 to 6, with the identity, the peak and k_A. The blue band is the toe's blend, below the mid point; the warm band is the shoulder. Drag across the plot, or use the slider, to read a grey: its frame-buffer value, the curve there and what the pass shows, through this page's port of the whole operator. A grey has no chroma, so the colour path changes nothing for it, and what it shows is min(curve, 2.5) / 2.5. Simplified: the page computes in f64, where the shader uses f32.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Colour</h3>
+    <p>The curve applied to each channel alone gives what the sample calls the skewed result. GT7 blends it 40/60 with a version that keeps the input's chroma in <span class="concept" data-tip="A colour space from ITU-R BT.2100 that splits colour into an intensity, I, and two chroma axes, Ct and Cp; GT7 computes it through PQ.">ICtCp</span>, a colour space from ITU-R BT.2100, which GT7 computes through SMPTE ST 2084's <span class="concept" data-tip="SMPTE ST 2084's perceptual quantiser: a transfer function made for HDR displays. GT7 computes ICtCp through it.">PQ</span>, and takes the skewed result's intensity. That chroma fades to white as the input's intensity goes from 0.98 to 1.16 of the paper white's, along a smoothstep:</p>
+    <div class="formula">skewed  = gt7_curve(R), gt7_curve(G), gt7_curve(B)
+kept    = in ICtCp: the intensity of skewed, the chroma of the input &times; fade
+fade    = 1 &minus; smoothstep(0.98, 1.16, I(input) / I(paper white))
+output  = 0.4 &middot; min(0.4 &middot; skewed + 0.6 &middot; kept, 2.5)</div>
+    <h3>How Praxis wraps it</h3>
+    <p>Praxis reads exposed 1.0 as the paper white, so the frame-buffer value is 2.5 &times; exposed. GT7 works in <span class="concept" data-tip="ITU-R BT.709 and BT.2020: two sets of RGB primaries. The scene's colour is in Rec. 709's, which are sRGB's; Rec. 2020's are wider, and GT7 works in them." data-term="Rec. 709 and Rec. 2020">Rec. 2020</span>'s primaries and the scene's colour is in Rec. 709's, so <code>tonemap</code> converts linear Rec. 709 to Rec. 2020 before GT7 and back after, with ITU-R BT.2087-0's matrix (R<sub>2020</sub> = 0.6274 R<sub>709</sub> + 0.3293 G<sub>709</sub> + 0.0433 B<sub>709</sub>, and so on), and clips to [0, 1], as the survey's probe did.</p>
+    <p>Reading exposed 1 as paper white puts GT7's linear section, frame-buffer 0.538 to 1.11, at exposed 0.2152 to 0.444, and there the operator maps a grey to itself: mid-tones keep their exposure, which the decision calls "keeps today's mid-tones". Exposed 1 itself shows at 0.835, on the shoulder.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Exposed colour, Rec. 709</th><th class="n">Display-linear output</th><th>Shown</th></tr></thead>
+        <tbody>
+          <tr><td>grey 1.0, the paper white</td><td class="n">0.835</td><td><span class="swatch" data-display="0.835,0.835,0.835"></span></td></tr>
+          <tr><td>grey 0.6</td><td class="n">0.585</td><td><span class="swatch" data-display="0.585,0.585,0.585"></span></td></tr>
+          <tr class="focus"><td>grey 0.32, in the linear section</td><td class="n">0.320</td><td><span class="swatch" data-display="0.32,0.32,0.32"></span></td></tr>
+          <tr><td>grey 4</td><td class="n">1.0</td><td><span class="swatch" data-display="1,1,1"></span></td></tr>
+          <tr><td>red (1, 0, 0)</td><td class="n">(0.948, 0, 0)</td><td><span class="swatch" data-display="0.948,0,0"></span></td></tr>
+          <tr><td>green (0, 1, 0)</td><td class="n">(0.027, 0.875, 0)</td><td><span class="swatch" data-display="0.027,0.875,0"></span></td></tr>
+          <tr><td>blue (0, 0, 1)</td><td class="n">(0, 0, 0.855)</td><td><span class="swatch" data-display="0,0,0.855"></span></td></tr>
+          <tr><td>red (8, 0, 0), which whitens</td><td class="n">(1.0, 0.503, 0.233)</td><td><span class="swatch" data-display="1,0.503,0.233"></span></td></tr>
+          <tr><td>the background (0.1, 0.2, 0.3)</td><td class="n">(0.0967, 0.1993, 0.2988)</td><td><span class="swatch" data-display="0.0967,0.1993,0.2988"></span><span class="num">88, 123, 149</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>GT7's reference outputs</b>, from Polyphony's sample compiled unmodified, with the Rec. 709 wrapper in f64: exposed colour in, display-linear colour out, and for the background its sRGB codes. The swatches show each output sRGB-encoded. This page's port, which the demos use, agrees with every output to within a unit in its last digit.</figcaption>
+  </figure>
+  <figure class="wide" id="demo-ramps">
+    <div class="canvas-frame"><canvas id="g-canvas" role="img" aria-label="Exposed grey, red, green and blue ramps through GT7."></canvas></div>
+    <figcaption><b>The path to white.</b> Exposed grey, red, green and blue from four stops below exposed 1 to five stops above it, through this page's port of the operator, without the dither. Red and blue hold their hue to about exposed 1.4, while green picks up some red from about exposed 0.5, as green (0, 1, 0) shows in the table. Brighter, each moves towards white, as red (8, 0, 0) does in the table: red through orange, green through yellow, and blue through violet; blue, with the least luminance of the three, gets there last.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The shader matches the sample within 7 &times; 10&#x207B;&#x2075; for GT7 itself and within 2.3 &times; 10&#x207B;&#x2074; for the Rec. 709 wrapper, on the M4 Pro (<code>src/render/shader_function_tests.rs</code>). The wrapper's largest error is in a saturated green's small red channel, where converting back to Rec. 709 subtracts near-equal terms; sRGB encoding is steep there, which makes it about a fifth of an 8-bit step.</p>
+    <h3>Why GT7</h3>
+    <p>The decision on map #17 chose GT7 over AgX for three reasons: of the five operators the survey offered, it is the only one with a path to any HDR peak, it keeps today's mid-tones, and it has MIT reference outputs. There is no operator switch; grading, when it comes, would bake the operator into a LUT. The survey's other rows cover the alternatives: Reinhard, Hable, ACES, AgX, PBR Neutral and Tony McMapface.</p>
+    <p>The <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span> see the shoulder. Clamping exposed colour to 1 before GT7 makes them fail: pbr-sweep by 376 pixels, up to 235 steps; normal-tangent by 159 pixels, up to 240; and minification by 1,038 pixels, up to 19. Exposed values above 1 reach the images, and the Goldens would catch an operator that clipped them.</p>
+  </div>
+</section>
+
+<section class="chapter" id="dither">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; PRs #255 and #256</div>
+    <h2>sRGB and dither</h2>
+    <p class="plain">The window takes 8-bit codes, 256 per channel. A dark gradient that spans only a few codes rounds into visible bands. Adding a little noise before rounding turns the bands into fine grain whose average follows the gradient. Praxis takes its noise from a fixed blue-noise pattern, so the grain is even and the same in every frame.</p>
+    <h3>Encoding once, in the shader</h3>
+    <p><span class="concept" data-tip="IEC 61966-2-1's curve from display-linear values to the codes a display expects: 12.92 x near black, 1.055 x^(1/2.4) &minus; 0.055 above." data-term="sRGB encoding">sRGB encoding</span> (IEC 61966-2-1) turns display-linear values into the codes a display expects:</p>
+    <div class="formula">encoded = 12.92 x                   for x &le; 0.0031308
+        = 1.055 x^(1/2.4) &minus; 0.055    above</div>
+    <p>The pass encodes in the shader, once, and writes an <span class="concept" data-tip="An 8-bit format the GPU stores as plain values, without encoding sRGB on write; the shader has done it." data-term="8-bit UNORM target">8-bit UNORM target</span>: the window picks a <code>Bgra8Unorm</code> or <code>Rgba8Unorm</code> surface, and the capture target is <code>Rgba8Unorm</code>. An sRGB surface written through a non-sRGB view would do the same, but it needs a downlevel flag outside the Capability floor, which Vulkan reports only with an extension. The target stores what the shader writes, rounded to 8 bits, so the noise the shader adds lands on 8-bit steps. Without the dither, the shader's encoding matches the hardware's sRGB view within one step: by scene, 0.8 to 9.7% of pixels differ by one.</p>
+    <h3>Triangular noise of two steps</h3>
+    <p>The <span class="concept" data-tip="Noise added before rounding, so that a gradient which would round into bands becomes fine grain whose average follows the gradient." data-term="Dither">dither</span> is <span class="concept" data-tip="Noise on (&minus;1, 1) whose values are likeliest near 0 and fall off linearly towards the ends, as the sum of two uniform noises does." data-term="Triangular noise">triangular noise</span> on (&minus;1, 1) 8-bit steps, added to the encoded value. Two steps peak to peak is the least that removes <span class="concept" data-tip="Noise whose power rises and falls with the signal, so that the grain itself makes a pattern along a gradient." data-term="Noise modulation">noise modulation</span> (Lipshitz, Wannamaker and Vanderkooy 1992, p. 372): with it, the rounding error's power no longer depends on the signal. The noise goes in the encoded domain because that is where the rounding happens. Added in linear light instead, it would be 12.92 times too large near black, where the encoding multiplies by 12.92 (the survey's row 19).</p>
+    <h3>The mask</h3>
+    <p>The noise comes from Christoph Peters's free <span class="concept" data-tip="Noise without low frequencies: neighbouring values differ, so it has no clumps and reads as fine, even grain." data-term="Blue noise">blue-noise</span> textures (CC0): <code>Data/64_64/LDR_LLL1_0.png</code>, a 64 &times; 64 image that holds each of its 256 levels exactly 16 times, alike in red, green and blue. It is committed as <code>assets/BlueNoise/LDR_LLL1_0.png</code> with its manifest entry, and compiled into the binary from <code>src/render/dither_mask.bin</code>, since a build without <code>cook</code> links no PNG decoder; a test pins one to the other.</p>
+    <p>The mask's levels are uniform, and the dither needs triangular noise. Peters's "Dithering" remaps the mask's values through the inverse CDF of the triangular distribution, which changes the values and keeps their arrangement. Praxis reads each level at the centre of its bin, where Peters's listing uses the stored value, level/255:</p>
+    <div class="formula">u     = (level + 0.5) / 256
+c     = 2u &minus; 1
+noise = sign(c) &middot; (1 &minus; &radic;(1 &minus; |c|))
+      = &minus;1 + &radic;(2u)        below u = &frac12;
+      =  1 &minus; &radic;(2 &minus; 2u)    above</div>
+    <p>Over the 256 bin centres, the noise's mean is 0 and its variance 1/6, within 10&#x207B;&#x2074;; its extremes are &plusmn;0.9375.</p>
+    <p>The mask is fixed to the screen and never animates, so the <span class="concept" data-tip="A committed image that a Reference scene must reproduce within tolerance." data-term="Golden">Goldens</span> stay exact and ADR 0008's stance against temporal tricks holds. The same noise goes to all three channels. Each channel moves by a step in about a third of pixels, since E|noise| = 1/3, and the channels tend to move together: on average, a grey moves in a third of pixels, and a colour whose channels sit at unrelated points between steps moves in 1 &minus; E[(1 &minus; |noise|)&sup3;] = 3/5 of them, by this guide's arithmetic; measured by scene, 48 to 75% of pixels move.</p>
+  </div>
+  <figure class="wide" id="demo-dither">
+    <div class="strip-label">Rounded to 8 bits</div>
+    <div class="canvas-frame"><canvas id="d-plain" class="pixelated" role="img" aria-label="A dark gradient rounded to 8 bits."></canvas></div>
+    <div class="strip-label">Dithered with the mask, then rounded</div>
+    <div class="canvas-frame"><canvas id="d-dithered" class="pixelated" role="img" aria-label="The same gradient dithered with the mask, then rounded."></canvas></div>
+    <div class="strip-label">Each column's mean code</div>
+    <div class="canvas-frame"><canvas id="d-plot" role="img" aria-label="Each column's mean code across the gradient."></canvas></div>
+    <div class="legend"><span><i class="thin"></i>the gradient, encoded</span><span><i class="dashed"></i>rounded</span><span><i></i>dithered, then rounded</span></div>
+    <div class="controls">
+      <span class="control-label">Magnify:</span>
+      <div class="seg" role="group" aria-label="Magnification" id="d-scale">
+        <button type="button" data-scale="2" aria-pressed="false">&times;2</button>
+        <button type="button" data-scale="3" aria-pressed="true">&times;3</button>
+        <button type="button" data-scale="6" aria-pressed="false">&times;6</button>
+      </div>
+      <span class="control-label">Codes:</span>
+      <div class="seg" role="group" aria-label="Codes as drawn" id="d-boost">
+        <button type="button" data-boost="1" aria-pressed="false">as they are</button>
+        <button type="button" data-boost="8" aria-pressed="true">times 8</button>
+      </div>
+    </div>
+    <div class="mask-row">
+      <div class="canvas-frame mask-frame"><canvas id="d-mask" class="pixelated" width="64" height="64" style="width:128px;height:128px" role="img" aria-label="Peters's mask, one 64 by 64 tile, each level drawn as a grey."></canvas></div>
+      <dl class="figures">
+        <div><dt>Pixels the dither moves off plain rounding</dt><dd id="d-moved"></dd></div>
+        <div><dt>Largest column error, rounded</dt><dd id="d-plain-error"></dd></div>
+        <div><dt>Largest column error, dithered</dt><dd id="d-dithered-error"></dd></div>
+      </dl>
+    </div>
+    <figcaption><b>Live demo.</b> A dark gradient, display-linear 0.0006 to 0.0045, which is about codes 2 to 14, sRGB-encoded as the shader encodes it and rounded to 8 bits as the target stores it: first plainly, then after adding Peters's mask, remapped to triangular noise and tiled every 64 pixels, as the pass adds it. The square is one tile of the mask, its levels drawn as greys. Each frame pixel is drawn as a square of 2, 3 or 6 screen pixels. The codes are dark, so the strips first draw each code times 8, which makes the steps easier to see; "as they are" draws the codes themselves. The plot gives each column's mean over the mask's 64 rows, and the errors are against the encoded gradient, in steps: rounding alone steps, while the dithered mean follows the gradient. The mask is embedded as the 4,096 bytes of <code>src/render/dither_mask.bin</code> (CC0, Christoph Peters). Simplified: one channel, in f64.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7</div>
+    <h2>What it costs</h2>
+    <p class="plain">Nearly all of #200's GPU time is the new tonemapping pass, and most of that is GT7's arithmetic: about 0.33 to 0.35 ms a frame in all, at 1440p on the M4 Pro. pbr-sweep's GPU frame went from about 700 &micro;s to 1,033 &micro;s. The lit pass costs 5 to 9 &micro;s more than before.</p>
+    <p>Each step was measured on the <span class="concept" data-tip="The Apple M4 Pro on which the project's Budgets are judged and its Baselines recorded; wgpu runs on Metal there.">M4 Pro</span> at 2560 &times; 1440 against the step before, in <span class="concept" data-tip="Runs of the two builds alternated on one machine, round after round, so that a change in load or temperature affects both alike." data-term="Interleaved rounds">interleaved rounds</span>:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Step</th><th>Against</th><th class="n">Frame total, &micro;s</th><th>Where it goes</th></tr></thead>
+        <tbody>
+          <tr><td>Part 2: the HDR target and a clamp-only tonemapping pass</td><td>main</td><td class="n">+56.5 far-coplanar<br>+72.7 helmet<br>+65.7 minification<br>+62.3 pbr-sweep</td><td>the lit pass +2 to 3 &micro;s for 16-bit colour, so the tonemapping pass about 55 to 70 &micro;s</td></tr>
+          <tr><td>Part 3: the weighted resolve</td><td>part 2</td><td class="n">+4.6 to +7.6</td><td>the lit pass +3 to 4 &micro;s, the inverse in the tonemapping pass the rest</td></tr>
+          <tr class="focus"><td>GT7 in the tonemapping pass</td><td>part 3</td><td class="n">+221.6 to +232.3</td><td>the survey's probe: 0.289 ms against 0.048 ms clamp-only, +0.241 ms</td></tr>
+          <tr><td>The shader's sRGB encoding</td><td>GT7 alone</td><td class="n">+22.0 to +26.2</td><td>three <code>pow</code>, one per channel</td></tr>
+          <tr><td>The dither</td><td>the encoding</td><td class="n">+16.0 to +20.4</td><td>with the mask's wrap a constant power of two</td></tr>
+          <tr><td>#200 as a whole</td><td>main before it</td><td class="n">about +330 to +350</td><td>almost all the tonemapping pass, GT7 about 225 &micro;s of it; the lit pass +5 to +9 &micro;s, for 16-bit colour and the weighting</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>GPU time of the whole frame</b>, each step against the one before it, as the work on #200 measured it on the M4 Pro at 2560 &times; 1440. The rows from part 2 to the sRGB encoding come from four interleaved rounds of far-coplanar, helmet, minification and pbr-sweep.</figcaption>
+  </figure>
+  <div class="prose">
+    <ul class="keypoints">
+      <li>The dither first wrapped the mask with a modulo by the texture's size, at which it cost about 38 &micro;s; a wrap by a constant power of two halved that.</li>
+      
+      <li>Part 2 cost the CPU 14 to 27 &micro;s and 17 more heap allocations a frame, for one more wgpu render pass.</li>
+    </ul>
+    <h3>Why frame totals</h3>
+    <p>The tonemapping pass's own timestamps do not measure it. On Apple's <span class="concept" data-tip="A GPU that renders the screen in small tiles, each held on chip while it is shaded. Apple's GPUs work this way." data-term="Tile-based GPU">tile-based GPU</span>, its first timestamp lands while the lit pass's fragments still run, so the span between its timestamps includes the lit pass. Its cost is read from frame totals instead: the change in the whole frame's GPU time between two builds.</p>
+  </div>
+</section>
+
+<section class="chapter" id="later">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8</div>
+    <h2>What is not in M3</h2>
+    <p class="plain">Some of what the survey covered stays out of M3 on purpose. Each item below was decided, and each that may return waits on the project's roadmap issue, #17, with the condition that would bring it back.</p>
+    <ul class="keypoints">
+      <li><b>Automatic exposure.</b> Each scene keeps a manual <span class="concept" data-tip="Exposure value at ISO 100. One more EV100 halves the exposure, so a scene twice as bright looks the same.">EV100</span>. Histogram exposure adaptation and local tone mapping return together, with the first scene that joins an interior and sunlight (M5) or changes the time of day (M6).</li>
+      <li><b>Bloom.</b> None, by decision B1; the survey measured a bloom chain at 0.27 ms.</li>
+      <li><b>HDR display output.</b> SDR only, by decision H1, though GT7 has a path to any HDR peak.</li>
+      <li><b>An operator switch.</b> None: GT7 is the operator, and grading, when it comes, goes into a LUT.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Repo links are pinned to main at 69e02dc, and the links to the course notes, papers and talks are the ones the survey cites.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket and its PRs</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/200">Ticket #200</a> and its split comment <span>the ask, and how it splits into parts</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/250">PR #250</a> <span>part 1: photometric lights and an EV100 per scene</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/251">PR #251</a> <span>part 2: the HDR target and the clamp-only pass; the box resolve's whitening</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/252">PR #252</a> <span>part 3: the lit pass's colour weighted for the resolve</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/253">PR #253</a> <span>part 4: GT7 ported under its oracles</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/254">PR #254</a> <span>part 5: GT7 in the tonemapping pass</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/255">PR #255</a> <span>part 6: sRGB encoded in the shader, into 8-bit UNORM targets</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/256">PR #256</a> <span>part 7: the blue-noise dither</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/17#issuecomment-6290319637">The decision on map #17</a> <span>GT7 over AgX, the dither (D1), no bloom (B1), SDR only (H1)</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/69e02dc49eaee125830e7470e91eb09e5a63a636/docs/adr/0023-lights-are-photometric-as-gltf-defines-them.md">ADR 0023</a> <span>photometric units, the fp16 clamp, the glint's peak</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/69e02dc49eaee125830e7470e91eb09e5a63a636/docs/research/hdr-exposure-and-tonemapping.md">The survey</a>, <code>docs/research/hdr-exposure-and-tonemapping.md</code> (#189) <span>rows 18 and 19, the probe, and the other operators: Reinhard, Hable, ACES, AgX, PBR Neutral, Tony McMapface</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Exposure, resolve and tone mapping</h3>
+      <ul>
+        <li>Lagarde and de Rousiers, <a href="https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=84">Moving Frostbite to Physically Based Rendering 3.0</a>, SIGGRAPH 2014 course notes <span>pp. 84&ndash;86: EV100 and exposure</span></li>
+        <li>Karis, <a href="https://graphicrants.blogspot.com/2013/12/tone-mapping.html">Tone mapping</a>, 2013 <span>the reversible weighting</span></li>
+        <li>Yasutomi, Suzuki and Uchimura (Polyphony Digital), "Driving Toward Reality: Physically Based Tone Mapping and Perceptual Fidelity in Gran Turismo 7", <a href="https://blog.selfshadow.com/publications/s2025-shading-course/">SIGGRAPH 2025 Physically Based Shading course</a>: the <a href="https://blog.selfshadow.com/publications/s2025-shading-course/pdi/s2025_pbs_pdi_slides_v1.1.pdf">slides</a>, s2025_pbs_pdi_slides_v1.1.pdf, and <a href="https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp">gt7_tone_mapping.cpp</a> <span>GT7: the curve, the ICtCp blend, the reference outputs; MIT</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Standards</h3>
+      <ul>
+        <li>ITU-R BT.2100-3 <span>ICtCp, Table 7 (Polyphony's sample cites "ITU-T T.302" for it)</span></li>
+        <li>SMPTE ST 2084 <span>PQ</span></li>
+        <li>ITU-R BT.709-6 <span>Rec. 709's primaries and the luminance coefficients</span></li>
+        <li>ITU-R BT.2020-2 <span>Rec. 2020's primaries</span></li>
+        <li>ITU-R BT.2087-0 <span>the matrix from Rec. 709 to Rec. 2020</span></li>
+        <li>IEC 61966-2-1 <span>sRGB encoding</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Dither and banding</h3>
+      <ul>
+        <li>Christoph Peters, <a href="https://momentsingraphics.de/BlueNoise.html">Free blue noise textures</a> <span>the mask, CC0, and "Dithering", the remap</span></li>
+        <li>Ulichney, <a href="https://cv.ulichney.com/papers/1993-void-cluster.pdf">void and cluster</a>, 1993 <span>blue-noise dither arrays</span></li>
+        <li>Lipshitz, Wannamaker and Vanderkooy, <a href="https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/reading/Lipshitz_1992.pdf#page=18">Quantization and dither: a theoretical survey</a>, J. Audio Eng. Soc. 40(5), 1992 <span>p. 372: triangular noise of two steps</span></li>
+        <li>Mikkel Gj&oslash;l, <a href="https://loopit.dk/banding_in_games.pdf#page=28">Banding in games</a> <span>pp. 28&ndash;33</span>, and, with Mikkel Svendsen, <a href="https://loopit.dk/rendering_inside.pdf#page=53">The Rendering of INSIDE</a>, GDC 2016, <span>pp. 53&ndash;65, as the survey cites them</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Photometric</dt><dd>Measured as the eye weights light: lux, candela and cd/m&sup2;.</dd></div>
+    <div><dt>Illuminance</dt><dd>Light arriving at a surface, in lux (lm/m&sup2;).</dd></div>
+    <div><dt>Luminous intensity</dt><dd>Light a point source sends per steradian, in candela.</dd></div>
+    <div><dt>Luminance</dt><dd>Light leaving a surface in one direction, in cd/m&sup2;: what a pixel shows.</dd></div>
+    <div><dt>EV100</dt><dd>Exposure value at ISO 100; one more halves the exposure.</dd></div>
+    <div><dt>Exposure</dt><dd>1/(1.2 &middot; 2^EV100), the scale the lit pass multiplies luminance by.</dd></div>
+    <div><dt>Exposed colour</dt><dd>Luminance times the exposure; Praxis reads 1 as the paper white.</dd></div>
+    <div><dt>Sunny 16</dt><dd>A sunny day's exposure: EV100 15.</dd></div>
+    <div><dt>fp16</dt><dd>A 16-bit float, whose largest finite value is 65504.</dd></div>
+    <div><dt>MSAA resolve</dt><dd>Averaging a pixel's 4 samples into one; the hardware's is a box average.</dd></div>
+    <div><dt>Transient attachment</dt><dd>An attachment discarded when its pass ends; memoryless on Apple GPUs.</dd></div>
+    <div><dt>HDR target</dt><dd>The single-sample <code>Rgba16Float</code> texture of resolved, weighted exposed colour.</dd></div>
+    <div><dt>Reversible weighting</dt><dd>c/(1 + Y) before the resolve and w/(1 &minus; Y) after: an average weighted by 1/(1 + luminance).</dd></div>
+    <div><dt>Frame-buffer units</dt><dd>GT7's: 1.0 = 100 cd/m&sup2;.</dd></div>
+    <div><dt>Paper white</dt><dd>The luminance given to SDR white: 250 cd/m&sup2;, 2.5 units, in GT7.</dd></div>
+    <div><dt>Tone curve</dt><dd>A map from scene to display values: toe, linear section, shoulder.</dd></div>
+    <div><dt>ICtCp</dt><dd>ITU-R BT.2100's colour space: intensity I, chroma Ct and Cp; GT7 computes it through PQ.</dd></div>
+    <div><dt>PQ</dt><dd>SMPTE ST 2084's perceptual quantiser, a transfer function for HDR displays.</dd></div>
+    <div><dt>Rec. 709, Rec. 2020</dt><dd>Two sets of RGB primaries: the scene's colour is in Rec. 709's, GT7 works in Rec. 2020's.</dd></div>
+    <div><dt>sRGB encoding</dt><dd>IEC 61966-2-1's curve from display-linear values to display codes.</dd></div>
+    <div><dt>Dither</dt><dd>Noise added before rounding, so bands become grain whose average follows the signal.</dd></div>
+    <div><dt>Triangular noise</dt><dd>Noise on (&minus;1, 1) whose density falls linearly from 0 to the ends.</dd></div>
+    <div><dt>Blue noise</dt><dd>Noise without low frequencies: even grain, no clumps.</dd></div>
+    <div><dt>Noise modulation</dt><dd>Noise whose power changes with the signal.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene with a fixed camera path and injected time, the same frames every run.</dd></div>
+    <div><dt>Interleaved rounds</dt><dd>Two builds run alternately on one machine, so load and temperature affect both alike.</dd></div>
+    <div><dt>Tile-based GPU</dt><dd>A GPU that shades the screen in small tiles held on chip, as Apple's do.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/200">#200</a>, PRs <a href="https://github.com/gariasf/praxis/pull/250">#250</a>, <a href="https://github.com/gariasf/praxis/pull/251">#251</a>, <a href="https://github.com/gariasf/praxis/pull/252">#252</a>, <a href="https://github.com/gariasf/praxis/pull/253">#253</a>, <a href="https://github.com/gariasf/praxis/pull/254">#254</a>, <a href="https://github.com/gariasf/praxis/pull/255">#255</a> and <a href="https://github.com/gariasf/praxis/pull/256">#256</a>, as the work on #200 verified them on 2026-10-22, with ADR 0023, the survey (#189) and the decision on map #17. Code was read on the #200 branch and checked again against main at 69e02dc on 2026-10-24. Where the guide does its own arithmetic, it says so. The demos run the shader's formulas in f64, not f32, and say where they simplify. Their GT7 follows Polyphony Digital's <code>gt7_tone_mapping.cpp</code> 1.0 (MIT, notice in the page's script), and the dither mask is Christoph Peters's <code>LDR_LLL1_0.png</code> (CC0), embedded.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="lit-pass.html">Previous: Lit Pass Explained</a><a href="index.html">All field guides</a><a href="anisotropy.html">Next: Anisotropy Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+
+  // <pure> The formulas as src/camera/mod.rs and the shader parts (hdr.wgsl, the GT7 and display parts,
+  // tonemapping.wgsl) write them, in f64, and what the demos make of them.
+  const LARGEST_HALF = 65504;
+  const SATURATING_LUMINANCE_AT_EV100_ZERO = 1.2;
+  // Each Reference scene's EV100: the sun's 100,000 lx exposes to 1.
+  const SCENE_EV100 = Math.log2(100000 / SATURATING_LUMINANCE_AT_EV100_ZERO);
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  // WGSL's smoothstep.
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+  const dot = (first, second) => first[0] * second[0] + first[1] * second[1] + first[2] * second[2];
+  // A WGSL mat3x3, given as its columns, times a vector.
+  const times = (columns, vector) => [0, 1, 2].map((row) => columns[0][row] * vector[0] + columns[1][row] * vector[1] + columns[2][row] * vector[2]);
+  // Camera::exposure: 1 / (1.2 * 2^EV100).
+  const exposureFor = (ev100) => 1 / (SATURATING_LUMINANCE_AT_EV100_ZERO * Math.pow(2, ev100));
+  // Luminance by ITU-R BT.709-6's coefficients.
+  const luminance = (color) => dot(color, [0.2126, 0.7152, 0.0722]);
+  // resolve_weighted, which the lit pass writes, and resolve_unweighted, which the tonemapping pass applies.
+  const resolveWeighted = (color) => color.map((channel) => channel / (1 + luminance(color)));
+  function resolveUnweighted(weighted) {
+    const complement = Math.max(1 - luminance(weighted), 1 / LARGEST_HALF);
+    return weighted.map((channel) => Math.min(channel / complement, LARGEST_HALF));
+  }
+
+  // GT7's SDR tone mapping, ported from Praxis's port of Polyphony Digital's sample implementation,
+  // gt7_tone_mapping.cpp 1.0 (SIGGRAPH 2025 Physically Based Shading course,
+  // https://blog.selfshadow.com/publications/s2025-shading-course/pdi/supplemental/gt7_tone_mapping.cpp):
+  //
+  // MIT License
+  //
+  // Copyright (c) 2025 Polyphony Digital Inc.
+  //
+  // Permission is hereby granted, free of charge, to any person obtaining a copy
+  // of this software and associated documentation files (the "Software"), to deal
+  // in the Software without restriction, including without limitation the rights
+  // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  // copies of the Software, and to permit persons to whom the Software is
+  // furnished to do so, subject to the following conditions:
+  //
+  // The above copyright notice and this permission notice shall be included in all
+  // copies or substantial portions of the Software.
+  //
+  // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  // SOFTWARE.
+  const GT7_PAPER_WHITE = 2.5;
+  // SMPTE ST 2084's (PQ) constants, as the sample writes them.
+  const PQ_M1 = 0.1593017578125;
+  const PQ_M2 = 78.84375;
+  const PQ_C1 = 0.8359375;
+  const PQ_C2 = 18.8515625;
+  const PQ_C3 = 18.6875;
+  // The GT tone curve at GT7's parameters, of a frame-buffer value.
+  function gt7Curve(frameBuffer) {
+    const peak = GT7_PAPER_WHITE;
+    const alpha = 0.25;
+    const midPoint = 0.538;
+    const linearSection = 0.444;
+    const toeStrength = 1.28;
+    // The sample's k.
+    const shoulderRise = (linearSection - 1) / (alpha - 1);
+    const shoulderLimit = peak * linearSection + peak * shoulderRise;
+    const shoulderScale = -peak * shoulderRise * Math.exp(linearSection / shoulderRise);
+    const shoulderRate = -1 / (shoulderRise * peak);
+    if (frameBuffer < 0) return 0;
+    if (frameBuffer < linearSection * peak) {
+      const linearWeight = smoothstep(0, midPoint, frameBuffer);
+      const toe = midPoint * Math.pow(frameBuffer / midPoint, toeStrength);
+      return (1 - linearWeight) * toe + linearWeight * frameBuffer;
+    }
+    return shoulderLimit + shoulderScale * Math.exp(frameBuffer * shoulderRate);
+  }
+  // PQ's inverse EOTF: frame-buffer values, 100 cd/m^2 each, to PQ signal; and its EOTF.
+  const pqEncode = (frameBuffer) => frameBuffer.map((value) => {
+    const normalized = Math.pow(Math.max(value, 0) * (100 / 10000), PQ_M1);
+    return Math.pow(2, PQ_M2 * (Math.log2(PQ_C1 + PQ_C2 * normalized) - Math.log2(1 + PQ_C3 * normalized)));
+  });
+  const pqDecode = (signal) => signal.map((value) => {
+    const power = Math.pow(clamp(value, 0, 1), 1 / PQ_M2);
+    const linear = Math.max(power - PQ_C1, 0) / (PQ_C2 - PQ_C3 * power);
+    return Math.pow(linear, 1 / PQ_M1) * (10000 / 100);
+  });
+  // ICtCp from linear Rec. 2020 frame-buffer values (ITU-R BT.2100), and back, negatives clamped to 0.
+  function rec2020ToIctcp(rgb) {
+    const lms = pqEncode([dot(rgb, [1688, 2146, 262]) / 4096, dot(rgb, [683, 2951, 462]) / 4096, dot(rgb, [99, 309, 3688]) / 4096]);
+    return [dot(lms, [2048, 2048, 0]) / 4096, dot(lms, [6610, -13613, 7003]) / 4096, dot(lms, [17933, -17390, -543]) / 4096];
+  }
+  function ictcpToRec2020(ictcp) {
+    const lms = pqDecode([dot(ictcp, [1, 0.00860904, 0.11103]), dot(ictcp, [1, -0.00860904, -0.11103]), dot(ictcp, [1, 0.560031, -0.320627])]);
+    return [dot(lms, [3.43661, -2.50645, 0.0698454]), dot(lms, [-0.79133, 1.9836, -0.192271]), dot(lms, [-0.0259499, -0.0989137, 1.12486])].map((value) => Math.max(value, 0));
+  }
+  // gt7_tonemap: linear Rec. 2020 frame-buffer values to [0, 1], the curve per channel blended 40/60
+  // with the skewed result's intensity carrying the input's chroma, which fades to white past the paper white.
+  function gt7Tonemap(rgb) {
+    const ictcp = rec2020ToIctcp(rgb);
+    const skewed = rgb.map(gt7Curve);
+    const skewedIntensity = rec2020ToIctcp(skewed)[0];
+    const paperWhiteIntensity = rec2020ToIctcp([GT7_PAPER_WHITE, GT7_PAPER_WHITE, GT7_PAPER_WHITE])[0];
+    const chromaScale = 1 - smoothstep(0.98, 1.16, ictcp[0] / paperWhiteIntensity);
+    const scaled = ictcpToRec2020([skewedIntensity, ictcp[1] * chromaScale, ictcp[2] * chromaScale]);
+    return skewed.map((channel, index) => Math.min(0.4 * channel + 0.6 * scaled[index], GT7_PAPER_WHITE) / GT7_PAPER_WHITE);
+  }
+  // End of the code under Polyphony Digital's notice.
+
+  // Linear colour from Rec. 709's primaries to Rec. 2020's and back, each column a primary (ITU-R BT.2087-0).
+  const REC709_TO_REC2020 = [[0.6274039, 0.0690973, 0.0163914], [0.3292830, 0.9195404, 0.0880133], [0.0433131, 0.0113623, 0.8955953]];
+  const REC2020_TO_REC709 = [[1.6604910, -0.1245505, -0.0181508], [-0.5876411, 1.1328999, -0.1005789], [-0.0728499, -0.0083494, 1.1187297]];
+  // tonemap: exposed Rec. 709 colour to display-linear Rec. 709 in [0, 1], exposed 1 read as the paper white.
+  function tonemap(exposed) {
+    const display = gt7Tonemap(times(REC709_TO_REC2020, exposed.map((channel) => channel * GT7_PAPER_WHITE)));
+    return times(REC2020_TO_REC709, display).map((channel) => clamp(channel, 0, 1));
+  }
+  // srgb_encode (IEC 61966-2-1).
+  const srgbEncode = (display) => display.map((value) => {
+    const clamped = clamp(value, 0, 1);
+    return clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+  });
+  // dither_noise: a mask level's triangular noise, read at its bin's centre.
+  function triangularNoise(uniform) {
+    const centred = 2 * uniform - 1;
+    return Math.sign(centred) * (1 - Math.sqrt(1 - Math.abs(centred)));
+  }
+  const noiseForLevel = (level) => triangularNoise((level + 0.5) / 256);
+  // An 8-bit code, as the target stores a value it is written: clamped and rounded.
+  const toCode = (encoded) => Math.round(clamp(encoded, 0, 1) * 255);
+  // What the pass shows for an exposed colour, without the dither, as 8-bit codes.
+  const shownCodes = (exposed) => srgbEncode(tonemap(exposed)).map(toCode);
+  // </pure>
+
+  /* Numbers as the page prints them. */
+  function format(value) {
+    if (!Number.isFinite(value)) return String(value);
+    if (value === 0) return "0";
+    const size = Math.abs(value);
+    if (size >= 1e5 || size < 1e-3) {
+      const [mantissa, exponent] = value.toExponential(2).split("e");
+      return mantissa + "\u00d710" + superscript(Number(exponent));
+    }
+    // Whole numbers from 1,000 up, so a clamped value reads 65,504.
+    if (size >= 1000) return Math.round(value).toLocaleString("en-GB").replace("-", "\u2212");
+    return Number(value.toPrecision(4)).toLocaleString("en-GB", { maximumSignificantDigits: 4 }).replace("-", "\u2212");
+  }
+  const SUPERSCRIPT_DIGITS = "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079";
+  const superscript = (number) => String(number).split("").map((character) => (character === "-" ? "\u207b" : SUPERSCRIPT_DIGITS[Number(character)])).join("");
+  const triple = (values) => values.map(format).join(" \u00b7 ");
+  const grouped = (value) => value.toLocaleString("en-GB", { maximumFractionDigits: 1 });
+  const rgb = (codes) => "rgb(" + codes.join(", ") + ")";
+  const isGrey = (values) => values[0] === values[1] && values[1] === values[2];
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (name) => style.getPropertyValue(name).trim();
+    return {
+      panel: token("--panel"), paper: token("--paper"), ink: token("--ink"), inkSoft: token("--ink-soft"),
+      rule: token("--rule"), accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"),
+      bad: token("--bad"), good: token("--good"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  function canvasView(canvas, aspect, minimumHeight) {
+    const width = Math.max(1, canvas.parentElement.clientWidth);
+    const height = Math.max(minimumHeight || 0, Math.round(width * aspect));
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function setPressed(buttons, isPressed) {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(isPressed(button)));
+  }
+  // Coalesces bursts of input into one update per animation frame.
+  function throttled(update) {
+    let waiting = false;
+    return () => {
+      if (waiting) return;
+      waiting = true;
+      window.requestAnimationFrame(() => {
+        waiting = false;
+        update();
+      });
+    };
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  function text(context, colours, words, x, y, align, colour, weight) {
+    context.font = (weight || "") + " 11px " + colours.mono;
+    context.fillStyle = colour || colours.inkSoft;
+    context.textAlign = align || "left";
+    context.textBaseline = "middle";
+    context.fillText(words, x, y);
+    context.textAlign = "left";
+  }
+  function dot2(context, colours, x, y, fill) {
+    context.fillStyle = fill;
+    context.strokeStyle = colours.panel;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(x, y, 5, 0, 2 * Math.PI);
+    context.fill();
+    context.stroke();
+  }
+
+  /* The reference table's swatches: each output, sRGB-encoded. */
+  for (const swatch of document.querySelectorAll(".swatch[data-display]")) {
+    swatch.style.background = rgb(srgbEncode(swatch.dataset.display.split(",").map(Number)).map(toCode));
+  }
+
+  /* Demo: exposure. */
+  (function exposureDemo() {
+    const slider = byId("e-ev100");
+    if (!slider) return;
+    const presets = Array.from(document.querySelectorAll("#e-presets button"));
+    const presetValue = (button) => (button.dataset.ev100 === "scene" ? SCENE_EV100 : Number(button.dataset.ev100));
+    // A white diffuse surface facing the sun: 100,000 lx times a BRDF of 1/pi.
+    const white = 100000 / Math.PI;
+    const SUBJECTS = [
+      { key: "white", lead: "the white surface exposes to ", luminance: [white, white, white] },
+      { key: "background", lead: "the background to ", luminance: [10000, 20000, 30000] },
+      { key: "glint", lead: "and the glint to ", luminance: [1.24e8, 1.24e8, 1.24e8] },
+    ];
+    let ev100 = SCENE_EV100;
+    function update() {
+      const exposure = exposureFor(ev100);
+      byId("e-ev100-out").textContent = ev100.toFixed(2);
+      byId("e-scale").textContent = "1/" + grouped(1 / exposure) + " = " + format(exposure);
+      byId("e-unit").textContent = grouped(1 / exposure) + " cd/m\u00b2";
+      const parts = SUBJECTS.map((subject) => {
+        const scaled = subject.luminance.map((value) => value * exposure);
+        const clamped = scaled.some((value) => value > LARGEST_HALF);
+        const exposed = scaled.map((value) => Math.min(value, LARGEST_HALF));
+        const codes = shownCodes(exposed);
+        const shown = (isGrey(exposed) ? format(exposed[0]) : triple(exposed)) + (clamped ? ", clamped" : "");
+        byId("e-" + subject.key).textContent = shown;
+        byId("e-" + subject.key + "-swatch").style.background = rgb(codes);
+        byId("e-" + subject.key + "-codes").textContent = codes.join(", ");
+        return subject.lead + shown;
+      });
+      byId("e-note").textContent = "At EV100 " + ev100.toFixed(2) + " the exposure is 1/" + grouped(1 / exposure) + ": " + parts.join(", ") + ".";
+      setPressed(presets, (button) => Math.abs(presetValue(button) - ev100) < 0.005);
+    }
+    slider.addEventListener("input", () => {
+      // The slider's 16.35 stands for the scenes' EV100, log2(100,000 / 1.2), as its preset does.
+      ev100 = Math.abs(Number(slider.value) - SCENE_EV100) < 0.005 ? SCENE_EV100 : Number(slider.value);
+      update();
+    });
+    for (const button of presets) {
+      button.addEventListener("click", () => {
+        ev100 = presetValue(button);
+        slider.value = String(ev100);
+        update();
+      });
+    }
+    slider.value = String(ev100);
+    update();
+  })();
+
+  /* Demo: the weighted resolve. */
+  (function resolveDemo() {
+    const inputs = [0, 1, 2, 3].map((index) => byId("r-" + index));
+    if (!inputs[0]) return;
+    const EXAMPLE = [100, 0.05, 0.05, 0.05];
+    // A sample as the lit pass would write it: not negative, clamped to fp16's largest value.
+    // A decimal comma reads as a point; anything else that is not a number reads as 0.
+    function read(input) {
+      const value = Number(input.value.trim().replace(",", "."));
+      return Number.isFinite(value) && value > 0 ? Math.min(value, LARGEST_HALF) : 0;
+    }
+    function update() {
+      const values = inputs.map(read);
+      const stored = values.map((value) => resolveWeighted([value, value, value]));
+      values.forEach((value, index) => {
+        const codes = shownCodes([value, value, value]);
+        byId("r-" + index + "-stored").textContent = format(stored[index][0]);
+        byId("r-" + index + "-swatch").style.background = rgb(codes);
+        byId("r-" + index + "-code").textContent = String(codes[0]);
+      });
+      const box = values.reduce((sum, value) => sum + value, 0) / 4;
+      const average = [0, 1, 2].map((channel) => stored.reduce((sum, sample) => sum + sample[channel], 0) / 4);
+      const weighted = resolveUnweighted(average)[0];
+      const boxCodes = shownCodes([box, box, box]);
+      const weightedCodes = shownCodes([weighted, weighted, weighted]);
+      byId("r-box").textContent = format(box) + ", code " + boxCodes[0];
+      byId("r-weighted").textContent = format(weighted) + ", code " + weightedCodes[0];
+      byId("r-box-swatch").style.background = rgb(boxCodes);
+      byId("r-weighted-swatch").style.background = rgb(weightedCodes);
+      byId("r-note").textContent = "The box average is " + format(box) + ", shown at code " + boxCodes[0] + ". The stored values average " + format(average[0]) +
+        ", and " + format(average[0]) + " / (1 \u2212 " + format(average[0]) + ") = " + format(weighted) + ", shown at code " + weightedCodes[0] + ".";
+    }
+    for (const input of inputs) input.addEventListener("input", update);
+    byId("r-example").addEventListener("click", () => {
+      inputs.forEach((input, index) => {
+        input.value = String(EXAMPLE[index]);
+      });
+      update();
+    });
+    update();
+  })();
+
+  /* Demo: the GT7 curve. */
+  (function curveDemo() {
+    const canvas = byId("c-canvas");
+    if (!canvas) return;
+    const slider = byId("c-exposed");
+    const FRAME_BUFFER_MAX = 6;
+    const VALUE_MAX = 3.1;
+    const MID_POINT = 0.538;
+    const LINEAR_END = 0.444 * GT7_PAPER_WHITE;
+    const SHOULDER_LIMIT = GT7_PAPER_WHITE * 0.444 + GT7_PAPER_WHITE * (0.444 - 1) / (0.25 - 1);
+    let plot = null;
+    function report(exposed) {
+      const frameBuffer = GT7_PAPER_WHITE * exposed;
+      const curve = gt7Curve(frameBuffer);
+      const shown = tonemap([exposed, exposed, exposed])[0];
+      const code = toCode(srgbEncode([shown])[0]);
+      byId("c-exposed-out").textContent = exposed.toFixed(2);
+      byId("c-x").textContent = format(frameBuffer);
+      byId("c-curve").textContent = format(curve);
+      byId("c-shown").textContent = format(shown) + ", code " + code;
+      const region = frameBuffer < MID_POINT ? "the toe, which blends into the identity"
+        : frameBuffer < LINEAR_END ? "the linear section, where a grey keeps its exposure"
+        : curve > GT7_PAPER_WHITE ? "the shoulder, past the peak, so the final min clamps it to 2.5" : "the shoulder";
+      byId("c-note").textContent = "Exposed " + exposed.toFixed(2) + " is frame-buffer " + format(frameBuffer) + ", in " + region + "; the pass shows it at " + format(shown) + ", sRGB code " + code + ".";
+      return { frameBuffer: frameBuffer, curve: curve };
+    }
+    function draw() {
+      const point = report(Number(slider.value));
+      const view = canvasView(canvas, 0.56, 260);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      plot = { left: 40, right: view.width - 14, top: 16, bottom: view.height - 34 };
+      const xOf = (x) => plot.left + (x / FRAME_BUFFER_MAX) * (plot.right - plot.left);
+      const yOf = (y) => plot.bottom - (y / VALUE_MAX) * (plot.bottom - plot.top);
+      // The toe's blend, washed blue, and the shoulder, washed warm.
+      context.fillStyle = colours.accentWash;
+      context.fillRect(xOf(0), plot.top, xOf(MID_POINT) - xOf(0), plot.bottom - plot.top);
+      context.globalAlpha = 0.09;
+      context.fillStyle = colours.warm;
+      context.fillRect(xOf(LINEAR_END), plot.top, plot.right - xOf(LINEAR_END), plot.bottom - plot.top);
+      context.globalAlpha = 1;
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      for (let x = 0; x <= FRAME_BUFFER_MAX; x++) {
+        line(context, xOf(x), plot.top, xOf(x), plot.bottom);
+        text(context, colours, String(x), xOf(x), plot.bottom + 12, "center");
+      }
+      for (let step = 0; step <= 6; step++) {
+        const y = step / 2;
+        line(context, plot.left, yOf(y), plot.right, yOf(y));
+        text(context, colours, y.toFixed(1), plot.left - 6, yOf(y), "right");
+      }
+      text(context, colours, "frame-buffer value, 1 = 100 cd/m\u00b2", plot.right, view.height - 8, "right");
+      // The section boundaries, labelled at the top.
+      context.save();
+      context.setLineDash([4, 4]);
+      context.strokeStyle = colours.inkSoft;
+      line(context, xOf(MID_POINT), plot.top, xOf(MID_POINT), plot.bottom);
+      line(context, xOf(LINEAR_END), plot.top, xOf(LINEAR_END), plot.bottom);
+      context.restore();
+      text(context, colours, "0.538", xOf(MID_POINT) + 4, plot.top + 8, "left");
+      text(context, colours, "1.11", xOf(LINEAR_END) + 4, yOf(SHOULDER_LIMIT) + 13, "left");
+      // The identity, k_A and the peak, then the curve, clipped to the plot.
+      context.save();
+      context.beginPath();
+      context.rect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+      context.clip();
+      context.setLineDash([2, 4]);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1.8;
+      line(context, xOf(0), yOf(0), xOf(VALUE_MAX), yOf(VALUE_MAX));
+      line(context, plot.left, yOf(SHOULDER_LIMIT), plot.right, yOf(SHOULDER_LIMIT));
+      context.setLineDash([7, 4]);
+      context.strokeStyle = colours.warm;
+      context.lineWidth = 2;
+      line(context, plot.left, yOf(GT7_PAPER_WHITE), plot.right, yOf(GT7_PAPER_WHITE));
+      context.setLineDash([]);
+      context.strokeStyle = colours.accent;
+      context.lineWidth = 2.6;
+      context.lineJoin = "round";
+      context.beginPath();
+      for (let step = 0; step <= 600; step++) {
+        const x = (FRAME_BUFFER_MAX * step) / 600;
+        if (step === 0) context.moveTo(xOf(x), yOf(gt7Curve(x)));
+        else context.lineTo(xOf(x), yOf(gt7Curve(x)));
+      }
+      context.stroke();
+      context.restore();
+      text(context, colours, "k_A = 2.963", plot.right - 4, yOf(SHOULDER_LIMIT) - 9, "right");
+      text(context, colours, "peak 2.5, the paper white", plot.right - 4, yOf(GT7_PAPER_WHITE) + 11, "right", colours.warm, "600");
+      text(context, colours, "y = x", xOf(2.2) - 8, yOf(2.2), "right");
+      // The reading.
+      context.strokeStyle = colours.ink;
+      context.lineWidth = 1;
+      const markerX = xOf(Math.min(point.frameBuffer, FRAME_BUFFER_MAX));
+      line(context, markerX, plot.top, markerX, plot.bottom);
+      if (point.curve > GT7_PAPER_WHITE) {
+        context.strokeStyle = colours.warm;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.arc(markerX, yOf(GT7_PAPER_WHITE), 6.5, 0, 2 * Math.PI);
+        context.stroke();
+      }
+      dot2(context, colours, markerX, yOf(point.curve), colours.accent);
+      canvas.setAttribute("aria-label", "GT7's tone curve from frame-buffer 0 to 6: a toe below 0.538, the identity to 1.11, then a shoulder towards 2.963, clamped to the peak 2.5. " + byId("c-note").textContent);
+    }
+    const schedule = throttled(draw);
+    slider.addEventListener("input", schedule);
+    let activePointer = null;
+    const aim = (event) => {
+      if (!plot) return;
+      const box = canvas.getBoundingClientRect();
+      const frameBuffer = ((event.clientX - box.left - plot.left) / (plot.right - plot.left)) * FRAME_BUFFER_MAX;
+      slider.value = String(clamp(frameBuffer / GT7_PAPER_WHITE, 0, 2.4));
+      schedule();
+    };
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      activePointer = event.pointerId;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      aim(event);
+      event.preventDefault();
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId === activePointer) aim(event);
+    });
+    const release = (event) => {
+      if (event.pointerId === activePointer) activePointer = null;
+    };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Figure: the path to white, exposed colours from four stops under exposed 1 to five over. */
+  (function rampDemo() {
+    const canvas = byId("g-canvas");
+    if (!canvas) return;
+    const ROWS = [["grey", [1, 1, 1]], ["red", [1, 0, 0]], ["green", [0, 1, 0]], ["blue", [0, 0, 1]]];
+    const LOWEST_STOP = -4;
+    const HIGHEST_STOP = 5;
+    const ROW_HEIGHT = 26;
+    const ROW_GAP = 6;
+    function draw() {
+      const height = 12 + ROWS.length * (ROW_HEIGHT + ROW_GAP) + 34;
+      const view = canvasView(canvas, 0, height);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const left = 50;
+      const right = view.width - 14;
+      const columns = Math.max(1, Math.floor(right - left));
+      const xOfStop = (stop) => left + ((stop - LOWEST_STOP) / (HIGHEST_STOP - LOWEST_STOP)) * columns;
+      ROWS.forEach(([name, colour], row) => {
+        const top = 12 + row * (ROW_HEIGHT + ROW_GAP);
+        for (let column = 0; column < columns; column++) {
+          const stop = LOWEST_STOP + ((HIGHEST_STOP - LOWEST_STOP) * (column + 0.5)) / columns;
+          const exposed = colour.map((channel) => channel * Math.pow(2, stop));
+          context.fillStyle = rgb(shownCodes(exposed));
+          context.fillRect(left + column, top, 1, ROW_HEIGHT);
+        }
+        text(context, colours, name, left - 8, top + ROW_HEIGHT / 2, "right");
+      });
+      const axis = 12 + ROWS.length * (ROW_HEIGHT + ROW_GAP);
+      context.strokeStyle = colours.inkSoft;
+      context.lineWidth = 1;
+      for (let stop = LOWEST_STOP; stop <= HIGHEST_STOP; stop++) {
+        const x = xOfStop(stop);
+        line(context, x, axis - 4, x, axis + 2);
+        text(context, colours, stop === 0 ? "0" : stop > 0 ? "+" + stop : "\u2212" + -stop, x, axis + 11, "center", stop === 0 ? colours.ink : colours.inkSoft, stop === 0 ? "600" : "");
+      }
+      text(context, colours, "stops from exposed 1, the paper white", right, view.height - 6, "right");
+    }
+    watchWidth(canvas.parentElement, draw);
+  })();
+
+  /* Demo: the dither. */
+  (function ditherDemo() {
+    const plainCanvas = byId("d-plain");
+    if (!plainCanvas) return;
+    const ditheredCanvas = byId("d-dithered");
+    const plotCanvas = byId("d-plot");
+    const maskCanvas = byId("d-mask");
+    const scaleButtons = Array.from(document.querySelectorAll("#d-scale button"));
+    const boostButtons = Array.from(document.querySelectorAll("#d-boost button"));
+    // Peters's LDR_LLL1_0.png, red channel, 64 x 64 rows top first: src/render/dither_mask.bin (CC0).
+    const MASK_BASE64 = "QffLsTaVYId6Pm3OG9mYZ/pOeuQDU+mgLfJsKH1dySPnu/7Pkw1XhvbFseA7XISpMbeMAzqlG8wMU8QEn7dcxaqMGH9t/yPST8GyjagLRYK2G5Mvv6pCDbtMAMWhQpKsaIY6YbboonMiSQLuorwG89ofRcH0V5KC+KzhaOsV2nXsMVeb5EUPpusYMFZ37sNaBt2laRT/eJLTgVjsFTT1EUmeGAd+K0C+2l+AF88ucZFVZuV3KGreQjGYH34ukTkKv2jVAyrFtmiTAd/8PCKhLfQ90IVZxyU49R2umHK+1H+z7tjD9m0a8Kozm2xR+RzDPK+ZE9CxD7ty011IsstSohxIs/KgU3g31oCcZLSI1mqQdR7nR5uxal7gL0XlY1MELXJXjUicy0+LDei1iUOf1AqC/k00oOtQBfHAEv5v44P4k3M7hc8a+FtDH8oNTuUQyVK3NPAS3QeLo8oMhiCk4MY/Iaoz4GUTdNM9xiTieV3sJshhjXshZoulOoWdBGApxw3bYhDjkCe9rO1xNb1+Q62cBGWNcs0/v0928bk5j/hmmuV5ALImlrr+WQRlrRG6NnCnANf3P8vjKlXcIs9ArVAzuiWrSW6hCdxRjKTxGV/9JtfCqitVffoVKJVs0EwVggy3/F7S8YFELKV/8i+YUo7fRxyzVr2WGLB6aLiN73jhh1n9fcHzPGF7LAXUaJQy34d4Svgd5Z41sdZYBagqwFrVShyHO1MJ4W4bkddGzfsWwpvzhS4Ic0n5DulNLxeaaqXNApgxGM7olrf7QiLLuRRWOQqWYLoDiepmP/7dd+iuNZTKonPDrZrL60+9cgaDaStbdjviol/ViDfCo17UCvAcQOhoVLKJShHGWYOrTXGg7MfhgEHRbEsim8SEHZ1DcCTwaRMu3CBdNQqyOiHiqT+2684Sa8bsJ53NAX/8sUi/eiqPxwzadyNsNp8X8NsAj2SxJKbzD63gexO3MVIP9I0D2VG5+o5JavZ8iWOc8FbKCocjqo9FthtXbUKTHnM1lq7dTKTxOZz4reLWY3g8K/dDEG4zkFnIOPZe0JJps81evoBBqgd65RbBotoPxC57HZ9J2VT/DTWC9K7mK9zKVvUWXYMhcl++AlSMKAmSs8KC0lC/2xl3KYujC0bv23w5oizkmGE40Zy0QipV/UePZ+D4cbIsfOBoltgXUblliQZv0jTltBHVLYPsP7zOUehdHKN5/ZhG7btQ13QrqQYiTf0McR3vxyZTgwPocBun1gG8NWCUBMShS70HdzqfEepDuZ4LwUH3kEjMGnpp/540DN+NKAZcz6wBH2b8jr9b6sWHtlfTihB0+GLUksm2O4NSmRHP8T9b7iDNYJD6xn6pJ/5ii3lWqmugXLeoD0Yhda5qPum3N4RrnubGOxeAQG+XFd41pkqxvz4erDR5XO4m9qtFIoC4F3UxqEPeIlgz1k4dOc7pKBXdB/o25JjGhdf1S8ypZRb0LEJ8WLTindSvL2ZEf/ZqLuKeiPJNCZsTacZ24Y5p5ZnXivYRgrDlA3SUga0GS5nHO3UiilAr8lcUupUJgFHcwozVEJQxCFEg+QDnzZsbBJNYDG3bKbrk0IoxFb5Vpw44UGW7Km9KnGfww1rhb/Syf+6+0mTaAnClOGIjMPmcciKxTvqmbvFjx3uPWKwnwtl9/8wYwmCAPaRN6mE71Crzya8A5pbSwBk9tBBFI5AyYxxYRpetfUG1jMjod9a/EkTsB2HIJ9u4ijdIuxBzT+xjQrVPOaaU+x9yB7CV/QmFR3IffkBYDPeO3C3Q+Z692A+JpC8KFsHrH94ORqOOPFuoknk5hRNBdw3modXxOomxM6AhhvB2AUfYWr3dIHmiuF7infzMpjVielKkhnYAUj/K/bnkbfZbkjBngFTyAWzjyS3Yu+6aWs+uLBlfJJnfBnfSEN5crzLFi/Mtg0ZqzBaQwy9qFonZI63nHF/sr+B9ZydM14Q5yU2f/dEcr7wlhP4aVWukHvdMk2v8hMptFvlYwZVrKOfTF2maEqbtM1L2PQZWs03wcLlECsE3bCsXp5QIdpobqCZ5sgY+ml/fNkyZsARG3jOAvgLaUalBuEumLelHugueTHy1PlTBAtevJNuC7ZUowAOD+ZnNj9VJxvNV5rNBYNHwE9tvwyuHddAMZXzpjckPZec8dcMwDH3OZYsZf/U2jWL3I+PQYHaJmWRypc8P3zyhWi9oTxL/nIc5H8ww+AG7iEVaj+lP+BWk87g7wiJyrJcotBec6+CS9CPcPq5Wc86/Bak0jvsdQOkJvjFFemaOyOsd4X60XQR4YbtviaJOaOIupR63CstCkVPZLJ9d/EHQVfOMYx5ZOQGgcccH1qMUQt2BcAugtCzGTP9cG6/1UxN0qLw9JKUy360M2hXpfZcOx/s5Zn2rMG4fhhDuTgiE4hN8SM2rc79QtF37lyXsLl6UT+3JR1rdfhKdiOe7JdI2R9gJk+dFwfBMkzxawSU3sXKD1p3gXO/E5WLOd7HXMWCmxQX/LIfv2BeDMmdNe7L+GrsnZxTyk2mr0TpvC6J8lvyGY85wjREhz3/8qUjU9VwaUgNHJxKWtQGnRY8Ym7wjkjdt3EETmCdG6b0P44jEbaHXO6qEvTYhUuMokUrDXQCyKlMZ9n1Za50tZB15BZ7L65G89NB0Tj2BLvnAOWn2dOuyUp65Ysp6rZE9ps0cNwBVeYzn0gN2+cgIYvbXMurca8eeOK8p1OuxB8jjuWqGQSynbDavjP8X3FpxJOdTAkbIDx9+5glU+msK1XNanEjf8g4gSy1XnrBEhb6odBSEIUDxDeK8ApQ9UojvNZVS3BFj4h9+CMFkoMy5EJTRf6zbiF3yjzTWpC/FIE73KeuQZq3Nt5hj7tgRbJccVj21mk6rj3RfS6fdwBRzRKUNKP2wxEya7Vcs5h6ITO+kXy8WnT0rzrVHdhmMXuCzhAe4yH4wQPlwwxp/OOoq2+8Fz/pbvRvThv1neTD4tl/ZgcA6dYoWyjyp2ERtNHoFQMPjt2b6cacGZ/TAQO2WNqJhQxQio1qGBqhFjrbJTnyijmgnewzpMUIgkA5aoCTNGG3oXJ8A9W9eghC3mfew3o0fSoUK1ByTUd4mrnwCbxXRed39btYR5TXcJf5dAatkMkfA3zjKbaK2xu7R40CM85lKrCHUMbPbJvqQzQlU0yxq/nbpVr9D7MWFD5xW2Ur1wixUq4+8TZZ1y1GfeB7U9w7oGoaolEr1CFM1Gqp+A1QyyQnxhFVFlRm/TXUjo2AUlrU4pyibejBfOv7LLrmnI4maCjjrYyj2smYNveQ8h7qacbFTBuQpXZqCtElixG/muHs+kmq853ulNmffP/KBxk8IyxmK3QC1pBhyZJDqPWpb4rVIgwHSPBaK8C9rlEsmWdE+/2N41hTOciXfk/4rE6Zh3hTPKQph0w7srIy9NOag2Vxu70ln99aN5UgIHILPDfpwxh6iecJbnETXCcjtE+F/LsYguoitP/igvgs6h9mXIfhPrp3+QcSCKlcaAW1FHnv2PKzFgxRAI7yq2JvxT6waMpbe8lCr4iKBpFive2WoAo6h70Yy6mgAXHhPrsdZRna/iDdzHo1R9Zu4eNL8sY8uuZUQJlmfzVJ9LFl1NsGSfNRXZyyNETP8cLsb+CpDw/NQbA6XVx3EjC7T6Blq9Q0x6AVeyd61BGvZSOmVJ1Vl4wRR0+U1s3DtEsX6swNiJ+0/qAa5RNFkyAJO3jeLm9kfOrDN2n6l4UQS85uAJdG3mtSpSe4teqM3IhFhO6XAFsyGpGp5j/QEmWKLQiDgzEm7ihf5buSCmK4/kHfMCG+3XHnmF2IG/G+2kWM0SKiLPGWAHG6VFFnmwZGvy4EL2nTtNkT/HL5KKNk45KNxhZ9rC9t4yZwkDFfnK/OgWepKGPuVKYjATjgmzKsGwt9xAuNQKfu6O6zSRIT3UG7vL0udWyTHsAveXqmBuAtO8BM3/q5bMkyyOvR6GMBmIxK9q4QzyadA87SdglIcdfxYshfyocgL3IfyB2cqGtwDt4r5rg5/lWQviT7QGGnJLbDUVSSU5hqEYNm7R9OHqNp9QNJiDuFUaSF3C+/Y6IY7IpDOX3hDkVNjIpzKdac+m10eQGvVuvFR56B3+1XpkXxgmMN0Qs+h7gKOpC5uCE40+pIn8KB0BNLljMReQiu4otdNMr4g6rQwfb1N/41Y7NJ6x5bhGDgBzm8axAWYJUTcAB3zigi6KWvFHlj/l7TmXsUFbEy5OpGsSBYzpWuTyAhk9X+aCW2mFtnoDje1E74zDecqU3iORqkmtk02sXLA+Tu3S+FkflP4N3bhEj7KH3adsN2LHcP9K1u4988OfUftcxWuPN39WMdCcK2A4CRuToawZr6j/F/bf/WL1+1bEKaEbJ0yENipl0mwz4Fl8IlEFVQw7F57EdiEmXJR4Btcly3hwopLJ4GdBJArX0jvkqX7PgXtIMowmQk+Yw2hgDBQ1STosMg/GeQHiSRRqQAtuffTgQrLRKZo5wE+JbP/ONGoVgNl07Y262b11sOeAMpgG9WaSoUQbLxX48ZuIMvklL4HXHP9kWHBbbj2M9rAlORopD2Xr/UyTx+974uhB8CCIUP5eg+UGc5PIKkUeD/bLX7CcVreskPqG62VM/5HFGb0QYsaUCWDL+4OXZ9wSntZIQ9z4yVuj9CeeVfWaORwsOqOosbmW6x1vIUyV/mLrlTxCzSqJvaPdc4pe1SnirZ4KqrFnOzRo0bVkjzmGQvSOLPOS79YBbbgOQvHLUmVUhJhMRtvOin3RQrcl2vIDCNqteKTz3wCNqFMDe293gI60FbgfjQBtXUVVax8yYj9p+qDk/oviOwUgF77q4UZyzfavPFLtN2ejGHvPbTkS+qbO4ZIE2W6VdVh+og+GWBx8ZgeDvleQ2jiw/ogZyu7QWQqA1UXoGTFSagncUK466R0AH6X0RJUewPCoxJ9KRi6dtD9H6PuQeYWwrNs15/KJa+FSblv2acSijiZBN9OoR2Wx3e43j7Udx30kdoRZCOK/EWrKGeH/CHWMHDMXZGnYTAFwVx0LoybJYExBZJKfzRa59OhLJPJ6ClbgbPN9HRZ2/JHae4ksJk1zE2/nfJW1xfAWuQMyqpGtutQHv7VQfPdjU2r2sUHaaviWfEh5bT4FWkEPFSCIEy67m5EMosYrgiHNakNhlgB5WmDCDN8PbNsMJD0QHMzkWWBmjmvAlSAn20QOfR/UPvLRnalv2YPQ6bEjvK+Cvt4ngnYpg5i6j28JtGXxHH/Q7oYW63jyAzqn9N6HqNWxNsWCeG8iHPEEyTtuJgoG7U7D5YZN1CJ0ZndfCZx4WSvP9BTHf/CmMx7UftfFUwv2pCj8NMpbpdPJ2IIS9+7Be8qofdKXynpNKrMP2DVh3DQYIrfstj7B3QxVhpLqjXVFZUuZ453JUnjEWyf2H3ptWMmdjqJR/sdhQ==";
+    const MASK = Uint8Array.from(atob(MASK_BASE64), (character) => character.charCodeAt(0));
+    const MASK_SIZE = 64;
+    const NOISE = Array.from({ length: 256 }, (unused, level) => noiseForLevel(level));
+    const LINEAR_LOW = 0.0006;
+    const LINEAR_HIGH = 0.0045;
+    const ROWS = 32;
+    let scale = 3;
+    let boost = 8;
+    // The mask tiles the screen; the pass reads it at the pixel's position.
+    const maskNoise = (x, y) => NOISE[MASK[(y % MASK_SIZE) * MASK_SIZE + (x % MASK_SIZE)]];
+    function paint(canvas, columns, codeAt) {
+      canvas.width = columns;
+      canvas.height = ROWS;
+      canvas.style.width = columns * scale + "px";
+      canvas.style.height = ROWS * scale + "px";
+      const context = canvas.getContext("2d");
+      const image = context.createImageData(columns, ROWS);
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < columns; x++) {
+          const shown = Math.min(255, codeAt(x, y) * boost);
+          const offset = 4 * (y * columns + x);
+          image.data[offset] = shown;
+          image.data[offset + 1] = shown;
+          image.data[offset + 2] = shown;
+          image.data[offset + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
+    }
+    (function paintMask() {
+      const context = maskCanvas.getContext("2d");
+      const image = context.createImageData(MASK_SIZE, MASK_SIZE);
+      MASK.forEach((level, index) => {
+        image.data[4 * index] = level;
+        image.data[4 * index + 1] = level;
+        image.data[4 * index + 2] = level;
+        image.data[4 * index + 3] = 255;
+      });
+      context.putImageData(image, 0, 0);
+    })();
+    function draw() {
+      const columns = Math.max(8, Math.floor(plainCanvas.parentElement.clientWidth / scale));
+      const encoded = Array.from({ length: columns }, (unused, column) => srgbEncode([LINEAR_LOW + ((LINEAR_HIGH - LINEAR_LOW) * column) / (columns - 1)])[0]);
+      const dithered = (x, y) => toCode(encoded[x] + maskNoise(x, y) / 255);
+      paint(plainCanvas, columns, (x) => toCode(encoded[x]));
+      paint(ditheredCanvas, columns, dithered);
+      let moved = 0;
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < columns; x++) if (dithered(x, y) !== toCode(encoded[x])) moved++;
+      }
+      const means = encoded.map((value, x) => {
+        let sum = 0;
+        for (let y = 0; y < MASK_SIZE; y++) sum += dithered(x, y);
+        return sum / MASK_SIZE;
+      });
+      const plainError = Math.max.apply(null, encoded.map((value) => Math.abs(toCode(value) - 255 * value)));
+      const ditheredError = Math.max.apply(null, means.map((mean, x) => Math.abs(mean - 255 * encoded[x])));
+      const bands = new Set(encoded.map(toCode)).size;
+      byId("d-moved").textContent = ((100 * moved) / (columns * ROWS)).toFixed(1) + "%, about a third";
+      byId("d-plain-error").textContent = plainError.toFixed(2) + " steps";
+      byId("d-dithered-error").textContent = ditheredError.toFixed(2) + " steps";
+      plainCanvas.setAttribute("aria-label", "A dark gradient rounded to 8 bits: " + bands + " flat bands of codes " + toCode(encoded[0]) + " to " + toCode(encoded[columns - 1]) + ".");
+      ditheredCanvas.setAttribute("aria-label", "The same gradient dithered with the mask, then rounded: fine grain, with " + ((100 * moved) / (columns * ROWS)).toFixed(1) + "% of pixels a step off plain rounding.");
+      // Each column's mean: the gradient, plain rounding and the dithered mean.
+      const view = canvasView(plotCanvas, 0.26, 130);
+      const context = view.context;
+      const colours = readTokens();
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, view.width, view.height);
+      const lowest = Math.floor(255 * encoded[0]) - 0.5;
+      const highest = Math.ceil(255 * encoded[columns - 1]) + 0.5;
+      const area = { left: 34, right: view.width - 10, top: 10, bottom: view.height - 12 };
+      const xOf = (column) => area.left + ((column + 0.5) / columns) * (area.right - area.left);
+      const yOf = (code) => area.bottom - ((code - lowest) / (highest - lowest)) * (area.bottom - area.top);
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      const labelEvery = highest - lowest > 12 ? 2 : 1;
+      for (let code = Math.ceil(lowest); code <= highest; code++) {
+        line(context, area.left, yOf(code), area.right, yOf(code));
+        if (code % labelEvery === 0) text(context, colours, String(code), area.left - 6, yOf(code), "right");
+      }
+      const trace = (valueAt, colour, width, dash) => {
+        context.save();
+        context.setLineDash(dash);
+        context.strokeStyle = colour;
+        context.lineWidth = width;
+        context.lineJoin = "round";
+        context.beginPath();
+        for (let column = 0; column < columns; column++) {
+          if (column === 0) context.moveTo(xOf(column), yOf(valueAt(column)));
+          else context.lineTo(xOf(column), yOf(valueAt(column)));
+        }
+        context.stroke();
+        context.restore();
+      };
+      trace((column) => toCode(encoded[column]), colours.warm, 2, [6, 3]);
+      trace((column) => means[column], colours.accent, 2.2, []);
+      trace((column) => 255 * encoded[column], colours.ink, 1.2, []);
+      plotCanvas.setAttribute("aria-label", "Each column's mean code: plain rounding steps by up to " + plainError.toFixed(2) + " from the gradient, while the dithered mean stays within " + ditheredError.toFixed(2) + ".");
+      setPressed(scaleButtons, (button) => Number(button.dataset.scale) === scale);
+      setPressed(boostButtons, (button) => Number(button.dataset.boost) === boost);
+    }
+    for (const button of scaleButtons) {
+      button.addEventListener("click", () => {
+        scale = Number(button.dataset.scale);
+        draw();
+      });
+    }
+    for (const button of boostButtons) {
+      button.addEventListener("click", () => {
+        boost = Number(button.dataset.boost);
+        draw();
+      });
+    }
+    watchWidth(plainCanvas.parentElement, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
