@@ -325,7 +325,7 @@ impl CookedTexture {
             .map(u32::from_le_bytes);
         anyhow::ensure!(
             version == Some(TEXTURE_FORMAT_VERSION),
-            "Blob is not a Texture Blob of version {TEXTURE_FORMAT_VERSION} ({TEXTURE_VERSION_KEY}): re-cook with `praxis cook`"
+            "Texture Blob is not version {TEXTURE_FORMAT_VERSION}: re-cook with `praxis cook`"
         );
         let header = reader.header();
         anyhow::ensure!(
@@ -831,10 +831,38 @@ mod tests {
             + key.len();
         assert!(version_at.is_multiple_of(4), "{version_at}");
 
-        // M3's first Texture Blobs, whose key was `PXTX`.
-        let mut old_version = blob.clone();
-        old_version[version_at..version_at + 4].copy_from_slice(&1u32.to_le_bytes());
-        let error = CookedTexture::from_blob(&old_version)
+        // Version 1 under the current key is refused.
+        let mut other_version = blob.clone();
+        other_version[version_at..version_at + 4].copy_from_slice(&1u32.to_le_bytes());
+        let error = CookedTexture::from_blob(&other_version)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+
+        // So is M3's first Texture Blob format, whose entry was the key
+        // `PXTX`, its NUL and version 1: 13 bytes padded to 16, four fewer
+        // than the current entry, so the header's key-value length and each
+        // level's byte offset shrink with it.
+        let mut old_entry = vec![9, 0, 0, 0];
+        old_entry.extend(b"PXTX\0");
+        old_entry.extend(1u32.to_le_bytes());
+        old_entry.resize(16, 0);
+        let entry_at = version_at - key.len() - 4;
+        let mut old_format = blob[..entry_at].to_vec();
+        old_format.extend(&old_entry);
+        old_format.extend(&blob[entry_at + 20..]);
+        old_format[60..64].copy_from_slice(&16u32.to_le_bytes());
+        for level in 0..4 {
+            let offset_at = ktx2::Header::LENGTH + level * ktx2::LevelIndex::LENGTH;
+            let offset =
+                u64::from_le_bytes(old_format[offset_at..offset_at + 8].try_into().unwrap());
+            old_format[offset_at..offset_at + 8].copy_from_slice(&(offset - 4).to_le_bytes());
+        }
+        assert_eq!(
+            ktx2::Reader::new(&old_format[..]).unwrap().levels().len(),
+            4
+        );
+        let error = CookedTexture::from_blob(&old_format)
             .unwrap_err()
             .to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
