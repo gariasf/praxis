@@ -1,6 +1,7 @@
 {
   "scene": "town",
   "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "vulkan",
   "profile": "release",
   "width": 640,
   "height": 360,

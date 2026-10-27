@@ -19,8 +19,9 @@ use crate::stats::FrameStats;
 use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
-/// machine's (ADR 0013), and CI's lavapipe for counters only. Keyed by
-/// adapter, so neither machine compares with the other's.
+/// machine's (ADR 0013), CI's lavapipe for counters only, and the comparison
+/// adapter's. Keyed by adapter and backend, so no run compares with another
+/// machine's or another API's.
 pub const BASELINE_DIRECTORY: &str = "bench/baselines";
 
 /// The Budgets `compare` reads: ADR 0013's numbers.
@@ -83,12 +84,20 @@ impl Configuration {
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
-/// The Baseline directory of `adapter`: its name in lowercase, each run of
-/// other characters a hyphen (`Apple M4 Pro` is `apple-m4-pro`).
-pub fn baseline_directory(adapter: &str) -> PathBuf {
+/// The Baseline directory of `adapter` on `backend`: the adapter's name in
+/// lowercase, each run of other characters a hyphen (`Apple M4 Pro` is
+/// `apple-m4-pro`), then the backend's name unless it is Vulkan or Metal,
+/// the backend an adapter runs on unless `WGPU_BACKEND` asks for another
+/// (`NVIDIA GeForce RTX 2070 SUPER` on DX12 is
+/// `nvidia-geforce-rtx-2070-super-dx12`).
+pub fn baseline_directory(adapter: &str, backend: &str) -> PathBuf {
+    let own_backend = [wgpu::Backend::Vulkan, wgpu::Backend::Metal]
+        .iter()
+        .any(|own| own.to_str() == backend);
     let key = adapter
         .to_lowercase()
         .split(|character: char| !character.is_ascii_alphanumeric())
+        .chain((!own_backend).then_some(backend))
         .filter(|word| !word.is_empty())
         .collect::<Vec<_>>()
         .join("-");
@@ -118,6 +127,8 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
 pub struct Measurements {
     pub scene: String,
     pub adapter: String,
+    /// wgpu's name for the backend the adapter ran on (`vulkan`, `dx12`).
+    pub backend: String,
     /// `debug` or `release`: allocations differ between the two.
     pub profile: String,
     pub width: u32,
@@ -303,9 +314,11 @@ pub fn run(
         shadow_rays: false,
         ..switches
     })?;
+    let adapter = context.adapter.get_info();
     measure(
         scene,
-        context.adapter.get_info().name,
+        adapter.name,
+        adapter.backend,
         configuration,
         &frames,
         &frames_without_rays,
@@ -313,11 +326,12 @@ pub fn run(
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
-/// `adapter`, and of `frames_without_rays`, the same run with shadow rays
+/// `adapter` through `backend`, and of `frames_without_rays`, the same run with shadow rays
 /// off, which fail unless every frame of both read back its GPU stats.
 fn measure(
     scene: ReferenceScene,
     adapter: String,
+    backend: wgpu::Backend,
     configuration: Configuration,
     frames: &[FrameStats],
     frames_without_rays: &[FrameStats],
@@ -351,6 +365,7 @@ fn measure(
     Ok(Measurements {
         scene: scene.name().to_owned(),
         adapter,
+        backend: backend.to_str().to_owned(),
         profile: if cfg!(debug_assertions) {
             "debug"
         } else {
@@ -488,12 +503,14 @@ pub fn compare(
         baseline.measured_frames
     );
     anyhow::ensure!(
-        current.adapter == baseline.adapter,
-        "{} ran on {:?}, its Baseline on {:?}: compare times on the Baseline's machine, \
-         or counters only with --ci",
+        (&current.adapter, &current.backend) == (&baseline.adapter, &baseline.backend),
+        "{} ran on {:?} through {}, its Baseline on {:?} through {}: compare times on the \
+         Baseline's machine and backend, or counters only with --ci",
         current.scene,
         current.adapter,
-        baseline.adapter
+        current.backend,
+        baseline.adapter,
+        baseline.backend
     );
     let cpu = current.cpu_frame_microseconds.median;
     check_regression(
@@ -700,6 +717,7 @@ mod tests {
         Measurements {
             scene: "pbr-sweep".to_owned(),
             adapter: "Apple M4 Pro".to_owned(),
+            backend: "metal".to_owned(),
             profile: "release".to_owned(),
             width: Configuration::REFERENCE.width,
             height: Configuration::REFERENCE.height,
@@ -1022,6 +1040,9 @@ mod tests {
         let mut other_adapter = baseline();
         other_adapter.adapter = "llvmpipe".to_owned();
         assert!(compare(&other_adapter, &baseline(), &BUDGETS, CompareMode::Local).is_err());
+        let mut other_backend = baseline();
+        other_backend.backend = "vulkan".to_owned();
+        assert!(compare(&other_backend, &baseline(), &BUDGETS, CompareMode::Local).is_err());
         let mut debug = baseline();
         debug.profile = "debug".to_owned();
         assert!(compare(&debug, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
@@ -1092,6 +1113,7 @@ mod tests {
             measure(
                 ReferenceScene::PbrSweep,
                 "Apple M4 Pro".to_owned(),
+                wgpu::Backend::Metal,
                 configuration,
                 &frames(configuration),
                 &frames_without_rays(configuration),
@@ -1142,13 +1164,24 @@ mod tests {
             measure(
                 scene,
                 adapter.clone(),
+                wgpu::Backend::Metal,
                 configuration,
                 &frames,
                 &without_rays
             )
             .is_err()
         );
-        assert!(measure(scene, adapter, configuration, &without_rays, &frames).is_err());
+        assert!(
+            measure(
+                scene,
+                adapter,
+                wgpu::Backend::Metal,
+                configuration,
+                &without_rays,
+                &frames
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1182,14 +1215,22 @@ mod tests {
     }
 
     #[test]
-    fn baseline_directories_are_keyed_by_adapter() {
+    fn baseline_directories_are_keyed_by_adapter_and_any_backend_but_its_own() {
         assert_eq!(
-            baseline_directory("Apple M4 Pro"),
+            baseline_directory("Apple M4 Pro", "metal"),
             PathBuf::from("bench/baselines/apple-m4-pro")
         );
         assert_eq!(
-            baseline_directory("llvmpipe (LLVM 20.1.2, 256 bits)"),
+            baseline_directory("llvmpipe (LLVM 20.1.2, 256 bits)", "vulkan"),
             PathBuf::from("bench/baselines/llvmpipe-llvm-20-1-2-256-bits")
+        );
+        assert_eq!(
+            baseline_directory("NVIDIA GeForce RTX 2070 SUPER", "vulkan"),
+            PathBuf::from("bench/baselines/nvidia-geforce-rtx-2070-super")
+        );
+        assert_eq!(
+            baseline_directory("NVIDIA GeForce RTX 2070 SUPER", "dx12"),
+            PathBuf::from("bench/baselines/nvidia-geforce-rtx-2070-super-dx12")
         );
     }
 

@@ -120,7 +120,7 @@ pub fn run() -> Vec<Check> {
                 &golden_key(info.backend, info.device_type),
                 machine,
             ));
-            checks.push(baselines(&info.name, machine));
+            checks.push(baselines(&info.name, info.backend, machine));
         }
         Err(error) => checks.push(Check::new(
             "adapter",
@@ -192,8 +192,8 @@ fn goldens(key: &str, machine: Machine) -> Check {
     )
 }
 
-fn baselines(adapter: &str, machine: Machine) -> Check {
-    let key = crate::bench::baseline_directory(adapter)
+fn baselines(adapter: &str, backend: wgpu::Backend, machine: Machine) -> Check {
+    let key = crate::bench::baseline_directory(adapter, backend.to_str())
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
