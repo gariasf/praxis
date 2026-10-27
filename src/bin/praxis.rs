@@ -411,10 +411,10 @@ fn report(results: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The Baseline of `current`, read from `path`: its adapter's file of the
-/// same name.
+/// The Baseline of `current`, read from `path`: its adapter and backend's
+/// file of the same name.
 fn baseline_path(current: &Measurements, path: &Path) -> std::path::PathBuf {
-    praxis::bench::baseline_directory(&current.adapter)
+    praxis::bench::baseline_directory(&current.adapter, &current.backend)
         .join(path.file_name().expect("a read_dir entry has a file name"))
 }
 

@@ -1,6 +1,7 @@
 {
   "scene": "minification",
   "adapter": "Apple M4 Pro",
+  "backend": "metal",
   "profile": "release",
   "width": 2560,
   "height": 1440,

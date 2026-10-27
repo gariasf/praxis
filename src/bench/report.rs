@@ -234,6 +234,7 @@ mod tests {
         Measurements {
             scene: "helmet".to_owned(),
             adapter: "Apple M4 Pro".to_owned(),
+            backend: "metal".to_owned(),
             profile: "release".to_owned(),
             width: 2560,
             height: 1440,
