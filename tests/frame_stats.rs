@@ -367,17 +367,22 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
         wgpu::Backend::Metal => 72,
         _ => 64,
     };
-    // The 112-byte camera and 32-byte light uniforms, the sun and four point
-    // lights, 48 bytes each, and the five 128-byte Instances and their
-    // entries.
-    assert_eq!(
-        last.uploaded_bytes,
-        112 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes
-    );
     assert_eq!(last.moving_instances_left_out, 0);
-    // Every frame builds it: its recording and its submit are timed on the
-    // CPU, and its build on the GPU, within the frame.
+    // Every frame builds it: its entries are uploaded, its recording and its
+    // submit are timed on the CPU, and its build on the GPU, within the
+    // frame. The build's time starts at the end of the frame before, so a
+    // build that finishes while that frame's passes still run reads 0, as
+    // the Baseline's does.
     for (frame, stats) in frames.iter().enumerate() {
+        // The 112-byte camera and 32-byte light uniforms, the sun and four
+        // point lights, 48 bytes each, the five 128-byte Instances and their
+        // entries, and on the first frame the 4-byte Instance slot count.
+        let slot_count = if frame == 0 { 4 } else { 0 };
+        assert_eq!(
+            stats.uploaded_bytes,
+            112 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + slot_count,
+            "frame {frame}"
+        );
         let timed: Vec<&str> = stats
             .cpu_times
             .iter()
@@ -395,7 +400,7 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
         let (pass, build) = gpu.pass_times[0];
         assert_eq!(pass, "dynamic_tlas_build", "frame {frame}");
         assert!(
-            Duration::ZERO < build && build <= gpu.frame_time,
+            build <= gpu.frame_time,
             "frame {frame}: the build took {build:?} of {:?}",
             gpu.frame_time
         );
