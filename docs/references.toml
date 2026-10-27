@@ -1411,3 +1411,471 @@ url = "https://crates.io/api/v1/crates/ktx2/0.5.0"
 section = "crates.io registry metadata, version.license"
 quote = '''"license": "Apache-2.0"'''
 checked = 2026-10-26
+
+["wgpu-types-30-ray-query-experimental"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/features.rs#L1049-L1060"
+section = "wgpu-types 30.0.1, Features::EXPERIMENTAL_RAY_QUERY"
+quote = '''/// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+/// major bugs in it and are expected to be subject to breaking changes, suggestions
+/// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+///
+/// Allows for the creation of ray-tracing queries within shaders.
+[...]
+const EXPERIMENTAL_RAY_QUERY = 1 << 32;'''
+checked = 2026-10-27
+
+["wgpu-types-30-experimental-features-unsafe"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/tokens.rs#L29-L37"
+section = "wgpu-types 30.0.1, ExperimentalFeatures::enabled"
+quote = '''/// # Safety
+///
+/// - You acknowledge that there may be UB-containing bugs in these
+///   apis and those may be hit by calling otherwise safe code.
+/// - You agree to report any such bugs to us, if you find them.
+[...]
+pub const unsafe fn enabled() -> Self {'''
+checked = 2026-10-27
+
+["wgpu-core-30-experimental-features-gate"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/instance.rs#L907-L916"
+section = "wgpu-core 30.0.1, Adapter::create_device_and_queue, experimental features check"
+quote = '''// Check if experimental features are permitted to be enabled.
+if desc
+    .required_features
+    .intersects(wgt::Features::all_experimental_mask())
+    && !desc.experimental_features.is_enabled()
+{
+    return Err(RequestDeviceError::ExperimentalFeaturesNotEnabled('''
+checked = 2026-10-27
+
+["wgpu-core-30-anisotropy-clamp"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L2318-L2328"
+section = "wgpu-core 30.0.1, Device::create_sampler"
+quote = '''let anisotropy_clamp = if self
+    .downlevel
+    .flags
+    .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
+{
+    // Clamp anisotropy clamp to [1, 16] per the wgpu-hal interface
+    desc.anisotropy_clamp.min(16)
+} else {
+    // If it isn't supported, set this unconditionally to 1
+    1
+};'''
+checked = 2026-10-27
+
+["wgpu-core-30-vertex-storage-required"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L2907-L2917"
+section = "wgpu-core 30.0.1, Device::create_bind_group_layout, per-entry downlevel requirements"
+quote = '''if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
+[...]
+    if let Bt::Buffer {
+        ty: wgt::BufferBindingType::Storage { .. },
+        ..
+    } = entry.ty
+    {
+        required_downlevel_flags |= wgt::DownlevelFlags::VERTEX_STORAGE;
+    }'''
+checked = 2026-10-27
+
+["wgpu-core-30-compute-required"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L4036-L4042"
+section = "wgpu-core 30.0.1, Device::create_compute_pipeline_inner"
+quote = '''pub fn create_compute_pipeline_inner(
+[...]
+    self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;'''
+checked = 2026-10-27
+
+["wgpu-core-30-indirect-required"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L1056-L1057"
+section = "wgpu-core 30.0.1, Device::create_buffer"
+quote = '''if desc.usage.contains(wgt::BufferUsages::INDIRECT) {
+    self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;'''
+checked = 2026-10-27
+
+["wgpu-types-30-downlevel-default-all"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L1063-L1071"
+section = "wgpu-types 30.0.1, impl Default for DownlevelCapabilities"
+quote = '''impl Default for DownlevelCapabilities {
+    fn default() -> Self {
+        Self {
+            flags: DownlevelFlags::all(),'''
+checked = 2026-10-27
+
+["wgpu-hal-30-dx12-downlevel-default"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L741"
+section = "wgpu-hal 30.0.1, DX12 adapter capabilities"
+quote = '''let downlevel = wgt::DownlevelCapabilities::default();'''
+checked = 2026-10-27
+
+["wgpu-hal-30-vulkan-downlevel-flags"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L684-L707"
+section = "wgpu-hal 30.0.1, Vulkan PhysicalDeviceFeatures::to_wgpu, downlevel flags"
+quote = '''let mut dl_flags = Df::COMPUTE_SHADERS
+[...]
+    | Df::VERTEX_STORAGE
+[...]
+    | Df::INDIRECT_EXECUTION
+[...]
+dl_flags.set(
+    Df::SURFACE_VIEW_FORMATS,
+    caps.supports_extension(khr::swapchain_mutable_format::NAME)
+        || !caps.supports_extension(khr::swapchain::NAME),
+);
+[...]
+dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);'''
+checked = 2026-10-27
+
+["wgpu-hal-30-metal-downlevel-flags"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1333-L1359"
+section = "wgpu-hal 30.0.1, Metal PrivateCapabilities::capabilities, downlevel flags"
+quote = '''let mut downlevel = wgt::DownlevelCapabilities::default();
+[...]
+downlevel.flags.set(
+    wgt::DownlevelFlags::INDIRECT_EXECUTION,
+    self.indirect_draw_dispatch,
+);
+[...]
+downlevel
+    .flags
+    .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);'''
+checked = 2026-10-27
+
+["wgpu-hal-30-metal-indirect-first-instance"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1202"
+section = "wgpu-hal 30.0.1, Metal PrivateCapabilities::features"
+quote = '''features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);'''
+checked = 2026-10-27
+
+["wgpu-core-30-resolve-format"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/render.rs#L1583-L1592"
+section = "wgpu-core 30.0.1, render pass colour attachment resolve checks"
+quote = '''if !resolve_view
+    .format_features
+    .flags
+    .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE)
+{
+    return Err(RenderPassErrorInner::UnsupportedResolveTargetFormat {'''
+checked = 2026-10-27
+
+["wgpu-hal-30-metal-timestamp-inside"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1208-L1217"
+section = "wgpu-hal 30.0.1, Metal PrivateCapabilities::features, timestamp features; INSIDE_WGPU_PASSES defined in metal/mod.rs L224"
+quote = '''features.set(
+    F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+    self.timestamp_query_support
+        .contains(TimestampQuerySupport::ON_BLIT_ENCODER),
+);
+features.set(
+    F::TIMESTAMP_QUERY_INSIDE_PASSES,
+    self.timestamp_query_support
+        .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
+);'''
+checked = 2026-10-27
+
+["wgpu-types-30-acceleration-structure-minimums"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L774-L786"
+section = "wgpu-types 30.0.1, Limits::using_minimum_supported_acceleration_structure_values"
+quote = '''/// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_QUERY`]
+[...]
+max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+// On metal acceleration structures are limited because they share buffer slots
+max_acceleration_structures_per_shader_stage: 1,
+max_buffers_and_acceleration_structures_per_shader_stage: 29,'''
+checked = 2026-10-27
+
+["wgpu-hal-30-metal-buffer-slots"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L1376-L1396"
+section = "wgpu-hal 30.0.1, Metal PrivateCapabilities::capabilities, per-stage buffer limits; MAX_BUFFERS = 31 at L54"
+quote = '''// Metal has a single buffer limit that we must split across 3 WebGPU limits:
+[...]
+// We also have to reserve 2 additional internal buffers:
+[...]
+const MAX_USABLE_BUFFERS: u32 = MAX_BUFFERS - 2;
+max_storage_buffers_per_shader_stage = MAX_USABLE_BUFFERS;
+[...]
+max_acceleration_structures_per_shader_stage = MAX_USABLE_BUFFERS;
+max_buffers_and_acceleration_structures_per_shader_stage = MAX_USABLE_BUFFERS;'''
+checked = 2026-10-27
+
+["wgpu-hal-30-dx12-binding-limits"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L772-L825"
+section = "wgpu-hal 30.0.1, DX12 adapter limits by Resource Binding Tier"
+quote = '''let full_heap_count = match rbt {
+    ResourceBindingTier::T1 | ResourceBindingTier::T2 => 1_000_000,
+    // 1_000_000+
+    ResourceBindingTier::T3 => {
+        // Theoretically vram limited, but in practice 2^20 is the limit
+        1 << 20
+    }
+};
+[...]
+    ResourceBindingTier::T3 => full_heap_count,
+};
+const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+// We must share the UAV limit across both storage resource limits.
+let max_uav_per_shader_stage = max_uav_across_all_stages / MAX_SHADER_STAGES_PER_PIPELINE;
+let max_storage_textures_per_shader_stage = max_uav_per_shader_stage / 2;
+let mut max_storage_buffers_per_shader_stage = max_uav_per_shader_stage / 2;'''
+checked = 2026-10-27
+
+["wgpu-hal-30-vulkan-storage-buffers-halved"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1534-L1553"
+section = "wgpu-hal 30.0.1, Vulkan adapter limits, per-stage storage buffers"
+quote = '''const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+[...]
+let mut max_storage_buffers_per_shader_stage = limits
+    .max_per_stage_descriptor_storage_buffers
+    .min(limits.max_descriptor_set_storage_buffers / MAX_SHADER_STAGES_PER_PIPELINE);'''
+checked = 2026-10-27
+
+["wgpu-types-30-default-storage-binding-size"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L441"
+section = "wgpu-types 30.0.1, Limits::defaults"
+quote = '''pub const fn defaults() -> Self {
+[...]
+    max_storage_buffer_binding_size: 128 << 20, // (128 MiB)'''
+checked = 2026-10-27
+
+["wgpu-core-30-backend-order"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/instance.rs#L83-L88"
+section = "wgpu-core 30.0.1, Instance::new, backend registration"
+quote = '''#[cfg(all(vulkan, not(target_os = "netbsd")))]
+this.try_add_hal(hal::api::Vulkan, &instance_desc, telemetry);
+#[cfg(metal)]
+this.try_add_hal(hal::api::Metal, &instance_desc, telemetry);
+#[cfg(dx12)]
+this.try_add_hal(hal::api::Dx12, &instance_desc, telemetry);'''
+checked = 2026-10-27
+
+["wgpu-hal-30-allocator-report-default"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1210-L1212"
+section = "wgpu-hal 30.0.1, Device::generate_allocator_report default (overridden only in dx12/device.rs and vulkan/device.rs; identical in 29.0.1 at L1164-L1166)"
+quote = '''fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+    None
+}'''
+checked = 2026-10-27
+
+["mesa-25.2.8-lvp-max-storage-buffers"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L905"
+section = "Mesa 25.2.8, lavapipe's physical device limits, maxPerStageDescriptorStorageBuffers"
+quote = '''.maxPerStageDescriptorStorageBuffers      = MAX_DESCRIPTORS,'''
+checked = 2026-10-27
+
+["mesa-25.2.8-lvp-max-descriptors"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_private.h#L102"
+section = "Mesa 25.2.8, lavapipe, MAX_DESCRIPTORS"
+quote = '''#define MAX_DESCRIPTORS 1000000 /* Required by vkd3d-proton */'''
+checked = 2026-10-27
+
+["mesa-25.2.8-lvp-max-storage-buffer-range"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L896"
+section = "Mesa 25.2.8, lavapipe's physical device limits, maxStorageBufferRange"
+quote = '''.maxStorageBufferRange                    = device->pscreen->caps.max_shader_buffer_size,'''
+checked = 2026-10-27
+
+["mesa-25.2.8-llvmpipe-max-shader-buffer-size"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/drivers/llvmpipe/lp_screen.c#L352"
+section = "Mesa 25.2.8, llvmpipe screen caps, max_shader_buffer_size"
+quote = '''caps->max_shader_buffer_size = LP_MAX_TGSI_SHADER_BUFFER_SIZE;'''
+checked = 2026-10-27
+
+["mesa-25.2.8-gallivm-max-shader-buffer-size"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/auxiliary/gallivm/lp_bld_limits.h#L57"
+section = "Mesa 25.2.8, gallivm limits, LP_MAX_TGSI_SHADER_BUFFER_SIZE: 2²⁷ bytes, 128 MiB"
+quote = '''#define LP_MAX_TGSI_SHADER_BUFFER_SIZE (1 << 27)'''
+checked = 2026-10-27
+
+["mesa-25.2.8-features-lavapipe-ray-query"]
+url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/docs/features.txt#L463"
+section = "Mesa 25.2.8, docs/features.txt, lines 463, 480, 534, 540 and 562 (lvp is lavapipe)"
+quote = '''VK_KHR_buffer_device_address DONE (anv, hasvk, lvp, nvk, panvk, radv, tu, v3dv, vn) [...] VK_EXT_descriptor_indexing DONE (anv, dzn, lvp, nvk, panvk/v10+, radv, tu, vn) [...] VK_KHR_acceleration_structure DONE (anv/gfx12.5+, lvp, radv/gfx10.3+, tu/a740+, vn) [...] VK_KHR_deferred_host_operations DONE (anv, hasvk, lvp, radv, vn) [...] VK_KHR_ray_query DONE (anv/gfx12.5+, lvp, radv/gfx10.3+, tu/a740+, vn)'''
+checked = 2026-10-27
+
+["vulkan-max-storage-buffer-range"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/chapters/limits.adoc#L6847"
+section = "Vulkan specification, Limits, table Required Limits, maxStorageBufferRange"
+quote = '''pname:maxStorageBufferRange: -: 2^27^: min'''
+checked = 2026-10-27
+
+["vulkan-update-after-bind-minimums"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/chapters/limits.adoc#L7109-L7126"
+section = "Vulkan specification, Limits, table Required Limits, the update-after-bind limits wgpu-hal reads for binding arrays, and footnote 9 (L7598-L7602)"
+quote = '''pname:maxPerStageDescriptorUpdateAfterBindStorageBuffers: -: 500000 ^9^: min
+pname:maxPerStageDescriptorUpdateAfterBindSampledImages: -: 500000 ^9^: min
+pname:maxPerStageDescriptorUpdateAfterBindStorageImages: -: 500000 ^9^: min [...]
+pname:maxDescriptorSetUpdateAfterBindStorageBuffers: -: 500000 ^9^: min [...]
+pname:maxDescriptorSetUpdateAfterBindSampledImages: -: 500000 ^9^: min
+pname:maxDescriptorSetUpdateAfterBindStorageImages: -: 500000 ^9^: min [...]
+9:: This ptext:UpdateAfterBind descriptor limit must: be greater than or equal to the corresponding ptext:non-UpdateAfterBind limit if the corresponding ptext:UpdateAfterBind feature is supported. Otherwise it can: be zero.'''
+checked = 2026-10-27
+
+["vulkan-max-acceleration-structures-per-stage"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/chapters/limits.adoc#L7237"
+section = "Vulkan specification, Limits, table Required Limits, VK_KHR_acceleration_structure rows"
+quote = '''pname:maxPerStageDescriptorAccelerationStructures: -: 16: min'''
+checked = 2026-10-27
+
+["d3d12-resource-binding-tiers"]
+url = "https://github.com/MicrosoftDocs/win32/blob/ca8274decead49403d70ceeed4af8d4ca74eaf11/desktop-src/direct3d12/hardware-support.md#L21-L27"
+section = "Microsoft Learn, Direct3D 12, Hardware Tiers (learn.microsoft.com/windows/win32/direct3d12/hardware-support), table Resources Available to the Pipeline, columns Tier 1: Tier 2: Tier 3"
+quote = '''Maximum number of descriptors in a Constant Buffer View (CBV), Shader Resource View (SRV), or Unordered Access View(UAV) heap used for rendering: 1,000,000: 1,000,000: 1,000,000+
+Maximum number of Constant Buffer Views in all descriptor tables per shader stage: 14: 14: full heap
+Maximum number of Shader Resource Views in all descriptor tables per shader stage: 128: full heap: full heap'''
+checked = 2026-10-27
+
+["metal-feature-set-tables-buffer-argument-table"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7"
+section = "Metal Feature Set Tables (2026-05-21), GPU implementation limits by family, Function arguments, p. 7, columns Apple2 to Apple10"
+quote = '''Maximum number of entries in the buffer argument table, per graphics or kernel function 2: 31 31 31 31 31 31 31 31 31'''
+checked = 2026-10-27
+
+["metal-feature-set-tables-sample-buffers"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8"
+section = "Metal Feature Set Tables (2026-05-21), GPU implementation limits by family, p. 8, columns Apple2 to Apple10"
+quote = '''Maximum counter sample buffer length: 32 KB [...] Maximum number of sample buffers: 32 32 32 32 32 32 32 32 32'''
+checked = 2026-10-27
+
+["msl-4.1-no-double"]
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=25"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §2.1 Scalar Data Types, p. 25"
+quote = '''Metal supports the scalar types listed in Table 2.1. Metal does not support the double, long long, unsigned long long, and long double data types.'''
+checked = 2026-10-27
+
+["apple-nsview-main-actor"]
+url = "https://developer.apple.com/documentation/appkit/nsview"
+section = "Apple AppKit documentation, NSView, declaration"
+quote = '''@MainActor class NSView'''
+checked = 2026-10-27
+
+["d3d12-feature-level-12-2"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/f2917db873d4ea81e1de3b6dd6321570391d3cdf/d3d/D3D12_FeatureLevel12_2.md#L39-L72"
+section = "DirectX specifications, Feature Level 12_2, Capabilities"
+quote = '''If a device is feature level 12_2, it has [...] Shader Model: 6.5 [...] Raytracing tier: Tier 1.1 [...] Mesh shader tier: Tier 1 [...] Resource Binding Tier: Tier 3 [...] Additionally, it has the following flags set [...] WaveOps: TRUE [...] Int64ShaderOps: TRUE'''
+checked = 2026-10-27
+
+["gpuinfo-vulkan-ray-query-coverage"]
+url = "https://vulkan.gpuinfo.org/listextensions.php?platform=windows&age=recent"
+section = "Vulkan Hardware Database, extension coverage, Windows, Age Recent (1y); the figures move, read on the date checked"
+quote = '''VK_EXT_mesh_shader: 49.35 % [...] VK_KHR_ray_query: 47.66 %'''
+checked = 2026-10-27
+
+["wgpu-hal-30-metal-acquire-window"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/surface.rs#L354-L375"
+section = "wgpu-hal 30.0.1, metal/surface.rs, Surface::acquire_texture's macOS occlusion check, and hosting_window (L24-L35), which it calls"
+quote = '''#[cfg(target_os = "macos")] { [...] if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) { [...] let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] }; [...]
+/// Walks up from `start` to the `NSWindow` hosting this layer: the first ancestor
+/// layer with a delegate is the backing `NSView`, and we return its `window`. [...] if let Some(delegate) = layer.delegate() { return unsafe { objc2::msg_send![&*delegate, window] }; }'''
+checked = 2026-10-27
+
+["bevy-tasks-0.18.1-default-threads"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/task_pool.rs#L165-L167"
+section = "bevy_tasks 0.18.1, task_pool.rs, TaskPool::new_internal, which TaskPool::default reaches through new() (L603-L606); available_parallelism in lib.rs L167-L172"
+quote = '''let num_threads = builder
+            .num_threads
+            .unwrap_or_else(crate::available_parallelism);'''
+checked = 2026-10-27
+
+["bevy-ecs-0.18.1-executor-default"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/schedule/executor/mod.rs#L45-L66"
+section = "bevy_ecs 0.18.1, schedule/executor/mod.rs, enum ExecutorKind"
+quote = '''/// The default depends on the target platform: [...] [`MultiThreaded`](ExecutorKind::MultiThreaded) everywhere else. [...] not(feature = "multi_threaded") ), default )] SingleThreaded, [...] #[cfg_attr(all(not(target_arch = "wasm32"), feature = "multi_threaded"), default)] MultiThreaded,'''
+checked = 2026-10-27
+
+["bevy-ecs-0.18.1-par-iter-multi-threaded"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/query/par_iter.rs#L86-L104"
+section = "bevy_ecs 0.18.1, query/par_iter.rs, QueryParIter::for_each_init: a serial fold without multi_threaded, compute pool batches with it"
+quote = '''#[cfg(any(target_arch = "wasm32", not(feature = "multi_threaded")))] [...] .fold(init, func); [...] #[cfg(all(not(target_arch = "wasm32"), feature = "multi_threaded"))] { let thread_count = bevy_tasks::ComputeTaskPool::get().thread_num();'''
+checked = 2026-10-27
+
+["bevy-tasks-0.18.1-multi-threaded-pool"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/lib.rs#L103-L115"
+section = "bevy_tasks 0.18.1, lib.rs: the threaded TaskPool and Scope with multi_threaded, the single-threaded ones without; bevy_ecs Cargo.toml L20 forwards the feature"
+quote = '''cfg::multi_threaded! { if { mod task_pool; [...] pub use task_pool::{Scope, TaskPool, TaskPoolBuilder}; [...] } else { mod single_threaded_task_pool; pub use single_threaded_task_pool::{Scope, TaskPool, TaskPoolBuilder, ThreadExecutor};'''
+checked = 2026-10-27
+
+["wgpu-core-30-map-after-last-submission"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L163-L164"
+section = "wgpu-core 30.0.1, device/life.rs, LifetimeTracker docs, Host mapping buffers; LifetimeTracker::map (L236-L250) queues the buffer on the newest active submission that uses it"
+quote = '''/// A buffer cannot be mapped until all active queue submissions that use it
+/// have completed.'''
+checked = 2026-10-27
+
+["wgpu-core-30-submit-mapped-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L2072-L2075"
+section = "wgpu-core 30.0.1, device/queue.rs, validate_command_buffer, check resource state; error text at L564-L565"
+quote = '''match *buffer.map_state.lock() { BufferMapState::Idle => (), _ => return Err(QueueSubmitError::BufferStillMapped(buffer.error_ident())), } [...] #[error("{0} is still mapped")] BufferStillMapped(ResourceErrorIdent),'''
+checked = 2026-10-27
+
+["wgpu-30-write-buffer-before-submit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/queue.rs#L143-L158"
+section = "wgpu 30.0.1, Queue::write_buffer, Performance considerations; write_texture (L245-L247) shares them"
+quote = '''Calls to `write_buffer()` do *not* submit the transfer to the GPU
+    ///   immediately. They begin GPU execution only on the next call to
+    ///   [`Queue::submit()`], just before the explicitly submitted commands. [...] However, `data` will be immediately copied into staging memory'''
+checked = 2026-10-27
+
+["wgpu-types-30-frame-latency-two"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/surface.rs#L947-L948"
+section = "wgpu-types 30.0.1, SurfaceConfiguration::desired_maximum_frame_latency; wgpu 30.0.1 Surface::get_default_config sets 2 (wgpu/src/api/surface.rs L96)"
+quote = '''* Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
+    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.'''
+checked = 2026-10-27
+
+["mlua-0.12.2-send-feature"]
+url = "https://github.com/mlua-rs/mlua/blob/v0.12.2/README.md#L52"
+section = "mlua v0.12.2 README, Cargo features"
+quote = '''`send`: make `mlua::Lua: Send + Sync` (adds [`Send`] requirement to `mlua::Function` and `Send + Sync` to `mlua::UserData`)'''
+checked = 2026-10-27
+
+["mlua-0.12.2-send-lock"]
+url = "https://github.com/mlua-rs/mlua/blob/v0.12.2/src/types/sync.rs#L1-L36"
+section = "mlua v0.12.2, src/types/sync.rs: ReentrantMutex is parking_lot's with send (L9), a no-op wrapper without (L34-L35)"
+quote = '''#[cfg(feature = "send")] mod inner { [...] pub(crate) type ReentrantMutex<T> = parking_lot::ReentrantMutex<T>; [...] #[cfg(not(feature = "send"))] mod inner { [...] pub(crate) fn lock(&self) -> ReentrantMutexGuard<'_, T> { ReentrantMutexGuard(&self.0)'''
+checked = 2026-10-27
+
+["mlua-0.12.2-luajit"]
+url = "https://github.com/mlua-rs/mlua/blob/v0.12.2/README.md#L23"
+section = "mlua v0.12.2 README, introduction and Cargo features (L44)"
+quote = '''`mlua` supports Lua 5.5, 5.4, 5.3, 5.2, 5.1 (including LuaJIT) and [Luau] [...] `luajit`: enable [LuaJIT] support'''
+checked = 2026-10-27
+
+["wgpu-issue-2869"]
+url = "https://github.com/gfx-rs/wgpu/issues/2869"
+section = "gfx-rs/wgpu issue 2869, Extended Presentation API Investigation (open)"
+quote = '''I'm working on frame pacing and we need some help from the api. [...] And we have the following primatives: - Get Present Start/End Time - Wait for Present Finish - Present with Damage - Schedule Present Time - Primary Monitor Frequency'''
+checked = 2026-10-27
+
+["box2d-3.1.1-fixed-step"]
+url = "https://github.com/erincatto/box2d/blob/v3.1.1/docs/hello.md#L176-L178"
+section = "Box2D v3.1.1 documentation, Hello Box2D, Simulating the World"
+quote = '''It is also not good for the time step to vary from frame to frame. A
+variable time step produces variable results, which makes it difficult
+to debug. So don't tie the time step to your frame rate.'''
+checked = 2026-10-27
+
+["physx-5.6.1-variable-step"]
+url = "https://nvidia-omniverse.github.io/PhysX/physx/5.6.1/docs/Simulation.html#the-simulation-loop"
+section = "PhysX 5.6.1 documentation, Simulation, The Simulation Loop, Note"
+quote = '''Be very careful if you do this, rather than taking constant-sized time steps: The simulation code is sensitive to both very small and large time steps, and also to too much variation between time steps. In these cases it will likely produce jittery simulation.'''
+checked = 2026-10-27
+
+["rust-1.96-f64-sin-precision"]
+url = "https://doc.rust-lang.org/1.96.0/std/primitive.f64.html#method.sin"
+section = "Rust 1.96.0 standard library, f64::sin, Unspecified precision (the same under cos and tan)"
+quote = '''The precision of this function is non-deterministic. This means it varies by platform, Rust version, and can even differ within the same execution from one invocation to the next.'''
+checked = 2026-10-27
+
+["schneider-2015-hzd-clouds"]
+url = "https://www.advances.realtimerendering.com/s2015/The%20Real-time%20Volumetric%20Cloudscapes%20of%20Horizon%20-%20Zero%20Dawn%20-%20ARTR.pdf#page=93"
+section = "Schneider and Vos, The Real-time Volumetric Cloudscapes of Horizon: Zero Dawn, SIGGRAPH 2015 Advances in Real-time Rendering, speaker notes of PDF pages 93 to 96"
+quote = '''The approach that I have described so far costs around 20 milliseconds. [...] Every frame we could use a quarter res buffer… to update 1 out of 16 pixels for each 4x4 pixel bl.ock within our final image. We reproject the previous frame to ensure we have something persistent. [...] Because of this our target performance is around 2 milliseconds [...] All of this was captured on a playstation 4'''
+checked = 2026-10-27
+
+["apple-mtldevice-current-allocated-size"]
+url = "https://developer.apple.com/documentation/metal/mtldevice/currentallocatedsize"
+section = "Apple Metal documentation, MTLDevice.currentAllocatedSize, abstract (macOS 10.13 and later)"
+quote = '''The total amount of memory, in bytes, the GPU device is using for all of its resources.'''
+checked = 2026-10-27

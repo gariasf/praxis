@@ -64,7 +64,7 @@ Lua. Same boundary Supergiant uses for Hades: a thin engine API, with
 the content shape and reactive logic above it. Designers and modders
 iterate on game content without recompiling.
 
-**Choice: Lua via [mlua](https://github.com/mlua-rs/mlua), with the
+**Choice: Lua via [mlua](https://github.com/mlua-rs/mlua/tree/v0.12.2) [ref:mlua-0.12.2-luajit], with the
 LuaJIT backend on supported platforms.** Lua has a long track record in
 shipped games as the gameplay/content layer above a native engine —
 Hades and Hades II (Supergiant), World of Warcraft (UI and addons),
