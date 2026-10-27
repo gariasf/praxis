@@ -12,11 +12,11 @@ Within 100 km of the origin: a point 0.3 m from the camera lands within 0.25 px 
 - A floating origin must shift whenever the camera strays 512 m from it, and each shift rewrites every position the engine holds (ECS, physics, GPU buffers, Lua state); entities simulated beyond 1024 m from the origin still fail.
 - An integer cell plus an f32 position in the ECS meets the bar, but every system, script and save handles two-part positions and moves entities between cells.
 - f64 rotation and scale buy nothing: the GPU applies rotation in f32 regardless.
-- f64 on the GPU: Metal has no f64 shaders, and its default fast math may reorder the arithmetic that two-float emulation depends on.
+- f64 on the GPU: Metal has no f64 shaders [ref:msl-4.1-no-double], and its default fast math may reorder the arithmetic that two-float emulation depends on [ref:msl-4.1-fast-math].
 
 ## Consequences
 
-- The Instance buffer (ADR 0003) and the per-Instance data (ADR 0005) store anchor plus offset, so camera motion dirties no Instance. The vertex shader composes camera-relative positions until draws are GPU-driven; then the culling pass does it once per Instance. Worst cases, measured separately, sum to 0.041 mm: the composition in every evaluation order the compiler may choose, plus f32 rotation of a vertex 128 m from its pivot. A 128 m grid sums to 0.045 mm and fails.
+- The Instance buffer (ADR 0003) and the per-Instance data (ADR 0005) store anchor plus offset, so camera motion dirties no Instance. The vertex shader composes camera-relative positions until draws are GPU-driven; then the culling pass does it once per Instance. Worst cases, measured separately ([#18](https://github.com/gariasf/praxis/issues/18#issuecomment-6124505688)), sum to 0.041 mm, 0.0185 and 0.0225: the composition in every evaluation order the compiler may choose, plus f32 rotation of a vertex 128 m from its pivot. A 128 m grid sums to 0.045 mm and fails.
 - Subsystems that compute in f32 (physics, audio, particles, ray-tracing acceleration structures) convert at their boundary into a local frame they own. The physics engine, not yet chosen, meets the simulation bar with f64 internals or f32 frames within 1 km of their origin.
 - Lua receives positions as numbers, which are doubles. Saves store f64.
 - A Chunk is a vertical column addressed by integer (x, z), with its origin at (x·edge, 0, z·edge). The cooked format picks the edge and encodes positions inside a Chunk so they meet the bar once promoted to f64: f32 heights alone fail the simulation bar above 1024 m, and cooked meshes stay within 128 m of their pivot.

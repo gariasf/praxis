@@ -54,7 +54,8 @@ const MAP_FAILED: u8 = 2;
 /// The ring of readbacks of the frames' GPU stats.
 pub struct GpuStatsReadback {
     /// `QUERIES_PER_FRAME` per slot, in one set: Apple GPUs allow 32
-    /// timestamp sets per device.
+    /// counter sample buffers, and on Metal each set is one
+    /// [ref:metal-feature-set-tables-sample-buffers].
     query_set: wgpu::QuerySet,
     /// Where a frame's timestamps resolve before their copy to its slot:
     /// queries resolve only into buffers the CPU cannot map.

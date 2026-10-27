@@ -52,7 +52,8 @@ impl GpuContext {
                 required_features: floor_features(),
                 // SAFETY: ray queries are an experimental wgpu feature, and
                 // enabling them accepts that a wgpu bug may cause undefined
-                // behaviour from safe calls. ADR 0020's ray-traced shadows
+                // behaviour from safe calls
+                // [ref:wgpu-types-30-experimental-features-unsafe]. ADR 0020's ray-traced shadows
                 // and probes need them, so the floor (ADR 0021) takes that
                 // risk.
                 experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
@@ -254,7 +255,8 @@ pub(crate) fn floor_features() -> wgpu::Features {
 pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
     // ADR 0017 keeps hardware anisotropic filtering, and Material Channels
     // sample at up to 16x; without the flag, wgpu silently
-    // clamps every sampler's anisotropy to 1.
+    // clamps every sampler's anisotropy to 1
+    // [ref:wgpu-core-30-anisotropy-clamp].
     wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
         // The vertex shader reads Instances and pulls vertices from the
         // vertex Arena as storage buffers (ADRs 0005, 0019).
@@ -422,7 +424,8 @@ async fn request_adapter(
 /// so it writes a format the GPU does not encode
 /// again, which the display reads as sRGB. An sRGB surface's non-sRGB view
 /// would need `DownlevelFlags::SURFACE_VIEW_FORMATS`, which Vulkan reports
-/// only with `VK_KHR_swapchain_mutable_format`.
+/// only with `VK_KHR_swapchain_mutable_format`
+/// [ref:wgpu-hal-30-vulkan-downlevel-flags].
 fn choose_surface_format(
     surface_capabilities: &wgpu::SurfaceCapabilities,
 ) -> anyhow::Result<wgpu::TextureFormat> {
@@ -448,10 +451,10 @@ fn choose_surface_format(
 /// The backends a context tries, in order, each in an instance of its own:
 /// an instance initialises every backend it names, and in debug builds
 /// DX12's validation turns on the D3D12 and DXGI debug layers for the whole
-/// process, under which NVIDIA's Vulkan driver, which presents through DXGI,
-/// raises exception 0x87D as it destroys its device (drivers 617.42 and
-/// 621.01). Vulkan leads, as in wgpu's own backend order; macOS builds have
-/// Metal alone.
+/// process, under which NVIDIA's Vulkan driver raised exception 0x87D as it
+/// destroyed its device (measured on drivers 617.42 and 621.01). Vulkan
+/// leads, as in wgpu's own backend order [ref:wgpu-core-30-backend-order];
+/// macOS builds have Metal alone.
 const BACKEND_ORDER: [wgpu::Backend; 3] = [
     wgpu::Backend::Vulkan,
     wgpu::Backend::Metal,
@@ -551,7 +554,7 @@ mod tests {
 
     /// Metal reports anisotropic filtering, vertex-stage storage buffers and
     /// compute shaders on every adapter, and indirect execution on the M4
-    /// Pro's GPU family (wgpu-hal 30.0.1).
+    /// Pro's GPU family (wgpu-hal 30.0.1 [ref:wgpu-hal-30-metal-downlevel-flags]).
     const M4_PRO_DOWNLEVEL_FLAGS: wgpu::DownlevelFlags =
         wgpu::DownlevelFlags::ANISOTROPIC_FILTERING
             .union(wgpu::DownlevelFlags::VERTEX_STORAGE)
@@ -726,7 +729,8 @@ mod tests {
 
     /// The vertex shader reads the whole vertex Arena through one storage
     /// binding (ADR 0019), which the floor holds to the default 128 MiB:
-    /// Vulkan's minimum and lavapipe's `maxStorageBufferRange`.
+    /// Vulkan's minimum [ref:vulkan-max-storage-buffer-range] and lavapipe's
+    /// `maxStorageBufferRange` [ref:mesa-25.2.8-gallivm-max-shader-buffer-size].
     #[test]
     fn the_vertex_arena_fits_one_storage_binding_of_the_floor() {
         assert!(

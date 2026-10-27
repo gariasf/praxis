@@ -48,7 +48,8 @@ pub struct FrameStats {
     /// Bytes of the Arenas that hold Meshes, which `gpu_memory_bytes`
     /// counts whole whatever they hold.
     pub arena_bytes_in_use: u64,
-    /// wgpu's allocator report, a diagnostic only; Metal has none.
+    /// wgpu's allocator report, a diagnostic only; Metal has none
+    /// [ref:wgpu-hal-30-allocator-report-default].
     pub allocator_report_bytes: Option<u64>,
     /// Heap allocations and reallocations on the thread that ran the frame.
     pub heap_allocations: u64,
