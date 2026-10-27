@@ -124,6 +124,7 @@ mod tests {
             metallic: 0.0,
             roughness: 1.0,
             emissive: [0.0; 3],
+            normal_scale: 1.0,
             textures: [None; 5],
         };
         for id in [1, 2] {

@@ -68,7 +68,7 @@ impl MaterialChannel {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialData {
     pub base_color: [f32; 4],
-    pub metallic_roughness: [f32; 4], // x=metallic, y=roughness, zw=pad
+    pub metallic_roughness: [f32; 4], // x=metallic, y=roughness, z=normal scale, w=pad
     pub emissive: [f32; 4],           // xyz=color, w=strength
     pub layers: [u32; 4],             // x=albedo, y=normal, z=MR, w=AO
     pub extra: [u32; 4],              // x=emissive Layer, yzw=pad
@@ -275,7 +275,12 @@ impl MaterialPool {
         let [red, green, blue] = material.emissive;
         let data = MaterialData {
             base_color: material.base_color,
-            metallic_roughness: [material.metallic, material.roughness, 0.0, 0.0],
+            metallic_roughness: [
+                material.metallic,
+                material.roughness,
+                material.normal_scale,
+                0.0,
+            ],
             emissive: [red, green, blue, 1.0],
             layers: [layers[0], layers[1], layers[2], layers[3]],
             extra: [layers[4], 0, 0, 0],
@@ -390,7 +395,7 @@ mod tests {
     use crate::gpu::GpuContext;
 
     /// Two Materials sampling one Texture load it once, and a Material
-    /// without that Channel samples Layer 0.
+    /// without that Channel samples Layer 0; each carries its normal scale.
     #[test]
     fn a_texture_two_materials_share_loads_once() {
         let context = match pollster::block_on(GpuContext::headless()) {
@@ -422,6 +427,7 @@ mod tests {
                 metallic: 0.0,
                 roughness: 1.0,
                 emissive: [0.0; 3],
+                normal_scale: 0.5,
                 textures,
             };
             cache
@@ -442,6 +448,11 @@ mod tests {
             .collect();
         assert_eq!(pool.gpu_memory_bytes(false) - neutral_bytes, 3 * 8);
         assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
+        assert!(
+            pool.materials
+                .iter()
+                .all(|material| material.metallic_roughness[2] == 0.5)
+        );
         std::fs::remove_dir_all(&directory).ok();
     }
 }

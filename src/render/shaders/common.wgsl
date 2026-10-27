@@ -89,6 +89,7 @@ fn point_light_position(
 
 struct MaterialData {
     base_color: vec4<f32>,
+    // Metallic, roughness and the normal Texture's scale; w is padding.
     metallic_roughness: vec4<f32>,
     emissive: vec4<f32>,
     // A Layer per Channel: albedo, normal, metallic-roughness, occlusion;

@@ -448,6 +448,9 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             metallic: pbr.metallic_factor(),
             roughness: pbr.roughness_factor(),
             emissive: material.emissive_factor(),
+            normal_scale: material
+                .normal_texture()
+                .map_or(1.0, |normal| normal.scale()),
             textures: texture_ids,
         };
         let cook_key = material_cook_key(&material.to_blob());
