@@ -55,12 +55,11 @@ fn mark(id: u32) {
     if id == NO_TRIANGLE {
         return;
     }
-    let triangle = id;
     if MESHLET_GRANULARITY {
-        let record = record_of(triangle);
+        let record = record_of(id);
         atomicOr(&record_bits[record / 32u], 1u << (record % 32u));
     } else {
-        atomicOr(&triangle_bits[triangle / 32u], 1u << (triangle % 32u));
+        atomicOr(&triangle_bits[id / 32u], 1u << (id % 32u));
     }
 }
 
@@ -115,6 +114,12 @@ fn mark_triangles(@builtin(global_invocation_id) pixel: vec3<u32>) {
     }
 }
 
+// The words of triangle bits the frame's draw reaches: past them, every
+// bit is clear.
+fn words_drawn() -> u32 {
+    return (frame_draw.draw.index_count / 3u + 31u) / 32u;
+}
+
 // A workgroup per block of SCAN_BLOCK_SIZE words of triangle bits: each
 // word's marked triangles, summed over the block's earlier words into its
 // offset, and the block's sum after every word's.
@@ -126,7 +131,7 @@ fn offset_words(
     let word_capacity = arrayLength(&triangle_bits);
     let word = block.x * SCAN_BLOCK_SIZE + invocation;
     var count = 0u;
-    if word < word_capacity {
+    if word < min(word_capacity, words_drawn()) {
         if MESHLET_GRANULARITY {
             mark_word_from_records(word);
         }
@@ -180,7 +185,7 @@ fn compact_triangles(
 ) {
     let word_capacity = arrayLength(&triangle_bits);
     let word = block.x * SCAN_BLOCK_SIZE + invocation;
-    if word >= word_capacity {
+    if word >= min(word_capacity, words_drawn()) {
         return;
     }
     var bits = atomicLoad(&triangle_bits[word]);

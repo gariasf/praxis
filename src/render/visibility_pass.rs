@@ -4,8 +4,7 @@
 //! with Meshlet granularity every triangle of their Meshlets, and compacts
 //! the marked triangles' packed indices, in the frame's draw's order, into
 //! the compacted draw, which the lit pass draws in place of the frame's
-//! draw: a prototype of option B of
-//! `docs/research/visibility-and-gpu-driven-main-pass.md`.
+//! draw: a prototype of option B of ADR 0019.
 
 use crate::render::bind_groups::{VISIBILITY_BUILD, pipeline_layout};
 use crate::render::culling_pass::{CullingPass, DrawCapacity, SCAN_BLOCK_SIZE};

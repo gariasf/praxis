@@ -1,5 +1,5 @@
-//! The visibility pre-pass Render switch, a prototype of option B of
-//! `docs/research/visibility-and-gpu-driven-main-pass.md`: `town` at the
+//! The visibility pre-pass Render switch, a prototype of option B of ADR
+//! 0019: `town` at the
 //! eight frames the Goldens test checks, drawn with the switch at Meshlet
 //! granularity, matches the same frames with it off within the Goldens'
 //! tolerance, so compacting the lit pass's draw to the Meshlets some sample
