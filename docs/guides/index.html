@@ -221,6 +221,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="frame-timing.html" aria-label="Read Frame Timing Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="visibility-prepass.html">Visibility Pre-pass Explained</a></h3>
+        <p class="meta">M3 · ticket #296 · prototype branch prototype/visibility-b</p>
+        <p class="summary">Follows #296's prototype of ADR 0019's option B on town: a visibility ID pass that records which triangle owns each sample through primitive_index, and a compute pass that compacts the lit pass's indices to those triangles by prefix sum, in the frame's order. It covers why, on the M4 Pro, a triangle drawn without its coplanar neighbour covers fewer samples, so the compaction has to keep whole Meshlets to draw A's image, the measurement that reads 13.2 ms against A's 9.7 and the 6 ms gate, and why no free visibility pass would reach it, with live demos. The prototype stays on its branch.</p>
+        <a class="read" href="visibility-prepass.html" aria-label="Read Visibility Pre-pass Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 

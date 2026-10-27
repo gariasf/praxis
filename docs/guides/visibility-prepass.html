@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Visibility Pre-pass Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 18 of the series, after Frame Timing Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the plain opening of each chapter, the pass order, and the demos' legends. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.lost { border-color: var(--bad); }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+[hidden] { display: none !important; }
+
+/* Key ideas and Check yourself, the series' standard for new guides. */
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #296 &middot; prototype branch prototype/visibility-b</div>
+  <h1>What a visibility pre-pass buys on town</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Town's main pass breached ADR 0019's 6 ms gate, so option B, a forward pass behind a visibility pre-pass, was prototyped on it. The prototype draws the frame again to record which triangle owns each sample, then compacts the lit pass's indices to those triangles. On the M4 Pro a triangle drawn without its coplanar neighbour covers fewer samples than it did beside it, so the compaction has to keep whole Meshlets to draw A's image, and the gate reads 13.2 ms against A's 9.7. The idea to keep: which samples a triangle covers can depend on what is drawn beside it, so a reduced draw is checked against the full one pixel by pixel, never assumed equal.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>What <code>primitive_index</code> is and what a visibility ID pass writes</li>
+      <li>How a prefix-sum compaction keeps the draw's order, and why order matters on the M4 Pro</li>
+      <li>Why drawing only the triangles that own a sample lost samples at coplanar edges, and how that was pinned down</li>
+      <li>Why Meshlet granularity reproduces A exactly</li>
+      <li>What the gate read for A, B and T, and why no free visibility pass saves it</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html">Frame Timing Explained</a>, <a href="instance-culling.html">Instance Culling Explained</a>, <a href="town.html">Town Explained</a></p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 5bb7abd (branch <code>prototype/visibility-b</code>, 2026-10-27), a prototype that stays on its branch; main at ba043f3 is unchanged by it. <b>Since then:</b> nothing, as of 2026-10-27.</p>
+  </aside>
+  <p class="lede">ADR 0019 chose a forward main pass and said when to doubt it: past 6 ms of GPU on a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>, two other shapes are prototyped on that scene before anything changes. <code>town</code> read 9.8 ms, so #296 built option B: today's pass plus a record of which triangle won each sample, and a compute pass that cuts the lit pass's draw down to those triangles. The prototype works, draws A's image, and reads 13.2 ms. Getting there turned up something the standard model of a rasterizer rules out: on the M4 Pro, which samples a triangle covers under a pixel depends on the triangles drawn beside it. This guide covers what B builds, how a prefix sum compacts a draw without changing its order, the coverage finding and the experiments that pinned it down, the Meshlet granularity that works around it, the measurement, and where that leaves the gate. Two live demos flip a sample's owner as a neighbour is drawn or not, and cut the new passes' cost down to nothing to see where the gate lands.</p>
+  <p class="status"><b>Provenance.</b> #296 asked for option B on <code>town</code>, as ADR 0019's reopen clause requires once the gate is past 6 ms. The prototype lives on branch <code>prototype/visibility-b</code> in two commits: 56803ee adds the Render switch, the visibility ID pass, the visibility pass and their tests; 5bb7abd bounds the scan to the words the draw reaches. Its code is <code>src/render/visibility_pass.rs</code>, <code>src/render/shaders/visibility.wgsl</code> and <code>visibility_prepass.wgsl</code>, with changes to <code>main_pass.rs</code>, <code>targets.rs</code>, <code>renderer.rs</code> and <code>src/gpu/mod.rs</code>; its tests are <code>renderer.rs</code>'s <code>the_visibility_prepass_*</code> and <code>tests/visibility_prepass.rs</code>. The figures are from <code>praxis bench &lt;dir&gt; town</code> at 2560&times;1440 with 4x MSAA, 248 warm-up and 1,800 measured frames, release, Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, on 2026-10-27, in three interleaved rounds of A, B and T with no other GPU work. The research behind option B is <code>docs/research/visibility-and-gpu-driven-main-pass.md</code> on main.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#shape">1 &middot; What option B builds</a>
+    <a href="#compaction">2 &middot; Compaction by prefix sum</a>
+    <a href="#coverage">3 &middot; Coverage depends on the neighbour</a>
+    <a href="#meshlets">4 &middot; Meshlet granularity</a>
+    <a href="#measurement">5 &middot; The measurement</a>
+    <a href="#gate">6 &middot; Where this leaves the gate</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="shape">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; <code>src/render/main_pass.rs</code> &middot; <code>visibility_prepass.wgsl</code></div>
+    <h2>What option B builds</h2>
+    <p class="key-idea"><b>Key idea.</b> B is A plus a record of which triangle won each sample, written by a pass of its own at depth equal, and a compute pass that cuts the lit pass's draw down to the triangles that record names.</p>
+    <p class="plain">Option A rasterizes each surviving triangle twice: once into depth, once at depth equal to shade. The second raster still runs every triangle of the frame's draw through the vertex stage and the rasterizer, including the many that own no sample at all. B records which triangle each sample shows, and the lit pass draws only those.</p>
+    <p>The record is a <span class="concept" data-term="Visibility buffer" data-tip="A 4-byte triangle and instance ID per sample, written by a pre-pass, from which later passes rebuild the surface each pixel shows. B only reads it to choose what the lit pass draws; D, option #297, shades from it.">visibility buffer</span> in the narrow sense: one ID per sample, nothing else. The ID is the triangle's <span class="concept" data-term="Primitive index" data-tip="A fragment stage builtin: the index of the triangle the fragment belongs to within its draw, so the triangle made of indices 3n, 3n+1 and 3n+2 is n. WGSL&#x27;s @builtin(primitive_index); wgpu exposes it behind the PRIMITIVE_INDEX feature.">primitive index</span>, which the fragment stage gets as <code>@builtin(primitive_index)</code>: the triangle made of the draw's indices 3<i>n</i>, 3<i>n</i>+1 and 3<i>n</i>+2 is <i>n</i>. Because culling builds the frame's draw as one indexed draw in slot order (<a href="instance-culling.html">Instance Culling Explained</a>), <i>n</i> names a triangle of that draw directly, and 3<i>n</i> is where its indices sit in the packed index buffer. No instance ID is needed: the draw is one instance. wgpu exposes the builtin behind its <code>PRIMITIVE_INDEX</code> feature, which the M4 Pro has; the device requests it beside the Capability floor (ADR 0021) wherever the adapter has it, and the floor itself does not hold it, an owner decision still pending.</p>
+    <p>The ID pass's fragment shader is a single line:</p>
+<pre class="code"><code>@fragment
+fn fs_visibility(@builtin(primitive_index) triangle: u32) -&gt; @location(0) vec2&lt;u32&gt; {
+    return vec2&lt;u32&gt;(triangle &amp; 0xffffu, triangle &gt;&gt; 16u);
+}</code></pre>
+    <p style="margin-top: 16px">The two halves are there because the target is 4x MSAA, and <code>R32Uint</code> has no multisampling among WebGPU's guaranteed format features; <code>Rg16Uint</code> does. At 2560&times;1440 with four samples the IDs take 58,982,400 bytes, the figure the research doc computed for a 32-bit ID. The target is cleared to 0xffff in both halves, an ID of no triangle, and stored for the compute pass that reads it. It lives in the targets module beside the depth target, so a resize recreates it and the bind groups that read it.</p>
+    <h3>The frame with the switch on</h3>
+    <p>Everything B adds sits behind one <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the crowd scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships. The prototype adds the visibility pre-pass.">Render switch</span>, <code>visibility_prepass</code>, with three values: <code>Off</code>, as Praxis ships, <code>Meshlets</code> and <code>Triangles</code>, the two granularities chapters 3 and 4 are about. <code>praxis bench</code> and <code>praxis capture</code> take it as <code>--visibility-prepass</code> and <code>--visibility-prepass-triangles</code>. With it on, phase two's depth always has a pass of its own, as it does with shadow rays on, so the depth target holds every Instance's depth before the IDs are drawn:</p>
+  </div>
+  <figure class="wide">
+    <p class="order-label">The frame's passes with <code>visibility_prepass</code> on, in the order the frame records them (<code>TIMED_PASSES</code>, <code>src/render/renderer.rs</code>)</p>
+    <ol class="pass-order">
+      <li>culling phase one</li>
+      <li>Froxel pass</li>
+      <li>depth pre-pass</li>
+      <li>depth pyramid</li>
+      <li>culling phase two</li>
+      <li class="apart">phase-two depth pass</li>
+      <li class="warm">visibility ID pass</li>
+      <li class="warm">visibility pass</li>
+      <li>shadow mask pass</li>
+      <li class="focus">lit pass, the compacted draw</li>
+      <li>tonemapping</li>
+    </ol>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>new: a render pass, then a compute pass</span>
+      <span><span class="swatch" style="border: 1.5px dashed var(--ink-soft)"></span>its own pass whenever shadow rays or the switch are on</span>
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>draws the compacted draw instead of the frame's draw</span>
+    </div>
+    <figcaption>The visibility ID pass draws the frame's draw again, both phases, at depth <code>Equal</code> with writes off: the lit pass's own depth state, so the IDs name the triangles the lit pass would show. Chapter 3 is about why they are not written in the depth passes themselves. The two new passes join <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: among much else, CPU time per system and stage, GPU time per pass, the GPU frame total and ADR 0019&#x27;s gate.">Frame stats</span> as <code>visibility_id_pass</code> and <code>visibility_pass</code>, making 14 timed passes, and so grow every <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.">Baseline</span>'s <code>gpu_memory_bytes</code> by 224 bytes of readback buffers; on the branch, <code>praxis compare</code> refuses every Baseline until it is re-recorded.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The visibility pass, a compute pass, turns the IDs into a draw: it marks the triangles the IDs name, counts the marks, and copies each marked triangle's three packed indices, in order, into a compacted index buffer with the indirect arguments to draw them. The lit pass then binds that buffer and that argument buffer in place of the frame's. Nothing in its shading changes: it still rasterizes at depth equal, reads the Froxel lists and the shadow mask, and resolves its 4x MSAA colour. Chapter 2 is about the counting and copying.</p>
+  </div>
+</section>
+
+<section class="chapter" id="compaction">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>src/render/visibility_pass.rs</code> &middot; <code>visibility.wgsl</code></div>
+    <h2>Compaction by prefix sum</h2>
+    <p class="key-idea"><b>Key idea.</b> A bit per triangle, a scan over the bits, and a copy in bit order give each marked triangle its place without changing the draw's order, which on the M4 Pro would change the derivatives some pixels sample their textures with.</p>
+    <p class="plain">A <span class="concept" data-term="Compaction" data-tip="Copying the marked items of a list into a dense list that keeps their order: a prefix sum of the marks gives each marked item its place, the number of marked items before it.">compaction</span> takes a list with some items marked and produces the marked items packed together. The fast and tempting way is an atomic counter: each marked item takes the next slot. The order the slots are taken in is then whatever order the GPU's threads happened to run in, and it changes from run to run.</p>
+    <p>Praxis never builds a draw that way. The culling pass builds the frame's draw in slot order because, on the M4 Pro, which triangles precede others in a draw changes the implicit derivatives of some pixels, so their texture lookups pick a different mip level, so a Golden captured twice would differ (<a href="instance-culling.html">Instance Culling Explained</a>). The compacted draw inherits that rule: it keeps the frame's draw's order exactly, and gets each triangle's place from a prefix sum instead of a counter. In four dispatches, all in one compute pass:</p>
+    <ul class="keypoints">
+      <li><b>Mark.</b> A workgroup per 8&times;8 tile of pixels, an invocation per pixel, loads its four samples' IDs together (Metal's compiler does not unroll a loop over them) and sets a bit per triangle with <code>atomicOr</code> in a buffer of 32-bit words, one bit per triangle the frame's draw can hold. A sample whose ID equals the sample before it marks nothing again. Atomics are fine here: a bit set twice is set.</li>
+      <li><b>Count by word, scan by block.</b> <code>offset_words</code> runs a workgroup per block of 256 words. Each invocation counts its word's bits with <code>countOneBits</code>, and the block runs the shared <code>scan.wgsl</code>, the Hillis and Steele scan the culling pass also uses, to give each word the number of marked triangles in the earlier words of its block, an exclusive prefix sum. The block's own total goes in a second array.</li>
+      <li><b>Scan the blocks.</b> One workgroup, <code>offset_blocks</code>, scans the block totals into block offsets and writes the compacted draw's indirect arguments: an index count of three per marked triangle, one instance, nothing else.</li>
+      <li><b>Copy.</b> <code>compact_triangles</code> runs an invocation per word again. Its slot is the block's offset plus the word's; it walks the word's set bits from the lowest with <code>firstTrailingBit</code>, copies the triangle's three packed indices to the slot, and moves on.</li>
+    </ul>
+<pre class="code"><code>var bits = atomicLoad(&amp;triangle_bits[word]);
+var slot = triangle_offsets[word_capacity + block.x] + triangle_offsets[word];
+while bits != 0u {
+    let triangle = 32u * word + firstTrailingBit(bits);
+    for (var corner = 0u; corner &lt; 3u; corner++) {
+        compacted_indices[3u * slot + corner] = packed_indices[3u * triangle + corner];
+    }
+    slot += 1u;
+    bits &amp;= bits - 1u;
+}</code></pre>
+    <p style="margin-top: 16px">Within a word the bits are walked in order; across words and blocks the prefix sums put earlier words first. So the compacted draw is the frame's draw with the unmarked triangles removed and nothing moved, whatever order the GPU ran the invocations in. The lit pass draws it in one call: <code>draw_calls</code> reads 5 with the switch on against A's 4, the ID pass's draw being the fifth.</p>
+    <h3>The buffers, and what the scan costs</h3>
+    <p>The compacted index buffer holds what the frame's draw can hold, 2<sup>25</sup> indices, 134,217,728 bytes; it is the largest of B's additions after the IDs. The triangle bits take 1,398,104 bytes, their offsets 1,403,568, and the compacted draw's arguments 20. Chapter 4's record bits add 131,072. Each is a GPU buffer the pass owns, so each joins <code>gpu_memory_bytes</code>.</p>
+    <p>The branch's second commit bounds the scan and the copy to the words the frame's draw actually reaches, instead of the full capacity. That moved the gate by about 40 &micro;s. So the visibility pass's time, 3.4 ms at Meshlet granularity in chapter 5, is not the scan: it is the mark over 3.7 million pixels, four texture loads and up to four atomics each, and the compaction's writes.</p>
+  </div>
+</section>
+
+<section class="chapter" id="coverage">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>tests/visibility_prepass.rs</code> &middot; the sub-pixel tilted quads</div>
+    <h2>Coverage depends on the neighbour</h2>
+    <p class="key-idea"><b>Key idea.</b> On the M4 Pro, which samples a triangle covers under a pixel depends on the triangles drawn beside it, so a draw of only the triangles that own a sample loses samples along coplanar shared edges, and no depth tie rule brings them back, because the missing fragments are never generated.</p>
+    <p class="plain">The rasterizer decides, for each of a pixel's four sample positions, whether it lies inside a triangle's three edges. Covered samples are depth-tested one by one; the fragment shader runs once for the pixel and its result lands in the covered samples that passed. In the standard model that decision depends on the triangle's vertices and the sample's position, and on nothing else.</p>
+    <p>That model is what makes a <span class="concept" data-term="Sample coverage" data-tip="Which of a pixel&#x27;s MSAA samples a triangle covers: the samples whose positions fall inside its three edges, with a fill rule giving a sample exactly on an edge to one of the two triangles that share it. Depth is tested per covered sample; the fragment shader runs once per pixel.">coverage</span>-based compaction sound in principle. Two triangles that share an edge are watertight: the fill rule gives a sample exactly on the edge to one of them, so along the edge every sample is covered once, none twice, none missed. And a triangle drawn alone covers exactly the samples it covered beside its neighbour, because the neighbour was never part of the decision. If an ID pass records which triangle owns each sample, then drawing exactly those triangles must put the same fragment in every sample, and the image cannot change.</p>
+    <h3>The first shape, and what it drew</h3>
+    <p>The research doc and the ticket describe the cheapest shape: write the IDs in the depth pre-pass itself, depth <code>Greater</code> with writes on, so the record comes free with the depth. Built that way, <code>town</code> differed from A at 176 to 4,335 pixels per frame over the eight checked frames at 640&times;360 (frames 59, 300, 500, 700, 900, 1200, 1500 and 1800), the pixels scattered over distant, sub-pixel geometry: the wires, the far cubes. Each experiment below is a run of all eight frames.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Experiment</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Depth <code>GreaterEqual</code>, so ties go to the later triangle</td><td>No difference</td></tr>
+        <tr><td>The visibility pass run twice in a frame, a race test</td><td>No difference</td></tr>
+        <tr><td>A separate ID pass at depth <code>Equal</code>: exactly the lit pass's depth state and draw order</td><td>Still 180 to 4,276 pixels</td></tr>
+        <tr><td>Every triangle forced marked</td><td>0 pixels: the compaction is right, the marks are incomplete</td></tr>
+        <tr class="focus"><td>Each ID's previous triangle marked too</td><td>Most differences gone</td></tr>
+        <tr class="focus"><td>Each ID's neighbours at &plusmn;2 marked too</td><td>Nearly all gone</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The last two rows say what is missing: the index neighbours of the triangles that own samples, which in <code>town</code>'s cubes and wires are the other triangle of the same quad face. The compaction drops a quad's second triangle because no sample names it, and with it gone the first triangle stops covering some of the samples it owned.</p>
+    <h3>Reading the coverage back</h3>
+    <p>To see that directly, a unit test encoded each fragment's <code>sample_mask</code>, the four bits of the pixel's samples the fragment covers, into its ID, and read the IDs back at the pixels that differed: 10,000 quads 0.3 m wide at 40 m, tilted, at 256&times;256, where 527 pixels differed. The same triangle, drawn in the full draw and then in the compacted draw without its quad partner, covered fewer samples the second time:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Triangle</th><th class="n">Samples covered in the full draw</th><th class="n">Alone, without its quad partner</th></tr></thead>
+      <tbody>
+        <tr><td>15741</td><td class="n">0 and 1 (mask 0011)</td><td class="n">0 (mask 0001)</td></tr>
+        <tr><td>15297</td><td class="n">0, 1 and 2 (mask 0111)</td><td class="n">0 and 2 (mask 0101)</td></tr>
+        <tr><td>15149</td><td class="n">0, 1 and 2 (mask 0111)</td><td class="n">0 (mask 0001)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Nor is it the depth test rejecting those samples. With the lit pass's compare changed from <code>Equal</code> to <code>GreaterEqual</code> or <code>LessEqual</code>, the same 527 pixels differed. A sample a depth test rejects would come back under a looser test; these do not, so the fragments for those samples are never generated. The rasterizer, drawing the triangle alone, decides that it does not cover them.</p>
+    <p>Why this GPU does that is not documented and this guide does not guess. What the readings establish is narrower and enough: on the M4 Pro, coverage along a coplanar shared edge is a property of the pair, not of each triangle, so a draw that keeps one triangle of a pair draws a different image from a draw that keeps both. That rules out the free version of B, the IDs written in the depth pre-pass, and it also rules out the honest version at triangle granularity, the separate pass at depth equal, which still lost 180 to 4,276 pixels. The ignored test on the branch prints the losses per frame at triangle granularity: 180, 168, 1,216, 3,811, 4,256, 4,265, 4,250 and 4,276 pixels at frames 59, 300, 500, 700, 900, 1200, 1500 and 1800. The images are linked in the reading list: black marks where triangle granularity lost samples, and an 8x crop of frame 1800 beside A.</p>
+  </div>
+  <figure class="wide" id="demo-coverage">
+    <div class="canvas-frame"><canvas id="c-canvas" role="img" aria-label="A grid of pixels, each with four sample positions, under a thin quad split into two triangles along its diagonal. With the quad drawn whole every sample inside it belongs to one triangle; with one triangle drawn alone, samples near the shared edge are lost."></canvas></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="What is drawn" id="c-mode">
+        <button type="button" data-mode="whole" aria-pressed="true">the quad drawn whole</button>
+        <button type="button" data-mode="alone" aria-pressed="false">triangle 1 drawn alone</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="c-shift" class="control-label">Quad's offset, in pixels <output id="c-shift-out" for="c-shift"></output></label>
+      <input type="range" id="c-shift" min="-0.5" max="0.5" step="0.01" value="0.12">
+    </div>
+    <div class="legend">
+      <span><span class="dot one"></span>sample owned by triangle 1</span>
+      <span><span class="dot two"></span>sample owned by triangle 2, the neighbour</span>
+      <span><span class="dot"></span>sample no triangle covers</span>
+      <span><span class="dot lost"></span>lost: covered beside the neighbour, not alone</span>
+    </div>
+    <p class="readout" id="c-readout" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> A 6&times;4 pixel grid with the standard four-sample pattern, under a thin tilted quad split along its diagonal, the shared edge. Drawn whole, every sample inside the quad belongs to exactly one triangle, as the fill rule says. Drawn alone, in this page's model of the readings above, triangle 1 covers a sample only if it lies more than a small distance inside the shared edge, so the samples nearest that edge are lost. The width of that band is this page's choice to make the effect visible; the M4 Pro's rule is not known, only that triangles 15741, 15297 and 15149 covered fewer samples alone. Slide the quad to see different samples flip.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="meshlets">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>VisibilityPrepass::Meshlets</code> &middot; <code>record_bits</code></div>
+    <h2>Meshlet granularity</h2>
+    <p class="key-idea"><b>Key idea.</b> Compacting every triangle of any Meshlet one of whose triangles owns a sample keeps each triangle's neighbours in the draw, and reproduces A exactly on every frame checked, at the cost of drawing more triangles than own a sample.</p>
+    <p class="plain">If the lost samples come from missing neighbours, keep the neighbours. The unit the frame's draw already groups triangles in is the <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive&#x27;s triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.">Meshlet</span>: a small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one. A quad's two triangles are almost always in the same Meshlet.</p>
+    <p>Each packed index already carries its Meshlet: the record's number sits in the bits above the vertex, so <code>packed_indices[3 &times; triangle] &gt;&gt; MESHLET_VERTEX_BITS</code> is the record any triangle was drawn with. At Meshlet granularity the mark step sets a bit per record instead of per triangle, in a buffer of 2<sup>20</sup> bits, 131,072 bytes. Then, before <code>offset_words</code> counts a word, it rebuilds the word's 32 triangle bits from the records: a triangle is marked if its Meshlet is. From there the scan and the copy run unchanged, so the compacted draw holds every triangle of every Meshlet some sample shows, in the frame's order.</p>
+    <p>That reproduces A: 0 differing pixels on all eight <code>town</code> frames, and 0 on the tilted quads that lost 527 at triangle granularity. The shader's own comment states the limit of the claim: it holds "on the Reference scenes checked". A quad whose two triangles fell into different Meshlets would lose samples again, and nothing in the pass prevents that; the scenes checked did not show it.</p>
+    <h3>The tests</h3>
+    <ul class="keypoints">
+      <li><b>A hidden quad is excluded.</b> A near quad hides one quad wholly and leaves another apart: of the six triangles the frame draws, four are compacted, in the first frame, where phase two draws every Instance, and in the next, where phase one draws those visible before. The image equals the switch-off image.</li>
+      <li><b>Phase two's triangles are marked past phase one's.</b> In the frame a lower triangle enters the view, phase one draws the upper one and phase two the lower, and the compacted draw holds both.</li>
+      <li><b>20,000 triangles across scan blocks.</b> 10,000 quads in a grid, all in view, compact every triangle in order, past one block of 256 words.</li>
+      <li><b>A triangle one sample alone shows.</b> A strip 0.15 pixels wide placed over the second of the four sample positions and no other is compacted from that sample.</li>
+      <li><b>The 7,871 sub-pixel tilted quads</b> draw the switch-off image at Meshlet granularity.</li>
+      <li><b><code>town</code> at eight frames.</b> <code>tests/visibility_prepass.rs</code> captures the frames with the switch off and at Meshlet granularity and requires every pixel within the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span>' tolerance, 1 step of 8 bits; with <code>PRAXIS_VISIBILITY_IMAGES</code> set it writes A, B and their difference for a PR, the all-black differences in the reading list. Its ignored companion prints triangle granularity's losses, chapter 3's list.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="measurement">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>praxis bench &lt;dir&gt; town</code> &middot; three rounds</div>
+    <h2>The measurement</h2>
+    <p class="key-idea"><b>Key idea.</b> B's gate reads 13.2 ms against A's 9.7 and T's 11.5; the lit pass saves 2.9 ms with rays on, but the two new passes cost 5.5, and even with them free the gate would sit at about 7.0 to 7.7 ms against 6.</p>
+    <p class="plain">The bench renders <code>town</code> twice per run, shadow rays on and then off, and <span class="concept" data-term="ADR 0019's gate" data-tip="From the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off; its median over a Reference scene&#x27;s camera path is judged against 6 ms.">ADR 0019's gate</span> comes from the rays-off run (<a href="frame-timing.html">Frame Timing Explained</a>). Three rounds, each A then B then T, interleaved so that drift affects all three alike, at a load average of 3.9 to 5.3 and no other GPU work. The table gives the medians of the median round; across rounds the gate spread from 9,652 to 9,672 &micro;s for A, 13,157 to 13,194 for B and 11,512 to 11,533 for T, so the differences below are far outside the noise.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th><code>town</code>, medians, &micro;s</th><th class="n">A: switch off</th><th class="n">B: Meshlets</th><th class="n">T: Triangles</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>ADR 0019's gate, rays off (p95)</td><td class="n">9,656.7 (10,048.3)</td><td class="n">13,173.9 (13,641.2)</td><td class="n">11,527.7 (11,970.1)</td></tr>
+        <tr><td>Over A; ratio</td><td class="n">&mdash;</td><td class="n">+3,517; 1.364</td><td class="n">+1,871; 1.194</td></tr>
+        <tr><td>GPU frame, rays on (p95)</td><td class="n">13,688.0 (14,201.7)</td><td class="n">17,031.6 (18,415.2)</td><td class="n">15,361.4</td></tr>
+        <tr><td>lit_pass</td><td class="n">8,802.1</td><td class="n">5,916.0 (&minus;2,886; 0.672)</td><td class="n">5,767.4</td></tr>
+        <tr><td>visibility_id_pass</td><td class="n">&mdash;</td><td class="n">2,079.5</td><td class="n">2,083.2</td></tr>
+        <tr><td>visibility_pass</td><td class="n">&mdash;</td><td class="n">3,436.4</td><td class="n">2,434.0</td></tr>
+        <tr><td>depth_prepass</td><td class="n">1,754.5</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+        <tr><td>culling phase one, phase two</td><td class="n">1,515; 898</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+        <tr><td>shadow_mask_pass</td><td class="n">4,701.8</td><td class="n">5,426.6 (+725)</td><td class="n">&mdash;</td></tr>
+        <tr><td>tonemapping</td><td class="n">3,870.0</td><td class="n">&mdash;</td><td class="n">4,739.9</td></tr>
+        <tr><td>gpu_memory_bytes</td><td class="n">616,555,496</td><td class="n">812,688,388 (+196,132,892)</td><td class="n">&mdash;</td></tr>
+        <tr><td>draw_calls</td><td class="n">4</td><td class="n">5</td><td class="n">&mdash;</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The pass times are from the rays-on run, the gate from the rays-off one, and a dash means the figure was not kept. Two readings move for no reason of their own: B's shadow mask pass gains 725 &micro;s and T's tonemapping reads 4,739.9, but neither traces more rays nor maps more pixels. Metal runs passes side by side, and a pass's reading stretches over work that is not its own, which is why a frame's time is a span and not a sum. B's memory grows by exactly its buffers: the IDs 58,982,400, the compacted indices 134,217,728, the triangle bits 1,398,104, their offsets 1,403,568, the record bits 131,072 and the compacted draw 20.</p>
+    <p>The lit pass does get cheaper: 5,916 &micro;s against 8,802 with rays on, a saving of about 2.9 ms. The ID pass costs 2,080 and the visibility pass 3,436, so B spends 5.5 ms to save 2.9. T, which loses samples and so is not a candidate, spends 1 ms less in its visibility pass than B, since it marks and copies fewer triangles, and its lit pass is 150 &micro;s cheaper; it is in the table only to bound what triangle granularity would have bought had it drawn the right image.</p>
+    <h3>If the new passes were free</h3>
+    <p>Metal overlaps passes, so subtracting pass times from a span is arithmetic, not measurement; it bounds, it does not predict. B's gate less its two new passes is 13,174 &minus; 2,080 &minus; 3,436, about 7,660 &micro;s; T's is 11,528 &minus; 2,083 &minus; 2,434, about 7,010. Even with the IDs written and the compaction done for free, the lit pass's saving leaves the gate at about 7.0 to 7.7 ms against 6. And writing the IDs for free, in the depth pre-pass, is exactly what chapter 3 forbids on this GPU: a raster pass of the frame's draw, which reads 1.75 ms as the depth pre-pass, is the floor of any further pass that touches every triangle, and the ID pass reads 2.08 ms, in line with the research doc's probe, where <code>primitive_index</code> made an ID pass 19 to 24% slower than one writing the instance alone.</p>
+  </div>
+  <figure class="wide" id="demo-gate">
+    <div class="canvas-frame"><canvas id="g-canvas" role="img" aria-label="Three bars for A, B and T against the 6 ms line. B's and T's bars end in two segments for the visibility ID pass and the visibility pass, which the slider shrinks toward zero; the rest of each bar stays above 6 ms."></canvas></div>
+    <div class="sliders">
+      <label for="g-cost" class="control-label">Cost of the visibility ID pass and the visibility pass <output id="g-cost-out" for="g-cost"></output></label>
+      <input type="range" id="g-cost" min="0" max="100" step="1" value="100">
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--accent-wash); border: 1.5px solid var(--accent)"></span>the gate less the two new passes</span>
+      <span><span class="swatch" style="background: var(--warm-wash); border: 1.5px solid var(--warm)"></span>visibility ID pass</span>
+      <span><span class="swatch" style="background: var(--warm); border: 1.5px solid var(--warm)"></span>visibility pass</span>
+      <span><i class="dashed"></i>6 ms, ADR 0019's gate</span>
+    </div>
+    <p class="readout" id="g-readout" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> The measured gates, 9,656.7, 13,173.9 and 11,527.7 &micro;s, with B's and T's new passes drawn as the segments at the end of their bars, at their rays-on medians. The slider scales those two segments down; the rest of each bar is the gate less the two passes, this page's subtraction. At zero, B reads about 7.66 ms and T about 7.01: still past the line, and still past A's lit pass alone. It is arithmetic over a span Metal fills with overlapping passes, so it bounds the prototype, and predicts nothing about a different one.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>For scale, the Baseline's rays-off passes inside A's gate, as <a href="frame-timing.html">Frame Timing Explained</a> gives them: the lit pass 5.15 ms, the depth pre-pass 1.76, culling 1.52 and 0.89, the Froxel pass 0.53, the depth pyramid 0.25. B's whole saving has to come out of that 5.15, and two more raster passes of the frame's draw are in the way of it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="gate">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; ADR 0019's reopen clause &middot; #296, #297</div>
+    <h2>Where this leaves the gate</h2>
+    <p class="key-idea"><b>Key idea.</b> B as prototyped does not reach 6 ms on town and could not with a free ID pass on this GPU, so the clause's decision rests with the owner: keep A and move the gate, or adopt an option, each an ADR change; D's ID pass would be this one.</p>
+    <p class="plain">ADR 0019's reopen clause: past 6 ms on a Reference scene at 1440p with 4x MSAA, "B and D are prototyped on that scene before anything changes." B has been. It draws A's image at Meshlet granularity, and its gate is 1.364 times A's.</p>
+    <p>The prototype stays on its branch; nothing of it is on main, and Praxis ships with the switch off. What the clause leaves to the owner is the decision itself, and both of its answers change an ADR: keep A and move the gate, which is provisional as ADR 0013's <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budgets</span> are, or adopt an option. Two smaller decisions wait with it: whether <code>PRIMITIVE_INDEX</code> joins the Capability floor, which the prototype requests beside it only where the adapter has it, and the Baselines, which the two new timed passes grow by 224 bytes each and which are refused until re-recorded.</p>
+    <h3>What this says about D</h3>
+    <p>Option D, ticket #297, shades from the IDs in compute and does not rasterize the scene a second time, so the coverage finding does not bite it the same way: there is no reduced draw whose coverage has to match the full one. But its ID pass would be this one. The IDs it shades from have to name the triangles the depth test kept, so they are written at depth equal after a depth pre-pass, and on <code>town</code> that pass reads 2.08 ms before any shading. D's prototype starts from that number, and from the derivative problem the research doc describes: compute has no 2&times;2 quads to take texture differences across, so it works them out itself.</p>
+    <p>What the prototype adds to the record beyond its gate is the finding itself. A pass that draws a subset of a draw and expects the same image, whether to cull, to compact, or to shade in two passes, is checked against the full draw on the reference GPU, pixel by pixel, before it is believed. The ignored test and the sample-mask readings are how that check was done here, and they are on the branch for the next one.</p>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <h2>Check yourself</h2>
+    <p>Three questions on the guide's central ideas. Try each before you open its answer.</p>
+    <details class="check"><summary>Why does drawing only the triangles that own a sample lose samples on the M4 Pro, and why does no depth compare bring them back?</summary><p>On this GPU, which samples a triangle covers along a coplanar shared edge depends on whether the triangle on the other side of the edge is in the draw. Drawn with its quad partner, triangle 15741 covered samples 0 and 1; drawn without it, only sample 0. The lit pass with GreaterEqual or LessEqual in place of Equal drew the same 527 differing pixels, so the missing samples are not fragments the depth test rejected: the rasterizer never generated them. Keeping whole Meshlets keeps the partner in the draw, and reproduces A exactly on every frame checked.</p></details>
+    <details class="check"><summary>Why does the compaction get each triangle's place from a prefix sum over bits rather than from an atomic counter?</summary><p>An atomic counter hands out slots in the order the GPU's threads happen to run, which changes from run to run. On the M4 Pro, which triangles precede others in a draw changes the implicit derivatives some pixels sample their textures with, so a Golden captured twice would differ. Counting each word's bits, scanning the counts within each block of 256 words and then across blocks, and walking each word's bits from the lowest gives every marked triangle the number of marked triangles before it in the frame's draw: the same order as the frame's draw, whatever order the invocations ran in.</p></details>
+    <details class="check"><summary>B's two new passes read 2,080 and 3,436 µs. If both were free, would B reach the 6 ms gate on town?</summary><p>No, by this page's arithmetic. B's gate is 13,174 µs; less its two new passes it is about 7,660, and T's, which loses samples, about 7,010 by the same subtraction. The lit pass saves about 2.9 ms with rays on, and the saving has to come out of A's rays-off lit pass of 5.15 ms, but the gate also holds culling, the depth pre-pass and the pyramid. And the only way to make the ID pass free, writing the IDs in the depth pre-pass, is what the coverage finding rules out on this GPU; a separate raster pass of the frame's draw costs at least what the depth pre-pass costs, 1.75 ms.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the prototype are pinned to 5bb7abd, the branch's head; links into main to ba043f3.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/296">Ticket #296</a> <span>option B on town; its findings and figures are posted there</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/297">Ticket #297</a> <span>option D, which starts from this ID pass</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/prototype/visibility-b">Branch <code>prototype/visibility-b</code></a> <span>commits <a href="https://github.com/gariasf/praxis/commit/56803eec2f59a7c55472fbbdf09cf7e308da4c50">56803ee</a> and <a href="https://github.com/gariasf/praxis/commit/5bb7abda08337456369f6fc3cda31364d4f36911">5bb7abd</a></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/ba043f30e7047e2029dfcb711cefb30097c1310e/docs/research/visibility-and-gpu-driven-main-pass.md">Visibility and the GPU-driven main pass</a> <span>option B's description, the ID target's size, the <code>primitive_index</code> probe, and Activision's triangle-ID pre-pass as the doc relays it from its REAC 2021 deck, slides 37 to 43</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/ba043f30e7047e2029dfcb711cefb30097c1310e/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> and <a href="https://github.com/gariasf/praxis/blob/ba043f30e7047e2029dfcb711cefb30097c1310e/docs/adr/0021-capability-floor.md">ADR 0021</a> <span>the reopen clause; the Capability floor <code>PRIMITIVE_INDEX</code> is not in</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/ba043f30e7047e2029dfcb711cefb30097c1310e/CONTEXT.md"><code>CONTEXT.md</code></a> <span>the glossary's source</span></li>
+      </ul>
+      <h4>The code, on the branch</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/visibility_pass.rs"><code>src/render/visibility_pass.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/shaders/visibility.wgsl"><code>visibility.wgsl</code></a> <span>mark, scan, compact; the buffers and their sizes</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/shaders/visibility_prepass.wgsl"><code>visibility_prepass.wgsl</code></a> and <a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/main_pass.rs"><code>src/render/main_pass.rs</code></a> <span>the ID pass at depth equal, and why not in the depth passes</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/targets.rs"><code>src/render/targets.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/gpu/mod.rs"><code>src/gpu/mod.rs</code></a> <span>the <code>Rg16Uint</code> target and its clear; the feature requested beside the floor</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/src/render/renderer.rs"><code>src/render/renderer.rs</code></a> and <a href="https://github.com/gariasf/praxis/blob/5bb7abda08337456369f6fc3cda31364d4f36911/tests/visibility_prepass.rs"><code>tests/visibility_prepass.rs</code></a> <span>the switch, the 14 timed passes, the <code>the_visibility_prepass_*</code> tests; the eight-frame check and the ignored losses test</span></li>
+      </ul>
+      <h4>Images</h4>
+      <ul>
+        <li>A | B | difference, all black, at frames <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-59-a-b-difference.png">59</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-300-a-b-difference.png">300</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-500-a-b-difference.png">500</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-700-a-b-difference.png">700</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-900-a-b-difference.png">900</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1200-a-b-difference.png">1200</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1500-a-b-difference.png">1500</a> and <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-a-b-difference.png">1800</a> <span>B at Meshlet granularity</span></li>
+        <li>Black marks where triangle granularity lost samples, at frames <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-59-triangles-lost.png">59</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-300-triangles-lost.png">300</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-500-triangles-lost.png">500</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-700-triangles-lost.png">700</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-900-triangles-lost.png">900</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1200-triangles-lost.png">1200</a>, <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1500-triangles-lost.png">1500</a> and <a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-triangles-lost.png">1800</a></li>
+        <li><a href="https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-crop-a-triangles-difference.png">Frame 1800, 8x crop</a> <span>A | triangle granularity | difference</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and talks</h3>
+      <ul>
+        <li>Burns and Hunt, <a href="https://jcgt.org/published/0002/02/04/">"The Visibility Buffer: A Cache-Friendly Approach to Deferred Shading"</a>, JCGT 2013 <span>the per-sample ID B records and D shades from</span></li>
+        <li>Wihlidal, <a href="https://media.gdcvault.com/gdc2016/Presentations/Wihlidal_Graham_OptimizingTheGraphics.pdf">"Optimizing the Graphics Pipeline with Compute"</a>, GDC 2016 <span>culling triangles in compute and compacting the survivors' indices for an indirect draw: B's compaction, with coverage as the test</span></li>
+        <li>Hable, <a href="https://advances.realtimerendering.com/s2024/content/Hable/Advances_SIGGRAPH_2024_VisibilityVRS-SIGGRAPH_Advances_2024.pptx">"Visibility Buffer and VRS"</a>, SIGGRAPH Advances 2024 <span>what a primitive ID costs against a flat-interpolated vertex ID, in Aaltonen's measurements it relays</span></li>
+        <li>Karis, Stubbe and Wihlidal, <a href="https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=106">"A Deep Dive into Nanite Virtualized Geometry"</a>, SIGGRAPH Advances 2021, pp. 106&ndash;107 <span>the derivatives D has to work out for itself</span></li>
+        <li>Blelloch, <a href="https://www.cs.cmu.edu/~guyb/papers/Ble93.pdf">"Prefix Sums and Their Applications"</a>, 1990 <span>compaction, "pack", as a prefix sum over flags; <code>scan.wgsl</code>'s scan is Hillis and Steele's from "Data Parallel Algorithms", 1986</span></li>
+        <li><a href="https://www.w3.org/TR/webgpu/#texture-format-caps">WebGPU, texture format capabilities</a> and <a href="https://www.w3.org/TR/webgpu/#rasterization">rasterization</a> <span>which formats multisample; sample coverage and the fill rule as the spec defines them</span></li>
+        <li><a href="https://docs.rs/wgpu/30.0.1/wgpu/struct.Features.html">wgpu 30.0.1, <code>Features</code></a> <span><code>PRIMITIVE_INDEX</code>, the feature the ID pass needs</span></li>
+      </ul>
+      <h4>Books</h4>
+      <ul>
+        <li><i>Real-Time Rendering</i>, 4th ed.: ch. 5 Shading Basics, on sampling and MSAA; ch. 23 Graphics Hardware, on rasterization and its tie rules</li>
+        <li><a href="https://foundationsofgameenginedev.com/"><i>Foundations of Game Engine Development</i></a>, vol. 2: ch. 9 Visibility and Occlusion</li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>the gate, the span, the two runs; chapter 3 introduces B and D</span></li>
+        <li><a href="instance-culling.html">Instance Culling Explained</a> <span>the frame's draw in slot order, and the scan this pass shares</span></li>
+        <li><a href="town.html">Town Explained</a> <span>the scene, its wires and its 4x MSAA</span></li>
+        <li><a href="depth-pyramid.html">Depth Pyramid Explained</a> <span>the depth pre-pass this ID pass reads at equal</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Where <code>CONTEXT.md</code> defines a term, the definition here and in the tooltips is its own at ba043f3, or a quoted part of it; the gate adds what ADR 0019 says of it. Visibility buffer follows the earlier volume; primitive index, sample coverage and compaction are this guide's, in the sense WGSL, WebGPU and Blelloch give them.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Render switches</dt><dd>The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#x27;s point lights, and the form the <code>crowd</code> scene&#x27;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch. The prototype adds the visibility pre-pass, off by default.</dd></div>
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive&#x27;s triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.</dd></div>
+    <div><dt>Frame stats</dt><dd>What one frame cost, measured by the engine itself: among much else, CPU time per system and stage, GPU time per pass, the GPU frame total and ADR 0019&#x27;s gate, draw calls, Instances and triangles drawn, bytes uploaded and GPU memory.</dd></div>
+    <div><dt>ADR 0019&#x27;s gate</dt><dd>From the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off; its median over a Reference scene&#x27;s camera path is judged against 6 ms.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter: the reference machine, where Budgets are judged against it, or CI&#x27;s lavapipe, where only its counters are judged.</dd></div>
+    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. Counters such as draw calls and bytes uploaded are held to their Baselines instead.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Visibility buffer</dt><dd>A 4-byte triangle and instance ID per sample, written by a pre-pass, from which later passes rebuild the surface each pixel shows. B only reads it to choose what the lit pass draws; D shades from it.</dd></div>
+    <div><dt>Primitive index</dt><dd>A fragment stage builtin: the index of the triangle the fragment belongs to within its draw, so the triangle made of indices 3n, 3n+1 and 3n+2 is n. WGSL&#x27;s <code>@builtin(primitive_index)</code>; wgpu exposes it behind the <code>PRIMITIVE_INDEX</code> feature.</dd></div>
+    <div><dt>Sample coverage</dt><dd>Which of a pixel&#x27;s MSAA samples a triangle covers: the samples whose positions fall inside its three edges, with a fill rule giving a sample exactly on an edge to one of the two triangles that share it. Depth is tested per covered sample; the fragment shader runs once per pixel.</dd></div>
+    <div><dt>Compaction</dt><dd>Copying the marked items of a list into a dense list that keeps their order: a prefix sum of the marks gives each marked item its place, the number of marked items before it.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/296">#296</a>, branch <code>prototype/visibility-b</code> at 56803ee and 5bb7abd, ADRs 0019 and 0021, <code>CONTEXT.md</code> and the visibility research doc on main at ba043f3, and a bench of <code>town</code> on the M4 Pro on 2026-10-27. The experiments in chapter 3 are the branch's own, read from its tests. Where the guide does its own arithmetic, it says so. The coverage demo is this page's model of the readings, with a band width of its own choosing; the gate demo uses the measured gates and the rays-on pass medians.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="frame-timing.html">Previous: Frame Timing Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"), warmWash: token("--warm-wash"),
+      bad: token("--bad"), badWash: token("--bad-wash"), good: token("--good"), figureBg: token("--figure-bg"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+  // Presses the clicked one of `buttons` and calls `choose` with its `data-` value named `key`.
+  function segmented(buttons, key, choose) {
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        for (const other of buttons) other.setAttribute("aria-pressed", String(other === button));
+        choose(button.dataset[key]);
+      });
+    }
+  }
+  function line(context, fromX, fromY, toX, toY) {
+    context.beginPath();
+    context.moveTo(fromX, fromY);
+    context.lineTo(toX, toY);
+    context.stroke();
+  }
+  const milliseconds = (value) => value.toFixed(2) + " ms";
+
+  /* Demo 1: a pixel grid under a thin quad split into two triangles, and which samples each triangle covers, whole or alone. */
+  (function () {
+    const COLUMNS = 6, ROWS = 4;
+    // The standard four-sample pattern, as fractions of a pixel.
+    const SAMPLES = [[0.375, 0.125], [0.875, 0.375], [0.125, 0.625], [0.625, 0.875]];
+    // How far inside the shared edge a sample must lie for triangle 1 to cover it alone: this page's model.
+    const LOST_BAND = 0.11;
+    let mode = "whole";
+
+    // The quad's corners in pixel units, shifted by the slider: a thin strip across the grid.
+    function quad(shift) {
+      const from = [0.35, 0.9 + shift], to = [5.65, 2.3 + shift];
+      const direction = [to[0] - from[0], to[1] - from[1]];
+      const length = Math.hypot(direction[0], direction[1]);
+      const normal = [-direction[1] / length * 0.42, direction[0] / length * 0.42];
+      const a = [from[0] - normal[0], from[1] - normal[1]], b = [to[0] - normal[0], to[1] - normal[1]];
+      const c = [to[0] + normal[0], to[1] + normal[1]], d = [from[0] + normal[0], from[1] + normal[1]];
+      // Triangle 1 is a, b, c; triangle 2 is a, c, d; they share the diagonal a to c.
+      return { one: [a, b, c], two: [a, c, d], shared: [a, c] };
+    }
+    // The signed distance of `point` from the line through `from` and `to`, positive on its left.
+    function sideOf(from, to, point) {
+      const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      return ((to[0] - from[0]) * (point[1] - from[1]) - (to[1] - from[1]) * (point[0] - from[0])) / length;
+    }
+    // Whether `point` lies inside `triangle`: on the same side of each edge as the opposite corner. A sample exactly on
+    // the shared edge is given to triangle 1, since triangle 2 is only asked about samples triangle 1 does not cover.
+    function inside(triangle, point) {
+      const orientation = Math.sign(sideOf(triangle[0], triangle[1], triangle[2]));
+      return [0, 1, 2].every((corner) => sideOf(triangle[corner], triangle[(corner + 1) % 3], point) * orientation >= 0);
+    }
+    function coverage(shift) {
+      const shape = quad(shift);
+      const samples = [];
+      for (let row = 0; row < ROWS; row++) {
+        for (let column = 0; column < COLUMNS; column++) {
+          for (const offset of SAMPLES) {
+            const point = [column + offset[0], row + offset[1]];
+            const inOne = inside(shape.one, point);
+            const inTwo = !inOne && inside(shape.two, point);
+            const fromEdge = Math.abs(sideOf(shape.shared[0], shape.shared[1], point));
+            const aloneOne = inOne && fromEdge >= LOST_BAND;
+            samples.push({ point: point, whole: inOne ? 1 : inTwo ? 2 : 0, alone: aloneOne ? 1 : 0 });
+          }
+        }
+      }
+      return { shape: shape, samples: samples };
+    }
+
+    const canvas = byId("c-canvas");
+    const frame = canvas.parentElement;
+    function draw() {
+      const tokens = readTokens();
+      const width = frame.clientWidth;
+      const cell = Math.min(96, Math.max(40, (width - 32) / COLUMNS));
+      const left = (width - cell * COLUMNS) / 2;
+      const top = 16;
+      const height = top + cell * ROWS + 16;
+      const context = sizeCanvas(canvas, width, height);
+      const toX = (x) => left + x * cell, toY = (y) => top + y * cell;
+      const shift = Number(byId("c-shift").value);
+      const state = coverage(shift);
+      context.clearRect(0, 0, width, height);
+
+      // The pixel grid.
+      context.strokeStyle = tokens.rule;
+      context.lineWidth = 1;
+      for (let column = 0; column <= COLUMNS; column++) line(context, toX(column) + 0.5, toY(0), toX(column) + 0.5, toY(ROWS));
+      for (let row = 0; row <= ROWS; row++) line(context, toX(0), toY(row) + 0.5, toX(COLUMNS), toY(row) + 0.5);
+
+      // The triangles: triangle 1 always, triangle 2 only when the quad is drawn whole.
+      function fillTriangle(triangle, fill, stroke) {
+        context.beginPath();
+        context.moveTo(toX(triangle[0][0]), toY(triangle[0][1]));
+        context.lineTo(toX(triangle[1][0]), toY(triangle[1][1]));
+        context.lineTo(toX(triangle[2][0]), toY(triangle[2][1]));
+        context.closePath();
+        context.fillStyle = fill;
+        context.fill();
+        context.strokeStyle = stroke;
+        context.lineWidth = 1.5;
+        context.stroke();
+      }
+      fillTriangle(state.shape.one, tokens.accentWash, tokens.accent);
+      if (mode === "whole") fillTriangle(state.shape.two, tokens.warmWash, tokens.warm);
+      else {
+        context.setLineDash([4, 4]);
+        fillTriangle(state.shape.two, "transparent", tokens.rule);
+        context.setLineDash([]);
+      }
+
+      // The samples.
+      const radius = Math.max(3, cell * 0.055);
+      let wholeCount = 0, aloneCount = 0, lost = 0;
+      for (const sample of state.samples) {
+        const owner = mode === "whole" ? sample.whole : sample.alone;
+        const isLost = mode === "alone" && sample.whole === 1 && sample.alone === 0;
+        if (sample.whole === 1) wholeCount++;
+        if (sample.alone === 1) aloneCount++;
+        if (sample.whole === 1 && sample.alone === 0) lost++;
+        const x = toX(sample.point[0]), y = toY(sample.point[1]);
+        context.beginPath();
+        context.arc(x, y, radius, 0, 2 * Math.PI);
+        if (owner === 1 || owner === 2) {
+          context.fillStyle = owner === 1 ? tokens.accent : tokens.warm;
+          context.fill();
+        } else {
+          context.strokeStyle = isLost ? tokens.bad : tokens.inkSoft;
+          context.lineWidth = isLost ? 2 : 1.5;
+          context.stroke();
+          if (isLost) {
+            line(context, x - radius, y - radius, x + radius, y + radius);
+            line(context, x - radius, y + radius, x + radius, y - radius);
+          }
+        }
+      }
+      byId("c-readout").innerHTML = mode === "whole"
+        ? "Drawn whole, triangle 1 owns <b>" + wholeCount + "</b> samples and its neighbour the rest of the quad's. Every sample inside the quad has one owner."
+        : "Drawn alone, triangle 1 covers <b>" + aloneCount + "</b> of the <b>" + wholeCount + "</b> samples it owned beside its neighbour: <b>" + lost + " lost</b>, all along the shared edge.";
+    }
+    function update() {
+      byId("c-shift-out").value = Number(byId("c-shift").value).toFixed(2) + " px";
+      draw();
+    }
+    segmented(document.querySelectorAll("#c-mode button"), "mode", (value) => {
+      mode = value;
+      update();
+    });
+    byId("c-shift").addEventListener("input", update);
+    byId("c-shift-out").value = Number(byId("c-shift").value).toFixed(2) + " px";
+    watchWidth(frame, draw);
+  })();
+
+  /* Demo 2: the measured gates of A, B and T, with B's and T's new passes shrinking toward zero. */
+  (function () {
+    const GATE_LIMIT = 6;
+    const AXIS_END = 14;
+    const ROWS = [
+      { name: "A, the switch off", gate: 9.6567, idPass: 0, visibilityPass: 0 },
+      { name: "B, Meshlets", gate: 13.1739, idPass: 2.0795, visibilityPass: 3.4364 },
+      { name: "T, Triangles (loses samples)", gate: 11.5277, idPass: 2.0832, visibilityPass: 2.4340 },
+    ];
+    const canvas = byId("g-canvas");
+    const frame = canvas.parentElement;
+    function draw() {
+      const tokens = readTokens();
+      const width = frame.clientWidth;
+      const narrow = width < 520;
+      const rowHeight = 54;
+      const height = 16 + ROWS.length * rowHeight + 30;
+      const context = sizeCanvas(canvas, width, height);
+      const left = narrow ? 8 : 16;
+      const right = width - (narrow ? 8 : 16);
+      const toX = (time) => left + (right - left) * Math.min(time, AXIS_END) / AXIS_END;
+      const share = Number(byId("g-cost").value) / 100;
+      context.clearRect(0, 0, width, height);
+      context.font = (narrow ? "10.5px " : "12px ") + tokens.mono;
+      context.textBaseline = "middle";
+      const totals = [];
+      ROWS.forEach((row, index) => {
+        const labelY = 16 + index * rowHeight + 8;
+        const barY = labelY + 12;
+        const barHeight = 20;
+        const rest = row.gate - row.idPass - row.visibilityPass;
+        const idPass = row.idPass * share, visibilityPass = row.visibilityPass * share;
+        const total = rest + idPass + visibilityPass;
+        totals.push(total);
+        context.fillStyle = tokens.inkSoft;
+        context.fillText(row.name, left, labelY);
+        function segment(from, to, fill, stroke) {
+          if (to <= from) return;
+          context.fillStyle = fill;
+          context.fillRect(toX(from), barY, toX(to) - toX(from), barHeight);
+          context.strokeStyle = stroke;
+          context.lineWidth = 1.2;
+          context.strokeRect(toX(from) + 0.5, barY + 0.5, toX(to) - toX(from) - 1, barHeight - 1);
+        }
+        segment(0, rest, tokens.accentWash, tokens.accent);
+        segment(rest, rest + idPass, tokens.warmWash, tokens.warm);
+        segment(rest + idPass, total, tokens.warm, tokens.warm);
+        context.fillStyle = total > GATE_LIMIT ? tokens.bad : tokens.good;
+        const label = total.toFixed(2) + " ms" + (row.idPass ? (share < 1 ? " (about)" : "") : "");
+        const labelX = Math.min(toX(total) + 6, right - context.measureText(label).width);
+        context.fillText(label, labelX, barY + barHeight / 2);
+      });
+      // The 6 ms line and the axis.
+      const axisY = height - 18;
+      context.setLineDash([4, 4]);
+      context.strokeStyle = tokens.warm;
+      context.lineWidth = 1.5;
+      line(context, toX(GATE_LIMIT), 8, toX(GATE_LIMIT), axisY);
+      context.setLineDash([]);
+      context.strokeStyle = tokens.rule;
+      context.lineWidth = 1;
+      line(context, left, axisY, right, axisY);
+      context.fillStyle = tokens.inkSoft;
+      for (let time = 0; time <= AXIS_END; time += 2) {
+        line(context, toX(time), axisY, toX(time), axisY + 4);
+        const text = time === AXIS_END ? time + " ms" : String(time);
+        const textWidth = context.measureText(text).width;
+        context.fillText(text, Math.min(Math.max(toX(time) - textWidth / 2, left), right - textWidth), axisY + 11);
+      }
+      context.fillStyle = tokens.warm;
+      context.fillText("6 ms", toX(GATE_LIMIT) + 4, 8);
+      byId("g-cost-out").value = Math.round(share * 100) + "%";
+      byId("g-readout").innerHTML = share === 1
+        ? "As measured: B's gate is <b>" + milliseconds(totals[1]) + "</b> and T's <b>" + milliseconds(totals[2]) + "</b>, against A's <b>" + milliseconds(totals[0]) + "</b> and the 6 ms line."
+        : "With the two new passes at <b>" + Math.round(share * 100) + "%</b> of their measured time, B's gate reads about <b>" + milliseconds(totals[1]) + "</b> and T's about <b>" + milliseconds(totals[2]) + "</b>: <b>" + (totals[1] - GATE_LIMIT).toFixed(2) + "</b> and <b>" + (totals[2] - GATE_LIMIT).toFixed(2) + " ms</b> past the line.";
+    }
+    byId("g-cost").addEventListener("input", draw);
+    watchWidth(frame, draw);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
