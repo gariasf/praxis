@@ -181,7 +181,7 @@ What one frame cost, measured by the engine itself: CPU time per system and stag
 _Avoid_: Metrics, telemetry
 
 **Baseline**:
-The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the comparison adapter, the RTX 2070 SUPER, on Vulkan and on DX12.
+The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.
 _Avoid_: Benchmark result
 
 **Budget**:

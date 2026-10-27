@@ -21,8 +21,9 @@ within 2.2% but the orrery's, which read 748 to 872 µs. One run on DX12
 against the Baselines passes every metric against its Baseline; it fails
 `town` on three Budgets alone, as it does on the M4 Pro.
 
-Medians in µs. The M4 Pro's column is its Baselines, the other two this
-adapter's; the table is printed from the Baseline files.
+Medians in µs, each as `praxis report bench/baselines/<adapter>` prints
+it for the M4 Pro's Baselines and this adapter's two sets, gathered into
+one table per figure.
 
 | Scene | GPU frame, M4 Pro | GPU frame, RTX Vulkan | GPU frame, RTX DX12 | Gate, M4 Pro | Gate, RTX Vulkan | Gate, RTX DX12 | CPU frame, M4 Pro | CPU frame, RTX Vulkan | CPU frame, RTX DX12 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -38,7 +39,58 @@ adapter's; the table is printed from the Baseline files.
 | town | 13,568.3 | 9,303.4 | 9,449.4 | 9,820.7 | 6,123.2 | 7,492.0 | 17,652.7 | 26,191.1 | 24,815.8 |
 | uv-grid | 2,308.1 | 1,626.4 | 1,462.3 | 749.8 | 530.0 | 506.9 | 199.8 | 301.2 | 452.8 |
 
-`town`'s passes, medians in µs, from the same files:
+Every scene's passes, from the same reports:
+
+M4 Pro, pass medians in µs:
+
+| Pass | crowd | far-coplanar | helmet | minification | normal-tangent | orrery | pbr-sweep | shadows | texture-wall | town | uv-grid |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `culling_phase_one` | 86.2 | 22.8 | 165.5 | 22.6 | 65.4 | 31.5 | 35.7 | 37.7 | 41.2 | 1,513.0 | 22.3 |
+| `culling_phase_two` | 22.8 | 17.8 | 18.1 | 16.8 | 17.3 | 17.5 | 17.6 | 16.9 | 35.2 | 897.8 | 17.7 |
+| `depth_prepass` | 251.8 | 104.8 | 154.2 | 106.5 | 94.8 | 93.9 | 95.5 | 110.9 | 226.0 | 1,756.3 | 89.5 |
+| `depth_pyramid_pass` | 254.1 | 251.4 | 229.1 | 257.2 | 199.2 | 192.3 | 204.0 | 270.0 | 438.2 | 250.4 | 216.0 |
+| `dynamic_tlas_build` | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 48.6 | 0.0 |
+| `froxel_pass` | 11.2 | 6.6 | 6.7 | 5.7 | 6.7 | 6.7 | 6.8 | 5.8 | 11.2 | 517.2 | 6.8 |
+| `lit_pass` | 1,708.2 | 329.9 | 758.9 | 488.7 | 461.2 | 324.5 | 447.8 | 461.7 | 585.2 | 8,714.4 | 430.7 |
+| `phase_two_depth_pass` | 11.8 | 12.1 | 12.2 | 12.1 | 12.2 | 12.1 | 12.1 | 12.1 | 16.5 | 48.9 | 12.1 |
+| `shadow_mask_pass` | 1,154.7 | 989.5 | 2,522.6 | 1,047.9 | 1,340.3 | 1,116.1 | 1,368.5 | 1,862.8 | 2,196.1 | 4,648.3 | 1,174.8 |
+| `tonemapping_pass` | 1,794.5 | 636.4 | 1,002.6 | 797.8 | 767.9 | 626.8 | 752.8 | 763.2 | 1,370.9 | 3,825.2 | 741.1 |
+| `bend_pass` | 27.6 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+RTX Vulkan, pass medians in µs:
+
+| Pass | crowd | far-coplanar | helmet | minification | normal-tangent | orrery | pbr-sweep | shadows | texture-wall | town | uv-grid |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `culling_phase_one` | 61.8 | 13.2 | 126.8 | 13.2 | 47.2 | 23.3 | 23.6 | 24.5 | 13.1 | 990.4 | 13.2 |
+| `culling_phase_two` | 15.9 | 14.1 | 13.8 | 12.4 | 13.9 | 13.9 | 13.9 | 12.5 | 14.1 | 482.5 | 13.9 |
+| `depth_prepass` | 128.6 | 184.3 | 127.1 | 39.9 | 30.2 | 17.8 | 33.4 | 55.9 | 24.7 | 1,135.6 | 23.2 |
+| `depth_pyramid_pass` | 149.7 | 147.9 | 146.8 | 149.1 | 143.8 | 139.3 | 142.4 | 152.4 | 144.6 | 183.4 | 143.9 |
+| `dynamic_tlas_build` | 160.9 | 0.0 | 0.0 | 0.0 | 0.0 | 51.8 | 0.0 | 0.0 | 0.0 | 245.5 | 0.0 |
+| `froxel_pass` | 8.6 | 6.7 | 8.0 | 6.8 | 7.5 | 7.5 | 7.6 | 6.1 | 5.4 | 369.3 | 7.7 |
+| `lit_pass` | 401.6 | 312.7 | 451.4 | 372.7 | 295.2 | 185.8 | 278.8 | 369.8 | 197.2 | 3,293.0 | 278.5 |
+| `phase_two_depth_pass` | 2.5 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 2.4 | 6.9 | 2.4 |
+| `shadow_mask_pass` | 740.2 | 507.0 | 1,248.2 | 821.3 | 678.9 | 524.6 | 652.2 | 1,196.9 | 421.0 | 2,321.4 | 864.5 |
+| `tonemapping_pass` | 187.1 | 187.1 | 192.4 | 187.4 | 185.8 | 185.9 | 191.5 | 184.2 | 185.4 | 219.1 | 193.0 |
+| `bend_pass` | 39.3 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+RTX DX12, pass medians in µs:
+
+| Pass | crowd | far-coplanar | helmet | minification | normal-tangent | orrery | pbr-sweep | shadows | texture-wall | town | uv-grid |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `culling_phase_one` | 61.4 | 14.3 | 141.3 | 14.3 | 49.7 | 24.9 | 25.2 | 26.0 | 14.6 | 1,411.4 | 14.3 |
+| `culling_phase_two` | 22.9 | 14.5 | 14.4 | 14.0 | 14.3 | 17.4 | 14.5 | 14.0 | 15.3 | 1,025.4 | 14.3 |
+| `depth_prepass` | 127.0 | 190.8 | 125.1 | 43.8 | 29.1 | 17.2 | 33.5 | 65.5 | 25.6 | 1,076.7 | 20.5 |
+| `depth_pyramid_pass` | 173.2 | 171.7 | 168.5 | 173.8 | 165.9 | 159.8 | 163.9 | 177.9 | 165.9 | 203.0 | 166.0 |
+| `dynamic_tlas_build` | 157.9 | 0.0 | 0.0 | 0.0 | 0.0 | 43.3 | 0.0 | 0.0 | 0.0 | 274.4 | 0.0 |
+| `froxel_pass` | 10.9 | 9.6 | 10.0 | 9.6 | 9.2 | 10.0 | 9.2 | 8.4 | 8.2 | 350.3 | 9.3 |
+| `lit_pass` | 436.8 | 402.1 | 471.0 | 423.2 | 295.7 | 165.9 | 274.4 | 393.5 | 189.5 | 3,433.5 | 274.9 |
+| `phase_two_depth_pass` | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 7.7 | 0.4 |
+| `shadow_mask_pass` | 297.3 | 327.7 | 1,105.8 | 685.0 | 469.6 | 141.5 | 425.0 | 1,078.7 | 174.1 | 1,454.1 | 739.3 |
+| `tonemapping_pass` | 188.4 | 188.5 | 188.4 | 191.4 | 188.6 | 188.5 | 188.5 | 186.8 | 188.3 | 213.0 | 188.8 |
+| `bend_pass` | 36.2 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+`town`'s passes beside each other, with its shadow-ray time and the
+dynamic TLAS's CPU time:
 
 | Pass | M4 Pro | RTX Vulkan | RTX DX12 |
 |---|---:|---:|---:|
@@ -91,10 +143,11 @@ the second:
 | `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
 | `heap_allocations` | 10,495 | 10,495 | +0 | 1.000 | — |
 
-GPU memory, `praxis capture <scene> <png> 2560x1440` on each backend, in
-bytes: the engine's count (`gpu_memory_bytes`, acceleration structures by
-the measured NVIDIA estimate) against wgpu's allocator report, which
-Metal lacks. The engine counts the same on both backends.
+GPU memory, from the `gpu_memory` line that `praxis capture <scene> <png>
+2560x1440` logs for its last frame on each backend, in bytes: the
+engine's count (`gpu_memory_bytes`, acceleration structures by the
+measured NVIDIA estimate) against wgpu's allocator report
+(`allocator_report_bytes`). The engine counts the same on both backends.
 
 | Scene | Engine count | Allocator, Vulkan | Ratio | Allocator, DX12 | Ratio |
 |---|---:|---:|---:|---:|---:|
@@ -110,27 +163,32 @@ Metal lacks. The engine counts the same on both backends.
 | town | 720,808,670 | 749,594,128 | 1.040 | 758,317,056 | 1.052 |
 | uv-grid | 625,700,523 | 654,472,768 | 1.046 | 662,503,424 | 1.059 |
 
-- **`town`'s CPU frame: 26.2 ms against the 6 ms Budget**, and 17.7 ms
+This adapter's top three offenders are the first three below; the rest
+are also seen.
+
+- **1. `town`'s CPU frame: 26.2 ms against the 6 ms Budget**, and 17.7 ms
   on the M4 Pro. Its p95, 37.9 ms, is 1.45 times its median, where
-  every other scene's is under 1.2. The dynamic TLAS takes 1.9 ms of it,
+  every other scene's on Vulkan is under 1.2. The dynamic TLAS takes 1.9 ms of it,
   over its 1.1 ms ceiling; on the orrery and the crowd it takes 0.59 and
   0.82 ms, 2 to 3 times the M4 Pro's. Where the rest goes is not yet
-  measured. This is the top offender on this adapter.
-- **`town`'s gate: 6.1 ms on Vulkan and 7.5 on DX12, over the 6 ms
+  measured.
+- **2. `town`'s gate: 6.1 ms on Vulkan and 7.5 on DX12, over the 6 ms
   Budget**, which the M4 Pro breaches at 9.8. The lit pass, which costs
-  the M4 Pro 8.7 ms, costs 3.3 here, both with rays on. After the lit pass and the depth
-  pre-pass, the culling phases are the gate's largest part, and on DX12
-  they read 1.41 and 1.03 ms against Vulkan's 0.99 and 0.48.
-- **Vulkan's shadow mask pass costs 1.6 to 3.7 times DX12's on the same
-  GPU**: 2,321 µs against 1,454 on `town`, 525 against 142 on the
-  orrery, 740 against 297 on the crowd, 421 against 174 on texture-wall.
+  the M4 Pro 8.7 ms, costs 3.3 here, both with rays on. After the lit
+  pass, the two culling phases are the gate's largest part: 1.47 ms on Vulkan and 2.44 on
+  DX12, against a depth pre-pass of 1.14 and 1.08.
+- **3. Vulkan's shadow mask pass costs 1.1 to 3.7 times DX12's on the
+  same GPU**, and more than 1.5 times on six scenes: 2,321 µs against
+  1,454 on `town`, 525 against 142 on the orrery, 740 against 297 on the
+  crowd, 421 against 174 on texture-wall; the shadows scene's, 1.11, is
+  the closest.
   Both trace the same rays through the same ray queries; the cause is not
   yet measured.
 - **DX12's allocator holds 2.1 times the engine's count on
   texture-wall**, 1.31 GB against 621 MB, where Vulkan's holds 1.08
   times and every other scene 1.04 to 1.06 on either backend. texture-wall
   binds 10,005 Textures, and DX12's allocator holds about 64 KB more per
-Texture than Vulkan's.
+  Texture than Vulkan's.
 - **The M4 Pro's slow passes are not this adapter's.** Tonemapping, which
   reads 0.6 to 3.8 ms on the M4 Pro, reads 184 to 219 µs on every scene
   here; texture-wall's GPU frame, 15.9 ms there, is 1.1 ms here. Both

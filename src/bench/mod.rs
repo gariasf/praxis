@@ -87,17 +87,18 @@ const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 /// The Baseline directory of `adapter` on `backend`: the adapter's name in
 /// lowercase, each run of other characters a hyphen (`Apple M4 Pro` is
 /// `apple-m4-pro`), then the backend's name unless it is Vulkan or Metal,
-/// the backend an adapter runs on unless `WGPU_BACKEND` asks for another
+/// which lead the engine's backend order, so an adapter runs on one of them
+/// unless `WGPU_BACKEND` asks for another
 /// (`NVIDIA GeForce RTX 2070 SUPER` on DX12 is
 /// `nvidia-geforce-rtx-2070-super-dx12`).
 pub fn baseline_directory(adapter: &str, backend: &str) -> PathBuf {
-    let own_backend = [wgpu::Backend::Vulkan, wgpu::Backend::Metal]
+    let default_backend = [wgpu::Backend::Vulkan, wgpu::Backend::Metal]
         .iter()
-        .any(|own| own.to_str() == backend);
+        .any(|default| default.to_str() == backend);
     let key = adapter
         .to_lowercase()
         .split(|character: char| !character.is_ascii_alphanumeric())
-        .chain((!own_backend).then_some(backend))
+        .chain((!default_backend).then_some(backend))
         .filter(|word| !word.is_empty())
         .collect::<Vec<_>>()
         .join("-");
@@ -326,8 +327,9 @@ pub fn run(
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
-/// `adapter` through `backend`, and of `frames_without_rays`, the same run with shadow rays
-/// off, which fail unless every frame of both read back its GPU stats.
+/// `adapter` through `backend`, and of `frames_without_rays`, the same run
+/// with shadow rays off, which fail unless every frame of both read back
+/// its GPU stats.
 fn measure(
     scene: ReferenceScene,
     adapter: String,
@@ -1215,7 +1217,7 @@ mod tests {
     }
 
     #[test]
-    fn baseline_directories_are_keyed_by_adapter_and_any_backend_but_its_own() {
+    fn baseline_directories_are_keyed_by_adapter_and_any_backend_but_vulkan_or_metal() {
         assert_eq!(
             baseline_directory("Apple M4 Pro", "metal"),
             PathBuf::from("bench/baselines/apple-m4-pro")
