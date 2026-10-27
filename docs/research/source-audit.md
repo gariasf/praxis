@@ -6,7 +6,7 @@ The Review's Sources axis (`docs/agents/workflow.md`, Review) applied to what me
 
 Audited 2026-10-26 (#305): the shading functions in `src/render/shaders/` and their oracles in `src/render/shader_function_tests.rs`, photometric units and exposure (ADR 0023, `src/camera/mod.rs`, `src/scenes/mod.rs`), the HDR, GT7 and display parts of the tonemapping pass, normal mapping in the lit pass, and ADR 0023's own claims. The environment module cites no source. ADR 0008 and ADR 0020 cite only decisions on this repo's issues; ADR 0020's ray-traced shadows and their measurements are #306's and #308's. The remaining links of the two lighting notes, their survey rows and the shipped-practice links of the HDR note's rows 11, 14 and 15, split off along the ticket size ceiling into #329.
 
-One mismatch changes rendered output and is ticketed: #327, glTF's normal texture scale.
+One mismatch changed rendered output and was ticketed as #327, glTF's normal texture scale, which fixed it.
 
 | Reference | Cited in | Exists | Says that | Cited right | Implemented right | Evidence, and the fix where one failed |
 |---|---|---|---|---|---|---|
@@ -24,7 +24,7 @@ One mismatch changes rendered output and is ticketed: #327, glTF's normal textur
 | KHR_lights_punctual, range window | `point_light_attenuation`; its oracle | ✓ | ✓ | ✓ | ✓ | [ref:khr-lights-punctual-range]; (d²/r²)² is (d/r)⁴ |
 | Walter et al. 2007, eq. 4 | normalisation oracle | ✓ | ✓ | ✓ | ✓ | [ref:walter-2007-projected-area]; the oracle's integral is eq. 4 in spherical coordinates |
 | Walter et al. 2007, eq. 33 | D's peak oracle | ✓ | ✓ | ✓ | ✓ | [ref:walter-2007-ggx]; 1/(π α²) at θm = 0 |
-| glTF 2.0 source, Meshes (bitangent) and Normal Texture | tangent frame in `main.wgsl`; `tangent_space_normal` | ✓ | ✓ | ✓ | ✗ | [ref:gltf-2.0-bitangent]: the bitangent is cross(normal, tangent.xyz) · tangent.w, as glTF writes it; z is rebuilt from x and y, which BC5 alone stores (ADR 0018). glTF multiplies x and y by `normalTexture.scale` (L2769-L2776), which the cooker never reads: #327, as the fix changes rendered output |
+| glTF 2.0 source, Meshes (bitangent) and Normal Texture | tangent frame in `main.wgsl`; `tangent_space_normal` | ✓ | ✓ | ✓ | ✓ | [ref:gltf-2.0-bitangent]: the bitangent is cross(normal, tangent.xyz) · tangent.w, as glTF writes it; z is rebuilt from x and y, which BC5 alone stores (ADR 0018). glTF multiplies x and y by `normalTexture.scale` (L2769-L2776), which the cooker never read: ✗ at the audit, ticketed as #327 since the fix changes rendered output; fixed there, the cooker reading the scale into the Material and the lit pass applying it, [ref:gltf-2.0-normal-texture-scale] |
 | Filament, 1 cm punctual light | `MINIMUM_LIGHT_DISTANCE_SQUARED` | ✓ | ✓ | ✓ | ✓ | [ref:filament-punctual-light-1cm], Apache-2.0; Filament takes its range window from the unclamped d², the shader from the clamped one, which differ only within 1 cm, where the window is 1 |
 | Hoffman 2013, Table 1 (gold) | `SWEEP_BASE_COLOR`, `GOLD` | ✓ | ✓ | ✗ | ✓ | [ref:hoffman-2013-f0]; gold's (1.00, 0.71, 0.29) had no source: now cited |
 | GT7, `gt7_tone_mapping.cpp` 1.0 | `gt7.wgsl`; GT7 oracles | ✓ | ✓ | ✓ | ✓ | [ref:gt7-tone-mapping-cpp]; MIT notice verbatim; every constant, matrix and step matches; SHA-256 matches the oracle's |

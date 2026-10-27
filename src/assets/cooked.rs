@@ -17,7 +17,7 @@ pub(crate) const MATERIAL_MAGIC: [u8; 4] = *b"PXMA";
 /// Bumped whenever the Material Blob layout, or how the cooker fills it,
 /// changes: it stands in for the cooker version in the Cook key, and old
 /// Blobs are refused.
-pub(crate) const MATERIAL_FORMAT_VERSION: u32 = 1;
+pub(crate) const MATERIAL_FORMAT_VERSION: u32 = 2;
 /// The KTX2 key of a Texture Blob's one key-value entry, whose value is
 /// `TEXTURE_FORMAT_VERSION` as a little-endian u32. With its NUL it is 12
 /// bytes, a multiple of the value's 4, as KTX 2.0 requires of a key whose
@@ -135,13 +135,16 @@ pub struct CookedMaterial {
     pub metallic: f32,
     pub roughness: f32,
     pub emissive: [f32; 3],
+    /// Multiplies the normal Texture's x and y (glTF's `normalTexture.scale`);
+    /// 1 for a Material without one.
+    pub normal_scale: f32,
     pub textures: [Option<AssetId>; 5],
 }
 
 impl CookedMaterial {
-    /// Nine little-endian f32 factors, then 16 bytes per Channel, all zero
+    /// Ten little-endian f32 factors, then 16 bytes per Channel, all zero
     /// for none.
-    const PAYLOAD_BYTES: usize = 9 * 4 + 5 * 16;
+    const PAYLOAD_BYTES: usize = 10 * 4 + 5 * 16;
 
     #[cfg(feature = "cook")]
     pub(crate) fn to_blob(&self) -> Vec<u8> {
@@ -160,6 +163,7 @@ impl CookedMaterial {
             emissive_red,
             emissive_green,
             emissive_blue,
+            self.normal_scale,
         ] {
             blob.extend(factor.to_le_bytes());
         }
@@ -177,7 +181,7 @@ impl CookedMaterial {
             payload.len(),
             Self::PAYLOAD_BYTES
         );
-        let (factor_bytes, texture_bytes) = payload.split_at(9 * 4);
+        let (factor_bytes, texture_bytes) = payload.split_at(10 * 4);
         let factors: Vec<f32> = factor_bytes
             .as_chunks::<4>()
             .0
@@ -194,6 +198,7 @@ impl CookedMaterial {
             metallic: factors[4],
             roughness: factors[5],
             emissive: factors[6..9].try_into().expect("3 factors"),
+            normal_scale: factors[9],
             textures,
         })
     }
@@ -776,6 +781,7 @@ mod tests {
             metallic: 0.5,
             roughness: 0.25,
             emissive: [1.0, 0.0, 2.0],
+            normal_scale: 1.5,
             textures: [Some(AssetId(7)), None, None, Some(AssetId(u128::MAX)), None],
         };
         let blob = material.to_blob();

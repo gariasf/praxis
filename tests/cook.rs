@@ -208,6 +208,7 @@ fn moving_and_renaming_a_source_keeps_its_asset_ids() {
             metallic: 0.0,
             roughness: 0.75,
             emissive: [0.0; 3],
+            normal_scale: 1.0,
             textures: [Some(paint), None, None, None, None],
         }
     );
@@ -428,8 +429,9 @@ const ROUGHNESS_BYTE: u8 = 77;
 /// rounding of the source normals.
 const ROUGHNESS_TOLERANCE: f32 = 0.01;
 
-/// `bumpy` samples a tilted normal Texture and a metallic-roughness image;
-/// `smooth` samples another metallic-roughness image and no normal Texture.
+/// `bumpy` samples a tilted normal Texture, at a normal scale of 1/2, which
+/// the widening does not read, and a metallic-roughness image; `smooth`
+/// samples another metallic-roughness image and no normal Texture.
 fn write_toksvig_sources(assets: &Path) {
     let gltf = json!({
         "asset": {"version": "2.0"},
@@ -442,7 +444,7 @@ fn write_toksvig_sources(assets: &Path) {
         "materials": [
             {
                 "name": "bumpy",
-                "normalTexture": {"index": 0},
+                "normalTexture": {"index": 0, "scale": 0.5},
                 "pbrMetallicRoughness": {"metallicRoughnessTexture": {"index": 1}},
             },
             {
@@ -533,6 +535,25 @@ fn a_material_without_a_normal_texture_cooks_its_roughness_unchanged() {
             assert_eq!(roughness, ROUGHNESS_BYTE, "mip {mip}");
         }
     }
+    fs::remove_dir_all(&directory).unwrap();
+}
+
+/// A Material's normal scale cooks from its `normalTexture.scale`, and reads
+/// 1 without a normal Texture.
+#[test]
+fn a_materials_normal_scale_cooks_from_its_normal_texture() {
+    let directory = scratch("normal-scale");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_toksvig_sources(&assets);
+    cook(&assets, &cache).unwrap();
+
+    let normal_scale = |name| {
+        let material = cache.material(material_id(AssetName::Name(name))).unwrap();
+        material.normal_scale
+    };
+    assert_eq!(normal_scale("bumpy"), 0.5);
+    assert_eq!(normal_scale("smooth"), 1.0);
     fs::remove_dir_all(&directory).unwrap();
 }
 

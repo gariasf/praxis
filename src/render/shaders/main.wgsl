@@ -117,7 +117,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
     let bitangent = cross(geometric_normal, tangent) * in.tangent_world.w;
     let tangent_to_world = mat3x3<f32>(tangent, bitangent, geometric_normal);
-    let normal = normalize(tangent_to_world * tangent_space_normal(normal_sample));
+    let normal = normalize(
+        tangent_to_world * tangent_space_normal(normal_sample, material.metallic_roughness.z)
+    );
 
     let view_direction = normalize(-in.camera_relative_position);
 

@@ -912,6 +912,7 @@ mod generators {
                     metallic,
                     roughness,
                     emissive: [0.0; 3],
+                    normal_scale: 1.0,
                     textures: [None; 5],
                 };
                 (name.to_owned(), material)

@@ -148,6 +148,7 @@ impl ReferenceScene {
             metallic,
             roughness,
             emissive: [0.0; 3],
+            normal_scale: 1.0,
             textures: [
                 albedo.map(|name| self.texture_id(MaterialChannel::Albedo, name)),
                 None,
@@ -192,6 +193,7 @@ impl ReferenceScene {
                     metallic: 1.0,
                     roughness: 1.0,
                     emissive: [0.0; 3],
+                    normal_scale: 1.0,
                     textures: [
                         Some(self.texture_id(MaterialChannel::Albedo, "checker")),
                         Some(self.texture_id(MaterialChannel::Normal, "bumps")),

@@ -667,6 +667,12 @@ section = "glTF 2.0 schema, material.normalTexture, gltf_detailedDescription"
 quote = '''Each texel represents the XYZ components of a normal vector in tangent space. The normal vectors use the convention +X is right and +Y is up. +Z points toward the viewer.'''
 checked = 2026-10-26
 
+["gltf-2.0-normal-texture-scale"]
+url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L2769"
+section = "glTF 2.0 specification source, 3.9.3 Additional Textures, normal, L2769-L2776"
+quote = '''The sampled RGB values are linearly mapped to XYZ directions as follows: red [0.0, 1.0] to X [−1.0, +1.0], green [0.0, 1.0] to Y [−1.0, +1.0], blue (0.5, 1.0] to Z (0.0, +1.0]. [...] After mapping RGB values to XYZ directions, the X and Y components are multiplied by the value of the `scale` property of the object that refers to the normal texture. [...] (sampledNormalValue_rgb · 2.0 − 1.0) ⊙ ⟨scale, scale, 1.0⟩ [...] Finally, the scaled normal vector is normalized before being used in lighting equations.'''
+checked = 2026-10-27
+
 ["gltf-2.0-tangent-bitangent"]
 url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L1763"
 section = "glTF 2.0 specification source, Meshes, Vertex Attributes (L1602) and Using Primitive Data (L1763)"

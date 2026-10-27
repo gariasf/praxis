@@ -103,10 +103,16 @@ fn smith_visibility(
 // A cooked normal Texture stores a unit normal's x and y in [0, 1], in BC5's
 // two channels (ADR 0018); z is rebuilt as the positive root of
 // x² + y² + z² = 1, and is 0 where block error carries x and y past the
-// unit circle.
-fn tangent_space_normal(encoded: vec2<f32>) -> vec3<f32> {
+// unit circle. x and y are then multiplied by the Material's normal scale,
+// (sample · 2 − 1) ⊙ ⟨scale, scale, 1⟩ (glTF 2.0, "Normal Texture"
+// [ref:gltf-2.0-normal-texture-scale]), which glTF normalises last: the lit
+// pass does, once its orthonormal tangent frame has turned the result into
+// World space. At a scale of 0, x and y vanish and z is 1, so a texel
+// without z flattens like the rest instead of normalising a zero vector.
+fn tangent_space_normal(encoded: vec2<f32>, scale: f32) -> vec3<f32> {
     let x_and_y = encoded * 2.0 - vec2<f32>(1.0);
-    return vec3<f32>(x_and_y, sqrt(max(1.0 - dot(x_and_y, x_and_y), 0.0)));
+    let z = sqrt(max(1.0 - dot(x_and_y, x_and_y), 0.0));
+    return vec3<f32>(x_and_y * scale, select(z, 1.0, scale == 0.0));
 }
 
 // The BRDF, mix(dielectric_brdf, metal_brdf, metallic), per steradian, from

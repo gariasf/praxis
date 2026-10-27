@@ -1084,46 +1084,61 @@ fn reference_brdf(
 }
 
 /// A cooked normal Texture stores a unit normal's x and y, each mapped to
-/// [0, 1], and the shader rebuilds z = √(1 − x² − y²), the cosine between the
-/// normal and the surface's, which falls to 0 at grazing slopes. On a lattice
-/// of encodings 1/512 apart, whose x, y and squares f32 holds exactly, every
-/// result matches that closed form, evaluated in f64, within sqrt's rounding.
-/// Past the unit circle, where BC5's error can carry an encoding, z is 0, not
-/// NaN.
+/// [0, 1]; the shader rebuilds z = √(1 − x² − y²), the cosine between the
+/// normal and the surface's, which falls to 0 at grazing slopes, multiplies
+/// x and y by the Material's normal scale, and normalises once the tangent
+/// frame has turned the result into World space: for a texture of unit
+/// normals, glTF 2.0's normalize((sample · 2 − 1) ⊙ ⟨scale, scale, 1⟩)
+/// ("Normal Texture" [ref:gltf-2.0-normal-texture-scale]), evaluated here in
+/// f64 on a lattice of encodings 1/256 apart, whose x, y and squares f32
+/// holds exactly, at scales of 1/2, 1 and 2. Past the unit circle, where
+/// BC5's error can carry an encoding, z is 0, not NaN, and a scale of 0
+/// gives the surface's normal at every texel, those included.
 #[test]
-fn tangent_space_normal_rebuilds_z_from_x_and_y() {
+fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
     let Some(context) = gpu_context() else {
         return;
     };
     let steps: Vec<f64> = (0..=1024)
-        .step_by(2)
+        .step_by(4)
         .map(|step| f64::from(step) / 1024.0)
         .collect();
-    let inputs: Vec<[f32; 4]> = steps
+    let lattice: Vec<[f32; 2]> = steps
         .iter()
-        .flat_map(|&x| steps.iter().map(move |&y| [x as f32, y as f32, 0.0, 0.0]))
+        .flat_map(|&x| steps.iter().map(move |&y| [x as f32, y as f32]))
+        .collect();
+    let inputs: Vec<[f32; 4]> = [0.0, 0.5, 1.0, 2.0]
+        .into_iter()
+        .flat_map(|scale| lattice.iter().map(move |&[x, y]| [x, y, scale, 0.0]))
         .collect();
     let results = evaluate(
         &context,
-        "vec4<f32>(tangent_space_normal(input.xy), 0.0)",
+        "vec4<f32>(normalize(tangent_space_normal(input.xy, input.z)), 0.0)",
         &inputs,
     );
 
-    let mut grazing = 0;
+    let mut without_z = 0;
     for (input, result) in inputs.iter().zip(results) {
         let [x, y] = [input[0], input[1]].map(|encoded| f64::from(encoded) * 2.0 - 1.0);
-        let expected = (1.0 - x * x - y * y).max(0.0).sqrt();
-        let [result_x, result_y, result_z, _] = result.map(f64::from);
-        assert!(
-            (result_x, result_y) == (x, y) && (result_z - expected).abs() <= 1e-6 * expected,
-            "encoded ({}, {}) rebuilds {result:?}, expected ({x}, {y}, {expected})",
-            input[0],
-            input[1]
-        );
-        grazing += usize::from(expected > 0.0 && expected < 1.0f64.to_radians().sin());
+        let scale = f64::from(input[2]);
+        let z = (1.0 - x * x - y * y).max(0.0).sqrt();
+        let scaled = glam::DVec3::new(x * scale, y * scale, z);
+        let expected = scaled.try_normalize().unwrap_or(glam::DVec3::Z);
+        for (axis, (actual, expected)) in result.iter().zip(expected.to_array()).enumerate() {
+            assert_close(
+                *actual,
+                expected,
+                f64::from(TOLERANCE),
+                format_args!(
+                    "encoded ({}, {}) at scale {scale}, axis {axis}: {result:?}, expected {expected}",
+                    input[0], input[1]
+                ),
+            );
+        }
+        without_z += usize::from(z == 0.0);
     }
-    // Normals within 1° of grazing are among the cases.
-    assert!(grazing > 0);
+    // Encodings at or past the unit circle are among the cases.
+    assert!(without_z > 0);
 }
 
 /// A surface decodes as its Material's factors times its texels (glTF's
