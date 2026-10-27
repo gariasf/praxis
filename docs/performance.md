@@ -4,6 +4,166 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Option B, a visibility pre-pass, prototyped on `town` (2026-10-27, #296)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
+prototype branch `prototype/visibility-b` at 5bb7abd, which stays on its
+branch. `praxis bench <dir> town` at 2560×1440 with 4x MSAA, 248 warm-up
+and 1,800 measured frames, three rounds, each round A (the switch off),
+then B (`--visibility-prepass`, Meshlet granularity), then T
+(`--visibility-prepass-triangles`, triangle granularity), interleaved so
+load falls on each alike. Load average 3.9 to 5.3, no other GPU work.
+The gate's medians across rounds spread under 0.3% (A 9,652 to 9,672 µs,
+B 13,157 to 13,194, T 11,512 to 11,533); the tables are the median
+round's, each against `town`'s Baseline of 2026-10-26, which is A as
+`main` runs it.
+
+**Verdict.** Option B does not reach ADR 0019's gate on `town`, and
+cannot on this GPU: the gate reads 13.2 ms at Meshlet granularity and
+11.5 ms at triangle granularity against A's 9.7 and the 6 ms limit. The
+lit pass gives back 2.9 ms, but the visibility ID pass costs 2.1 ms and
+the visibility pass 2.4 to 3.4 ms. Even with both free, the gate would
+read about 7.0 to 7.7 ms; and the one way to make the IDs free, writing
+them in the depth pre-pass, loses samples on the M4 Pro (below).
+Triangle granularity, the ticket's shape, is a lower bound, not a
+candidate: it draws a different image.
+
+**Shape as built.** With the switch on, phase two's depth goes in its own
+pass, as with shadow rays; a visibility ID pass then draws both phases'
+draw again at depth equal, the lit pass's own depth state, and writes
+each sample's triangle, the draw's primitive index, into a 4x Rg16Uint
+target (58,982,400 bytes; R32Uint has no MSAA among WebGPU's guaranteed
+format features, so the two halves of the ID fill Rg16Uint instead and
+no adapter-specific feature is requested). A visibility pass marks those
+triangles, or with Meshlet granularity every triangle of their Meshlets,
+sums the marks with the culling pass's scan, and copies the marked
+triangles' packed indices in draw order into a compacted draw, which the
+lit pass draws. The device requests `PRIMITIVE_INDEX` beside the
+Capability floor where the adapter has it; it is Tier 1 in ADR 0021, so
+raising the floor is an owner decision.
+
+**B, Meshlet granularity**, median round, against the Baseline:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 19,084.2 | 19,844.2 | 17,652.7 | 18,184.2 | +1,431.5 | 1.081 | 6,000.0 |
+| Dynamic TLAS, CPU | 975.9 | 1,071.0 | 1,039.2 | 1,109.5 | -63.3 | 0.939 | 1,100.0 |
+| GPU frame | 17,031.6 | 18,415.2 | 13,568.3 | 14,188.4 | +3,463.3 | 1.255 | 12,000.0 |
+| Gate, rays off | 13,173.9 | 13,641.2 | 9,820.7 | 10,483.3 | +3,353.2 | 1.341 | 6,000.0 |
+| Shadow-ray time | 3,454.0 | 4,764.3 | 3,228.0 | 3,984.7 | +226.1 | 1.070 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,525.3 | 1,669.3 | 1,513.0 | 1,585.4 | +12.3 | 1.008 | — |
+| `culling_phase_two` | 901.0 | 1,034.8 | 897.8 | 936.2 | +3.2 | 1.004 | — |
+| `depth_prepass` | 1,753.8 | 1,880.4 | 1,756.3 | 1,814.6 | -2.6 | 0.999 | — |
+| `depth_pyramid_pass` | 249.0 | 270.7 | 250.4 | 266.8 | -1.4 | 0.994 | — |
+| `dynamic_tlas_build` | 0.0 | 596.0 | 48.6 | 462.8 | -48.6 | 0.000 | 1,000.0 |
+| `froxel_pass` | 509.0 | 550.3 | 517.2 | 556.3 | -8.3 | 0.984 | — |
+| `lit_pass` | 5,916.0 | 8,348.5 | 8,714.4 | 9,186.1 | -2,798.5 | 0.679 | — |
+| `phase_two_depth_pass` | 46.3 | 96.0 | 48.9 | 98.6 | -2.6 | 0.946 | — |
+| `shadow_mask_pass` | 5,426.6 | 6,155.9 | 4,648.3 | 4,940.3 | +778.3 | 1.167 | — |
+| `tonemapping_pass` | 3,825.2 | 4,096.2 | 3,825.2 | 4,499.8 | +0.0 | 1.000 | — |
+| `visibility_id_pass` | 2,079.5 | 2,213.8 | — | — | — | — | — |
+| `visibility_pass` | 3,436.4 | 5,981.8 | — | — | — | — | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 5 | 4 | +1 | 1.250 | — |
+| `instances_drawn` | 137,730 | 137,730 | +0 | 1.000 | — |
+| `triangles_drawn` | 5,552,214 | 5,552,214 | +0 | 1.000 | — |
+| `instances_overflowed` | 0 | 0 | +0 | — | — |
+| `uploaded_bytes` | 2,049,344 | 2,049,344 | +0 | 1.000 | — |
+| `gpu_memory_bytes` | 812,688,388 | 616,555,272 | +196,133,116 | 1.318 | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
+| `heap_allocations` | 10,535 | 10,478 | +57 | 1.005 | — |
+
+**T, triangle granularity**, median round, against the Baseline:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 19,096.5 | 19,743.0 | 17,652.7 | 18,184.2 | +1,443.8 | 1.082 | 6,000.0 |
+| Dynamic TLAS, CPU | 969.3 | 1,046.3 | 1,039.2 | 1,109.5 | -69.9 | 0.933 | 1,100.0 |
+| GPU frame | 15,361.4 | 16,107.2 | 13,568.3 | 14,188.4 | +1,793.1 | 1.132 | 12,000.0 |
+| Gate, rays off | 11,527.7 | 11,970.1 | 9,820.7 | 10,483.3 | +1,707.0 | 1.174 | 6,000.0 |
+| Shadow-ray time | 3,417.6 | 4,175.2 | 3,228.0 | 3,984.7 | +189.7 | 1.059 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,517.2 | 1,673.5 | 1,513.0 | 1,585.4 | +4.2 | 1.003 | — |
+| `culling_phase_two` | 899.3 | 1,033.6 | 897.8 | 936.2 | +1.5 | 1.002 | — |
+| `depth_prepass` | 1,753.0 | 1,879.4 | 1,756.3 | 1,814.6 | -3.3 | 0.998 | — |
+| `depth_pyramid_pass` | 248.8 | 282.0 | 250.4 | 266.8 | -1.6 | 0.994 | — |
+| `dynamic_tlas_build` | 0.0 | 229.8 | 48.6 | 462.8 | -48.6 | 0.000 | 1,000.0 |
+| `froxel_pass` | 514.0 | 551.9 | 517.2 | 556.3 | -3.2 | 0.994 | — |
+| `lit_pass` | 5,767.4 | 7,854.3 | 8,714.4 | 9,186.1 | -2,947.0 | 0.662 | — |
+| `phase_two_depth_pass` | 46.4 | 95.1 | 48.9 | 98.6 | -2.5 | 0.948 | — |
+| `shadow_mask_pass` | 4,817.8 | 5,137.0 | 4,648.3 | 4,940.3 | +169.5 | 1.036 | — |
+| `tonemapping_pass` | 4,739.9 | 6,890.5 | 3,825.2 | 4,499.8 | +914.7 | 1.239 | — |
+| `visibility_id_pass` | 2,083.2 | 2,225.6 | — | — | — | — | — |
+| `visibility_pass` | 2,434.0 | 3,281.9 | — | — | — | — | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 5 | 4 | +1 | 1.250 | — |
+| `instances_drawn` | 137,730 | 137,730 | +0 | 1.000 | — |
+| `triangles_drawn` | 5,552,214 | 5,552,214 | +0 | 1.000 | — |
+| `instances_overflowed` | 0 | 0 | +0 | — | — |
+| `uploaded_bytes` | 2,049,344 | 2,049,344 | +0 | 1.000 | — |
+| `gpu_memory_bytes` | 812,688,388 | 616,555,272 | +196,133,116 | 1.318 | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
+| `heap_allocations` | 10,535 | 10,478 | +57 | 1.005 | — |
+
+The memory the switch adds, 196,132,892 bytes, is the visibility IDs
+(58,982,400), the compacted indices at the draw's capacity of 2^25
+(134,217,728), the triangle bits (1,398,104), their offsets (1,403,568),
+the record bits (131,072) and the compacted draw's arguments. The
+`shadow_mask_pass` and `tonemapping_pass` readings move because Metal
+runs them beside the new passes, not because they do more work; the
+gate, a span with rays off, is the figure to judge. The two new timed
+passes grow every Baseline's `gpu_memory_bytes` by 224 bytes of
+readback, so `compare` refuses the Baselines on the branch.
+
+- **Coverage depends on the draw's neighbours.** With the IDs written in
+  the depth pre-pass, as option B is described, `town` differed from A at
+  176 to 4,335 pixels per frame over the eight frames the Goldens test
+  checks, scattered over distant geometry: wires, far cubes. Writing the
+  IDs at depth equal in a pass of their own, with the lit pass's depth
+  state and draw order, still left 180 to 4,276. Forcing every triangle
+  marked left 0, so the compaction is right and the marks are short.
+  Marking each ID's previous triangle too removed most of the difference,
+  and its two neighbours either side nearly all: the lost triangles are
+  the other triangle of the same quad face. Encoding each fragment's
+  sample mask into its ID showed why: the same triangle covers samples
+  0 and 1 of a pixel when its quad partner is in the draw, and sample 0
+  alone when drawn without it (7,871 tilted quads 0.3 m wide at 40 m;
+  527 pixels differ at 256×256, with depth equal, greater-equal and
+  less-equal alike, so the fragments are not generated). On the M4 Pro,
+  which samples a triangle under a pixel covers depends on the triangles
+  drawn beside it. Drawing whole Meshlets instead reproduces A: 0 pixels
+  differ on all eight frames
+  ([frame 1800, A | B | difference](https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-a-b-difference.png);
+  [every frame](https://github.com/gariasf/praxis/tree/2ab7f5a7e141446b715dff42e465db69c3144a8d/296)), while triangle
+  granularity loses 180, 168, 1,216, 3,811, 4,256, 4,265, 4,250 and
+  4,276 pixels at frames 59, 300, 500, 700, 900, 1,200, 1,500 and 1,800
+  ([where, frame 1800](https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-triangles-lost.png);
+  [an 8x crop, A | T | difference](https://raw.githubusercontent.com/gariasf/praxis/2ab7f5a7e141446b715dff42e465db69c3144a8d/296/town-1800-crop-a-triangles-difference.png)).
+- **Where B's time goes.** The ID pass, 2.08 ms, is a second raster of
+  every drawn triangle: a depth-only raster of them costs 1.75 ms (the
+  pre-pass), and the IDs add about 19%, as the research note's probe found for
+  `primitive_index`. The visibility pass, 3.44 ms at Meshlet granularity
+  and 2.43 at triangle granularity, is the mark over 3.7 million pixels
+  and the compaction's writes: bounding its scan to the words the draw
+  reaches moved the gate by about 40 µs.
+- **What the lit pass gives back.** 2.9 ms with rays on (8.80 to 5.92
+  ms), the vertex work and quad overdraw of the triangles that own no
+  sample. A's lit pass with rays off reads 5.15 ms, so B's saving there
+  is at most that; with both new passes free the gate would read about
+  7.0 to 7.7 ms.
+- **For option D (#297).** D shades from the IDs in compute and draws
+  nothing again, so the coverage finding does not bite it the same way,
+  but its ID pass is this one: at depth equal after a depth pre-pass,
+  2.08 ms on `town`, or the pre-pass's samples with IDs the lit pass
+  would not reproduce.
+
 ## The RTX 2070 SUPER beside the M4 Pro (2026-10-27, #284)
 
 NVIDIA GeForce RTX 2070 SUPER (Turing, 8 GB), driver 621.01, AMD Ryzen 5
@@ -197,6 +357,7 @@ are also seen.
   the previous frame's passes and reads 0 on the orrery and the crowd;
   this adapter reads 52 and 161 µs there, and 246 µs on `town`, under
   the 1 ms ceiling.
+
 
 ## `town`'s Baselines, ADR 0019's gate and the dynamic TLAS (2026-10-26, #207)
 
