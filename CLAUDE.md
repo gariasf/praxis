@@ -170,7 +170,9 @@ tests/                         # integration tests at agreed seams
                                  cargo test checks it lists each scene
 bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
-                                 and CI's lavapipe (`--ci`); `praxis
+                                 CI's lavapipe (`--ci`) and the RTX
+                                 2070 SUPER's, a `-dx12` directory for
+                                 its DX12 runs; `praxis
                                  bench <dir>` then `praxis compare <dir>`;
                                  `praxis report <dir>` prints the tables
                                  PRs quote

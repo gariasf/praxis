@@ -1,0 +1,101 @@
+{
+  "scene": "shadows",
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "backend": "vulkan",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 438.59999999999997,
+    "p95": 466.0
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.09999999999999999,
+    "p95": 0.19999999999999998
+  },
+  "gpu_frame_microseconds": {
+    "median": 2097.568,
+    "p95": 2134.2079999999996
+  },
+  "gate_microseconds": {
+    "median": 664.256,
+    "p95": 682.5279999999999
+  },
+  "shadow_ray_microseconds": {
+    "median": 1237.888,
+    "p95": 1276.0
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 24.48,
+      "p95": 24.768
+    },
+    "culling_phase_two": {
+      "median": 12.48,
+      "p95": 12.704
+    },
+    "depth_prepass": {
+      "median": 55.936,
+      "p95": 65.536
+    },
+    "depth_pyramid_pass": {
+      "median": 152.44799999999998,
+      "p95": 153.472
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.144,
+      "p95": 6.848000000000001
+    },
+    "lit_pass": {
+      "median": 369.79200000000003,
+      "p95": 380.608
+    },
+    "phase_two_depth_pass": {
+      "median": 2.4320000000000004,
+      "p95": 3.392
+    },
+    "shadow_mask_pass": {
+      "median": 1196.896,
+      "p95": 1233.7279999999998
+    },
+    "tonemapping_pass": {
+      "median": 184.16,
+      "p95": 184.95999999999998
+    }
+  },
+  "draw_calls": 4,
+  "instances_drawn": 1,
+  "triangles_drawn": 2210,
+  "instances_overflowed": 0,
+  "uploaded_bytes": 240,
+  "gpu_memory_bytes": 620171029,
+  "arena_bytes_in_use": 76856,
+  "heap_allocations": 329,
+  "counter_frames": {
+    "frames": {
+      "start": 8,
+      "end": 72
+    },
+    "draw_calls": 4,
+    "instances_drawn": 1,
+    "triangles_drawn": 2210,
+    "instances_overflowed": 0,
+    "uploaded_bytes": 240,
+    "gpu_memory_bytes": 620171029,
+    "arena_bytes_in_use": 76856,
+    "heap_allocations": 329
+  }
+}
