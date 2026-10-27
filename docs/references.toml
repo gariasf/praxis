@@ -1878,4 +1878,1287 @@ checked = 2026-10-27
 url = "https://developer.apple.com/documentation/metal/mtldevice/currentallocatedsize"
 section = "Apple Metal documentation, MTLDevice.currentAllocatedSize, abstract (macOS 10.13 and later)"
 quote = '''The total amount of memory, in bytes, the GPU device is using for all of its resources.'''
+
+["wgpu-29-metal-store-action-resolve"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/conv.rs#L312-L319"
+section = "wgpu-hal 29.0.1, metal/conv.rs L312-L319: map_store_action: a resolve without a store maps to MultisampleResolve"
+quote = '''pub fn map_store_action(store: bool, resolve: bool) -> MTLStoreAction {
+[...]
+match (store, resolve) {
+[...]
+(false, true) => MTL::MultisampleResolve,'''
+checked = 2026-10-27
+
+["wgpu-29-metal-texture-from-raw"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/device.rs#L358-L374"
+section = "wgpu-hal 29.0.1, metal/device.rs L358-L374: Device::texture_from_raw wraps a native MTLTexture"
+quote = '''pub unsafe fn texture_from_raw(
+raw: Retained<ProtocolObject<dyn MTLTexture>>,
+[...]
+) -> super::Texture {'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-texture-from-raw"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/device.rs#L406-L428"
+section = "wgpu-hal 29.0.1, vulkan/device.rs L406-L428: Device::texture_from_raw wraps a native VkImage with its TextureMemory"
+quote = '''pub unsafe fn texture_from_raw(
+[...]
+vk_image: vk::Image,
+[...]
+memory: super::TextureMemory,
+) -> super::Texture {'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-texture-memory-external"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/mod.rs#L713-L722"
+section = "wgpu-hal 29.0.1, vulkan/mod.rs L713-L722: enum TextureMemory"
+quote = '''pub enum TextureMemory {
+[...]
+// memory not owned by wgpu
+External,'''
+checked = 2026-10-27
+
+["wgpu-29-hal-memory-flags"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/lib.rs#L1868-L1874"
+section = "wgpu-hal 29.0.1, lib.rs L1868-L1874: struct MemoryFlags"
+quote = '''pub struct MemoryFlags: u32 {
+const TRANSIENT = 1 << 0;
+const PREFER_COHERENT = 1 << 1;'''
+checked = 2026-10-27
+
+["wgpu-29-gles-prefer-coherent"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/gles/device.rs#L575-L578"
+section = "wgpu-hal 29.0.1, gles/device.rs L575-L578: create_buffer reads PREFER_COHERENT; no other backend reads memory_flags (metal/device.rs L410 says it is ignored; searched)"
+quote = '''let is_coherent = desc
+.memory_flags
+.contains(crate::MemoryFlags::PREFER_COHERENT);'''
+checked = 2026-10-27
+
+["wgpu-29-hal-allocation-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/lib.rs#L432-L471"
+section = "wgpu-hal 29.0.1, lib.rs L432-L471: AllocationSizes::from_memory_hints, used by the Vulkan and DX12 allocators (vulkan/adapter.rs L2767, dx12/suballocation.rs L78)"
+quote = '''wgt::MemoryHints::Performance => Self {
+min_device_memblock_size: 128 * MB,
+max_device_memblock_size: 256 * MB,
+min_host_memblock_size: 64 * MB,
+max_host_memblock_size: 128 * MB,
+[...]
+wgt::MemoryHints::MemoryUsage => Self {
+min_device_memblock_size: 8 * MB,
+max_device_memblock_size: 64 * MB,
+min_host_memblock_size: 4 * MB,
+max_host_memblock_size: 32 * MB,
+[...]
+// gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+[...]
+min_device_memblock_size: device_size.start.clamp(4 * MB, 256 * MB),
+max_device_memblock_size: device_size.end.clamp(4 * MB, 256 * MB),'''
+checked = 2026-10-27
+
+["wgpu-29-dx12-suballocation-intel-xe"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/dx12/suballocation.rs#L20-L33"
+section = "wgpu-hal 29.0.1, dx12/suballocation.rs L20-L33: enum AllocationInner"
+quote = '''/// This resource is suballocated from a heap.
+Placed {
+[...]
+/// This resource is a committed resource and does not belong to a
+[...]
+/// This is only used for Intel Xe drivers, which have a bug that
+/// prevents suballocation from working correctly.'''
+checked = 2026-10-27
+
+["wgpu-29-metal-ignores-memory-hints"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/adapter.rs#L63"
+section = "wgpu-hal 29.0.1, metal/adapter.rs L63: Adapter::open: the memory hints parameter is unused"
+quote = '''_memory_hints: &wgt::MemoryHints,'''
+checked = 2026-10-27
+
+["wgpu-29-metal-create-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/device.rs#L404-L428"
+section = "wgpu-hal 29.0.1, metal/device.rs L404-L428: create_buffer: storage mode, write-combining, the hazard-tracking TODO, one MTLBuffer per buffer"
+quote = '''let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
+[...]
+options |= if map_read || map_write {
+[...]
+MTLResourceOptions::StorageModeShared
+[...]
+MTLResourceOptions::StorageModePrivate
+[...]
+options.set(MTLResourceOptions::CPUCacheModeWriteCombined, map_write);
+[...]
+//TODO: HazardTrackingModeUntracked
+[...]
+.newBufferWithLength_options(desc.size as usize, options)'''
+checked = 2026-10-27
+
+["wgpu-29-metal-create-texture-storage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/device.rs#L492-L512"
+section = "wgpu-hal 29.0.1, metal/device.rs L492-L512: create_texture: memoryless storage for TRANSIENT, one MTLTexture per texture"
+quote = '''let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT)
+&& self.shared.private_caps.supports_memoryless_storage
+[...]
+MTLStorageMode::Memoryless
+[...]
+MTLStorageMode::Private
+[...]
+descriptor.setStorageMode(mtl_storage_mode);
+[...]
+.newTextureWithDescriptor(&descriptor)'''
+checked = 2026-10-27
+
+["wgpu-29-hal-create-bind-group"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/lib.rs#L1026-L1036"
+section = "wgpu-hal 29.0.1, lib.rs L1026-L1036: Device trait: create_bind_group and destroy_bind_group, no update entry point (searched)"
+quote = '''unsafe fn create_bind_group(
+[...]
+unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup);'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-update-after-bind"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/device.rs#L1299-L1308"
+section = "wgpu-hal 29.0.1, vulkan/device.rs L1299-L1308: create_bind_group_layout: binding-array flags"
+quote = '''if entry.count.is_some() {
+flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-bind-group-write"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/device.rs#L1708"
+section = "wgpu-hal 29.0.1, vulkan/device.rs L1708: create_bind_group (from L1500) writes the descriptors; the only update_descriptor_sets call in wgpu-hal Vulkan (searched)"
+quote = '''unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };'''
+checked = 2026-10-27
+
+["wgpu-29-metal-binding-array-argument-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/device.rs#L937-L972"
+section = "wgpu-hal 29.0.1, metal/device.rs L937-L972: create_bind_group (from L901): per shader stage (L913), an argument buffer for each binding array visible to it (L928)"
+quote = '''// Create argument buffer for this array
+[...]
+.newBufferWithLength_options(
+8 * count as usize,
+[...]
+| MTLResourceOptions::StorageModeShared,
+[...]
+contents[idx] = tex.view.raw.gpuResourceID();'''
+checked = 2026-10-27
+
+["wgpu-29-metal-set-bind-group-use-resource"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/command.rs#L1111-L1118"
+section = "wgpu-hal 29.0.1, metal/command.rs L1111-L1118: set_bind_group (from L1054), render encoder; the compute encoder likewise at L1142-L1148"
+quote = '''// Call useResource on all textures and buffers used indirectly so they are alive
+for (resource, use_info) in group.resources_to_use.iter() {
+encoder.useResource_usage_stages('''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-transient-usage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/conv.rs#L263-L264"
+section = "wgpu-hal 29.0.1, vulkan/conv.rs L263-L264: map_texture_usage"
+quote = '''if usage.contains(wgt::TextureUses::TRANSIENT) {
+flags |= vk::ImageUsageFlags::TRANSIENT_ATTACHMENT;'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-transient-lazily-allocated"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/device.rs#L522-L530"
+section = "wgpu-hal 29.0.1, vulkan/device.rs L522-L530: create_image_without_memory (from L455): a LAZILY_ALLOCATED memory type for TRANSIENT textures when one exists"
+quote = '''if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+let mem_type_index = self.find_memory_type_index(
+[...]
+vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+[...]
+if let Some(mem_type_index) = mem_type_index {
+req.memory_type_bits = 1 << mem_type_index;'''
+checked = 2026-10-27
+
+["wgpu-29-hal-open-device-one-queue"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/lib.rs#L2014-L2017"
+section = "wgpu-hal 29.0.1, lib.rs L2014-L2017: struct OpenDevice"
+quote = '''pub struct OpenDevice<A: Api> {
+pub device: A::Device,
+pub queue: A::Queue,'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-queue-family-0"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/adapter.rs#L2821-L2825"
+section = "wgpu-hal 29.0.1, vulkan/adapter.rs L2821-L2825: Adapter::open: one queue create info, family 0, one priority"
+quote = '''let family_index = 0; //TODO
+let family_info = vk::DeviceQueueCreateInfo::default()
+.queue_family_index(family_index)
+.queue_priorities(&[1.0]);'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-memory-budget"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/adapter.rs#L1292-L1297"
+section = "wgpu-hal 29.0.1, vulkan/adapter.rs L1292-L1297: get_required_extensions (from L1157); neither VK_EXT_memory_priority nor VK_EXT_pageable_device_local_memory appears in wgpu-hal (searched)"
+quote = '''// Optional `VK_EXT_memory_budget`
+if self.supports_extension(ext::memory_budget::NAME) {
+extensions.push(ext::memory_budget::NAME);'''
+checked = 2026-10-27
+
+["wgpu-29-metal-transitions-empty"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/command.rs#L544-L554"
+section = "wgpu-hal 29.0.1, metal/command.rs L544-L554: transition_buffers and transition_textures, whose bodies are empty; metal/ has no MTLFence or memory-barrier call (searched), its Fence tracks command-buffer completion (mod.rs L1022)"
+quote = '''unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
+[...]
+{
+}
+[...]
+unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
+[...]
+{
+}'''
+checked = 2026-10-27
+
+["wgpu-29-metal-raw-command-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/command.rs#L153"
+section = "wgpu-hal 29.0.1, metal/command.rs L153: CommandEncoder::raw_command_buffer"
+quote = '''pub fn raw_command_buffer(&self) -> Option<&ProtocolObject<dyn MTLCommandBuffer>> {'''
+checked = 2026-10-27
+
+["wgpu-29-vulkan-raw-queue"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/vulkan/device.rs#L767"
+section = "wgpu-hal 29.0.1, vulkan/device.rs L767: Device::raw_queue"
+quote = '''pub fn raw_queue(&self) -> vk::Queue {'''
+checked = 2026-10-27
+
+["wgpu-hal-30-vulkan-radv-no-memory-budget"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1998-L2005"
+section = "wgpu-hal 30.0.1, vulkan/adapter.rs L1998-L2005: physical device capabilities: VK_EXT_memory_budget dropped on Mesa RADV; absent at 29.0.1 and from the 30.0.1 CHANGELOG (searched)"
+quote = '''// Due to https://gitlab.freedesktop.org/mesa/mesa/-/work_items/15725
+[...]
+if capabilities.is_driver(vk::DriverId::MESA_RADV) {
+capabilities
+.supported_extensions
+.retain(|&x| x.extension_name_as_c_str() != Ok(ext::memory_budget::NAME));
+}'''
+checked = 2026-10-27
+
+["wgpu-29-create-from-hal"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/device.rs#L325"
+section = "wgpu 29.0.1, api/device.rs, Device::create_texture_from_hal (L325) and create_buffer_from_hal (L379)"
+quote = '''pub unsafe fn create_texture_from_hal<A: hal::Api>(
+[...]
+pub unsafe fn create_buffer_from_hal<A: hal::Api>('''
+checked = 2026-10-27
+
+["wgpu-29-hal-reexport"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/lib.rs#L103-L104"
+section = "wgpu 29.0.1, lib.rs, wgpu-hal re-exported as wgpu::hal"
+quote = '''#[cfg(wgpu_core)]
+pub extern crate wgpu_hal as hal;'''
+checked = 2026-10-27
+
+["wgpu-core-29-staging-transient"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/resource.rs#L1120-L1127"
+section = "wgpu-core 29.0.1, resource.rs, StagingBuffer::new: the one TRANSIENT memory flag"
+quote = '''pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
+profiling::scope!("StagingBuffer::new");
+[...]
+label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
+size: size.get(),
+usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
+memory_flags: hal::MemoryFlags::TRANSIENT,'''
+checked = 2026-10-27
+
+["wgpu-core-29-user-memory-flags-empty"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/resource.rs#L1093-L1098"
+section = "wgpu-core 29.0.1, device/resource.rs, create_buffer (L1093-L1098) and create_texture (L1615-L1626) hal descriptors"
+quote = '''let hal_desc = hal::BufferDescriptor {
+[...]
+memory_flags: hal::MemoryFlags::empty(),
+[...]
+let hal_desc = hal::TextureDescriptor {
+[...]
+memory_flags: hal::MemoryFlags::empty(),'''
+checked = 2026-10-27
+
+["wgpu-types-29-memory-hints"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-types/src/device.rs#L57-L83"
+section = "wgpu-types 29.0.1, device.rs, enum MemoryHints"
+quote = '''pub enum MemoryHints {
+/// Favor performance over memory usage (the default value).
+Performance,
+/// Favor memory usage over performance.
+MemoryUsage,
+[...]
+Manual {
+[...]
+suballocated_device_memory_block_size: Range<u64>,'''
+checked = 2026-10-27
+
+["wgpu-29-bind-group-immutable"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/bind_group.rs#L11-L26"
+section = "wgpu 29.0.1, api/bind_group.rs, struct BindGroup and its only method"
+quote = '''pub struct BindGroup {
+pub(crate) inner: dispatch::DispatchBindGroup,
+}
+[...]
+impl BindGroup {
+/// Returns custom implementation of BindGroup (if custom backend and is internally T)
+pub fn as_custom<T: custom::BindGroupInterface>(&self) -> Option<&T> {
+self.inner.as_custom()
+}
+}'''
+checked = 2026-10-27
+
+["wgpu-29-copy-texture-to-texture"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/command_encoder.rs#L163"
+section = "wgpu 29.0.1, api/command_encoder.rs, CommandEncoder::copy_texture_to_texture"
+quote = '''pub fn copy_texture_to_texture('''
+checked = 2026-10-27
+
+["wgpu-types-29-view-mips-and-lod-clamp"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-types/src/texture.rs#L464-L469"
+section = "wgpu-types 29.0.1, texture.rs, TextureViewDescriptor mip range (L464-L469) and SamplerDescriptor LOD clamps (L655-L658)"
+quote = '''/// Base mip level.
+pub base_mip_level: u32,
+/// Mip level count.
+/// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+/// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+pub mip_level_count: Option<u32>,
+[...]
+/// Minimum level of detail (i.e. mip level) to use
+pub lod_min_clamp: f32,
+/// Maximum level of detail (i.e. mip level) to use
+pub lod_max_clamp: f32,'''
+checked = 2026-10-27
+
+["naga-29-sample-level-image-query"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/naga/src/ir/mod.rs#L1459-L1493"
+section = "naga 29.0.1, ir/mod.rs, enums SampleLevel and ImageQuery (doc comments elided)"
+quote = '''pub enum SampleLevel {
+Auto,
+Zero,
+Exact(Handle<Expression>),
+Bias(Handle<Expression>),
+Gradient {
+x: Handle<Expression>,
+y: Handle<Expression>,
+},
+}
+[...]
+pub enum ImageQuery {
+[...]
+Size {
+[...]
+NumLevels,
+[...]
+NumLayers,
+[...]
+NumSamples,
+}'''
+checked = 2026-10-27
+
+["wgpu-core-29-transient-usage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/resource.rs#L1489-L1503"
+section = "wgpu-core 29.0.1, device/resource.rs, create_texture: TRANSIENT needs RENDER_ATTACHMENT and nothing else"
+quote = '''if desc.usage.contains(wgt::TextureUsages::TRANSIENT) {
+if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+return Err(CreateTextureError::InvalidUsage(
+wgt::TextureUsages::TRANSIENT,
+));
+}
+let extra_usage =
+desc.usage - wgt::TextureUsages::TRANSIENT - wgt::TextureUsages::RENDER_ATTACHMENT;
+if !extra_usage.is_empty() {
+return Err(CreateTextureError::IncompatibleUsage(
+wgt::TextureUsages::TRANSIENT,
+extra_usage,
+));
+}
+}'''
+checked = 2026-10-27
+
+["wgpu-core-29-transient-format"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/instance.rs#L758-L761"
+section = "wgpu-core 29.0.1, instance.rs, allowed usages from format capabilities"
+quote = '''allowed_usages.set(
+wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT,
+caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
+);'''
+checked = 2026-10-27
+
+["wgpu-core-29-transient-store-discard"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/command/render.rs#L1648-L1659"
+section = "wgpu-core 29.0.1, command/render.rs, the only TRANSIENT check in a render pass: colour attachments' store op (searched)"
+quote = '''if view.desc.usage.contains(TextureUsages::TRANSIENT)
+&& *store_op != StoreOp::Discard
+{
+return Err(RenderPassErrorInner::ColorAttachment(
+ColorAttachmentError::InvalidUsageForStoreOp(
+TextureUsages::TRANSIENT,
+StoreOp::Discard,
+*store_op,
+),
+));
+}'''
+checked = 2026-10-27
+
+["wgpu-core-30-transient-attachment-ops"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/render.rs#L836-L869"
+section = "wgpu-core 30.0.1, command/render.rs, ColorAttachmentError and AttachmentError for TRANSIENT_ATTACHMENT; checked at L1874-L1885 and from L1924"
+quote = '''"Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+`LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
+[...]
+"Depth attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+`LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
+[...]
+[...]
+"Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
+`LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
+[...]
+checked = 2026-10-27
+
+["wgpu-core-29-write-staging"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/queue.rs#L545"
+section = "wgpu-core 29.0.1, device/queue.rs, a new StagingBuffer in write_buffer (L545), create_staging_buffer for write_buffer_with (L573-L582) and write_texture (L875-L891)"
+quote = '''let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
+[...]
+pub fn create_staging_buffer(
+[...]
+let staging_buffer = StagingBuffer::new(&self.device, buffer_size)?;
+[...]
+let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
+[...]
+let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;'''
+checked = 2026-10-27
+
+["wgpu-core-29-pending-writes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/queue.rs#L300-L311"
+section = "wgpu-core 29.0.1, device/queue.rs, PendingWrites"
+quote = '''/// Operations like `buffer_unmap`, `queue_write_buffer`, and
+/// `queue_write_texture` need to copy data to the GPU. At the hal
+/// level, this must be done by encoding and submitting commands, but
+/// these operations are not associated with any specific wgpu command
+/// buffer.
+///
+/// Instead, `Device::pending_writes` owns one of these values, which
+/// has its own hal command encoder and resource lists. The commands
+/// accumulated here are automatically submitted to the queue the next
+/// time the user submits a wgpu command buffer, ahead of the user's
+/// commands.'''
+checked = 2026-10-27
+
+["wgpu-core-29-temp-resource"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/queue.rs#L259-L275"
+section = "wgpu-core 29.0.1, device/queue.rs, enum TempResource"
+quote = '''/// A texture or buffer to be freed soon.
+///
+/// This is just a tagged raw texture or buffer, generally about to be added to
+/// some other more specific container like:
+///
+/// - `PendingWrites::temp_resources`: resources used by queue writes and
+///   unmaps, waiting to be folded in with the next queue submission
+///
+/// - `ActiveSubmission::temp_resources`: temporary resources used by a queue
+///   submission, to be freed when it completes
+[...]
+pub enum TempResource {
+StagingBuffer(FlushedStagingBuffer),'''
+checked = 2026-10-27
+
+["wgpu-29-write-buffer-staging-doc"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/queue.rs#L152-L156"
+section = "wgpu 29.0.1, api/queue.rs, Queue::write_buffer docs"
+quote = '''/// * Currently on native platforms, for both of these methods, the staging
+///   memory will be a new allocation. This will then be released after the
+///   next submission finishes. To entirely avoid short-lived allocations, you might
+///   be able to use [`StagingBelt`](crate::util::StagingBelt),
+///   or buffers you explicitly create, map, and unmap yourself.'''
+checked = 2026-10-27
+
+["wgpu-29-staging-belt"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/util/belt.rs#L12-L25"
+section = "wgpu 29.0.1, util/belt.rs, StagingBelt docs"
+quote = '''/// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
+///
+/// Internally it uses a ring-buffer of staging buffers that are sub-allocated.
+/// Its advantage over [`Queue::write_buffer_with()`] is that the individual allocations
+/// are cheaper; `StagingBelt` is most useful when you are writing very many small pieces
+/// of data. It can be understood as a sort of arena allocator.'''
+checked = 2026-10-27
+
+["wgpu-29-map-async"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/buffer.rs#L350-L371"
+section = "wgpu 29.0.1, api/buffer.rs, Buffer::map_async docs"
+quote = '''/// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+/// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+/// an event loop or run on a separate thread.
+[...]
+/// The callback runs on the thread that first calls one of the above functions after the GPU work
+/// completes. There are no restrictions on the code you can run in the callback; however, on native
+[...]
+/// While a buffer is mapped, it cannot be used by other commands; at any time, either the GPU or
+/// the CPU has exclusive access to the buffer’s contents.'''
+checked = 2026-10-27
+
+["wgpu-types-29-map-read"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-types/src/buffer.rs#L64-L69"
+section = "wgpu-types 29.0.1, buffer.rs, BufferUsages::MAP_READ"
+quote = '''/// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
+/// may have is COPY_DST.
+const MAP_READ = 1 << 0;'''
+checked = 2026-10-27
+
+["wgpu-29-request-device-one-queue"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/adapter.rs#L58-L61"
+section = "wgpu 29.0.1, api/adapter.rs, Adapter::request_device returns one Device and one Queue"
+quote = '''pub fn request_device(
+&self,
+desc: &DeviceDescriptor<'_>,
+) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {'''
+checked = 2026-10-27
+
+["wgpu-29-texture-destroy"]
+url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu/src/api/texture.rs#L102-L103"
+section = "wgpu 29.0.1, api/texture.rs, Texture::destroy"
+quote = '''/// Destroy the associated native resources as soon as possible.
+pub fn destroy(&self) {'''
+checked = 2026-10-27
+
+["wgpu-30-changelog-transient-attachment"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L265-L266"
+section = "wgpu CHANGELOG at v30.0.1, v30.0.0, L265-L266"
+quote = '''- `AdapterInfo::transient_saves_memory` now is `Option<bool>` instead of `bool`. It is `None` on web and `Some` on native platforms. [...]
+- BREAKING: `TextureUsages::TRANSIENT` is renamed to `TextureUsages::TRANSIENT_ATTACHMENT` and brought in line with WebGPU spec. Transient textures may now only be used with `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and `StoreOp::Discard`. [...]'''
+checked = 2026-10-27
+
+["wgpu-30-changelog-from-hal-initial-state"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L191"
+section = "wgpu CHANGELOG at v30.0.1, v30.0.0, L191"
+quote = '''- `Device::create_texture_from_hal` now takes an explicit `initial_state: wgt::TextureUses` parameter declaring the state the wrapped foreign resource is already in. Previously the tracker hard-coded `TextureUses::UNINITIALIZED` for the wrapped texture, which is a content-discarding transition under the Vulkan spec. This affected zero-copy hardware-decoded video imports on the platforms where compressed modifiers are used. To migrate, pass `wgpu::TextureUses::UNINITIALIZED` to preserve the previous behaviour:'''
+checked = 2026-10-27
+
+["wgpu-30-changelog-staging-belt-recall"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L184"
+section = "wgpu CHANGELOG at v30.0.1, v30.0.0, L184"
+quote = '''- Add `StagingBelt::finish_and_recall_on_submit`, a convenience that combines `finish` and `recall` by deferring the buffer re-map via `CommandEncoder::map_buffer_on_submit`, so no explicit `recall()` call is needed after submission. [...]'''
+checked = 2026-10-27
+
+["wgpu-30-changelog-queue-interop"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L217"
+section = "wgpu CHANGELOG at v30.0.1, v30.0.0, L217 (DX12), L222 (Vulkan), L231 (Metal)"
+quote = '''- Added `dx12::Queue::add_wait_fence` / `add_signal_fence` (and matching `remove_*` companions). They stage `ID3D12CommandQueue::Wait` / `Signal` calls on the next `Queue::submit`. The wait calls are issued before the submit's `ExecuteCommandLists`, the signal calls after wgpu's own `Signal(signal_fence, signal_value)`. Cross-API interop crates use this to GPU-side gate / publish wgpu submits against foreign-API fences. [...]
+[...]
+- Add `vulkan::Queue::add_wait_semaphore` and `vulkan::Queue::remove_wait_semaphore`. Lets external producers (CUDA / OpenCL / D3D12 imported via `VK_KHR_external_semaphore_*`) be waited on at the next `Queue::submit` call without a CPU block. [...]
+[...]
+- Add `metal::Queue::add_wait_event` / `add_signal_event` (with `remove_*` companions) to stage `MTLSharedEvent` waits/signals on the next `Queue::submit`, for GPU-side interop with foreign APIs. Waits run on an internal CB committed before user CBs. [...]'''
+checked = 2026-10-27
+
+["wgpu-30-changelog-map-async-flush"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/CHANGELOG.md#L290"
+section = "wgpu CHANGELOG at v30.0.1, v30.0.0, L290"
+quote = '''- Writes from `Queue::write_buffer` are now flushed by calls to `Buffer::map_async` for that same buffer, to prevent reading stale data. `on_submitted_work_done` also now flushes pending writes. [...]'''
+checked = 2026-10-27
+
+["barb-2017-tf2-permanent-mips"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=6"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Algorithm Overview, p. 6"
+quote = '''Any MIP below 64kiB is permanent. [...] MIPs can be added/dropped one-by-one. [...] Use precomputed information to build list of what’s important/unimportant. [...] Work toward that list each frame.'''
+checked = 2026-10-27
+
+["barb-2017-tf2-probes"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=10"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How do we Choose Probes?, p. 10"
+quote = '''Chop geometry into 16ft2 columns [...] Use k-means to combine into max 8 probes per column'''
+checked = 2026-10-27
+
+["barb-2017-tf2-probe-render"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=11"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How do we Render Probes?, p. 11"
+quote = '''Upload static Geo to GPU(s) once [...] InterlockedAdd( outHistogram[interpolants.vMaterialId * MATERIAL_HISTOGRAM_BIN_COUNT + (uint)mipLevel], 1 ); [...] Do once per cube face (accumulate results)'''
+checked = 2026-10-27
+
+["barb-2017-tf2-probe-records"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=12"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Compiling Probe Data, p. 12"
+quote = '''Now have coverage per material per MIP at probes [...] Store the 512 most important records per column [...] Group columns 4x4 into ~32kiB streamable pages'''
+checked = 2026-10-27
+
+["barb-2017-tf2-resize"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=18"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How do we Resize Textures?, p. 18"
+quote = '''Windows/DirectX [...] Originally CPU-writable texture, map, read new MIPs [...] Create GPU texture, GPU copies new and old MIPs [...] Now just load into heap and pass to CreateTexture [...] Console [...] Read new MIPs directly in [...] Drops are queued 3 frames, to flush pipeline.'''
+checked = 2026-10-27
+
+["barb-2017-tf2-async-io"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=19"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Asynchronous I/O, p. 19"
+quote = '''Reads occur in 64kiB chunks for interruptibility.'''
+checked = 2026-10-27
+
+["barb-2017-tf2-streaming-budget"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=27"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How Much RAM do we Need?, p. 27"
+quote = '''Empirically, worked well with ~600MiB buffer, pretty hard to find fault ~1000MiB [...] Plus permanent MIPs (~400MiB on typical level)'''
+checked = 2026-10-27
+
+["barb-2017-tf2-cpu-cost"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=31"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How Much Per-Frame CPU?, p. 31"
+quote = '''0.8 msec (on Console) typical per-frame on a busy scene'''
+checked = 2026-10-27
+
+["vanwaveren-2012-svt-border"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=10"
+section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §3.2 Texture Filtering, p. 10"
+quote = '''As such, a 4-texel border is typically used around each physical page. In other words, if a page is 128 x 128 texels then the payload is 120 x 120 texels surrounded by a 4-texel border [...] and allows for reasonable quality anisotropic filtering with a maximum anisotropy up to 8.'''
+checked = 2026-10-27
+
+["vanwaveren-2012-svt-feedback-latency"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=14"
+section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §3.4 Feedback Rendering, p. 14"
+quote = '''The results of the feedback rendering pass are analyzed in a separate process. This process could stall and wait for the feedback render but it is typically fine to use a frame old data and incur a frame of latency.'''
+checked = 2026-10-27
+
+["vanwaveren-2012-svt-transcode"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=22"
+section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §5.3 Transcode, p. 22"
+quote = '''During normal operation about 8 to 16 pages are transcoded per render frame which results in 16 to 32 jobs.'''
+checked = 2026-10-27
+
+["vanwaveren-2012-svt-storage"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=24"
+section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §6.3 Feedback Analysis and §6.4 Storage, p. 24"
+quote = '''On this platform and multi-core PCs, the feedback analysis only consumes in the order of 0.5 milliseconds worth of CPU time for a feedback buffer of 80x60 pixels. [...] The texture pages used in the system are 128 x 128 texels with a 4-texel inset border and a 120 x 120 texel payload. [...] When stored DXT compressed in video memory, the three 4096 x 4096 physical textures (storing 10 channels) together consume 40 MB.'''
+checked = 2026-10-27
+
+["zhang-2020-texture-streaming-allocation"]
+url = "https://www.fraunhofer.sg/content/dam/singapur/documents/Publications/High%20Performance%20Texture%20Streaming%20and%20Rendering%20of%20Large%20Textured%203D%20Cities.pdf#page=1"
+section = "Zhang, Kan, Johan and Erdt, High Performance Texture Streaming and Rendering of Large Textured 3D Cities, Fraunhofer Singapore (PDF dated 2020-10-29), Abstract, p. 1"
+quote = '''We adopt the sparse partially-resident image to cache mesh textures at runtime and propose to allocate memory persistently, based on mesh visibility weightings and estimated GPU bandwidth.'''
+checked = 2026-10-27
+
+["zhang-2020-sparse-bind-quadratic"]
+url = "https://www.fraunhofer.sg/content/dam/singapur/documents/Publications/High%20Performance%20Texture%20Streaming%20and%20Rendering%20of%20Large%20Textured%203D%20Cities.pdf#page=2"
+section = "Zhang, Kan, Johan and Erdt, High Performance Texture Streaming and Rendering of Large Textured 3D Cities (PDF dated 2020-10-29), §2.3 Hardware virtual texturing, p. 2"
+quote = '''The sparse (partially-resident) image is an interface for hardware virtual texturing on the Vulkan graphics API [...] Under testing, we discover that the time taken to bind a memory block increases quadratically with every memory block bound, especially when memory blocks are sparsely bound across more than thirty sparse image layers.'''
+checked = 2026-10-27
+
+["zhang-2020-berlin-latency"]
+url = "https://www.fraunhofer.sg/content/dam/singapur/documents/Publications/High%20Performance%20Texture%20Streaming%20and%20Rendering%20of%20Large%20Textured%203D%20Cities.pdf#page=6"
+section = "Zhang, Kan, Johan and Erdt, High Performance Texture Streaming and Rendering of Large Textured 3D Cities (PDF dated 2020-10-29), §4 Evaluation and §4.1, p. 6"
+quote = '''Our test system is an Intel i7-8700K CPU with a Nvidia RTX2080 Ti GPU [...] rendering into a 3840×2160 resolution framebuffer. [...] We evaluate our texture streaming performance with a rapid flythrough of the Berlin city scene with texture atlases (Figure 1) [...] We record an average rendering latency of 5.66ms and a peak latency of 15.37ms'''
+checked = 2026-10-27
+
+["zhang-2021-visual-computer"]
+url = "https://doi.org/10.1007/s00371-021-02152-z"
+section = "Crossref metadata for doi:10.1007/s00371-021-02152-z (api.crossref.org/works), The Visual Computer 38(4)"
+quote = '''title: High-performance adaptive texture streaming and rendering of large 3D cities [...] author: Alex Zhang, Kan Chen, Henry Johan, Marius Erdt [...] container-title: The Visual Computer [...] volume: 38 [...] issue: 4 [...] page: 1245-1262 [...] published-online: 2021-06-01'''
+checked = 2026-10-27
+
+["nanite-prior-work"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=44"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide LOD crack options, speaker notes, p. 44"
+quote = '''Quick-VDR [...] Batched Multi-Triangulation [...] This is the direction I took and the prior work we primarily build upon.'''
+checked = 2026-10-27
+
+["nanite-lod-no-geomorphing"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=67"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Seamless LOD, speaker notes, p. 67"
+quote = '''Do we need to smooth the transitions with geomorphing or cross fading? That would be expensive at render time or require significant additional data or both.'''
+checked = 2026-10-27
+
+["nanite-streaming-unit"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=123"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Streaming unit, p. 123"
+quote = '''We should stream at group granularity [...] Use ﬁxed-sized pages to avoid memory fragmentation'''
+checked = 2026-10-27
+
+["nanite-root-page"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=124"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Paging, p. 124"
+quote = '''Always resident, so we always have something to render [...] Resident pages stored in one big GPU page buffer'''
+checked = 2026-10-27
+
+["nanite-page-slack"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=125"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Group parts, p. 125"
+quote = '''Clusters are small (~2KB) [...] Groups can be large (8-32 clusters) [...] ~1KB average slack per page! (~1% slack for 128KB page)'''
+checked = 2026-10-27
+
+["nanite-resident-hierarchy"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=126"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Deciding what to stream, p. 126"
+quote = '''Full culling hierarchy always resident'''
+checked = 2026-10-27
+
+["nanite-streaming-requests"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=127"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Streaming requests, p. 127"
+quote = '''Persistent shader outputs page requests during culling traversals [...] Requests page ranges with priority based on LOD Error [...] Asynchronous CPU readback of requests [...] Issue IO page requests for pages with highest total priority [...] Evicts low-priority pages'''
+checked = 2026-10-27
+
+["nanite-gpu-transcoding"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=138"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide GPU transcoding, p. 138"
+quote = '''Currently runs at ~50GB/s with fairly unoptimized code on PS5 [...] Powerful in combination with hardware LZ'''
+checked = 2026-10-27
+
+["nanite-lumen-demo-size"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=144"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Results: Lumen in the Land of Nanite, p. 144"
+quote = '''433M Input triangles, 882M Nanite triangles [...] Memory format: 7.67GB [...] Compressed disk format: 4.61GB'''
+checked = 2026-10-27
+
+["dgf-2024-bytes-per-triangle"]
+url = "https://gpuopen.com/download/publications/DGF.pdf#page=1"
+section = "Barczak, Benthin and McAllister, DGF: A Dense, Hardware-Friendly Geometry Format for Lossily Compressing Meshlets with Arbitrary Topologies, Proc. ACM Comput. Graph. Interact. Tech. 7(3), July 2024, Fig. 1, p. 1"
+quote = '''Left:Reef Crab (2.1M triangles 2.9B/triangle). Center: Bicycle with individually modeled chain links (1.7M triangles, 3.73B/triangle). Right: Powerplant with many long, axis-aligned triangles (12.7M triangles, 3.05B/triangle)'''
+checked = 2026-10-27
+
+["dgf-2024-block"]
+url = "https://gpuopen.com/download/publications/DGF.pdf#page=3"
+section = "Barczak, Benthin and McAllister, DGF, Proc. ACM Comput. Graph. Interact. Tech. 7(3), July 2024, §3.2 Format Description, p. 3"
+quote = '''Our dense geometry format (DGF) consists of an array of 128 byte blocks that encode triangle data. Each block holds a maximum of 64 triangles and 64 vertices.'''
+checked = 2026-10-27
+
+["dgf-2024-test-gpu"]
+url = "https://gpuopen.com/download/publications/DGF.pdf#page=9"
+section = "Barczak, Benthin and McAllister, DGF, Proc. ACM Comput. Graph. Interact. Tech. 7(3), July 2024, §5 Results, p. 9"
+quote = '''All rendering tests were conducted on an AMD® Radeon™ 7900 XT GPU and Windows 11.'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-transient-lifetime"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=42"
+section = "O'Donnell, FrameGraph: Extensible Rendering Architecture in Frostbite, GDC 2017, PS4 transient memory slide, p. 42 (printed 41)"
+quote = '''Allocate texture virtual memory block on first use [...] Return virtual memory block after last use'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-aliasing-considerations"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=47"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Memory aliasing considerations, p. 47 (printed 45; slide text is an image, transcribed)"
+quote = '''Ensure valid resource metadata state (FMASK, CMASK, DCC, etc.) [...] Perform fast clears or discard / over-write resources or disable metadata'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-discard-clear"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=48"
+section = "O'Donnell, FrameGraph, GDC 2017, slide DiscardResource & Clear, p. 48 (printed 46; slide text is an image, transcribed)"
+quote = '''Must be the first operation on a newly allocated resource'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-aliasing-barriers"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=50"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Aliasing barriers and its speaker notes, p. 50 (printed 48)"
+quote = '''Since different rendering passes may use the same physical memory, we need to add synchronization point between them [...] We do this by using aliasing barriers, which will add the necessary pipeline and cache flushes.'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-720p-non-aliasing"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=54"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Non-aliasing memory layout (720p), p. 54 (printed 52; slide text is an image, transcribed)"
+quote = '''Non-aliasing memory layout (720p) [...] 147 MB total'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-720p-dx12"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=55"
+section = "O'Donnell, FrameGraph, GDC 2017, slide DirectX 12 PC memory layout (720p), p. 55 (printed 53; slide text is an image, transcribed)"
+quote = '''DirectX 12 PC memory layout (720p) [...] 80 MB total'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-720p-ps4"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=56"
+section = "O'Donnell, FrameGraph, GDC 2017, slide PlayStation 4 memory layout (720p), p. 56 (printed 54; slide text is an image, transcribed)"
+quote = '''PlayStation 4 memory layout (720p) [...] 77 MB total'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-720p-xbox-one"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=57"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Xbox One memory layout (720p), p. 57 (printed 55; slide text is an image, transcribed)"
+quote = '''Xbox One memory layout (720p) [...] 76 MB total [...] 32 MB ESRAM [...] 44 MB DRAM'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-4k-non-aliasing"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=59"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Non-aliasing memory layout (4K, DX12 PC), p. 59 (printed 57; slide text is an image, transcribed)"
+quote = '''Non-aliasing memory layout (4K, DX12 PC) [...] 1042 MB total'''
+checked = 2026-10-27
+
+["odonnell-2017-framegraph-4k-aliasing"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/ODonnell_Yuriy_FrameGraph.pdf#page=60"
+section = "O'Donnell, FrameGraph, GDC 2017, slide Aliasing memory layout (4K, DX12 PC), p. 60 (printed 58; slide text is an image, transcribed)"
+quote = '''Aliasing memory layout (4K, DX12 PC) [...] 472 MB total [...] 570 MB saved'''
+checked = 2026-10-27
+
+["intel-sfs-heap-share"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L11"
+section = "Intel, Sampler Feedback Streaming With DirectStorage, README at 714e144, Introduction, line 11"
+quote = '''This repository contains an [MIT licensed](LICENSE) demo of _DirectX12 Sampler Feedback Streaming_ [...] The scene below uses just ~200MB of a 1GB heap, despite over 350GB of total texture resources.'''
+checked = 2026-10-27
+
+["intel-sfs-heap-fragmentation"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L154-L157"
+section = "Intel, Sampler Feedback Streaming README at 714e144, lines 154-157"
+quote = '''The issue (which does not affect Intel GPUs) is the tile allocations in the heap becoming fragmented relative to resources. Specifically, the CPU time for [UpdateTileMappings](...) gradually increases causing the streaming system to stall waiting for pending operations to complete. [...] "heapSizeTiles": 512, // size for each heap. 64KB per tile * 512 tiles -> 32MB heap
+    "numHeaps": 127, // number of heaps. streaming resources will be distributed among heaps'''
+checked = 2026-10-27
+
+["intel-sfs-cracks"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L159-L169"
+section = "Intel, Sampler Feedback Streaming README at 714e144, Cracks between tiles, lines 159-169"
+quote = '''Feedback is always read *after* drawing, resulting in loads and evictions corresponding to that frame only becoming available for a future frame. [...] Most of the time this isn't perceptible, but sometimes a fast-moving object enters the view resulting in visible artifacts. [...] the hardware sampler is reaching across tile boundaries to perform anisotropic sampling, but encounters tiles that are not physically mapped. D3D12 Reserved Resource tiles that are not physically mapped return black to the sampler.'''
+checked = 2026-10-27
+
+["intel-sfs-how-it-works"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L175-L183"
+section = "Intel, Sampler Feedback Streaming README at 714e144, How It Works, lines 175-183"
+quote = '''in this sample, GPU time is mostly a function of the Sampler Feedback Resolve() operations described below. [...] The streaming textures are allocated as DX12 [Reserved Resources](...) [...] Each resource takes no physical GPU memory until 64KB regions of the resource are committed in 1 or more GPU [heaps](...). [...] For example, BC7 textures have 256x256 tiles, while BC1 textures have 512x256 tiles.'''
+checked = 2026-10-27
+
+["intel-sfs-resolve-limit"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L221"
+section = "Intel, Sampler Feedback Streaming README at 714e144, 4. Process Feedback, line 221"
+quote = '''Resolving feedback for one resource is inexpensive, but adds up when there are 1000 objects. Expanse has a configurable time limit for the amount of feedback resolved each frame.'''
+checked = 2026-10-27
+
+["intel-sfs-eviction-residency-map"]
+url = "https://github.com/GameTechDev/SamplerFeedbackStreaming/blob/714e144df957336fa36022acabaa19e826f9850c/README.md#L253-L259"
+section = "Intel, Sampler Feedback Streaming README at 714e144, lines 253-259"
+quote = '''We prevent this by  delaying evictions a frame or two depending on swap chain buffer count (i.e. double or triple buffering). [...] The residency map is relatively tiny: for a 16k x 16k BC7 texture, which would take 350MB of GPU memory, we only need a 4KB residency map.'''
+checked = 2026-10-27
+
+["d3d12-sampler-feedback-streaming"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/a610933eac2103cd502bacfb5193ae7f02c6fa54/d3d/SamplerFeedback.md#L10-L30"
+section = "Microsoft, DirectX-Specs at a610933, d3d/SamplerFeedback.md, Motivation: Streaming, lines 10-30"
+quote = '''Sampler feedback is one feature with two distinct usage scenarios: streaming and texture-space shading. [...] Specifically D3D12_TILED_RESOURCES_TIER_2 is recommended as a dependency for a workable streaming implementation; hardware tier 2 covers the ability to control tile residency, also the ability to straightforwardly clamp to resident mip levels when sampling.'''
+checked = 2026-10-27
+
+["d3d12-sampler-feedback-tiers"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/a610933eac2103cd502bacfb5193ae7f02c6fa54/d3d/SamplerFeedback.md#L81-L99"
+section = "Microsoft, DirectX-Specs at a610933, d3d/SamplerFeedback.md, capability tiers, lines 81-99"
+quote = '''Support for sampler feedback is queryable from a CheckFeatureSupport capability tier. [...] * TIER_0_9 (i.e., version 0.9) indicates the following. [...] * TIER_1_0 (i.e., version 1.0) indicates sampler feedback is supported for all texture addressing modes'''
+checked = 2026-10-27
+
+["d3d12-sampler-feedback-minmip"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/a610933eac2103cd502bacfb5193ae7f02c6fa54/d3d/SamplerFeedback.md#L101-L112"
+section = "Microsoft, DirectX-Specs at a610933, d3d/SamplerFeedback.md, How to adopt Sampler Feedback for Streaming, lines 101-112"
+quote = '''* Along with each tiled texture, create a small "MinMip map" texture and small "feedback map" texture.
+  * The MinMip map represents per-region mip level clamping values for the tiled texture; it represents what is actually loaded.
+  * The feedback map represents per-region desired mip level for the tiled texture; it represents what needs to be loaded.'''
+checked = 2026-10-27
+
+["ms-d3d12-residency"]
+url = "https://learn.microsoft.com/en-us/windows/win32/direct3d12/residency"
+section = "Microsoft Learn, Direct3D 12, Residency: Residency budget, Heap resources, Default priority algorithm"
+quote = '''If an application doesn’t stay within its budget, the process will be intermittently frozen to allow other applications to run and/or the creation APIs will return failure. The IDXGIAdapter3 interface provides the methods pertaining to this functionality, in particular QueryVideoMemoryInfo [...] UMA adapters have one pool, while discrete adapters have two pools. [...] But, destruction of heaps is a more reliable technique to free up residency across all adapter architectures. [...] The high-priority bucket contains heaps and resources that are created with flags that identify them as render targets, depth-stencil buffers, or Unordered Access Views (UAVs).'''
+checked = 2026-10-27
+
+["ms-d3d12-memory-aliasing"]
+url = "https://learn.microsoft.com/en-us/windows/win32/direct3d12/memory-aliasing-and-data-inheritance"
+section = "Microsoft Learn, Direct3D 12, Memory Aliasing and Data Inheritance"
+quote = '''Placed and reserved resource may alias physical memory within a heap. [...] An aliasing barrier must be issued between the usage of two resources that share the same physical memory, even if data inheritance is not desired.'''
+checked = 2026-10-27
+
+["ms-d3d12-tiled-resources-tier"]
+url = "https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_tiled_resources_tier"
+section = "Microsoft Learn, D3D12_TILED_RESOURCES_TIER enumeration"
+quote = '''D3D12_TILED_RESOURCES_TIER_1 [...] Indicates that 2D textures can be created with the D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE layout. [...] ID3D12Device::CreateReservedResource can be used. [...] Adapters that support feature level 12_0 all support TIER_2 or greater.'''
+checked = 2026-10-27
+
+["xbox-2020-velocity-architecture"]
+url = "https://web.archive.org/web/20201216073533/https://news.xbox.com/en-us/2020/07/14/a-closer-look-at-xbox-velocity-architecture/"
+section = "Xbox Wire, A Closer Look at Xbox Velocity Architecture, 2020-07-14 (web.archive.org snapshot 2020-12-16)"
+quote = '''we discovered that the GPU often accesses less than 1/3 of the texture data required to be loaded in memory. [...] This innovation results in approximately 2.5x the effective I/O throughput and memory usage above and beyond the raw hardware capabilities on average. [...] Assuming a 2:1 compression ratio, Xbox Series X delivers an effective 4.8 GB/s in I/O performance to the title [...] To deliver similar levels of decompression performance in software would require more than 4 Zen 2 CPU cores.'''
+checked = 2026-10-27
+
+["directstorage-1.1-preview-sample"]
+url = "https://devblogs.microsoft.com/directx/directstorage-1-1-coming-soon/"
+section = "Microsoft DirectX Developer Blog, DirectStorage 1.1 Coming Soon, sample caption"
+quote = '''GPU with GDeflate (left) loading in 0.8 seconds vs CPU with Zlib (right) in 2.36 seconds. This is an early preview of the sample; performance numbers vary with different workloads/hardware.'''
+checked = 2026-10-27
+
+["directstorage-1.1-gpu-decompression"]
+url = "https://devblogs.microsoft.com/directx/directstorage-1-1-now-available/"
+section = "Microsoft DirectX Developer Blog, DirectStorage 1.1 Now Available, November 7th, 2022"
+quote = '''GPU decompression is supported on all DirectX 12 + Shader Model 6.0 GPUs. [...] GPU hardware vendors can provide additional optimizations for their hardware, called metacommands. [...] GDeflate splits the uncompressed stream into 64 KiB-sized tiles. [...] DirectStorage creates a compute queue and two copy queues. The decompression takes place on the compute queue – either by executing the decompression metacommand if available, or by dispatching the DirectCompute fallback implementation.'''
+checked = 2026-10-27
+
+["gdeflate-hlsl-wave-or-groupshared"]
+url = "https://github.com/microsoft/DirectStorage/blob/c53f1499d5f67a61b69a1a348d22dcd2b4cb4ede/GDeflate/shaders/GDeflate.hlsl#L76-L178"
+section = "Microsoft, DirectStorage at c53f149, GDeflate/shaders/GDeflate.hlsl, lines 76-178"
+quote = '''groupshared uint32_t g_tmp[NUM_THREADS];
+
+inline uint32_t vote(bool p, uint tid)
+{
+    return (uint32_t)WaveActiveBallot(p);
+}
+
+inline uint32_t shuffle(uint32_t value, uint idx, uint tid)
+{
+    return WaveReadLaneAt(value, idx);
+}
+[...]
+uint32_t scan(uint32_t value, uint tid)
+{
+    return WavePrefixSum(value);
+}
+
+groupshared uint32_t g_tmp1[NUM_THREADS];
+[...]
+inline uint32_t shuffle(uint32_t value, uint idx, uint tid)
+{
+    g_tmp1[tid] = value;
+    GroupMemoryBarrierWithGroupSync();
+    uint32_t res = g_tmp1[idx];
+    GroupMemoryBarrierWithGroupSync();
+    return res;
+}
+[...]
+    [unroll] for (uint i = 1; i < NUM_THREADS; i *= 2) sum += tid >= i ? shuffle(sum, tid - i, tid) : 0;'''
+checked = 2026-10-27
+
+["nvidia-2023-rtx-io"]
+url = "https://www.nvidia.com/en-gb/geforce/news/rtx-io-for-geforce-gpus-available-now/"
+section = "NVIDIA GeForce News, NVIDIA RTX IO GPU-Accelerated Storage Technology Debuts This Month In Portal: Prelude RTX and Ratchet & Clank: Rift Apart, 2023"
+quote = '''thanks to RTX IO and the use of Vulkan extensions, GPU decompression with GDeflate shrank Portal: Prelude RTX’s install size by 44% [...] DirectStorage ensures quick loading times and GPU decompression is used at high graphics settings to stream assets in the background while playing.'''
+checked = 2026-10-27
+
+["vulkan-sparse-standard-block-shapes"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/chapters/sparsemem.adoc#L417-L423"
+section = "Vulkan specification at 193ebe1, chapters/sparsemem.adoc, Standard Sparse Image Block Shapes, lines 417-423"
+quote = '''=== Standard Sparse Image Block Shapes [...] All currently defined standard sparse image block shapes are 64 KB in size.'''
+checked = 2026-10-27
+
+["vulkan-sparse-bind-queue"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/chapters/sparsemem.adoc#L1115-L1121"
+section = "Vulkan specification at 193ebe1, chapters/sparsemem.adoc, lines 1115-1121"
+quote = '''This means that resources must: be created with the appropriate
+etext:*_SPARSE_BINDING_BIT to be used with the sparse binding command
+(fname:vkQueueBindSparse).'''
+checked = 2026-10-27
+
+["vulkan-amdx-dgf-blocks"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/chapters/VK_AMDX_dense_geometry_format/dense_geometry_format.adoc#L11-L19"
+section = "Vulkan specification at 193ebe1, chapters/VK_AMDX_dense_geometry_format/dense_geometry_format.adoc, lines 11-19"
+quote = '''The provisional `apiext:VK_AMDX_dense_geometry_format` extension provides a
+way for applications to build acceleration structures from pre-compressed
+Dense Geometry Format (DGF) triangle geometry data [...] The dense geometry format consists of an array of 128B blocks that encode
+triangle data.
+Each block holds a maximum of 64 triangles and 64 vertices.'''
+checked = 2026-10-27
+
+["vulkan-amdx-dgf-ip-status"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/appendices/VK_AMDX_dense_geometry_format.adoc#L9-L12"
+section = "Vulkan specification at 193ebe1, appendices/VK_AMDX_dense_geometry_format.adoc, Other Extension Metadata, lines 9-12"
+quote = '''*Last Modified Date*::
+    2025-07-10
+*IP Status*::
+    No known IP claims.'''
+checked = 2026-10-27
+
+["vulkan-ext-memory-budget"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/appendices/VK_EXT_memory_budget.adoc#L19-L20"
+section = "Vulkan specification at 193ebe1, appendices/VK_EXT_memory_budget.adoc, Description"
+quote = '''This extension adds support for querying the amount of memory used and the
+total memory budget for a memory heap.'''
+checked = 2026-10-27
+
+["vulkan-ext-pageable-device-local-memory"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/appendices/VK_EXT_pageable_device_local_memory.adoc#L60-L63"
+section = "Vulkan specification at 193ebe1, appendices/VK_EXT_pageable_device_local_memory.adoc, Description, lines 60-63"
+quote = '''When enabled the Vulkan implementation will allow device-local memory
+allocations to be paged in and out by the operating system, and may: not
+return VK_ERROR_OUT_OF_DEVICE_MEMORY even if device-local memory appears to
+be full, but will instead page this, or other allocations, out to make room.'''
+checked = 2026-10-27
+
+["vulkan-ext-memory-decompression-gdeflate"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/appendices/VK_EXT_memory_decompression.adoc#L28-L38"
+section = "Vulkan specification at 193ebe1, appendices/VK_EXT_memory_decompression.adoc, Issues 1, lines 28-38; Last Modified Date 2025-01-23"
+quote = '''For example, with GDeflate 1.0, data is streamed in 64 KB blocks, but the
+final block may be smaller.'''
+checked = 2026-10-27
+
+["gpuinfo-sparse-residency-image2d-windows"]
+url = "https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=windows"
+section = "vulkan.gpuinfo.org, Core 1.0 device features, Windows, Recent (1y) filter, read 2026-10-27"
+quote = '''sparseResidencyImage2D: 76.64 %: 23.36 %'''
+checked = 2026-10-27
+
+["gpuinfo-sparse-residency-image2d-linux"]
+url = "https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=linux"
+section = "vulkan.gpuinfo.org, Core 1.0 device features, Linux, Recent (1y) filter, read 2026-10-27"
+quote = '''sparseResidencyImage2D: 72.11 %: 27.89 %'''
+checked = 2026-10-27
+
+["gpuinfo-lazily-allocated-windows"]
+url = "https://vulkan.gpuinfo.org/listmemory.php?platform=windows"
+section = "vulkan.gpuinfo.org, Memory types for Windows, Recent (1y) filter, read 2026-10-27"
+quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 5.05 %: 94.95 %'''
+checked = 2026-10-27
+
+["gpuinfo-lazily-allocated-linux"]
+url = "https://vulkan.gpuinfo.org/listmemory.php?platform=linux"
+section = "vulkan.gpuinfo.org, Memory types for Linux, Recent (1y) filter, read 2026-10-27"
+quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 3.85 %: 96.15 %'''
+checked = 2026-10-27
+
+["gpuinfo-memory-extensions-windows"]
+url = "https://vulkan.gpuinfo.org/listextensions.php?platform=windows"
+section = "vulkan.gpuinfo.org, Extensions, Windows, Recent (1y) filter, read 2026-10-27"
+quote = '''VK_EXT_memory_budget: 91.03 % [...] VK_EXT_memory_priority: 78.13 % [...] VK_EXT_pageable_device_local_memory: 49.72 % [...] VK_NV_memory_decompression: 31.78 % [...] VK_EXT_memory_decompression: 21.5 %'''
+checked = 2026-10-27
+
+["gpuinfo-memory-extensions-linux"]
+url = "https://vulkan.gpuinfo.org/listextensions.php?platform=linux"
+section = "vulkan.gpuinfo.org, Extensions, Linux, Recent (1y) filter, read 2026-10-27"
+quote = '''VK_EXT_memory_budget: 93.65 % [...] VK_EXT_memory_priority: 55.56 % [...] VK_EXT_pageable_device_local_memory: 27.21 % [...] VK_NV_memory_decompression: 21.54 % [...] VK_EXT_memory_decompression: 11.34 %'''
+checked = 2026-10-27
+
+["vma-3.0.0-tlsf"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/bfb2ca99e1e7e9684dc06546b552ee3eff4b10aa/CHANGELOG.md#L132"
+section = "AMD, Vulkan Memory Allocator CHANGELOG at bfb2ca9, 3.0.0 (2022-03-25), line 132"
+quote = '''- Implemented Two-Level Segregated Fit (TLSF) allocation algorithm, replacing previous default one.'''
+checked = 2026-10-27
+
+["vma-defragmentation"]
+url = "https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/defragmentation.html"
+section = "AMD, Vulkan Memory Allocator documentation, Defragmentation"
+quote = '''It cannot recreate buffers and images in a new place as it doesn't remember the contents of VkBufferCreateInfo / VkImageCreateInfo structures. It cannot copy their contents as it doesn't record any commands to a command buffer. [...] // Recreate and bind this buffer/image at: pass.pMoves[i].dstMemory, pass.pMoves[i].dstOffset. [...] // Issue a vkCmdCopyBuffer/vkCmdCopyImage to copy its content to the new place. [...] // Update appropriate descriptors to point to the new places...'''
+checked = 2026-10-27
+
+["gpu-allocator-0.28-best-fit"]
+url = "https://github.com/Traverse-Research/gpu-allocator/blob/0.28.0/src/allocator/free_list_allocator/mod.rs#L24"
+section = "Traverse Research, gpu-allocator 0.28.0, src/allocator/free_list_allocator/mod.rs, line 24"
+quote = '''const USE_BEST_FIT: bool = true;'''
+checked = 2026-10-27
+
+["offset-allocator-bins"]
+url = "https://github.com/sebbbi/OffsetAllocator/blob/3610a7377088b1e8c8f1525f458c96038a4e6fc0/README.md#L4"
+section = "Aaltonen, OffsetAllocator README at 3610a73, line 4; LICENSE: Copyright (c) 2023"
+quote = '''Uses 256 bins with 8 bit floating point distribution (3 bit mantissa + 5 bit exponent) [...] Pow2 bins would waste up to +100% memory (+50% on average). Our float bins waste up to +12.5% (+6.25% on average).'''
+checked = 2026-10-27
+
+["rps-sdk-aliasing-mit"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/RenderPipelineShaders/blob/f3330f5306d15af8529a310f6255225c864b0961/README.md#L3-L24"
+section = "AMD, Render Pipeline Shaders SDK README at f3330f5, lines 3-24"
+quote = '''Copyright (c) 2024 Advanced Micro Devices, Inc.
+
+The AMD Render Pipeline Shaders (RPS) SDK is released under the MIT LICENSE. [...] The AMD Render Pipeline Shaders (RPS) SDK Open Beta was previously released under the
+AMD INTERNAL EVALUATION LICENSE. [...] The RPS SDK intends to make Render Graphs more easily accessible and to provide a generally optimal barrier generator
+and (aliasing) memory scheduler.'''
+checked = 2026-10-27
+
+["vk-lod-clusters-sparse-clas"]
+url = "https://github.com/nvpro-samples/vk_lod_clusters/blob/20352f04a5bce46938ca63871c1389b0fac921fa/README.md#L177-L182"
+section = "NVIDIA, vk_lod_clusters README at 20352f0, GPU-Driven CLAS Allocation, lines 177-182"
+quote = '''We are leveraging a sparse buffer for the CLAS allocation, so we can grow it on demand. [...] This is crucial as the host-side estimates are way too conservative (e.g. often 3-5x bigger than actual).'''
+checked = 2026-10-27
+
+["vk-lod-clusters-streaming-requests"]
+url = "https://github.com/nvpro-samples/vk_lod_clusters/blob/20352f04a5bce46938ca63871c1389b0fac921fa/docs/streaming.md#L65-L83"
+section = "NVIDIA, vk_lod_clusters docs/streaming.md at 20352f0, lines 65-83"
+quote = '''At the end of the frame we download the request to host in
+   `SceneStreaming::cmdEndFrame`. [...] The actual number of loads to perform is adjusted based on the available per-frame
+   limits and if we can stay within the memory budget.'''
+checked = 2026-10-27
+
+["apple-metal-sparse-tile-mapping"]
+url = "https://developer.apple.com/documentation/metal/assigning-memory-to-sparse-textures"
+section = "Apple Metal documentation, Assigning memory to sparse textures, Map or unmap sparse tiles; Synchronize access to tile mapping and unmapping"
+quote = '''To map or unmap sparse tiles, you issue commands to the GPU using a resource state command encoder (MTLResourceStateCommandEncoder). [...] Tile mapping is performed by the GPU, which means that it happens asynchronously at a future point after you commit the command buffer. [...] If you use more than one resource state encoder to encode commands that access the same sparse heap'''
+checked = 2026-10-27
+
+["metal-feature-set-tables-sparse-textures"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4"
+section = "Metal Feature Set Tables (2026-05-21), feature availability, p. 4, and note 4, p. 6"
+quote = '''Sparse textures 4: Metal 3 & 4: Apple6 [...] GPU devices starting with the Apple6 family support sparse color textures with automatic heap backing.'''
+checked = 2026-10-27
+
+["apple-wwdc22-10104-sparse-tile-sizes"]
+url = "https://developer.apple.com/videos/play/wwdc2022/10104/"
+section = "Apple, WWDC22 session 10104, Load resources faster with Metal 3, transcript, tuning sparse page size"
+quote = '''Earlier versions of Metal support loading tiles to sparse textures at a 16K granularity. With Metal 3, you can specify two new sparse tile sizes: 64 and 256K.'''
+checked = 2026-10-27
+
+["apple-wwdc22-10104-sparse-streaming-demo"]
+url = "https://developer.apple.com/videos/play/wwdc2022/10104/"
+section = "Apple, WWDC22 session 10104, Load resources faster with Metal 3, transcript, fast resource loading in action"
+quote = '''This is a test scene that uses the new fast resource loading APIs to stream texture data by using sparse textures with a tile size of 16 kilobytes. This video is from a MacBook Pro with an M1 Pro chip. The streaming system queries the GPU's sparse texture access counters to identify two things: the tiles it has sampled but not loaded and the loaded tiles the app isn't using.'''
+checked = 2026-10-27
+
+["apple-wwdc22-10104-fast-resource-loading"]
+url = "https://developer.apple.com/videos/play/wwdc2022/10104/"
+section = "Apple, WWDC22 session 10104, Load resources faster with Metal 3, transcript and code at 14:04"
+quote = '''loadTexture, which loads to a Metal texture for texture streaming; loadBuffer, which loads to a Metal buffer for streaming scene or geometry data [...] Metal 3 allows you to attempt to cancel load operation. [...] Metal 3 also lets you prioritize your IO work. [...] In this example, the context compresses the data in 64K chunks [...] For compressed files, Metal 3 performs inline decompression [...] Use LZ4 when decompression speed is critical [...] use ZLib, LZBitmap, or LZFSE. [...] consider using the LZMA codec [...] let chunkSize = 64 * 1024'''
+checked = 2026-10-27
+
+["apple-metal-sparse-access-counters"]
+url = "https://developer.apple.com/documentation/metal/estimating-how-often-a-texture-region-is-accessed"
+section = "Apple Metal documentation, Estimating how often a texture region is accessed, Overview"
+quote = '''Metal provides a mechanism to estimate how often you access each region. When you detect a sufficient number of requests to a given region, you can map a sparse tile to it. [...] The texture access count estimation comes from the number of cache misses'''
+checked = 2026-10-27
+
+["apple-metal-sparse-sample"]
+url = "https://developer.apple.com/documentation/metal/reading-and-writing-to-sparse-textures"
+section = "Apple Metal documentation, Reading and writing to sparse textures, Test for unmapped regions in your shader"
+quote = '''Instead of calling the sample method, call sparse_sample. [...] the shader samples the texture again using the min_lod_clamp modifier to restrict access to the mapped part of the texture.'''
+checked = 2026-10-27
+
+["apple-metal-residency-set"]
+url = "https://developer.apple.com/documentation/metal/mtlresidencyset"
+section = "Apple Metal documentation, MTLResidencySet (macOS 15.0+), Overview"
+quote = '''However, residency sets don’t track hazards, so you need to account for hazards with fences and events. [...] Require CPU overhead for each resource or heap, which scale up with each one you add [...] Residency sets don’t support sparse heaps or sparse textures, and their methods aren’t thread-safe.'''
+checked = 2026-10-27
+
+["apple-metal-residency-set-limits"]
+url = "https://developer.apple.com/documentation/metal/simplifying-gpu-resource-management-with-residency-sets"
+section = "Apple Metal documentation, Simplifying GPU resource management with residency sets, Attach a residency set to a command buffer; to a command queue"
+quote = '''Every command buffer can maintain a list of up to 32 different residency sets. [...] You don’t need to call the following methods for any allocation in a residency set that you associate with the command buffer: [...] Every command queue can maintain a list of up to 32 different residency sets.'''
+checked = 2026-10-27
+
+["apple-metal-placement-sparse-buffer"]
+url = "https://developer.apple.com/documentation/metal/mtldevice/makebuffer%28length:options:placementsparsepagesize:%29"
+section = "Apple Metal documentation, MTLDevice makeBuffer(length:options:placementSparsePageSize:), availability macOS 26.0+"
+quote = '''Creates a new placement sparse buffer of a specific length.'''
+checked = 2026-10-27
+
+["apple-metal-volatile-footprint"]
+url = "https://developer.apple.com/documentation/metal/reducing-the-memory-footprint-of-metal-apps"
+section = "Apple Metal documentation, Reducing the memory footprint of Metal apps, Optimize memory usage in your Metal app"
+quote = '''Learn best practices for using memory efficiently in iOS and tvOS. [...] Use MTLPurgeableState.volatile and setPurgeableState(_:) for textures and buffers the operating system can safely discard under low-memory conditions, and be subsequently recreated or reloaded by your app as needed. This design means your app keeps a cache of idle resources in memory but doesn’t count them toward the memory limit.'''
+checked = 2026-10-27
+
+["apple-metal-heap-hazard-tracking"]
+url = "https://developer.apple.com/documentation/metal/mtlheapdescriptor/hazardtrackingmode"
+section = "Apple Metal documentation, MTLHeapDescriptor hazardTrackingMode, Discussion"
+quote = '''This property’s default value is MTLHazardTrackingMode.default, which is equivalent to MTLHazardTrackingMode.untracked for a heap. The resources you allocate from a heap inherit that heap’s hazard tracking mode.'''
+checked = 2026-10-27
+
+["apple-metal-memoryless"]
+url = "https://developer.apple.com/documentation/metal/mtlstoragemode/memoryless"
+section = "Apple Metal documentation, MTLStorageMode.memoryless, Discussion"
+quote = '''For example, most render passes don’t store depth attachments and multisample attachments to memory. You can significantly reduce your memory usage by creating these attachments as memoryless resources.'''
+checked = 2026-10-27
+
+["apple-metal-mip-allocation"]
+url = "https://developer.apple.com/documentation/metal/dynamically-adjusting-texture-level-of-detail"
+section = "Apple Metal documentation, Dynamically adjusting texture level of detail, Provide data for smaller mipmaps"
+quote = '''Remember that Metal allocates memory for all of the mipmaps when you create the texture.'''
+checked = 2026-10-27
+
+["ue-5.7-svt-cost"]
+url = "https://web.archive.org/web/20251201111137/https://dev.epicgames.com/documentation/en-us/unreal-engine/streaming-virtual-texturing-in-unreal-engine"
+section = "Unreal Engine 5.7 documentation, Streaming Virtual Texturing, Converting Textures and Materials; Additional Material Notes"
+quote = '''There will always be at least two texture fetches and some math instructions. [...] It also limits the lowest resolution mip by the tile size. In many cases, this won't be an issue, however, textures with a lot of noise or high detail may exhibit aliasing or Moiré effects due to lack of low-resolution mips. [...] UE limits support for anisotropic filtering by the size of the Tile Border setting. The default value of 4 allows for less anisotropic filtering than is typical for textures [...] VT streaming is reactive by nature, meaning that the CPU doesn't know it needs to load a given VT tile until after it has already been required by a rendered frame. So, as the camera moves through the scene, some visible popping in may occur'''
+checked = 2026-10-27
+
+["ue-5.5-texture-streaming-build"]
+url = "https://web.archive.org/web/20250403154235/https://dev.epicgames.com/documentation/en-us/unreal-engine/building-texture-streaming-data-in-unreal-engine"
+section = "Unreal Engine 5.5 documentation, Building Texture Streaming Data, build data; Build Accuracy; Mesh UV Density Accuracy"
+quote = '''For a given primitive component, the data required to accurately compute the required resolution of each used texture comes from: The bounds of the primitive The texture coordinate sizes of the mesh The material texture coordinate scale for sampling each texture [...] The streamer computes the distance from the viewpoint to the texture instance axis-aligned bounding box (AABB). This bounding box is computed in the build process [...] This size relates the variation of texcoords by unit of world space.'''
+checked = 2026-10-27
+
+["ue-5.6-texture-streaming-pool"]
+url = "https://web.archive.org/web/20250810013810/https://dev.epicgames.com/documentation/en-us/unreal-engine/texture-streaming-configuration-in-unreal-engine"
+section = "Unreal Engine 5.6 documentation, Texture Streaming Configuration, console variables"
+quote = '''r.Streaming.PoolSize The pool size in MB available for textures in the engine. [...] r.Streaming.Boost This is a global boost affecting the "wanted" resolution of textures'''
+checked = 2026-10-27
+
+["ue-5.6-world-partition-hlod"]
+url = "https://web.archive.org/web/20250825185139/https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine"
+section = "Unreal Engine 5.6 documentation, World Partition - Hierarchical Level of Detail, overview and HLOD Layer settings"
+quote = '''This technique is used to visualize unloaded World Partition grid cells [...] Cell Size Sets the cell size of the runtime grid created to contain the HLOD Actors in this layer. [...] Loading Range Sets the distance at which the runtime grid streams its cells.'''
+checked = 2026-10-27
+
+["ue-5.7-nanite-streaming"]
+url = "https://web.archive.org/web/20251221042229/https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine"
+section = "Unreal Engine 5.7 documentation, Nanite Virtualized Geometry, data size; Resizing the Nanite Streaming Pool Size"
+quote = '''For example, using the Unreal Engine 5 sample Valley of the Ancients, Nanite meshes average 14.4 bytes per input triangle. This means an average one million triangle Nanite mesh will be ~13.8 megabytes (MB) on disk. [...] Control the amount of memory dedicated to holding Nanite streaming data with the console variable r.Nanite.Streaming.StreamingPoolSize .'''
+checked = 2026-10-27
+
+["ue-5.6-rdg-transient-allocator"]
+url = "https://web.archive.org/web/20251112072340/https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine"
+section = "Unreal Engine 5.6 documentation, Render Dependency Graph, Transient Resources; console variables"
+quote = '''Platforms with a transient allocator implemented can achieve a significant reduction in the GPU memory watermark over the default resource pool approach. [...] r.RDG.TransientAllocator Disable to fall back to resource pooling.'''
+checked = 2026-10-27
+
+["bevy-0.20-meshlet-required-features"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_pbr/src/meshlet/mod.rs#L94-L126"
+section = "Bevy v0.20.0, bevy_pbr meshlet, MeshletPlugin documentation and required_wgpu_features"
+quote = '''/// This plugin requires a fairly recent GPU that supports [`WgpuFeatures::TEXTURE_INT64_ATOMIC`]. [...] WgpuFeatures::TEXTURE_INT64_ATOMIC'''
+checked = 2026-10-27
+
+["bevy-0.20-meshlet-buffer-growth"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_pbr/src/meshlet/persistent_buffer.rs#L41-L53"
+section = "Bevy v0.20.0, bevy_pbr meshlet, PersistentGpuBuffer::queue_write (allocation_planner is a RangeAllocator, L19)"
+quote = '''pub fn queue_write(&mut self, data: T, metadata: T::Metadata) -> Range<BufferAddress> { [...] if let Ok(buffer_slice) = self.allocation_planner.allocate_range(data_size) { [...] let double_buffer_size = (buffer_size.end - buffer_size.start) * 2;
+        let new_size = double_buffer_size.max(data_size);
+        self.allocation_planner.grow_to(buffer_size.end + new_size);'''
+checked = 2026-10-27
+
+["bevy-0.20-meshlet-buffer-expand"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_pbr/src/meshlet/persistent_buffer.rs#L94-L106"
+section = "Bevy v0.20.0, bevy_pbr meshlet, PersistentGpuBuffer::expand_buffer, whose doc comment (L93) reads: Expand the buffer by creating a new buffer and copying old data over."
+quote = '''fn expand_buffer(&mut self, render_device: &RenderDevice, render_queue: &RenderQueue) { [...] command_encoder.copy_buffer_to_buffer(&self.buffer, 0, &new_buffer, 0, self.buffer.size());'''
+checked = 2026-10-27
+
+["bevy-0.20-slab-offset-allocator"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_render/src/slab_allocator.rs#L46-L50"
+section = "Bevy v0.20.0, bevy_render slab_allocator, MeshAllocator documentation"
+quote = '''/// Within each slab, or hardware buffer, the underlying allocation algorithm
+/// is [`offset_allocator`], a Rust port of Sebastian Aaltonen's hard-real-time
+/// C++ `OffsetAllocator`. Slabs start small and then grow as their contents
+/// fill up, up to a maximum size limit. To reduce fragmentation, objects that
+/// are too large bypass this system and receive their own buffers.'''
+checked = 2026-10-27
+
+["bevy-0.20-slab-settings"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_render/src/slab_allocator.rs#L145-L195"
+section = "Bevy v0.20.0, bevy_render slab_allocator, SlabAllocatorSettings and its Default"
+quote = '''/// The default value is 1 MiB. [...] /// The default value is 512 MiB. [...] /// If an allocation exceeds this size limit, that data is placed in its own
+    /// slab. [...] /// The default value is 256 MiB. [...] /// The default value is 1.5.'''
+checked = 2026-10-27
+
+["bevy-0.20-slab-reallocate"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_render/src/slab_allocator.rs#L855-L908"
+section = "Bevy v0.20.0, bevy_render slab_allocator, MeshAllocator::reallocate_slab"
+quote = '''// Create the buffer.
+        let new_buffer = render_device.create_buffer(&BufferDescriptor { [...] // Copy the data from the old buffer into the new one.
+        encoder.copy_buffer_to_buffer('''
+checked = 2026-10-27
+
+["tanner-1998-clipmap"]
+url = "https://doi.org/10.1145/280814.280855"
+section = "Tanner, Migdal and Jones, The clipmap, SIGGRAPH '98, pp. 151-158 (title and venue per Crossref)"
+quote = '''The clipmap [...] Proceedings of the 25th annual conference on Computer graphics and interactive techniques - SIGGRAPH '98'''
+checked = 2026-10-27
+
+["erikson-2001-hlod"]
+url = "https://doi.org/10.1145/364338.364376"
+section = "Erikson, Manocha and Baxter, I3D 2001, pp. 111-120 (title and venue per Crossref)"
+quote = '''HLODs for faster display of large static and dynamic environments [...] Proceedings of the 2001 symposium on Interactive 3D graphics'''
+checked = 2026-10-27
+
+["yoon-2004-quick-vdr"]
+url = "https://doi.org/10.1109/VISUAL.2004.86"
+section = "Yoon, Salomon, Gayle and Manocha, IEEE Visualization 2004, pp. 131-138 (title and venue per Crossref)"
+quote = '''Quick-VDR: interactive view-dependent rendering of massive models [...] IEEE Visualization 2004'''
+checked = 2026-10-27
+
+["cignoni-2005-bmt"]
+url = "https://doi.org/10.1109/VISUAL.2005.1532797"
+section = "Cignoni, Ganovelli, Gobbetti, Marton, Ponchio and Scopigno, IEEE Visualization 2005, pp. 207-214 (title and venue per Crossref)"
+quote = '''Batched Multi Triangulation [...] VIS 05. IEEE Visualization, 2005.'''
+checked = 2026-10-27
+
+["masmano-2004-tlsf"]
+url = "https://doi.org/10.1109/EMRTS.2004.1311009"
+section = "Masmano, Ripoll, Crespo and Real, ECRTS 2004, pp. 79-88 (title and venue per Crossref)"
+quote = '''TLSF: a new dynamic memory allocator for real-time systems [...] Proceedings. 16th Euromicro Conference on Real-Time Systems, 2004. ECRTS 2004.'''
+checked = 2026-10-27
+
+["barrett-svt-public-domain"]
+url = "https://silverspaceship.com/src/svt/"
+section = "Sean Barrett, Sparse Virtual Textures, Downloads"
+quote = '''(This is essentially the same as my GDC 2008 presentation, although I only took 0:50 at GDC.) [...] All the source code is in the public domain.'''
+checked = 2026-10-27
+
+["gdc-2015-far-cry-4-avt"]
+url = "https://web.archive.org/web/20260828081731/https://gdcvault.com/play/1021760/Adaptive-Virtual-Texture-Rendering-in"
+section = "Ka Chen (Ubisoft), Adaptive Virtual Texture Rendering in Far Cry 4, GDC 2015, session overview"
+quote = '''In Far Cry 4 it is used in a 10KM*10KM world, and achieves 10 texels/cm resolution, which is 20 times higher than traditional virtual texturing techniques.'''
+checked = 2026-10-27
+
+["gdc-2021-ghost-of-tsushima-streaming"]
+url = "https://web.archive.org/web/20261005213246/https://gdcvault.com/play/1027205/Zen-of-Streaming-Building-and"
+section = "Adrian Bentley (Sucker Punch Productions), Zen of Streaming: Building and Loading 'Ghost of Tsushima', GDC 2021, session overview and tags"
+quote = '''It will also show the details of our various streaming technologies and the tradeoffs encountered in switching to a fine-grained streaming model. [...] Game Developers Conference 2021 [...] free content'''
 checked = 2026-10-27
