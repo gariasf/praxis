@@ -158,6 +158,18 @@ readback, so `compare` refuses the Baselines on the branch.
   sample. A's lit pass with rays off reads 5.15 ms, so B's saving there
   is at most that; with both new passes free the gate would read about
   7.0 to 7.7 ms.
+- **What the gate is made of.** A's 9.66 ms is both culling phases, 2.4
+  ms before any triangle draws; the depth pre-pass, 1.76; the lit pass,
+  5.15, of which about 2.9 is vertex work on triangles no sample shows,
+  by B's own split, and about 2.3 is shading; and the Froxel pass and
+  the depth pyramid, 0.8. About 7 ms of the 9.66 is transforming 5.5
+  million triangles twice and culling 524,288 slots, which B and D pay
+  alike: D measured today would start from culling plus an ID raster,
+  4.5 ms, before a pixel shades. The owner's decision (PR #346): keep A
+  and keep the 6 ms, and earn it where the time is, Meshlet culling and
+  the culling pass's dispatch, both owed under any option, then
+  re-measure; #297 is prototyped after them if the gate still breaches,
+  so its reading isolates the architecture.
 - **For option D (#297).** D shades from the IDs in compute and draws
   nothing again, so the coverage finding does not bite it the same way,
   but its ID pass is this one: at depth equal after a depth pre-pass,
