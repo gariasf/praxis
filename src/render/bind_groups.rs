@@ -123,6 +123,41 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the visibility pass, which runs with the visibility pre-pass
+/// Render switch on: the visibility IDs, which the visibility ID pass
+/// writes, the frame's draw and its packed indices, which the culling pass
+/// writes, and what the pass writes: a bit per triangle of the frame's draw
+/// that owns a sample and, with Meshlet granularity, a bit per Meshlet
+/// record one does, each word's and each block of words' offset in the
+/// compacted draw, and the compacted draw, its packed indices and its
+/// indirect arguments, which the lit pass draws.
+pub const VISIBILITY_BUILD: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Visibility Build Bind Group",
+    bindings: &[
+        loaded_texture(
+            "visibility_ids",
+            "texture_multisampled_2d<u32>",
+            wgpu::TextureSampleType::Uint,
+            true,
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage("frame_draw", "FrameDrawCounts", wgpu::ShaderStages::COMPUTE)
+        },
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage("packed_indices", "array<u32>", wgpu::ShaderStages::COMPUTE)
+        },
+        storage("triangle_bits", "array<atomic<u32>>"),
+        storage("record_bits", "array<atomic<u32>>"),
+        storage("triangle_offsets", "array<u32>"),
+        storage("compacted_indices", "array<u32>"),
+        storage("compacted_draw", "DrawArguments"),
+    ],
+};
+
 /// Group 3 of the Froxel pass: the camera and the lights, which the CPU
 /// writes as `FRAME` holds them, and what the pass writes: each Froxel's
 /// list, and the light counts, among them how many lights the lists had no

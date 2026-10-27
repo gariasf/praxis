@@ -12,7 +12,7 @@ use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
     FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
-    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    SHADOW_MASK_BUILD, TONEMAPPING_INPUT, VISIBILITY_BUILD,
 };
 use crate::render::culling_pass::SCAN_BLOCK_SIZE;
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -26,6 +26,7 @@ use crate::render::renderer::RenderSwitches;
 use crate::render::shadow_mask_pass::{SAMPLE_OFFSETS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE};
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
 use crate::render::tonemapping_pass::DITHER_MASK_SIDE;
+use crate::render::visibility_pass::VISIBILITY_TILE_SIZE;
 
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
@@ -55,6 +56,9 @@ const COMMON: Part = part!("common.wgsl");
 
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
+
+/// The workgroup scan the culling and visibility passes compact with.
+const SCAN: Part = part!("scan.wgsl");
 
 /// The Froxel grid: its slices, and where a Froxel's list starts.
 const FROXEL_GRID: Part = part!("froxel_grid.wgsl");
@@ -88,6 +92,32 @@ pub const MAIN: ShaderModule = ShaderModule {
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
 };
 
+/// The main pass with the `visibility_prepass` Render switch on: `MAIN`,
+/// and the visibility ID pass's fragment entry point, which writes each
+/// sample's triangle from the primitive index, which the adapter's
+/// `PRIMITIVE_INDEX` feature enables.
+pub const MAIN_VISIBILITY: ShaderModule = ShaderModule {
+    name: "main_visibility",
+    enables: &["wgpu_binding_array", "wgpu_ray_query", "primitive_index"],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
+    parts: &[
+        COMMON,
+        SHADING,
+        HDR,
+        FROXEL_GRID,
+        part!("main.wgsl"),
+        part!("visibility_prepass.wgsl"),
+    ],
+};
+
+/// The visibility pass, with the `visibility_prepass` Render switch on.
+pub const VISIBILITY: ShaderModule = ShaderModule {
+    name: "visibility",
+    enables: &[],
+    bind_groups: &[&VISIBILITY_BUILD],
+    parts: &[SCAN, part!("visibility.wgsl")],
+};
+
 /// The shadow mask pass.
 pub const SHADOW_MASK: ShaderModule = ShaderModule {
     name: "shadow_mask",
@@ -103,7 +133,7 @@ pub const CULLING: ShaderModule = ShaderModule {
     // The scene geometry holds both TLAS.
     enables: &["wgpu_ray_query"],
     bind_groups: &[&FRAME, &SCENE_GEOMETRY, &FRAME_DRAW],
-    parts: &[COMMON, part!("culling.wgsl")],
+    parts: &[COMMON, SCAN, part!("culling.wgsl")],
 };
 
 /// The Froxel pass.
@@ -174,9 +204,11 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 11] = [
+pub const MODULES: [ShaderModule; 13] = [
     SHARED,
     MAIN,
+    MAIN_VISIBILITY,
+    VISIBILITY,
     SHADOW_MASK,
     CULLING,
     FROXEL,
@@ -241,6 +273,7 @@ impl ShaderModule {
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
+             const VISIBILITY_TILE_SIZE: u32 = {VISIBILITY_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
              const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n\
              const FROXEL_COLUMNS: u32 = {FROXEL_COLUMNS}u;\n\

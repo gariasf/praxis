@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use praxis::bench::{Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
-use praxis::{CrowdForm, ReferenceScene, RenderSwitches};
+use praxis::{CrowdForm, ReferenceScene, RenderSwitches, VisibilityPrepass};
 
 /// The capture size when the command names none: small, and 16:9 like the
 /// window.
@@ -44,13 +44,13 @@ enum Command {
         scene: String,
         output: String,
         size: String,
-        crowd_form: CrowdForm,
+        switches: RenderSwitches,
     },
     Bench {
         output: String,
         configuration: Configuration,
         scenes: Vec<String>,
-        crowd_form: CrowdForm,
+        switches: RenderSwitches,
     },
     Compare {
         results: String,
@@ -75,14 +75,14 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             scene,
             output,
             size,
-            crowd_form,
-        } => capture(&scene, &output, &size, crowd_form),
+            switches,
+        } => capture(&scene, &output, &size, switches),
         Command::Bench {
             output,
             configuration,
             scenes,
-            crowd_form,
-        } => bench(&output, configuration, &scenes, crowd_form),
+            switches,
+        } => bench(&output, configuration, &scenes, switches),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -90,20 +90,34 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
 
 fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     let (arguments, crowd_form) = take_crowd_form(arguments)?;
-    let takes_crowd_form = matches!(
+    let (arguments, meshlets) = take_flag(&arguments, "--visibility-prepass");
+    let (arguments, triangles) = take_flag(&arguments, "--visibility-prepass-triangles");
+    let takes_switches = matches!(
         arguments.first().map(String::as_str),
         Some("bench" | "capture")
     );
     anyhow::ensure!(
-        crowd_form.is_none() || takes_crowd_form,
-        "only `bench` and `capture` take --crowd-form"
+        (crowd_form.is_none() && !meshlets && !triangles) || takes_switches,
+        "only `bench` and `capture` take --crowd-form and --visibility-prepass"
     );
-    let crowd_form = crowd_form.unwrap_or_default();
+    let visibility_prepass = match (meshlets, triangles) {
+        (false, false) => VisibilityPrepass::Off,
+        (true, false) => VisibilityPrepass::Meshlets,
+        (false, true) => VisibilityPrepass::Triangles,
+        (true, true) => anyhow::bail!(
+            "--visibility-prepass and --visibility-prepass-triangles are one or the other"
+        ),
+    };
+    let switches = RenderSwitches {
+        crowd_form: crowd_form.unwrap_or_default(),
+        visibility_prepass,
+        ..RenderSwitches::default()
+    };
     let bench = |output: &String, configuration, scenes: &[String]| Command::Bench {
         output: output.clone(),
         configuration,
         scenes: scenes.to_vec(),
-        crowd_form,
+        switches,
     };
     Ok(match arguments.as_slice() {
         [] => Command::Window(ReferenceScene::Helmet),
@@ -118,14 +132,14 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             scene: scene.clone(),
             output: output.clone(),
             size: DEFAULT_CAPTURE_SIZE.into(),
-            crowd_form,
+            switches,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => Command::Capture {
             scene: scene.clone(),
             output: output.clone(),
             size: size.clone(),
-            crowd_form,
+            switches,
         },
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
             bench(output, Configuration::CI, scenes)
@@ -158,10 +172,21 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
-             `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
+             `--crowd-form <proxies | refit | rebuild>`, `--visibility-prepass` and \
+             `--visibility-prepass-triangles`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
     })
+}
+
+/// `arguments` without `flag`, and whether it held it.
+fn take_flag(arguments: &[String], flag: &str) -> (Vec<String>, bool) {
+    let mut arguments = arguments.to_vec();
+    let Some(position) = arguments.iter().position(|argument| argument == flag) else {
+        return (arguments, false);
+    };
+    arguments.remove(position);
+    (arguments, true)
 }
 
 /// `arguments` without `--crowd-form <form>`, and the form it names.
@@ -250,15 +275,16 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 
 /// Benches the named Reference scenes, or with none every scene whose assets
 /// are present, prints one line per scene, and writes `<scene>.json` into
-/// `output`. A crowd form other than the default benches `crowd` alone,
-/// written as `crowd-<form>.json`.
+/// `output`, as `switches` set. A crowd form other than the default benches
+/// `crowd` alone, written as `crowd-<form>.json`.
 fn bench(
     output: &str,
     configuration: Configuration,
     scene_names: &[String],
-    crowd_form: CrowdForm,
+    switches: RenderSwitches,
 ) -> anyhow::Result<()> {
     let crowd = ReferenceScene::Crowd.name();
+    let crowd_form = switches.crowd_form;
     let other_form = crowd_form != CrowdForm::default();
     anyhow::ensure!(
         !other_form || scene_names.iter().all(|name| name == crowd),
@@ -285,10 +311,6 @@ fn bench(
     std::fs::create_dir_all(output)?;
     let context = pollster::block_on(GpuContext::headless())?;
     for scene in scenes {
-        let switches = RenderSwitches {
-            crowd_form,
-            ..RenderSwitches::default()
-        };
         let mut result = praxis::bench::run(&context, scene, configuration, switches)?;
         if other_form {
             result.scene = format!("{crowd}-{}", crowd_form.name());
@@ -438,11 +460,11 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, its crowd in `crowd_form`, writes the last frame to
-/// `output` as a PNG, and prints that frame's stats, its point lights per
-/// lit pixel counted. The PNG encoder comes with `cook`.
+/// `<width>x<height>`, as `switches` set, writes the last frame to `output`
+/// as a PNG, and prints that frame's stats, its point lights per lit pixel
+/// counted. The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
-fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyhow::Result<()> {
+fn capture(scene: &str, output: &str, size: &str, switches: RenderSwitches) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
         .split_once('x')
@@ -457,8 +479,7 @@ fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyh
         height,
         RenderSwitches {
             count_point_lights: true,
-            crowd_form,
-            ..RenderSwitches::default()
+            ..switches
         },
     )?;
     image::save_buffer_with_format(
@@ -527,7 +548,7 @@ mod tests {
             output,
             configuration,
             scenes,
-            crowd_form,
+            switches,
         } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
         else {
             panic!("bench parsed as another command");
@@ -535,7 +556,23 @@ mod tests {
         assert_eq!(output, "out");
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
-        assert_eq!(crowd_form, CrowdForm::default());
+        assert_eq!(switches, RenderSwitches::default());
+    }
+
+    #[test]
+    fn the_visibility_prepass_flag_sets_its_switch_for_bench_and_capture_alone() {
+        let Command::Bench {
+            scenes, switches, ..
+        } = parse(&["bench", "out", "town", "--visibility-prepass"]).unwrap()
+        else {
+            panic!("bench parsed as another command");
+        };
+        assert_eq!(scenes, ["town"]);
+        assert_eq!(switches.visibility_prepass, VisibilityPrepass::Meshlets);
+        let error = parse(&["town", "--visibility-prepass"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--visibility-prepass"), "{error}");
     }
 
     #[test]

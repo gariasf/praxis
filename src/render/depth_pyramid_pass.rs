@@ -143,9 +143,9 @@ pub(crate) mod tests {
             return;
         };
         let device = &context.device;
-        let mut pass = DepthPyramidPass::new(device, &RenderTargets::new(device, 16, 16));
+        let mut pass = DepthPyramidPass::new(device, &RenderTargets::new(device, 16, 16, false));
         let (width, height) = (37, 23);
-        let render_targets = RenderTargets::new(device, width, height);
+        let render_targets = RenderTargets::new(device, width, height, false);
         pass.bind_render_targets(device, &render_targets);
         // Each triangle's centre, half its width and its depth, in clip space.
         let triangles = [

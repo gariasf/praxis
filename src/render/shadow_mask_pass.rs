@@ -219,7 +219,7 @@ mod tests {
             return;
         };
         let (width, height) = (37, 23);
-        let render_targets = RenderTargets::new(&context.device, width, height);
+        let render_targets = RenderTargets::new(&context.device, width, height, false);
         // Clip-space corners, w 1, so depth is z: a triangle past each side.
         let corners = [
             [-1.0, -1.0, 0.2, 1.0],

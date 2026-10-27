@@ -94,7 +94,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // u32s a pixel and its 4-byte overflow count, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the twelve timed passes, and six slots of 272 bytes,
+    // bytes for each of the fourteen timed passes, and six slots of 304 bytes,
     // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
     // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
@@ -127,8 +127,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 160 * 90 * 8
             + 4
             + 3 * 2048
-            + 12 * 2 * 8
-            + 6 * 272
+            + 14 * 2 * 8
+            + 6 * 304
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
             + 16
@@ -193,9 +193,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // back its passes' GPU time, none skipped: Metal reads a timestamp
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
-    // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
-    // Phase two's depth pass draws nothing in a frame whose phase one drew
-    // every visible Instance, and NVIDIA times an empty pass at 0.
+    // dynamic TLAS, runs the bend pass or refits BLASes, which take no time,
+    // nor the visibility pre-pass's passes, off as it ships. Phase two's
+    // depth pass draws nothing in a frame whose phase one drew every visible
+    // Instance, and NVIDIA times an empty pass at 0.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -214,6 +215,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
                 "depth_pyramid_pass",
                 "culling_phase_two",
                 "phase_two_depth_pass",
+                "visibility_id_pass",
+                "visibility_pass",
                 "shadow_mask_pass",
                 "lit_pass",
                 "tonemapping_pass"
@@ -221,7 +224,14 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {
-            let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
+            let runs = ![
+                "dynamic_tlas_build",
+                "bend_pass",
+                "blas_refit",
+                "visibility_id_pass",
+                "visibility_pass",
+            ]
+            .contains(&pass);
             let may_be_empty = pass == "phase_two_depth_pass" && gpu.phase_two_triangles_drawn == 0;
             assert!(
                 (Duration::ZERO < time || may_be_empty) == runs

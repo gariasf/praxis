@@ -173,7 +173,7 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Render switches**:
-The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the `crowd` scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.
+The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, whether a visibility pre-pass compacts the lit pass's draw to the Meshlets, or the triangles, some sample shows (a prototype), and the form the `crowd` scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:

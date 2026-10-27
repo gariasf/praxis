@@ -10,11 +10,14 @@ use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
-use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
+use crate::render::main_pass::{
+    DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS, VISIBILITY_ID_PASS,
+};
 use crate::render::readback::{FrameShape, GpuStatsReadback};
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
+use crate::render::visibility_pass::{VISIBILITY_PASS, VisibilityPass};
 use crate::render::{
     AccelerationStructureBytes, CameraUniform, DynamicTlas, FrameData, FrameStaging,
     INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform, LoadStaging,
@@ -29,9 +32,12 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
-/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`). The
-/// rebuild form, an oracle, times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 12] = [
+/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`), and the
+/// visibility ID pass and the visibility pass, with phase two's depth pass,
+/// only with the visibility pre-pass Render switch on
+/// (`VISIBILITY_PREPASS_PASSES`). The rebuild form, an oracle, times
+/// neither its rebuild nor its build.
+pub(crate) const TIMED_PASSES: [&str; 14] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
@@ -41,6 +47,8 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
     DEPTH_PYRAMID_PASS,
     CullingPhase::Two.label(),
     PHASE_TWO_DEPTH_PASS,
+    VISIBILITY_ID_PASS,
+    VISIBILITY_PASS,
     SHADOW_MASK_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
@@ -49,6 +57,10 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
 /// The passes only shadow rays run: with them off, each reads as taking no
 /// time.
 pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
+
+/// The passes only the visibility pre-pass Render switch runs: with it off,
+/// each reads as taking no time.
+pub(crate) const VISIBILITY_PREPASS_PASSES: [&str; 2] = [VISIBILITY_ID_PASS, VISIBILITY_PASS];
 
 /// The CPU stages of the dynamic TLAS's build: its recording and its
 /// submit, the CPU cost ADR 0020 caps.
@@ -85,6 +97,33 @@ pub struct RenderSwitches {
     /// The form the `crowd` scene's figures, which the GPU bends each frame,
     /// take in the TLAS.
     pub crowd_form: CrowdForm,
+    /// Whether a visibility ID pass writes the triangle each sample shows
+    /// and a visibility pass compacts the lit pass's draw to those
+    /// triangles, or to their Meshlets: a prototype of option B of ADR
+    /// 0019's research note, off as it ships. It needs the adapter's
+    /// `PRIMITIVE_INDEX` feature.
+    pub visibility_prepass: VisibilityPrepass,
+}
+
+/// The visibility pre-pass prototype's granularity, or off.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum VisibilityPrepass {
+    #[default]
+    Off,
+    /// The lit pass draws every triangle of each Meshlet some sample shows:
+    /// what draws the frame's draw's image on the M4 Pro, where a triangle
+    /// under a pixel covers samples it does not cover when drawn without
+    /// its neighbours.
+    Meshlets,
+    /// The lit pass draws the triangles some sample shows alone: the least
+    /// the compacted draw can hold, which loses samples on the M4 Pro.
+    Triangles,
+}
+
+impl VisibilityPrepass {
+    pub fn is_on(self) -> bool {
+        self != VisibilityPrepass::Off
+    }
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -135,6 +174,7 @@ impl Default for RenderSwitches {
             shadow_rays: true,
             count_point_lights: false,
             crowd_form: CrowdForm::Proxies,
+            visibility_prepass: VisibilityPrepass::Off,
         }
     }
 }
@@ -168,6 +208,9 @@ pub struct Renderer {
     /// Whether the frame traces shadow rays, which the shadow mask pass and
     /// phase two's depth pass run for.
     shadow_rays: bool,
+    /// With the visibility pre-pass Render switch on; phase two's depth
+    /// pass runs for it too.
+    visibility_pass: Option<VisibilityPass>,
     /// With the crowd's refit or rebuild form.
     blas_refit: Option<BlasRefit>,
     /// Whether the dynamic TLAS's build is timed between markers: not with
@@ -251,7 +294,8 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_targets = RenderTargets::new(&device, width, height);
+        let render_targets =
+            RenderTargets::new(&device, width, height, switches.visibility_prepass.is_on());
         let culling_pass = CullingPass::new(
             &device,
             &[
@@ -262,6 +306,15 @@ impl Renderer {
             switches,
             &render_targets,
         );
+        let visibility_pass = switches.visibility_prepass.is_on().then(|| {
+            VisibilityPass::new(
+                &device,
+                &culling_pass,
+                draw_capacity,
+                &render_targets,
+                switches.visibility_prepass,
+            )
+        });
         let main_pass = MainPass::new(
             &device,
             &[
@@ -384,15 +437,17 @@ impl Renderer {
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
         let tonemapping_pass =
             TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
-        let gpu_stats = GpuStatsReadback::new(
-            &device,
-            queue.get_timestamp_period(),
-            if switches.shadow_rays {
-                &[]
-            } else {
-                &SHADOW_RAY_PASSES
-            },
-        );
+        // The passes this Renderer never records read as taking no time.
+        let mut untimed = Vec::new();
+        if !switches.shadow_rays {
+            untimed.extend(SHADOW_RAY_PASSES);
+        }
+        if switches.visibility_prepass.is_on() {
+            untimed.retain(|&pass| pass != PHASE_TWO_DEPTH_PASS);
+        } else {
+            untimed.extend(VISIBILITY_PREPASS_PASSES);
+        }
+        let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period(), &untimed);
 
         let adapter_info = context.adapter.get_info();
         Self {
@@ -409,6 +464,7 @@ impl Renderer {
             main_pass,
             shadow_mask_pass,
             shadow_rays: switches.shadow_rays,
+            visibility_pass,
             blas_refit,
             marks_dynamic_tlas_build: switches.crowd_form != CrowdForm::Rebuild,
             depth_pyramid_pass,
@@ -436,9 +492,13 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, width, height);
+        self.render_targets =
+            RenderTargets::new(&self.device, width, height, self.visibility_pass.is_some());
         self.depth_pyramid_pass
             .bind_render_targets(&self.device, &self.render_targets);
+        if let Some(visibility_pass) = &mut self.visibility_pass {
+            visibility_pass.bind_render_targets(&self.device, &self.render_targets);
+        }
         self.culling_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.main_pass
@@ -635,7 +695,10 @@ impl Renderer {
             CullingPhase::Two,
             timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
         );
-        if self.shadow_rays {
+        // The shadow mask pass and the visibility ID pass each read every
+        // Instance's depth, so phase two's goes into a pass of its own for
+        // either.
+        if self.shadow_rays || self.visibility_pass.is_some() {
             self.main_pass.record_phase_two_depth(
                 &mut encoder,
                 &self.render_targets,
@@ -644,18 +707,46 @@ impl Renderer {
                 self.culling_pass.frame_draw(),
                 timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),
             );
+        }
+        if let Some(visibility_pass) = &self.visibility_pass {
+            self.main_pass.record_visibility_ids(
+                &mut encoder,
+                &self.render_targets,
+                &bind_groups,
+                self.culling_pass.packed_indices(),
+                self.culling_pass.frame_draw(),
+                timestamps.map(|timestamps| timestamps.render_pass(VISIBILITY_ID_PASS)),
+            );
+            visibility_pass.record(
+                &mut encoder,
+                timestamps.map(|timestamps| timestamps.compute_pass(VISIBILITY_PASS)),
+            );
+        }
+        if self.shadow_rays {
             self.shadow_mask_pass.record(
                 &mut encoder,
                 &self.scene_geometry_bind_group,
                 timestamps.map(|timestamps| timestamps.compute_pass(SHADOW_MASK_PASS)),
             );
         }
+        // The lit pass draws the compacted draw where the visibility pass
+        // built one, else the frame's draw.
+        let (lit_indices, lit_draw) = match &self.visibility_pass {
+            Some(visibility_pass) => (
+                visibility_pass.compacted_indices(),
+                visibility_pass.compacted_draw(),
+            ),
+            None => (
+                self.culling_pass.packed_indices(),
+                self.culling_pass.frame_draw(),
+            ),
+        };
         self.main_pass.record_lit_pass(
             &mut encoder,
             &self.render_targets,
             &bind_groups,
-            self.culling_pass.packed_indices(),
-            self.culling_pass.frame_draw(),
+            lit_indices,
+            lit_draw,
             frame.background,
             timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
@@ -671,8 +762,9 @@ impl Renderer {
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
         // phases', each with one indirect call; the tonemapping pass draws
-        // one triangle.
-        recorder.draw_calls += 4;
+        // one triangle; the visibility ID pass, where it runs, draws both
+        // phases' once more.
+        recorder.draw_calls += 4 + u32::from(self.visibility_pass.is_some());
         // A frame whose refit went untimed spans its build's submission
         // from the bend pass, so its build is not counted apart.
         let refit_untimed = bent && self.blas_refit.is_some() && !blas_refitted;
@@ -755,6 +847,10 @@ impl Renderer {
             + self.froxel_pass.gpu_memory_bytes()
             + self.shadow_mask_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()
+            + self
+                .visibility_pass
+                .as_ref()
+                .map_or(0, VisibilityPass::gpu_memory_bytes)
             + self.mesh_pool.gpu_memory_bytes()
             + self.estimated_acceleration_structure_bytes()
             + self.dynamic_tlas.gpu_memory_bytes()
@@ -1101,6 +1197,329 @@ pub(crate) mod tests {
             assert!(
                 culled.0 == unculled.0,
                 "frame {frame} differs with culling off"
+            );
+        }
+    }
+
+    /// With the `visibility_prepass` Render switch on, the lit pass draws the
+    /// compacted draw, the triangles some sample shows, and draws the image it
+    /// draws with the switch off. A near quad hides one quad wholly and
+    /// leaves another apart, so of the six triangles the frame draws, four
+    /// are compacted: in the first frame, where phase two draws every
+    /// Instance, and the next, where phase one draws those visible before.
+    #[test]
+    fn the_visibility_prepass_draws_the_triangles_seen_and_the_image_a_draws() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
+            ..CameraUniform::default()
+        };
+        let size = 64;
+        // Each frame's image, triangles drawn and triangles compacted.
+        let frames = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, size, size, switches);
+            let [red, green, blue] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+                .map(|emissive| emissive_material(&mut renderer, emissive));
+            let quad = load_quad(&mut renderer);
+            let placed = |material: MaterialHandle, centre: [f32; 3], side: f32| InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    side, side, 1.0,
+                ))),
+                offset: centre,
+                ..instance(quad, material.index(), [0.0, 0.0])
+            };
+            let near = placed(red, [-1.0, 1.0, -3.0], 2.0);
+            let hidden = placed(green, [-1.0, 1.0, -6.0], 0.8);
+            let apart = placed(blue, [1.2, -0.6, -6.0], 1.0);
+            let frame = FrameData {
+                camera,
+                ..frame_of(vec![near, hidden, apart])
+            };
+            [0, 1].map(|_| {
+                let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, size, size);
+                let compacted = renderer.visibility_pass.as_ref().map(|pass| {
+                    let arguments: Vec<wgpu::util::DrawIndexedIndirectArgs> =
+                        read_storage(&context, pass.compacted_draw(), 1);
+                    arguments[0]
+                });
+                (image, gpu.triangles_drawn, compacted)
+            })
+        };
+        let compacted = frames(RenderSwitches {
+            visibility_prepass: VisibilityPrepass::Meshlets,
+            ..RenderSwitches::default()
+        });
+        let plain = frames(RenderSwitches::default());
+
+        for (frame, ((image, drawn, draw), (plain_image, plain_drawn, plain_draw))) in
+            compacted.iter().zip(&plain).enumerate()
+        {
+            assert_eq!(*drawn, 6, "frame {frame}");
+            assert_eq!(*plain_drawn, 6, "frame {frame}");
+            assert!(plain_draw.is_none());
+            let draw = draw.expect("the switch builds a compacted draw");
+            assert_eq!(
+                (draw.index_count, draw.instance_count, draw.first_index),
+                (12, 1, 0),
+                "frame {frame}"
+            );
+            assert!(shows(image.get_pixel(16, 16).0, RED));
+            assert!(
+                image == plain_image,
+                "frame {frame} differs with the switch off"
+            );
+        }
+    }
+
+    /// With the `visibility_prepass` Render switch on, a frame of more
+    /// triangles than one block of the visibility pass's scan sums, 10,000
+    /// quads in a grid, all in view, compacts every triangle, in order, so
+    /// the lit pass draws the image the switch off draws.
+    #[test]
+    fn the_visibility_prepass_compacts_triangles_across_blocks_of_its_scan() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        let size = 512;
+        let side = 100;
+        // A quad 4 pixels wide at each grid point 5 pixels apart.
+        let quad_side = 0.016;
+        let spacing = 0.02;
+        let frame_and_image = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, size, size, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let quad = load_quad(&mut renderer);
+            let instances = (0..side * side)
+                .map(|cell| {
+                    let (column, row) = (cell % side, cell / side);
+                    let at = |index: u32| (f32::from(index as u16) + 0.5) * spacing - 1.0;
+                    InstanceData {
+                        rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                            quad_side, quad_side, 1.0,
+                        ))),
+                        offset: [at(column), at(row), 0.5],
+                        ..instance(quad, red.index(), [0.0, 0.0])
+                    }
+                })
+                .collect();
+            let frame = frame_of(instances);
+            let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, size, size);
+            let compacted = renderer.visibility_pass.as_ref().map(|pass| {
+                read_storage::<wgpu::util::DrawIndexedIndirectArgs>(
+                    &context,
+                    pass.compacted_draw(),
+                    1,
+                )[0]
+                .index_count
+            });
+            (image, gpu.triangles_drawn, compacted)
+        };
+        let (image, drawn, compacted) = frame_and_image(RenderSwitches {
+            visibility_prepass: VisibilityPrepass::Meshlets,
+            ..RenderSwitches::default()
+        });
+        let (plain_image, plain_drawn, _) = frame_and_image(RenderSwitches::default());
+
+        assert_eq!((drawn, plain_drawn), (20_000, 20_000));
+        assert_eq!(compacted, Some(60_000));
+        assert!(shows(image.get_pixel(2, 2).0, RED));
+        assert!(
+            image == plain_image,
+            "the image differs with the switch off"
+        );
+    }
+
+    /// With the `visibility_prepass` Render switch on, a triangle only the
+    /// second sample of its pixels shows is marked from that sample: a
+    /// strip 0.15 pixels wide over one column of pixels, placed over the
+    /// second of the four sample positions (`SAMPLE_OFFSETS`) and no other,
+    /// is compacted, and the lit pass draws the image the switch off draws.
+    #[test]
+    fn the_visibility_prepass_marks_a_triangle_one_sample_alone_shows() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        let pixel = 2.0 / SIZE as f32;
+        let column = 8.0;
+        let frame_and_image = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let quad = load_quad(&mut renderer);
+            // The quad, 1 m square at the origin, scaled to the strip and
+            // moved over the column.
+            let (left, right) = (column + 0.8, column + 0.95);
+            let strip = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    (right - left) * pixel,
+                    2.0,
+                    1.0,
+                ))),
+                offset: [-1.0 + (left + right) / 2.0 * pixel, 0.0, 0.5],
+                ..instance(quad, red.index(), [0.0, 0.0])
+            };
+            let frame = frame_of(vec![strip]);
+            let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+            let compacted = renderer.visibility_pass.as_ref().map(|pass| {
+                read_storage::<wgpu::util::DrawIndexedIndirectArgs>(
+                    &context,
+                    pass.compacted_draw(),
+                    1,
+                )[0]
+                .index_count
+            });
+            (image, gpu.triangles_drawn, compacted)
+        };
+        let (image, drawn, compacted) = frame_and_image(RenderSwitches {
+            visibility_prepass: VisibilityPrepass::Meshlets,
+            ..RenderSwitches::default()
+        });
+        let (plain_image, plain_drawn, _) = frame_and_image(RenderSwitches::default());
+
+        assert_eq!((drawn, plain_drawn), (2, 2));
+        // A quarter red over the background in the column, and none beside.
+        let background = plain_image.get_pixel(0, 8).0;
+        let in_column = plain_image.get_pixel(column as u32, 8).0;
+        assert!(
+            in_column[0] > background[0] + 20,
+            "{in_column:?} over {background:?}"
+        );
+        assert!(shows(
+            plain_image.get_pixel(column as u32 + 1, 8).0,
+            background
+        ));
+        assert_eq!(compacted, Some(6));
+        assert!(
+            image == plain_image,
+            "the image differs with the switch off"
+        );
+    }
+
+    /// With the visibility pre-pass at Meshlet granularity, a frame of
+    /// 7,871 quads under a pixel wide, tilted and in perspective, draws the
+    /// image the switch off draws. On the M4 Pro, which samples such a
+    /// triangle covers depends on the triangles drawn beside it, so the
+    /// triangles some sample shows, drawn alone, lose samples; drawn with
+    /// their Meshlets, they do not.
+    #[test]
+    fn the_visibility_prepass_draws_sub_pixel_tilted_quads_as_the_switch_off_draws() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        let size = 256;
+        let side = 100;
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
+            ..CameraUniform::default()
+        };
+        let image = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, size, size, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let quad = load_quad(&mut renderer);
+            let rotation = glam::Mat3::from_rotation_x(1.0) * glam::Mat3::from_rotation_y(0.3);
+            let instances = (0..side * side)
+                .map(|cell| {
+                    let (column, row) = (cell % side, cell / side);
+                    let at = |index: u32| (f32::from(index as u16) + 0.5) * 0.4 - 20.0;
+                    InstanceData {
+                        rotation_scale: padded_columns(
+                            rotation * glam::Mat3::from_diagonal(glam::vec3(0.3, 0.3, 1.0)),
+                        ),
+                        offset: [at(column), at(row) * 0.5 - 2.0, -40.0 + row as f32 * 0.05],
+                        ..instance(quad, red.index(), [0.0, 0.0])
+                    }
+                })
+                .collect();
+            let frame = FrameData {
+                camera,
+                ..frame_of(instances)
+            };
+            let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, size, size);
+            (image, gpu.triangles_drawn)
+        };
+        let (compacted, drawn) = image(RenderSwitches {
+            visibility_prepass: VisibilityPrepass::Meshlets,
+            ..RenderSwitches::default()
+        });
+        let (plain, plain_drawn) = image(RenderSwitches::default());
+
+        assert_eq!((drawn, plain_drawn), (15_742, 15_742));
+        let differing = compacted
+            .pixels()
+            .zip(plain.pixels())
+            .filter(|(a, b)| !shows(a.0, b.0))
+            .count();
+        assert_eq!(differing, 0, "pixels differ with the switch off");
+    }
+
+    /// With the `visibility_prepass` Render switch on, a triangle phase two
+    /// draws is marked from phase two's first triangle, past phase one's:
+    /// in the frame the lower triangle enters the view, phase one draws the
+    /// upper one and phase two the lower one, and the compacted draw holds
+    /// both, so the lit pass draws the image the switch off draws.
+    #[test]
+    fn the_visibility_prepass_marks_phase_twos_triangles_past_phase_ones() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        // Each frame's image, and the compacted draw's index count.
+        let frames = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+            let upper = instance(mesh, NO_MATERIAL, [0.0, 0.5]);
+            [[5.0, -0.5], [0.0, -0.5], [0.0, -0.5]].map(|lower| {
+                let frame = frame_of(vec![upper, instance(mesh, NO_MATERIAL, lower)]);
+                let (image, ..) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+                let compacted = renderer.visibility_pass.as_ref().map(|pass| {
+                    read_storage::<wgpu::util::DrawIndexedIndirectArgs>(
+                        &context,
+                        pass.compacted_draw(),
+                        1,
+                    )[0]
+                    .index_count
+                });
+                (image, compacted)
+            })
+        };
+        let compacted = frames(RenderSwitches {
+            visibility_prepass: VisibilityPrepass::Meshlets,
+            ..RenderSwitches::default()
+        });
+        let plain = frames(RenderSwitches::default());
+
+        assert_eq!(
+            compacted.clone().map(|(_, count)| count),
+            [Some(3), Some(6), Some(6)]
+        );
+        assert!(shows(compacted[1].0.get_pixel(SIZE / 2, 12).0, RED));
+        for (frame, (compacted, plain)) in compacted.iter().zip(&plain).enumerate() {
+            assert!(
+                compacted.0 == plain.0,
+                "frame {frame} differs with the switch off"
             );
         }
     }

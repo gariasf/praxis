@@ -25,6 +25,19 @@ pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// and the Froxel slice the bits follow.
 pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
+/// The visibility IDs' format, with the `visibility_prepass` Render switch
+/// on: a 32-bit triangle ID per sample in two halves, since WebGPU's
+/// guaranteed format features multisample Rg16Uint but not R32Uint.
+pub const VISIBILITY_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Uint;
+
+/// The visibility IDs' clear value: no triangle, every bit set.
+const NO_TRIANGLE: wgpu::Color = wgpu::Color {
+    r: 65535.0,
+    g: 65535.0,
+    b: 0.0,
+    a: 0.0,
+};
+
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
 /// unit of each: ITU-R BT.709-6's luma weights (item 3.2), which are the Y
 /// row of its linear RGB-to-XYZ matrix as ITU-R BT.2087-0 prints it
@@ -55,11 +68,21 @@ pub struct RenderTargets {
     /// Which lights the shadow mask pass found hidden at each pixel, which
     /// the lit pass reads.
     shadow_mask: wgpu::TextureView,
+    /// With the `visibility_prepass` Render switch on, the triangle each
+    /// sample of the depth target shows, which the visibility ID pass writes
+    /// and the visibility pass reads.
+    visibility_ids: Option<wgpu::TextureView>,
 }
 
 impl RenderTargets {
-    /// Targets `width` × `height`, both non-zero.
-    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
+    /// Targets `width` × `height`, both non-zero, with visibility IDs where
+    /// `visibility_prepass` is set.
+    pub fn new(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        visibility_prepass: bool,
+    ) -> RenderTargets {
         let target = |label, format, sample_count, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
@@ -130,12 +153,60 @@ impl RenderTargets {
                 1,
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
+            // Drawn by the visibility ID pass, then read by the visibility
+            // pass.
+            visibility_ids: visibility_prepass.then(|| {
+                target(
+                    "Visibility IDs",
+                    VISIBILITY_ID_FORMAT,
+                    SAMPLE_COUNT,
+                    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                )
+            }),
+        }
+    }
+
+    /// The visibility IDs, with the `visibility_prepass` Render switch on.
+    pub fn visibility_ids(&self) -> Option<&wgpu::TextureView> {
+        self.visibility_ids.as_ref()
+    }
+
+    /// The visibility IDs as the visibility ID pass's colour attachment,
+    /// with the `visibility_prepass` Render switch on: cleared to no
+    /// triangle, and stored for the visibility pass.
+    pub fn visibility_ids_attachment(&self) -> Option<wgpu::RenderPassColorAttachment<'_>> {
+        self.visibility_ids
+            .as_ref()
+            .map(|view| wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(NO_TRIANGLE),
+                    store: wgpu::StoreOp::Store,
+                },
+            })
+    }
+
+    /// The depth target as the attachment of a pass that reads it at depth
+    /// equal and writes nothing: read-only, so the pass stores nothing back.
+    pub fn read_only_depth_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+        wgpu::RenderPassDepthStencilAttachment {
+            view: &self.depth,
+            depth_ops: None,
+            stencil_ops: None,
         }
     }
 
     /// The depth target, as passes read it.
     pub fn depth(&self) -> &wgpu::TextureView {
         &self.depth
+    }
+
+    /// The targets' size, in pixels.
+    pub fn size(&self) -> (u32, u32) {
+        let size = self.depth.texture().size();
+        (size.width, size.height)
     }
 
     /// The HDR target, as the tonemapping pass reads it.
@@ -243,6 +314,7 @@ impl RenderTargets {
             &self.shadow_mask,
         ]
         .into_iter()
+        .chain(self.visibility_ids.as_ref())
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))
         .sum()
     }

@@ -33,7 +33,9 @@ impl GpuContext {
     }
 
     /// Requests a device with exactly the Capability floor, after checking
-    /// the adapter against all of it.
+    /// the adapter against all of it, and `PRIMITIVE_INDEX` where the
+    /// adapter has it, which the `visibility_prepass` Render switch, a
+    /// prototype, needs and which the floor does not hold.
     async fn request_device(adapter: wgpu::Adapter) -> anyhow::Result<Self> {
         let attachment_formats: Vec<_> = MAIN_PASS_FORMATS
             .into_iter()
@@ -49,7 +51,8 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: floor_features(),
+                required_features: floor_features()
+                    | (adapter.features() & wgpu::Features::PRIMITIVE_INDEX),
                 // SAFETY: ray queries are an experimental wgpu feature, and
                 // enabling them accepts that a wgpu bug may cause undefined
                 // behaviour from safe calls. ADR 0020's ray-traced shadows
@@ -72,6 +75,14 @@ impl GpuContext {
     /// The graphics API the adapter runs on.
     pub fn backend(&self) -> wgpu::Backend {
         self.adapter.get_info().backend
+    }
+
+    /// Whether the device has `PRIMITIVE_INDEX`, which the
+    /// `visibility_prepass` Render switch needs.
+    pub fn has_primitive_index(&self) -> bool {
+        self.device
+            .features()
+            .contains(wgpu::Features::PRIMITIVE_INDEX)
     }
 
     /// The adapter's vendor ID: a PCI vendor ID, or a Khronos one for a

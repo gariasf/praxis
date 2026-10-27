@@ -7,7 +7,11 @@
 //! colour, which it resolves into the HDR target. With shadow rays on, phase
 //! two's depth is a pass of its own, so the shadow mask pass reads every
 //! Instance's depth before the lit pass reads the mask; with them off, the
-//! lit pass draws it first.
+//! lit pass draws it first. With the visibility pre-pass Render switch on,
+//! phase two's depth is a pass of its own too, a visibility ID pass then
+//! draws both phases' at depth equal and writes the triangle each sample
+//! shows, and the lit pass draws the compacted draw the visibility pass
+//! builds from those IDs.
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
 use crate::render::culling_pass::PHASE_TWO_DRAW_OFFSET;
@@ -21,6 +25,9 @@ pub(crate) const DEPTH_PREPASS: &str = "depth_prepass";
 /// Phase two's depth pass's label, and its name in frame stats.
 pub(crate) const PHASE_TWO_DEPTH_PASS: &str = "phase_two_depth_pass";
 
+/// The visibility ID pass's label, and its name in frame stats.
+pub(crate) const VISIBILITY_ID_PASS: &str = "visibility_id_pass";
+
 /// The lit pass's label, and its name in frame stats.
 pub(crate) const LIT_PASS: &str = "lit_pass";
 
@@ -30,15 +37,19 @@ pub struct MainPass {
     /// With shadow rays off, phase two's draw into depth, inside the lit
     /// pass, before it shades.
     lit_pass_depth_pipeline: wgpu::RenderPipeline,
+    /// With the visibility pre-pass Render switch on, the pipeline that
+    /// writes each sample's triangle at depth equal.
+    visibility_id_pipeline: Option<wgpu::RenderPipeline>,
     lit_pipeline: wgpu::RenderPipeline,
     inputs_layout: wgpu::BindGroupLayout,
     meshlet_records_buffer: wgpu::Buffer,
     /// Its group 3 (`MAIN_PASS_INPUTS`), built from the render targets by
     /// `bind_render_targets`.
     inputs: wgpu::BindGroup,
-    /// Whether shadow rays are on, so phase two's depth is drawn in its own
-    /// pass rather than by the lit pass.
-    shadow_rays: bool,
+    /// Whether the lit pass draws phase two's draw into depth before it
+    /// shades: with shadow rays and the visibility pre-pass both off, since
+    /// either reads every Instance's depth before the lit pass.
+    phase_two_in_lit_pass: bool,
     /// Whether the lit pass keeps the depth it ends with, for the light
     /// count pass (the `count_point_lights` Render switch).
     keeps_depth: bool,
@@ -64,7 +75,13 @@ impl MainPass {
             &meshlet_records_buffer,
             render_targets,
         );
-        let shader = device.create_shader_module(shaders::MAIN.descriptor());
+        // The visibility ID pass's entry point needs the adapter's primitive
+        // index, which its module alone enables.
+        let shader = device.create_shader_module(if switches.visibility_prepass.is_on() {
+            shaders::MAIN_VISIBILITY.descriptor()
+        } else {
+            shaders::MAIN.descriptor()
+        });
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
@@ -93,25 +110,30 @@ impl MainPass {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        let depth_pipeline = |label, fragment| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&depth_prepass_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_depth_prepass"),
-                    buffers: &[],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment,
-                primitive,
-                depth_stencil: Some(targets::depth_stencil_state()),
-                multisample,
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let depth_prepass_pipeline = depth_pipeline("Depth Pre-pass Pipeline", None);
+        let depth_pipeline =
+            |label: &str, fragment: Option<wgpu::FragmentState<'_>>, depth_stencil| {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&depth_prepass_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_depth_prepass"),
+                        buffers: &[],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment,
+                    primitive,
+                    depth_stencil: Some(depth_stencil),
+                    multisample,
+                    multiview_mask: None,
+                    cache: None,
+                })
+            };
+        let depth_prepass_pipeline = depth_pipeline(
+            "Depth Pre-pass Pipeline",
+            None,
+            targets::depth_stencil_state(),
+        );
         // Every pipeline the lit pass sets names its colour target, so its
         // depth draw names it too, and writes nothing to it.
         let lit_pass_depth_pipeline = depth_pipeline(
@@ -126,7 +148,26 @@ impl MainPass {
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
+            targets::depth_stencil_state(),
         );
+        // At depth equal, as the lit pipeline draws, so the IDs name the
+        // triangles the lit pass shows.
+        let visibility_id_pipeline = switches.visibility_prepass.is_on().then(|| {
+            depth_pipeline(
+                "Visibility ID Pipeline",
+                Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_visibility"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: targets::VISIBILITY_ID_FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                targets::depth_equal_state(),
+            )
+        });
         let lit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Lit Pass Pipeline"),
             layout: Some(&lit_layout),
@@ -158,11 +199,12 @@ impl MainPass {
         MainPass {
             depth_prepass_pipeline,
             lit_pass_depth_pipeline,
+            visibility_id_pipeline,
             lit_pipeline,
             inputs_layout,
             meshlet_records_buffer,
             inputs,
-            shadow_rays: switches.shadow_rays,
+            phase_two_in_lit_pass: !switches.shadow_rays && !switches.visibility_prepass.is_on(),
             keeps_depth: switches.count_point_lights,
         }
     }
@@ -233,10 +275,11 @@ impl MainPass {
         depth_prepass.draw_indexed_indirect(frame_draw, 0);
     }
 
-    /// Records phase two's depth pass into `encoder`, with shadow rays on:
-    /// draws phase two's draw into the depth target, which it loads and
-    /// stores for the shadow mask pass, the buffers and groups as
-    /// `record_depth_prepass` takes them, timed into `timestamp_writes`.
+    /// Records phase two's depth pass into `encoder`, with shadow rays or
+    /// the visibility pre-pass on: draws phase two's draw into the depth
+    /// target, which it loads and stores for the passes that read every
+    /// Instance's depth, the buffers and groups as `record_depth_prepass`
+    /// takes them, timed into `timestamp_writes`.
     pub fn record_phase_two_depth(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -266,12 +309,54 @@ impl MainPass {
         depth_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
     }
 
+    /// Records the visibility ID pass into `encoder`, with the visibility
+    /// pre-pass Render switch on: clears the visibility IDs of
+    /// `render_targets` and draws the frame's draw of both phases at depth
+    /// equal against the depth target, writing each sample's triangle, the
+    /// buffers and groups as `record_depth_prepass` takes them, timed into
+    /// `timestamp_writes`. Without the switch, it records nothing.
+    pub fn record_visibility_ids(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        render_targets: &RenderTargets,
+        bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
+        packed_indices: &wgpu::Buffer,
+        frame_draw: &wgpu::Buffer,
+        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) {
+        let (Some(pipeline), Some(visibility_ids)) = (
+            &self.visibility_id_pipeline,
+            render_targets.visibility_ids_attachment(),
+        ) else {
+            return;
+        };
+        let mut id_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(VISIBILITY_ID_PASS),
+            color_attachments: &[Some(visibility_ids)],
+            depth_stencil_attachment: Some(render_targets.read_only_depth_attachment()),
+            occlusion_query_set: None,
+            timestamp_writes,
+            multiview_mask: None,
+        });
+        id_pass.set_pipeline(pipeline);
+        self.bind(
+            &mut id_pass,
+            bind_groups
+                .iter()
+                .copied()
+                .filter(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
+            packed_indices,
+        );
+        id_pass.draw_indexed_indirect(frame_draw, 0);
+    }
+
     /// Records the lit pass into `encoder`: clears the multisampled colour
     /// to `background`, exposed, draws phase two's draw into the depth
     /// target unless its own pass did, then the frame's draw of both phases
-    /// at depth equal, the buffers as `record_depth_prepass` takes them,
-    /// with `bind_groups` set, and resolves the colour into the HDR target,
-    /// timed into `timestamp_writes`.
+    /// at depth equal, the buffers as `record_depth_prepass` takes them, or
+    /// the compacted draw's with the visibility pre-pass on, with
+    /// `bind_groups` set, and resolves the colour into the HDR target, timed
+    /// into `timestamp_writes`.
     #[expect(clippy::too_many_arguments)]
     pub fn record_lit_pass(
         &self,
@@ -295,7 +380,7 @@ impl MainPass {
             multiview_mask: None,
         });
         self.bind(&mut lit_pass, bind_groups.iter().copied(), packed_indices);
-        if !self.shadow_rays {
+        if self.phase_two_in_lit_pass {
             lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
             lit_pass.draw_indexed_indirect(frame_draw, PHASE_TWO_DRAW_OFFSET);
         }

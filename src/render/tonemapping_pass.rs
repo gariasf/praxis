@@ -221,7 +221,7 @@ mod tests {
             height: 3,
             depth_or_array_layers: 1,
         };
-        let render_targets = RenderTargets::new(device, size.width, size.height);
+        let render_targets = RenderTargets::new(device, size.width, size.height, false);
         let mut staging = LoadStaging::new(device.clone());
         let pass = TonemappingPass::new(device, format, &render_targets, &mut staging);
         staging.submit(&context.queue);
@@ -297,7 +297,7 @@ mod tests {
             height: DITHER_MASK_SIDE,
             depth_or_array_layers: 1,
         };
-        let render_targets = RenderTargets::new(device, size.width, size.height);
+        let render_targets = RenderTargets::new(device, size.width, size.height, false);
         let mut staging = LoadStaging::new(device.clone());
         let pass = TonemappingPass::new(device, TARGET_FORMAT, &render_targets, &mut staging);
         staging.submit(&context.queue);
