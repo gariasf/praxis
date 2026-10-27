@@ -6,7 +6,8 @@ use sha2::{Digest, Sha256};
 
 use super::CookSettings;
 use crate::cooked::{
-    AssetId, CookedTexture, MAX_TEXTURE_SIDE, MaterialChannel, TEXTURE_MAGIC, hex, level_bytes,
+    AssetId, CookedTexture, MAX_TEXTURE_SIDE, MaterialChannel, TEXTURE_VERSION_KEY, hex,
+    level_bytes,
 };
 
 // intel_tex_2 0.5.0 links a prebuilt C++ library (its ASTC helpers) but not
@@ -117,7 +118,7 @@ impl TextureSource {
     /// are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(TEXTURE_MAGIC);
+        hasher.update(TEXTURE_VERSION_KEY);
         hasher.update(format_version.to_le_bytes());
         hasher.update(ENCODER);
         hasher.update(settings.texture_zstd_level.to_le_bytes());
