@@ -19,11 +19,13 @@ pub(crate) const MATERIAL_MAGIC: [u8; 4] = *b"PXMA";
 /// Blobs are refused.
 pub(crate) const MATERIAL_FORMAT_VERSION: u32 = 1;
 /// The KTX2 key of a Texture Blob's one key-value entry, whose value is
-/// `TEXTURE_FORMAT_VERSION` as a little-endian u32.
-pub(crate) const TEXTURE_MAGIC: &str = "PXTX";
+/// `TEXTURE_FORMAT_VERSION` as a little-endian u32. With its NUL it is 12
+/// bytes, a multiple of the value's 4, as KTX 2.0 requires of a key whose
+/// value starts with a multi-byte number [ref:ktx2-key-value-alignment].
+pub(crate) const TEXTURE_VERSION_KEY: &str = "PXTXVERSION";
 /// Bumped whenever the Texture Blob layout, or how the cooker fills it,
 /// changes, like `MATERIAL_FORMAT_VERSION`.
-pub(crate) const TEXTURE_FORMAT_VERSION: u32 = 1;
+pub(crate) const TEXTURE_FORMAT_VERSION: u32 = 2;
 /// The largest side the cooker accepts; larger sources are refused rather
 /// than resized (ADR 0018).
 pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
@@ -245,7 +247,9 @@ impl CookedTexture {
     /// mips are one contiguous byte range (ADR 0017). KTX2 orders level data
     /// this way [ref:ktx2-level-order], compresses each level on its own
     /// [ref:ktx2-supercompression-per-level] and needs no level alignment
-    /// under supercompression [ref:ktx2-level-alignment].
+    /// under supercompression [ref:ktx2-level-alignment]. The one key-value
+    /// entry's key is sized so that its u32 value lands aligned
+    /// [ref:ktx2-key-value-alignment].
     #[cfg(feature = "cook")]
     pub fn to_blob(&self, zstd_level: i32) -> anyhow::Result<Vec<u8>> {
         let (_, format) = TEXTURE_FORMATS
@@ -257,8 +261,8 @@ impl CookedTexture {
         let descriptor = ktx2::dfd::Block::Basic(descriptor).to_vec();
         // One entry: its length, the key, a NUL, the value, padded to 4.
         let mut key_value_entry = Vec::new();
-        key_value_entry.extend((TEXTURE_MAGIC.len() as u32 + 1 + 4).to_le_bytes());
-        key_value_entry.extend(TEXTURE_MAGIC.as_bytes());
+        key_value_entry.extend((TEXTURE_VERSION_KEY.len() as u32 + 1 + 4).to_le_bytes());
+        key_value_entry.extend(TEXTURE_VERSION_KEY.as_bytes());
         key_value_entry.push(0);
         key_value_entry.extend(TEXTURE_FORMAT_VERSION.to_le_bytes());
         key_value_entry.resize(key_value_entry.len().next_multiple_of(4), 0);
@@ -316,12 +320,12 @@ impl CookedTexture {
         })?;
         let version = reader
             .key_value_data()
-            .find(|(key, _)| *key == TEXTURE_MAGIC)
+            .find(|(key, _)| *key == TEXTURE_VERSION_KEY)
             .and_then(|(_, value)| value.try_into().ok())
             .map(u32::from_le_bytes);
         anyhow::ensure!(
             version == Some(TEXTURE_FORMAT_VERSION),
-            "Blob is not a {TEXTURE_MAGIC} version {TEXTURE_FORMAT_VERSION} Blob: re-cook with `praxis cook`"
+            "Blob is not a Texture Blob of version {TEXTURE_FORMAT_VERSION} ({TEXTURE_VERSION_KEY}): re-cook with `praxis cook`"
         );
         let header = reader.header();
         anyhow::ensure!(
@@ -815,14 +819,22 @@ mod tests {
         );
         assert_eq!(reader.levels().len(), 4);
 
-        let mut other_version = blob.clone();
+        // KTX 2.0 aligns a value that starts with a multi-byte number by
+        // requiring the key and its NUL to be a multiple of the number's
+        // size [ref:ktx2-key-value-alignment].
+        let key = [TEXTURE_VERSION_KEY.as_bytes(), &[0]].concat();
+        assert!(key.len().is_multiple_of(4), "{TEXTURE_VERSION_KEY:?}");
         let version_at = blob
-            .windows(5)
-            .position(|window| window == b"PXTX\0")
+            .windows(key.len())
+            .position(|window| window == key)
             .unwrap()
-            + 5;
-        other_version[version_at] += 1;
-        let error = CookedTexture::from_blob(&other_version)
+            + key.len();
+        assert!(version_at.is_multiple_of(4), "{version_at}");
+
+        // M3's first Texture Blobs, whose key was `PXTX`.
+        let mut old_version = blob.clone();
+        old_version[version_at..version_at + 4].copy_from_slice(&1u32.to_le_bytes());
+        let error = CookedTexture::from_blob(&old_version)
             .unwrap_err()
             .to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
