@@ -1089,11 +1089,11 @@ fn reference_brdf(
 /// x and y by the Material's normal scale, and normalises once the tangent
 /// frame has turned the result into World space: for a texture of unit
 /// normals, glTF 2.0's normalize((sample · 2 − 1) ⊙ ⟨scale, scale, 1⟩)
-/// ("Normal Texture"), evaluated here in f64 on a lattice of encodings 1/256
-/// apart, whose x, y and squares f32 holds exactly, at scales of 1/2, 1 and
-/// 2. Past the unit circle, where BC5's error can carry an encoding, z is 0,
-/// not NaN, and a scale of 0 gives the surface's normal at every texel,
-/// those included.
+/// ("Normal Texture" [ref:gltf-2.0-normal-texture-scale]), evaluated here in
+/// f64 on a lattice of encodings 1/256 apart, whose x, y and squares f32
+/// holds exactly, at scales of 1/2, 1 and 2. Past the unit circle, where
+/// BC5's error can carry an encoding, z is 0, not NaN, and a scale of 0
+/// gives the surface's normal at every texel, those included.
 #[test]
 fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
     let Some(context) = gpu_context() else {
