@@ -64,11 +64,12 @@ fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
         in.normal * inverseSqrt(normal_length_squared),
         normal_length_squared > 0.0
     );
-    let encoded = vec4<f32>(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
+    let encoded_normals = vec4<f32>(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
         * 0.5 + 0.5;
-    // Reads the flat input to no effect: no Material has the ID below
-    // NO_MATERIAL.
-    return select(encoded, vec4<f32>(0.0), in.material_id == NO_MATERIAL - 1u);
+    // Reads the flat input, so the stage has one the compiler cannot drop,
+    // to no effect: Material IDs index the Material table, far below
+    // NO_MATERIAL - 1.
+    return select(encoded_normals, vec4<f32>(0.0), in.material_id == NO_MATERIAL - 1u);
 }
 
 // With shadow rays off, the lit pass draws phase two's Instances into depth
