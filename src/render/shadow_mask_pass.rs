@@ -152,6 +152,10 @@ impl ShadowMaskPass {
                 wgpu::BindingResource::TextureView(render_targets.depth()),
             ),
             (
+                "surface_normals",
+                wgpu::BindingResource::TextureView(render_targets.surface_normals()),
+            ),
+            (
                 "shadow_mask",
                 wgpu::BindingResource::TextureView(render_targets.shadow_mask()),
             ),

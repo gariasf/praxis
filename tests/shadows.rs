@@ -7,10 +7,10 @@
 //! within 2.1 mm of it, so their shadows' outlines lie within 2.5 mm of the
 //! true ones' under the sun, a quarter of a pixel there, and within 11 mm
 //! under the point light, whose rays graze the ground farther out, three
-//! quarters of a pixel there. Near the sphere's terminator for each light,
-//! though, a triangle can face away from the light while the normals
-//! interpolated over it face it: there it hides the light from its own
-//! pixels, which are not judged.
+//! quarters of a pixel there. Nothing shadows the sphere, so the rays leave
+//! each of its pixels unchanged, those up to each light's terminator
+//! included, where a triangle can face away from the light while the normals
+//! interpolated over it face it.
 
 use std::io::Write;
 use std::path::Path;
@@ -63,12 +63,6 @@ impl Light {
     }
 }
 
-/// The cosine of a light's angle from the sphere's normal past which a
-/// triangle can face away from the light: the sphere's 48 × 24 segments of
-/// 7.5° make triangles whose circumradius, √2 sin 3.75° of the radius, turns
-/// them up to 5.3° from the normals interpolated over them.
-const TERMINATOR_BAND: f64 = std::f64::consts::SQRT_2 * 0.065_403_129_230_143_07;
-
 /// The largest channel difference, in 8-bit steps, that a pixel the rays do
 /// not shadow may show, as the Goldens allow.
 const TOLERANCE: i16 = 1;
@@ -77,14 +71,7 @@ const TOLERANCE: i16 = 1;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Sight {
     Sky,
-    /// The sphere beyond each light's terminator band, and which of the
-    /// lights, in `LIGHTS`'s order, reach it.
-    Sphere {
-        lit: [bool; LIGHTS.len()],
-    },
-    /// The sphere within `TERMINATOR_BAND` of a light's terminator, on its
-    /// lit side.
-    Terminator,
+    Sphere,
     /// The ground, and which of the lights the sphere hides from it.
     Ground {
         shadowed: [bool; LIGHTS.len()],
@@ -121,18 +108,7 @@ fn sight(x: f64, y: f64) -> Sight {
     if let Some(distance) = enters_sphere(CAMERA, direction)
         && ground.is_none_or(|point| distance < (point - CAMERA).length())
     {
-        let point = CAMERA + direction * distance;
-        let normal = (point - SPHERE_CENTRE) / SPHERE_RADIUS;
-        let cosines = LIGHTS.map(|light| normal.dot(light.towards(point).0));
-        if cosines
-            .iter()
-            .any(|&cosine| cosine > 0.0 && cosine <= TERMINATOR_BAND)
-        {
-            return Sight::Terminator;
-        }
-        return Sight::Sphere {
-            lit: cosines.map(|cosine| cosine > 0.0),
-        };
+        return Sight::Sphere;
     }
     match ground {
         None => Sight::Sky,
@@ -204,7 +180,7 @@ fn shadow_rays_darken_exactly_the_spheres_analytic_shadows() {
             .any(|(column_step, row_step)| {
                 sight_at(column + column_step, row + row_step) != expected
             });
-        if in_band || expected == Sight::Terminator {
+        if in_band {
             continue;
         }
         let untraced_pixel = untraced.get_pixel(x, y);

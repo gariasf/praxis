@@ -7,24 +7,24 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 120322.483,
-    "p95": 136431.60400000002
+    "median": 74081.155,
+    "p95": 82969.378
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 117370.332,
-    "p95": 133406.33599999998
+    "median": 71752.11600000001,
+    "p95": 80535.327
   },
   "gpu_frame_microseconds": {
-    "median": 120046.669,
-    "p95": 136061.23
+    "median": 74054.54699999999,
+    "p95": 82737.369
   },
   "gate_microseconds": {
-    "median": 84893.864,
-    "p95": 98392.081
+    "median": 48813.261,
+    "p95": 56549.406
   },
   "shadow_ray_microseconds": {
-    "median": 25757.949000000037,
-    "p95": 36645.04600000002
+    "median": 18026.232000000004,
+    "p95": 24638.45399999999
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 985.871,
-      "p95": 1161.742
+      "median": 726.657,
+      "p95": 964.204
     },
     "culling_phase_two": {
-      "median": 341.613,
-      "p95": 388.967
+      "median": 262.70599999999996,
+      "p95": 291.84000000000003
     },
     "depth_prepass": {
-      "median": 2214.0950000000003,
-      "p95": 2574.416
+      "median": 1923.773,
+      "p95": 2237.554
     },
     "depth_pyramid_pass": {
-      "median": 1604.807,
-      "p95": 1957.4050000000002
+      "median": 1648.457,
+      "p95": 1915.789
     },
     "dynamic_tlas_build": {
-      "median": 2607.6290000000004,
-      "p95": 2700.391
+      "median": 2069.31,
+      "p95": 2148.5319999999997
     },
     "froxel_pass": {
-      "median": 346.307,
-      "p95": 466.26099999999997
+      "median": 260.06199999999995,
+      "p95": 386.06300000000005
     },
     "lit_pass": {
-      "median": 80499.382,
-      "p95": 93495.276
+      "median": 47146.537000000004,
+      "p95": 54982.02
     },
     "phase_two_depth_pass": {
-      "median": 139.832,
-      "p95": 172.185
+      "median": 88.324,
+      "p95": 107.482
     },
     "shadow_mask_pass": {
-      "median": 24836.707,
-      "p95": 30895.243
+      "median": 15112.874,
+      "p95": 19210.880999999998
     },
     "tonemapping_pass": {
-      "median": 5054.549999999999,
-      "p95": 5465.797
+      "median": 3262.84,
+      "p95": 3609.332
     }
   },
   "draw_calls": 4,
@@ -81,9 +81,9 @@
   "triangles_drawn": 11040,
   "instances_overflowed": 0,
   "uploaded_bytes": 1344,
-  "gpu_memory_bytes": 400631220,
+  "gpu_memory_bytes": 404317620,
   "arena_bytes_in_use": 76680,
-  "heap_allocations": 447,
+  "heap_allocations": 455,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -94,8 +94,8 @@
     "triangles_drawn": 11040,
     "instances_overflowed": 0,
     "uploaded_bytes": 1344,
-    "gpu_memory_bytes": 400631220,
+    "gpu_memory_bytes": 404317620,
     "arena_bytes_in_use": 76680,
-    "heap_allocations": 447
+    "heap_allocations": 455
   }
 }

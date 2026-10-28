@@ -238,3 +238,19 @@ fn decode_vertex(vertex: CookedVertex) -> Vertex {
         decode_qtangent(qtangent),
     );
 }
+
+// A unit vector's octahedral coordinates, each in [-1, 1]: it projects onto
+// the octahedron |x| + |y| + |z| = 1, whose lower half folds over the upper.
+fn octahedral_encode(direction: vec3<f32>) -> vec2<f32> {
+    let projected = direction.xy / (abs(direction.x) + abs(direction.y) + abs(direction.z));
+    let sign = select(vec2<f32>(-1.0), vec2<f32>(1.0), projected >= vec2<f32>(0.0));
+    return select((1.0 - abs(projected.yx)) * sign, projected, direction.z >= 0.0);
+}
+
+// The unit vector whose octahedral coordinates are `coordinates`.
+fn octahedral_decode(coordinates: vec2<f32>) -> vec3<f32> {
+    let z = 1.0 - abs(coordinates.x) - abs(coordinates.y);
+    let sign = select(vec2<f32>(-1.0), vec2<f32>(1.0), coordinates >= vec2<f32>(0.0));
+    let unfolded = select((1.0 - abs(coordinates.yx)) * sign, coordinates, z >= 0.0);
+    return normalize(vec3<f32>(unfolded, z));
+}

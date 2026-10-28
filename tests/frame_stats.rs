@@ -93,7 +93,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
-    // u32s a pixel and its 4-byte overflow count, three staging slots of the
+    // u32s a pixel and its 4-byte overflow count, the surface normals' 4
+    // bytes at each of 4 samples a pixel, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
     // bytes for each of the twelve timed passes, and six slots of 288 bytes,
@@ -129,6 +130,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
             + 160 * 90 * 8
             + 4
+            + 160 * 90 * 4 * 4
             + 3 * 2048
             + 12 * 2 * 8
             + 6 * 288
