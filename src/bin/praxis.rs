@@ -490,7 +490,7 @@ fn capture(
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
     let switches = RenderSwitches {
-        count_point_lights: true,
+        count_point_lights: frame.is_none(),
         crowd_form,
         ..RenderSwitches::default()
     };

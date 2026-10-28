@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The capture gallery for the visual audit: every Reference scene at
-# 2560x1440 at its Golden's frame, `town` at the eight frames the Goldens
+# 2560x1440 at the Goldens' frame, `town` at the eight frames the Goldens
 # test checks and `crowd` in both its shadow forms, written to
 # target/tmp/gallery/<scene>-frame-<n>.png. Given an earlier gallery's
 # directory, it also writes <scene>-frame-<n>-difference.png beside each
@@ -11,8 +11,12 @@
 # Usage: scripts/gallery.sh [<earlier gallery directory>]
 set -euo pipefail
 
-cd "$(dirname "$0")/.." || exit 1
 against="${1:-}"
+if [[ -n "$against" ]]; then
+  [[ -d "$against" ]] || { echo "no gallery at $against" >&2; exit 1; }
+  against="$(cd "$against" && pwd)"
+fi
+cd "$(dirname "$0")/.." || exit 1
 gallery=target/tmp/gallery
 logs="$gallery/logs"
 size=2560x1440
@@ -20,11 +24,8 @@ size=2560x1440
 golden_frame=59
 town_frames=(59 300 500 700 900 1200 1500 1800)
 
-if [[ -n "$against" ]]; then
-  [[ -d "$against" ]] || { echo "no gallery at $against" >&2; exit 1; }
-  [[ "$(cd "$against" && pwd)/" != "$(pwd)/$gallery/"* ]] ||
-    { echo "copy the earlier gallery out of $gallery first" >&2; exit 1; }
-fi
+[[ -z "$against" || "$against/" != "$(pwd)/$gallery/"* ]] ||
+  { echo "copy the earlier gallery out of $gallery first" >&2; exit 1; }
 cargo build --release --quiet
 rm -rf "$gallery"
 mkdir -p "$logs"
@@ -41,11 +42,16 @@ capture() {
     tail -n 20 "$log"
     exit 1
   fi
-  if [[ -n "$against" && -f "$against/$image" ]]; then
-    printf 'ok    %-34s %s\n' "$image" "$(RUST_LOG=error target/release/praxis difference \
-      "$against/$image" "$gallery/$image" "$gallery/${image%.png}-difference.png")"
-  else
+  if [[ -z "$against" ]]; then
     printf 'ok    %s\n' "$image"
+  elif [[ ! -f "$against/$image" ]]; then
+    printf 'ok    %-34s no earlier image\n' "$image"
+  else
+    local difference
+    difference="$(RUST_LOG=error target/release/praxis difference "$against/$image" \
+      "$gallery/$image" "$gallery/${image%.png}-difference.png" 2>&1)" ||
+      { printf 'FAIL  %s  %s\n' "$image" "$difference"; exit 1; }
+    printf 'ok    %-34s %s\n' "$image" "$difference"
   fi
 }
 

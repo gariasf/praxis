@@ -91,7 +91,8 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image,
-                                 and where its Goldens live
+                                 where its Goldens live, and how two
+                                 images differ
   preflight/                   # `praxis preflight`: a session's starting
                                  state, a line per check
   bench/                       # Reference scene medians, compared with

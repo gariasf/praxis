@@ -25,23 +25,25 @@ pub fn golden_key(backend: wgpu::Backend, device_type: wgpu::DeviceType) -> Stri
 }
 
 /// The largest channel difference, in 8-bit steps, that still matches.
-/// Measured noise on the M4 Pro (Metal) and on CI's lavapipe: 20 captures per
-/// scene, each in its own process, were byte-identical, so the noise is 0.
+/// Measured noise on the M4 Pro (Metal) and on CI's lavapipe: 20 captures of
+/// each of the first two Golden scenes, `pbr-sweep` and `uv-grid`, each in
+/// its own process, were byte-identical, so the noise is 0.
 /// One step above it absorbs a driver rounding a value on the other side of
 /// .5; any larger difference in any pixel fails.
 pub const GOLDEN_TOLERANCE: u8 = 1;
 
 /// How two captures of equal size differ.
 #[derive(Debug, PartialEq)]
-pub struct Difference {
+pub struct ImageDifference {
     /// Pixels with a channel that differs by more than `GOLDEN_TOLERANCE`.
     pub differing_pixels: usize,
     pub max_channel_delta: u8,
 }
 
 /// Compares two RGBA8 images of equal size channel by channel.
-pub fn compare_images(expected: &[u8], actual: &[u8]) -> Difference {
-    let mut difference = Difference {
+pub fn compare_images(expected: &[u8], actual: &[u8]) -> ImageDifference {
+    assert_eq!(expected.len(), actual.len(), "images differ in size");
+    let mut difference = ImageDifference {
         differing_pixels: 0,
         max_channel_delta: 0,
     };
@@ -58,6 +60,7 @@ pub fn compare_images(expected: &[u8], actual: &[u8]) -> Difference {
 /// `actual`, an RGBA8 image the size of `expected`, dimmed to a third, with
 /// every pixel beyond `GOLDEN_TOLERANCE` in opaque red.
 pub fn difference_image(expected: &[u8], actual: &[u8]) -> Vec<u8> {
+    assert_eq!(expected.len(), actual.len(), "images differ in size");
     expected
         .chunks_exact(4)
         .zip(actual.chunks_exact(4))
@@ -324,7 +327,7 @@ mod tests {
 
         assert_eq!(
             compare_images(&expected, &actual),
-            Difference {
+            ImageDifference {
                 differing_pixels: 1,
                 max_channel_delta: 20,
             }

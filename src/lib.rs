@@ -37,7 +37,7 @@ mod transform;
 
 pub use assets::cooked;
 pub use capture::{
-    Difference, GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, capture, capture_frames, compare_images,
+    GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, capture, capture_frames, compare_images,
     difference_image, golden_key,
 };
 pub use render::{CrowdForm, RenderSwitches};
