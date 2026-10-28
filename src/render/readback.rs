@@ -289,16 +289,6 @@ impl GpuStatsReadback {
         &self.read_back
     }
 
-    /// Bytes of the resolve buffer and the slots.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.resolve_buffer.size()
-            + self
-                .slots
-                .iter()
-                .map(|slot| slot.buffer.size())
-                .sum::<u64>()
-    }
-
     /// Records the copy of `frame`'s timestamps, from slot `index`'s
     /// queries, into the slot, which maps once the copy is done.
     fn resolve(&mut self, encoder: &mut wgpu::CommandEncoder, index: usize, frame: u64) {

@@ -95,10 +95,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
     // u32s a pixel and its 4-byte overflow count, the surface normals' 4
     // bytes at each of 4 samples a pixel, three staging slots of the
-    // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
-    // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the twelve timed passes, and six slots of 288 bytes,
-    // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
+    // first frame's 1668 uploaded bytes rounded up to 2048, the tonemapping
+    // pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
     // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
     // of 20 bytes. The load's staging is gone.
@@ -132,8 +130,6 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 4
             + 160 * 90 * 4 * 4
             + 3 * 2048
-            + 12 * 2 * 8
-            + 6 * 288
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
             + 16
