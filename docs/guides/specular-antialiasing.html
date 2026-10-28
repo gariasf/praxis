@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Specular Antialiasing Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 19 of the series, after Visibility Pre-pass Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the plain opening of each chapter, the pass order, and the demos' legends. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.lost { border-color: var(--bad); }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+[hidden] { display: none !important; }
+
+/* Key ideas and Check yourself, the series' standard for new guides. */
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+/* This volume's demos: three panels side by side, stacked on a phone. */
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.panels > div { min-width: 0; }
+.panel-title { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.panels .readout { margin: 6px 0 0; font-size: 13px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #351 &middot; PR #361</div>
+  <h1>Highlights narrower than a pixel</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A polished metal's highlight can be far narrower than the turn its normal makes across one pixel. A pixel shaded once either catches it or misses it, so highlights sparkle as anything moves. The lit pass now widens roughness by how fast the shading normal changes from pixel to pixel, using Tokuyoshi and Kaplanyan's filter. Testing that from the roughness floor up found an f32 error in D worth 1.1% of a white metal's light. The idea to keep: filter the distribution the pixel averages, not the image, and compute a small quantity directly, never as the difference of two near-equal ones.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why a highlight narrower than a pixel sparkles, and why 4x MSAA does not help</li>
+      <li>How adding the pixel's normal variance to α² filters GGX, and what σ and κ do</li>
+      <li>How a white furnace sums a lobe narrower than its grid: over half vectors</li>
+      <li>Why f32's 1 &minus; N&middot;H cost a white metal 1.1% at the floor, and how |N &times; H|&sup2; fixes it</li>
+      <li>What the change costs on <code>town</code>, and which Goldens moved</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="lit-pass.html">Lit Pass Explained</a>, for D, the roughness floor and the white furnace; <a href="anisotropy.html">Anisotropy Explained</a>, for Toksvig's widening in the cooked mips</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at d8162f0 (PR #361, merged 2026-10-28). <b>Since then:</b> nothing, as of 2026-10-28.</p>
+  </aside>
+  <p class="lede">At the visual check of 2026-10-27, the two smoothest helmets in <code>helmet</code>'s metallic row showed coloured sparkle and streaks under the scene's three point lights. Nothing was wrong with the BRDF. Each pixel evaluated it once, at one normal, and the highlight was much narrower than the range of normals the pixel covered. This guide covers why that sparkles and why 4x MSAA leaves it alone. It then covers how the lit pass widens roughness by the shading normal's screen-space derivatives, and the two limits on that widening. Testing the change needed a white furnace that works at the roughness floor, so the guide explains how to sum a lobe narrower than the grid. That furnace found an older f32 error in D, which the guide traces to its cause and fixes. It ends with the cost. Two live demos let you shade a small sphere three ways while its highlight moves, and round D's inputs to f32 near the peak.</p>
+  <p class="status"><b>Provenance.</b> Ticket #351 asked for Tokuyoshi and Kaplanyan's geometric specular antialiasing in the lit pass, with an oracle test, before and after images on <code>helmet</code> and <code>pbr-sweep</code> at 1440p, and the lit pass's cost on <code>town</code>. An earlier decision, on #354, folded in a white furnace that sweeps roughness from the floor to 1 and adds dielectrics. PR #361 did all of it in one squash-merged commit, d8162f0, and fixed the f32 error in D that the new furnace found. Code facts were read at d8162f0: <code>src/render/shaders/shading.wgsl</code>, <code>main.wgsl</code> and <code>src/render/shader_function_tests.rs</code>. The cost figures are the PR's, measured on an Apple M4 Pro with three runs of each variant in one session on a quiet GPU. The project's owner accepted both the images and the cost on 2026-10-28. Where this guide does its own arithmetic, it says so; those sums are f64, on the grids it names.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#sparkle">1 &middot; Why highlights sparkle</a>
+    <a href="#filter">2 &middot; Filtering the distribution</a>
+    <a href="#limits">3 &middot; Derivatives, κ and the floor</a>
+    <a href="#furnace">4 &middot; A furnace from the floor</a>
+    <a href="#precision">5 &middot; f32 at the peak</a>
+    <a href="#cost">6 &middot; Cost and Goldens</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="sparkle">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; <code>helmet</code> &middot; <code>pbr-sweep</code></div>
+    <h2>Why highlights sparkle</h2>
+    <p class="key-idea"><b>Key idea.</b> A pixel shaded once evaluates the BRDF at one normal. Where the normal turns further across the pixel than the highlight is wide, the pixel either catches the highlight or misses it, and which one changes whenever anything moves.</p>
+    <p class="plain">A smooth surface's highlight is narrow. A curved surface's normal turns across every pixel. Once the turn is wider than the highlight, the pixel's one shading point says nothing about the rest of what the pixel covers.</p>
+    <p>D, the GGX <span class="concept" data-term="Normal distribution function" data-tip="D: how densely microfacets face each direction H. Appendix B's is Trowbridge-Reitz, which Walter et al. named GGX.">normal distribution function</span>, depends on the angle between the normal N and the half vector H. At α = roughness², by this guide's arithmetic, D falls to half its peak when H is 0.37° from N at roughness 0.1, and 0.059° from N at the <span class="concept" data-term="Roughness floor" data-tip="MINIMUM_ROUGHNESS, 0.04: decode_surface raises any lower roughness to it, so α is at least 0.0016 and D stays finite.">roughness floor</span>, 0.04. Compare that with a sphere 30 pixels across: at its centre, its normal turns by 1/15 radian, about 3.8°, from one pixel to the next, and more towards its rim. The roughness-0.1 highlight is a tenth of that pixel-to-pixel step. Most pixels miss it. The few whose centres land on it show it at full strength, and as the light, the object or the camera moves, the highlight jumps from pixel to pixel instead of gliding. That is <span class="concept" data-term="Specular aliasing" data-tip="Flicker and sparkle where a highlight is narrower than the range of normals one pixel covers, so the pixel's one shading point catches or misses it.">specular aliasing</span>.</p>
+    <p>4x MSAA does not reach it. The lit pass tests coverage and depth at four samples per pixel, but runs its fragment shader once per pixel (ADR 0019), so MSAA smooths the edges of triangles, not the shading inside them. Shading per sample would only move the problem a factor of two finer, at up to four times the shading cost, and the ticket ruled it out on cost. Temporal accumulation, which averages over frames, is ruled out by ADR 0008: nothing the image depends on reads screen-space history. So the fix has to live in the shading itself. The single evaluation has to return what the pixel's average would have been.</p>
+    <p>The cooked mips already do part of this. The cooker widens each mip's roughness by how much the normal map's normals disagree within a texel, after Toksvig (<a href="anisotropy.html">Anisotropy Explained</a>). That covers detail smaller than a texel of the mip being sampled. It does nothing for the normal's change from pixel to pixel: the curvature of the mesh, and normal-map detail at a fine mip, where each texel spans several pixels.</p>
+  </div>
+  <figure class="wide">
+    <img src="img/specular-aa-helmet-before.png" width="1360" height="800" alt="Before: the two smoothest metallic helmets at 2x zoom. The left one is mostly dark with isolated coloured dots and broken streaks along its edges; the right one shows a few broken streaks.">
+    <img src="img/specular-aa-helmet-after.png" width="1360" height="800" alt="After: the same helmets. The left one shows continuous highlights along its edges and rims, and the coloured dots have become soft continuous glints; the right one shows broader, continuous highlights." style="margin-top: 10px">
+    <figcaption><b>helmet's metallic row at 1440p, 2&times; zoom, before (top) and after (bottom).</b> The left helmet is roughness 0.1 and the right one 0.3. Before, the left one's highlights are isolated coloured sparkles where a pixel centre happened to catch one of the three point lights. After, they are continuous highlights along its edges and rims. The point lights are coloured, hence the colours. From PR #361.</figcaption>
+  </figure>
+  <figure class="wide" id="demo-sparkle">
+    <div class="panels">
+      <div><p class="panel-title">Once per pixel</p><div class="canvas-frame"><canvas id="s-raw" role="img" aria-label="A small sphere shaded once per pixel at its roughness."></canvas></div><p class="readout" id="s-raw-error"></p></div>
+      <div><p class="panel-title">Once per pixel, widened</p><div class="canvas-frame"><canvas id="s-widened" role="img" aria-label="The same sphere shaded once per pixel with roughness widened by the normal's derivatives."></canvas></div><p class="readout" id="s-widened-error"></p></div>
+      <div><p class="panel-title">Reference: the pixel's average</p><div class="canvas-frame"><canvas id="s-reference" role="img" aria-label="The same sphere at its own roughness, averaged over each pixel."></canvas></div><p class="readout" id="s-reference-brightest"></p></div>
+    </div>
+    <div class="sliders">
+      <label class="control-label" for="s-diameter">Sphere, px across</label>
+      <div><input id="s-diameter" type="range" min="12" max="72" step="2" value="30"> <output id="s-diameter-out" for="s-diameter"></output></div>
+      <label class="control-label" for="s-roughness">Roughness</label>
+      <div><input id="s-roughness" type="range" min="0.04" max="0.6" step="0.01" value="0.1"> <output id="s-roughness-out" for="s-roughness"></output></div>
+      <label class="control-label" for="s-light">Light azimuth</label>
+      <div><input id="s-light" type="range" min="0" max="360" step="0.5" value="40"> <output id="s-light-out" for="s-light"></output></div>
+    </div>
+    <div class="controls"><button class="btn" id="s-play" type="button" aria-pressed="false">Move the light</button> <span class="readout" id="s-centre"></span></div>
+    <figcaption><b>Live demo.</b> A white metal sphere under one directional light, seen head-on through a grid of pixels. The left panel shades each pixel once, at its centre. The middle one does the same with roughness widened as the lit pass widens it, from normal differences within each 2&times;2 quad. The right one averages each pixel at the sphere's own roughness, over 64 points and 64 more within each point's share of the pixel wherever the highlight could fall: what the pixel should show. Move the light and watch the left panel's highlight flare and vanish while the other two glide. At roughness 0.1, the left panel's brightest pixel swings between 0.07 and 0.63 as the light turns from 40° to 61°, while the reference's stays between 0.37 and 0.51. The middle panel's highlight is steady but softer than the reference's, peaking near 0.2: it spreads the same light over more pixels, since the image's total light stays within about 1% of the reference's by this page's sums. That softness is the price of the filter. Simplified: one light, F = 1, Appendix B's D and V, a box pixel for the reference where the filter assumes a Gaussian of σ = 0.5 px, and x/(1 + x) for display, whose values the readouts give from 0 to 1.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="filter">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>shading.wgsl</code> &middot; <code>specular_antialiased_roughness</code></div>
+    <h2>Filtering the distribution</h2>
+    <p class="key-idea"><b>Key idea.</b> A narrow lobe averaged over a spread of normals is, near enough, a wider lobe over one normal: the two widths add in quadrature. So the pixel can be shaded once, with α² raised by the spread of the normals it covers.</p>
+    <p class="plain">The pixel should show the BRDF averaged over its footprint. Inside that footprint the normal varies. Averaging a lobe over a varying normal blurs it, and a blurred GGX lobe is close to a wider GGX lobe. So widen the lobe, and shade once.</p>
+    <p>The argument runs in <span class="concept" data-term="Slope space" data-tip="Microfacet normals written as slopes, (−m_x/m_z, −m_y/m_z). In slope space a Beckmann distribution is a Gaussian, and small tilts of the surface shift slopes by about the angle they turn.">slope space</span>, where a microfacet normal m becomes the slope (&minus;m<sub>x</sub>/m<sub>z</sub>, &minus;m<sub>y</sub>/m<sub>z</sub>). There the Beckmann distribution is a Gaussian whose variance along each axis is α²/2. Kaplanyan, Hill, Patney and Lefohn (HPG 2016) write it as a covariance matrix, Σ<sub>B</sub> = diag(α<sub>s</sub>²/2, α<sub>t</sub>²/2), "where we use the relation α² = 2σ² [BS63] between the standard deviation of a Gaussian distribution and the roughness parameter of a Beckmann distribution". Averaging a Gaussian over another Gaussian adds their covariances, so their eq. (15) filters the distribution by adding the pixel's own, Σ′<sub>B</sub> = Σ<sub>B</sub> + Σ<sub>P</sub>. GGX is not a Gaussian, but the same paper uses a Beckmann lobe of the same α as a proxy for it, and Tokuyoshi and Kaplanyan (I3D 2019) note that "this roughness matrix can be used to approximate the filtering of the GGX NDF". Their roughness matrix is twice the covariance.</p>
+    <p>What is the pixel's covariance? Model the pixel as a Gaussian filter of standard deviation σ in screen space; Tokuyoshi and Kaplanyan take σ = 0.5 pixels. Near the pixel's centre the normal changes linearly, by ∂n/∂x per pixel across the screen and ∂n/∂y down it. Over the filter, it therefore spreads by about σ times those changes. For small turns, a normal's change and its slope's change are about the same size. Their isotropic form, eq. (4), adds both screen directions' squared changes, doubles the variance into roughness and caps it at κ:</p>
+    <div class="formula">ᾱ² = α² + min(2σ² (|∂n/∂x|² + |∂n/∂y|²), κ)        σ = 0.5 px, κ = 0.18<br>widened roughness = min(ᾱ², 1)<sup>1/4</sup>        since α = roughness²</div>
+    <p>In the shader, σ² is <code>PIXEL_FILTER_VARIANCE</code>, 0.25, and κ is <code>MAXIMUM_FILTER_ALPHA_SQUARED</code>, 0.18. The function takes roughness and returns roughness, since that is what <code>decode_surface</code> stores; the fourth root undoes α² = roughness⁴.</p>
+  </div>
+  <div class="prose">
+<pre class="code"><code>fn specular_antialiased_roughness(
+    roughness: f32,
+    normal_change_x: vec3&lt;f32&gt;,
+    normal_change_y: vec3&lt;f32&gt;
+) -&gt; f32 {
+    let normal_variance = PIXEL_FILTER_VARIANCE
+        * (dot(normal_change_x, normal_change_x) + dot(normal_change_y, normal_change_y));
+    let filter_alpha_squared = min(2.0 * normal_variance, MAXIMUM_FILTER_ALPHA_SQUARED);
+    let alpha = roughness * roughness;
+    return sqrt(sqrt(min(alpha * alpha + filter_alpha_squared, 1.0)));
+}</code></pre>
+    <p style="margin-top: 16px">How much does it widen? It depends on how many pixels the curvature is spread over. By this guide's arithmetic, at the centre of a sphere, where each derivative is 1/radius per pixel:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Roughness</th><th class="n">Sphere 30 px across</th><th class="n">Sphere 260 px across</th></tr></thead>
+        <tbody>
+          <tr><td>0.04, the floor</td><td class="n">0.258</td><td class="n">0.089</td></tr>
+          <tr class="focus"><td>0.1</td><td class="n">0.260</td><td class="n">0.112</td></tr>
+          <tr><td>0.3</td><td class="n">0.335</td><td class="n">0.301</td></tr>
+          <tr><td>0.5</td><td class="n">0.509</td><td class="n">0.500</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>Widened roughness at a sphere's centre</b>, by this guide's arithmetic from eq. (4), with |∂n/∂x| = |∂n/∂y| = 1/radius. A <code>pbr-sweep</code> sphere is about 70 px across at Golden size, 640&times;360, and about 260 px at 1440p; 30 px is a smaller object, such as a distant one. Towards the rim the derivatives grow and so does the widening, up to κ.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The small sphere's mirror becomes roughness 0.26 at its centre. That is a large change, and it is what the pixel's average looks like: at that size, each pixel covers normals spread over several degrees, and a 0.06°-wide lobe averaged over them is a lobe several degrees wide. Rough surfaces barely change, because their lobes are already wider than the pixel's spread. Variances add, so a small spread added to a large one makes little difference.</p>
+  </div>
+</section>
+
+<section class="chapter" id="limits">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>main.wgsl</code> &middot; <code>fs_main</code> &middot; <code>decode_surface</code></div>
+    <h2>Derivatives, κ and the floor</h2>
+    <p class="key-idea"><b>Key idea.</b> The derivatives come free from the 2&times;2 quads the GPU shades in, and under 4x MSAA they are per pixel, the footprint the filter assumes. Two limits stop the widening from running away: κ on what it adds and 1 on the total. The roughness floor applies after both.</p>
+    <p class="plain">The GPU already shades pixels in groups of four so it can compare neighbours. Asking how the normal changes costs a subtraction. The limits matter where the normal changes fastest, at the rims.</p>
+    <p>A GPU runs fragment shaders in 2&times;2 <span class="concept" data-term="Quad" data-tip="The 2×2 block of pixels a GPU runs a fragment shader on together, so that each value has a horizontal and a vertical neighbour to differ from. Pixels outside the triangle run as helper invocations.">quads</span>. WGSL's <code>dpdx(v)</code> is the difference in v between horizontal neighbours in a quad, and <code>dpdy(v)</code> between vertical ones. These are <span class="concept" data-term="Screen-space derivative" data-tip="How fast a value changes from one pixel to the next, taken by differencing it between the pixels of a 2×2 quad: dpdx across the screen, dpdy down it.">screen-space derivatives</span>. A derivative is only defined while every pixel of the quad is running the same code, so <code>fs_main</code> samples every texture first, builds the shading normal, and takes <code>dpdx(normal)</code> and <code>dpdy(normal)</code> before any per-light branching. The normal it differences is the one after the normal map, so both the mesh's curvature and the normal map's detail count.</p>
+    <p>Under 4x MSAA the lit pass shades once per pixel, not per sample, so neighbouring invocations are one pixel apart and the derivatives are per pixel. A comment beside the call says so. That is the unit σ is measured in.</p>
+    <p>A quad belongs to one triangle. Where a quad overhangs its triangle, the extra pixels run as helpers with that triangle's interpolants, so a derivative never differences across a triangle edge. A flat facet with one normal across it therefore gets no widening at all. Its highlight lights the facet whole or not at all, as helmet's faceplate shows when the sweep draws it without its textures. That is not aliasing: it is what a flat mirror does.</p>
+    <h3>κ, the cap on what filtering adds</h3>
+    <p>Towards a silhouette, the normal turns ever faster per pixel and the derivatives grow without bound. Uncapped, every rim would be shaded at roughness 1. κ = 0.18 caps the α² that filtering adds, so a perfect mirror widens to at most 0.18<sup>1/4</sup> ≈ 0.65 roughness (this guide's arithmetic). Tokuyoshi and Kaplanyan give κ = 0.18 as "the clamping threshold" with their eq. (1), and eq. (4) keeps it. The listing in their paper then saturates the sum, so the total α² stays at or below 1, and <code>specular_antialiased_roughness</code> does the same with <code>min(…, 1.0)</code>.</p>
+    <h3>Then the floor</h3>
+    <p><code>decode_surface</code> widens the Material's roughness first and applies <code>MINIMUM_ROUGHNESS</code>, 0.04, to the result. The floor exists so that D stays finite (<a href="lit-pass.html#distribution">Lit Pass Explained</a>). Widening can only raise roughness, so a widened value never needs the floor. A surface whose normal does not change, such as a flat floor or the furnace in chapter 4, still lands on the floor exactly as before.</p>
+    <h3>The oracle</h3>
+    <p><code>specular_antialiased_roughness_adds_the_normals_variance_to_alpha_squared</code> runs the WGSL function on the GPU and compares it with eq. (4) evaluated in f64. It covers a still normal, a change along each screen axis alone, a change large enough to reach κ, and a roughness high enough to reach the cap at 1. The <code>decode_surface</code> oracle passes zero derivatives, so it still tests only the decoding.</p>
+  </div>
+</section>
+
+<section class="chapter" id="furnace">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>shader_function_tests.rs</code> &middot; the white furnace</div>
+    <h2>A furnace from the floor</h2>
+    <p class="key-idea"><b>Key idea.</b> To sum a lobe narrower than the grid, sum over the variable it is narrow in. The specular lobe is narrow in H at every view, so the furnace sums over half vectors and maps each to its light with the Jacobian 4 (V&middot;H).</p>
+    <p class="plain">A furnace adds up how much light a white surface sends back. If the grid it adds over is coarser than the highlight, the sum depends on where the grid's points happen to fall. That tells you nothing about the shader.</p>
+    <p>The <span class="concept" data-term="White furnace" data-tip="A check that lights a white surface equally from every direction. A surface that conserves energy reflects at most what it receives.">white furnace</span> lights a surface equally from every direction and sums what it sends towards V, its <span class="concept" data-term="Directional albedo" data-tip="The share of uniform light from the whole hemisphere that a surface reflects towards one view, ∫ f(L, V)(N·L) dω.">directional albedo</span>. A white metal that conserves energy reflects at most 1. Before #351, the oracle summed over 16,200 light directions in cells of 1° by 2°, at roughness 0.5 and 1 only (<a href="lit-pass.html#oracles">Lit Pass Explained</a>). The ticket asked for the sweep to run from the floor to 1. On the old grid, the floor is meaningless:</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>White metal, seen head-on</th><th class="n">Old grid: 1°&times;2° light directions</th><th class="n">New grid: half vectors</th></tr></thead>
+        <tbody>
+          <tr class="focus"><td>Roughness 0.04, the floor</td><td class="n">0.445</td><td class="n">0.9992</td></tr>
+          <tr class="focus"><td>Roughness 0.1</td><td class="n">1.087</td><td class="n">0.9991</td></tr>
+          <tr><td>Roughness 0.5</td><td class="n">0.916</td><td class="n">0.916</td></tr>
+          <tr><td>Roughness 1</td><td class="n">0.307</td><td class="n">0.307</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>One BRDF, two grids.</b> Appendix B's white metal summed in f64 by this guide's arithmetic, on the oracle's old grid and on its new one. At the floor, the whole lobe falls inside the first ring of light directions, whose samples all sit 0.5° off the mirror direction, far down the lobe's side: the sum reads 0.445. At roughness 0.1, a sample near the peak stands for a 1°&times;2° cell and overcounts it: the sum reads 1.087, and a correct BRDF would fail. Only the rough rows can be trusted on the old grid.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Summing over half vectors</h3>
+    <p>At every view, the specular lobe sits around H = N, as narrow in H as α. So the test puts its grid on H and derives the light from each half vector by reflecting the view about it: L = 2 (V&middot;H) H &minus; V. Cells of equal size in H are not equal in L. A small solid angle dω<sub>H</sub> about H maps to dω<sub>L</sub> = 4 (V&middot;H) dω<sub>H</sub> about L, the reflection Jacobian that Walter et al. (2007) derive to sample GGX. Each cell's light is weighted by that.</p>
+    <p>The half vectors lie on rings about the normal, 48 to a ring in azimuth. The first ring ends 10⁻⁵ radian from the normal, and each ring after it is 10% wider than the one inside it, until rings reach 1° wide at 10.5°; from there to the horizon they stay 1° wide. That is 184 rings and 8,832 half vectors per view, less those facing away from V. The rings are finest where the floor's lobe lives, so the sum no longer depends on where it lands.</p>
+    <h3>The sweep and its bounds</h3>
+    <p>The test sweeps seven roughnesses (the floor, 0.1, 0.2, 0.3, 0.5, 0.7 and 1), three views (0°, 60° and 85° off the normal) and three materials (a white metal, a white dielectric and a black dielectric): 63 furnaces. Each GPU sum must land within 10⁻⁵ of an f64 sum of Appendix B's BRDF over the same cells. On the M4 Pro they land within 2 &times; 10⁻⁷. Then the bounds:</p>
+    <ul class="keypoints">
+      <li>A white metal reflects at most 1, plus 10⁻³.</li>
+      <li>A white dielectric reflects at most 1 plus what a black dielectric reflects, plus 10⁻³. Appendix B's coupling of diffuse and specular is not energy conserving, so a white dielectric can pass 1: by this guide's sums it reflects about 1.59 at the floor seen at 85°. A black dielectric of the same roughness reflects only the specular part, about 0.65 there, so the difference, about 0.94, is the diffuse lobe alone, which must stay at or below 1.</li>
+      <li>The 10⁻³ is the grid's own error. These sums land within 7.1 &times; 10⁻⁴ of sums over cells half or a quarter the size, below them where the lobe is narrow.</li>
+    </ul>
+    <p>The furnace's normal is +Z, untilted, because f32 holds it exactly. A tilted normal, rounded off unit length, moved D near the floor's peak by about 1%, and the reference's sum with it, which would hide anything smaller.</p>
+    <p>The ticket also asked that "the widened α keeps every case under its bound". Widening adds nothing when the normal is still, so the floor is a case it really produces, and the sweep has to pass there. It did not.</p>
+  </div>
+</section>
+
+<section class="chapter" id="precision">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>shading.wgsl</code> &middot; <code>distribution_ggx</code></div>
+    <h2>f32 at the peak</h2>
+    <p class="key-idea"><b>Key idea.</b> Near D's peak, 1 &minus; (N&middot;H)² is a tiny number computed from N&middot;H, a number near 1. Any error in N&middot;H becomes a large relative error in it. |N &times; H|², which equals it for unit vectors, is built from small components and keeps its precision.</p>
+    <p class="plain">With the normal untilted, the furnace at the floor still failed. A white metal seen head-on reflected 1.011 of what it received, 1.1% more, where the f64 sum over the same cells was 0.9992. The BRDF was right. Its f32 arithmetic was not.</p>
+    <p>Appendix B's D is α² / (π ((N&middot;H)² (α² &minus; 1) + 1)²). PR #245, under #199, had already rearranged its denominator as (N&middot;H)² α² + (1 &minus; N&middot;H)(1 + N&middot;H), so that f32 never forms α² &minus; 1, close to &minus;1, only to add 1 back (<a href="lit-pass.html#distribution">Lit Pass Explained</a>). That fixed the arithmetic, but the arithmetic starts from N&middot;H, which is already rounded.</p>
+    <p>Just below 1, neighbouring f32 values are 2⁻²⁴ ≈ 6.0 &times; 10⁻⁸ apart. At the floor, by this guide's arithmetic, D falls to half its peak where 1 &minus; N&middot;H ≈ 5.3 &times; 10⁻⁷: only 8.9 f32 steps from 1. A rounding error of half a step in N&middot;H is a few percent of 1 &minus; N&middot;H there, and more nearer the peak. The <span class="concept" data-term="Condition" data-tip="How much a computation magnifies its input's relative error. 1 − x for x near 1 is badly conditioned: a tiny relative error in x becomes a large one in the result.">conditioning</span> is the problem, not the order of operations: no rearrangement of a formula whose input is N&middot;H can recover digits N&middot;H has already lost.</p>
+    <h3>Why a 1.1% error, not a random one</h3>
+    <p>Rounding to nearest errs evenly in both directions, and much of that error cancels over the lobe. This guide modelled it by rounding H's components to f32, with N = +Z and every operation rounded, as the demo below does. The old form's D errs by up to 4.7% within 0.3° of the peak, but its sum over the lobe moves by only about +0.04%. The GPU's sum was 1.2% above the f64 one, so its errors ran mostly one way. A one-way error is enough. If N&middot;H reads δ high throughout the lobe, 1 &minus; (N&middot;H)² reads about 2δ low, and the lobe's integral, ∫ α² / (α² + s &minus; c)² ds = α² / (α² &minus; c) with c = 2δ, grows by about 2δ/α². For 1.2%, δ ≈ 1.5 &times; 10⁻⁸: about a quarter of one f32 step. Leaving H a hair longer than 1 after <code>normalize</code> would do it. The GPU's sequence of roundings was not traced one operation at a time, and it does not need to be: the fix removes the sensitivity, whatever the error's source.</p>
+    <h3>Lagrange's identity</h3>
+    <p>For any two vectors, |a &times; b|² = |a|² |b|² &minus; (a&middot;b)². For unit N and H this gives |N &times; H|² = 1 &minus; (N&middot;H)², which is exactly the small term in D's denominator. Near the peak, the cross product's components are of the order of sin θ, where θ is the angle between N and H. f32 rounds each of them to a relative error of about ε/sin θ. Going through N&middot;H costs about ε/sin² θ instead. At the floor's half maximum, sin θ ≈ 10⁻³, so that is about a thousand times better. A length error in H also scales |N &times; H|² by only (1 + 2η), a relative error of 2η, where through N&middot;H it is 2η/sin² θ. Filament's mobile path computes D this way, and its comment gives the reason: "This computes 1.0 - NoH^2 directly (which is close to zero in the highlights and has enough precision)".</p>
+  </div>
+  <div class="prose">
+<pre class="code"><code>fn distribution_ggx(normal_dot_half: f32, normal_cross_half_squared: f32, alpha: f32) -&gt; f32 {
+    let alpha_squared = alpha * alpha;
+    let denominator = max(
+        normal_dot_half * normal_dot_half * alpha_squared + normal_cross_half_squared,
+        alpha_squared
+    );
+    let distribution = alpha_squared / (PI * denominator * denominator);
+    return select(0.0, distribution, normal_dot_half &gt; 0.0);
+}</code></pre>
+    <p style="margin-top: 16px"><code>reflected_luminance</code> computes <code>cross(normal, half_vector)</code> once per light and passes its squared length down through <code>metallic_roughness_brdf</code>. The <code>max</code> holds the denominator at α². For unit N and H the sum is never below α² anyway, so the <code>max</code> changes nothing there. It catches H = 0, where the light is exactly opposite the view, both terms are 0 and D would otherwise divide by zero; review caught that case.</p>
+    <p>The tests changed with it. The D and BRDF oracles now pass |N &times; H|² computed in f64, so they test D's arithmetic rather than how a test vector's N&middot;H was rounded. The D integral test, which had left the floor out because f32 cosines brought it to 0.9991, now includes it. With the fix, the GPU's furnace sums and the f64 sums agree within 2 &times; 10⁻⁷ at every roughness, and every bound holds.</p>
+  </div>
+  <figure class="wide" id="demo-precision">
+    <div class="canvas-frame"><canvas id="p-canvas" role="img" aria-label="Relative error of D in f32 against the angle between N and H, for the old form through N·H and the new form through |N × H|², with D's own shape shaded behind."></canvas></div>
+    <div class="legend"><span><i class="dashed"></i>through N&middot;H (before #361)</span><span><i></i>through |N &times; H|² (now)</span><span><span class="swatch" style="background: var(--accent-wash)"></span>D's shape, peak at the top</span></div>
+    <div class="sliders">
+      <label class="control-label" for="p-roughness">Roughness</label>
+      <div><input id="p-roughness" type="range" min="0.04" max="0.2" step="0.01" value="0.04"> <output id="p-roughness-out" for="p-roughness"></output></div>
+      <label class="control-label" for="p-bias">N&middot;H reads high by</label>
+      <div><input id="p-bias" type="range" min="0" max="1" step="0.25" value="0"> <output id="p-bias-out" for="p-bias"></output></div>
+    </div>
+    <dl class="figures">
+      <div><dt>Lobe's sum, through N&middot;H</dt><dd id="p-old"></dd></div>
+      <div><dt>Lobe's sum, through |N &times; H|²</dt><dd id="p-new"></dd></div>
+      <div><dt>1 &minus; N&middot;H at half max</dt><dd id="p-steps"></dd></div>
+    </dl>
+    <figcaption><b>Live demo.</b> D computed with every operation rounded to f32 (JavaScript's <code>Math.fround</code>), against D in f64, as N&middot;H moves away from 1. H's components are rounded to f32 and N = +Z. The slider adds a one-way error to N&middot;H in quarters of an f32 step, as some GPU operation might; it leaves |N &times; H|² alone, as a length error would barely touch it. The sums are the lobe's integral out to ten times its half-maximum angle, relative to f64. This page's model of rounding, not the GPU's: at the floor, a quarter step moves the sum by about as much as the GPU's error.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; <code>praxis bench town</code> &middot; Goldens</div>
+    <h2>Cost and Goldens</h2>
+    <p class="key-idea"><b>Key idea.</b> The widening costs town's lit pass +0.7% and the precise D +1.3%, +2.0% together, which the owner accepted. Goldens moved where the widening reaches: smooth highlights and the rims of small spheres.</p>
+    <p class="plain">Two small changes per pixel and per light, measured against each other on the same machine in the same session.</p>
+    <p>The ticket asked for the lit pass's cost on <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> <code>town</code>. Three builds were benched three times each, interleaved, on a quiet M4 Pro: main, main with the widening only, and the whole PR. Each figure is the median of a run's 1,800 measured frames at 2560&times;1440.</p>
+  </div>
+  <figure class="wide">
+    <div class="table-wrap">
+      <table class="facts">
+        <thead><tr><th>Town's lit pass, median µs</th><th class="n">Run 1</th><th class="n">Run 2</th><th class="n">Run 3</th><th class="n">Against main</th></tr></thead>
+        <tbody>
+          <tr><td>main</td><td class="n">8,698.9</td><td class="n">8,712.0</td><td class="n">8,706.0</td><td class="n">&mdash;</td></tr>
+          <tr><td>Widening only</td><td class="n">8,768.8</td><td class="n">8,759.2</td><td class="n">8,763.4</td><td class="n">+58 (+0.7%)</td></tr>
+          <tr class="focus"><td>PR #361: widening and |N &times; H|²</td><td class="n">8,879.0</td><td class="n">8,875.2</td><td class="n">8,872.9</td><td class="n">+170 (+2.0%)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption><b>The A/B.</b> Each variant's runs agree within about 13 µs, so both steps are well outside the noise. Against the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison.">Baseline</span> re-recorded just before, the PR's second run reads 8,875.2 against 8,726.0, +149.3 µs, a ratio of 1.017. The ticket had asked for "within noise". It is not, so the cost went to the owner with a recommendation to keep both, and was accepted.</figcaption>
+  </figure>
+  <div class="prose">
+    <p>The widening is two dot products, two <code>min</code>s and two square roots per pixel, plus the two derivatives. The precise D adds a cross product for every light, and town's pixels have many point lights, so it costs more than the widening even though each instance of it is cheaper.</p>
+    <h3>Goldens</h3>
+    <p>At <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span> size, 640&times;360, a <code>pbr-sweep</code> sphere is about 70 px across, small enough that the widening reaches roughness 0.3 and above at the silhouettes. The ticket allowed for that: hold the Golden, or re-record it and say why. On Metal, the PR re-recorded minification, normal-tangent, orrery, pbr-sweep, shadows and town. On CI's software Vulkan it re-recorded minification, normal-tangent, orrery, pbr-sweep and town, taken from CI's own captures, whose debug and shipping builds came out identical. The RTX 2070 SUPER's Vulkan Goldens for those scenes stay stale until that machine runs again.</p>
+  </div>
+  <figure class="wide">
+    <img src="img/specular-aa-pbr-sweep-difference.png" width="2560" height="1440" alt="The difference between pbr-sweep before and after, scaled eight times: rings around the highlights of the two roughness-0.1 spheres, faint outlines at the rims of the rougher spheres, and black elsewhere.">
+    <figcaption><b>pbr-sweep at 1440p, before minus after, scaled &times;8.</b> At roughness 0.1, each highlight widens, so its rim lights up in the difference. At 0.3 and above, only the silhouettes change, where the normal turns fastest. From PR #361.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>A sphere 30 px across has roughness 0.1. What roughness does the lit pass shade its centre pixel with, and why is that the right answer rather than a blur?</summary><p>About 0.26, by eq. (4). At the centre each derivative is 1/15 per pixel, so 2σ² (|∂n/∂x|² + |∂n/∂y|²) = 2 &times; 0.25 &times; 2/225 ≈ 0.0044. Added to α² = 0.0001, that gives ᾱ² ≈ 0.0045 and a roughness of 0.0045<sup>1/4</sup> ≈ 0.26. The pixel covers normals spread over several degrees, and a lobe 0.37° wide averaged over them is several degrees wide. Shading once with the wider lobe gives the pixel what averaging many samples would. The reference panel of the first demo shows the same thing.</p></details>
+    <details class="check"><summary>The old furnace grid read 0.445 for a white metal at the floor and 1.087 at roughness 0.1, where both should be just under 1. What went wrong, and what does summing over half vectors change?</summary><p>The specular lobe is narrower than the grid's cells. At the floor, the whole lobe falls inside the first ring of light directions, whose samples all sit 0.5° off the mirror direction, on the lobe's side, and read far below its peak. At 0.1, a sample near the peak stands for a whole 1°&times;2° cell and overcounts it. The lobe is narrow in H at every view, so the new grid places its cells on H, finest near the normal, and maps each to its light by L = 2 (V&middot;H) H &minus; V with weight 4 (V&middot;H). Then every lobe from the floor to 1 is resolved by many cells.</p></details>
+    <details class="check"><summary>|N &times; H|² and 1 &minus; (N&middot;H)² are equal for unit vectors. Why does only one of them hold up in f32 near D's peak?</summary><p>1 &minus; (N&middot;H)² is computed from N&middot;H, a number near 1 whose f32 rounding is an absolute error of order 6 &times; 10⁻⁸. Near the peak at the floor, 1 &minus; N&middot;H is only a few such steps, so that rounding becomes a relative error of several percent, and a one-way error of about a quarter step is enough to move the white metal's sum by the 1.2% the GPU showed. The cross product's components are of order sin θ, formed from products whose rounding errors are of order ε, so |N &times; H|² keeps a relative error near ε/sin θ instead of ε/sin² θ. Reordering the arithmetic, as #245 did, cannot help once the input has lost the digits.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to d8162f0.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/351">Ticket #351</a> <span>the sparkle at the visual check, what to build, the acceptance criteria</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/361">PR #361</a> <span>the images, the furnace finding, the A/B and the review</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/351#issuecomment-6468348577">The owner's decision on #351</a> <span>visual check and the +2.0% accepted</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/354">Ticket #354</a> <span>where the furnace sweep from the floor was decided</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/245">PR #245</a> <span>the earlier rearrangement of D's denominator</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/d8162f0aef9de7dd0ed1f13b26cc8d754e392e6a/src/render/shaders/shading.wgsl"><code>src/render/shaders/shading.wgsl</code></a> <span><code>specular_antialiased_roughness</code>, <code>decode_surface</code>, <code>distribution_ggx</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d8162f0aef9de7dd0ed1f13b26cc8d754e392e6a/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span><code>fs_main</code>: samples first, then <code>dpdx(normal)</code> and <code>dpdy(normal)</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d8162f0aef9de7dd0ed1f13b26cc8d754e392e6a/src/render/shader_function_tests.rs"><code>src/render/shader_function_tests.rs</code></a> <span>the widening oracle, the half-vector furnace and its two tolerances</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d8162f0aef9de7dd0ed1f13b26cc8d754e392e6a/docs/references.toml"><code>docs/references.toml</code></a> <span>the quoted sources the code cites: <code>tokuyoshi-2019-normal-derivatives</code>, <code>tokuyoshi-2019-roughness-matrix</code>, <code>filament-ggx-lagrange-identity</code></span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and code</h3>
+      <ul>
+        <li>Tokuyoshi and Kaplanyan, <a href="https://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf">"Improved Geometric Specular Antialiasing"</a>, I3D 2019 <span>σ = 0.5 px (§2.2), κ and eq. (1) (p. 4), eq. (4) and Listing 2 (p. 5): the filter the lit pass implements</span></li>
+        <li>Kaplanyan, Hill, Patney and Lefohn, <a href="https://research.nvidia.com/sites/default/files/pubs/2016-06_Filtering-Distributions-of/NDFFiltering.pdf">"Filtering Distributions of Normals for Shading Antialiasing"</a>, HPG 2016 <span>slope-space covariances, eqs. (14) and (15), and the Beckmann proxy for GGX</span></li>
+        <li>Toksvig, <a href="https://developer.download.nvidia.com/whitepapers/2006/Mipmapping_Normal_Maps.pdf">"Mipmapping Normal Maps"</a>, NVIDIA 2004 (JGT 2005) <span>the widening the cooked mips already do</span></li>
+        <li>Walter, Marschner, Li and Torrance, <a href="https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html">"Microfacet Models for Refraction through Rough Surfaces"</a>, EGSR 2007 <span>GGX, and the reflection Jacobian the furnace weights by</span></li>
+        <li>Heitz, <a href="https://jcgt.org/published/0003/02/03/">"Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"</a>, JCGT 2014 <span>the white furnace tests, §3.5</span></li>
+        <li>Filament, <a href="https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/shaders/src/surface_brdf.fs#L62-L70"><code>surface_brdf.fs</code>, D_GGX</a>, Apache-2.0 <span>Lagrange's identity for 1 &minus; (N&middot;H)², and why</span></li>
+        <li>Khronos, <a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation">glTF 2.0, Appendix B</a> <span>the BRDF the lit pass follows, and its coupling of diffuse and specular</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman, Pesce, Iwanicki and Hillaire, <i>Real-Time Rendering</i>, 4th edition, CRC Press, 2018: section 9.13, Blending and Filtering Materials, pp. 365&ndash;374 <span>filtering normals and their distributions, Toksvig at p. 369; pages from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">table of contents and index</a></span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Reference scene, Golden and Baseline are <code>CONTEXT.md</code>'s definitions at d8162f0, Baseline shortened. Normal distribution function, roughness floor, white furnace and directional albedo follow <a href="lit-pass.html">Lit Pass Explained</a>. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Specular aliasing</dt><dd>Flicker and sparkle where a highlight is narrower than the range of normals one pixel covers, so the pixel's one shading point catches or misses it.</dd></div>
+    <div><dt>Normal distribution function</dt><dd>D: how densely microfacets face each direction H. Appendix B's is Trowbridge-Reitz, which Walter et al. named GGX.</dd></div>
+    <div><dt>Roughness floor</dt><dd><code>MINIMUM_ROUGHNESS</code>, 0.04: <code>decode_surface</code> raises any lower roughness to it, so α is at least 0.0016 and D stays finite.</dd></div>
+    <div><dt>Slope space</dt><dd>Microfacet normals written as slopes, (&minus;m<sub>x</sub>/m<sub>z</sub>, &minus;m<sub>y</sub>/m<sub>z</sub>). In slope space a Beckmann distribution is a Gaussian, and small tilts of the surface shift slopes by about the angle they turn.</dd></div>
+    <div><dt>Quad</dt><dd>The 2&times;2 block of pixels a GPU runs a fragment shader on together, so that each value has a horizontal and a vertical neighbour to differ from. Pixels outside the triangle run as helper invocations.</dd></div>
+    <div><dt>Screen-space derivative</dt><dd>How fast a value changes from one pixel to the next, taken by differencing it between the pixels of a 2&times;2 quad: <code>dpdx</code> across the screen, <code>dpdy</code> down it.</dd></div>
+    <div><dt>White furnace</dt><dd>A check that lights a white surface equally from every direction. A surface that conserves energy reflects at most what it receives.</dd></div>
+    <div><dt>Directional albedo</dt><dd>The share of uniform light from the whole hemisphere that a surface reflects towards one view, ∫ f(L, V)(N&middot;L) dω.</dd></div>
+    <div><dt>Conditioning</dt><dd>How much a computation magnifies its input's relative error. 1 &minus; x for x near 1 is badly conditioned: a tiny relative error in x becomes a large one in the result.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/351">#351</a>, PR <a href="https://github.com/gariasf/praxis/pull/361">#361</a> and its merge d8162f0, the shading code and tests at that commit, <code>CONTEXT.md</code>, ADRs 0008 and 0019, and the sources in the reading list. The cost figures are the PR's own A/B on the M4 Pro. Where the guide does its own arithmetic (lobe widths, the widening table, both grids' sums, the dielectric's sums and the rounding model), it says so; the sums are f64 over the grids named. The sparkle demo is this page's model of one sphere under one light. The precision demo is this page's model of f32 rounding, not a trace of the GPU's.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="visibility-prepass.html">Previous: Visibility Pre-pass Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+
+  /* Theme: every drawing reads the colour tokens when it draws, and redraws when the theme changes. */
+  const redrawers = [];
+  const redrawAll = () => {
+    for (const redraw of redrawers) redraw();
+  };
+  function readTokens() {
+    const style = getComputedStyle(document.documentElement);
+    const token = (tokenName) => style.getPropertyValue(tokenName).trim();
+    return {
+      panel: token("--panel"), ink: token("--ink"), inkSoft: token("--ink-soft"), rule: token("--rule"),
+      accent: token("--accent"), accentWash: token("--accent-wash"), warm: token("--warm"), mono: token("--mono"),
+    };
+  }
+  if (window.matchMedia) {
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", redrawAll);
+    else if (darkQuery.addListener) darkQuery.addListener(redrawAll);
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+  /* Sizing: each drawing takes its container's width and redraws when that width changes. */
+  function watchWidth(container, render) {
+    redrawers.push(render);
+    if (window.ResizeObserver) {
+      let lastWidth = -1;
+      new ResizeObserver(() => {
+        const width = container.clientWidth;
+        if (width !== lastWidth) {
+          lastWidth = width;
+          render();
+        }
+      }).observe(container);
+    } else {
+      window.addEventListener("resize", render);
+    }
+    render();
+  }
+  // Sizes `canvas` to `width` by `height` CSS pixels at the device's pixel ratio, and returns its context.
+  function sizeCanvas(canvas, width, height) {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return context;
+  }
+
+  /* Appendix B's specular lobe for a white metal, F = 1, as shading.wgsl computes it. */
+  function distribution(normalDotHalf, normalCrossHalfSquared, alpha) {
+    const alphaSquared = alpha * alpha;
+    const denominator = Math.max(normalDotHalf * normalDotHalf * alphaSquared + normalCrossHalfSquared, alphaSquared);
+    return normalDotHalf > 0 ? alphaSquared / (Math.PI * denominator * denominator) : 0;
+  }
+  function visibility(normalDotLight, normalDotView, alpha) {
+    const alphaSquared = alpha * alpha;
+    const denominator = 2 * (normalDotView * Math.sqrt(alphaSquared + (1 - alphaSquared) * normalDotLight * normalDotLight) +
+      normalDotLight * Math.sqrt(alphaSquared + (1 - alphaSquared) * normalDotView * normalDotView));
+    return denominator > 0 ? 1 / denominator : 0;
+  }
+
+  /* Demo 1: a small sphere shaded once per pixel, once per pixel widened, and at 64 points per pixel. */
+  (function sparkleDemo() {
+    const ILLUMINANCE = 0.02;
+    const BACKGROUND = 0.012;
+    const LIGHT_FROM_VIEW = 35 * Math.PI / 180;
+    const COVERAGE_GRID = 4;
+    const REFERENCE_GRID = 8;
+    const canvases = { raw: byId("s-raw"), widened: byId("s-widened"), reference: byId("s-reference") };
+    const diameterInput = byId("s-diameter"), roughnessInput = byId("s-roughness"), lightInput = byId("s-light");
+    const playButton = byId("s-play");
+    let playing = false;
+
+    // The shading normal where the sphere covers (x, y), in pixels; a point past the rim takes the rim's normal,
+    // as a pixel whose centre misses the sphere still shades with interpolants extrapolated to its centre.
+    function normalAt(x, y, centre, radius) {
+      let across = (x - centre) / radius, up = (centre - y) / radius;
+      const squared = across * across + up * up;
+      if (squared >= 0.998) {
+        const scale = Math.sqrt(0.998 / squared);
+        across *= scale;
+        up *= scale;
+      }
+      return [across, up, Math.sqrt(Math.max(0, 1 - across * across - up * up))];
+    }
+    function inside(x, y, centre, radius) {
+      return (x - centre) * (x - centre) + (y - centre) * (y - centre) < radius * radius;
+    }
+    function radiance(normal, light, roughness) {
+      const alpha = roughness * roughness;
+      const normalDotLight = normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2];
+      if (normalDotLight <= 0) return 0;
+      const half = [light[0], light[1], light[2] + 1];
+      const length = Math.hypot(half[0], half[1], half[2]);
+      half[0] /= length; half[1] /= length; half[2] /= length;
+      const normalDotHalf = normal[0] * half[0] + normal[1] * half[1] + normal[2] * half[2];
+      const cross = [normal[1] * half[2] - normal[2] * half[1], normal[2] * half[0] - normal[0] * half[2], normal[0] * half[1] - normal[1] * half[0]];
+      const crossSquared = cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2];
+      return distribution(normalDotHalf, crossSquared, alpha) * visibility(normalDotLight, normal[2], alpha) * normalDotLight * ILLUMINANCE;
+    }
+    const display = (value) => value / (1 + value);
+    // Eq. (4): roughness widened by the normal's change per pixel along x and y.
+    function widen(roughness, changeX, changeY) {
+      const variance = 0.25 * (changeX[0] ** 2 + changeX[1] ** 2 + changeX[2] ** 2 + changeY[0] ** 2 + changeY[1] ** 2 + changeY[2] ** 2);
+      const alpha = roughness * roughness;
+      return Math.sqrt(Math.sqrt(Math.min(alpha * alpha + Math.min(2 * variance, 0.18), 1)));
+    }
+
+    // The average over a square cell `side` pixels wide about (x, y): its centre's value, or, where the highlight
+    // may fall inside the cell, the mean of 8x8 points across it, so the narrowest lobe is not missed.
+    function cellAverage(x, y, side, centre, radius, light, half, roughness) {
+      if (!inside(x, y, centre, radius)) return BACKGROUND;
+      const normal = normalAt(x, y, centre, radius);
+      const cosine = normal[0] * half[0] + normal[1] * half[1] + normal[2] * half[2];
+      const cellAngle = side / (radius * Math.max(normal[2], 0.1));
+      if (Math.acos(Math.min(cosine, 1)) > 1.5 * cellAngle + 8 * roughness * roughness) return radiance(normal, light, roughness);
+      let sum = 0;
+      for (let sy = 0; sy < REFERENCE_GRID; sy++) {
+        for (let sx = 0; sx < REFERENCE_GRID; sx++) {
+          const pointX = x + ((sx + 0.5) / REFERENCE_GRID - 0.5) * side, pointY = y + ((sy + 0.5) / REFERENCE_GRID - 0.5) * side;
+          sum += inside(pointX, pointY, centre, radius) ? radiance(normalAt(pointX, pointY, centre, radius), light, roughness) : BACKGROUND;
+        }
+      }
+      return sum / (REFERENCE_GRID * REFERENCE_GRID);
+    }
+
+    function shadeAll() {
+      const diameter = Number(diameterInput.value), roughness = Number(roughnessInput.value);
+      const azimuth = Number(lightInput.value) * Math.PI / 180;
+      const light = [Math.sin(LIGHT_FROM_VIEW) * Math.cos(azimuth), Math.sin(LIGHT_FROM_VIEW) * Math.sin(azimuth), Math.cos(LIGHT_FROM_VIEW)];
+      const halfLength = Math.hypot(light[0], light[1], light[2] + 1);
+      const half = [light[0] / halfLength, light[1] / halfLength, (light[2] + 1) / halfLength];
+      const size = diameter + 4, centre = size / 2, radius = diameter / 2;
+      const normals = [];
+      for (let row = 0; row < size; row++) {
+        for (let column = 0; column < size; column++) normals.push(normalAt(column + 0.5, row + 0.5, centre, radius));
+      }
+      const difference = (a, b) => [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const images = { raw: [], widened: [], reference: [] };
+      let centreRoughness = roughness;
+      for (let row = 0; row < size; row++) {
+        for (let column = 0; column < size; column++) {
+          let covered = 0;
+          for (let sy = 0; sy < COVERAGE_GRID; sy++) {
+            for (let sx = 0; sx < COVERAGE_GRID; sx++) {
+              if (inside(column + (sx + 0.5) / COVERAGE_GRID, row + (sy + 0.5) / COVERAGE_GRID, centre, radius)) covered++;
+            }
+          }
+          const coverage = covered / (COVERAGE_GRID * COVERAGE_GRID);
+          const normal = normals[row * size + column];
+          // dpdx and dpdy: differences within the pixel's 2x2 quad.
+          const quadColumn = column - (column & 1), quadRow = row - (row & 1);
+          const changeX = difference(normals[row * size + quadColumn], normals[row * size + Math.min(quadColumn + 1, size - 1)]);
+          const changeY = difference(normals[quadRow * size + column], normals[Math.min(quadRow + 1, size - 1) * size + column]);
+          const widenedRoughness = Math.max(widen(roughness, changeX, changeY), 0.04);
+          if (row === Math.floor(centre) && column === Math.floor(centre)) centreRoughness = widenedRoughness;
+          const raw = coverage * radiance(normal, light, roughness) + (1 - coverage) * BACKGROUND;
+          const widened = coverage * radiance(normal, light, widenedRoughness) + (1 - coverage) * BACKGROUND;
+          let sum = 0;
+          for (let sy = 0; sy < REFERENCE_GRID; sy++) {
+            for (let sx = 0; sx < REFERENCE_GRID; sx++) {
+              const x = column + (sx + 0.5) / REFERENCE_GRID, y = row + (sy + 0.5) / REFERENCE_GRID;
+              sum += cellAverage(x, y, 1 / REFERENCE_GRID, centre, radius, light, half, roughness);
+            }
+          }
+          const reference = sum / (REFERENCE_GRID * REFERENCE_GRID);
+          images.raw.push(display(raw));
+          images.widened.push(display(widened));
+          images.reference.push(display(reference));
+        }
+      }
+      return {
+        size: size, images: images, centreRoughness: centreRoughness, roughness: roughness,
+        brightest: Object.fromEntries(Object.keys(images).map((key) => [key, Math.max(...images[key])])),
+      };
+    }
+
+    function paint(canvas, size, values) {
+      const width = Math.min(canvas.parentElement.clientWidth, 320);
+      const context = sizeCanvas(canvas, width, width);
+      const image = document.createElement("canvas");
+      image.width = size;
+      image.height = size;
+      const imageContext = image.getContext("2d");
+      const pixels = imageContext.createImageData(size, size);
+      for (let index = 0; index < values.length; index++) {
+        const level = Math.round(255 * Math.pow(Math.min(values[index], 1), 1 / 2.2));
+        pixels.data[index * 4] = level;
+        pixels.data[index * 4 + 1] = level;
+        pixels.data[index * 4 + 2] = level;
+        pixels.data[index * 4 + 3] = 255;
+      }
+      imageContext.putImageData(pixels, 0, 0);
+      context.imageSmoothingEnabled = false;
+      context.drawImage(image, 0, 0, width, width);
+    }
+
+    function render() {
+      const result = shadeAll();
+      for (const key of Object.keys(canvases)) paint(canvases[key], result.size, result.images[key]);
+      byId("s-diameter-out").textContent = diameterInput.value + " px";
+      byId("s-roughness-out").textContent = Number(roughnessInput.value).toFixed(2);
+      byId("s-light-out").textContent = Number(lightInput.value).toFixed(1) + "°";
+      byId("s-raw-error").textContent = "Brightest pixel: " + result.brightest.raw.toFixed(2);
+      byId("s-widened-error").textContent = "Brightest pixel: " + result.brightest.widened.toFixed(2);
+      byId("s-reference-brightest").textContent = "Brightest pixel: " + result.brightest.reference.toFixed(2);
+      byId("s-centre").textContent = "Centre pixel shades at roughness " + result.centreRoughness.toFixed(3) + " when widened, from " + result.roughness.toFixed(2) + ".";
+    }
+
+    for (const input of [diameterInput, roughnessInput, lightInput]) input.addEventListener("input", render);
+    function step() {
+      if (!playing) return;
+      lightInput.value = String((Number(lightInput.value) + 0.25) % 360);
+      render();
+      window.requestAnimationFrame(step);
+    }
+    playButton.addEventListener("click", () => {
+      playing = !playing;
+      playButton.setAttribute("aria-pressed", String(playing));
+      playButton.textContent = playing ? "Stop the light" : "Move the light";
+      if (playing) window.requestAnimationFrame(step);
+    });
+    watchWidth(canvases.raw.parentElement, render);
+  })();
+
+  /* Demo 2: D near its peak with every operation rounded to f32, through N·H and through |N × H|². */
+  (function precisionDemo() {
+    const canvas = byId("p-canvas");
+    const roughnessInput = byId("p-roughness"), biasInput = byId("p-bias");
+    const round = Math.fround;
+    const F32_STEP_BELOW_ONE = Math.pow(2, -24);
+    const SAMPLES = 20000;
+
+    // D in f32, with N = +Z, from H's components rounded to f32; N·H read `bias` high before its rounding.
+    function throughDot(angle, alphaSquared, bias) {
+      const normalDotHalf = round(Math.cos(angle) + bias);
+      const denominator = round(round(round(normalDotHalf * normalDotHalf) * alphaSquared) +
+        round(round(1 - normalDotHalf) * round(1 + normalDotHalf)));
+      return round(alphaSquared / round(round(Math.PI) * round(denominator * denominator)));
+    }
+    function throughCross(angle, alphaSquared, bias) {
+      const normalDotHalf = round(Math.cos(angle) + bias);
+      const across = round(Math.sin(angle));
+      const denominator = round(round(round(normalDotHalf * normalDotHalf) * alphaSquared) + round(across * across));
+      return round(alphaSquared / round(round(Math.PI) * round(denominator * denominator)));
+    }
+    function exact(angle, alphaSquared) {
+      const cosine = Math.cos(angle), sine = Math.sin(angle);
+      const denominator = cosine * cosine * alphaSquared + sine * sine;
+      return alphaSquared / (Math.PI * denominator * denominator);
+    }
+    const halfMaximumAngle = (alpha) => Math.atan(Math.sqrt(Math.SQRT2 - 1) * alpha);
+
+    function render() {
+      const roughness = Number(roughnessInput.value), steps = Number(biasInput.value);
+      const alpha = round(roughness * roughness);
+      const alphaSquared = round(alpha * alpha);
+      const bias = steps * F32_STEP_BELOW_ONE;
+      const halfMaximum = halfMaximumAngle(alpha);
+      byId("p-roughness-out").textContent = roughness.toFixed(2);
+      byId("p-bias-out").textContent = steps === 0 ? "0 (rounding only)" : steps.toFixed(2) + " of an f32 step";
+
+      // The lobe's integral, out to ten half-maximum angles, relative to f64.
+      const top = 10 * halfMaximum, width = top / SAMPLES;
+      let exactSum = 0, dotSum = 0, crossSum = 0;
+      for (let index = 0; index < SAMPLES; index++) {
+        const angle = (index + 0.5) * width;
+        const weight = Math.cos(angle) * Math.sin(angle);
+        exactSum += exact(angle, alphaSquared) * weight;
+        dotSum += throughDot(angle, alphaSquared, bias) * weight;
+        crossSum += throughCross(angle, alphaSquared, bias) * weight;
+      }
+      const percent = (value) => (value >= 0 ? "+" : "−") + Math.abs(value * 100).toPrecision(2) + "%";
+      byId("p-old").textContent = percent(dotSum / exactSum - 1);
+      byId("p-new").textContent = percent(crossSum / exactSum - 1);
+      byId("p-steps").textContent = ((1 - Math.cos(halfMaximum)) / F32_STEP_BELOW_ONE).toFixed(1) + " f32 steps";
+
+      const colours = readTokens();
+      const plotWidth = canvas.parentElement.clientWidth;
+      const height = 300;
+      const context = sizeCanvas(canvas, plotWidth, height);
+      context.fillStyle = colours.panel;
+      context.fillRect(0, 0, plotWidth, height);
+      const left = 56, right = plotWidth - 14, topEdge = 14, bottom = height - 40;
+      const span = 4 * halfMaximum;
+      const points = Math.max(200, Math.round(right - left));
+      const dotErrors = [], crossErrors = [], shape = [];
+      let largest = 0.01;
+      for (let index = 0; index <= points; index++) {
+        const angle = index / points * span;
+        const reference = exact(angle, alphaSquared);
+        const dotError = throughDot(angle, alphaSquared, bias) / reference - 1;
+        const crossError = throughCross(angle, alphaSquared, bias) / reference - 1;
+        dotErrors.push(dotError);
+        crossErrors.push(crossError);
+        shape.push(reference / exact(0, alphaSquared));
+        largest = Math.max(largest, Math.abs(dotError), Math.abs(crossError));
+      }
+      const limit = Math.ceil(largest * 1.1 * 100) / 100;
+      const x = (index) => left + (right - left) * index / points;
+      const y = (error) => topEdge + (bottom - topEdge) * (0.5 - error / (2 * limit));
+      context.fillStyle = colours.accentWash;
+      context.beginPath();
+      context.moveTo(left, bottom);
+      shape.forEach((value, index) => context.lineTo(x(index), bottom - (bottom - topEdge) * value));
+      context.lineTo(right, bottom);
+      context.closePath();
+      context.fill();
+      context.strokeStyle = colours.rule;
+      context.lineWidth = 1;
+      context.font = "12px " + colours.mono;
+      context.fillStyle = colours.inkSoft;
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      for (const tick of [-limit, -limit / 2, 0, limit / 2, limit]) {
+        context.beginPath();
+        context.moveTo(left, y(tick));
+        context.lineTo(right, y(tick));
+        context.stroke();
+        context.fillText((tick * 100).toFixed(1) + "%", left - 6, y(tick));
+      }
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      for (let tick = 0; tick <= 4; tick++) {
+        const angleDegrees = tick * span / 4 * 180 / Math.PI;
+        context.textAlign = tick === 0 ? "left" : tick === 4 ? "right" : "center";
+        context.fillText(angleDegrees.toPrecision(2) + "°", left + (right - left) * tick / 4, bottom + 6);
+      }
+      context.textAlign = "center";
+      context.fillText("angle between N and H", (left + right) / 2, bottom + 22);
+      function series(errors, colour, dashed) {
+        context.strokeStyle = colour;
+        context.lineWidth = dashed ? 1.5 : 2.5;
+        context.setLineDash(dashed ? [5, 3] : []);
+        context.beginPath();
+        errors.forEach((error, index) => (index === 0 ? context.moveTo(x(index), y(error)) : context.lineTo(x(index), y(error))));
+        context.stroke();
+        context.setLineDash([]);
+      }
+      series(dotErrors, colours.warm, true);
+      series(crossErrors, colours.accent, false);
+      canvas.setAttribute("aria-label", "Relative error of D in f32 at roughness " + roughness.toFixed(2) + ": through N·H up to " +
+        (Math.max(...dotErrors.map(Math.abs)) * 100).toFixed(2) + "%, through |N × H|² up to " +
+        (Math.max(...crossErrors.map(Math.abs)) * 100).toFixed(4) + "%.");
+    }
+    roughnessInput.addEventListener("input", render);
+    biasInput.addEventListener("input", render);
+    watchWidth(canvas.parentElement, render);
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

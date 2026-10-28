@@ -229,6 +229,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="visibility-prepass.html" aria-label="Read Visibility Pre-pass Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="specular-antialiasing.html">Specular Antialiasing Explained</a></h3>
+        <p class="meta">M3 · ticket #351 · PR #361</p>
+        <p class="summary">Follows #351's fix for the sparkle on helmet's smoothest metals: highlights narrower than the turn the normal makes across a pixel, which one shading point per pixel catches or misses and 4x MSAA leaves alone. It covers filtering the distribution rather than the image, Tokuyoshi and Kaplanyan's widening of α² by the shading normal's screen-space derivatives, κ and the roughness floor, a white furnace that sums over half vectors so it works from the floor up, and the f32 error in D that furnace found, 1.1% of a white metal's light, fixed with |N × H|², with live demos. Together they cost town's lit pass 2.0%.</p>
+        <a class="read" href="specular-antialiasing.html" aria-label="Read Specular Antialiasing Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
