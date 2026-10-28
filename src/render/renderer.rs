@@ -188,8 +188,8 @@ pub struct Renderer {
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
     instance_buffer: wgpu::Buffer,
-    /// The Instances, the vertex Arena, the Mesh pool's tables and both
-    /// TLAS (`SCENE_GEOMETRY`).
+    /// The Instances, the vertex Arena and the Mesh pool's tables
+    /// (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
     static_tlas: StaticTlas,
     dynamic_tlas: DynamicTlas,
@@ -364,14 +364,13 @@ impl Renderer {
                     "meshlet_triangles",
                     mesh_pool.meshlet_triangle_arena().as_entire_binding(),
                 ),
-                ("static_tlas", static_tlas.binding()),
-                ("dynamic_tlas", dynamic_tlas.binding()),
             ],
         );
 
         let shadow_mask_pass = ShadowMaskPass::new(
             &device,
-            &scene_geometry_bind_group_layout,
+            &static_tlas,
+            &dynamic_tlas,
             [
                 ("camera", &camera_buffer),
                 ("light", &light_uniform_buffer),
@@ -646,7 +645,6 @@ impl Renderer {
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
-                &self.scene_geometry_bind_group,
                 timestamps.map(|timestamps| timestamps.compute_pass(SHADOW_MASK_PASS)),
             );
         }

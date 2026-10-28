@@ -4,7 +4,8 @@
 //! and declares its bindings in every shader module assembled with it, so no
 //! shader part declares one. Groups are packed by how often they change,
 //! within the Capability floor's four (ADR 0021): 0 the frame's, 1 the
-//! Materials', 2 the scene geometry's, 3 a pass's own.
+//! Materials', 2 the scene geometry's, or the TLAS in the one pass that
+//! traces rays, 3 a pass's own.
 
 use std::num::NonZeroU32;
 
@@ -61,11 +62,9 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 2, the scene geometry, built once since its buffers never grow and
-/// its TLAS are rebuilt in place: the Instances, the vertex Arena the vertex
-/// shader pulls from (ADR 0019), the Mesh pool's tables of Meshes and
-/// Meshlets, and the static and dynamic TLAS the shadow mask pass traces
-/// shadow rays against (ADR 0020).
+/// Group 2, the scene geometry, built once since its buffers never grow: the
+/// Instances, the vertex Arena the vertex shader pulls from (ADR 0019), and
+/// the Mesh pool's tables of Meshes and Meshlets.
 pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Scene Geometry Bind Group",
@@ -92,6 +91,21 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
             "array<u32>",
             wgpu::ShaderStages::COMPUTE,
         ),
+    ],
+};
+
+/// Group 2 of the shadow mask pass, built once since its TLAS are rebuilt in
+/// place: the static and dynamic TLAS it traces shadow rays against (ADR
+/// 0020). No other pass binds them, but the dynamic TLAS's markers bind the
+/// dynamic one: at submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one
+/// BLAS per Instance it holds, for each flush of a group holding it, at
+/// least once per pass that binds one
+/// [ref:wgpu-30-tlas-dependency-per-instance] [ref:wgpu-30-use-tlas-per-flush]
+/// [ref:wgpu-30-submit-tlas-dependencies].
+pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
+    index: 2,
+    label: "Shadow Ray Scene Bind Group",
+    bindings: &[
         acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
         acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
     ],
