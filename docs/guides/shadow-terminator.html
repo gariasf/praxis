@@ -382,7 +382,7 @@ fn octahedral_decode(coordinates: vec2&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
     <p>For each light that reaches the pixel, the mask decodes the sample's two normals and picks one of three outcomes:</p>
     <ul class="keypoints">
       <li><b>Hidden, no ray,</b> where the interpolated normal turns from the light by more than 2&deg;: <code>dot(interpolated_normal, direction) &lt;= -INTERPOLATED_TURN_MARGIN</code>, sin 2&deg;. The 2&deg; covers the stored normal's error, so the mask never hides a light that the lit pass's interpolated normal, its <code>geometric_normal</code>, still faces. Between there and the horizon, a ray is traced, and the lit pass's clamp of N&middot;L at zero darkens what is past it.</li>
-      <li><b>A ray from outside,</b> where the triangle faces the light by at least 10&deg;, or by at least 5&deg; when its two normals agree within 3&deg;, as on a flat surface: the ray starts along the triangle normal by <code>SHADOW_RAY_OFFSET_SCALE</code>, 2<sup>&minus;16</sup> of the point's largest coordinate and at least 2<sup>&minus;16</sup> m, as before (<a href="shadow-rays.html#acne">Shadow Rays Explained, chapter 4</a>), and any hit hides the light.</li>
+      <li><b>A ray from outside,</b> where the triangle faces the light by at least 10&deg;, or by at least 2&deg; when its two normals agree within 3&deg;, as on a flat surface: the ray starts along the triangle normal by <code>SHADOW_RAY_OFFSET_SCALE</code>, 2<sup>&minus;16</sup> of the point's largest coordinate and at least 2<sup>&minus;16</sup> m, as before (<a href="shadow-rays.html#acne">Shadow Rays Explained, chapter 4</a>), and any hit hides the light.</li>
       <li><b>A ray from inside,</b> everywhere else: the triangle faces the light by less than the margin, or turns from it, while the interpolated normal does not turn from it. The rest of this chapter is about this case.</li>
     </ul>
     <h3>The inside ray</h3>
@@ -673,7 +673,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
   const RADIUS = 0.5;
   const OFFSET = 1.52587890625e-5; // the shader's 2^-16 m, for a point within 1 m of the camera
   const INTERPOLATED_TURN_MARGIN = Math.sin(2 * degree);
-  const AGREEING_TRIANGLE_TURN_MARGIN = Math.sin(5 * degree);
+  const AGREEING_TRIANGLE_TURN_MARGIN = Math.sin(2 * degree);
   const TRIANGLE_TURN_MARGIN = Math.sin(10 * degree);
   const NORMALS_AGREE = Math.cos(3 * degree);
   const SAMPLES = 96;
