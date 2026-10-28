@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>MSAA Fragment Merging Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 22 of the series, after Meshlet Culling Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the pass order, the demos' legends and canvases. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); font-weight: 600; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.ring { background: transparent; border-color: var(--bad); }
+.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-canvas { width: 100%; }
+.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; tickets #348, #369 &middot; PRs #370, #373</div>
+  <h1>MSAA Fragment Merging Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Under MSAA, the M4 Pro can merge the fragments of two triangles that share vertex indices. One fragment then writes both triangles' samples with one triangle's inputs, unless the fragment stage reads a flat input. That made option B's draw lose samples, and it handed the shadow mask a neighbour's normals at shared edges. Praxis now reads a flat input in every pass that must know a sample's triangle. The idea to keep: coverage stays exact, but which triangle a sample shows is fixed only by a flat input.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>How MSAA separates coverage, per sample, from shading, per fragment</li>
+      <li>What the M4 Pro was measured to do, and what stops it</li>
+      <li>How merging made option B's draw lose samples and gave the shadow mask the wrong normals</li>
+      <li>Why <code>@invariant</code> could not fix it, and why an unused flat read does</li>
+      <li>What rests on one GPU's measurement, and the portable fallback</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="visibility-prepass.html#coverage">Visibility Pre-pass Explained</a>, chapter 3, for the ID pass and its lost samples; <a href="shadow-terminator.html#normals">Shadow Terminator Explained</a>, chapter 2, for the surface normals</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 7525b7d (PR #370, merged 2026-10-28) and #369's fix (PR #373, 5d03cf2, 2026-10-28). <b>Since then:</b> nothing, as of 2026-10-28.</p>
+  </aside>
+  <p class="lede">Two defects that looked unrelated had one cause. Option B's prototype lost samples when it drew only the triangles its ID pass named. Then, after the depth passes began writing surface normals, <code>town</code> drew a few pixels differently with culling on and off. Ticket #348 traced the first to a behaviour of the Apple M4 Pro under MSAA that no documentation found describes: fragments of neighbouring triangles merge, unless the fragment stage reads a flat input. Ticket #369 applied that finding to the second. This guide explains MSAA's samples and fragments, the measurements, both defects, the fix and what it rests on. Two live demos rasterise two triangles at 4x MSAA, with and without merging, and show how a merged normal flips a shadow bit across a crease.</p>
+  <p class="status"><b>Provenance.</b> The measurements are #348's, made on an Apple M4 Pro under macOS 27.0.1 with wgpu 30.0.1 on Metal, and recorded in <code>docs/performance.md</code> and <code>src/render/coverage_tests.rs</code> at 7525b7d. The rule they support is in ADR 0019. #369's fix, its pixel counts and its cost are PR #373's, measured on the same machine. No other GPU was measured, and no Apple documentation of it was found. Where the guide reads the published literature into the result, it says so.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#samples">1 &middot; Samples and fragments</a>
+    <a href="#measured">2 &middot; What the M4 Pro does</a>
+    <a href="#idpass">3 &middot; Option B's lost samples</a>
+    <a href="#normals">4 &middot; The shadow mask's normals</a>
+    <a href="#fix">5 &middot; The fix</a>
+    <a href="#open">6 &middot; What is still open</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="samples">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; background</div>
+    <h2>Samples and fragments</h2>
+    <p class="key-idea"><b>Key idea.</b> MSAA decides coverage per sample but shades per pixel: each triangle that covers any of a pixel's samples gets one fragment there, and that fragment writes the samples its triangle covers.</p>
+    <p class="plain">With 4x MSAA, a pixel holds four samples, each with its own depth and colour. The rasteriser tests each sample against each triangle. The fragment shader then runs once per pixel per triangle, not once per sample.</p>
+    <p>Praxis's main pass draws at 4x MSAA (ADR 0019). The coverage tests place its four samples where Vulkan's standard positions put them, at (0.375, 0.125), (0.875, 0.375), (0.125, 0.625) and (0.625, 0.875) within the pixel, and wherever nothing merges the M4 Pro agrees with them at every sample. Where an edge crosses a pixel, one triangle covers some of its samples and its neighbour covers the rest. Each gets a <span class="concept" data-term="Fragment" data-tip="One triangle's shading at one pixel. Under MSAA it runs once, with inputs interpolated at the pixel centre, and its output lands in every sample of the pixel that the triangle covers.">fragment</span>, and each fragment's output lands only in its own triangle's samples. That is what antialiases the edge: the resolve averages the four samples, so the pixel blends both triangles in proportion to their coverage.</p>
+    <p>A fragment's inputs come from the vertex shader's outputs. Most are <b>smooth</b>: interpolated across the triangle, so their value says where on the triangle the fragment lies. A <span class="concept" data-term="Flat input" data-tip="A fragment input declared @interpolate(flat): not interpolated, but taken whole from one vertex of the triangle, so every fragment of the triangle reads the same value.">flat input</span>, declared <code>@interpolate(flat)</code> in WGSL, is not interpolated. Every fragment of a triangle reads the value one vertex wrote. The lit pass's <span class="concept" data-term="Material ID" data-tip="The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.">Material ID</span> is one. Chapter 2 shows why that difference turned out to matter on the M4 Pro.</p>
+    <p>Indices matter too. A <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.">Meshlet</span>'s triangles share vertices, and two triangles that meet along an edge name the same two vertex indices. Praxis's packed indices carry the Meshlet record in their high bits, so triangles of different Meshlets or Instances never share an index, even where their positions coincide.</p>
+  </div>
+</section>
+
+<section class="chapter" id="measured">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; ticket #348</div>
+    <h2>What the M4 Pro does</h2>
+    <p class="key-idea"><b>Key idea.</b> When the fragment stage reads no flat input, the M4 Pro can merge two index-sharing triangles' fragments in a pixel both cover. The samples covered stay exact; which triangle's inputs they receive does not. Reading any flat input stops it.</p>
+    <p class="plain">The rule, as ADR 0019 now records it: under 2x or 4x MSAA, when the fragment stage reads no flat-interpolated input, the fragments of nearby triangles of one draw that share vertex indices can be merged in a pixel. One fragment, with one triangle's interpolated inputs and <code>primitive_index</code>, writes the samples of both.</p>
+    <h3>How it was measured</h3>
+    <p><code>src/render/coverage_tests.rs</code> draws quads with sides of 0.3 to 1.5 px into a 256&times;256 multisampled ID target. The fragment stage writes each sample's triangle ID, and a compute pass reads the target back per sample. The flat scene's 4,096 quads do not overlap, so an analytic oracle knows every sample's owner. It leaves out samples within 0.01 px of an edge, where rounding could go either way. Each quad is drawn as the cooker draws one, <code>0 1 2</code> then <code>0 2 3</code>, so its two triangles, partners, share two indices. Each quad also carries a weight that only its first triangle interpolates and one that only its partner does, so a fragment's smooth inputs alone say which triangle they were interpolated over.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Draw, flat scene</th><th class="n">4x</th><th class="n">2x</th><th class="n">1x</th></tr></thead>
+      <tbody>
+        <tr><td>Partner with its own indices, as another Meshlet or Instance</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+        <tr class="focus"><td>Partner sharing two indices, as within a Meshlet</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+        <tr><td>The same, sample-rate shading</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+        <tr><td>The same, IDs from smooth inputs alone</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+        <tr><td>The same, <code>primitive_index</code> beside a smooth input</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+        <tr class="focus"><td>The same, <code>primitive_index</code> beside a flat input</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+        <tr><td>Every other quad removed</td><td class="n">760</td><td class="n">145</td><td class="n">0</td></tr>
+        <tr><td>One triangle between partners</td><td class="n">1,286</td><td class="n">257</td><td class="n">0</td></tr>
+        <tr><td>Every partner after every first triangle</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+        <tr><td>Partners in another draw call</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">Samples whose ID departs from the oracle, a selection of the rows in <code>docs/performance.md</code>. Every departure went to the partner, never to another quad or to an empty sample, and every count was identical over three runs.</p>
+    <ul class="keypoints">
+      <li><b>Fragments, not just the index.</b> IDs built from smooth inputs alone depart exactly where <code>primitive_index</code> does. So a merged fragment carries one triangle's interpolated inputs onto the other's samples, not only its index.</li>
+      <li><b>A flat input stops it.</b> Every row that reads a flat input departs nowhere, even where the flat value is the same for both triangles. What matters is that the stage reads one, not what it holds.</li>
+      <li><b>What triggers it.</b> No flat input, shared vertex indices, nearness in the draw, and more than one sample per pixel. One triangle between partners still merges most; a partner thousands of triangles later, or in another draw call, never. Sample-rate shading does not stop it.</li>
+      <li><b>Coverage is exact.</b> The samples the two triangles cover together do not change. Only their attribution moves, and how it moves depends on what else the draw holds: remove every other quad and 1,421 becomes 760.</li>
+    </ul>
+    <p>That last point corrects the reading #296 had made. Its guide said a triangle's coverage depended on what else the draw held. It does not: a triangle drawn alone covers exactly its own samples. What depends on the draw is which triangle a sample is credited to.</p>
+    <h3>What it resembles</h3>
+    <p>Fatahalian and colleagues proposed something like it in 2010, as a way to cut shading cost on small triangles: gather the fragments of adjacent triangles of a mesh and shade them once. Their merge conditions are a shared screen location, no sample covered by both, the same facing, and source triangles connected by edges. A merged fragment then shades both triangles' samples with inputs chosen from one of them. Their paper says nothing about flat inputs. As far as #348 could find, Apple's documentation says nothing about it: #348 searched Metal's documentation, Apple's talks, the developer forums and wgpu's issues and found nothing. The resemblance is a reading, not a source for what the M4 Pro does. A plausible explanation of the flat-input rule, which no source confirms, is that inputs interpolated across a triangle can be evaluated for a neighbour, while a flat input belongs to one primitive and cannot be shared.</p>
+  </div>
+  <figure class="wide" id="demo-merge">
+    <div class="demo-grid merge">
+      <div class="canvas-frame"><canvas id="m-canvas" class="demo-canvas" role="img" aria-label="Two triangles that share an edge, rasterised on a grid of pixels at the chosen MSAA sample count, each sample coloured by the triangle whose inputs it received."></canvas></div>
+      <div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Fragment stage</span>
+            <div class="seg" role="group" aria-label="Fragment stage" id="m-flat">
+              <button type="button" data-flat="no" aria-pressed="true">reads no flat input</button>
+              <button type="button" data-flat="yes" aria-pressed="false">reads a flat input</button>
+            </div>
+          </div>
+          <div>
+            <span class="control-label">Samples per pixel</span>
+            <div class="seg" role="group" aria-label="Samples per pixel" id="m-samples">
+              <button type="button" data-samples="1" aria-pressed="false">1x</button>
+              <button type="button" data-samples="2" aria-pressed="false">2x</button>
+              <button type="button" data-samples="4" aria-pressed="true">4x</button>
+            </div>
+          </div>
+          <div>
+            <span class="control-label">A merged fragment carries</span>
+            <div class="seg" role="group" aria-label="A merged fragment carries" id="m-carrier">
+              <button type="button" data-carrier="centre" aria-pressed="true">nearest the centre</button>
+              <button type="button" data-carrier="A" aria-pressed="false">A's inputs</button>
+              <button type="button" data-carrier="B" aria-pressed="false">B's inputs</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot one"></span>A's inputs</span>
+          <span><span class="dot two"></span>B's inputs</span>
+          <span><span class="dot ring"></span>the other triangle's sample</span>
+          <span><span class="box"></span>merged fragment</span>
+        </div>
+        <p class="readout" id="m-readout" aria-live="polite"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> Triangles A (<code>0 1 2</code>) and B (<code>0 2 3</code>) share the dashed edge and its two indices. Each dot is a sample at the standard positions; its colour is the triangle whose inputs reached it. Without a flat input, a pixel both triangles cover gets one merged fragment, which writes every covered sample with one triangle's inputs. Red rings mark the samples that belong to the other triangle. Coverage, the set of samples covered at all, never changes. <b>This is a model, not Apple's algorithm,</b> which is undocumented. It merges every pixel both triangles cover, per pixel rather than per 2&times;2 quad, and lets you choose which inputs a merged fragment carries. &ldquo;Nearest the centre&rdquo; is Fatahalian et al.'s published rule. On the M4 Pro the choice depends on the rest of the draw.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="idpass">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; ticket #296</div>
+    <h2>Option B's lost samples</h2>
+    <p class="key-idea"><b>Key idea.</b> An ID pass that reads no flat input credits some of a triangle's samples to its partner. Drawing only the triangles it names then drops the uncredited triangle, and its samples go missing; drawing whole Meshlets keeps both.</p>
+    <p>Option B, the visibility pre-pass that <a href="visibility-prepass.html">Visibility Pre-pass Explained</a> describes, wrote each sample's triangle ID in an ID pass and then drew what those IDs named: the named triangles alone in its triangle-granularity variant, and their whole Meshlets as recorded. Its fragment stage read <code>primitive_index</code> and no flat input, so the M4 Pro merged partners' fragments. Where merged fragments carried the partner's ID, a triangle all of whose samples had gone to its partner was named by none. The draw of named triangles left it out, and the partner, whose coverage is exact, does not cover its samples, so nothing did.</p>
+    <p>#348 reproduced the prototype's loss in the harness. On #296's tilted scene, 7,871 quads 0.3 m wide at 40 m, an ID pass at depth Equal after a pre-pass, followed by a draw of the triangles it named, lost 697 samples and credited 554 to a partner. With whole quads kept, it lost none, though 368 samples were still credited to a partner. With each triangle given its own indices, neither happened. The prototype branch itself showed the same 697 and 554.</p>
+    <p>For Praxis's ADR 0019 the rule became: a pass that decides from which triangle a sample shows, as an ID pass or a visibility buffer does, reads a flat input, which costs nothing, or keeps whole Meshlets, the groups that share indices. Culling decided from geometry, as #347's Meshlet culling is, never asks which triangle a sample shows, so it is unaffected.</p>
+    <p><code>a_draw_of_whole_index_sharing_groups_keeps_every_sample</code> stays on main as the guard. It checks that drawing whole quads loses nothing, a check any conformant rasteriser should pass. On the M4 Pro, it also checks that drawing the named triangles alone still loses samples. If a driver change makes that check fail, the merging has stopped, and ADR 0019's line is due for review.</p>
+  </div>
+</section>
+
+<section class="chapter" id="normals">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; ticket #369</div>
+    <h2>The shadow mask's normals</h2>
+    <p class="key-idea"><b>Key idea.</b> Two passes that must agree on a sample's triangle disagreed because only one of them read a flat input. The depth passes wrote one triangle's normals into an edge sample that the lit pass then shaded as its neighbour.</p>
+    <p class="order-label">The passes that matter here, in order, with shadow rays and culling on:</p>
+    <ol class="pass-order">
+      <li>culling phase one</li>
+      <li class="warm">depth pre-pass</li>
+      <li>depth pyramid</li>
+      <li>culling phase two</li>
+      <li class="warm">phase two's depth pass</li>
+      <li>shadow mask pass</li>
+      <li class="focus">lit pass</li>
+    </ol>
+    <p>Since #350, the depth passes, marked orange above, write the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">Surface normals</span> with a fragment shader, <code>fs_surface_normals</code>. The <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span> pass reads them to decide, per light, whether to hide it with no ray, trace a ray from outside the surface, or trace one from inside. The <span class="concept" data-term="Lit pass" data-tip="The pass that shades each pixel, at depth equal after the depth passes, into a 4x MSAA HDR attachment. It reads each light's shadow from the shadow mask.">lit pass</span> then tests each sample at depth Equal, shades the fragments that pass and reads the mask's bits.</p>
+    <p><code>fs_surface_normals</code> read no flat input. The lit pass's <code>fs_main</code> reads the flat Material ID to find its Material. So on the M4 Pro the depth passes' fragments could merge and the lit pass's never did. At a sample beside a shared edge, the normals could come from triangle A while the lit pass shaded triangle B there, at the same depth, so B passed the Equal test. Across a crease, A may face away from a light that B faces, and the mask hides that light where the shading says lit.</p>
+    <h3>How culling exposed it</h3>
+    <p>Which fragments merge depends on what the draw holds. With culling on, the depth passes draw the two culling phases' Instances in two draws, while the lit pass draws them all in one. With culling off, phase two is empty, and the depth pre-pass makes the same draw as the lit pass. The depth passes' fragments could merge in both modes, so in both, some edge samples held a neighbour's normals. But the two modes merged different pairs, so their images differed at a few pixels, and that difference is what a test could see. A pixel wrong the same way in both modes was invisible to that comparison; the four Goldens the fix changed (chapter 5) show where the culled image had been wrong.</p>
+    <p>That is how the defect was found. Culling must not change the image, so <code>tests/goldens.rs</code> compares <code>town</code> culled and unculled at eight frames. With #350's normals, six of those frames differed by 1 to 6 pixels at 640&times;360, by up to 69 steps, and PR #366 tolerated up to 8, as <code>HARDWARE_UNCULLED_PIXELS</code>, filing #369 to bring it back to 0. Probes on #366's branch narrowed it down. A lit pass that wrote a hash of each fragment's depth and normal matched in both modes, and constant surface normals matched too. Neither depth pass's tie rule changed a single pixel. Later, #347's Meshlet culling test made <code>helmet</code> differ by 23 pixels, and by none with shadow rays off.</p>
+  </div>
+  <figure class="wide" id="demo-crease">
+    <div class="demo-grid merge">
+      <div class="canvas-frame"><canvas id="c-canvas" class="demo-canvas" role="img" aria-label="Two triangles meeting at a crease, with each sample's shadow bit as the mask decides it from the normals the depth pass wrote, and a cross-section of the crease under the light."></canvas></div>
+      <div>
+        <div class="sliders stacked">
+          <label for="c-light" class="control-label">Light direction <output id="c-light-out" for="c-light"></output></label>
+          <input type="range" id="c-light" min="-90" max="90" step="1" value="70">
+        </div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Depth passes' fragment stage</span>
+            <div class="seg" role="group" aria-label="Depth passes' fragment stage" id="c-flat">
+              <button type="button" data-flat="no" aria-pressed="true">no flat input, before</button>
+              <button type="button" data-flat="yes" aria-pressed="false">flat input, #369</button>
+            </div>
+          </div>
+          <div>
+            <span class="control-label">A merged fragment carries</span>
+            <div class="seg" role="group" aria-label="A merged fragment carries" id="c-carrier">
+              <button type="button" data-carrier="centre" aria-pressed="true">nearest the centre</button>
+              <button type="button" data-carrier="A" aria-pressed="false">A's</button>
+              <button type="button" data-carrier="B" aria-pressed="false">B's</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot one"></span>light reaches it</span>
+          <span><span class="dot"></span>light hidden</span>
+          <span><span class="dot ring" style="background: var(--bad)"></span>hidden where the shading says lit</span>
+          <span><span class="dot ring"></span>wrong bit, darkened anyway</span>
+        </div>
+        <p class="readout" id="c-readout" aria-live="polite"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> The same two triangles, now folded along their shared edge: A's normal leans 35&deg; one way and B's 35&deg; the other, as the cross-section below the grid shows. The lit pass reads a flat input, so it shades each sample as the triangle that covers it, and the background tint is that truth. Each dot is the shadow bit the mask decides from the normal the depth passes wrote there: hidden where that normal turns from the light. Turn the light until it faces one triangle and not the other, then add the flat input. Simplified: one normal per triangle, no rays, no margins, and a bit per sample, where the real mask keeps one per pixel, from the pixel's nearest sample. A wrong &ldquo;reaches it&rdquo; on a triangle that turns from the light does no harm here, since the lit pass's N&middot;L clamp darkens it anyway.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="fix">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; PR #373</div>
+    <h2>The fix</h2>
+    <p class="key-idea"><b>Key idea.</b> The depth passes now read a flat input too, so neither pass's fragments merge and both credit every sample to the triangle that covers it. The read has to survive the compiler, so it is used, to no effect.</p>
+    <pre class="code"><code><span class="comment">// main.wgsl, PR #373: the depth passes' vertex output gains the flat Material ID.</span>
+struct DepthNormalsOutput {
+    @builtin(position) @invariant clip_position: vec4&lt;f32&gt;,
+    @location(0) camera_relative_position: vec3&lt;f32&gt;,
+    @location(1) normal: vec3&lt;f32&gt;,
+    @location(2) @interpolate(flat) material_id: u32,
+}
+
+<span class="comment">// The end of fs_surface_normals.</span>
+let encoded_normals = vec4&lt;f32&gt;(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
+    * 0.5 + 0.5;
+return select(encoded_normals, vec4&lt;f32&gt;(0.0), in.material_id == NO_MATERIAL - 1u);</code></pre>
+    <p>An input the shader never reads can be dropped by the compiler, and then the stage reads no flat input after all. So <code>fs_surface_normals</code> compares the Material ID with <code>NO_MATERIAL - 1</code>, which is <code>u32::MAX - 1</code>. Material IDs index a table of 256 Materials (<code>MATERIAL_CAPACITY</code>), so the comparison never holds and the normals pass through unchanged. The compiler cannot bound a value it reads from a vertex output, so it has to keep the read. That pattern comes from #348's coverage tests.</p>
+    <h3>What changed</h3>
+    <ul class="keypoints">
+      <li><b>The check.</b> <code>HARDWARE_UNCULLED_PIXELS</code> went from 8 to 0, and <code>town</code>'s eight frames match culled and unculled on Metal. On #347's prototype branch, <code>helmet</code> went from 23 differing pixels to 0.</li>
+      <li><b>The Goldens.</b> Four Metal <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span> changed at single edge pixels, where the old image held a merged fragment's normals: <code>normal-tangent</code> 50 pixels, <code>pbr-sweep</code> 3, <code>shadows</code> 1, <code>town</code> 1. The owner accepted them.</li>
+      <li><b>The cost.</b> On <code>town</code>, in three rounds interleaved with a build of main: GPU frame +13 to +24 &micro;s, <code>depth_prepass</code> +23 to +26 &micro;s, and <code>shadow_mask_pass</code> &minus;13 to &minus;34 &micro;s. The counters did not move, so no Baseline was re-recorded.</li>
+    </ul>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>M4 Pro, <code>town</code>, round 3</th><th class="n">median</th><th class="n">Baseline</th><th class="n">change</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>GPU frame</td><td class="n">15,380.8 &micro;s</td><td class="n">15,399.8 &micro;s</td><td class="n">&minus;19.0 &micro;s</td></tr>
+        <tr><td>Gate, rays off (the main pass from culling to the lit pass, ADR 0019&rsquo;s 6 ms limit)</td><td class="n">8,617.2 &micro;s</td><td class="n">8,654.9 &micro;s</td><td class="n">&minus;37.7 &micro;s</td></tr>
+        <tr><td><code>depth_prepass</code></td><td class="n">2,138.7 &micro;s</td><td class="n">2,117.8 &micro;s</td><td class="n">+21.0 &micro;s</td></tr>
+        <tr><td><code>shadow_mask_pass</code></td><td class="n">6,986.2 &micro;s</td><td class="n">7,041.0 &micro;s</td><td class="n">&minus;54.9 &micro;s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">From PR #373, against the recorded Baseline. The interleaved comparison with main, quoted above, is the fairer measure of the change. Either way it is tens of microseconds in a frame of about 15 ms.</p>
+    <h3>Why invariance could not do it</h3>
+    <p>Before choosing, #369 read the published practice, as the owner asks of every defect. The obvious tool is invariance, and Praxis already uses it: <code>clip_position</code> is <code>@invariant</code> in every main-pass entry point, and wgpu turns on Metal's <code>preserveInvariance</code>. But WGSL's <code>@invariant</code> applies only to the position output, and Apple's <code>preserveInvariance</code> likewise guarantees only that position is computed the same way in each pass. That is what makes depth Equal sound, and depth was already equal in #369. The Vulkan specification's invariance appendix, the most explicit of the three, promises identical fragments only for identical pipelines, or across a listed set of state changes. A different fragment shader is not among them. No source found says when two pipelines with different fragment shaders resolve a shared-edge sample to the same triangle.</p>
+    <h3>The options</h3>
+    <ol>
+      <li><b>Read a flat input in the depth passes,</b> as shipped. Almost free, and it matches #348's measurement that a fragment stage reading a flat input is never merged. It rests on that measurement, not on a published rule.</li>
+      <li><b>Write the normals in one draw of both phases at depth Equal,</b> the ticket's first candidate, at about one more geometry pass, roughly 1.5 to 2 ms on <code>town</code>. Both passes would then make the same draw, but Vulkan's rule for identical pipelines would still not cover two different fragment shaders, so it is no safer and costs more.</li>
+      <li><b>Write the normals in the lit pass's own draw.</b> Impossible: the shadow mask pass reads them before the lit pass runs.</li>
+      <li><b>Store a triangle ID per sample and derive the normals from it,</b> as Burns and Hunt's visibility buffer does. Exact by construction and portable, since no later pass resolves ownership again, but a larger change. It is the fallback if the flat-input behaviour fails on another GPU.</li>
+    </ol>
+    <p>ADR 0019 already carried the rule the fix follows: two passes that must agree on a sample's triangle both read a flat input.</p>
+  </div>
+</section>
+
+<section class="chapter" id="open">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; limits</div>
+    <h2>What is still open</h2>
+    <p class="key-idea"><b>Key idea.</b> The fix is sound on the one GPU that was measured. Its guards are tests on that GPU, and the per-sample triangle ID is the way out if another GPU behaves differently.</p>
+    <ul class="keypoints">
+      <li><b>One GPU.</b> Only the M4 Pro was measured. Other Apple GPU families and later macOS releases may merge under other conditions, or regardless of a flat input. Nobody has measured them yet.</li>
+      <li><b>No vendor documentation.</b> PR #370 drafted a report for Apple's Feedback Assistant, describing the behaviour and a reproducer. Filing it needs the owner's Apple ID, so it is the owner's action, and it blocks nothing.</li>
+      <li><b>The guards.</b> On Metal, the culled-vs-unculled check at 0 pixels catches the read being removed, and the coverage test's M4 Pro check catches the merging stopping. Lavapipe, which CI runs, would not catch the flat read being deleted: a shader test asserting that <code>fs_surface_normals</code> reads a flat input was deferred until the read is removed or the normals pass is restructured.</li>
+      <li><b>Every new pass.</b> Any later pass that decides from which triangle a sample shows, such as a visibility buffer (#297), reads a flat input or keeps whole Meshlets.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>Does merging change which samples a draw covers? Which passes does it affect?</summary><p>No. The samples the two triangles cover together are exact; only which triangle's inputs each one receives can move. So culling decided from geometry, as Meshlet culling is, is unaffected. A pass that asks which triangle a sample shows is affected: an ID pass, a visibility buffer, or the depth passes writing normals that another pass must match.</p></details>
+    <details class="check"><summary>Why does <code>fs_surface_normals</code> compare the Material ID with an ID no Material has?</summary><p>It must read a flat input for the M4 Pro to leave its fragments unmerged, and an input the shader never uses can be removed by the compiler. Comparing the value with <code>NO_MATERIAL - 1</code> uses it. Material IDs index a 256-entry table, so the comparison never holds and the output is unchanged, but the compiler cannot know that, so the read stays.</p></details>
+    <details class="check"><summary>Praxis already marked its clip position <code>@invariant</code>. Why did that not keep the depth passes and the lit pass in agreement?</summary><p>Invariance in WGSL, and Metal's <code>preserveInvariance</code>, cover the position output only. They make both passes compute the same depth, which they did. The disagreement was over which triangle owns a sample at that depth, and no specification promises that two pipelines with different fragment shaders resolve it alike. Vulkan's invariance rules cover identical pipelines only.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to 7525b7d, or to PR #373's merge for the fix.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>These tickets</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/348">Ticket #348</a> and <a href="https://github.com/gariasf/praxis/pull/370">PR #370</a> <span>the experiments, the rule, and the draft report to Apple</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/369">Ticket #369</a> and <a href="https://github.com/gariasf/praxis/pull/373">PR #373</a> <span>the culled-vs-unculled defect, the literature step, the fix, its images and its cost</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7525b7d79eec5a837a5546f3365bdc922265d822/docs/performance.md#index-sharing-fragments-merge-on-the-m4-pro-unless-a-flat-input-is-read-2026-10-28-348"><code>docs/performance.md</code>, #348's section</a> <span>the full table, what triggers merging, #296's loss reproduced</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7525b7d79eec5a837a5546f3365bdc922265d822/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the rule, in its Consequences</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/7525b7d79eec5a837a5546f3365bdc922265d822/src/render/coverage_tests.rs"><code>src/render/coverage_tests.rs</code></a> <span>the harness, the oracle, <code>coverage_experiments</code> and the guard test</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/5d03cf2/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span><code>DepthNormalsOutput</code>, <code>fs_surface_normals</code>, <code>fs_main</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/5d03cf2/tests/goldens.rs"><code>tests/goldens.rs</code></a> <span><code>HARDWARE_UNCULLED_PIXELS</code>, now 0</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and specifications</h3>
+      <ul>
+        <li>Fatahalian, Boulos, Hegarty, Akeley, Mark, Moreton and Hanrahan, <a href="https://web.archive.org/web/20250524023447id_/http://graphics.stanford.edu/papers/fragmerging/shade_sig10.pdf#page=4">&ldquo;Reducing Shading on GPUs using Quad-Fragment Merging&rdquo;</a>, ACM Transactions on Graphics 29(4), SIGGRAPH 2010, &sect;3.1&ndash;3.2 <span>the published technique this resembles: the merge conditions, and how a merged fragment's inputs are chosen</span></li>
+        <li>Burns and Hunt, <a href="https://jcgt.org/published/0002/02/04/">&ldquo;The Visibility Buffer: A Cache-Friendly Approach to Deferred Shading&rdquo;</a>, JCGT 2(2), 2013 <span>a triangle ID per sample, written once, so later passes never re-resolve ownership: the portable fallback</span></li>
+        <li>W3C, <a href="https://www.w3.org/TR/WGSL/#invariant-attr">WGSL, the <code>invariant</code> attribute</a> <span>invariance applies to the position output only</span></li>
+        <li>Apple, <a href="https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance">Metal, <code>MTLCompileOptions.preserveInvariance</code></a> <span>Apple's multi-pass guarantee, again for position</span></li>
+        <li>Khronos, <a href="https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#invariance">Vulkan specification, appendix Invariance</a> <span>identical results only for identical pipelines and listed state changes</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman et al., <i>Real-Time Rendering</i>, 4th ed., &sect;5.4 Aliasing and Antialiasing, with multisampling on pp. 139&ndash;142 <span>coverage per sample and shading per pixel, the background to chapter 1. Pages from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">contents and index</a>.</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Meshlet, Material ID, Surface normals, Shadow mask and Golden are <code>CONTEXT.md</code>'s definitions. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Sample</dt><dd>One of the points per pixel at which MSAA tests coverage and stores depth and colour: four at 4x.</dd></div>
+    <div><dt>Fragment</dt><dd>One triangle's shading at one pixel. Under MSAA it runs once and lands in every sample of the pixel the triangle covers.</dd></div>
+    <div><dt>Flat input</dt><dd>A fragment input declared <code>@interpolate(flat)</code>, taken whole from one vertex of the triangle rather than interpolated.</dd></div>
+    <div><dt>Fragment merging</dt><dd>One fragment writing the samples of two triangles with one triangle's inputs. Measured on the M4 Pro for index-sharing triangles whose fragment stage reads no flat input.</dd></div>
+    <div><dt>Partner</dt><dd>In the coverage tests, the other triangle of the same quad, which shares two of its vertex indices.</dd></div>
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.</dd></div>
+    <div><dt>Material ID</dt><dd>The number that identifies a Material to the GPU.</dd></div>
+    <div><dt>Surface normals</dt><dd>Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads.</dd></div>
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from tickets <a href="https://github.com/gariasf/praxis/issues/348">#348</a> and <a href="https://github.com/gariasf/praxis/issues/369">#369</a>, PRs <a href="https://github.com/gariasf/praxis/pull/370">#370</a> at 7525b7d and <a href="https://github.com/gariasf/praxis/pull/373">#373</a>, <code>docs/performance.md</code>, ADR 0019, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is the PRs' own, on one Apple M4 Pro. Both demos are this page's illustrative model of the measured behaviour, not Apple's algorithm, which is undocumented.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="meshlet-culling.html">Previous: Meshlet Culling Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const degree = Math.PI / 180;
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function sizeCanvas(canvas, width, height) {
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.aspectRatio = width + " / " + height;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return context;
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+
+  // ---- The model: a quad of two index-sharing triangles on a grid of pixels.
+  const GRID_WIDTH = 12, GRID_HEIGHT = 6;
+  // Pixel units, y down. A is 0 1 2 and B is 0 2 3, so they share vertices 0 and 2.
+  const VERTICES = [[0.55, 0.8], [11.45, 0.35], [11.15, 5.45], [0.8, 5.3]];
+  const TRIANGLES = { A: [0, 1, 2], B: [0, 2, 3] };
+  // Standard sample positions within a pixel, as the coverage tests' oracle uses them.
+  const SAMPLE_POSITIONS = {
+    1: [[0.5, 0.5]],
+    2: [[0.75, 0.75], [0.25, 0.25]],
+    4: [[0.375, 0.125], [0.875, 0.375], [0.125, 0.625], [0.625, 0.875]],
+  };
+  const edge = (a, b, p) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  function insideQuad(point) {
+    const signs = [0, 1, 2, 3].map((index) => edge(VERTICES[index], VERTICES[(index + 1) % 4], point));
+    return signs.every((value) => value > 0) || signs.every((value) => value < 0);
+  }
+  const sideOfA = Math.sign(edge(VERTICES[0], VERTICES[2], VERTICES[1]));
+  // The triangle that covers a point, exactly: the shared edge goes to B.
+  function owner(point) {
+    if (!insideQuad(point)) return null;
+    return edge(VERTICES[0], VERTICES[2], point) * sideOfA > 0 ? "A" : "B";
+  }
+  // Each pixel's samples: who covers each, and whose inputs reach it.
+  // Without a flat input and with more than one sample, a pixel both triangles
+  // cover gets one merged fragment, which writes every covered sample with
+  // `carrier`'s inputs ("centre": the triangle at the pixel centre, else the
+  // one whose covered sample lies nearest it, Fatahalian et al.'s rule).
+  function rasterise(sampleCount, readsFlat, carrier) {
+    const pixels = [];
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+      for (let x = 0; x < GRID_WIDTH; x++) {
+        const samples = SAMPLE_POSITIONS[sampleCount].map(([u, v]) => {
+          const point = [x + u, y + v];
+          return { point, owner: owner(point) };
+        });
+        const coversA = samples.some((sample) => sample.owner === "A");
+        const coversB = samples.some((sample) => sample.owner === "B");
+        const merged = !readsFlat && sampleCount > 1 && coversA && coversB;
+        let carried = null;
+        if (merged) {
+          if (carrier === "A" || carrier === "B") carried = carrier;
+          else {
+            const centre = [x + 0.5, y + 0.5];
+            carried = owner(centre);
+            if (!carried) {
+              let nearest = Infinity;
+              samples.forEach((sample) => {
+                const distance = Math.hypot(sample.point[0] - centre[0], sample.point[1] - centre[1]);
+                if (sample.owner && distance < nearest) { nearest = distance; carried = sample.owner; }
+              });
+            }
+          }
+        }
+        samples.forEach((sample) => { sample.written = sample.owner ? (merged ? carried : sample.owner) : null; });
+        pixels.push({ x, y, samples, merged });
+      }
+    }
+    return pixels;
+  }
+
+  // The crease: each triangle's normal leans this far from the view direction, A one way and B the other.
+  const CREASE = 35;
+  const NORMAL_ANGLE = { A: CREASE, B: -CREASE };
+  const faces = (triangle, light) => Math.cos((light - NORMAL_ANGLE[triangle]) * degree) > 0;
+
+  if (typeof module !== "undefined") {
+    module.exports = { rasterise, owner, faces, SAMPLE_POSITIONS };
+    return;
+  }
+
+  // ---- Drawing, shared by both demos.
+  const WIDTH = 600, CELL = WIDTH / GRID_WIDTH, GRID_PIXELS_HIGH = GRID_HEIGHT * CELL;
+  const toCanvas = (point) => [point[0] * CELL, point[1] * CELL];
+  function drawGrid(context, tint) {
+    const panel = css("--panel"), rule = css("--rule"), ink = css("--ink");
+    context.fillStyle = panel;
+    context.fillRect(0, 0, WIDTH, GRID_PIXELS_HIGH);
+    ["A", "B"].forEach((name) => {
+      context.fillStyle = tint(name);
+      context.beginPath();
+      TRIANGLES[name].forEach((index, at) => {
+        const [x, y] = toCanvas(VERTICES[index]);
+        if (at === 0) context.moveTo(x, y); else context.lineTo(x, y);
+      });
+      context.closePath();
+      context.fill();
+    });
+    context.strokeStyle = rule;
+    context.lineWidth = 1;
+    for (let x = 0; x <= GRID_WIDTH; x++) { context.beginPath(); context.moveTo(x * CELL, 0); context.lineTo(x * CELL, GRID_PIXELS_HIGH); context.stroke(); }
+    for (let y = 0; y <= GRID_HEIGHT; y++) { context.beginPath(); context.moveTo(0, y * CELL); context.lineTo(WIDTH, y * CELL); context.stroke(); }
+    context.strokeStyle = ink;
+    context.lineWidth = 1.5;
+    context.beginPath();
+    VERTICES.concat([VERTICES[0]]).forEach((vertex, index) => {
+      const [x, y] = toCanvas(vertex);
+      if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.setLineDash([6, 5]);
+    context.beginPath();
+    context.moveTo(...toCanvas(VERTICES[0]));
+    context.lineTo(...toCanvas(VERTICES[2]));
+    context.stroke();
+    context.setLineDash([]);
+    context.font = "700 15px " + css("--display");
+    context.fillStyle = ink;
+    context.fillText("A", 8.6 * CELL, 1.75 * CELL);
+    context.fillText("B", 2.6 * CELL, 4.55 * CELL);
+  }
+  function drawMerged(context, pixels) {
+    context.strokeStyle = css("--ink");
+    context.lineWidth = 1.5;
+    context.setLineDash([4, 3]);
+    pixels.filter((pixel) => pixel.merged).forEach((pixel) => context.strokeRect(pixel.x * CELL + 2.5, pixel.y * CELL + 2.5, CELL - 5, CELL - 5));
+    context.setLineDash([]);
+  }
+  function dot(context, point, fill, stroke, radius) {
+    const [x, y] = toCanvas(point);
+    context.beginPath();
+    context.arc(x, y, radius, 0, 2 * Math.PI);
+    if (fill) { context.fillStyle = fill; context.fill(); }
+    if (stroke) { context.strokeStyle = stroke; context.lineWidth = 1.5; context.stroke(); }
+  }
+  function ring(context, point, colour) {
+    const [x, y] = toCanvas(point);
+    context.strokeStyle = colour;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(x, y, 8.5, 0, 2 * Math.PI);
+    context.stroke();
+  }
+
+  // ---- Demo 1: merging, with and without a flat input.
+  (function () {
+    const canvas = document.getElementById("m-canvas");
+    if (!canvas) return;
+    let readsFlat = false, sampleCount = 4, carrier = "centre";
+    function draw() {
+      const context = sizeCanvas(canvas, WIDTH, GRID_PIXELS_HIGH);
+      const accent = css("--accent"), warm = css("--warm"), bad = css("--bad"), soft = css("--ink-soft");
+      drawGrid(context, (name) => name === "A" ? css("--accent-wash") : css("--warm-wash"));
+      const pixels = rasterise(sampleCount, readsFlat, carrier);
+      drawMerged(context, pixels);
+      let covered = 0, moved = 0, both = 0;
+      pixels.forEach((pixel) => {
+        if (pixel.samples.some((sample) => sample.owner === "A") && pixel.samples.some((sample) => sample.owner === "B")) both++;
+        pixel.samples.forEach((sample) => {
+          if (!sample.owner) { dot(context, sample.point, null, soft, 2.5); return; }
+          covered++;
+          dot(context, sample.point, sample.written === "A" ? accent : warm, null, 5.5);
+          if (sample.written !== sample.owner) { moved++; ring(context, sample.point, bad); }
+        });
+      });
+      const merged = pixels.filter((pixel) => pixel.merged).length;
+      let text = "<b>" + covered + "</b> samples covered, the same in every setting. ";
+      if (sampleCount === 1) text += "At 1x each pixel has one sample, so no pixel holds samples of both triangles, and a merged fragment could misattribute no sample; #348 measured no departures at 1x.";
+      else if (readsFlat) text += "<b>" + both + "</b> pixels hold samples of both triangles, each shaded by two fragments: <b>0</b> samples receive the other triangle's inputs.";
+      else text += "<b>" + both + "</b> pixels hold samples of both triangles; their <b>" + merged + "</b> merged fragments give <b class=\"bad-text\">" + moved + "</b> samples the other triangle's inputs.";
+      document.getElementById("m-readout").innerHTML = text;
+    }
+    segmented(document.getElementById("m-flat"), "flat", (value) => { readsFlat = value === "yes"; draw(); });
+    segmented(document.getElementById("m-samples"), "samples", (value) => { sampleCount = Number(value); draw(); });
+    segmented(document.getElementById("m-carrier"), "carrier", (value) => { carrier = value; draw(); });
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+
+  // ---- Demo 2: the crease, and the shadow bit the mask decides from the depth passes' normals.
+  (function () {
+    const canvas = document.getElementById("c-canvas");
+    if (!canvas) return;
+    const slider = document.getElementById("c-light");
+    const PROFILE = 130, HEIGHT = GRID_PIXELS_HIGH + PROFILE;
+    let readsFlat = false, carrier = "centre";
+    function drawProfile(context, light) {
+      const top = GRID_PIXELS_HIGH, ink = css("--ink"), soft = css("--ink-soft"), accent = css("--accent"), warm = css("--warm");
+      context.fillStyle = css("--figure-bg");
+      context.fillRect(0, top, WIDTH, PROFILE);
+      context.strokeStyle = css("--rule");
+      context.beginPath(); context.moveTo(0, top + 0.5); context.lineTo(WIDTH, top + 0.5); context.stroke();
+      // A ridge seen end-on, the eye above it: A's face leans one way and B's the other.
+      const apex = [WIDTH / 2, top + 60], length = 100;
+      const faceEnd = (angle, sign) => [apex[0] + sign * length * Math.cos(angle * degree), apex[1] + length * Math.sin(angle * degree)];
+      const ends = { A: faceEnd(CREASE, 1), B: faceEnd(CREASE, -1) };
+      ["A", "B"].forEach((name) => {
+        const colour = name === "A" ? accent : warm;
+        context.strokeStyle = colour;
+        context.lineWidth = 4;
+        context.beginPath(); context.moveTo(apex[0], apex[1]); context.lineTo(ends[name][0], ends[name][1]); context.stroke();
+        const middle = [(apex[0] + ends[name][0]) / 2, (apex[1] + ends[name][1]) / 2];
+        const normal = [Math.sin(NORMAL_ANGLE[name] * degree), -Math.cos(NORMAL_ANGLE[name] * degree)];
+        context.lineWidth = 2;
+        context.beginPath(); context.moveTo(middle[0], middle[1]); context.lineTo(middle[0] + normal[0] * 34, middle[1] + normal[1] * 34); context.stroke();
+        context.font = "600 12px " + css("--mono");
+        context.fillStyle = colour;
+        context.fillText(name + (faces(name, light) ? " faces the light" : " turns from it"), name === "A" ? apex[0] + 95 : apex[0] - 215, top + 98);
+      });
+      // The light, coming in at `light` degrees from straight above.
+      const direction = [Math.sin(light * degree), -Math.cos(light * degree)];
+      const from = [apex[0] + direction[0] * 52, apex[1] + direction[1] * 52];
+      const to = [apex[0] + direction[0] * 16, apex[1] + direction[1] * 16];
+      context.strokeStyle = warm;
+      context.fillStyle = warm;
+      context.lineWidth = 2;
+      context.setLineDash([5, 4]);
+      context.beginPath(); context.moveTo(from[0], from[1]); context.lineTo(to[0], to[1]); context.stroke();
+      context.setLineDash([]);
+      context.beginPath(); context.arc(from[0], from[1], 7, 0, 2 * Math.PI); context.fill();
+      context.font = "12px " + css("--mono");
+      context.fillStyle = soft;
+      context.fillText("cross-section, eye above", 10, top + 120);
+      context.strokeStyle = ink;
+    }
+    function draw() {
+      const light = Number(slider.value);
+      document.getElementById("c-light-out").textContent = (light > 0 ? "+" : light < 0 ? "−" : "") + Math.abs(light) + "°";
+      const context = sizeCanvas(canvas, WIDTH, HEIGHT);
+      const accent = css("--accent"), bad = css("--bad"), soft = css("--ink-soft"), panel = css("--panel");
+      drawGrid(context, (name) => faces(name, light) ? css("--accent-wash") : css("--figure-bg"));
+      const pixels = rasterise(4, readsFlat, carrier);
+      drawMerged(context, pixels);
+      let foreign = 0, wrongDark = 0, wrongHarmless = 0;
+      pixels.forEach((pixel) => pixel.samples.forEach((sample) => {
+        if (!sample.owner) { dot(context, sample.point, null, soft, 2.5); return; }
+        const reaches = faces(sample.written, light);
+        const shading = faces(sample.owner, light);
+        if (reaches) dot(context, sample.point, accent, null, 5.5);
+        else dot(context, sample.point, panel, soft, 5);
+        if (sample.written !== sample.owner) {
+          foreign++;
+          if (reaches !== shading) {
+            if (shading) { wrongDark++; dot(context, sample.point, bad, null, 5.5); ring(context, sample.point, bad); }
+            else { wrongHarmless++; ring(context, sample.point, bad); }
+          }
+        }
+      }));
+      drawProfile(context, light);
+      document.getElementById("c-readout").innerHTML =
+        "<b>" + foreign + "</b> samples hold the normal of the triangle the lit pass does not shade there. " +
+        "<b class=\"bad-text\">" + wrongDark + "</b> of them hide the light where the shading says lit; <b>" + wrongHarmless + "</b> let it reach a triangle that turns from it, which N&middot;L darkens anyway." +
+        (readsFlat ? " With the flat input, no fragment merges." : "");
+    }
+    slider.addEventListener("input", draw);
+    segmented(document.getElementById("c-flat"), "flat", (value) => { readsFlat = value === "yes"; draw(); });
+    segmented(document.getElementById("c-carrier"), "carrier", (value) => { carrier = value; draw(); });
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

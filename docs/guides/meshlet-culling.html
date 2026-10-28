@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Meshlet Culling Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 21 of the series, after Shadow Terminator Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the dispatch order, the demos' legends and the proof. */
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.legend .bar { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 7px; border-top: 3px solid var(--accent); }
+.legend .bar.away { border-top: 2px solid var(--bad); }
+.legend .bar.cone { border-top: 3px dashed var(--warm); }
+.legend .bar.frustum { border-top: 3px dotted var(--ink-soft); }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.good-text { color: var(--good); }
+.bad-text { color: var(--bad); }
+[hidden] { display: none !important; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+#m-canvas, #d-canvas { width: 100%; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #347 &middot; PRs #363 and #371</div>
+  <h1>Culling Meshlets, and the scene where it did not pay</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>On <code>town</code>, the culling pass spent 2.4 ms building the frame's draw, launching a workgroup per Instance slot to write an index for each triangle corner. Praxis now writes them with a dispatch the GPU sizes itself. A test of each Meshlet was prototyped to write fewer, but dropped only 4.9% of the triangles and left the gate unchanged, so it stays unmerged. The idea to keep: a normal cone can only cull a Meshlet whose triangles all face roughly one way, and a Meshlet holding a whole box never does.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why the frame's draw costs index writes, and how an indirect dispatch sizes them</li>
+      <li>Why wgpu will not let a dispatch read its arguments from a buffer it also writes</li>
+      <li>How the frustum, depth pyramid and normal cone tests drop a Meshlet, and why any bounding sphere works for the cone</li>
+      <li>Why each Meshlet is tested in exactly one place under Metal's fast math</li>
+      <li>What <code>town</code> measured, and what would make the test pay</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="instance-culling.html">Instance Culling Explained</a>, for the culling pass, its two phases and slot order; <a href="depth-pyramid.html">Depth Pyramid Explained</a>, for the occlusion test; <a href="frame-timing.html">Frame Timing Explained</a>, for the gate</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at a531ed2 (PR #371, 2026-10-28), and the unmerged prototype <code>prototype/347-meshlet-culling</code> at d242a68. <b>Since then:</b> PR #372 (5264094) leaves the GPU stats readback out of <code>gpu_memory_bytes</code>, and PR #373 (5d03cf2) fixes #369, after which the prototype's <code>helmet</code> images match culled and unculled; as of 2026-10-28.</p>
+  </aside>
+  <p class="lede">Ticket #347 set out to cut what <code>town</code>'s gate, past ADR 0019's 6 ms, is made of, with two fixes: make the culling pass itself cheaper, and stop it drawing <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.">Meshlets</span> that cannot show. The first merged as PR #363 and cut the pass from 2.4 to 1.3 ms. The second was built, tested and measured, and the owner chose to record it rather than merge it. This guide explains both: how the GPU sizes its own work with an indirect dispatch, why wgpu needed a stand-in buffer for it, what a Meshlet test checks and why its cone test is sound, and why on <code>town</code> almost nothing failed it. Three live demos let you size a dispatch, move a camera round a Mesh's Meshlets, and watch two orders of the same f32 sum disagree.</p>
+  <p class="status"><b>Provenance.</b> Part A is PR #363, merged on 2026-10-28 as 79c3e87; its code is read at a531ed2: <code>src/render/shaders/culling.wgsl</code> and <code>src/render/culling_pass.rs</code>. Part B is the prototype at d242a68 on branch <code>prototype/347-meshlet-culling</code>, read as its diff against main at 7525b7d: <code>culling.wgsl</code>, <code>src/assets/pools.rs</code>, <code>src/assets/mesh.rs</code> and its GPU test in <code>src/render/renderer.rs</code>. PR #371, merged as a531ed2, records the prototype in <code>docs/performance.md</code> and ADR 0019. Timings are the PRs' and that section's, measured on an Apple M4 Pro at 2560&times;1440 with 4x MSAA. Where this guide does its own arithmetic, it says so.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#draw">1 &middot; The frame's draw</a>
+    <a href="#indirect">2 &middot; Indirect dispatch</a>
+    <a href="#tests">3 &middot; Testing a Meshlet</a>
+    <a href="#once">4 &middot; Test once</a>
+    <a href="#town">5 &middot; What <code>town</code> measured</a>
+    <a href="#pay">6 &middot; What would make it pay</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="draw">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; culling.wgsl</div>
+    <h2>The frame's draw, and why its cost is index writes</h2>
+    <p class="key-idea"><b>Key idea.</b> Each culling phase builds its draw as one index per triangle corner, in slot order. Once the slots are summed, what the pass pays for is writing those indices: on <code>town</code>, 5,552,214 triangles' worth.</p>
+    <p>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> lists no draws. The GPU builds its own: the culling pass tests each <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> and appends the ones it draws to the frame's draw, which the main pass draws with one <code>draw_indexed_indirect</code> per pipeline and phase (ADR 0019). The draw is two buffers:</p>
+    <ul class="keypoints">
+      <li><b><span class="concept" data-term="Meshlet record" data-tip="One Meshlet of one Instance in the frame's draw: the Instance's slot, the Meshlet, and the Material it is drawn with.">Meshlet records</span></b>, one per Meshlet of each drawn Instance: the Instance's slot, the Meshlet and the Material it is drawn with.</li>
+      <li><b><span class="concept" data-term="Packed index" data-tip="An index of the frame's draw: its Meshlet record in the high bits, and the vertex within that Meshlet in the low six.">Packed indices</span></b>, one per triangle corner: the record in the high bits and the vertex within its Meshlet in the low six. Meshlets hold at most 64 vertices and 124 triangles. The vertex shader unpacks the record, and from it its Instance, Material and vertex.</li>
+    </ul>
+    <p>Both are written in slot order within each phase, never in the order atomics happen to land. On the M4 Pro, which triangles a draw holds before others changes the derivatives some pixels sample their Textures with, so a draw built in landing order would draw a different image from run to run (<a href="instance-culling.html#slot-order">Instance Culling Explained, chapter 3</a>). Slot order means every Instance must know where its records and indices start before any are written, and that is a prefix sum.</p>
+    <h3>Four dispatches per phase</h3>
+    <p class="order-label">One compute pass per culling phase, at a531ed2:</p>
+    <ol class="pass-order">
+      <li>offset_slots &middot; a workgroup per 256 slots</li>
+      <li>offset_blocks &middot; one workgroup</li>
+      <li>append_records &middot; an invocation per slot</li>
+      <li class="focus">append_triangles &middot; indirect, 32 per record</li>
+    </ol>
+    <ol>
+      <li><b><code>offset_slots</code></b> tests each slot's Instance against the frustum, and in phase two the depth pyramid, and sums the Meshlet records and packed indices of the drawn ones over each block of 256 slots: a Hillis and Steele scan in workgroup memory.</li>
+      <li><b><code>offset_blocks</code></b>, one workgroup, scans the blocks' sums. It also writes how many workgroups step 4 launches, and the phase's range of records, as chapter 2 explains.</li>
+      <li><b><code>append_records</code></b> writes each drawn Instance's Meshlet records from its offset, and counts it drawn or, past the draw's capacity, overflowed.</li>
+      <li><b><code>append_triangles</code></b> takes one workgroup of 32 invocations per record and writes its Meshlet's packed indices, adjacent invocations writing adjacent indices.</li>
+    </ol>
+    <h3>What PR #363 replaced</h3>
+    <p>Before it, steps 3 and 4 were one entry point, <code>append_meshlets</code>, with a workgroup of 124 invocations, one per triangle of a Meshlet, for every slot in use. <code>town</code> places 244,256 Instances and 10,000 pigeons, so each phase launched 254,256 workgroups whatever it appended. Phase two appends little, since most of what is visible was drawn in phase one, yet it spent about 0.7 ms on those workgroups. PR #363 measured, on <code>town</code> against main's Baseline:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>M4 Pro, <code>town</code>, medians</th><th class="n">before</th><th class="n">PR #363</th><th class="n">change</th></tr></thead>
+      <tbody>
+        <tr><td><code>culling_phase_one</code></td><td class="n">1,513 &micro;s</td><td class="n">1,109 &micro;s</td><td class="n">&minus;404 &micro;s</td></tr>
+        <tr><td><code>culling_phase_two</code></td><td class="n">898 &micro;s</td><td class="n">170 &micro;s</td><td class="n">&minus;728 &micro;s</td></tr>
+        <tr class="focus"><td>Gate, rays off</td><td class="n">9.82 ms</td><td class="n">8.50 ms</td><td class="n">&minus;1.32 ms</td></tr>
+        <tr><td><code>triangles_drawn</code></td><td class="n">5,552,214</td><td class="n">5,552,214</td><td class="n">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The draw is byte-identical: the same records and packed indices, in the same order, so no image changed. The two phases went from 2,411 to 1,279 &micro;s, 53% of where they started. The ticket asked for under half.</p>
+    <h3>What remains is the writes</h3>
+    <p>Phase one's 1.1 ms is its packed-index writes: 3 &times; 5,552,214 = 16,656,642 of them on <code>town</code>, this page's product. PR #363 tried to find another cause and found none. A variant that wrote its indices without reading anything cost the same; so did workgroups 32 to 128 wide, and 1 to 8 records per workgroup. Writing fewer indices is the only lever left, which means drawing fewer triangles: a test of each Meshlet, chapter 3's subject.</p>
+  </div>
+</section>
+
+<section class="chapter" id="indirect">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; culling_pass.rs</div>
+    <h2>Indirect dispatch, and the stand-in buffer</h2>
+    <p class="key-idea"><b>Key idea.</b> The GPU writes how many workgroups <code>append_triangles</code> launches into a buffer, and the dispatch reads them from there; the CPU never learns the number. wgpu checks a dispatch's bindings and its argument buffer together, and a buffer cannot be both, so the dispatch binds a 72-byte stand-in where that buffer would go.</p>
+    <p>Only <code>offset_blocks</code> knows how many Meshlet records the phase appends, and it knows it on the GPU, mid-frame. Reading it back would stall the frame. An <b>indirect dispatch</b> takes its workgroup counts, x, y and z, from a buffer instead of from the CPU's call, so <code>offset_blocks</code> writes them and <code>append_triangles</code> launches with them, in the same compute pass.</p>
+    <h3>Rows of 65,535</h3>
+    <p>A dispatch may launch at most 65,535 workgroups in each dimension, wgpu's default <code>max_compute_workgroups_per_dimension</code>, which the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> takes as its own (ADR 0021); <code>CullingPass::new</code> asserts the device allows it. The frame's draw holds 2<sup>20</sup> = 1,048,576 records, so the records are laid out in rows:</p>
+    <pre class="code"><code><span class="comment">// culling.wgsl at a531ed2, the end of offset_blocks</span>
+let records = appended.y - appended.x;
+<span class="comment">// At least one row, so no records dispatch no workgroups.</span>
+let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
+frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);</code></pre>
+    <p>Each workgroup finds its record as <code>appended.x + workgroup.y * workgroups.x + workgroup.x</code>, and returns at once past the last, since x &times; y can exceed the count. The <code>max(&hellip;, 1)</code> matters at zero: without it, rows would be 0 and x would compute (0 + 0 &minus; 1) / 0, which PR #363's review caught wrapping x to 0xFFFFFFFF. With it, zero records give x = 0, y = 1: no workgroups.</p>
+  </div>
+  <figure class="wide" id="demo-dispatch">
+    <div class="demo-grid">
+      <div class="canvas-frame"><canvas id="d-canvas" class="demo" role="img" aria-label="The workgroups an indirect dispatch launches, in rows of at most 65,535, with those past the last record marked."></canvas></div>
+      <div>
+        <div class="sliders stacked">
+          <label for="d-records" class="control-label">Meshlet records the phase appends <output id="d-records-out" for="d-records"></output></label>
+          <input type="range" id="d-records" min="0" max="1048576" step="1" value="70000">
+        </div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Presets</span>
+            <div class="seg" role="group" aria-label="Preset record counts" id="d-presets">
+              <button type="button" data-records="0" aria-pressed="false">0</button>
+              <button type="button" data-records="65535" aria-pressed="false">65,535</button>
+              <button type="button" data-records="65536" aria-pressed="false">65,536</button>
+              <button type="button" data-records="70000" aria-pressed="true">70,000</button>
+              <button type="button" data-records="1048576" aria-pressed="false">2<sup>20</sup></button>
+            </div>
+          </div>
+        </div>
+        <p class="readout" id="d-readout" aria-live="polite"></p>
+        <p class="readout" id="d-before"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> What <code>offset_blocks</code> writes for <code>append_triangles</code>, for a count of records you pick: each bar is a row of y, its length the x workgroups in it, filled where a workgroup has a record and hatched where it returns at once. 70,000 records is the size PR #363's capacity test uses to reach a second row. The comparison below is <code>town</code>'s, with <code>append_meshlets</code>'s workgroup per slot in use.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>One usage scope per dispatch</h3>
+    <p>The dispatch's arguments live in <code>frame_draw</code>, which group 3 binds read-write: the culling entry points add to its counts and <code>offset_blocks</code> writes the arguments there. wgpu tracks how each dispatch uses every buffer, in a <span class="concept" data-term="Usage scope" data-tip="The resources wgpu checks together for conflicting uses: in a compute pass, everything one dispatch's bind groups bind, plus its indirect buffer.">usage scope</span>. In wgpu-core 30, <code>flush_bindings</code> merges every active bind group into the dispatch's scope, then the indirect buffer, as <code>INDIRECT</code>. In wgpu-types, <code>INDIRECT</code> is one of the uses a buffer may hold at the same time as others, and <code>STORAGE_READ_WRITE</code> one it must hold alone. So a dispatch whose arguments are in a buffer that a bound group writes fails validation.</p>
+    <p>Group 3 holds more than <code>frame_draw</code>: the offsets, records, packed indices, visibility bits and the depth pyramid. <code>append_triangles</code> needs most of them. So it runs with a second copy of group 3, built beside the first in <code>frame_draw_bind_groups</code>, whose <code>frame_draw</code> binding is a 72-byte stand-in it never reads. It reads the phase's record range from <code>instance_offsets[APPENDED_RECORDS]</code>, where <code>offset_blocks</code> put a copy, past every slot's and block's offsets. One layout, one pipeline layout, two groups.</p>
+    <ul class="keypoints">
+      <li><b>The road not taken.</b> The first attempt copied the arguments out between two compute passes. It cost about 50 heap allocations a frame, and was dropped.</li>
+      <li><b>What it costs.</b> 192 bytes of GPU memory on every scene, among them the stand-in's 72 and <code>FrameDraw</code>'s growth from 56 to 72 bytes; and 3 heap allocations a frame on Metal, 2 on lavapipe. A test build with direct dispatches allocated fewer, so those are wgpu's work for indirect ones.</li>
+      <li><b>Why 32 wide.</b> 32 is an Apple SIMD-group. On <code>crowd</code>, phase one read 142 &micro;s with a workgroup of 124 invocations, one per triangle, as before, and 93 with 32 per index. <code>town</code> read 1,112 &micro;s either way.</li>
+      <li><b>Why records stay one per slot.</b> Spreading each block's records over a workgroup read 55 &micro;s on <code>helmet</code> but cost <code>town</code> about 180 &micro;s.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="tests">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; the prototype's tests</div>
+    <h2>What a Meshlet test is</h2>
+    <p class="key-idea"><b>Key idea.</b> A drawn Instance's Meshlet can be dropped whole when its box lies outside the view frustum, when in phase two the depth pyramid hides its box, or when its normal cone shows the camera sees all of its triangles from behind. The cone test needs only a sphere that holds the triangles, so the sphere round the Meshlet's box will do.</p>
+    <p>The prototype tests each Meshlet of an Instance that has already passed the Instance tests. A Meshlet is kept or dropped whole, never triangle by triangle: its record stays, and its indices are written or not.</p>
+    <h3>The box tests, again</h3>
+    <p>The frustum and occlusion tests are the Instance's, given a smaller box. <code>clip_space_bounds</code> takes the box's corners instead of a Mesh, and <code>in_view_frustum</code> and <code>occluded</code> run unchanged (<a href="instance-culling.html#frustum">Instance Culling Explained, chapter 4</a>; <a href="depth-pyramid.html">Depth Pyramid Explained</a>). The frustum has five planes, four sides and the near one, since with reverse-Z and no far plane there is no sixth (ADR 0015). Phase one has no depth pyramid yet, so it keeps Meshlets that are hidden behind others. The prototype's GPU test shows it: an Instance entering view in its second frame has phase two drop a Meshlet behind a nearer quad, and in its third, phase one keeps it.</p>
+    <h3>The normal cone</h3>
+    <p>The third test asks whether the camera sees every triangle of the Meshlet from behind, as the rasterizer would cull each of them. A <span class="concept" data-term="Normal cone" data-tip="An axis and a half-angle within which lie the normals of every triangle in a Meshlet.">normal cone</span> answers it without visiting the triangles: an axis <b>a</b>, and a half-angle &alpha; within which every triangle's normal lies. meshoptimizer 0.25's <code>meshopt_computeMeshletBounds</code> computes it, which the Mesh pool calls through the <code>meshopt</code> crate. It sets the cone's axis from the triangles' normals and finds the smallest dot product of any normal with it, cos &alpha;. Its cutoff is s = &radic;(1 &minus; cos&sup2; &alpha;) = sin &alpha;.</p>
+    <ul class="keypoints">
+      <li><b>Wide cones accept everything.</b> Where cos &alpha; &le; 0.1, so the cone is about 168&deg; wide or more, meshoptimizer calls it degenerate and sets the cutoff to 1, which culls nothing.</li>
+      <li><b>Eight bits, rounded up.</b> The axis and cutoff are also given as Snorm8, each x/127. meshoptimizer adds the quantised axis's error to the cutoff and rounds up, so the 8-bit test never culls a Meshlet the exact cone keeps. The prototype stores those four bytes, and tests <code>cone.w &lt; 1.0</code> first: a cutoff of 127 culls nothing.</li>
+    </ul>
+    <h3>The test without an apex</h3>
+    <p>meshoptimizer's header gives two perspective tests. One needs the cone's apex. The other, which the prototype uses, needs only a bounding sphere, centre <b>c</b> and radius r, and the camera <b>e</b>: the Meshlet faces away where</p>
+    <pre class="formula">dot(c &minus; e, a)  &ge;  s &middot; |c &minus; e|  +  r</pre>
+    <p>The header cites <i>Real-Time Rendering</i>, 4th edition, section 19.3, for its derivation. The prototype uses the sphere round the Meshlet's box, centred on the box with half its diagonal as radius, since the box is there already. meshoptimizer's own sphere would be tighter, but the test holds for any sphere that holds the triangles. Here is why, in this page's words. Write L = |c &minus; e| and u = cos &theta; for the angle &theta; between c &minus; e and the axis:</p>
+    <pre class="formula">the test says        u  &ge;  s + r/L
+any normal n is within &alpha; of a, so the angle from c &minus; e to n is at most &theta; + &alpha;
+any triangle point p is within r of c, so
+  dot(p &minus; e, n)  =  dot(c &minus; e, n) + dot(p &minus; c, n)  &ge;  L&middot;cos(&theta; + &alpha;) &minus; r
+cos(&theta; + &alpha;)  =  u&middot;&radic;(1 &minus; s&sup2;) &minus; s&middot;&radic;(1 &minus; u&sup2;)  =  f(u),   and f(s) = 0
+f&prime;(u)  =  &radic;(1 &minus; s&sup2;) + s&middot;u/&radic;(1 &minus; u&sup2;)  &ge;  1/&radic;(1 &minus; s&sup2;)  &ge;  1   for u &ge; s
+so  L&middot;cos(&theta; + &alpha;)  &ge;  L&middot;(u &minus; s)  &ge;  r,   and dot(p &minus; e, n) &ge; 0</pre>
+    <p>The last line says the camera lies behind the plane of every triangle the cone covers, which is what the rasterizer would cull. The sphere enters only through dot(p &minus; c, n) &ge; &minus;r, which every sphere that holds p gives. A larger sphere is still sound; it only culls less.</p>
+    <h3>In mesh space</h3>
+    <p>The cone is computed from the Mesh's own vertices, so the prototype tests it in mesh space. It moves the camera there instead of the cone: by the inverse of the Instance's rotation-scale, computed as its cofactors' transpose over its determinant. That is sound because whether a point lies behind a triangle's plane is the sign of a determinant of the triangle's corners and the point, and an affine map multiplies that by its own determinant. Where the determinant is not positive, a mirroring transform that flips winding, the cone test is skipped. It is also skipped unless the camera is a perspective one at the camera-relative origin, which the view-projection maps to clip x = y = w = 0; tests that draw with an identity view-projection are orthographic and keep every Meshlet.</p>
+    <h3>Where the bounds come from</h3>
+    <p>Each Meshlet's box and cone are computed when the Mesh pool loads a Mesh, not cooked into its Blob. SciFiHelmet's Mesh Blob reads 13.822 bytes per triangle against its 13.83 ceiling, which leaves no room for them. A Mesh the GPU bends, as <code>crowd</code>'s figures are, gets its whole Mesh's box for every Meshlet and the no-cull cone, since its cooked triangles bound none of the shapes it is bent into.</p>
+  </div>
+  <figure class="wide" id="demo-meshlets">
+    <div class="demo-grid">
+      <div class="canvas-frame"><canvas id="m-canvas" class="demo" role="img" aria-label="A cross-section of a Mesh cut into Meshlets, with a camera and its view; each Meshlet is drawn as kept, dropped by the frustum or dropped by its normal cone."></canvas></div>
+      <div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Mesh</span>
+            <div class="seg" role="group" aria-label="Mesh" id="m-mesh">
+              <button type="button" data-mesh="box" aria-pressed="true">box, one Meshlet</button>
+              <button type="button" data-mesh="faces" aria-pressed="false">box as its faces</button>
+              <button type="button" data-mesh="ring4" aria-pressed="false">ring, 4</button>
+              <button type="button" data-mesh="ring16" aria-pressed="false">ring, 16</button>
+            </div>
+          </div>
+        </div>
+        <div class="sliders stacked">
+          <label for="m-angle" class="control-label">Camera bearing <output id="m-angle-out" for="m-angle"></output></label>
+          <input type="range" id="m-angle" min="0" max="359" step="1" value="200">
+          <label for="m-distance" class="control-label">Camera distance <output id="m-distance-out" for="m-distance"></output></label>
+          <input type="range" id="m-distance" min="0.9" max="1.75" step="0.05" value="1.5">
+        </div>
+        <div class="legend">
+          <span><span class="bar"></span>drawn, facing the camera</span>
+          <span><span class="bar away"></span>drawn, facing away</span>
+          <span><span class="bar cone"></span>dropped by its cone</span>
+          <span><span class="bar frustum"></span>dropped by the frustum</span>
+          <span><span class="swatch" style="background: var(--warm-wash)"></span>where the camera culls the selected Meshlet by its cone</span>
+        </div>
+        <p class="readout" id="m-counts" aria-live="polite"></p>
+        <p class="readout" id="m-selected"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> A cross-section of one Instance's Mesh, 1 m across, its triangles drawn as edges, cut into Meshlets. The camera, the dot with its 50&deg; view, always looks at the Mesh's centre; drag on the canvas to move it, or click a Meshlet to select it. The selected Meshlet shows its box, the sphere round the box (dashed) and its normal cone (the wedge); the shaded region is where a camera would drop it by the cone, with the apex-free test above. Drawn edges that face away are what the rasterizer still drops, after their vertex work. Simplified: two dimensions, in f64, with the exact cone rather than its Snorm8 form, and no depth pyramid.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="once">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; fast math</div>
+    <h2>Test each Meshlet once</h2>
+    <p class="key-idea"><b>Key idea.</b> Metal compiles shaders with fast math by default, which allows the compiler to reassociate arithmetic, so two entry points that test the same Meshlet may disagree at the boundary. The prototype tests each Meshlet in one place, writes down the answer, and every later step reads it.</p>
+    <p>Part A's offsets are counted in one dispatch and used in another. A test of each Meshlet would naturally go in both: <code>offset_slots</code> testing to count the kept indices, and <code>append_triangles</code> testing again to know whether to write them. That relies on both computing the same answer from the same numbers.</p>
+    <p>The Metal Shading Language specification, 4.1, section 1.6.3, says of <code>-fmetal-math-mode</code>: &ldquo;The default is fast,&rdquo; which lets the compiler assume no NaNs or infinities, and &ldquo;allow reassociation, and FP contract to be fast&rdquo;. In f32, (x + y) + z and x + (y + z) can round to different values, and a fused multiply-add rounds once where a multiply then an add round twice. Two entry points compiled separately can each choose. For a Meshlet whose test lands within a rounding step of its boundary, the count could say kept and the write say dropped. Then an Instance's indices would end short of the next Instance's offset, leaving a gap of indices that nothing wrote, or overrun it.</p>
+  </div>
+  <figure class="wide" id="demo-fast-math">
+    <div class="controls">
+      <button type="button" class="btn" id="f-run">Test 100,000 Meshlets near the boundary</button>
+      <span class="readout" id="f-seed"></span>
+    </div>
+    <p class="readout" id="f-readout" aria-live="polite"></p>
+    <figcaption><b>Live demo.</b> The cone test of chapter 3 in f32, evaluated twice for each of 100,000 random cases placed within a few f32 steps of its boundary: once summing the dot product and the length left to right, rounding every multiply and add, and once summing them right to left with s&middot;L + r fused into one rounding. Both are orders fast math permits. This is this page's emulation with <code>Math.fround</code>, not Metal's compiler, whose choices are not documented; it shows only that the orders can disagree.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>How the prototype orders it</h3>
+    <p class="order-label">Six dispatches per phase, on <code>prototype/347-meshlet-culling</code>:</p>
+    <ol class="pass-order">
+      <li>offset_slots &middot; records</li>
+      <li>offset_blocks &middot; records</li>
+      <li class="warm">append_records &middot; tests each Meshlet</li>
+      <li>offset_index_blocks</li>
+      <li>count_instances</li>
+      <li class="focus">append_triangles</li>
+    </ol>
+    <ol>
+      <li><code>offset_slots</code> still tests Instances, but sums only their Meshlet records, which do not depend on the Meshlet test.</li>
+      <li><code>offset_blocks</code> scans the records and sizes the indirect dispatch, as before.</li>
+      <li><code>append_records</code> tests each Meshlet, once. It writes every record with the offset of its indices within its Instance, or <code>NOT_KEPT</code>, and scans the kept indices over its block of slots.</li>
+      <li><code>offset_index_blocks</code>, one workgroup, scans the blocks' kept indices.</li>
+      <li><code>count_instances</code>, an invocation per slot, counts each Instance drawn or overflowed, now that its final index offset is known.</li>
+      <li><code>append_triangles</code> writes the indices of the records kept, from their Instance's first index plus the record's offset, and returns at once for a <code>NOT_KEPT</code> record.</li>
+    </ol>
+    <p>Records are not compacted: a dropped Meshlet keeps its record, with no indices pointing at it. Each record grew by one u32, its index offset, and the frame's draw by 4 &times; 2<sup>20</sup> = 4,194,304 bytes. Since each answer is written once and read thereafter, the draw stays in slot order and the same from run to run.</p>
+  </div>
+</section>
+
+<section class="chapter" id="town">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; measurement</div>
+    <h2>What <code>town</code> measured</h2>
+    <p class="key-idea"><b>Key idea.</b> On <code>town</code>, the Meshlet test dropped 4.9% of the triangles drawn. The depth pre-pass and lit pass got about 90 &micro;s cheaper, the culling phases about 130 &micro;s dearer, and the gate stayed at 8.6 ms against its 6 ms limit. Most of <code>town</code>'s Instances draw a single Meshlet that faces every way.</p>
+    <p>The prototype (M) and main at 7525b7d (A), release builds, <code>praxis bench</code> on <code>town</code>, 1,800 measured frames, three rounds of M then A with no other GPU work. Medians per round, in &micro;s:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Round</th><th>Build</th><th class="n"><span class="concept" data-term="Gate" data-tip="ADR 0019's measure of the opaque main pass: GPU time from the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off, as the median over a Reference scene's camera path at 1440p with 4x MSAA. Its provisional limit is 6 ms.">Gate</span>, rays off</th><th class="n">phase one</th><th class="n">phase two</th><th class="n"><code>depth_prepass</code></th><th class="n"><code>lit_pass</code></th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>A, main</td><td class="n">8,621</td><td class="n">1,110</td><td class="n">168</td><td class="n">2,119</td><td class="n">11,283</td></tr>
+        <tr><td>1</td><td>M, Meshlet test</td><td class="n">8,620</td><td class="n">1,197</td><td class="n">211</td><td class="n">2,081</td><td class="n">9,656</td></tr>
+        <tr><td>2</td><td>A, main</td><td class="n">8,728</td><td class="n">1,129</td><td class="n">180</td><td class="n">2,089</td><td class="n">11,288</td></tr>
+        <tr><td>2</td><td>M, Meshlet test</td><td class="n">8,735</td><td class="n">1,219</td><td class="n">211</td><td class="n">2,081</td><td class="n">11,220</td></tr>
+        <tr><td>3</td><td>A, main</td><td class="n">8,625</td><td class="n">1,128</td><td class="n">178</td><td class="n">2,094</td><td class="n">11,267</td></tr>
+        <tr class="focus"><td>3</td><td>M, Meshlet test</td><td class="n">8,631</td><td class="n">1,234</td><td class="n">217</td><td class="n">2,062</td><td class="n">11,201</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>Triangles drawn:</b> 5,552,214 to 5,280,720, &minus;271,494, or &minus;4.9%.</li>
+      <li><b>The draw:</b> the depth pre-pass and lit pass together about 90 &micro;s cheaper, over rounds 2 and 3. Round 1's M <code>lit_pass</code> stands apart from the other five, while its gate does not, so the note leaves it out.</li>
+      <li><b>The culling phases:</b> about 130 &micro;s dearer: the Meshlet tests and the two extra dispatches.</li>
+      <li><b>The phases against the ticket:</b> M's median round reads 1,234 + 217 = 1,451 &micro;s, 60% of the 2,411 the ticket started from. It asked for under half. Even if the tests cost nothing, 4.9% fewer index writes could not bring A's roughly 1.3 ms under 1.2.</li>
+      <li><b>The gate:</b> 8.6 ms either way, against 6.</li>
+    </ul>
+    <h3>Why so few</h3>
+    <p>Of the 244,256 Instances <code>town</code> places besides its pigeons, 171,649 draw a Mesh of a single Meshlet, among them 109,760 railing posts and 56,932 boxes, and each of the 10,000 pigeons does too: by this page's sum, 181,649 of 254,256 slots, 71%. For those, the Meshlet test can drop nothing the Instance test did not, since the Meshlet's box is the Mesh's box.</p>
+    <p>Nor can the cone. A box's single Meshlet faces every way: its normals point along all six axes, its cone is degenerate, and its cutoff is 127. Its back faces are still dropped, but by the rasterizer, after the vertex shader has run for them. Choose <b>box, one Meshlet</b> in the demo above and turn the camera: the cone never culls, and the far faces are drawn facing away. The other Meshes hold 2 to 5 Meshlets each, cut in index order rather than by facing, and 33 of their 37 Meshlets have a cone too wide to cull by. Only 4 could be dropped for facing away.</p>
+    <p>The ticket's hope came from option B's prototype, which found about 2.9 ms of the lit pass was vertex work on Meshlets no sample shows (<a href="visibility-prepass.html#meshlets">Visibility Pre-pass Explained, chapter 4</a>). A sample-exact pass sees that; a test of bounds sees only what a box and a cone can prove.</p>
+    <h3>Correct, but not merged</h3>
+    <p>The prototype passed its checks: a new GPU test that drops a Meshlet outside the frustum, one facing away and, in phase two, one behind the pyramid; every Golden but one; and culling on and off drawing the same image at <code>town</code>'s eight frames. The exception was <code>helmet</code>, whose culled and unculled images differed by 23 pixels with shadow rays on, and by none with them off. That is a bug of its own, #369, about which triangle a sample on a shared edge shows. PR #373 has since fixed it, and with the fix the prototype's <code>helmet</code> images match at 0 pixels; it is <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a>'s subject.</p>
+    <p>The owner chose to record the prototype rather than merge it. It stays on its branch at d242a68. <code>docs/performance.md</code> holds the measurement, and ADR 0019's line that culling tests Instances, with tests per Meshlet waiting for a profile that shows the pass raster-bound, now cites it as evidence.</p>
+  </div>
+</section>
+
+<section class="chapter" id="pay">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; what next</div>
+    <h2>What would make it pay</h2>
+    <p class="key-idea"><b>Key idea.</b> A Meshlet test pays where Meshlets have narrow cones and are each a small part of what an Instance draws. Either cut Meshes so their Meshlets face one way, at the cost of more records, or draw denser Meshes. Neither is ticketed; the next step on the gate is option D.</p>
+    <ul class="keypoints">
+      <li><b>Cut by facing.</b> A box cut into its six faces has six Meshlets, each with a cone of zero width, and from most viewpoints the cone test drops the faces turned away before their vertex work. Choose <b>box as its faces</b> in the demo. The price is records: six per box instead of one, each written by <code>append_records</code> and each a workgroup of <code>append_triangles</code>. Notice too that the apex-free test is conservative: a face is dropped only once the camera is behind its plane by at least the sphere's radius.</li>
+      <li><b>Denser Meshes.</b> The demo's <b>ring, 16</b> is a Mesh whose Meshlets each turn only a little: from outside, roughly half of them fail the cone test, and a close camera drops more by the frustum. A Mesh of many Meshlets, each a small part of the Instance, is where a test of each pays for itself. <code>town</code>'s Meshes are not that.</li>
+    </ul>
+    <p><code>docs/performance.md</code> names both and tickets neither. With the gate still past 6 ms under option A after #363 and this, ADR 0019's reopen clause sends the next prototype to option D, a visibility buffer, ticket #297 (<a href="frame-timing.html#options">Frame Timing Explained, chapter 3</a>).</p>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>Why does <code>append_triangles</code> run with a second copy of group 3, whose <code>frame_draw</code> binding is a stand-in it never reads?</summary><p>Its dispatch takes its arguments from <code>frame_draw</code>, as an indirect buffer. wgpu merges every bind group active at a dispatch and its indirect buffer into one usage scope, and a buffer may not be used as <code>INDIRECT</code> and as read-write storage in one scope. The first copy of group 3 binds <code>frame_draw</code> read-write, so <code>append_triangles</code> binds a copy with a 72-byte stand-in in its place, and reads the phase's record range from <code>instance_offsets</code> instead.</p></details>
+    <details class="check"><summary>The prototype could have tested each Meshlet in <code>offset_slots</code>, to count its indices, and again in <code>append_triangles</code>, to write them. Why does it test each once, in <code>append_records</code>?</summary><p>Metal compiles with fast math by default, which lets the compiler reassociate and contract arithmetic differently in each entry point. Near the test's boundary the two could disagree: the count says kept and the write says dropped, or the reverse, and an Instance's indices would then leave a gap of unwritten indices or overrun the next Instance's. Testing once and recording the answer, an index offset or <code>NOT_KEPT</code>, gives every later step the same answer.</p></details>
+    <details class="check"><summary>Why did the cone test drop nothing from <code>town</code>'s 56,932 boxes, and what would let it?</summary><p>Each box draws a Mesh of one Meshlet whose normals point every way, so its normal cone is wider than about 168&deg;: meshoptimizer gives it the cutoff 127, which culls nothing. The rasterizer still drops the back faces, after their vertex work. Cutting the box into Meshlets by face would give each a zero-width cone, which the test can drop once the camera is behind the face's plane by the sphere's radius, at the cost of six records per box instead of one.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to a531ed2, or to d242a68 for the prototype.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/347">Ticket #347</a> <span>the gate's split on <code>town</code>, the two fixes and the criteria</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/363">PR #363</a> <span>part A: the indirect dispatch, the stand-in, the widths tried and the metrics</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/371">PR #371</a> <span>part B recorded: the criteria against the outcome</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/a531ed2aefbdfb115801e5211a89f51ecbcc701c/docs/performance.md"><code>docs/performance.md</code></a> <span>&ldquo;Meshlet culling prototyped on <code>town</code>&rdquo;: rounds, cause and verdict</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/a531ed2aefbdfb115801e5211a89f51ecbcc701c/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>one indirect draw per pipeline and phase; culling tests Instances</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/a531ed2aefbdfb115801e5211a89f51ecbcc701c/src/render/shaders/culling.wgsl"><code>src/render/shaders/culling.wgsl</code></a> <span>the four entry points and the dispatch's rows</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/a531ed2aefbdfb115801e5211a89f51ecbcc701c/src/render/culling_pass.rs"><code>src/render/culling_pass.rs</code></a> <span><code>record</code>, the stand-in and <code>frame_draw_bind_groups</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d242a685/src/render/shaders/culling.wgsl">The prototype's <code>culling.wgsl</code></a> <span><code>mesh_space_camera</code>, <code>faces_away</code>, <code>meshlet_kept</code> and the six entry points</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d242a685/src/assets/pools.rs">The prototype's <code>src/assets/pools.rs</code></a> <span><code>meshlet_bounds</code>, at load</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Libraries and specifications</h3>
+      <ul>
+        <li>meshoptimizer 0.25, <a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L721-L744"><code>meshoptimizer.h</code>, the cluster bounds documentation</a> <span>the apex and apex-free cone tests, and the citation of RTR4</span></li>
+        <li>meshoptimizer 0.25, <a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/clusterizer.cpp#L1497-L1555"><code>clusterizer.cpp</code>, <code>meshopt_computeClusterBounds</code></a> <span>the wide-cone cutoff and the Snorm8 rounding up</span></li>
+        <li>wgpu-core 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/compute.rs#L340-L357"><code>flush_bindings</code></a> <span>bind groups and the indirect buffer in one usage scope</span></li>
+        <li>wgpu-types 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/buffer.rs#L143-L148"><code>BufferUses</code></a> <span><code>INDIRECT</code> among the shared uses, <code>STORAGE_READ_WRITE</code> among the exclusive</span></li>
+        <li>wgpu-types 30.0.1, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L456"><code>Limits::defaults</code></a> <span>65,535 workgroups per dimension</span></li>
+        <li>Apple, <a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15">Metal Shading Language Specification 4.1</a>, section 1.6.3 <span>fast math as the default, and what it allows</span></li>
+        <li>Hillis and Steele, <a href="https://doi.org/10.1145/7902.7903">&ldquo;Data Parallel Algorithms&rdquo;</a>, Communications of the ACM 29(12), 1986 <span>the scan <code>offset_slots</code> runs</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman, Pesce, Iwanicki and Hillaire, <i>Real-Time Rendering</i>, 4th edition, CRC Press, 2018, section 19.3 <span>backface culling of groups of triangles by a normal cone, the derivation meshoptimizer cites</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Meshlet, Instance, Frame data and Capability floor are <code>CONTEXT.md</code>'s definitions at a531ed2. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.</dd></div>
+    <div><dt>Frame data</dt><dd>The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.</dd></div>
+    <div><dt>Meshlet record</dt><dd>One Meshlet of one Instance in the frame's draw: the Instance's slot, the Meshlet, and the Material it is drawn with.</dd></div>
+    <div><dt>Packed index</dt><dd>An index of the frame's draw: its Meshlet record in the high bits, the vertex within that Meshlet in the low six.</dd></div>
+    <div><dt>Indirect dispatch</dt><dd>A compute dispatch that reads its workgroup counts from a GPU buffer, so a pass before it can size it.</dd></div>
+    <div><dt>Usage scope</dt><dd>The resources wgpu checks together for conflicting uses: in a compute pass, everything one dispatch's bind groups bind, plus its indirect buffer.</dd></div>
+    <div><dt>Normal cone</dt><dd>An axis and a half-angle within which lie the normals of every triangle in a Meshlet. Its cutoff is the sine of the half-angle.</dd></div>
+    <div><dt>Fast math</dt><dd>A compiler mode that may reorder and fuse floating-point arithmetic, so the same expression can round differently in two places. Metal's default.</dd></div>
+    <div><dt>Gate</dt><dd>ADR 0019's measure of the opaque main pass: GPU time from the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off. Its provisional limit is 6 ms.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/347">#347</a>, PRs <a href="https://github.com/gariasf/praxis/pull/363">#363</a> and <a href="https://github.com/gariasf/praxis/pull/371">#371</a>, the code at a531ed2, the prototype at d242a68, <code>docs/performance.md</code>, <code>CONTEXT.md</code>, ADR 0019 and the sources in the reading list. Timings and counts are the PRs' own and that note's, on the M4 Pro. The proof of the apex-free test, the index-write count and the share of one-Meshlet slots are this page's. The demos are this page's two-dimensional and f32 models, not traces of the GPU's.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="shadow-terminator.html">Previous: Shadow Terminator Explained</a><a href="index.html">All field guides</a><a href="msaa-fragment-merging.html">Next: MSAA Fragment Merging Explained</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const degree = Math.PI / 180;
+  const isPage = typeof document !== "undefined";
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function sizeCanvas(canvas, width, height) {
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.aspectRatio = width + " / " + height;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return context;
+  }
+  function pointerAt(canvas, event, width, height) {
+    const box = canvas.getBoundingClientRect();
+    return [(event.clientX - box.left) * width / box.width, (event.clientY - box.top) * height / box.height];
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+  const format = (value, digits) => value.toFixed(digits).replace("-", "−");
+  const thousands = (value) => value.toLocaleString("en-US");
+
+  // ---- Demo 1: the indirect dispatch offset_blocks writes for append_triangles.
+  const MAX_WORKGROUPS_PER_DIMENSION = 65535;
+  function appendDispatch(records) {
+    const rows = Math.max(Math.ceil(records / MAX_WORKGROUPS_PER_DIMENSION), 1);
+    return { x: Math.ceil(records / rows), y: rows };
+  }
+
+  // ---- Demo 2: a cross-section of a Mesh cut into Meshlets, tested as the prototype tests them.
+  const HALF_VIEW = 25 * degree, NEAR = 0.1;
+  const unit = (a) => { const length = Math.hypot(a[0], a[1]); return length > 0 ? [a[0] / length, a[1] / length] : [0, 0]; };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  // Edges of a closed polygon, counter-clockwise, each with its outward normal.
+  function polygonEdges(points) {
+    return points.map((start, index) => {
+      const end = points[(index + 1) % points.length];
+      return { start, end, normal: unit([end[1] - start[1], start[0] - end[0]]) };
+    });
+  }
+  function buildMesh(kind) {
+    if (kind === "box" || kind === "faces") {
+      // A 1 m box, each side two edges, as a cube's face is two triangles.
+      const corners = [[0.5, -0.5], [0.5, 0.5], [-0.5, 0.5], [-0.5, -0.5]];
+      const points = [];
+      corners.forEach((corner, index) => {
+        const next = corners[(index + 1) % 4];
+        points.push(corner, [(corner[0] + next[0]) / 2, (corner[1] + next[1]) / 2]);
+      });
+      const edges = polygonEdges(points);
+      return kind === "box" ? [edges] : [0, 1, 2, 3].map((face) => edges.slice(face * 2, face * 2 + 2));
+    }
+    const meshlets = kind === "ring4" ? 4 : 16, perMeshlet = 4;
+    const count = meshlets * perMeshlet, points = [];
+    for (let index = 0; index < count; index++) {
+      const angle = 2 * Math.PI * index / count;
+      points.push([0.5 * Math.cos(angle), 0.5 * Math.sin(angle)]);
+    }
+    const edges = polygonEdges(points);
+    return Array.from({ length: meshlets }, (_, index) => edges.slice(index * perMeshlet, (index + 1) * perMeshlet));
+  }
+  // Its box, the sphere round the box, and its normal cone as meshoptimizer computes it:
+  // the axis from the normals, cos of the half-angle their least dot product with it,
+  // and a cutoff of 1, culling nothing, where that is at most 0.1.
+  function meshletBounds(edges) {
+    const xs = edges.flatMap((edge) => [edge.start[0], edge.end[0]]);
+    const ys = edges.flatMap((edge) => [edge.start[1], edge.end[1]]);
+    const low = [Math.min(...xs), Math.min(...ys)], high = [Math.max(...xs), Math.max(...ys)];
+    const centre = [(low[0] + high[0]) / 2, (low[1] + high[1]) / 2];
+    const radius = Math.hypot(high[0] - low[0], high[1] - low[1]) / 2;
+    const sum = edges.reduce((total, edge) => [total[0] + edge.normal[0], total[1] + edge.normal[1]], [0, 0]);
+    const axis = unit(sum);
+    const leastDot = Math.hypot(sum[0], sum[1]) < 1e-9 ? -1 : Math.min(...edges.map((edge) => dot(edge.normal, axis)));
+    const cutoff = leastDot <= 0.1 ? 1 : Math.sqrt(1 - leastDot * leastDot);
+    return { low, high, centre, radius, axis, leastDot, cutoff };
+  }
+  // meshoptimizer's apex-free test: how far the camera is past the boundary, positive where it culls.
+  function coneMargin(bounds, camera) {
+    const toward = sub(bounds.centre, camera);
+    return dot(toward, bounds.axis) - (bounds.cutoff * Math.hypot(toward[0], toward[1]) + bounds.radius);
+  }
+  const facesAway = (bounds, camera) => bounds.cutoff < 1 && coneMargin(bounds, camera) >= 0;
+  // The view's three planes, each an inward normal and offset, for a camera looking at the origin.
+  function viewPlanes(camera) {
+    const forward = unit([-camera[0], -camera[1]]);
+    const planes = [-1, 1].map((side) => {
+      const angle = Math.atan2(forward[1], forward[0]) + side * HALF_VIEW;
+      const edge = [Math.cos(angle), Math.sin(angle)];
+      const inward = side > 0 ? [edge[1], -edge[0]] : [-edge[1], edge[0]];
+      return { normal: inward, offset: dot(inward, camera) };
+    });
+    planes.push({ normal: forward, offset: dot(forward, camera) + NEAR });
+    return planes;
+  }
+  function inView(bounds, planes) {
+    const corners = [[bounds.low[0], bounds.low[1]], [bounds.high[0], bounds.low[1]], [bounds.low[0], bounds.high[1]], [bounds.high[0], bounds.high[1]]];
+    return planes.every((plane) => corners.some((corner) => dot(plane.normal, corner) >= plane.offset));
+  }
+  function testMesh(meshlets, camera) {
+    const planes = viewPlanes(camera);
+    return meshlets.map((edges) => {
+      const bounds = meshletBounds(edges);
+      const visible = inView(bounds, planes);
+      const away = visible && facesAway(bounds, camera);
+      const verdict = !visible ? "frustum" : away ? "cone" : "kept";
+      return { edges, bounds, verdict };
+    });
+  }
+  const edgeFacesAway = (edge, camera) => dot(sub([(edge.start[0] + edge.end[0]) / 2, (edge.start[1] + edge.end[1]) / 2], camera), edge.normal) >= 0;
+
+  // ---- Demo 3: the cone test in f32, in two orders fast math permits.
+  const f32 = Math.fround;
+  function seeded(seed) {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function bothOrders(t, a, s, r) {
+    const leftDot = f32(f32(f32(t[0] * a[0]) + f32(t[1] * a[1])) + f32(t[2] * a[2]));
+    const leftLength = f32(Math.sqrt(f32(f32(f32(t[0] * t[0]) + f32(t[1] * t[1])) + f32(t[2] * t[2]))));
+    const left = leftDot >= f32(f32(s * leftLength) + r);
+    const rightDot = f32(f32(t[0] * a[0]) + f32(f32(t[1] * a[1]) + f32(t[2] * a[2])));
+    const rightLength = f32(Math.sqrt(f32(f32(t[0] * t[0]) + f32(f32(t[1] * t[1]) + f32(t[2] * t[2])))));
+    const right = rightDot >= f32(s * rightLength + r);
+    return [left, right];
+  }
+  function runCases(seed, count) {
+    const random = seeded(seed);
+    const direction = () => {
+      const z = random() * 2 - 1, angle = random() * 2 * Math.PI, ring = Math.sqrt(1 - z * z);
+      return [ring * Math.cos(angle), ring * Math.sin(angle), z];
+    };
+    let disagree = 0, keptOnlyLeft = 0;
+    for (let index = 0; index < count; index++) {
+      const a = direction().map(f32);
+      const distance = 2 + random() * 48;
+      const t = direction().map((c) => f32(c * distance));
+      const s = f32(0.2 + random() * 0.7);
+      const exactDot = t[0] * a[0] + t[1] * a[1] + t[2] * a[2];
+      const exactLength = Math.hypot(t[0], t[1], t[2]);
+      // A radius that puts the case within a few f32 steps of the boundary.
+      const r = f32(exactDot - s * exactLength + (random() * 2 - 1) * 4e-7 * exactLength);
+      if (r <= 0) { index--; continue; }
+      const [left, right] = bothOrders(t, a, s, r);
+      if (left !== right) { disagree++; if (!left) keptOnlyLeft++; }
+    }
+    return { disagree, keptOnlyLeft };
+  }
+
+  if (!isPage) {
+    module.exports = { appendDispatch, buildMesh, meshletBounds, coneMargin, facesAway, testMesh, edgeFacesAway, runCases };
+    return;
+  }
+
+  // ---- Demo 1, drawn.
+  (function () {
+    const canvas = document.getElementById("d-canvas");
+    if (!canvas) return;
+    const WIDTH = 520, HEIGHT = 220;
+    const slider = document.getElementById("d-records");
+    const presets = document.getElementById("d-presets");
+    function draw() {
+      const records = Number(slider.value);
+      document.getElementById("d-records-out").textContent = thousands(records);
+      const { x, y } = appendDispatch(records);
+      const context = sizeCanvas(canvas, WIDTH, HEIGHT);
+      const accent = css("--accent"), soft = css("--ink-soft"), bad = css("--bad"), panel = css("--panel"), ink = css("--ink");
+      context.fillStyle = panel;
+      context.fillRect(0, 0, WIDTH, HEIGHT);
+      const left = 20, right = WIDTH - 20, top = 34, bottom = HEIGHT - 26;
+      const fullWidth = right - left;
+      context.font = "12px " + css("--mono");
+      context.fillStyle = soft;
+      context.fillText("x = " + thousands(x) + " workgroups per row, of at most 65,535", left, 20);
+      const rowHeight = Math.min(28, (bottom - top) / y);
+      const rowWidth = fullWidth * x / MAX_WORKGROUPS_PER_DIMENSION;
+      for (let row = 0; row < y; row++) {
+        const rowTop = top + row * rowHeight;
+        const height = Math.max(2, rowHeight - Math.min(4, rowHeight * 0.25));
+        const filled = Math.max(0, Math.min(x, records - row * x));
+        context.fillStyle = accent;
+        context.fillRect(left, rowTop, fullWidth * filled / MAX_WORKGROUPS_PER_DIMENSION, height);
+        if (filled < x) {
+          const idleLeft = left + fullWidth * filled / MAX_WORKGROUPS_PER_DIMENSION;
+          const idleWidth = rowWidth - (idleLeft - left);
+          context.save();
+          context.beginPath();
+          context.rect(idleLeft, rowTop, Math.max(idleWidth, 1.5), height);
+          context.clip();
+          context.strokeStyle = bad;
+          context.lineWidth = 1.25;
+          for (let stripe = idleLeft - height; stripe < idleLeft + idleWidth + height; stripe += 6) {
+            context.beginPath(); context.moveTo(stripe, rowTop + height); context.lineTo(stripe + height, rowTop); context.stroke();
+          }
+          context.restore();
+        }
+      }
+      context.strokeStyle = soft;
+      context.setLineDash([4, 4]);
+      context.beginPath(); context.moveTo(right, top - 6); context.lineTo(right, bottom); context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = soft;
+      context.textAlign = "right";
+      context.fillText("65,535", right, HEIGHT - 8);
+      context.textAlign = "left";
+      context.fillText("y = " + y + (y === 1 ? " row" : " rows"), left, HEIGHT - 8);
+      if (x === 0) {
+        context.fillStyle = ink;
+        context.fillText("x = 0: no workgroups launch", left, top + 40);
+      }
+      const launched = x * y;
+      document.getElementById("d-readout").innerHTML =
+        "<code>offset_blocks</code> writes <b>(" + thousands(x) + ", " + y + ", 1)</b>: " + thousands(launched) + " workgroups of 32, " +
+        thousands(launched - records) + " of them past the last record, returning at once; " +
+        thousands(32 * launched) + " invocations.";
+      document.getElementById("d-before").innerHTML =
+        "Before #363, on <code>town</code>: <b>254,256</b> workgroups of 124, 31,527,744 invocations, every phase, whatever it appended. " +
+        "The other dispatches launch 994, 1 and 994 workgroups of 256 there.";
+    }
+    slider.addEventListener("input", () => {
+      presets.querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.records === slider.value)));
+      draw();
+    });
+    segmented(presets, "records", (value) => { slider.value = value; draw(); });
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+
+  // ---- Demo 2, drawn.
+  (function () {
+    const canvas = document.getElementById("m-canvas");
+    if (!canvas) return;
+    const WIDTH = 560, HEIGHT = 440, SCALE = 120;
+    const angleSlider = document.getElementById("m-angle"), distanceSlider = document.getElementById("m-distance");
+    let kind = "box", selected = 0, dragging = false;
+    const toCanvas = (p) => [WIDTH / 2 + p[0] * SCALE, HEIGHT / 2 - p[1] * SCALE];
+    const toWorld = (x, y) => [(x - WIDTH / 2) / SCALE, (HEIGHT / 2 - y) / SCALE];
+    function cameraPosition() {
+      const angle = Number(angleSlider.value) * degree, distance = Number(distanceSlider.value);
+      return [distance * Math.cos(angle), distance * Math.sin(angle)];
+    }
+    function line(context, a, b) {
+      const [ax, ay] = toCanvas(a), [bx, by] = toCanvas(b);
+      context.beginPath(); context.moveTo(ax, ay); context.lineTo(bx, by); context.stroke();
+    }
+    function draw() {
+      const camera = cameraPosition();
+      document.getElementById("m-angle-out").textContent = angleSlider.value + "°";
+      document.getElementById("m-distance-out").textContent = format(Number(distanceSlider.value), 2) + " m";
+      const results = testMesh(buildMesh(kind), camera);
+      if (selected >= results.length) selected = 0;
+      const context = sizeCanvas(canvas, WIDTH, HEIGHT);
+      const ink = css("--ink"), soft = css("--ink-soft"), accent = css("--accent"), warm = css("--warm"), warmWash = css("--warm-wash"), bad = css("--bad"), panel = css("--panel"), rule = css("--rule");
+      context.fillStyle = panel;
+      context.fillRect(0, 0, WIDTH, HEIGHT);
+      // Where a camera would drop the selected Meshlet by its cone.
+      const chosen = results[selected].bounds;
+      if (chosen.cutoff < 1) {
+        context.fillStyle = warmWash;
+        const cell = 6;
+        for (let y = 0; y < HEIGHT; y += cell) {
+          for (let x = 0; x < WIDTH; x += cell) {
+            if (coneMargin(chosen, toWorld(x + cell / 2, y + cell / 2)) >= 0) context.fillRect(x, y, cell, cell);
+          }
+        }
+      }
+      // The camera's view.
+      const planes = viewPlanes(camera);
+      const forward = unit([-camera[0], -camera[1]]);
+      context.strokeStyle = rule;
+      context.lineWidth = 1.25;
+      [-1, 1].forEach((side) => {
+        const angle = Math.atan2(forward[1], forward[0]) + side * HALF_VIEW;
+        line(context, camera, [camera[0] + 9 * Math.cos(angle), camera[1] + 9 * Math.sin(angle)]);
+      });
+      const nearCentre = [camera[0] + forward[0] * NEAR, camera[1] + forward[1] * NEAR];
+      const nearSide = Math.tan(HALF_VIEW) * NEAR;
+      line(context, [nearCentre[0] - forward[1] * nearSide, nearCentre[1] + forward[0] * nearSide], [nearCentre[0] + forward[1] * nearSide, nearCentre[1] - forward[0] * nearSide]);
+      // The selected Meshlet's box, sphere and cone.
+      const [lowX, lowY] = toCanvas(chosen.low), [highX, highY] = toCanvas(chosen.high);
+      context.strokeStyle = ink;
+      context.lineWidth = 1;
+      context.strokeRect(lowX - 0.5, highY - 0.5, highX - lowX + 1, lowY - highY + 1);
+      const [centreX, centreY] = toCanvas(chosen.centre);
+      context.setLineDash([4, 4]);
+      context.beginPath(); context.arc(centreX, centreY, chosen.radius * SCALE, 0, 2 * Math.PI); context.stroke();
+      context.setLineDash([]);
+      if (chosen.leastDot > -1) {
+        const half = Math.acos(Math.max(-1, Math.min(1, chosen.leastDot)));
+        const axisAngle = Math.atan2(chosen.axis[1], chosen.axis[0]);
+        context.fillStyle = css("--accent-wash");
+        context.strokeStyle = accent;
+        context.beginPath();
+        context.moveTo(centreX, centreY);
+        context.arc(centreX, centreY, 0.45 * SCALE, -axisAngle - half, -axisAngle + half);
+        context.closePath();
+        context.fill(); context.stroke();
+      }
+      // The edges.
+      results.forEach((result) => {
+        result.edges.forEach((edge) => {
+          context.setLineDash([]);
+          if (result.verdict === "frustum") { context.strokeStyle = soft; context.lineWidth = 3; context.setLineDash([1.5, 5]); context.lineCap = "round"; }
+          else if (result.verdict === "cone") { context.strokeStyle = warm; context.lineWidth = 3; context.setLineDash([7, 5]); context.lineCap = "butt"; }
+          else if (edgeFacesAway(edge, camera)) { context.strokeStyle = bad; context.lineWidth = 2; context.lineCap = "butt"; }
+          else { context.strokeStyle = accent; context.lineWidth = 3.5; context.lineCap = "butt"; }
+          line(context, edge.start, edge.end);
+        });
+      });
+      context.setLineDash([]);
+      context.lineCap = "butt";
+      // Meshlet boundaries.
+      context.fillStyle = ink;
+      results.forEach((result) => {
+        const [x, y] = toCanvas(result.edges[0].start);
+        context.beginPath(); context.arc(x, y, 2.5, 0, 2 * Math.PI); context.fill();
+      });
+      // The camera.
+      const [cameraX, cameraY] = toCanvas(camera);
+      context.fillStyle = ink;
+      context.beginPath(); context.arc(cameraX, cameraY, 7, 0, 2 * Math.PI); context.fill();
+      context.strokeStyle = panel;
+      context.lineWidth = 2;
+      context.beginPath(); context.arc(cameraX, cameraY, 7, 0, 2 * Math.PI); context.stroke();
+      readout(results, camera);
+    }
+    function readout(results, camera) {
+      let edges = 0, drawn = 0, away = 0, byFrustum = 0, byCone = 0;
+      results.forEach((result) => result.edges.forEach((edge) => {
+        edges++;
+        if (result.verdict === "frustum") byFrustum++;
+        else if (result.verdict === "cone") byCone++;
+        else { drawn++; if (edgeFacesAway(edge, camera)) away++; }
+      }));
+      document.getElementById("m-counts").innerHTML =
+        results.length + (results.length === 1 ? " Meshlet, " : " Meshlets, ") + edges + " edges. Drawn: <b>" + drawn + "</b>, of which <b>" + away +
+        "</b> face away, for the rasterizer to drop after their vertex work. Dropped by the frustum: <b>" + byFrustum + "</b>; by the cone: <b>" + byCone + "</b>.";
+      const result = results[selected], bounds = result.bounds;
+      let cone;
+      if (bounds.cutoff >= 1) {
+        const spread = bounds.leastDot <= -1 ? "its normals point every way" : "its normals spread " + format(Math.acos(bounds.leastDot) / degree, 1) + "° from the axis";
+        cone = spread + ", so the cutoff is 1 and the cone culls nothing.";
+      } else {
+        const margin = coneMargin(bounds, camera);
+        cone = "half-angle " + format(Math.acos(bounds.leastDot) / degree, 1) + "°, cutoff s = " + format(bounds.cutoff, 3) + ", sphere radius " + format(bounds.radius, 2) +
+          " m. The camera is " + format(Math.abs(margin), 2) + " m " + (margin >= 0 ? "past" : "short of") + " the cone test's boundary.";
+      }
+      const verdict = result.verdict === "kept" ? "<span class=\"good-text\">Kept.</span>"
+        : result.verdict === "cone" ? "<span class=\"bad-text\">Dropped by its cone.</span>"
+        : "<span class=\"bad-text\">Dropped by the frustum.</span>";
+      document.getElementById("m-selected").innerHTML = "Selected Meshlet " + (selected + 1) + ": " + cone + " " + verdict;
+    }
+    function nearestMeshlet(point) {
+      const results = testMesh(buildMesh(kind), cameraPosition());
+      let best = -1, bestDistance = 14 / SCALE;
+      results.forEach((result, index) => result.edges.forEach((edge) => {
+        const along = sub(edge.end, edge.start), length = dot(along, along);
+        const t = Math.max(0, Math.min(1, dot(sub(point, edge.start), along) / length));
+        const distance = Math.hypot(point[0] - edge.start[0] - along[0] * t, point[1] - edge.start[1] - along[1] * t);
+        if (distance < bestDistance) { best = index; bestDistance = distance; }
+      }));
+      return best;
+    }
+    function moveCamera(point) {
+      const distance = Math.max(0.9, Math.min(1.75, Math.hypot(point[0], point[1])));
+      let angle = Math.round(Math.atan2(point[1], point[0]) / degree);
+      if (angle < 0) angle += 360;
+      angleSlider.value = String(angle % 360);
+      distanceSlider.value = String(distance);
+      draw();
+    }
+    canvas.addEventListener("pointerdown", (event) => {
+      const point = toWorld(...pointerAt(canvas, event, WIDTH, HEIGHT));
+      const hit = nearestMeshlet(point);
+      if (hit >= 0) { selected = hit; draw(); return; }
+      dragging = true;
+      canvas.setPointerCapture(event.pointerId);
+      moveCamera(point);
+    });
+    canvas.addEventListener("pointermove", (event) => { if (dragging) moveCamera(toWorld(...pointerAt(canvas, event, WIDTH, HEIGHT))); });
+    const stop = () => { dragging = false; };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    angleSlider.addEventListener("input", draw);
+    distanceSlider.addEventListener("input", draw);
+    segmented(document.getElementById("m-mesh"), "mesh", (value) => { kind = value; selected = 0; draw(); });
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+
+  // ---- Demo 3, run.
+  (function () {
+    const button = document.getElementById("f-run");
+    if (!button) return;
+    let seed = 1;
+    function run() {
+      const count = 100000;
+      const { disagree, keptOnlyLeft } = runCases(seed, count);
+      document.getElementById("f-seed").textContent = "seed " + seed;
+      document.getElementById("f-readout").innerHTML =
+        "The two orders disagree on <b>" + thousands(disagree) + "</b> of " + thousands(count) + " cases: " +
+        thousands(keptOnlyLeft) + " kept by the first order and dropped by the second, " + thousands(disagree - keptOnlyLeft) + " the reverse. " +
+        "Each is a Meshlet a count and a write could see differently.";
+      seed++;
+    }
+    button.addEventListener("click", run);
+    run();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
