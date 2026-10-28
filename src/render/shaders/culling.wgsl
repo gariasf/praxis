@@ -27,20 +27,35 @@ struct DrawIndexedIndirect {
     first_instance: u32,
 }
 
+// The arguments of one indirect dispatch: its workgroups in x, y and z.
+struct DispatchIndirect {
+    x: u32,
+    y: u32,
+    z: u32,
+}
+
 // The frame's draw, cleared before phase one: the draw of the Instances
 // appended so far, from index 0, so phase one's, which the depth pre-pass
 // draws, then both phases', which the lit pass draws; the Instances it holds
 // and those it has no room for, which Frame stats read back; phase two's own
 // draw, of the indices after phase one's, which the lit pass draws into
-// depth before it shades; and where phase two's Meshlet records and packed
-// indices start, phase one's sums.
+// depth before it shades; where phase two's Meshlet records and packed
+// indices start, phase one's sums; and the phase's dispatch of
+// append_triangles.
 struct FrameDraw {
     draw: DrawIndexedIndirect,
     instances_drawn: atomic<u32>,
     instances_overflowed: atomic<u32>,
     phase_two_draw: DrawIndexedIndirect,
     phase_two_offsets: vec2<u32>,
+    append_dispatch: DispatchIndirect,
 }
+
+// Where instance_offsets holds, after each slot's and block's, the phase's
+// first Meshlet record and where its records end, short of the buffer's
+// end: append_triangles reads them there, as it runs with another buffer in
+// frame_draw's binding, so that frame_draw can hold its dispatch.
+const APPENDED_RECORDS = INSTANCE_CAPACITY + INSTANCE_CAPACITY / SCAN_BLOCK_SIZE;
 
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
 
@@ -269,10 +284,12 @@ fn offset_slots(
 }
 
 // One workgroup: each block's offsets, the sum of the earlier blocks' after
-// where the phase starts, in place of its own sum; and the phase's draw is
-// of one Instance. Each invocation takes a run of blocks, its loops bounded
-// alike in every invocation so the scan's barriers stay in uniform control
-// flow. Phase one's sums are where phase two starts.
+// where the phase starts, in place of its own sum; the phase's draw is of
+// one Instance; and append_triangles takes a workgroup per Meshlet record
+// the phase may append short of the buffer's end, in rows of at most
+// MAX_WORKGROUPS_PER_DIMENSION. Each invocation takes a run of blocks, its
+// loops bounded alike in every invocation so the scan's barriers stay in
+// uniform control flow. Phase one's sums are where phase two starts.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     let block_count = (instance_slot_count + SCAN_BLOCK_SIZE - 1u) / SCAN_BLOCK_SIZE;
@@ -298,8 +315,17 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
             offset = saturating_add(offset, block_sum);
         }
     }
-    if !PHASE_TWO && invocation == SCAN_BLOCK_SIZE - 1u {
-        frame_draw.phase_two_offsets = offset;
+    if invocation == SCAN_BLOCK_SIZE - 1u {
+        if !PHASE_TWO {
+            frame_draw.phase_two_offsets = offset;
+        }
+        let record_capacity = arrayLength(&meshlet_records);
+        let appended = min(vec2<u32>(first.x, offset.x), vec2<u32>(record_capacity));
+        instance_offsets[APPENDED_RECORDS] = appended;
+        let records = appended.y - appended.x;
+        // At least one row, so no records dispatch no workgroups.
+        let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
+        frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);
     }
     if invocation == 0u {
         if PHASE_TWO {
@@ -311,65 +337,90 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     }
 }
 
-// A workgroup per Instance slot, dispatched in rows of at most 65,535, and
-// an invocation per triangle of a Meshlet: writes the Instance's Meshlet
-// records and packed indices from its offsets, unless they are NOT_DRAWN.
-// Where they would pass either buffer's end, neither it nor any Instance
-// after it is drawn, so the draw ends at the last Instance that fits, and
-// every index before is written.
-// ponytail: a workgroup per Instance idles most invocations on small Meshes;
-// split it into a pass per Instance and one per Meshlet when a profile of a
-// dense scene names it.
-@compute @workgroup_size(MESHLET_MAX_TRIANGLES)
-fn append_meshlets(
-    @builtin(workgroup_id) workgroup: vec3<u32>,
-    @builtin(num_workgroups) workgroups: vec3<u32>,
-    @builtin(local_invocation_index) triangle: u32
-) {
-    let slot = workgroup.y * workgroups.x + workgroup.x;
+// The first Meshlet record and packed index of the Instance in `slot`: its
+// block's offsets plus its own within the block.
+fn slot_offsets(slot: u32) -> vec2<u32> {
+    return saturating_add(instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE], instance_offsets[slot]);
+}
+
+// Whether the Meshlet records and packed indices of `mesh` from `first` fit
+// in their buffers. Where an Instance's would pass either buffer's end,
+// neither it nor any Instance after it is drawn, so the draw ends at the
+// last Instance that fits, and every index before is written.
+fn fits(first: vec2<u32>, mesh: MeshData) -> bool {
+    let counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+    let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
+    return all(first <= capacity) && all(counts <= capacity - first);
+}
+
+// An invocation per Instance slot: writes the Meshlet records of the
+// Instance from its offsets, unless they are NOT_DRAWN, those short of the
+// buffer's end even where the Instance does not fit, so that every record
+// append_triangles reads is written; and counts the Instance drawn, or
+// overflowed.
+@compute @workgroup_size(SCAN_BLOCK_SIZE)
+fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let slot = invocation.x;
     if slot >= instance_slot_count || all(instance_offsets[slot] == NOT_DRAWN) {
         return;
     }
     let instance = instances[slot];
     let mesh = meshes[instance.mesh];
-    let block_offset = instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE];
-    let first = saturating_add(block_offset, instance_offsets[slot]);
-    let counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
-    let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
-    if any(first > capacity) || any(counts > capacity - first) {
-        if triangle == 0u {
-            atomicAdd(&frame_draw.instances_overflowed, 1u);
-        }
-        return;
-    }
-    if triangle == 0u {
-        atomicMax(&frame_draw.draw.index_count, first.y + counts.y);
+    let first = slot_offsets(slot);
+    if fits(first, mesh) {
+        let indices_end = first.y + 3u * mesh.triangle_count;
+        atomicMax(&frame_draw.draw.index_count, indices_end);
         atomicAdd(&frame_draw.instances_drawn, 1u);
         if PHASE_TWO {
             let phase_two_first = frame_draw.phase_two_draw.first_index;
-            atomicMax(&frame_draw.phase_two_draw.index_count, first.y + counts.y - phase_two_first);
+            atomicMax(&frame_draw.phase_two_draw.index_count, indices_end - phase_two_first);
         }
+    } else {
+        atomicAdd(&frame_draw.instances_overflowed, 1u);
     }
-
-    for (var meshlet_in_mesh = 0u; meshlet_in_mesh < mesh.meshlet_count; meshlet_in_mesh++) {
+    let overridden = instance.material_id != NO_MATERIAL;
+    let records = min(mesh.meshlet_count, arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
+    for (var meshlet_in_mesh = 0u; meshlet_in_mesh < records; meshlet_in_mesh++) {
         let meshlet_index = mesh.first_meshlet + meshlet_in_mesh;
-        let meshlet = meshlets[meshlet_index];
-        let record = first.x + meshlet_in_mesh;
-        if triangle == 0u {
-            let overridden = instance.material_id != NO_MATERIAL;
-            let material_id = select(meshlet.material_id, instance.material_id, overridden);
-            meshlet_records[record] = MeshletRecord(slot, meshlet_index, material_id);
-        }
-        if triangle < meshlet.triangle_count {
-            // The Mesh's triangles in cooked order, each with its corners as
-            // cooked, so the draw rasterizes as the cooked index stream does.
-            let triangle_in_mesh = meshlet.first_triangle - mesh.first_triangle + triangle;
-            let first_index = first.y + 3u * triangle_in_mesh;
-            let corners = meshlet_triangles[meshlet.first_triangle + triangle];
-            for (var corner = 0u; corner < 3u; corner++) {
-                let vertex = extractBits(corners, 8u * corner, 8u);
-                packed_indices[first_index + corner] = pack_index(record, vertex);
-            }
-        }
+        let material_id = select(meshlets[meshlet_index].material_id, instance.material_id, overridden);
+        meshlet_records[first.x + meshlet_in_mesh] = MeshletRecord(slot, meshlet_index, material_id);
+    }
+}
+
+// Invocations of append_triangles, which share a Meshlet's indices: a
+// SIMD-group on Apple GPUs, where wider workgroups wrote a dense scene's
+// draw slower.
+const APPEND_WORKGROUP_SIZE = 32u;
+
+// A workgroup per Meshlet record the phase appends, dispatched indirectly in
+// the rows offset_blocks sized: writes the record's packed indices where its
+// Instance fits, at the Instance's first index plus its Meshlet's triangles
+// before it in the Mesh, an invocation per index in turn, so that adjacent
+// invocations write adjacent indices.
+@compute @workgroup_size(APPEND_WORKGROUP_SIZE)
+fn append_triangles(
+    @builtin(workgroup_id) workgroup: vec3<u32>,
+    @builtin(num_workgroups) workgroups: vec3<u32>,
+    @builtin(local_invocation_index) invocation: u32
+) {
+    let appended = instance_offsets[APPENDED_RECORDS];
+    let record_index = appended.x + workgroup.y * workgroups.x + workgroup.x;
+    if record_index >= appended.y {
+        return;
+    }
+    let record = meshlet_records[record_index];
+    let meshlet = meshlets[record.meshlet];
+    let mesh = meshes[instances[record.instance_slot].mesh];
+    let first = slot_offsets(record.instance_slot);
+    if !fits(first, mesh) {
+        return;
+    }
+    // The Mesh's triangles in cooked order, each with its corners as cooked,
+    // so the draw rasterizes as the cooked index stream does.
+    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangle);
+    for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
+        let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
+        let vertex = extractBits(corners, 8u * (index % 3u), 8u);
+        packed_indices[first_index + index] = pack_index(record_index, vertex);
     }
 }

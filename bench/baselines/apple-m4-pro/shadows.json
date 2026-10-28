@@ -7,24 +7,24 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 317.834,
-    "p95": 384.209
+    "median": 256.958,
+    "p95": 324.04200000000003
   },
   "dynamic_tlas_cpu_microseconds": {
     "median": 0.041,
     "p95": 0.08399999999999999
   },
   "gpu_frame_microseconds": {
-    "median": 3119.291,
-    "p95": 3128.666
+    "median": 3116.542,
+    "p95": 3402.833
   },
   "gate_microseconds": {
-    "median": 872.1669999999999,
-    "p95": 876.625
+    "median": 870.2080000000001,
+    "p95": 876.666
   },
   "shadow_ray_microseconds": {
-    "median": 1925.0819999999997,
-    "p95": 1935.292
+    "median": 1922.625,
+    "p95": 2208.332
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 37.708,
-      "p95": 39.0
+      "median": 33.333,
+      "p95": 34.875
     },
     "culling_phase_two": {
-      "median": 16.916,
-      "p95": 17.5
+      "median": 18.958000000000002,
+      "p95": 19.583
     },
     "depth_prepass": {
-      "median": 110.917,
-      "p95": 114.208
+      "median": 110.084,
+      "p95": 114.667
     },
     "depth_pyramid_pass": {
-      "median": 270.04200000000003,
-      "p95": 274.041
+      "median": 266.875,
+      "p95": 270.5
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 5.792,
-      "p95": 6.292
+      "median": 5.9159999999999995,
+      "p95": 6.417
     },
     "lit_pass": {
-      "median": 461.709,
-      "p95": 464.625
+      "median": 463.416,
+      "p95": 467.08299999999997
     },
     "phase_two_depth_pass": {
       "median": 12.125,
-      "p95": 12.458
+      "p95": 12.5
     },
     "shadow_mask_pass": {
-      "median": 1862.75,
-      "p95": 1868.292
+      "median": 1862.0,
+      "p95": 1982.917
     },
     "tonemapping_pass": {
-      "median": 763.25,
-      "p95": 767.291
+      "median": 764.667,
+      "p95": 769.583
     }
   },
   "draw_calls": 4,
@@ -81,9 +81,9 @@
   "triangles_drawn": 2210,
   "instances_overflowed": 0,
   "uploaded_bytes": 240,
-  "gpu_memory_bytes": 515931095,
+  "gpu_memory_bytes": 515931287,
   "arena_bytes_in_use": 76856,
-  "heap_allocations": 322,
+  "heap_allocations": 325,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -94,8 +94,8 @@
     "triangles_drawn": 2210,
     "instances_overflowed": 0,
     "uploaded_bytes": 240,
-    "gpu_memory_bytes": 515931095,
+    "gpu_memory_bytes": 515931287,
     "arena_bytes_in_use": 76856,
-    "heap_allocations": 322
+    "heap_allocations": 325
   }
 }

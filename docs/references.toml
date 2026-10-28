@@ -1639,6 +1639,32 @@ quote = '''pub const fn defaults() -> Self {
     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)'''
 checked = 2026-10-27
 
+["wgpu-types-30-default-workgroups-per-dimension"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L456"
+section = "wgpu-types 30.0.1, Limits::defaults"
+quote = '''pub const fn defaults() -> Self {
+[...]
+            max_compute_workgroups_per_dimension: 65535,'''
+checked = 2026-10-28
+
+["wgpu-core-30-dispatch-usage-scope"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/compute.rs#L340-L357"
+section = "wgpu-core 30.0.1, command/compute.rs, State::flush_bindings"
+quote = '''for bind_group in self.pass.binder.list_active() {
+            unsafe { self.pass.scope.merge_bind_group(&bind_group.used)? };
+        }
+
+        // Add the indirect buffer. Because usage scopes are per-dispatch, this
+        // is the only place where INDIRECT usage could be added, and it is safe
+        // for us to remove it below.
+        if let Some(buffer) = indirect_buffer {
+            self.pass
+                .scope
+                .buffers
+                .merge_single(buffer, wgt::BufferUses::INDIRECT)?;
+        }'''
+checked = 2026-10-28
+
 ["wgpu-core-30-backend-order"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/instance.rs#L83-L88"
 section = "wgpu-core 30.0.1, Instance::new, backend registration"
