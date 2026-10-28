@@ -4,6 +4,101 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Index-sharing fragments merge on the M4 Pro unless a flat input is read (2026-10-28, #348)
+
+**Verdict.** Under 2x or 4x MSAA, when the fragment stage reads no
+flat-interpolated input, the M4 Pro can merge the fragments of nearby
+triangles of one draw that share vertex indices: in a pixel both cover,
+one fragment, with one triangle's interpolated inputs and
+`primitive_index`, writes the samples of both. The samples they cover
+together are exact; which triangle each shows depends on the triangles
+near them in the draw. Reading any flat input stops it, and a triangle
+drawn alone covers exactly its own samples. #296's ID pass read no flat
+input, so it credited samples to a triangle's neighbour, dropped the
+neighbour, and the draw of the named triangles lost those samples; whole
+Meshlets keep both and lose none. It resembles quad-fragment merging,
+which Fatahalian et al. proposed as a way "to gather and merge rasterized
+fragments from adjacent triangles in a mesh"
+[ref:fatahalian-2010-quad-fragment-merging]. No Apple documentation of
+it was found, and only the M4 Pro was measured. The rule is in ADR 0019's
+Consequences.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build at
+`5f0f5f8`. The experiments are `src/render/coverage_tests.rs`: a raster
+of quads with sides of 0.3 to 1.5 px at 256×256 whose fragment stage
+writes each sample's triangle ID into a multisampled ID target, read back
+per sample; the ID is `primitive_index` unless a row says otherwise. The
+flat scene's 4,096 quads do not overlap, so an analytic oracle gives each
+sample's owner, leaving out samples within 0.01 px of an edge: 9,001 at
+4x. Every count below is identical over three runs; `cargo test
+--release --lib coverage_experiments -- --ignored --nocapture` prints the
+table.
+
+Samples whose ID departs from the oracle, as the partner's (the other
+triangle of the same quad) and as any other; a quad is drawn `0 1 2`, `0 2
+3`, as the cooker draws one. Each quad's `q1` carries a weight only the
+first triangle interpolates and `q3` one only the partner does, and every
+vertex the quad's index as a smooth input, so a fragment's smooth inputs
+alone say which triangle they were interpolated over:
+
+| Draw | 4x: partner's, other | 2x | 1x |
+|---|---:|---:|---:|
+| Partner with its own indices (another Meshlet or Instance) | 0, 0 | 0, 0 | 0, 0 |
+| Partner sharing two indices, as within a Meshlet | 1421, 0 | 268, 0 | 0, 0 |
+| The same, sample-rate shading | 1421, 0 | 268, 0 | 0, 0 |
+| The same, IDs from the weights each interpolates | 0, 0 | 0, 0 | 0, 0 |
+| The same, IDs from smooth inputs alone | 1421, 0 | 268, 0 | 0, 0 |
+| The same, primitive_index beside a smooth input | 1421, 0 | 268, 0 | 0, 0 |
+| The same, primitive_index beside a flat input | 0, 0 | 0, 0 | 0, 0 |
+| The same, both IDs from one fragment: primitive_index's | 0, 0 | 0, 0 | 0, 0 |
+| The same, both IDs from one fragment: the weights' | 0, 0 | 0, 0 | 0, 0 |
+| Partner sharing them, led by another vertex | 1421, 0 | 268, 0 | 0, 0 |
+| The same, IDs from each first vertex's flat output | 0, 0 | 0, 0 | 0, 0 |
+| Partner removed | 0, 0 | 0, 0 | 0, 0 |
+| Every other quad removed | 760, 0 | 145, 0 | 0, 0 |
+| Triangle 1 removed, so later pairs shift by one | 1413, 0 | 267, 0 | 0, 0 |
+| One triangle between partners | 1286, 0 | 257, 0 | 0, 0 |
+| Every partner after every first triangle | 0, 0 | 0, 0 | 0, 0 |
+| Partners in a later draw call | 0, 0 | 0, 0 | 0, 0 |
+| Partners in an earlier draw call | 0, 0 | 0, 0 | 0, 0 |
+
+- **Fragments, not just the index.** IDs built from smooth inputs alone,
+  with no flat input and no `primitive_index`, depart exactly where
+  `primitive_index` does, so a merged fragment carries one triangle's
+  interpolated inputs onto the other's samples. Every row that reads a
+  flat input (the weights' IDs, which take the quad from one, the flat
+  IDs, and `primitive_index` beside a flat input) departs nowhere, even
+  where the flat value is the same for both triangles. Every departure
+  goes to the partner, never to another quad or to an empty sample.
+- **What triggers it.** No flat input, shared vertex indices, nearness in
+  the draw (one triangle between still merges most; a partner thousands
+  of triangles later, or in another draw call, never) and more than one
+  sample per pixel. Sample-rate shading does not stop it.
+- **Another Meshlet or Instance.** The renderer's packed indices carry
+  the Meshlet record in their high bits, so triangles of different
+  Meshlets or Instances never share an index, whatever their positions:
+  the first row stands for both.
+- **The prototype's loss, reproduced.** On #296's tilted scene (7,871
+  quads 0.3 m wide at 40 m), `primitive_index` IDs at depth equal after a
+  pre-pass, then a draw of the triangles they name: 697 samples lost and
+  554 credited to the partner. The same with whole quads kept: none lost,
+  368 credited to the partner. With own indices per triangle: none of
+  either. On the prototype branch itself (`5bb7abd`), an ID pass over its
+  compacted draw showed the same 697 and 554.
+- **Ruled out**, on earlier revisions of the harness and the prototype
+  branch rather than by anything on `main`: the prototype's IDs still
+  changed at 1,259 samples at depth compare Always, and the clip position
+  interpolated at every sample one triangle covers in both draws was
+  bit-identical; the vertex entry point its ID pass used; direct against
+  indirect draws; back faces culled; triangles crossing the viewport's
+  edge; clip positions computed on the GPU.
+- **What it means.** Meshlet culling (#347) decides from geometry, which
+  this does not touch. An ID pass or a visibility buffer (#297) reads a
+  flat input, which costs nothing, or keeps whole Meshlets. #369 is this:
+  the depth passes' `fs_surface_normals` reads no flat input and the lit
+  pass's `fs_main` reads `material_id`, so at shared-edge samples the
+  normals can come from a merged fragment the lit pass never sees.
+
 ## Option B, a visibility pre-pass, prototyped on `town` (2026-10-27, #296)
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
@@ -122,7 +217,8 @@ gate, a span with rays off, is the figure to judge. The two new timed
 passes grow every Baseline's `gpu_memory_bytes` by 224 bytes of
 readback, so `compare` refuses the Baselines on the branch.
 
-- **Coverage depends on the draw's neighbours.** With the IDs written in
+- **Coverage depends on the draw's neighbours** (superseded 2026-10-28:
+  fragments merge, section above). With the IDs written in
   the depth pre-pass, as option B is described, `town` differed from A at
   176 to 4,335 pixels per frame over the eight frames the Goldens test
   checks, scattered over distant geometry: wires, far cubes. Writing the
