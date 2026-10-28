@@ -63,7 +63,8 @@ pub struct MaterialPass {
 }
 
 /// The buffers of the pass's group 3, kept to rebuild it: the culling
-/// pass's frame's draw, and the pass's uniform.
+/// pass's Meshlet records and packed indices, its frame's draw, which the
+/// uniform's copy reads, and the pass's uniform.
 struct MaterialPassBuffers {
     meshlet_records: wgpu::Buffer,
     packed_indices: wgpu::Buffer,

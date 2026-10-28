@@ -23,24 +23,76 @@ struct MaterialPassUniform {
 // whose column i is the cross product of rows i + 1 and i + 2 over M's
 // determinant; normalising the weights to sum to 1 drops both factors. No
 // corner is divided by its w, so a corner behind the camera needs no
-// clipping.
+// clipping. The sum is 0 only where the point's ray runs parallel to the
+// triangle's plane, which a quad's neighbour of a pixel seen at a grazing
+// angle can reach: the weights are then left unnormalised, finite.
 fn barycentric_weights(edges: mat3x3<f32>, point: vec3<f32>) -> vec3<f32> {
     let unnormalised = point * edges;
-    return unnormalised / (unnormalised.x + unnormalised.y + unnormalised.z);
+    let sum = unnormalised.x + unnormalised.y + unnormalised.z;
+    return unnormalised / select(sum, 1.0, sum == 0.0);
 }
 
-// The attribute whose values at the triangle's corners are `a`, `b` and `c`,
-// at the point whose weights are `weights`.
-fn interpolate2(a: vec2<f32>, b: vec2<f32>, c: vec2<f32>, weights: vec3<f32>) -> vec2<f32> {
-    return a * weights.x + b * weights.y + c * weights.z;
+// The attribute whose values at the triangle's corners are `first`,
+// `second` and `third`, at the point whose weights are `weights`.
+fn interpolate2(
+    first: vec2<f32>,
+    second: vec2<f32>,
+    third: vec2<f32>,
+    weights: vec3<f32>
+) -> vec2<f32> {
+    return first * weights.x + second * weights.y + third * weights.z;
 }
 
-fn interpolate3(a: vec3<f32>, b: vec3<f32>, c: vec3<f32>, weights: vec3<f32>) -> vec3<f32> {
-    return a * weights.x + b * weights.y + c * weights.z;
+fn interpolate3(
+    first: vec3<f32>,
+    second: vec3<f32>,
+    third: vec3<f32>,
+    weights: vec3<f32>
+) -> vec3<f32> {
+    return first * weights.x + second * weights.y + third * weights.z;
 }
 
-fn interpolate4(a: vec4<f32>, b: vec4<f32>, c: vec4<f32>, weights: vec3<f32>) -> vec4<f32> {
-    return a * weights.x + b * weights.y + c * weights.z;
+fn interpolate4(
+    first: vec4<f32>,
+    second: vec4<f32>,
+    third: vec4<f32>,
+    weights: vec3<f32>
+) -> vec4<f32> {
+    return first * weights.x + second * weights.y + third * weights.z;
+}
+
+// The shading normal of the triangle whose corners are `first_corner`,
+// `second_corner` and `third_corner`, at the point whose weights are
+// `weights` and whose UV is `uv`, `material`'s normal Texture sampled there
+// with the UV's gradients.
+fn corner_shading_normal(
+    first_corner: VertexOutput,
+    second_corner: VertexOutput,
+    third_corner: VertexOutput,
+    weights: vec3<f32>,
+    uv: vec2<f32>,
+    uv_gradient_x: vec2<f32>,
+    uv_gradient_y: vec2<f32>,
+    material: MaterialData
+) -> vec3<f32> {
+    let normal_sample = textureSampleGrad(
+        normal_textures[material.layers.y],
+        data_sampler,
+        uv,
+        uv_gradient_x,
+        uv_gradient_y
+    ).rg;
+    return shading_normal(
+        interpolate3(first_corner.normal, second_corner.normal, third_corner.normal, weights),
+        interpolate4(
+            first_corner.tangent_world,
+            second_corner.tangent_world,
+            third_corner.tangent_world,
+            weights
+        ),
+        normal_sample,
+        material.metallic_roughness.z
+    );
 }
 
 // The device coordinates, (x, y, 1), of the point `point`, in pixels from
@@ -60,15 +112,20 @@ fn device_point(point: vec2<f32>, size: vec2<f32>) -> vec3<f32> {
 // across the quad rather than from each pixel match the lit pass's image
 // on the M4 Pro far more closely (docs/performance.md).
 fn shade_triangle(id: u32, pixel_centre: vec2<f32>, size: vec2<f32>) -> vec4<f32> {
+    // Phase one's draw starts at index 0, phase two's where it ends.
     var triangle = id & ~PHASE_TWO_BIT;
     if (id & PHASE_TWO_BIT) != 0u {
         triangle += material_pass.phase_two_first_index / 3u;
     }
     let first_index = 3u * triangle;
-    let a = vertex_output(packed_indices[first_index]);
-    let b = vertex_output(packed_indices[first_index + 1u]);
-    let c = vertex_output(packed_indices[first_index + 2u]);
-    let rows = mat3x3<f32>(a.clip_position.xyw, b.clip_position.xyw, c.clip_position.xyw);
+    let first_corner = vertex_output(packed_indices[first_index]);
+    let second_corner = vertex_output(packed_indices[first_index + 1u]);
+    let third_corner = vertex_output(packed_indices[first_index + 2u]);
+    let rows = mat3x3<f32>(
+        first_corner.clip_position.xyw,
+        second_corner.clip_position.xyw,
+        third_corner.clip_position.xyw
+    );
     let edges = mat3x3<f32>(
         cross(rows[1], rows[2]),
         cross(rows[2], rows[0]),
@@ -80,68 +137,82 @@ fn shade_triangle(id: u32, pixel_centre: vec2<f32>, size: vec2<f32>) -> vec4<f32
     let right = barycentric_weights(edges, device_point(quad_corner + vec2<f32>(1.0, 0.0), size));
     let down = barycentric_weights(edges, device_point(quad_corner + vec2<f32>(0.0, 1.0), size));
 
-    let uv = interpolate2(a.uv, b.uv, c.uv, weights);
-    let uv_origin = interpolate2(a.uv, b.uv, c.uv, origin);
-    let uv_right = interpolate2(a.uv, b.uv, c.uv, right);
-    let uv_down = interpolate2(a.uv, b.uv, c.uv, down);
-    let uv_dx = uv_right - uv_origin;
-    let uv_dy = uv_down - uv_origin;
+    let uv = interpolate2(first_corner.uv, second_corner.uv, third_corner.uv, weights);
+    let uv_origin = interpolate2(first_corner.uv, second_corner.uv, third_corner.uv, origin);
+    let uv_right = interpolate2(first_corner.uv, second_corner.uv, third_corner.uv, right);
+    let uv_down = interpolate2(first_corner.uv, second_corner.uv, third_corner.uv, down);
+    let uv_gradient_x = uv_right - uv_origin;
+    let uv_gradient_y = uv_down - uv_origin;
 
     // The flat Material ID comes from the first corner, as the lit pass's.
-    let material = materials[a.material_id];
+    let material = materials[first_corner.material_id];
     let albedo = textureSampleGrad(
         albedo_textures[material.layers.x],
         colour_sampler,
         uv,
-        uv_dx,
-        uv_dy
+        uv_gradient_x,
+        uv_gradient_y
     );
     let metallic_roughness = textureSampleGrad(
         metallic_roughness_textures[material.layers.z],
         data_sampler,
         uv,
-        uv_dx,
-        uv_dy
+        uv_gradient_x,
+        uv_gradient_y
     ).rg;
     let occlusion = textureSampleGrad(
         occlusion_textures[material.layers.w],
         data_sampler,
         uv,
-        uv_dx,
-        uv_dy
+        uv_gradient_x,
+        uv_gradient_y
     ).r;
     let emissive = textureSampleGrad(
         emissive_textures[material.extra.x],
         colour_sampler,
         uv,
-        uv_dx,
-        uv_dy
+        uv_gradient_x,
+        uv_gradient_y
     ).rgb;
-    let normal_layer = material.layers.y;
-    let scale = material.metallic_roughness.z;
-    let normal = shading_normal(
-        interpolate3(a.normal, b.normal, c.normal, weights),
-        interpolate4(a.tangent_world, b.tangent_world, c.tangent_world, weights),
-        textureSampleGrad(normal_textures[normal_layer], data_sampler, uv, uv_dx, uv_dy).rg,
-        scale
+    let normal = corner_shading_normal(
+        first_corner,
+        second_corner,
+        third_corner,
+        weights,
+        uv,
+        uv_gradient_x,
+        uv_gradient_y,
+        material
     );
-    let normal_right = shading_normal(
-        interpolate3(a.normal, b.normal, c.normal, right),
-        interpolate4(a.tangent_world, b.tangent_world, c.tangent_world, right),
-        textureSampleGrad(normal_textures[normal_layer], data_sampler, uv_right, uv_dx, uv_dy).rg,
-        scale
+    let normal_origin = corner_shading_normal(
+        first_corner,
+        second_corner,
+        third_corner,
+        origin,
+        uv_origin,
+        uv_gradient_x,
+        uv_gradient_y,
+        material
     );
-    let normal_down = shading_normal(
-        interpolate3(a.normal, b.normal, c.normal, down),
-        interpolate4(a.tangent_world, b.tangent_world, c.tangent_world, down),
-        textureSampleGrad(normal_textures[normal_layer], data_sampler, uv_down, uv_dx, uv_dy).rg,
-        scale
+    let normal_right = corner_shading_normal(
+        first_corner,
+        second_corner,
+        third_corner,
+        right,
+        uv_right,
+        uv_gradient_x,
+        uv_gradient_y,
+        material
     );
-    let normal_origin = shading_normal(
-        interpolate3(a.normal, b.normal, c.normal, origin),
-        interpolate4(a.tangent_world, b.tangent_world, c.tangent_world, origin),
-        textureSampleGrad(normal_textures[normal_layer], data_sampler, uv_origin, uv_dx, uv_dy).rg,
-        scale
+    let normal_down = corner_shading_normal(
+        first_corner,
+        second_corner,
+        third_corner,
+        down,
+        uv_down,
+        uv_gradient_x,
+        uv_gradient_y,
+        material
     );
     let surface = decode_surface(
         material,
@@ -153,9 +224,9 @@ fn shade_triangle(id: u32, pixel_centre: vec2<f32>, size: vec2<f32>) -> vec4<f32
         normal_down - normal_origin
     );
     let position = interpolate3(
-        a.camera_relative_position,
-        b.camera_relative_position,
-        c.camera_relative_position,
+        first_corner.camera_relative_position,
+        second_corner.camera_relative_position,
+        third_corner.camera_relative_position,
         weights
     );
     return lit_colour(surface, normal, position, pixel_centre);
@@ -188,7 +259,9 @@ fn shade_pixels(@builtin(global_invocation_id) invocation: vec3<u32>) {
     var unshaded = 0xfu;
     while unshaded != 0u {
         let id = ids[firstTrailingBit(unshaded)];
-        let matching = dot(select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), ids == vec4<u32>(id)), vec4<u32>(1u));
+        // The bits of the samples that show this ID.
+        let sample_bits = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), ids == vec4<u32>(id));
+        let matching = dot(sample_bits, vec4<u32>(1u));
         var shaded = cleared;
         if id != NO_TRIANGLE {
             shaded = shade_triangle(id, pixel_centre, vec2<f32>(size));

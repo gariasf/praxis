@@ -1756,13 +1756,6 @@ pub(crate) mod tests {
         );
     }
 
-    /// A white quad over the left half of the view, 1.8 m away, and point
-    /// lights. With the `count_point_lights` Render switch on, the light
-    /// count pass counts each pixel the quad covers, with the lights its
-    /// Froxel lists and those whose range reaches the quad there: three in
-    /// front reaching past it, listed and reaching everywhere; one just
-    /// behind it, within its Froxels' slice of depth but short of it, listed
-    /// in some and reaching none. Off, nothing counts them.
     /// With the `visibility_buffer` Render switch on, the material pass
     /// shades the image the lit pass shades: a white wall lit by nine point
     /// lights, a red quad turned on it so its edges cross pixels at an
@@ -1862,6 +1855,13 @@ pub(crate) mod tests {
         }
     }
 
+    /// A white quad over the left half of the view, 1.8 m away, and point
+    /// lights. With the `count_point_lights` Render switch on, the light
+    /// count pass counts each pixel the quad covers, with the lights its
+    /// Froxel lists and those whose range reaches the quad there: three in
+    /// front reaching past it, listed and reaching everywhere; one just
+    /// behind it, within its Froxels' slice of depth but short of it, listed
+    /// in some and reaching none. Off, nothing counts them.
     #[test]
     fn the_light_count_pass_counts_the_point_lights_each_lit_pixel_lists_and_is_reached_by() {
         let Some(context) = gpu_context() else {
