@@ -3224,7 +3224,7 @@ quote = '''We address this inefficiency by augmenting the GPU pipeline to gather
 checked = 2026-10-28
 
 ["wgpu-30-tlas-dependency-per-instance"]
-url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L268-L270"
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L269-L271"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs, the TLAS build's loop over its instances: one dependency pushed per instance, not per distinct BLAS"
 quote = '''            instance_count += 1;
 

@@ -38,9 +38,9 @@ fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
 }
 
 /// At submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one BLAS per
-/// Instance, for each pass that binds a group holding it, so only the pass
-/// that traces rays and the markers that time the dynamic TLAS's build
-/// declare one.
+/// Instance, for each flush of a group holding it, so only the pass that
+/// traces rays and the markers that time the dynamic TLAS's build declare
+/// one.
 #[test]
 fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
     let declaring: Vec<&str> = MODULES

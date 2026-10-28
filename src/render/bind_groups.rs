@@ -96,10 +96,12 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 2 of the shadow mask pass, built once since its TLAS are rebuilt in
 /// place: the static and dynamic TLAS it traces shadow rays against (ADR
-/// 0020). No other pass binds them: at submit, wgpu-core 30.0.1 walks a
-/// TLAS's dependencies, one BLAS per Instance it holds, for each pass that
-/// binds a group holding it [ref:wgpu-30-tlas-dependency-per-instance]
-/// [ref:wgpu-30-use-tlas-per-flush] [ref:wgpu-30-submit-tlas-dependencies].
+/// 0020). No other pass binds them, but the dynamic TLAS's markers bind the
+/// dynamic one: at submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one
+/// BLAS per Instance it holds, for each flush of a group holding it, at
+/// least once per pass that binds one
+/// [ref:wgpu-30-tlas-dependency-per-instance] [ref:wgpu-30-use-tlas-per-flush]
+/// [ref:wgpu-30-submit-tlas-dependencies].
 pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Shadow Ray Scene Bind Group",

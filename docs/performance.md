@@ -4,34 +4,41 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
-## The TLAS bound in the shadow mask pass alone: the GPU frame's 1.1 ms is the dynamic TLAS's build, no longer hidden (2026-10-28, #378)
+## The TLAS bound in the shadow mask pass alone: queued frames, not the split, cost the GPU 1.1 ms (2026-10-28, #378)
 
 **Verdict.** Binding both TLAS only in the shadow mask pass adds no GPU
-work. `town`'s `submit` falls from 13.3 to 2.8 ms with rays on and from
-11.3 ms to 26 µs with rays off, and the CPU frame from 16.5–16.7 to
-6.8–7.2 ms. The GPU frame's growth, 1.1 ms, as #352's probe saw, has
-two parts. The dynamic TLAS's build, about 0.67 ms of GPU, used to run
-beside the previous frame, so it read 100 µs from that frame's end: its
-command buffer was submitted 13 ms before the frame's own, which the
-TLAS walks held back. With `submit` short, the GPU runs the frames back
-to back, and their spans grow about 0.5 ms more, by a cause not
-measured here. Paced so that the GPU is idle when each frame starts, as
-base was, every pass reads as base within 1%, the gate too, and the GPU
-frame grows only by the build. The GPU is now the bottleneck: the frame
-period with rays on, 16.4 ms, is no longer than base's.
+work. `town`'s `submit` falls from 13.3 to 2.8 ms with rays on, and from
+11.3 ms to 26 µs with rays off; the CPU frame falls from 16.9 to 7.0 ms
+in the re-recorded Baseline. The GPU frame grows 1.1 ms, as #352's probe
+saw, but the cause is the GPU becoming the bottleneck, which any faster
+CPU frame brings, not the split. Once the CPU outpaces the GPU, each
+frame is queued behind the one running. With rays on, Metal then stops
+overlapping passes it overlapped when the GPU was idle at each frame's
+start. The lit pass no longer starts beside the shadow mask pass, nor
+the Froxel pass beside culling phase one, and the frame's passes span
+16.5 ms instead of 15.3. Base's binding layout with upstream's TLAS
+dependency dedup patched in, whose CPU also outpaces the GPU, loses the
+same overlap; one frame in flight keeps it. #382 takes the lost
+overlap. The dynamic TLAS's build, about 0.67 ms of GPU, runs beside the
+previous frame when frames queue (it reads 0), and is exposed when the
+GPU is idle at the frame's start.
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
-`main` at 4ef4f7d3 (base) and of this change (split), both with a
-measurement patch, not committed. The patch logged the median interval
-between frames over all but the first 100 frames, and each CPU stage's
-median. Set to 17 ms, an environment variable made each frame sleep out
-the rest of that time after it was submitted (paced); the frames then
-took about 20 ms. `praxis bench <dir> town` at 2560×1440 with 4x MSAA,
-1,800 measured frames, interleaved base, split and paced, three rounds,
-no other GPU work.
+`main` at 4ef4f7d3 (base) and of this change (split), with measurement
+patches, not committed. The patches logged the median interval between
+frames over all but the first 100 frames, each CPU stage's median and
+each frame's raw pass timestamps. Switches, by environment variable,
+made each frame sleep out the rest of 17 ms after it was submitted
+(paced; the frames then took about 20 ms) and set the frames in
+flight. One variant patched wgpu-core 30.0.1 with gfx-rs/wgpu#9835's
+dedup [ref:wgpu-pr-9835], so each frame's TLAS uses walk their distinct
+BLASes only. Another had the dynamic TLAS's first marker read the HDR
+target, so the next frame's build waited for this frame's lit pass.
+`praxis bench <dir> town` at 2560×1440 with 4x MSAA, 1,800 measured
+frames, no other GPU work.
 
-Medians in µs, as `praxis report` prints them, rounds 1 and 2. The
-interval is the patch's, with rays on.
+Medians in µs, as `praxis report` prints them; base, split and paced
+interleaved over two rounds. The interval is the patch's, with rays on.
 
 | Run | Round | Interval | CPU frame | GPU frame | `dynamic_tlas_build` | Gate, rays off | Shadow-ray time | Dynamic TLAS, CPU |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -42,24 +49,58 @@ interval is the patch's, with rays on.
 | Split | 2 | 16,438 | 6,846.2 | 16,483.9 | 0.0 | 8,700.6 | 6,617.5 | 1,240.5 |
 | Split, paced | 2 | 19,889 | 5,490.8 | 16,006.5 | 671.4 | 8,618.9 | 6,298.5 | 969.8 |
 
-The GPU frame less the build: base 15,287.9 and 15,289.1, paced
-15,302.1 and 15,335.1. Round 1's passes, base against paced:
+Paced, the GPU frame less the build reads 15,302.1 and 15,335.1, against
+base's 15,287.9 and 15,289.1. Round 1's passes, base against paced:
 `culling_phase_one` 1,113.2 and 1,109.7, `depth_prepass` 2,138.7 and
 2,156.8, `shadow_mask_pass` 7,009.1 and 6,972.8, `lit_pass` 11,244.3 and
-11,224.6. Unpaced, frames overlap, so per-pass times shift (the split's
-`lit_pass` reads 5,593.8); the GPU frame and the interval are the
-figures to judge.
+11,224.6, and the gate within 1.5%. The variants, one run each:
 
-**Every CPU stage runs slower when the GPU is the bottleneck.** Round 3's
-stage medians, rays on, base, split and paced: `prepare_frame` 1,284,
+| Run | Frames in flight | CPU frame | GPU frame | `dynamic_tlas_build` | `froxel_pass` | `lit_pass` | Dynamic TLAS, CPU |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Split | 1 | 4,870.9 | 15,988.1 | 667.9 | 534.9 | 11,222.9 | 909.1 |
+| Split, build after the lit pass | 2 | 7,021.4 | 16,988.3 | 511.7 | 385.6 | 5,545.5 | 1,261.9 |
+| Split with the dedup | 2 | 2,548.2 | 16,494.4 | 0.0 | 385.8 | 5,594.2 | 586.5 |
+| Base with the dedup | 2 | 2,575.3 | 16,578.2 | 0.0 | 385.7 | 5,623.2 | 583.9 |
+
+Where each pass runs, from the raw timestamps: medians of each pass's
+start and end, from culling phase one's start, rays on.
+
+| Run | Froxel | Shadow mask | Lit | Tonemapping |
+|---|---|---|---|---|
+| Base, 2 in flight, the CPU slower | 51–577 | 3,761–10,805 | 3,725–14,983 | 11,333–15,305 |
+| Split, 2 in flight | 888–1,273 | 3,915–10,514 | 10,526–16,166 | 12,521–16,488 |
+| Split, 1 in flight | 60–593 | 3,797–10,831 | 3,767–15,004 | 11,354–15,326 |
+| Split, build after the lit pass | 897–1,283 | 3,929–10,526 | 10,540–16,127 | 12,486–16,478 |
+
+When the GPU is idle at the frame's start, the lit pass's vertex work
+runs beside the shadow mask pass and only its fragment work waits for
+the mask; queued, it waits for the whole pass. With rays off, the split's
+queued frames keep the overlap: Froxel −3–552, lit 3,333–8,664,
+tonemapping 5,312–8,988, as base's. Unpaced, `lit_pass` and
+`froxel_pass` change with the overlap, so the GPU frame is the figure
+to judge.
+
+In the split, each frame's build waits for the previous frame's shadow
+mask pass and runs beside its lit pass. In base it waited for the
+previous lit pass, which held the TLAS too, and ran beside the
+tonemapping pass. Made to wait for the lit pass again, the build ran
+exposed at the frame boundary and the passes still spanned 16.5 ms,
+so the build's placement is not the cause. Nor is the size of each
+frame's residency set, which the dedup shrinks to the distinct BLASes:
+the GPU frame stays 16.5 ms. The dedup arrives with wgpu 31; it takes
+the CPU frame to 2.5 ms but leaves the GPU frame as is.
+
+**Every CPU stage runs slower when frames queue.** Stage medians from a
+third round, rays on, base, split and paced: `prepare_frame` 1,284,
 1,671 and 1,288; `propagate_world_transforms` 366, 453 and 346; the
 dynamic TLAS's recording 596, 721 and 552, and its submit 331, 474 and
-415; `submit` 13,310, 2,783 and 2,566. Unpaced, the main thread waits
-for the GPU in each frame, and stages that touch no TLAS slow by the
-same 20–40% as the dynamic TLAS's. Paced with rays off, where the
-thread sleeps most of each frame, they slow too (`prepare_frame` 2,445).
-So the dynamic TLAS's CPU line's 1.24–1.28 ms, over the 1.1 ms ceiling,
-is not the split's cost; #381 measures the cause.
+415; `submit` 13,310, 2,783 and 2,566. With rays off, `submit` reads
+11,268, 26 and 35. Queued, the main thread waits for the GPU in each
+frame, and stages that touch no TLAS slow by the same 20–45% as the
+dynamic TLAS's. Paced with rays off, where the thread sleeps most of
+each frame, they slow too (`prepare_frame` 2,445). So the dynamic TLAS's
+CPU line's 1.24–1.31 ms, over the 1.1 ms ceiling, is not the split's
+cost; with one frame in flight it reads 909 µs. #381 measures the cause.
 
 ## `town`'s submit is wgpu's TLAS bookkeeping, not a GPU wait (2026-10-28, #352)
 

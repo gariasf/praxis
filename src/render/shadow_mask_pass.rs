@@ -5,6 +5,7 @@
 //! reads. It runs once both culling phases' Instances are in the depth
 //! target.
 
+use crate::render::acceleration_structures::{DynamicTlas, StaticTlas};
 use crate::render::bind_groups::{SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, pipeline_layout};
 use crate::render::froxel_pass::FROXEL_SLICES;
 use crate::render::renderer::RenderSwitches;
@@ -65,13 +66,13 @@ pub struct ShadowMaskPass {
 }
 
 impl ShadowMaskPass {
-    /// The pass, tracing against the `static_tlas` and `dynamic_tlas`
-    /// bindings, reading the Renderer's `camera`, `light` and `lights`
+    /// The pass, tracing against `static_tlas` and `dynamic_tlas`, reading the Renderer's `camera`, `light` and `lights`
     /// buffers and the Froxel pass's `froxel_lists`, and writing the shadow
     /// mask of `render_targets`, with its Froxel lookups as `switches` set.
     pub fn new(
         device: &wgpu::Device,
-        [static_tlas, dynamic_tlas]: [wgpu::BindingResource<'_>; 2],
+        static_tlas: &StaticTlas,
+        dynamic_tlas: &DynamicTlas,
         buffers: [(&'static str, &wgpu::Buffer); 4],
         render_targets: &RenderTargets,
         switches: RenderSwitches,
@@ -80,7 +81,10 @@ impl ShadowMaskPass {
         let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
             device,
             &shadow_ray_scene_layout,
-            [("static_tlas", static_tlas), ("dynamic_tlas", dynamic_tlas)],
+            [
+                ("static_tlas", static_tlas.binding()),
+                ("dynamic_tlas", dynamic_tlas.binding()),
+            ],
         );
         let layout = SHADOW_MASK_BUILD.layout(device);
         let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor());

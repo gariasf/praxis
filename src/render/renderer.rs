@@ -369,7 +369,8 @@ impl Renderer {
 
         let shadow_mask_pass = ShadowMaskPass::new(
             &device,
-            [static_tlas.binding(), dynamic_tlas.binding()],
+            &static_tlas,
+            &dynamic_tlas,
             [
                 ("camera", &camera_buffer),
                 ("light", &light_uniform_buffer),
