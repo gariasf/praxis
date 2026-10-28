@@ -21,6 +21,33 @@ const DIELECTRIC_BASE_REFLECTANCE: f32 = 0.04;
 // [ref:gltf-2.0-zero-roughness].
 const MINIMUM_ROUGHNESS: f32 = 0.04;
 
+// Tokuyoshi and Kaplanyan's pixel filter, a Gaussian of standard deviation
+// σ = 0.5 pixels, as σ², and κ, their cap on the roughness it adds
+// [ref:tokuyoshi-2019-normal-derivatives].
+const PIXEL_FILTER_VARIANCE: f32 = 0.25;
+const MAXIMUM_FILTER_ALPHA_SQUARED: f32 = 0.18;
+
+// `roughness` widened for a shading normal that changes by `normal_change_x`
+// and `normal_change_y` from one pixel to the next, its screen-space
+// derivatives, so a highlight narrower than the normal's turn across a pixel
+// spreads instead of sparkling: Tokuyoshi and Kaplanyan, "Improved Geometric
+// Specular Antialiasing" (I3D 2019), eq. (4) and Listing 2,
+//   α² + min(2σ² (|∂n/∂x|² + |∂n/∂y|²), κ),
+// capped at 1 as the listing saturates it [ref:tokuyoshi-2019-normal-derivatives],
+// with α = roughness² [ref:gltf-2.0-roughness-mapping]. Equations only; no
+// code copied.
+fn specular_antialiased_roughness(
+    roughness: f32,
+    normal_change_x: vec3<f32>,
+    normal_change_y: vec3<f32>
+) -> f32 {
+    let normal_variance = PIXEL_FILTER_VARIANCE
+        * (dot(normal_change_x, normal_change_x) + dot(normal_change_y, normal_change_y));
+    let filter_alpha_squared = min(2.0 * normal_variance, MAXIMUM_FILTER_ALPHA_SQUARED);
+    let alpha = roughness * roughness;
+    return sqrt(sqrt(min(alpha * alpha + filter_alpha_squared, 1.0)));
+}
+
 // A surface point, as the shading terms read it.
 struct Surface {
     base_color: vec3<f32>,
@@ -35,20 +62,28 @@ struct Surface {
 // A surface point from its Material's factors and the texels of its Layers,
 // each factor scaling its texel (glTF 2.0, "Metallic-Roughness Material"
 // [ref:gltf-2.0-metallic-roughness]): cooked metallic-roughness holds roughness
-// in red and metallic in green (BC5, ADR 0018). Roughness keeps to
-// MINIMUM_ROUGHNESS or above.
+// in red and metallic in green (BC5, ADR 0018). Roughness is widened for the
+// shading normal's screen-space derivatives, `normal_change_x` and
+// `normal_change_y`, then keeps to MINIMUM_ROUGHNESS or above.
 fn decode_surface(
     material: MaterialData,
     albedo: vec4<f32>,
     metallic_roughness: vec2<f32>,
     occlusion: f32,
-    emissive: vec3<f32>
+    emissive: vec3<f32>,
+    normal_change_x: vec3<f32>,
+    normal_change_y: vec3<f32>
 ) -> Surface {
+    let roughness = specular_antialiased_roughness(
+        metallic_roughness.r * material.metallic_roughness.y,
+        normal_change_x,
+        normal_change_y
+    );
     return Surface(
         albedo.rgb * material.base_color.rgb,
         albedo.a * material.base_color.a,
         metallic_roughness.g * material.metallic_roughness.x,
-        max(metallic_roughness.r * material.metallic_roughness.y, MINIMUM_ROUGHNESS),
+        max(roughness, MINIMUM_ROUGHNESS),
         occlusion,
         emissive * material.emissive.rgb,
     );
@@ -67,12 +102,17 @@ fn fresnel_weight(view_dot_half: f32) -> f32 {
 // D: the Trowbridge-Reitz (GGX) distribution of microfacet normals at width
 // alpha (Appendix B, "Specular BRDF" [ref:gltf-2.0-specular-brdf]),
 //   α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²),
-// its (N·H)² (α² − 1) + 1 summed as (N·H)² α² + (1 − N·H)(1 + N·H), terms
-// f32 keeps to a few ulps where the sum falls to α², at N·H = 1.
-fn distribution_ggx(normal_dot_half: f32, alpha: f32) -> f32 {
+// its (N·H)² (α² − 1) + 1 summed as (N·H)² α² + 1 − (N·H)², with
+// 1 − (N·H)² given as |N × H|², `normal_cross_half_squared`, by Lagrange's
+// identity for unit N and H, as Filament (Apache-2.0) computes it
+// [ref:filament-ggx-lagrange-identity]. Near the peak, at the roughness
+// floor, 1 − N·H is a few f32 steps below 1 and errs by several percent,
+// which D's steep peak sums to about 1% too much light; |N × H|² keeps its
+// relative precision there.
+fn distribution_ggx(normal_dot_half: f32, normal_cross_half_squared: f32, alpha: f32) -> f32 {
     let alpha_squared = alpha * alpha;
     let denominator = normal_dot_half * normal_dot_half * alpha_squared
-        + (1.0 - normal_dot_half) * (1.0 + normal_dot_half);
+        + normal_cross_half_squared;
     let distribution = alpha_squared / (PI * denominator * denominator);
     return select(0.0, distribution, normal_dot_half > 0.0);
 }
@@ -117,17 +157,18 @@ fn tangent_space_normal(encoded: vec2<f32>, scale: f32) -> vec3<f32> {
 
 // The BRDF, mix(dielectric_brdf, metal_brdf, metallic), per steradian, from
 // the cosines between the normal N, the directions to the light L and to
-// the viewer V, and H halfway between them (Appendix B, "Metal BRDF and
-// Dielectric BRDF" [ref:gltf-2.0-metal-and-dielectric-brdf]).
+// the viewer V, and H halfway between them, and |N × H|² (Appendix B,
+// "Metal BRDF and Dielectric BRDF" [ref:gltf-2.0-metal-and-dielectric-brdf]).
 fn metallic_roughness_brdf(
     surface: Surface,
     normal_dot_light: f32,
     normal_dot_view: f32,
     normal_dot_half: f32,
+    normal_cross_half_squared: f32,
     view_dot_half: f32
 ) -> vec3<f32> {
     let alpha = surface.roughness * surface.roughness;
-    let specular = distribution_ggx(normal_dot_half, alpha)
+    let specular = distribution_ggx(normal_dot_half, normal_cross_half_squared, alpha)
         * smith_visibility(normal_dot_light, normal_dot_view, view_dot_half, alpha);
     // The mix, gathered by lobe. A dielectric's surface reflects F of the
     // light, from its fixed F0, and the rest enters, scatters and leaves
@@ -163,11 +204,13 @@ fn reflected_luminance(
     let half_sum = light_direction + view_direction;
     let half_vector = half_sum * inverseSqrt(max(dot(half_sum, half_sum), 1e-30));
     let normal_dot_light = dot(normal, light_direction);
+    let normal_cross_half = cross(normal, half_vector);
     let brdf = metallic_roughness_brdf(
         surface,
         normal_dot_light,
         dot(normal, view_direction),
         dot(normal, half_vector),
+        dot(normal_cross_half, normal_cross_half),
         dot(view_direction, half_vector)
     );
     return brdf * illuminance * max(normal_dot_light, 0.0);

@@ -61,10 +61,9 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     let Some(context) = gpu_context() else {
         return;
     };
-    // Below 0.25, f32 holds cos θ too coarsely near D's peak: at the
-    // renderer's floor of 0.04 the sum lands 9e-4 short, so the floor is
-    // checked against D's f64 reference instead.
-    let roughnesses = [0.25, 0.5, 0.75, 1.0];
+    // f32 holds cos θ too coarsely near D's peak at the roughness floor, so
+    // sin² θ, which D takes as |N × H|², comes from f64.
+    let roughnesses = [minimum_roughness(&context), 0.25, 0.5, 0.75, 1.0];
     let sample_count = 4096;
     // Each sample's angle θ and the width dθ = π u du it stands for.
     let samples: Vec<(f64, f64)> = (0..sample_count)
@@ -80,14 +79,19 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     let inputs: Vec<[f32; 4]> = roughnesses
         .iter()
         .flat_map(|&roughness| {
-            samples
-                .iter()
-                .map(move |(angle, _)| [angle.cos() as f32, roughness, 0.0, 0.0])
+            samples.iter().map(move |(angle, _)| {
+                [
+                    angle.cos() as f32,
+                    roughness,
+                    angle.sin().powi(2) as f32,
+                    0.0,
+                ]
+            })
         })
         .collect();
     let results = evaluate(
         &context,
-        "vec4<f32>(distribution_ggx(input.x, input.y * input.y))",
+        "vec4<f32>(distribution_ggx(input.x, input.z, input.y * input.y))",
         &inputs,
     );
 
@@ -114,7 +118,7 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
     // which is 16/π at roughness 0.5.
     let peak = evaluate(
         &context,
-        "vec4<f32>(distribution_ggx(input.x, input.y * input.y))",
+        "vec4<f32>(distribution_ggx(input.x, input.z, input.y * input.y))",
         &[[1.0, 0.5, 0.0, 0.0]],
     )[0][0];
     assert!(
@@ -125,9 +129,9 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
 
 /// D matches glTF 2.0 Appendix B's Trowbridge-Reitz formula, evaluated in
 /// f64, from below the horizon, where χ⁺ makes it 0, to the normal, and from
-/// the roughness floor to 1. At the floor's peak the formula's
-/// (N·H)² (α² − 1) + 1 falls to α² = 2.56e-6, which f32 keeps only as the
-/// shader sums it.
+/// the roughness floor to 1, given 1 − (N·H)² from f64 as |N × H|². At the
+/// floor's peak the formula's (N·H)² (α² − 1) + 1 falls to α² = 2.56e-6,
+/// which f32 keeps only as the shader sums it.
 #[test]
 fn distribution_ggx_matches_appendix_b_from_the_roughness_floor_to_one() {
     let Some(context) = gpu_context() else {
@@ -136,11 +140,16 @@ fn distribution_ggx_matches_appendix_b_from_the_roughness_floor_to_one() {
     let cosines = [-0.5, 0.0, 1e-3, 0.5, 0.9, 0.99, 0.999, 0.9999, 0.99999, 1.0];
     let inputs: Vec<[f32; 4]> = [minimum_roughness(&context), 0.25, 0.5, 1.0]
         .into_iter()
-        .flat_map(|roughness| cosines.map(|cosine| [cosine, roughness * roughness, 0.0, 0.0]))
+        .flat_map(|roughness| {
+            cosines.map(|cosine| {
+                let sine_squared = (1.0 - f64::from(cosine)) * (1.0 + f64::from(cosine));
+                [cosine, roughness * roughness, sine_squared as f32, 0.0]
+            })
+        })
         .collect();
     let results = evaluate(
         &context,
-        "vec4<f32>(distribution_ggx(input.x, input.y))",
+        "vec4<f32>(distribution_ggx(input.x, input.z, input.y))",
         &inputs,
     );
 
@@ -213,8 +222,15 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
                         let light = direction(light_angle, azimuth);
                         let cosines =
                             cosines(glam::DVec3::Z, view, light).map(|cosine| cosine as f32);
+                        // 1 − (N·H)², from the N·H the shader takes.
+                        let normal_dot_half = f64::from(cosines[2]);
+                        let normal_cross_half = (1.0 - normal_dot_half) * (1.0 + normal_dot_half);
                         let [red, green, blue] = GOLD;
-                        cases.push([cosines, [red, green, blue, metallic], [roughness; 4]]);
+                        cases.push([
+                            cosines,
+                            [red, green, blue, metallic],
+                            [roughness, normal_cross_half as f32, 0.0, 0.0],
+                        ]);
                     }
                 }
             }
@@ -224,7 +240,7 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
     let brdf = |normal_dot_light: &str, normal_dot_view: &str| {
         format!(
             "vec4<f32>(metallic_roughness_brdf({surface}, {normal_dot_light}, \
-             {normal_dot_view}, inputs[0].z, inputs[0].w), 0.0)"
+             {normal_dot_view}, inputs[0].z, inputs[2].y, inputs[0].w), 0.0)"
         )
     };
     let results = evaluate_cases(&context, &brdf("inputs[0].x", "inputs[0].y"), &cases, &[]);
@@ -257,11 +273,15 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
 /// What a point reflects from a punctual light, f(L, V) E (N·L)⁺, from unit
 /// vectors around a normal off every axis, matches the f64 reference: 0 for a
 /// light at or below the horizon, finite where the light is opposite the
-/// view, even at the roughness floor. A white metal reflects at most what it
-/// receives: under illuminance 1 from each direction of the hemisphere in
-/// turn, what it reflects sums to at most 1 (a white furnace). Appendix B's
-/// dielectric is not held to that, since its fresnel_mix is not energy
-/// conserving (Appendix B, "Coupling Diffuse and Specular Reflection"
+/// view, even at the roughness floor. Under illuminance 1 from each direction
+/// of the hemisphere in turn (a white furnace), at roughnesses from the floor
+/// to 1, which is every roughness the lit pass's widening gives, what a
+/// surface reflects sums to what the reference's sum gives and stays under
+/// its bound: a white metal reflects at most what it receives, 1; a white
+/// dielectric at most its base colour, 1, plus the Fresnel it receives, what
+/// a black dielectric reflects. Appendix B's dielectric is held to no more,
+/// since its fresnel_mix weighs only the diffuse lobe by 1 − F and is not
+/// energy conserving (Appendix B, "Coupling Diffuse and Specular Reflection"
 /// [ref:gltf-2.0-coupling]).
 #[test]
 fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives() {
@@ -294,31 +314,67 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
             cases.push(case(view_angle, light, metallic, floor));
         }
     }
-    // The hemisphere in midpoints of 1° by 2° cells, each the solid angle
-    // sin θ dθ dφ of its cell.
-    let cells: Vec<(glam::DVec3, f64)> = (0..90)
-        .flat_map(|polar| (0..180).map(move |azimuth| (polar, azimuth)))
-        .map(|(polar, azimuth)| {
-            let polar_angle = f64::from(polar) + 0.5;
-            let solid_angle = polar_angle.to_radians().sin() * 2f64.to_radians().powi(2) / 2.0;
-            (
-                direction(polar_angle, f64::from(azimuth) * 2.0 + 1.0),
-                solid_angle,
-            )
+    let direction_cases = cases.len();
+    // The hemisphere is summed over half vectors H, each giving the light
+    // L = 2 (V·H) H − V and the solid angle 4 (V·H) dω_H about it, so the
+    // specular lobe, as narrow as α about the normal in H, is as narrow at
+    // every view. Cells are rings about the normal, 2π/48 apart in azimuth,
+    // each 10% wider than the one inside it, from 1e-5 radians, up to 1°.
+    // Midpoint sums over cells half or a quarter that size differ by at most
+    // 1.2e-4 at these cases.
+    let mut ring_edges = vec![0.0, 1e-5];
+    while let Some(&edge) = ring_edges.last()
+        && edge < std::f64::consts::FRAC_PI_2
+    {
+        ring_edges.push(
+            (edge * 1.1)
+                .min(edge + 1f64.to_radians())
+                .min(std::f64::consts::FRAC_PI_2),
+        );
+    }
+    const AZIMUTHS: u32 = 48;
+    let half_vectors: Vec<(glam::DVec3, f64)> = ring_edges
+        .windows(2)
+        .flat_map(|ring| {
+            let solid_angle =
+                (ring[0].cos() - ring[1].cos()) * std::f64::consts::TAU / f64::from(AZIMUTHS);
+            let polar = (ring[0] + ring[1]) / 2.0;
+            (0..AZIMUTHS).map(move |azimuth| {
+                let azimuth = (f64::from(azimuth) + 0.5) * 360.0 / f64::from(AZIMUTHS);
+                (direction(polar.to_degrees(), azimuth), solid_angle)
+            })
         })
         .collect();
-    let furnaces = [
-        (0.0, 0.5),
-        (60.0, 0.5),
-        (85.0, 0.5),
-        (0.0, 1.0),
-        (85.0, 1.0),
-    ];
-    for (view_angle, roughness) in furnaces {
-        for &(light, _) in &cells {
-            let mut white_metal = case(view_angle, light, 1.0, roughness);
-            white_metal[3] = [1.0; 4];
-            cases.push(white_metal);
+    // White metal, white dielectric, black dielectric, about the normal +Z,
+    // which f32 holds exactly: near the floor's peak, a normal rounded off
+    // unit length moves D, and the reference's sum with it, by about 1%.
+    let materials = [[1.0; 4], [1.0, 1.0, 1.0, 0.0], [0.0; 4]];
+    let mut furnaces = Vec::new();
+    for view_angle in [0.0, 60.0, 85.0] {
+        let view = direction(view_angle, 0.0);
+        let cells: Vec<(glam::DVec3, f64)> = half_vectors
+            .iter()
+            .filter(|(half, _)| view.dot(*half) > 0.0)
+            .map(|&(half, solid_angle)| {
+                let view_dot_half = view.dot(half);
+                (
+                    2.0 * view_dot_half * half - view,
+                    4.0 * view_dot_half * solid_angle,
+                )
+            })
+            .collect();
+        for roughness in [floor, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0] {
+            for material in materials {
+                let start = cases.len();
+                for &(light, _) in &cells {
+                    let [normal, view, light] = [glam::DVec3::Z, view, light]
+                        .map(|vector| vector.as_vec3().extend(0.0).to_array());
+                    cases.push([normal, view, light, material, [roughness; 4]]);
+                }
+                let solid_angles: Vec<f64> =
+                    cells.iter().map(|&(_, solid_angle)| solid_angle).collect();
+                furnaces.push((view_angle, roughness, start, solid_angles));
+            }
         }
     }
     let surface = surface("inputs[3].rgb", "inputs[3].w", "inputs[4].x", "1.0");
@@ -332,59 +388,99 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
         &[],
     );
 
-    for (case, result) in cases.iter().zip(&results) {
-        let [normal, view, light, material, roughness] =
-            case.map(|vector| glam::Vec4::from_array(vector).as_dvec4());
-        let [normal, view, light] = [normal, view, light].map(glam::DVec4::truncate);
-        let brdf = reference_brdf(
-            cosines(normal, view, light),
-            material.truncate().to_array(),
-            material.w,
-            roughness.x,
-        );
-        let normal_dot_light = normal.dot(light).max(0.0);
-        // f32's N·L is three products and two sums, each rounded once: Vulkan
-        // rounds them correctly (its precision table
-        // [ref:vulkan-spirv-precision]) and D3D to 0.5 ULP
-        // [ref:d3d11.3-fp32-rules]. Metal's fast math, which wgpu-hal leaves
-        // at its default [ref:wgpu-hal-30-metal-compile-options], rounds
-        // them and fused multiply-adds correctly but may reorder them
-        // [ref:msl-4.1-fast-math], and Metal may round toward zero
-        // [ref:msl-4.1-rounding]. In any order and with any fusing, the dot
-        // product errs by at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖ with
-        // γ₃ = 3u / (1 − 3u) (Higham, Accuracy and Stability of Numerical
-        // Algorithms, §3.1 [ref:higham-3.1]), where u is 2⁻²³ to cover
-        // rounding toward zero, not round-to-nearest's 2⁻²⁴. Against
-        // N·L ≈ 0, for a light on the horizon, that error is all there is,
-        // which a tolerance relative to the result rules out.
-        let unit_roundoff = f64::from(f32::EPSILON);
-        let normal_dot_light_rounding =
-            3.0 * unit_roundoff / (1.0 - 3.0 * unit_roundoff) * normal.length() * light.length();
+    let expected: Vec<([f64; 3], [f64; 3])> = cases
+        .iter()
+        .map(|case| {
+            let [normal, view, light, material, roughness] =
+                case.map(|vector| glam::Vec4::from_array(vector).as_dvec4());
+            let [normal, view, light] = [normal, view, light].map(glam::DVec4::truncate);
+            let brdf = reference_brdf(
+                cosines(normal, view, light),
+                material.truncate().to_array(),
+                material.w,
+                roughness.x,
+            );
+            let normal_dot_light = normal.dot(light).max(0.0);
+            // f32's N·L is three products and two sums, each rounded once:
+            // Vulkan rounds them correctly (its precision table
+            // [ref:vulkan-spirv-precision]) and D3D to 0.5 ULP
+            // [ref:d3d11.3-fp32-rules]. Metal's fast math, which wgpu-hal
+            // leaves at its default [ref:wgpu-hal-30-metal-compile-options],
+            // rounds them and fused multiply-adds correctly but may reorder
+            // them [ref:msl-4.1-fast-math], and Metal may round toward zero
+            // [ref:msl-4.1-rounding]. In any order and with any fusing, the
+            // dot product errs by at most γ₃ |N|ᵀ|L| ≤ γ₃ ‖N‖ ‖L‖ with
+            // γ₃ = 3u / (1 − 3u) (Higham, Accuracy and Stability of Numerical
+            // Algorithms, §3.1 [ref:higham-3.1]), where u is 2⁻²³ to cover
+            // rounding toward zero, not round-to-nearest's 2⁻²⁴. Against
+            // N·L ≈ 0, for a light on the horizon, that error is all there
+            // is, which a tolerance relative to the result rules out.
+            let unit_roundoff = f64::from(f32::EPSILON);
+            let normal_dot_light_rounding = 3.0 * unit_roundoff / (1.0 - 3.0 * unit_roundoff)
+                * normal.length()
+                * light.length();
+            (
+                brdf.map(|brdf| brdf * normal_dot_light),
+                brdf.map(|brdf| brdf * normal_dot_light_rounding),
+            )
+        })
+        .collect();
+    for ((case, result), (expected, rounding)) in cases
+        .iter()
+        .zip(&results)
+        .zip(&expected)
+        .take(direction_cases)
+    {
         for channel in 0..3 {
-            let expected = brdf[channel] * normal_dot_light;
             let case = format_args!("{case:?}, channel {channel}");
             assert_close(
                 result[channel],
-                expected,
-                DIRECTION_TOLERANCE * expected + brdf[channel] * normal_dot_light_rounding,
+                expected[channel],
+                DIRECTION_TOLERANCE * expected[channel] + rounding[channel],
                 case,
             );
         }
     }
-    let furnace_results = results[cases.len() - furnaces.len() * cells.len()..].chunks(cells.len());
-    for ((view_angle, roughness), results) in furnaces.into_iter().zip(furnace_results) {
-        let albedo: f64 = results
+    let mut albedos = Vec::new();
+    for (view_angle, roughness, start, solid_angles) in &furnaces {
+        let cells = *start..start + solid_angles.len();
+        let albedo: f64 = results[cells.clone()]
             .iter()
-            .zip(&cells)
-            .map(|(result, (_, solid_angle))| f64::from(result[0]) * solid_angle)
+            .zip(solid_angles)
+            .map(|(result, solid_angle)| f64::from(result[0]) * solid_angle)
+            .sum();
+        let reference: f64 = expected[cells]
+            .iter()
+            .zip(solid_angles)
+            .map(|((expected, _), solid_angle)| expected[0] * solid_angle)
             .sum();
         assert!(
-            albedo <= 1.0,
-            "a white metal of roughness {roughness}, seen {view_angle}° off its normal, \
-             reflects {albedo} of what it receives"
+            (albedo - reference).abs() <= FURNACE_TOLERANCE,
+            "a furnace at roughness {roughness}, seen {view_angle}° off its normal, reflects \
+             {albedo}, expected {reference}"
+        );
+        albedos.push(albedo);
+    }
+    // Each view and roughness's white metal, white dielectric and black
+    // dielectric, in turn.
+    for (furnace, albedos) in furnaces.chunks_exact(3).zip(albedos.chunks_exact(3)) {
+        let (view_angle, roughness, ..) = &furnace[0];
+        let (white_metal, white, black) = (albedos[0], albedos[1], albedos[2]);
+        let case = format!("roughness {roughness}, seen {view_angle}° off its normal");
+        assert!(
+            white_metal <= 1.0 + FURNACE_TOLERANCE,
+            "a white metal of {case} reflects {white_metal} of what it receives"
+        );
+        assert!(
+            white <= 1.0 + black + FURNACE_TOLERANCE,
+            "a white dielectric of {case} reflects {white}, past 1 plus a black one's {black}"
         );
     }
 }
+
+/// How far a white furnace's sum may stray from the reference's, and past its
+/// bound: the cells' midpoint sums land within 1.2e-4 of finer grids'.
+const FURNACE_TOLERANCE: f64 = 1e-3;
 
 /// A point light's attenuation is KHR_lights_punctual's
 /// max(min(1 − (d / r)⁴, 1), 0) / d², evaluated in f64 from the same d² the
@@ -1141,11 +1237,64 @@ fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
     assert!(without_z > 0);
 }
 
+/// Roughness widens for the shading normal's screen-space derivatives as
+/// Tokuyoshi and Kaplanyan's eq. (4) gives it, evaluated in f64
+/// [ref:tokuyoshi-2019-normal-derivatives]: α² + min(2σ² (|∂n/∂x|² +
+/// |∂n/∂y|²), κ) with σ = 0.5 and κ = 0.18, capped at 1, α = roughness². A
+/// still normal leaves roughness as it is; the added α² grows with the
+/// derivatives' squared lengths in either axis and any direction, stops at
+/// κ, and the total stops at 1, roughness 1.
+#[test]
+fn specular_antialiased_roughness_adds_the_normals_variance_to_alpha_squared() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let derivatives: [([f32; 3], [f32; 3]); 6] = [
+        ([0.0; 3], [0.0; 3]),
+        ([0.1, 0.0, 0.0], [0.0; 3]),
+        ([0.0; 3], [0.0, 0.0, 0.1]),
+        ([0.06, -0.08, 0.0], [0.0, 0.3, 0.4]),
+        ([0.6, 0.0, 0.0], [0.0, 0.8, 0.0]),
+        ([2.0, 0.0, 0.0], [0.0, 0.0, -2.0]),
+    ];
+    let mut cases = Vec::new();
+    for roughness in [minimum_roughness(&context), 0.2, 0.5, 0.9, 1.0] {
+        for (x, y) in derivatives {
+            cases.push([
+                [roughness, 0.0, 0.0, 0.0],
+                [x[0], x[1], x[2], 0.0],
+                [y[0], y[1], y[2], 0.0],
+            ]);
+        }
+    }
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(specular_antialiased_roughness(inputs[0].x, inputs[1].xyz, inputs[2].xyz))",
+        &cases,
+        &[],
+    );
+
+    for (case, result) in cases.iter().zip(&results) {
+        let [roughness, x, y] = case.map(|vector| glam::Vec4::from_array(vector).as_dvec4());
+        let normal_variance = 0.25 * (x.length_squared() + y.length_squared());
+        let alpha_squared = roughness.x.powi(4) + (2.0 * normal_variance).min(0.18);
+        let expected = alpha_squared.min(1.0).powf(0.25);
+        assert_close(
+            result[0],
+            expected,
+            RELATIVE_TOLERANCE * expected,
+            format_args!("widened {case:?}"),
+        );
+    }
+}
+
 /// A surface decodes as its Material's factors times its texels (glTF's
 /// metallic-roughness Material): base colour and its alpha, metallic from the
 /// cooked metallic-roughness texel's green and roughness from its red,
-/// occlusion and emissive; a roughness below the floor rises to it. The
-/// values are binary fractions, so each product is exact.
+/// occlusion and emissive; a roughness below the floor rises to it, after
+/// widening for the normal's derivatives, which are 0 here, so widening
+/// leaves roughness as it is. The values are binary fractions, so each
+/// product is exact.
 #[test]
 fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
     let Some(context) = gpu_context() else {
@@ -1178,7 +1327,8 @@ fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
     });
     let decode = |expression: &str| {
         let surface = "decode_surface(MaterialData(inputs[0], inputs[1], inputs[2], vec4<u32>(0u), \
-                       vec4<u32>(0u)), inputs[3], inputs[4].xy, inputs[4].z, inputs[5].xyz)";
+                       vec4<u32>(0u)), inputs[3], inputs[4].xy, inputs[4].z, inputs[5].xyz, vec3<f32>(0.0), \
+                       vec3<f32>(0.0))";
         evaluate_cases(
             &context,
             &expression.replace("{surface}", surface),
