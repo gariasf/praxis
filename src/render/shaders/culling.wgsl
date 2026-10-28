@@ -387,16 +387,21 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
     }
 }
 
+// Invocations of append_triangles, which share a Meshlet's indices: a
+// SIMD-group on Apple GPUs, where wider workgroups wrote a dense scene's
+// draw slower.
+const APPEND_WORKGROUP_SIZE = 32u;
+
 // A workgroup per Meshlet record the phase appends, dispatched indirectly in
-// the rows offset_blocks sized, and an invocation per triangle of its
-// Meshlet: writes the record's packed indices where its Instance fits, at
-// the Instance's first index plus its Meshlet's triangles before it in the
-// Mesh.
-@compute @workgroup_size(MESHLET_MAX_TRIANGLES)
+// the rows offset_blocks sized: writes the record's packed indices where its
+// Instance fits, at the Instance's first index plus its Meshlet's triangles
+// before it in the Mesh, an invocation per index in turn, so that adjacent
+// invocations write adjacent indices.
+@compute @workgroup_size(APPEND_WORKGROUP_SIZE)
 fn append_triangles(
     @builtin(workgroup_id) workgroup: vec3<u32>,
     @builtin(num_workgroups) workgroups: vec3<u32>,
-    @builtin(local_invocation_index) triangle: u32
+    @builtin(local_invocation_index) invocation: u32
 ) {
     let appended = instance_offsets[APPENDED_RECORDS];
     let record_index = appended.x + workgroup.y * workgroups.x + workgroup.x;
@@ -405,9 +410,6 @@ fn append_triangles(
     }
     let record = meshlet_records[record_index];
     let meshlet = meshlets[record.meshlet];
-    if triangle >= meshlet.triangle_count {
-        return;
-    }
     let mesh = meshes[instances[record.instance_slot].mesh];
     let first = slot_offsets(record.instance_slot);
     if !fits(first, mesh) {
@@ -415,10 +417,10 @@ fn append_triangles(
     }
     // The Mesh's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangle + triangle);
-    let corners = meshlet_triangles[meshlet.first_triangle + triangle];
-    for (var corner = 0u; corner < 3u; corner++) {
-        let vertex = extractBits(corners, 8u * corner, 8u);
-        packed_indices[first_index + corner] = pack_index(record_index, vertex);
+    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangle);
+    for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
+        let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
+        let vertex = extractBits(corners, 8u * (index % 3u), 8u);
+        packed_indices[first_index + index] = pack_index(record_index, vertex);
     }
 }
