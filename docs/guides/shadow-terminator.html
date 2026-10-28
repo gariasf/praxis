@@ -248,10 +248,10 @@ figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
       <li>What it costs on <code>town</code>, and where it can still be wrong</li>
     </ul>
     <p class="in-brief-meta"><b>Read first:</b> <a href="shadow-rays.html">Shadow Rays Explained</a>, chapters 5 and 10, for the terminator and the shadow mask; <a href="acceleration-structures.html">Acceleration Structures Explained</a>, for the TLAS the rays query</p>
-    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at b41b991, the head of PR #366 (2026-10-28), open while the owner's visual check and the M4 Pro Baselines are pending. <b>Since then:</b> nothing, as of 2026-10-28.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at b8bb97f (PR #366, merged 2026-10-28). <b>Since then:</b> nothing, as of 2026-10-28.</p>
   </aside>
   <p class="lede">At the visual check of 2026-10-27, the owner saw dark, triangle-shaped patches on SciFiHelmet, and the <code>shadows</code> sphere's terminator stepped along its triangles. Shadow Rays Explained had described that artefact and set it aside as a fog line; ticket #350 revived it. This guide explains why the shadow mask stepped and why skipping the ray there, the obvious fix, lets light into cast shadows. It then follows the fix the owner chose: two normals per sample written by the depth passes, packed as octahedral coordinates, and a ray that starts inside the surface where its triangle turns from the light. It ends with what can still go wrong and what the fix costs. Two live demos let you store a normal in a few bits, and turn the sun round a coarse sphere under three rules.</p>
-  <p class="status"><b>Provenance.</b> Ticket #350 asked for a diagnosis, then a fix chosen by the owner among three options; the owner chose option 2b in session on 2026-10-28 (<a href="https://github.com/gariasf/praxis/issues/350#issuecomment-6468831265">decision</a>). PR #366 implements it. Code facts were read at its head, b41b991: <code>src/render/shaders/main.wgsl</code>, <code>shadow_mask.wgsl</code>, <code>common.wgsl</code>, <code>src/render/targets.rs</code>, <code>main_pass.rs</code>, <code>shader_function_tests.rs</code> and <code>tests/shadows.rs</code>. The cost figures and image counts are the PR's, measured on an Apple M4 Pro. Where this guide does its own arithmetic, it says so.</p>
+  <p class="status"><b>Provenance.</b> Ticket #350 asked for a diagnosis, then a fix chosen by the owner among three options; the owner chose option 2b in session on 2026-10-28 (<a href="https://github.com/gariasf/praxis/issues/350#issuecomment-6468831265">decision</a>). PR #366 implements it, merged on 2026-10-28 as b8bb97f. Code facts were read at that commit: <code>src/render/shaders/main.wgsl</code>, <code>shadow_mask.wgsl</code>, <code>common.wgsl</code>, <code>src/render/targets.rs</code>, <code>main_pass.rs</code>, <code>shader_function_tests.rs</code> and <code>tests/shadows.rs</code>. The cost figures and image counts are the PR's, measured on an Apple M4 Pro; <code>town</code>'s are its final run, on a quiet machine. Where this guide does its own arithmetic, it says so.</p>
   <nav class="toc" aria-label="Chapters">
     <a href="#steps">1 &middot; Why the terminator stepped</a>
     <a href="#normals">2 &middot; Two normals per sample</a>
@@ -301,7 +301,7 @@ figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
     <p>These are the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">Surface normals</span>, a term #350 adds to <code>CONTEXT.md</code>. With shadow rays on, the depth pre-pass and phase two's depth pass both run a fragment shader, <code>fs_surface_normals</code>. Before, neither ran one. Their vertex stage, <code>vs_depth_normals</code>, passes on the lit pass's position and normal, and keeps the clip position <code>@invariant</code> so that their depths still meet the lit pass's exactly.</p>
     <h3>The triangle's own normal</h3>
     <p>Across a triangle, the camera-relative position changes linearly in the triangle's plane. Its <span class="concept" data-term="Screen-space derivatives" data-tip="How fast a value changes from one pixel to the next, taken by differencing it between the pixels of a 2x2 quad: dpdx across the screen, dpdy down it.">screen-space derivatives</span>, <code>dpdx</code> and <code>dpdy</code>, are two vectors in that plane, so their cross product is the plane's normal. The GPU runs fragment shaders in 2&times;2 quads. Where a quad hangs over the triangle's edge, the pixels outside it still run, as helper invocations for that same triangle (WGSL &sect;15.4). So even at an edge the derivatives belong to the triangle, which is what the depth rebuild could not promise.</p>
-    <pre class="code"><code><span class="comment">// main.wgsl at b41b991, fs_surface_normals</span>
+    <pre class="code"><code><span class="comment">// main.wgsl at b8bb97f, fs_surface_normals</span>
 let crossed = cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position));
 let crossed_length_squared = dot(crossed, crossed);
 let toward_camera = -normalize(in.camera_relative_position);
@@ -318,7 +318,7 @@ let triangle_normal = select(
     <ul class="keypoints">
       <li><b>Format.</b> <code>SURFACE_NORMALS_FORMAT</code> is <code>Rgba8Unorm</code>: the triangle normal in red and green, the interpolated normal in blue and alpha, each as two 8-bit octahedral coordinates (chapter 3).</li>
       <li><b>Size.</b> 4x MSAA like the depth target, 4 bytes per sample: 2560 &times; 1440 &times; 4 &times; 4 = 58,982,400 bytes at 1440p, as much as the depth target itself.</li>
-      <li><b>When.</b> Written only with shadow rays on: the pre-pass clears it, and phase two's depth pass loads and stores it. With rays off the pre-pass keeps its depth-only pipeline, so the rays-off gate does not move. The target is allocated either way, as amended ADR 0019 records.</li>
+      <li><b>When.</b> Written only with shadow rays on: the pre-pass clears it, and phase two's depth pass loads and stores it. With rays off the pre-pass keeps its depth-only pipeline, so the rays-off gate barely moves: +0.01 ms. The target is allocated either way, as amended ADR 0019 records.</li>
       <li><b>Per pixel.</b> Under 4x MSAA the fragment shader runs once per pixel and its output lands in every sample the triangle covers, so both normals are pixel-centre values. The mask reads, at each pixel, the nearest sample's normals.</li>
     </ul>
     <p>ADR 0019 had said its main pass writes nothing that no decided pass reads. The shadow mask is a decided pass that reads this target, and the ADR's amendment of 2026-10-28 records the new attachment, its size and its cost.</p>
@@ -331,7 +331,7 @@ let triangle_normal = select(
     <h2>Octahedral normals in 8 bits</h2>
     <p class="key-idea"><b>Key idea.</b> A unit vector has only two degrees of freedom. Project it onto the octahedron |x| + |y| + |z| = 1 and fold the lower half over the upper, and the square [&minus;1, 1]&sup2; holds every direction with nearly even precision. At 8 bits per coordinate, each stays within 0.95&deg;.</p>
     <p>Storing x, y and z wastes a number, since they always satisfy x&sup2; + y&sup2; + z&sup2; = 1. Storing x and y and rebuilding z loses the sign of z and crowds precision near the horizon. <span class="concept" data-term="Octahedral coordinates" data-tip="Two numbers in [−1, 1] for a unit vector: its projection onto the octahedron |x| + |y| + |z| = 1, with the lower half folded over the upper.">Octahedral coordinates</span> avoid both. Divide the vector by |x| + |y| + |z| and it lands on the octahedron. Its upper half, seen from above, is the diamond |u| + |v| &le; 1. Its lower half folds outward into the square's four corners, each triangle reflected across the diamond's edge.</p>
-    <pre class="code"><code><span class="comment">// common.wgsl at b41b991</span>
+    <pre class="code"><code><span class="comment">// common.wgsl at b8bb97f</span>
 fn octahedral_encode(direction: vec3&lt;f32&gt;) -&gt; vec2&lt;f32&gt; {
     let projected = direction.xy / (abs(direction.x) + abs(direction.y) + abs(direction.z));
     let sign = select(vec2&lt;f32&gt;(-1.0), vec2&lt;f32&gt;(1.0), projected &gt;= vec2&lt;f32&gt;(0.0));
@@ -387,7 +387,7 @@ fn octahedral_decode(coordinates: vec2&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
     </ul>
     <p>The 5&deg; margin is wider than the stored normals' error, for a second reason. The mask rebuilds each sample's position from depth, and that position can sit below the surface by more than the fixed ray offset. Under a grazing light, a ray leaving from there meets its own triangle. Sending those rays down the inside path hides the error, at a cost. Every flat floor that a light grazes by less than 5&deg; traces twice. On <code>minification</code>, whose floor lies under grazing point lights, the mask rose from 1.05 to 3.07 ms. At a 2&deg; margin with a 1&deg; agreement, two pixels of the <code>shadows</code> sphere went wrong; an offset eight times larger cleared them. Ticket #368 will size the offset to the depth rebuild's error, after which the margin can drop toward 2&deg;.</p>
     <h3>The inside ray</h3>
-    <pre class="code"><code><span class="comment">// shadow_mask.wgsl at b41b991, the end of shadowed()</span>
+    <pre class="code"><code><span class="comment">// shadow_mask.wgsl at b8bb97f, the end of shadowed()</span>
 let origin = tlas_position - triangle_normal * offset;
 let exit = nearest_hit(origin, direction, distance);
 if exit.kind == RAY_QUERY_INTERSECTION_NONE {
@@ -460,6 +460,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
       <li><b>A possible leak.</b> If a ray starts inside another mesh, where two meshes interpenetrate, the back face it passes may be that mesh's rather than its own. The PR defers a leak test, an occluder casting onto a terminator band, until a Golden or a visual check shows light in a cast shadow.</li>
       <li><b>Backends.</b> The front-face convention is checked on Metal and on Vulkan through lavapipe. DX12 is unchecked while the RTX machine is stored. A probe that pins <code>front_face</code> per backend is deferred until DX12 runs again.</li>
       <li><b>Flat floors under grazing light.</b> The 5&deg; margin also covers positions rebuilt from depth that sit below the surface, at the price of a second traversal on every flat surface a light grazes (chapter 4). Ticket #368 will size the ray offset to that error instead.</li>
+      <li><b>Two draws against one.</b> With culling on, the depth passes draw the two culling phases' Instances in two draws, which write the surface normals, while the lit pass draws them in one. On the M4 Pro, which of two triangles sharing an edge covers a sample on that edge depends on what else the draw holds (<a href="visibility-prepass.html">Visibility Pre-pass Explained</a>). So at a few edge samples the mask reads one triangle's normals while the lit pass shades the other. Culled and unculled <code>town</code> differ by up to 6 pixels a frame on Metal, and <code>tests/goldens.rs</code> now allows 8, <code>HARDWARE_UNCULLED_PIXELS</code>. Ticket #369 follows it up.</li>
       <li><b>Normal maps.</b> The mask follows the interpolated normal, not the normal-mapped one. A bump that the normal map turns toward a light, more than 2&deg; past where the interpolated normal turns from it, stays dark.</li>
     </ul>
     <figure>
@@ -475,26 +476,28 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
   <div class="prose">
     <div class="chapter-mark">Chapter 6 &middot; cost</div>
     <h2>What it costs</h2>
-    <p class="key-idea"><b>Key idea.</b> On <code>town</code>, the fix costs the M4 Pro's GPU frame about 2.8 ms, most of it in the shadow mask, plus 58,982,400 bytes of memory. The rays-off gate does not move. Each alternative without the triangle normal cost more, because it traced more rays, or traced them twice.</p>
-    <p><code>praxis report</code> on <code>town</code>, run back to back with a build of main at d8162f0, against #363's Baseline.:</p>
+    <p class="key-idea"><b>Key idea.</b> On <code>town</code>, the fix costs the M4 Pro's GPU frame about 2.8 ms, most of it in the shadow mask, plus 58,982,400 bytes of memory. The rays-off gate barely moves. Each alternative without the triangle normal cost more, because it traced more rays, or traced them twice.</p>
+    <p>Medians from <code>praxis report</code> on <code>town</code>, on a quiet machine, run back to back with a build of main at eeb18e9:</p>
   </div>
   <div class="prose table-wrap">
     <table class="facts">
       <thead><tr><th>M4 Pro, <code>town</code></th><th class="n">main</th><th class="n">PR #366</th><th class="n">change</th></tr></thead>
       <tbody>
-        <tr class="focus"><td>GPU frame</td><td class="n">12.64 ms</td><td class="n">15.40 ms</td><td class="n">+2.77 ms</td></tr>
-        <tr><td>Gate, rays off</td><td class="n">8.64 ms</td><td class="n">8.64 ms</td><td class="n">+0.0004 ms</td></tr>
-        <tr><td><code>depth_prepass</code></td><td class="n">1.76 ms</td><td class="n">2.11 ms</td><td class="n">+0.35 ms</td></tr>
-        <tr><td><code>shadow_mask_pass</code></td><td class="n">4.63 ms</td><td class="n">7.01 ms</td><td class="n">+2.38 ms</td></tr>
+        <tr class="focus"><td>GPU frame</td><td class="n">12.62 ms</td><td class="n">15.40 ms</td><td class="n">+2.78 ms</td></tr>
+        <tr><td>Shadow-ray time</td><td class="n">3.64 ms</td><td class="n">6.34 ms</td><td class="n">+2.70 ms</td></tr>
+        <tr><td>Gate, rays off</td><td class="n">8.64 ms</td><td class="n">8.65 ms</td><td class="n">+0.01 ms</td></tr>
+        <tr><td><code>depth_prepass</code></td><td class="n">1.76 ms</td><td class="n">2.12 ms</td><td class="n">+0.36 ms</td></tr>
+        <tr><td><code>shadow_mask_pass</code></td><td class="n">4.65 ms</td><td class="n">7.04 ms</td><td class="n">+2.39 ms</td></tr>
+        <tr><td><code>lit_pass</code>, its span</td><td class="n">8.92 ms</td><td class="n">11.27 ms</td><td class="n">+2.35 ms</td></tr>
         <tr><td>GPU memory</td><td class="n">616,555,464 B</td><td class="n">675,537,864 B</td><td class="n">+58,982,400 B</td></tr>
       </tbody>
     </table>
   </div>
   <div class="prose">
     <ul class="keypoints">
-      <li><b>The frame total is the cost.</b> Metal overlaps the mask with the lit pass, so the lit pass's own span grows too, from 8.91 to 11.28 ms, absorbing the mask's growth. Earlier, three interleaved quiet rounds against main read +2.81 ms.</li>
+      <li><b>The frame total is the cost.</b> Metal overlaps the mask with the lit pass, so the lit pass's own span grows by nearly as much, absorbing the mask's growth; the spans do not add. Shadow-ray time, the GPU frame with rays on less the same frame's with them off, grows by 2.70 ms. Earlier, three interleaved quiet rounds against main read +2.81 ms. The CPU frame moved by 0.12 ms, within its noise.</li>
       <li><b>Partly the fix at work.</b> <code>town</code>'s posts, trees, wires and pillars are smooth-shaded cylinders and cones of 6 to 24 sides: coarse, with wide terminator bands, so many of their pixels now trace the two-query inside ray where they used to be hidden with none.</li>
-      <li><b>The pre-pass.</b> Its 0.35 ms is the new fragment shader and the 4x target it writes.</li>
+      <li><b>The pre-pass.</b> Its 0.36 ms is the new fragment shader and the 4x target it writes.</li>
     </ul>
     <p>The PR's A/B against main measured every Reference scene. The largest costs come from grazing light. On <code>minification</code>, whose flat floor the 5&deg; margin sends down the inside path, the mask rose from 1.05 to 3.07 ms and the GPU frame by 2.0 ms. On <code>helmet</code>, the mask rose from 2.53 to 4.13 ms and the GPU frame by 1.6 ms. On <code>pbr-sweep</code>, the GPU frame rose by 0.6 ms. Ticket #368 is where those come down.</p>
     <h3>The alternatives, measured</h3>
@@ -513,7 +516,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
   <div class="prose">
     <p>The more precisely the mask knows which pixels are in the band, the fewer rays it traces twice. That is what the second, exact triangle normal buys.</p>
     <h3>Goldens</h3>
-    <p>Six Metal Goldens moved by more than one step: <code>town</code> in 1,280 pixels, at wire, cone and cylinder terminators and at wall edges the depth-rebuilt normal used to darken; <code>pbr-sweep</code> in 546; <code>normal-tangent</code> in 504; <code>shadows</code> in 131; <code>orrery</code> in 52, by at most 6 steps; and <code>uv-grid</code> in 2. The vulkan-cpu Goldens and lavapipe Baselines come from the PR's CI. The M4 Pro Baselines, with <code>gpu_memory_bytes</code> 58,982,400 higher on every scene, wait for a quiet machine.</p>
+    <p>Six Metal Goldens moved by more than one step: <code>town</code> in 1,280 pixels, at wire, cone and cylinder terminators and at wall edges the depth-rebuilt normal used to darken; <code>pbr-sweep</code> in 546; <code>normal-tangent</code> in 504; <code>shadows</code> in 131; <code>orrery</code> in 52, by at most 6 steps; and <code>uv-grid</code> in 2. The vulkan-cpu Goldens and lavapipe Baselines came from the PR's CI, and the M4 Pro Baselines were re-recorded on a quiet machine, with <code>gpu_memory_bytes</code> 58,982,400 higher on every scene.</p>
   </div>
 </section>
 
@@ -531,7 +534,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
   <div class="prose">
     <div class="chapter-mark">Reference</div>
     <h2>Reading list</h2>
-    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to b41b991.</p>
+    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to b8bb97f.</p>
   </div>
   <div class="reading page">
     <article>
@@ -544,13 +547,13 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
       </ul>
       <h4>The code</h4>
       <ul>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span><code>vs_depth_normals</code>, <code>fs_surface_normals</code></span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/src/render/shaders/shadow_mask.wgsl"><code>src/render/shaders/shadow_mask.wgsl</code></a> <span><code>shadowed</code>, <code>nearest_hit</code>, <code>hit_any</code> and the margins</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/src/render/shaders/common.wgsl"><code>src/render/shaders/common.wgsl</code></a> <span><code>octahedral_encode</code>, <code>octahedral_decode</code></span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/src/render/targets.rs"><code>src/render/targets.rs</code></a> <span><code>SURFACE_NORMALS_FORMAT</code> and the target</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/src/render/shader_function_tests.rs"><code>src/render/shader_function_tests.rs</code></a> <span>the octahedral oracle and its 0.95&deg; bound</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/tests/shadows.rs"><code>tests/shadows.rs</code></a> <span>the analytic test, now judging the terminator band</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/b41b991beeec2179344f7b95e4fdbc33f291b6d8/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the main pass, amended for the surface normals</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span><code>vs_depth_normals</code>, <code>fs_surface_normals</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/shadow_mask.wgsl"><code>src/render/shaders/shadow_mask.wgsl</code></a> <span><code>shadowed</code>, <code>nearest_hit</code>, <code>hit_any</code> and the margins</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/common.wgsl"><code>src/render/shaders/common.wgsl</code></a> <span><code>octahedral_encode</code>, <code>octahedral_decode</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/targets.rs"><code>src/render/targets.rs</code></a> <span><code>SURFACE_NORMALS_FORMAT</code> and the target</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shader_function_tests.rs"><code>src/render/shader_function_tests.rs</code></a> <span>the octahedral oracle and its 0.95&deg; bound</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/tests/shadows.rs"><code>tests/shadows.rs</code></a> <span>the analytic test, now judging the terminator band</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the main pass, amended for the surface normals</span></li>
       </ul>
     </article>
     <article>
@@ -574,7 +577,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
   <div class="prose">
     <div class="chapter-mark">Reference</div>
     <h2>Glossary</h2>
-    <p>Surface normals, Shadow mask, Reference scene and Golden are <code>CONTEXT.md</code>'s definitions at b41b991. The rest are this guide's own.</p>
+    <p>Surface normals, Shadow mask, Reference scene and Golden are <code>CONTEXT.md</code>'s definitions at b8bb97f. The rest are this guide's own.</p>
   </div>
   <dl class="glossary page">
     <div><dt>Surface normals</dt><dd>Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.</dd></div>
@@ -588,7 +591,7 @@ return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
     <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
     <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
   </dl>
-  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/350">#350</a>, PR <a href="https://github.com/gariasf/praxis/pull/366">#366</a> at b41b991, the code and tests at that commit, <code>CONTEXT.md</code>, ADR 0019 and the sources in the reading list. The cost figures and image counts are the PR's own, on the M4 Pro. The octahedral error over 400,000 directions is this page's arithmetic, in f64. The terminator demo is this page's two-dimensional model of the shader's rules, not a trace of the GPU's.</footer>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/350">#350</a>, PR <a href="https://github.com/gariasf/praxis/pull/366">#366</a> at b8bb97f, the code and tests at that commit, <code>CONTEXT.md</code>, ADR 0019 and the sources in the reading list. The cost figures and image counts are the PR's own, on the M4 Pro. The octahedral error over 400,000 directions is this page's arithmetic, in f64. The terminator demo is this page's two-dimensional model of the shader's rules, not a trace of the GPU's.</footer>
 </section>
 <nav class="series" aria-label="Praxis field guides"><a href="specular-antialiasing.html">Previous: Specular Antialiasing Explained</a><a href="index.html">All field guides</a></nav>
 </div>
