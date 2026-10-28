@@ -91,20 +91,18 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
     return select(UNMASKED, light.directional_light_count + low, listed);
 }
 
-// Every Texture is sampled first, so none is sampled under non-uniform
-// control flow; the rest decodes the surface and sums what each light
-// reflects, unless the shadow mask hides it, with the ambient term and the
-// emissive.
+// Every Texture is sampled first, and the shading normal differentiated, so
+// neither happens under non-uniform control flow; the rest sums what each
+// light reflects, unless the shadow mask hides it, with the ambient term and
+// the emissive.
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
-    let surface = decode_surface(
-        material,
-        textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv),
-        textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg,
-        textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r,
-        textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb
-    );
+    let albedo = textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv);
+    let metallic_roughness =
+        textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg;
+    let occlusion = textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r;
+    let emissive = textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb;
     let normal_sample = textureSample(normal_textures[material.layers.y], data_sampler, in.uv).rg;
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
@@ -119,6 +117,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tangent_to_world = mat3x3<f32>(tangent, bitangent, geometric_normal);
     let normal = normalize(
         tangent_to_world * tangent_space_normal(normal_sample, material.metallic_roughness.z)
+    );
+    // The normal's change across a pixel widens roughness. The lit pass
+    // shades once per pixel under 4x MSAA, not per sample, so these
+    // derivatives are per pixel, the footprint the filter assumes.
+    let surface = decode_surface(
+        material,
+        albedo,
+        metallic_roughness,
+        occlusion,
+        emissive,
+        dpdx(normal),
+        dpdy(normal)
     );
 
     let view_direction = normalize(-in.camera_relative_position);

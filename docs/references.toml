@@ -249,6 +249,17 @@ section = "Lagarde and de Rousiers, Moving Frostbite to Physically Based Renderi
 quote = '''Punctual: Luminous power (lm) [...] Table 8: Light units associated with various Frostbite light types.'''
 checked = 2026-10-26
 
+["filament-ggx-lagrange-identity"]
+url = "https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/shaders/src/surface_brdf.fs#L62-L70"
+section = "Filament, shaders/src/surface_brdf.fs, D_GGX, lines 62-70 (Apache-2.0)"
+quote = '''However, we can do better using Lagrange's identity:
+     ||a x b||^2 = ||a||^2 ||b||^2 - (a . b)^2
+since N and H are unit vectors: ||N x H||^2 = 1.0 - NoH^2
+This computes 1.0 - NoH^2 directly (which is close to zero in the highlights and has
+enough precision). [...] vec3 NxH = cross(shading_normal, h);
+float oneMinusNoHSquared = dot(NxH, NxH);'''
+checked = 2026-10-28
+
 ["filament-light-units"]
 url = "https://github.com/google/filament/blob/26b427773c9292317c4e65d7cd371d87daa1eebc/docs/Filament.md.html#L1238"
 section = "Filament, Filament.md.html, Lighting, Units"
@@ -654,6 +665,12 @@ url = "https://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecular
 section = "Tokuyoshi and Kaplanyan, Improved Geometric Specular Antialiasing (I3D 2019), §2.2, p. 3; eq. (1), p. 4"
 quote = '''In this paper, we refer to the above matrix as a roughness matrix, which is two times the covariance matrix by definition of the Beckmann NDF. It was also shown that this roughness matrix can be used to approximate the filtering of the GGX NDF. [...] α′² = α² + min(2λ_max, κ), (1) where α is the original roughness parameter for the isotropic NDF, and κ = 0.18 is the clamping threshold'''
 checked = 2026-10-26
+
+["tokuyoshi-2019-normal-derivatives"]
+url = "https://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf#page=5"
+section = "Tokuyoshi and Kaplanyan, Improved Geometric Specular Antialiasing (I3D 2019), §4.5, eq. (4) and Listing 2, p. 5; σ, §2.2, p. 3"
+quote = '''where σ = 0.5 is the standard deviation of the pixel filter kernel in image space measured in pixels [...] Hence, our roughness for the filtered isotropic NDF is yielded as ᾱ² = α² + min(2σ²(∥∆nᵤ∥² + ∥∆nᵥ∥²), κ). (4) [...] float filteredRoughness2 = saturate(roughness2 + kernelRoughness2);'''
+checked = 2026-10-28
 
 ["gltf-2.0-texture-origin"]
 url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L2299"
