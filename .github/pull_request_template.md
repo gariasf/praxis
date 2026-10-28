@@ -18,7 +18,7 @@ Closes #
 
 ## Images
 
-<!-- A rendering change, or something the owner must look at: each affected Reference scene before and after, with a difference image where the change is subtle (docs/agents/workflow.md, PRs). Otherwise `n/a`. -->
+<!-- A rendering change, or something the owner must look at: each affected Reference scene before and after, with a difference image where the change is subtle; a change to src/render/, the cooker's textures or meshes, or ADR 0019 or 0020 links scripts/gallery.sh's before, after and difference images (docs/agents/workflow.md, PRs). Otherwise `n/a`. -->
 
 ## Decide
 

@@ -177,9 +177,10 @@ bench/                         # budgets.json (ADR 0013) and baselines/
                                  bench <dir>` then `praxis compare <dir>`;
                                  `praxis report <dir>` prints the tables
                                  PRs quote
-scripts/pr-lint.sh             # CI's PR form check: body and commits
-                                 against docs/agents/workflow.md, tested
-                                 by scripts/pr-lint-test.sh
+scripts/pr-lint.sh             # CI's PR form check: body, commits and a
+                                 rendering PR's gallery images against
+                                 docs/agents/workflow.md, tested by
+                                 scripts/pr-lint-test.sh
 scripts/gallery.sh             # the visual audit's capture gallery: each
                                  Reference scene at 2560x1440, with
                                  difference images against an earlier one

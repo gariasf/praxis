@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Checks a PR's body and commit messages against docs/agents/workflow.md (PRs,
-# Review) and the sections of .github/pull_request_template.md.
-# Usage: pr-lint.sh <body-file> [<commit-message-file>...]
+# Review) and the sections of .github/pull_request_template.md, and that a PR
+# touching rendering paths links before, after and difference images.
+# Usage: pr-lint.sh <body-file> <changed-paths-file> [<commit-message-file>...]
+# The changed-paths file lists the PR's paths, one per line.
 # Prints one line per miss, naming the rule it breaks; exits non-zero on any.
 set -uo pipefail
 
@@ -54,7 +56,32 @@ if ! awk '
   miss 'body: Verification lacks a "Sources checked" line listing each reference and its verdict, or None (workflow.md, Review)'
 fi
 
-for file in "${@:2}"; do
+# A PR touching the renderer, the cooker's textures or meshes, or ADR 0019 or
+# 0020 links scripts/gallery.sh's before, after and difference images: links
+# to an image whose text or file name names its kind.
+if [ ! -r "${2:-}" ]; then
+  miss 'paths: no changed-paths file to check'
+elif grep -Eq '^(src/render/|src/cook/(texture|mesh)(\.rs$|/)|docs/adr/00(19|20)-)' "$2"; then
+  images=$(section '## Images')
+  unlinked=()
+  for kind in before after difference; do
+    if ! KIND="$kind" perl -ne '
+      while (/(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) {
+        my ($embedded, $text, $url) = ($1, $2, $3);
+        next unless $embedded || $url =~ /\.(png|jpe?g|gif|webp)(\?\S*)?$/i;
+        my $name = $text . " " . ($url =~ s{.*/}{}r);
+        $found = 1 if $name =~ /(?<![[:alpha:]])$ENV{KIND}(?![[:alpha:]])/i;
+      }
+      END { exit !$found }' <<<"$images"; then
+      unlinked+=("$kind")
+    fi
+  done
+  if [ ${#unlinked[@]} -gt 0 ]; then
+    miss "body: a rendering PR's Images links scripts/gallery.sh's before, after and difference images, each named by its kind in its link text or file name (missing: ${unlinked[*]}) (workflow.md, PRs)"
+  fi
+fi
+
+for file in "${@:3}"; do
   name=$(basename "$file")
   if [ ! -r "$file" ]; then
     miss "commit $name: no message to check"
