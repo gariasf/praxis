@@ -17,6 +17,7 @@ use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
+use crate::render::material_pass::MaterialPassUniform;
 use crate::render::shaders::{MODULES, Part, ShaderModule};
 use crate::render::{CameraUniform, InstanceData, LightData, LightUniform};
 
@@ -213,6 +214,11 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
         })
         .collect();
     let twins = [
+        twin!(MaterialPassUniform {
+            background,
+            phase_two_first_index,
+            _padding,
+        }),
         twin!(CameraUniform {
             view_proj,
             anchor,
@@ -421,8 +427,14 @@ fn validate(module: &ShaderModule) -> Result<(naga::Module, naga::valid::ModuleI
         Some((path, line, column)) => format!("{label}: {path}:{line}:{column}: {message}"),
         None => format!("{label}: {message}"),
     };
+    // The visibility buffer enables `primitive_index`, which the adapter's
+    // feature, requested beside the floor where it has it, allows.
+    let mut features = floor_features();
+    if module.enables.contains(&"primitive_index") {
+        features |= wgpu::Features::PRIMITIVE_INDEX;
+    }
     let capabilities =
-        wgpu_naga_bridge::features_to_naga_capabilities(floor_features(), floor_downlevel_flags());
+        wgpu_naga_bridge::features_to_naga_capabilities(features, floor_downlevel_flags());
     let mut options = naga::front::wgsl::Options::new();
     options.capabilities = capabilities;
     let parsed = naga::front::wgsl::Frontend::new_with_options(options)

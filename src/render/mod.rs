@@ -8,6 +8,7 @@ pub mod froxel_pass;
 pub mod instance;
 pub mod light_count_pass;
 pub mod main_pass;
+pub mod material_pass;
 pub mod prepare;
 pub mod readback;
 pub mod renderer;

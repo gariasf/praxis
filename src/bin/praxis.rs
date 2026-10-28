@@ -45,6 +45,7 @@ enum Command {
         output: String,
         size: String,
         crowd_form: CrowdForm,
+        visibility_buffer: bool,
         frame: Option<u32>,
     },
     #[cfg(feature = "cook")]
@@ -58,6 +59,7 @@ enum Command {
         configuration: Configuration,
         scenes: Vec<String>,
         crowd_form: CrowdForm,
+        visibility_buffer: bool,
     },
     Compare {
         results: String,
@@ -83,8 +85,9 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             output,
             size,
             crowd_form,
+            visibility_buffer,
             frame,
-        } => capture(&scene, &output, &size, crowd_form, frame),
+        } => capture(&scene, &output, &size, crowd_form, visibility_buffer, frame),
         #[cfg(feature = "cook")]
         Command::Difference {
             expected,
@@ -96,7 +99,14 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             configuration,
             scenes,
             crowd_form,
-        } => bench(&output, configuration, &scenes, crowd_form),
+            visibility_buffer,
+        } => bench(
+            &output,
+            configuration,
+            &scenes,
+            crowd_form,
+            visibility_buffer,
+        ),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -119,10 +129,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 .map_err(|_| anyhow::anyhow!("--frame takes a frame number, not {frame:?}"))
         })
         .transpose()?;
+    let visibility_buffer = take_flag(&mut arguments, "--visibility-buffer");
     let command = arguments.first().map(String::as_str);
     anyhow::ensure!(
-        crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
-        "only `bench` and `capture` take --crowd-form"
+        (crowd_form.is_none() && !visibility_buffer)
+            || matches!(command, Some("bench" | "capture")),
+        "only `bench` and `capture` take --crowd-form and --visibility-buffer"
     );
     anyhow::ensure!(
         frame.is_none() || command == Some("capture"),
@@ -134,6 +146,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         configuration,
         scenes: scenes.to_vec(),
         crowd_form,
+        visibility_buffer,
     };
     Ok(match arguments.as_slice() {
         [] => Command::Window(ReferenceScene::Helmet),
@@ -149,6 +162,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: DEFAULT_CAPTURE_SIZE.into(),
             crowd_form,
+            visibility_buffer,
             frame,
         },
         #[cfg(feature = "cook")]
@@ -157,6 +171,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: size.clone(),
             crowd_form,
+            visibility_buffer,
             frame,
         },
         #[cfg(feature = "cook")]
@@ -197,10 +212,19 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
-             `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
+             `--crowd-form <proxies | refit | rebuild>` and `--visibility-buffer`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
     })
+}
+
+/// Removes `flag` from `arguments`, and returns whether it held it.
+fn take_flag(arguments: &mut Vec<String>, flag: &str) -> bool {
+    let position = arguments.iter().position(|argument| argument == flag);
+    if let Some(position) = position {
+        arguments.remove(position);
+    }
+    position.is_some()
 }
 
 /// Removes `flag` and the value after it from `arguments`, and returns the
@@ -283,13 +307,15 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 
 /// Benches the named Reference scenes, or with none every scene whose assets
 /// are present, prints one line per scene, and writes `<scene>.json` into
-/// `output`. A crowd form other than the default benches `crowd` alone,
-/// written as `crowd-<form>.json`.
+/// `output`, with the visibility buffer where `visibility_buffer` is set. A
+/// crowd form other than the default benches `crowd` alone, written as
+/// `crowd-<form>.json`.
 fn bench(
     output: &str,
     configuration: Configuration,
     scene_names: &[String],
     crowd_form: CrowdForm,
+    visibility_buffer: bool,
 ) -> anyhow::Result<()> {
     let crowd = ReferenceScene::Crowd.name();
     let other_form = crowd_form != CrowdForm::default();
@@ -320,6 +346,7 @@ fn bench(
     for scene in scenes {
         let switches = RenderSwitches {
             crowd_form,
+            visibility_buffer,
             ..RenderSwitches::default()
         };
         let mut result = praxis::bench::run(&context, scene, configuration, switches)?;
@@ -471,7 +498,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, its crowd in `crowd_form`, and writes `frame` of its
+/// `<width>x<height>`, its crowd in `crowd_form`, with the visibility buffer
+/// where `visibility_buffer` is set, and writes `frame` of its
 /// camera path to `output` as a PNG. With no `frame`, it writes the last
 /// frame `praxis::capture` renders and prints that frame's stats, its point
 /// lights per lit pixel counted. The PNG encoder comes with `cook`.
@@ -481,6 +509,7 @@ fn capture(
     output: &str,
     size: &str,
     crowd_form: CrowdForm,
+    visibility_buffer: bool,
     frame: Option<u32>,
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
@@ -492,6 +521,7 @@ fn capture(
     let switches = RenderSwitches {
         count_point_lights: frame.is_none(),
         crowd_form,
+        visibility_buffer,
         ..RenderSwitches::default()
     };
     let (pixels, last_frame) = match frame {
@@ -617,6 +647,7 @@ mod tests {
             configuration,
             scenes,
             crowd_form,
+            visibility_buffer,
         } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
         else {
             panic!("bench parsed as another command");
@@ -625,6 +656,25 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+        assert!(!visibility_buffer);
+    }
+
+    #[test]
+    fn the_visibility_buffer_flag_sets_its_switch_for_bench_and_capture_alone() {
+        let Command::Bench {
+            scenes,
+            visibility_buffer,
+            ..
+        } = parse(&["bench", "out", "town", "--visibility-buffer"]).unwrap()
+        else {
+            panic!("bench parsed as another command");
+        };
+        assert_eq!(scenes, ["town"]);
+        assert!(visibility_buffer);
+        let error = parse(&["town", "--visibility-buffer"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--visibility-buffer"), "{error}");
     }
 
     #[cfg(feature = "cook")]

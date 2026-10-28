@@ -11,6 +11,7 @@ use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
+use crate::render::material_pass::{MATERIAL_PASS, MaterialPass};
 use crate::render::readback::{FrameShape, GpuStatsReadback};
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
@@ -29,9 +30,11 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
-/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`). The
-/// rebuild form, an oracle, times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 12] = [
+/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`), phase
+/// two's depth pass with the visibility buffer on too; the material pass
+/// only with the visibility buffer on, and the lit pass only with it off.
+/// The rebuild form, an oracle, times neither its rebuild nor its build.
+pub(crate) const TIMED_PASSES: [&str; 13] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
@@ -42,6 +45,7 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
     CullingPhase::Two.label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
+    MATERIAL_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
@@ -85,6 +89,11 @@ pub struct RenderSwitches {
     /// The form the `crowd` scene's figures, which the GPU bends each frame,
     /// take in the TLAS.
     pub crowd_form: CrowdForm,
+    /// Whether the depth passes write the triangle each sample shows and a
+    /// compute material pass shades each pixel from those IDs in place of
+    /// the lit pass: a prototype of option D of ADR 0019's research note,
+    /// off as it ships. It needs the adapter's `PRIMITIVE_INDEX` feature.
+    pub visibility_buffer: bool,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -135,6 +144,7 @@ impl Default for RenderSwitches {
             shadow_rays: true,
             count_point_lights: false,
             crowd_form: CrowdForm::Proxies,
+            visibility_buffer: false,
         }
     }
 }
@@ -168,6 +178,9 @@ pub struct Renderer {
     /// Whether the frame traces shadow rays, which the shadow mask pass and
     /// phase two's depth pass run for.
     shadow_rays: bool,
+    /// With the `visibility_buffer` Render switch on, in place of the lit
+    /// pass; phase two's depth pass runs for it too.
+    material_pass: Option<MaterialPass>,
     /// With the crowd's refit or rebuild form.
     blas_refit: Option<BlasRefit>,
     /// Whether the dynamic TLAS's build is timed between markers: not with
@@ -251,7 +264,7 @@ impl Renderer {
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(&device, &mut load_staging);
 
-        let render_targets = RenderTargets::new(&device, width, height);
+        let render_targets = RenderTargets::new(&device, width, height, switches.visibility_buffer);
         let culling_pass = CullingPass::new(
             &device,
             &[
@@ -330,6 +343,27 @@ impl Renderer {
         });
         let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
         let bend_pass = BendPass::new(&device, mesh_pool.vertex_arena());
+        let material_pass = switches.visibility_buffer.then(|| {
+            MaterialPass::new(
+                &device,
+                &material_pool.bind_group_layout,
+                [
+                    ("camera", &camera_buffer),
+                    ("light", &light_uniform_buffer),
+                    ("lights", &light_buffer),
+                    ("froxel_lists", froxel_pass.froxel_lists()),
+                ],
+                [
+                    ("instances", &instance_buffer),
+                    ("vertices", mesh_pool.vertex_arena()),
+                    ("meshlets", mesh_pool.meshlet_arena()),
+                    ("meshlet_vertices", mesh_pool.meshlet_vertex_arena()),
+                ],
+                &culling_pass,
+                &render_targets,
+                switches,
+            )
+        });
         // The most a frame uploads: every buffer `upload` writes, in full.
         let frame_staging = FrameStaging::new(
             [
@@ -340,7 +374,8 @@ impl Renderer {
                 culling_pass.instance_slot_count(),
                 bend_pass.bends(),
             ]
-            .iter()
+            .into_iter()
+            .chain(material_pass.as_ref().map(MaterialPass::uniform))
             .map(|buffer| buffer.size())
             .sum(),
         );
@@ -384,15 +419,18 @@ impl Renderer {
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
         let tonemapping_pass =
             TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
-        let gpu_stats = GpuStatsReadback::new(
-            &device,
-            queue.get_timestamp_period(),
-            if switches.shadow_rays {
-                &[]
-            } else {
-                &SHADOW_RAY_PASSES
-            },
-        );
+        // The passes this Renderer never records read as taking no time.
+        let mut untimed = Vec::new();
+        if !switches.shadow_rays {
+            untimed.extend(SHADOW_RAY_PASSES);
+        }
+        if switches.visibility_buffer {
+            untimed.retain(|&pass| pass != PHASE_TWO_DEPTH_PASS);
+            untimed.push(LIT_PASS);
+        } else {
+            untimed.push(MATERIAL_PASS);
+        }
+        let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period(), &untimed);
 
         let adapter_info = context.adapter.get_info();
         Self {
@@ -409,6 +447,7 @@ impl Renderer {
             main_pass,
             shadow_mask_pass,
             shadow_rays: switches.shadow_rays,
+            material_pass,
             blas_refit,
             marks_dynamic_tlas_build: switches.crowd_form != CrowdForm::Rebuild,
             depth_pyramid_pass,
@@ -436,7 +475,11 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, width, height);
+        self.render_targets =
+            RenderTargets::new(&self.device, width, height, self.material_pass.is_some());
+        if let Some(material_pass) = &mut self.material_pass {
+            material_pass.bind_render_targets(&self.device, &self.render_targets);
+        }
         self.depth_pyramid_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.culling_pass
@@ -504,6 +547,17 @@ impl Renderer {
             });
         let light_upload = (!frame.lights.is_empty())
             .then(|| (&self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
+        let background = [
+            frame.background.r,
+            frame.background.g,
+            frame.background.b,
+            frame.background.a,
+        ]
+        .map(|channel| channel as f32);
+        let background_upload = self
+            .material_pass
+            .as_ref()
+            .map(|material_pass| (material_pass.uniform(), 0, bytemuck::bytes_of(&background)));
         let bend_upload = (!frame.bends.is_empty()).then(|| {
             (
                 self.bend_pass.bends(),
@@ -521,6 +575,7 @@ impl Renderer {
         ]
         .into_iter()
         .chain(light_upload)
+        .chain(background_upload)
         .chain(bend_upload)
         .chain(instance_uploads)
         .chain(slot_count_upload);
@@ -635,7 +690,10 @@ impl Renderer {
             CullingPhase::Two,
             timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
         );
-        if self.shadow_rays {
+        // The shadow mask pass and the material pass each read every
+        // Instance's depth, so phase two's goes into a pass of its own for
+        // either.
+        if self.shadow_rays || self.material_pass.is_some() {
             self.main_pass.record_phase_two_depth(
                 &mut encoder,
                 &self.render_targets,
@@ -644,21 +702,30 @@ impl Renderer {
                 self.culling_pass.frame_draw(),
                 timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),
             );
+        }
+        if self.shadow_rays {
             self.shadow_mask_pass.record(
                 &mut encoder,
                 &self.scene_geometry_bind_group,
                 timestamps.map(|timestamps| timestamps.compute_pass(SHADOW_MASK_PASS)),
             );
         }
-        self.main_pass.record_lit_pass(
-            &mut encoder,
-            &self.render_targets,
-            &bind_groups,
-            self.culling_pass.packed_indices(),
-            self.culling_pass.frame_draw(),
-            frame.background,
-            timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
-        );
+        match &self.material_pass {
+            Some(material_pass) => material_pass.record(
+                &mut encoder,
+                &self.material_pool.bind_group,
+                timestamps.map(|timestamps| timestamps.compute_pass(MATERIAL_PASS)),
+            ),
+            None => self.main_pass.record_lit_pass(
+                &mut encoder,
+                &self.render_targets,
+                &bind_groups,
+                self.culling_pass.packed_indices(),
+                self.culling_pass.frame_draw(),
+                frame.background,
+                timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
+            ),
+        }
         self.tonemapping_pass.record(
             &mut encoder,
             target,
@@ -670,9 +737,9 @@ impl Renderer {
         }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
-        // phases', each with one indirect call; the tonemapping pass draws
-        // one triangle.
-        recorder.draw_calls += 4;
+        // phases', each with one indirect call, unless the material pass
+        // shades in its place; the tonemapping pass draws one triangle.
+        recorder.draw_calls += if self.material_pass.is_some() { 3 } else { 4 };
         // A frame whose refit went untimed spans its build's submission
         // from the bend pass, so its build is not counted apart.
         let refit_untimed = bent && self.blas_refit.is_some() && !blas_refitted;
@@ -756,6 +823,10 @@ impl Renderer {
             + self.froxel_pass.gpu_memory_bytes()
             + self.shadow_mask_pass.gpu_memory_bytes()
             + self.culling_pass.gpu_memory_bytes()
+            + self
+                .material_pass
+                .as_ref()
+                .map_or(0, MaterialPass::gpu_memory_bytes)
             + self.mesh_pool.gpu_memory_bytes()
             + self.estimated_acceleration_structure_bytes()
             + self.dynamic_tlas.gpu_memory_bytes()
@@ -1692,6 +1763,105 @@ pub(crate) mod tests {
     /// front reaching past it, listed and reaching everywhere; one just
     /// behind it, within its Froxels' slice of depth but short of it, listed
     /// in some and reaching none. Off, nothing counts them.
+    /// With the `visibility_buffer` Render switch on, the material pass
+    /// shades the image the lit pass shades: a white wall lit by nine point
+    /// lights, a red quad turned on it so its edges cross pixels at an
+    /// angle, partly over the wall and partly over the background, matches
+    /// the switch off within an 8-bit step at every pixel, with shadow rays
+    /// on and off.
+    #[test]
+    fn the_visibility_buffer_shades_the_image_the_lit_pass_shades() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        if !context.has_primitive_index() {
+            writeln!(std::io::stderr(), "skipped: no PRIMITIVE_INDEX").ok();
+            return;
+        }
+        const SIDE: u32 = 64;
+        let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
+        let grid = [-0.5, 0.0, 0.5];
+        let image_with = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
+            let white = renderer.material_pool.insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 0.5, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            );
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let quad = load_quad(&mut renderer);
+            let wall = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    1.6, 1.6, 1.0,
+                ))),
+                offset: [0.0, 0.0, -2.0],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let turned = InstanceData {
+                rotation_scale: padded_columns(
+                    glam::Mat3::from_rotation_z(0.5)
+                        * glam::Mat3::from_diagonal(glam::vec3(0.9, 0.9, 1.0)),
+                ),
+                offset: [0.7, 0.6, -1.5],
+                ..instance(quad, red.index(), [0.0, 0.0])
+            };
+            let lights = grid
+                .iter()
+                .flat_map(|&y| grid.map(|x| glam::vec3(x, y, -1.9)))
+                .map(|centre| LightData {
+                    range: 0.6,
+                    offset: centre.to_array(),
+                    intensity: [0.05; 3],
+                    ..LightData::default()
+                })
+                .collect();
+            let frame = FrameData {
+                camera: CameraUniform {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    exposure: 1.0,
+                    ..CameraUniform::default()
+                },
+                light: LightUniform {
+                    point_light_count: 9,
+                    ..LightUniform::default()
+                },
+                lights,
+                ..frame_of(vec![wall, turned])
+            };
+            render_frame(&context, &mut renderer, &frame, SIDE, SIDE).0
+        };
+        for shadow_rays in [true, false] {
+            let switches = RenderSwitches {
+                shadow_rays,
+                ..RenderSwitches::default()
+            };
+            let lit = image_with(switches);
+            let shaded = image_with(RenderSwitches {
+                visibility_buffer: true,
+                ..switches
+            });
+            let largest_difference = lit
+                .pixels()
+                .zip(shaded.pixels())
+                .flat_map(|(lit, shaded)| lit.0.into_iter().zip(shaded.0))
+                .map(|(lit, shaded)| lit.abs_diff(shaded))
+                .max();
+            assert!(
+                largest_difference <= Some(1),
+                "shadow rays {shadow_rays}: channels differ by up to {largest_difference:?}"
+            );
+            assert!(
+                lit.pixels().any(|pixel| shows(pixel.0, RED)),
+                "the red quad shows"
+            );
+        }
+    }
+
     #[test]
     fn the_light_count_pass_counts_the_point_lights_each_lit_pixel_lists_and_is_reached_by() {
         let Some(context) = gpu_context() else {

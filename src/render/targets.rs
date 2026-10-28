@@ -30,6 +30,19 @@ pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uin
 /// (`octahedral_encode`, common.wgsl) of 8 bits each, mapped from [-1, 1].
 pub const SURFACE_NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// The visibility IDs' format, with the `visibility_buffer` Render switch
+/// on: a 32-bit triangle ID per sample in two halves, since WebGPU's
+/// guaranteed format features multisample Rg16Uint but not R32Uint.
+pub const VISIBILITY_ID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Uint;
+
+/// The visibility IDs' clear value: no triangle, every bit set.
+const NO_TRIANGLE: wgpu::Color = wgpu::Color {
+    r: 65535.0,
+    g: 65535.0,
+    b: 0.0,
+    a: 0.0,
+};
+
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
 /// unit of each: ITU-R BT.709-6's luma weights (item 3.2), which are the Y
 /// row of its linear RGB-to-XYZ matrix as ITU-R BT.2087-0 prints it
@@ -63,11 +76,22 @@ pub struct RenderTargets {
     /// Each sample's surface normals, which the depth passes write with
     /// shadow rays on and the shadow mask pass reads.
     surface_normals: wgpu::TextureView,
+    /// With the `visibility_buffer` Render switch on, the triangle each
+    /// sample of the depth target shows, which the depth passes write and
+    /// the material pass reads.
+    visibility_ids: Option<wgpu::TextureView>,
 }
 
 impl RenderTargets {
-    /// Targets `width` × `height`, both non-zero.
-    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
+    /// Targets `width` × `height`, both non-zero, with visibility IDs, and
+    /// an HDR target the material pass writes as storage, where
+    /// `visibility_buffer` is set.
+    pub fn new(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        visibility_buffer: bool,
+    ) -> RenderTargets {
         let target = |label, format, sample_count, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
@@ -119,7 +143,11 @@ impl RenderTargets {
                 "HDR Texture",
                 HDR_FORMAT,
                 1,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                if visibility_buffer {
+                    wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING
+                } else {
+                    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING
+                },
             ),
             depth_pyramid: depth_pyramid.create_view(&wgpu::TextureViewDescriptor::default()),
             depth_pyramid_levels: (0..depth_pyramid.mip_level_count())
@@ -144,7 +172,45 @@ impl RenderTargets {
                 SAMPLE_COUNT,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
+            // Drawn by the depth passes, then read by the material pass.
+            visibility_ids: visibility_buffer.then(|| {
+                target(
+                    "Visibility IDs",
+                    VISIBILITY_ID_FORMAT,
+                    SAMPLE_COUNT,
+                    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                )
+            }),
         }
+    }
+
+    /// The visibility IDs, with the `visibility_buffer` Render switch on.
+    pub fn visibility_ids(&self) -> Option<&wgpu::TextureView> {
+        self.visibility_ids.as_ref()
+    }
+
+    /// The visibility IDs as a depth pass writes them, with the
+    /// `visibility_buffer` Render switch on: cleared to no triangle where
+    /// `clear`, loaded otherwise, and stored for the material pass.
+    pub fn visibility_ids_attachment(
+        &self,
+        clear: bool,
+    ) -> Option<wgpu::RenderPassColorAttachment<'_>> {
+        self.visibility_ids
+            .as_ref()
+            .map(|view| wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: if clear {
+                        wgpu::LoadOp::Clear(NO_TRIANGLE)
+                    } else {
+                        wgpu::LoadOp::Load
+                    },
+                    store: wgpu::StoreOp::Store,
+                },
+            })
     }
 
     /// The surface normals.
@@ -281,6 +347,7 @@ impl RenderTargets {
             &self.surface_normals,
         ]
         .into_iter()
+        .chain(self.visibility_ids.as_ref())
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))
         .sum()
     }

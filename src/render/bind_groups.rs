@@ -9,7 +9,7 @@
 use std::num::NonZeroU32;
 
 use crate::assets::material::TEXTURES_PER_CHANNEL;
-use crate::render::targets::{DEPTH_PYRAMID_FORMAT, SHADOW_MASK_FORMAT};
+use crate::render::targets::{DEPTH_PYRAMID_FORMAT, HDR_FORMAT, SHADOW_MASK_FORMAT};
 
 /// Group 0, written every frame: the camera, the light buffer with its
 /// counts, and each Froxel's list of its lights, which the Froxel pass
@@ -38,6 +38,11 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// The stages that sample Materials: the lit pass's fragment stage, and
+/// with the `visibility_buffer` Render switch on the material pass.
+const LIT_STAGES: wgpu::ShaderStages =
+    wgpu::ShaderStages::FRAGMENT.union(wgpu::ShaderStages::COMPUTE);
+
 /// Group 1, which the Material pool rebuilds when loads add Textures: the
 /// Materials (ADR 0001), each Channel's Textures as a binding array indexed
 /// by Layer, in `MaterialChannel` order (ADR 0017), and their samplers: the
@@ -46,11 +51,7 @@ pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     index: 1,
     label: "Material Bind Group",
     bindings: &[
-        read_only_storage(
-            "materials",
-            "array<MaterialData>",
-            wgpu::ShaderStages::FRAGMENT,
-        ),
+        read_only_storage("materials", "array<MaterialData>", LIT_STAGES),
         channel("albedo_textures"),
         channel("normal_textures"),
         channel("metallic_roughness_textures"),
@@ -250,6 +251,113 @@ pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
             false,
             wgpu::ShaderStages::FRAGMENT,
         ),
+    ],
+};
+
+/// Group 0 of the material pass, which runs with the `visibility_buffer`
+/// Render switch on: `FRAME`'s buffers, which it reads in its compute stage,
+/// in a group of its own, so the compute pipelines that set `FRAME` count
+/// none of its storage buffers against the Capability floor's.
+pub const MATERIAL_PASS_FRAME: BindGroupDefinition = BindGroupDefinition {
+    index: 0,
+    label: "Material Pass Frame Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "froxel_lists",
+                "array<FroxelList>",
+                wgpu::ShaderStages::COMPUTE,
+            )
+        },
+    ],
+};
+
+/// Group 2 of the material pass: the `SCENE_GEOMETRY` buffers it rebuilds
+/// each triangle's corners from, as the vertex stage pulls them.
+pub const MATERIAL_PASS_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
+    index: 2,
+    label: "Material Pass Geometry Bind Group",
+    bindings: &[
+        read_only_storage(
+            "instances",
+            "array<InstanceData>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage(
+            "vertices",
+            "array<CookedVertex>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage(
+            "meshlets",
+            "array<MeshletData>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage(
+            "meshlet_vertices",
+            "array<u32>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+    ],
+};
+
+/// Group 3 of the material pass: the frame's draw, its Meshlet records and
+/// packed indices, which the culling pass writes, the shadow mask, which
+/// the shadow mask pass writes, the visibility IDs, which the depth passes
+/// write, its uniform, the clear colour the CPU writes and where phase
+/// two's draw starts, which the GPU copies in, and the HDR target, which
+/// the pass writes.
+pub const MATERIAL_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Material Pass Inputs Bind Group",
+    bindings: &[
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "meshlet_records",
+                "array<MeshletRecord>",
+                wgpu::ShaderStages::COMPUTE,
+            )
+        },
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage("packed_indices", "array<u32>", wgpu::ShaderStages::COMPUTE)
+        },
+        loaded_texture(
+            "shadow_mask",
+            "texture_2d<u32>",
+            wgpu::TextureSampleType::Uint,
+            false,
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        loaded_texture(
+            "visibility_ids",
+            "texture_multisampled_2d<u32>",
+            wgpu::TextureSampleType::Uint,
+            true,
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        uniform(
+            "material_pass",
+            "MaterialPassUniform",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        Binding {
+            name: "hdr_target",
+            wgsl_type: "texture_storage_2d<rgba16float, write>",
+            binding_type: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: HDR_FORMAT,
+                view_dimension: wgpu::TextureViewDimension::D2,
+            },
+            stages: wgpu::ShaderStages::COMPUTE,
+            count: None,
+            writer: Writer::Gpu,
+        },
     ],
 };
 
@@ -583,7 +691,7 @@ const fn acceleration_structure(name: &'static str, stages: wgpu::ShaderStages) 
     }
 }
 
-/// One Channel's Textures, which the fragment shader samples.
+/// One Channel's Textures, which the stages that shade sample.
 const fn channel(name: &'static str) -> Binding {
     Binding {
         name,
@@ -593,19 +701,19 @@ const fn channel(name: &'static str) -> Binding {
             view_dimension: wgpu::TextureViewDimension::D2,
             multisampled: false,
         },
-        stages: wgpu::ShaderStages::FRAGMENT,
+        stages: LIT_STAGES,
         count: NonZeroU32::new(TEXTURES_PER_CHANNEL),
         writer: Writer::Cpu,
     }
 }
 
-/// A filtering sampler the fragment shader samples Channels with.
+/// A filtering sampler the stages that shade sample Channels with.
 const fn channel_sampler(name: &'static str) -> Binding {
     Binding {
         name,
         wgsl_type: "sampler",
         binding_type: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-        stages: wgpu::ShaderStages::FRAGMENT,
+        stages: LIT_STAGES,
         count: None,
         writer: Writer::Cpu,
     }

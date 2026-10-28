@@ -64,6 +64,10 @@ impl State {
         if let Some(reason) = switches.crowd_form.unavailable_on(context.backend()) {
             anyhow::bail!("{:?} is unavailable: {reason}", switches.crowd_form);
         }
+        anyhow::ensure!(
+            !switches.visibility_buffer || context.has_primitive_index(),
+            "the visibility buffer needs the adapter's PRIMITIVE_INDEX feature, which it lacks"
+        );
 
         let mut renderer = Renderer::new(context, target_format, width, height, switches);
         let Renderer {

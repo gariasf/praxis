@@ -7,7 +7,10 @@
 //! colour, which it resolves into the HDR target. With shadow rays on, phase
 //! two's depth is a pass of its own, so the shadow mask pass reads every
 //! Instance's depth before the lit pass reads the mask; with them off, the
-//! lit pass draws it first.
+//! lit pass draws it first. With the `visibility_buffer` Render switch on,
+//! phase two's depth is a pass of its own too, both depth passes write each
+//! sample's visibility ID beside depth, and the material pass shades from
+//! those IDs in place of the lit pass.
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
 use crate::render::culling_pass::PHASE_TWO_DRAW_OFFSET;
@@ -27,6 +30,10 @@ pub(crate) const LIT_PASS: &str = "lit_pass";
 /// The main pass's pipelines.
 pub struct MainPass {
     depth_prepass_pipeline: wgpu::RenderPipeline,
+    /// Phase two's depth pass's pipeline: the depth pre-pass's, or with the
+    /// `visibility_buffer` Render switch on one that marks its IDs as phase
+    /// two's.
+    phase_two_depth_pipeline: wgpu::RenderPipeline,
     /// With shadow rays off, phase two's draw into depth, inside the lit
     /// pass, before it shades.
     lit_pass_depth_pipeline: wgpu::RenderPipeline,
@@ -37,8 +44,12 @@ pub struct MainPass {
     /// `bind_render_targets`.
     inputs: wgpu::BindGroup,
     /// Whether shadow rays are on, so phase two's depth is drawn in its own
-    /// pass rather than by the lit pass.
+    /// pass rather than by the lit pass, and the depth passes write the
+    /// surface normals.
     shadow_rays: bool,
+    /// Whether the depth passes write visibility IDs (the
+    /// `visibility_buffer` Render switch).
+    visibility_buffer: bool,
     /// Whether the lit pass keeps the depth it ends with, for the light
     /// count pass (the `count_point_lights` Render switch).
     keeps_depth: bool,
@@ -64,7 +75,13 @@ impl MainPass {
             &meshlet_records_buffer,
             render_targets,
         );
-        let shader = device.create_shader_module(shaders::MAIN.descriptor());
+        // The depth passes' visibility ID entry points need the adapter's
+        // primitive index, which their module alone enables.
+        let shader = device.create_shader_module(if switches.visibility_buffer {
+            shaders::MAIN_VISIBILITY.descriptor()
+        } else {
+            shaders::MAIN.descriptor()
+        });
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
@@ -93,43 +110,84 @@ impl MainPass {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        let depth_pipeline = |label, vertex_entry_point, fragment| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&depth_prepass_layout),
-                vertex: wgpu::VertexState {
+        let depth_pipeline =
+            |label: &str, vertex_entry_point: &str, fragment: Option<wgpu::FragmentState<'_>>| {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&depth_prepass_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some(vertex_entry_point),
+                        buffers: &[],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment,
+                    primitive,
+                    depth_stencil: Some(targets::depth_stencil_state()),
+                    multisample,
+                    multiview_mask: None,
+                    cache: None,
+                })
+            };
+        let normals_target = Some(wgpu::ColorTargetState {
+            format: targets::SURFACE_NORMALS_FORMAT,
+            blend: None,
+            write_mask: wgpu::ColorWrites::ALL,
+        });
+        let id_target = Some(wgpu::ColorTargetState {
+            format: targets::VISIBILITY_ID_FORMAT,
+            blend: None,
+            write_mask: wgpu::ColorWrites::ALL,
+        });
+        // With the visibility buffer on, each depth pass writes the IDs, and
+        // with shadow rays on the surface normals before them.
+        let visibility_pipeline = |label, phase_two: bool| {
+            let constants = [("PHASE_TWO", f64::from(u8::from(phase_two)))];
+            let (vertex_entry_point, fragment_entry_point, targets) = if switches.shadow_rays {
+                (
+                    "vs_depth_normals",
+                    "fs_visibility_normals",
+                    &[normals_target.clone(), id_target.clone()][..],
+                )
+            } else {
+                ("vs_visibility", "fs_visibility", &[id_target.clone()][..])
+            };
+            depth_pipeline(
+                label,
+                vertex_entry_point,
+                Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(vertex_entry_point),
-                    buffers: &[],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment,
-                primitive,
-                depth_stencil: Some(targets::depth_stencil_state()),
-                multisample,
-                multiview_mask: None,
-                cache: None,
-            })
+                    entry_point: Some(fragment_entry_point),
+                    targets,
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &constants,
+                        ..wgpu::PipelineCompilationOptions::default()
+                    },
+                }),
+            )
         };
         // With shadow rays on, the depth passes write each sample's surface
         // normals beside its depth, for the shadow mask pass.
-        let depth_prepass_pipeline = if switches.shadow_rays {
+        let depth_prepass_pipeline = if switches.visibility_buffer {
+            visibility_pipeline("Depth Pre-pass Pipeline", false)
+        } else if switches.shadow_rays {
             depth_pipeline(
                 "Depth Pre-pass Pipeline",
                 "vs_depth_normals",
                 Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some("fs_surface_normals"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: targets::SURFACE_NORMALS_FORMAT,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
+                    targets: std::slice::from_ref(&normals_target),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),
             )
         } else {
             depth_pipeline("Depth Pre-pass Pipeline", "vs_depth_prepass", None)
+        };
+        let phase_two_depth_pipeline = if switches.visibility_buffer {
+            visibility_pipeline("Phase Two Depth Pipeline", true)
+        } else {
+            depth_prepass_pipeline.clone()
         };
         // Every pipeline the lit pass sets names its colour target, so its
         // depth draw names it too, and writes nothing to it.
@@ -177,12 +235,14 @@ impl MainPass {
         });
         MainPass {
             depth_prepass_pipeline,
+            phase_two_depth_pipeline,
             lit_pass_depth_pipeline,
             lit_pipeline,
             inputs_layout,
             meshlet_records_buffer,
             inputs,
             shadow_rays: switches.shadow_rays,
+            visibility_buffer: switches.visibility_buffer,
             keeps_depth: switches.count_point_lights,
         }
     }
@@ -220,7 +280,8 @@ impl MainPass {
     }
 
     /// Records the depth pre-pass into `encoder`: clears the depth target,
-    /// and with shadow rays on the surface normals, and draws the frame's
+    /// with shadow rays on the surface normals, and with the visibility
+    /// buffer on the visibility IDs, and draws the frame's
     /// draw as phase one leaves it, its packed indices `packed_indices` and
     /// its indirect arguments `frame_draw`, with the groups of `bind_groups`
     /// its vertex stage reads set, timed into `timestamp_writes`.
@@ -233,14 +294,10 @@ impl MainPass {
         frame_draw: &wgpu::Buffer,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
-        let surface_normals = [Some(render_targets.surface_normals_attachment(true))];
+        let color_attachments = self.color_attachments(render_targets, true);
         let mut depth_prepass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(DEPTH_PREPASS),
-            color_attachments: if self.shadow_rays {
-                &surface_normals
-            } else {
-                &[]
-            },
+            color_attachments: attached(&color_attachments),
             depth_stencil_attachment: Some(render_targets.depth_attachment()),
             occlusion_query_set: None,
             timestamp_writes,
@@ -258,9 +315,10 @@ impl MainPass {
         depth_prepass.draw_indexed_indirect(frame_draw, 0);
     }
 
-    /// Records phase two's depth pass into `encoder`, with shadow rays on:
-    /// draws phase two's draw into the depth target and the surface
-    /// normals, which it loads and stores for the shadow mask pass, the
+    /// Records phase two's depth pass into `encoder`, with shadow rays or
+    /// the visibility buffer on: draws phase two's draw into the depth
+    /// target and the colour the depth pre-pass writes, which it loads and
+    /// stores for the shadow mask pass and the material pass, the
     /// buffers and groups as `record_depth_prepass` takes them, timed into
     /// `timestamp_writes`.
     pub fn record_phase_two_depth(
@@ -272,15 +330,16 @@ impl MainPass {
         frame_draw: &wgpu::Buffer,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
+        let color_attachments = self.color_attachments(render_targets, false);
         let mut depth_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(PHASE_TWO_DEPTH_PASS),
-            color_attachments: &[Some(render_targets.surface_normals_attachment(false))],
+            color_attachments: attached(&color_attachments),
             depth_stencil_attachment: Some(render_targets.loaded_depth_attachment()),
             occlusion_query_set: None,
             timestamp_writes,
             multiview_mask: None,
         });
-        depth_pass.set_pipeline(&self.depth_prepass_pipeline);
+        depth_pass.set_pipeline(&self.phase_two_depth_pipeline);
         self.bind(
             &mut depth_pass,
             bind_groups
@@ -329,6 +388,27 @@ impl MainPass {
         lit_pass.draw_indexed_indirect(frame_draw, 0);
     }
 
+    /// The colour attachments of a depth pass, in the first of two places
+    /// with none after: the surface normals with shadow rays on, then the
+    /// visibility IDs with the visibility buffer on, each cleared where
+    /// `clear`, else loaded.
+    fn color_attachments<'a>(
+        &self,
+        render_targets: &'a RenderTargets,
+        clear: bool,
+    ) -> [Option<wgpu::RenderPassColorAttachment<'a>>; 2] {
+        let normals = self
+            .shadow_rays
+            .then(|| render_targets.surface_normals_attachment(clear));
+        let ids = render_targets
+            .visibility_ids_attachment(clear)
+            .filter(|_| self.visibility_buffer);
+        match normals {
+            Some(normals) => [Some(normals), ids],
+            None => [ids, None],
+        }
+    }
+
     /// Sets `bind_groups`, this pass's own group and the frame's draw's
     /// `packed_indices` into `render_pass`.
     fn bind<'a>(
@@ -343,4 +423,15 @@ impl MainPass {
         render_pass.set_bind_group(MAIN_PASS_INPUTS.index, &self.inputs, &[]);
         render_pass.set_index_buffer(packed_indices.slice(..), wgpu::IndexFormat::Uint32);
     }
+}
+
+/// The attachments of `color_attachments` up to the first place with none.
+fn attached<'a, 'b>(
+    color_attachments: &'b [Option<wgpu::RenderPassColorAttachment<'a>>],
+) -> &'b [Option<wgpu::RenderPassColorAttachment<'a>>] {
+    let count = color_attachments
+        .iter()
+        .take_while(|attachment| attachment.is_some())
+        .count();
+    &color_attachments[..count]
 }

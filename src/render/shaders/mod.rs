@@ -11,8 +11,8 @@ use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
-    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIAL_PASS_FRAME, MATERIAL_PASS_GEOMETRY,
+    MATERIAL_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -22,6 +22,7 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
+use crate::render::material_pass::MATERIAL_TILE_SIZE;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shadow_mask_pass::{SAMPLE_OFFSETS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE};
 use crate::render::targets::LUMINANCE_COEFFICIENTS;
@@ -56,6 +57,14 @@ const COMMON: Part = part!("common.wgsl");
 /// The shading terms.
 const SHADING: Part = part!("shading.wgsl");
 
+/// The surface the lit pass and the material pass shade: the vertex
+/// output, the shading normal and the lit colour.
+const SURFACE: Part = part!("surface.wgsl");
+
+/// A visibility ID's encoding, which the depth passes write and the material
+/// pass reads.
+const VISIBILITY_ID: Part = part!("visibility_id.wgsl");
+
 /// The Froxel grid: its slices, and where a Froxel's list starts.
 const FROXEL_GRID: Part = part!("froxel_grid.wgsl");
 
@@ -85,7 +94,56 @@ pub const MAIN: ShaderModule = ShaderModule {
     // scene geometry holds both TLAS (ADR 0020).
     enables: &["wgpu_binding_array", "wgpu_ray_query"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
-    parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
+    parts: &[
+        COMMON,
+        SHADING,
+        HDR,
+        FROXEL_GRID,
+        SURFACE,
+        part!("main.wgsl"),
+    ],
+};
+
+/// The main pass with the `visibility_buffer` Render switch on: `MAIN`, and
+/// the depth passes' entry points that write each sample's visibility ID
+/// from the primitive index, which the adapter's `PRIMITIVE_INDEX` feature
+/// enables.
+pub const MAIN_VISIBILITY: ShaderModule = ShaderModule {
+    name: "main_visibility",
+    enables: &["wgpu_binding_array", "wgpu_ray_query", "primitive_index"],
+    bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
+    parts: &[
+        COMMON,
+        SHADING,
+        HDR,
+        FROXEL_GRID,
+        SURFACE,
+        part!("main.wgsl"),
+        VISIBILITY_ID,
+        part!("visibility_ids.wgsl"),
+    ],
+};
+
+/// The material pass, with the `visibility_buffer` Render switch on.
+pub const MATERIAL: ShaderModule = ShaderModule {
+    name: "material",
+    // It samples the Materials' binding arrays.
+    enables: &["wgpu_binding_array"],
+    bind_groups: &[
+        &MATERIAL_PASS_FRAME,
+        &MATERIALS,
+        &MATERIAL_PASS_GEOMETRY,
+        &MATERIAL_PASS_INPUTS,
+    ],
+    parts: &[
+        COMMON,
+        SHADING,
+        HDR,
+        FROXEL_GRID,
+        SURFACE,
+        VISIBILITY_ID,
+        part!("material_pass.wgsl"),
+    ],
 };
 
 /// The shadow mask pass.
@@ -174,9 +232,11 @@ pub const SHARED: ShaderModule = ShaderModule {
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 11] = [
+pub const MODULES: [ShaderModule; 13] = [
     SHARED,
     MAIN,
+    MAIN_VISIBILITY,
+    MATERIAL,
     SHADOW_MASK,
     CULLING,
     FROXEL,
@@ -242,6 +302,7 @@ impl ShaderModule {
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
+             const MATERIAL_TILE_SIZE: u32 = {MATERIAL_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
              const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n\
              const FROXEL_COLUMNS: u32 = {FROXEL_COLUMNS}u;\n\
