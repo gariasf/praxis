@@ -19,6 +19,8 @@ pub mod tonemapping_pass;
 pub mod uniforms;
 
 #[cfg(test)]
+mod coverage_tests;
+#[cfg(test)]
 mod shader_function_tests;
 #[cfg(test)]
 mod shader_tests;

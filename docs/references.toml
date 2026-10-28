@@ -381,8 +381,8 @@ checked = 2026-10-26
 ["vulkan-standard-sample-locations"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750"
 section = "Vulkan specification, Multisampling, table Standard Sample Locations"
-quote = '''If the pname:standardSampleLocations member of slink:VkPhysicalDeviceLimits is ename:VK_TRUE, then the sample counts [...] have sample locations as listed in the following table [...] Locations are defined relative to an origin in the upper left corner of the fragment. [...] ename:VK_SAMPLE_COUNT_4_BIT: (0.375, 0.125) (0.875, 0.375) (0.125, 0.625) (0.625, 0.875)'''
-checked = 2026-10-26
+quote = '''If the pname:standardSampleLocations member of slink:VkPhysicalDeviceLimits is ename:VK_TRUE, then the sample counts [...] have sample locations as listed in the following table [...] Locations are defined relative to an origin in the upper left corner of the fragment. [...] ename:VK_SAMPLE_COUNT_1_BIT: (0.5,0.5) [...] ename:VK_SAMPLE_COUNT_2_BIT: (0.75,0.75) (0.25,0.25) [...] ename:VK_SAMPLE_COUNT_4_BIT: (0.375, 0.125) (0.875, 0.375) (0.125, 0.625) (0.625, 0.875)'''
+checked = 2026-10-28
 
 ["vulkan-acceleration-structure-instance"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml#L6713-L6725"
@@ -3205,3 +3205,9 @@ url = "https://web.archive.org/web/20261005213246/https://gdcvault.com/play/1027
 section = "Adrian Bentley (Sucker Punch Productions), Zen of Streaming: Building and Loading 'Ghost of Tsushima', GDC 2021, session overview and tags"
 quote = '''It will also show the details of our various streaming technologies and the tradeoffs encountered in switching to a fine-grained streaming model. [...] Game Developers Conference 2021 [...] free content'''
 checked = 2026-10-27
+
+["fatahalian-2010-quad-fragment-merging"]
+url = "https://www.microsoft.com/en-us/research/?p=159994"
+section = "Fatahalian, Boulos, Hegarty, Akeley, Mark, Moreton and Hanrahan, Reducing Shading on GPUs using Quad-Fragment Merging, ACM Transactions on Graphics 29(4), SIGGRAPH 2010, abstract"
+quote = '''We address this inefficiency by augmenting the GPU pipeline to gather and merge rasterized fragments from adjacent triangles in a mesh.'''
+checked = 2026-10-28
