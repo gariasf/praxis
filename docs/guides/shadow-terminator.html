@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Shadow Terminator Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 20 of the series, after Specular Antialiasing Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the plain opening of each chapter, the pass order, and the demos' legends. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.apart { border-style: dashed; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.lost { border-color: var(--bad); }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+[hidden] { display: none !important; }
+
+/* Key ideas and Check yourself, the series' standard for new guides. */
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+
+/* In brief: the guide's conclusion first, for the reader who stops here. */
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+/* Demo controls, stacked beside the canvas. */
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; }
+.control-rows .seg { flex-wrap: nowrap; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+#o-canvas { width: 100%; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #350 &middot; PR #366</div>
+  <h1>A terminator that follows the normals, not the triangles</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>On a coarse smooth-shaded mesh, the shadow mask hid each light from whole triangles near its terminator, so the lit edge stepped along them. Now the depth passes store two normals per sample, the triangle's and the interpolated one. The mask hides a light without a ray only where the interpolated normal turns from it. Where the triangle turns from it or only grazes it, the ray starts just inside the surface and passes the one back face where it leaves its own mesh. The idea to keep: give the mask the normals the shading uses, and let a ray that starts inside skip only its own exit.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why the terminator stepped, and why skipping the ray there leaked light</li>
+      <li>How the depth passes find a triangle's own normal from screen-space derivatives</li>
+      <li>How octahedral coordinates hold two normals in four bytes, within 0.95&deg;</li>
+      <li>How a ray that starts inside the surface tells its own mesh from an occluder by front and back faces</li>
+      <li>What it costs on <code>town</code>, and where it can still be wrong</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="shadow-rays.html">Shadow Rays Explained</a>, chapters 5 and 10, for the terminator and the shadow mask; <a href="acceleration-structures.html">Acceleration Structures Explained</a>, for the TLAS the rays query</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at b8bb97f (PR #366, merged 2026-10-28). <b>Since then:</b> nothing, as of 2026-10-28.</p>
+  </aside>
+  <p class="lede">At the visual check of 2026-10-27, the owner saw dark, triangle-shaped patches on SciFiHelmet, and the <code>shadows</code> sphere's terminator stepped along its triangles. Shadow Rays Explained had described that artefact and set it aside as a fog line; ticket #350 revived it. This guide explains why the shadow mask stepped and why skipping the ray there, the obvious fix, lets light into cast shadows. It then follows the fix the owner chose: two normals per sample written by the depth passes, packed as octahedral coordinates, and a ray that starts inside the surface where its triangle turns from the light. It ends with what can still go wrong and what the fix costs. Two live demos let you store a normal in a few bits, and turn the sun round a coarse sphere under three rules.</p>
+  <p class="status"><b>Provenance.</b> Ticket #350 asked for a diagnosis, then a fix chosen by the owner among three options; the owner chose option 2b in session on 2026-10-28 (<a href="https://github.com/gariasf/praxis/issues/350#issuecomment-6468831265">decision</a>). PR #366 implements it, merged on 2026-10-28 as b8bb97f. Code facts were read at that commit: <code>src/render/shaders/main.wgsl</code>, <code>shadow_mask.wgsl</code>, <code>common.wgsl</code>, <code>src/render/targets.rs</code>, <code>main_pass.rs</code>, <code>shader_function_tests.rs</code> and <code>tests/shadows.rs</code>. The cost figures and image counts are the PR's, measured on an Apple M4 Pro; <code>town</code>'s are its final run, on a quiet machine. Where this guide does its own arithmetic, it says so.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#steps">1 &middot; Why the terminator stepped</a>
+    <a href="#normals">2 &middot; Two normals per sample</a>
+    <a href="#octahedral">3 &middot; Octahedral normals in 8 bits</a>
+    <a href="#inside">4 &middot; Starting inside the surface</a>
+    <a href="#limits">5 &middot; Where it can still be wrong</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="steps">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; the defect</div>
+    <h2>Why the terminator stepped</h2>
+    <p class="key-idea"><b>Key idea.</b> The lit pass shades with the normal interpolated over each triangle, while the shadow mask judged facing by the triangle's own plane. Within a few degrees of the terminator the two disagree, and the mask hid the whole light from the whole triangle.</p>
+    <p class="plain">A coarse mesh drawn with smooth shading is flat triangles shaded with curved normals. Near the line where it turns from a light, a triangle can already face away from the light while the normals interpolated over it still face it.</p>
+    <p>The <code>shadows</code> sphere is a UV sphere of 48 &times; 24 segments, 7.5&deg; each. A triangle's plane turns up to 5.3&deg; from the normals interpolated over it (<a href="shadow-rays.html#terminator">Shadow Rays Explained, chapter 5</a>). Since #260 the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it. (CONTEXT.md before #350.)">shadow mask</span> pass has had only the depth target to work from. It rebuilt a face normal from the depths the same sample holds at the neighbouring pixels. Where that face normal turned from a light, it set the light's bit with no ray, and elsewhere it traced a ray offset along it. The <span class="concept" data-term="Lit pass" data-tip="The pass that shades each pixel, at depth equal after the depth pre-pass, into a 4x MSAA HDR attachment. It reads each light's shadow from the shadow mask.">lit pass</span> then left that light out of the pixel entirely, diffuse and specular. So in a band about 5&deg; wide, whole triangles went dark while the shading said lit, and the terminator stepped along them.</p>
+    <p>The rebuilt face normal had a second fault. At a triangle's edge, the neighbouring pixel can show the next triangle, or another surface, so the normal rebuilt from it is neither triangle's. That darkened pixels along some wall edges on <code>town</code> too.</p>
+  </div>
+  <figure class="wide">
+    <img src="img/terminator-shadows-zoom.png" alt="The shadows sphere at 1280 by 720, twice enlarged, before and after: on the left, the dark side's edge steps along the triangles; on the right, it is smooth." width="1600" height="600" loading="lazy">
+    <figcaption><b>The <code>shadows</code> sphere</b> at 1280&times;720, a 2x crop, before (left) and after (right) PR #366. Before, the edge between the sphere's lit and dark sides steps along its triangles.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>The fix that leaked</h3>
+    <p>PR #258's first version tried the obvious fix: where the triangle faces away from the light while the interpolated normal faces it, skip the ray and light the pixel. The terminators came out smooth, but the helmet's smoothed bevels sit in that band, and where another part of the helmet shadowed them the rule lit them anyway. Skipping the ray ignores whatever stands in its way. The ticket listed that rule as ruled out.</p>
+    <p>A ray is still needed in the band, then. The trouble is where it starts. Offset off the triangle along its own normal, a ray toward a light the triangle turns from goes straight back through the triangle's own mesh, and finds the mesh in its way.</p>
+    <h3>Three options</h3>
+    <p>The ticket offered three:</p>
+    <ol>
+      <li>Move the ray's origin by Hanika's terminator offset (<i>Ray Tracing Gems II</i>, chapter 4), which needs the shading normal, which the mask did not have.</li>
+      <li>Write the shading normal per sample in the depth pre-pass, a new attachment, which amends ADR 0019.</li>
+      <li>Offset the origin by an amount estimated from the curvature of the depth: approximate, and no new attachment.</li>
+    </ol>
+    <p>The prototypes measured on <code>town</code> settled it (chapter 6). The owner chose <b>2b</b>: write <i>two</i> normals per sample, and start the ray inside the surface where its triangle turns from the light. Option 2b uses no Hanika offset.</p>
+  </div>
+</section>
+
+<section class="chapter" id="normals">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; the depth passes</div>
+    <h2>Two normals per sample</h2>
+    <p class="key-idea"><b>Key idea.</b> The depth passes already rasterise every triangle the mask will see. With shadow rays on, they now write each sample's triangle normal and interpolated normal, so the mask reads what the triangle was instead of guessing it from neighbouring depths.</p>
+    <p>These are the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">Surface normals</span>, a term #350 adds to <code>CONTEXT.md</code>. With shadow rays on, the depth pre-pass and phase two's depth pass both run a fragment shader, <code>fs_surface_normals</code>. Before, neither ran one. Their vertex stage, <code>vs_depth_normals</code>, passes on the lit pass's position and normal, and keeps the clip position <code>@invariant</code> so that their depths still meet the lit pass's exactly.</p>
+    <h3>The triangle's own normal</h3>
+    <p>Across a triangle, the camera-relative position changes linearly in the triangle's plane. Its <span class="concept" data-term="Screen-space derivatives" data-tip="How fast a value changes from one pixel to the next, taken by differencing it between the pixels of a 2x2 quad: dpdx across the screen, dpdy down it.">screen-space derivatives</span>, <code>dpdx</code> and <code>dpdy</code>, are two vectors in that plane, so their cross product is the plane's normal. The GPU runs fragment shaders in 2&times;2 quads. Where a quad hangs over the triangle's edge, the pixels outside it still run, as helper invocations for that same triangle (WGSL &sect;15.4). So even at an edge the derivatives belong to the triangle, which is what the depth rebuild could not promise.</p>
+    <pre class="code"><code><span class="comment">// main.wgsl at b8bb97f, fs_surface_normals</span>
+let crossed = cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position));
+let crossed_length_squared = dot(crossed, crossed);
+let toward_camera = -normalize(in.camera_relative_position);
+let unit_crossed = crossed * inverseSqrt(crossed_length_squared);
+let triangle_normal = select(
+    toward_camera,
+    select(unit_crossed, -unit_crossed, dot(unit_crossed, toward_camera) &lt; 0.0),
+    crossed_length_squared &gt; 0.0
+);</code></pre>
+    <p>The cross product's sign depends on how the triangle lies on screen, so the shader flips it to face the camera, the side the sample shows. A triangle seen exactly edge-on spans no plane on screen, and its normal falls back to the direction toward the camera. Neither case can produce a NaN.</p>
+    <h3>The interpolated normal</h3>
+    <p>The second normal is the vertex normals, turned by the Instance's normal matrix and interpolated over the triangle, then normalised: the lit pass's <code>geometric_normal</code> before its normal map. A normal that interpolates to zero length falls back to the triangle's. The mask reads no Textures, so normal maps play no part in it.</p>
+    <h3>The target</h3>
+    <ul class="keypoints">
+      <li><b>Format.</b> <code>SURFACE_NORMALS_FORMAT</code> is <code>Rgba8Unorm</code>: the triangle normal in red and green, the interpolated normal in blue and alpha, each as two 8-bit octahedral coordinates (chapter 3).</li>
+      <li><b>Size.</b> 4x MSAA like the depth target, 4 bytes per sample: 2560 &times; 1440 &times; 4 &times; 4 = 58,982,400 bytes at 1440p, as much as the depth target itself.</li>
+      <li><b>When.</b> Written only with shadow rays on: the pre-pass clears it, and phase two's depth pass loads and stores it. With rays off the pre-pass keeps its depth-only pipeline, so the rays-off gate barely moves: +0.01 ms. The target is allocated either way, as amended ADR 0019 records.</li>
+      <li><b>Per pixel.</b> Under 4x MSAA the fragment shader runs once per pixel and its output lands in every sample the triangle covers, so both normals are pixel-centre values. The mask reads, at each pixel, the nearest sample's normals.</li>
+    </ul>
+    <p>ADR 0019 had said its main pass writes nothing that no decided pass reads. The shadow mask is a decided pass that reads this target, and the ADR's amendment of 2026-10-28 records the new attachment, its size and its cost.</p>
+  </div>
+</section>
+
+<section class="chapter" id="octahedral">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; common.wgsl</div>
+    <h2>Octahedral normals in 8 bits</h2>
+    <p class="key-idea"><b>Key idea.</b> A unit vector has only two degrees of freedom. Project it onto the octahedron |x| + |y| + |z| = 1 and fold the lower half over the upper, and the square [&minus;1, 1]&sup2; holds every direction with nearly even precision. At 8 bits per coordinate, each stays within 0.95&deg;.</p>
+    <p>Storing x, y and z wastes a number, since they always satisfy x&sup2; + y&sup2; + z&sup2; = 1. Storing x and y and rebuilding z loses the sign of z and crowds precision near the horizon. <span class="concept" data-term="Octahedral coordinates" data-tip="Two numbers in [−1, 1] for a unit vector: its projection onto the octahedron |x| + |y| + |z| = 1, with the lower half folded over the upper.">Octahedral coordinates</span> avoid both. Divide the vector by |x| + |y| + |z| and it lands on the octahedron. Its upper half, seen from above, is the diamond |u| + |v| &le; 1. Its lower half folds outward into the square's four corners, each triangle reflected across the diamond's edge.</p>
+    <pre class="code"><code><span class="comment">// common.wgsl at b8bb97f</span>
+fn octahedral_encode(direction: vec3&lt;f32&gt;) -&gt; vec2&lt;f32&gt; {
+    let projected = direction.xy / (abs(direction.x) + abs(direction.y) + abs(direction.z));
+    let sign = select(vec2&lt;f32&gt;(-1.0), vec2&lt;f32&gt;(1.0), projected &gt;= vec2&lt;f32&gt;(0.0));
+    return select((1.0 - abs(projected.yx)) * sign, projected, direction.z &gt;= 0.0);
+}
+
+fn octahedral_decode(coordinates: vec2&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    let z = 1.0 - abs(coordinates.x) - abs(coordinates.y);
+    let sign = select(vec2&lt;f32&gt;(-1.0), vec2&lt;f32&gt;(1.0), coordinates &gt;= vec2&lt;f32&gt;(0.0));
+    let unfolded = select((1.0 - abs(coordinates.yx)) * sign, coordinates, z &gt;= 0.0);
+    return normalize(vec3&lt;f32&gt;(unfolded, z));
+}</code></pre>
+    <p><code>fs_surface_normals</code> maps each coordinate from [&minus;1, 1] to [0, 1] for the <code>Unorm</code> target. The mask maps it back and decodes. The ticket had priced one normal as two 16-bit coordinates. Two normals at 8 bits per coordinate fill the same four bytes.</p>
+    <h3>How much 8 bits lose</h3>
+    <p>A new oracle test, <code>octahedral_coordinates_decode_to_the_unit_vector_they_encode</code>, encodes 4,110 directions on the GPU: the six axes, eight directions on the octahedron's edges, four of them on the equator where the lower half folds, and a 4,096-point Fibonacci lattice. It checks that each decodes back within 4&times;10<sup>&minus;6</sup> from full floats, and within 0.95&deg; of itself after rounding to 8 bits. This page's own sum, in f64 with round-to-nearest, finds 0.90&deg; over the lattice and 0.94&deg; over 400,000 lattice directions. The bound is sampled, not proven.</p>
+    <p>Metal rounds a <code>Unorm</code> store to the nearest step. Vulkan only recommends it, and may round to either neighbour, which roughly doubles the error. The mask's margins in chapter 4 are sized for both.</p>
+  </div>
+  <figure class="wide" id="demo-octahedral">
+    <div class="demo-grid">
+      <div class="canvas-frame" style="max-width: 400px"><canvas id="o-canvas" class="demo" role="img" aria-label="The octahedral square, each point coloured by the direction it decodes to after storing its coordinates in the chosen number of bits."></canvas></div>
+      <div>
+        <div class="control-rows">
+          <div>
+          <span class="control-label">Bits per coordinate</span>
+          <div class="seg" role="group" aria-label="Bits per coordinate" id="o-bits">
+            <button type="button" data-bits="4" aria-pressed="true">4</button>
+            <button type="button" data-bits="6" aria-pressed="false">6</button>
+            <button type="button" data-bits="8" aria-pressed="false">8, as shipped</button>
+            <button type="button" data-bits="10" aria-pressed="false">10</button>
+          </div>
+          </div>
+        </div>
+        <p class="readout" id="o-readout" aria-live="polite"></p>
+        <p class="readout" id="o-largest"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> The square of octahedral coordinates, u across and v up. Each point is coloured by the direction it decodes to after both coordinates are stored in the chosen bits, x as red, y as green and z as blue, each mapped from [&minus;1, 1]. Inside the dashed diamond lies the upper half, z &ge; 0; the four corners hold the lower half, folded. Point at or drag on the square to pick a direction. At 4 bits the cells are plain to see, and at 8 they are too small to see at this size. The largest error is taken over the oracle test's 4,110 directions, in f64, rounding to nearest as Metal does.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="inside">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; shadow_mask.wgsl</div>
+    <h2>Starting inside the surface</h2>
+    <p class="key-idea"><b>Key idea.</b> Where a triangle grazes or turns from a light that its interpolated normal faces, the ray starts just inside the surface. It finds its nearest hit and passes it only if it is a back face, which means the ray is leaving its own mesh, then asks for any hit beyond. An occluder that is a closed mesh shows the ray a front face first, so its shadow holds.</p>
+    <p class="plain">A ray that starts outside a triangle turned from the light runs back into its own mesh. One that starts inside runs out of it, and the way out is the back of a triangle.</p>
+    <h3>Three outcomes per light</h3>
+    <p>For each light that reaches the pixel, the mask decodes the sample's two normals and picks one of three outcomes:</p>
+    <ul class="keypoints">
+      <li><b>Hidden, no ray,</b> where the interpolated normal turns from the light by more than 2&deg;: <code>dot(interpolated_normal, direction) &lt;= -INTERPOLATED_TURN_MARGIN</code>, sin 2&deg;. The 2&deg; covers the stored normal's error, so the mask never hides a light that the lit pass's interpolated normal, its <code>geometric_normal</code>, still faces. Between there and the horizon, a ray is traced, and the lit pass's clamp of N&middot;L at zero darkens what is past it.</li>
+      <li><b>A ray from outside,</b> where the triangle faces the light by at least 10&deg;, or by at least 5&deg; when its two normals agree within 3&deg;, as on a flat surface: the ray starts along the triangle normal by <code>SHADOW_RAY_OFFSET_SCALE</code>, 2<sup>&minus;16</sup> of the point's largest coordinate and at least 2<sup>&minus;16</sup> m, as before (<a href="shadow-rays.html#acne">Shadow Rays Explained, chapter 4</a>), and any hit hides the light.</li>
+      <li><b>A ray from inside,</b> everywhere else: the triangle faces the light by less than the margin, or turns from it, while the interpolated normal does not turn from it. The rest of this chapter is about this case.</li>
+    </ul>
+    <p>The 5&deg; margin is wider than the stored normals' error, for a second reason. The mask rebuilds each sample's position from depth, and that position can sit below the surface by more than the fixed ray offset. Under a grazing light, a ray leaving from there meets its own triangle. Sending those rays down the inside path hides the error, at a cost. Every flat floor that a light grazes by less than 5&deg; traces twice. On <code>minification</code>, whose floor lies under grazing point lights, the mask rose from 1.05 to 3.07 ms. At a 2&deg; margin with a 1&deg; agreement, two pixels of the <code>shadows</code> sphere went wrong; an offset eight times larger cleared them. Ticket #368 will size the offset to the depth rebuild's error, after which the margin can drop toward 2&deg;.</p>
+    <h3>The inside ray</h3>
+    <pre class="code"><code><span class="comment">// shadow_mask.wgsl at b8bb97f, the end of shadowed()</span>
+let origin = tlas_position - triangle_normal * offset;
+let exit = nearest_hit(origin, direction, distance);
+if exit.kind == RAY_QUERY_INTERSECTION_NONE {
+    return false;
+}
+if exit.front_face || exit.t + offset &gt;= distance {
+    return exit.front_face;
+}
+return hit_any(origin, direction, exit.t + offset, distance);</code></pre>
+    <ol>
+      <li><b>Start inside.</b> The origin moves the same small offset, but <i>into</i> the surface, against the triangle normal.</li>
+      <li><b>Take the nearest hit.</b> <code>nearest_hit</code> traces without <code>RAY_FLAG_TERMINATE_ON_FIRST_HIT</code>, so it returns the closest triangle rather than any. It queries the static TLAS, then the dynamic TLAS only up to the static hit, since only a nearer dynamic triangle could replace it.</li>
+      <li><b>Read its face.</b> A ray that starts just behind a triangle facing the light crosses that triangle from behind. One that starts behind a triangle turned from the light runs through the mesh and leaves through a neighbour. Either way the nearest hit is a <span class="concept" data-term="Back face" data-tip="The side of a triangle opposite its front: the side its counter-clockwise normal points away from. A ray leaving a closed mesh meets the back of the triangle it leaves through.">back face</span>. If the nearest hit is a front face instead, the ray met something else first, and the light is hidden.</li>
+      <li><b>Look beyond.</b> After passing the back face, a second, any-hit query starts at the exit plus the offset. Anything found hides the light: an occluder, or any other part of the same mesh.</li>
+    </ol>
+    <p>For a point light, an exit within one offset of the light settles it: a front face there hides the light, and a back face does not. The second query would have nothing left to search. Starting it there also keeps every ray's tmin at or below its tmax, which both Metal and Vulkan require.</p>
+    <h3>Why this does not leak</h3>
+    <p>#203's rejected rule skipped the ray. The inside ray still runs the whole way to the light and passes exactly one triangle, the nearest, and only if that triangle shows its back. An occluder between the point and the light is a closed mesh seen from outside, so the ray enters it through a front face. If that face is the nearest hit, the light is hidden at once. If the ray first leaves its own mesh, the any-hit query beyond finds the occluder. Cast shadows fall into the band just as they fall outside it.</p>
+    <h3>Front and back, per backend</h3>
+    <p>A triangle's <span class="concept" data-term="Front face" data-tip="The side of a triangle that its normal, taken from its vertices in index order (counter-clockwise), points toward. A ray query reports whether the ray met that side.">front face</span> is the side its normal, taken from its vertices in index order, points toward. The ray query reports whether the ray met it in <code>front_face</code>. The Vulkan specification decides facing in the bottom-level acceleration structure's own space, so a mirrored Instance does not flip it. On Metal, MSL documents a clockwise default winding and naga sets none, which would seem to invert it; the sources do not settle it. <code>tests/shadows.rs</code> does: an inverted <code>front_face</code> would hide the sun across the terminator band it now judges, and it passes on Metal and on lavapipe. Culling back faces in the traversal with <code>RAY_FLAG_CULL_BACK_FACING</code> was not an option: naga's Metal backend ignores that flag. The shader reads <code>front_face</code> itself.</p>
+  </div>
+  <figure class="wide" id="demo-inside">
+    <div class="demo-grid">
+      <div class="canvas-frame"><canvas id="t2-canvas" class="demo" role="img" aria-label="A cross-section of a coarse sphere under the sun, with a block casting a shadow across one terminator, and a selected sample's shadow ray."></canvas></div>
+      <div>
+        <div class="sliders stacked">
+          <label for="t2-sun" class="control-label">Sun direction <output id="t2-sun-out" for="t2-sun"></output></label>
+          <input type="range" id="t2-sun" min="0" max="359" step="1" value="15">
+        </div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Facets</span>
+            <div class="seg" role="group" aria-label="Facets" id="t2-facets">
+              <button type="button" data-facets="12" aria-pressed="true">12</button>
+              <button type="button" data-facets="24" aria-pressed="false">24</button>
+              <button type="button" data-facets="48" aria-pressed="false">48</button>
+            </div>
+          </div>
+          <div>
+            <span class="control-label">Rule</span>
+            <div class="seg" role="group" aria-label="Rule" id="t2-rule">
+              <button type="button" data-rule="face" aria-pressed="false">facing, before</button>
+              <button type="button" data-rule="skip" aria-pressed="false">skip, rejected</button>
+              <button type="button" data-rule="inside" aria-pressed="true">inside, #350</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot one"></span>lit</span>
+          <span><span class="dot"></span>dark, rightly</span>
+          <span><span class="dot lost" style="background: var(--bad)"></span>dark where the shading says lit</span>
+          <span><span class="dot one" style="box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--bad)"></span>lit in the block's shadow</span>
+        </div>
+        <p class="readout" id="t2-note" aria-live="polite"></p>
+        <p class="readout" id="t2-counts"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> A cross-section of a coarse sphere of radius 0.5 m: facets in solid line, the true circle dotted, short orange ticks at the true terminators, and 96 samples, each drawn just off its facet and shaded with the normal interpolated across it. A block turns with the sun so that its shadow always falls across one terminator. The rules: the triangle's facing, as the mask judged before #350; skipping the ray where the triangle turns away, as #203 rejected; and the inside origin #350 ships. Click a sample to follow its ray: blue from outside, orange from inside, with a ring where it passes the back face it leaves through. The rules are the shader's, with its margins and its 2<sup>&minus;16</sup> m offset. The first is idealised, with each facet's exact normal, which the depth rebuild only approximated. Simplified: two dimensions instead of three, in f64, one light.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="limits">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; limits</div>
+    <h2>Where it can still be wrong</h2>
+    <p class="key-idea"><b>Key idea.</b> The rule passes one back face and trusts that it is the ray leaving its own mesh. Where a ray starts inside something else, or a mesh is not closed, that trust can be wrong in either direction. The PR defers two checks for those cases.</p>
+    <ul class="keypoints">
+      <li><b>Overlapping shells.</b> SciFiHelmet is built of shells that overlap. An inside ray that starts in one shell can meet another shell's front face first, and is hidden. One-pixel dark lines remain where the shells overlap; those pixels sat inside the dark patches before.</li>
+      <li><b>Moved dots.</b> On the helmet, 21,351 pixels brighten and 6,332 darken; on <code>town</code>, 1,147 and 133. The darkened ones are mostly isolated one-pixel dots of 2 to 17 steps along creases and seams. Main shows dots like them elsewhere, so the PR reads them as moved rather than multiplied, which is part of the owner's visual check.</li>
+      <li><b>A possible leak.</b> If a ray starts inside another mesh, where two meshes interpenetrate, the back face it passes may be that mesh's rather than its own. The PR defers a leak test, an occluder casting onto a terminator band, until a Golden or a visual check shows light in a cast shadow.</li>
+      <li><b>Backends.</b> The front-face convention is checked on Metal and on Vulkan through lavapipe. DX12 is unchecked while the RTX machine is stored. A probe that pins <code>front_face</code> per backend is deferred until DX12 runs again.</li>
+      <li><b>Flat floors under grazing light.</b> The 5&deg; margin also covers positions rebuilt from depth that sit below the surface, at the price of a second traversal on every flat surface a light grazes (chapter 4). Ticket #368 will size the ray offset to that error instead.</li>
+      <li><b>Two draws against one.</b> With culling on, the depth passes draw the two culling phases' Instances in two draws, which write the surface normals, while the lit pass draws them in one. On the M4 Pro, which of two triangles sharing an edge covers a sample on that edge depends on what else the draw holds (<a href="visibility-prepass.html">Visibility Pre-pass Explained</a>). So at a few edge samples the mask reads one triangle's normals while the lit pass shades the other. Culled and unculled <code>town</code> differ by up to 6 pixels a frame on Metal, and <code>tests/goldens.rs</code> now allows 8, <code>HARDWARE_UNCULLED_PIXELS</code>. Ticket #369 follows it up.</li>
+      <li><b>Normal maps.</b> The mask follows the interpolated normal, not the normal-mapped one. A bump that the normal map turns toward a light, more than 2&deg; past where the interpolated normal turns from it, stays dark.</li>
+    </ul>
+    <figure>
+      <img src="img/terminator-helmet-zoom.png" alt="A 4x enlarged crop of the right-hand SciFiHelmet at 2560 by 1440, before and after: triangle-shaped dark patches on the left are gone on the right, where a few one-pixel dark lines remain along the shells' seams." width="1280" height="480" loading="lazy">
+      <figcaption><b><code>helmet</code></b> at 2560&times;1440, a 4x crop of the right-hand helmet, before (left) and after (right). The triangle-shaped dark patches are gone; one-pixel lines remain where shells overlap.</figcaption>
+    </figure>
+    <h3>How it is checked</h3>
+    <p><code>tests/shadows.rs</code> compares the <code>shadows</code> scene, traced and untraced, against the true sphere's analytic shadows, intersected in f64. It used to leave out every sphere pixel within 5.3&deg; of a terminator on its lit side, <code>TERMINATOR_BAND</code>. That exclusion is gone: nothing shadows the sphere, so every sphere pixel must be unchanged by the rays. On main before this change, 122 of the pixels it now judges fail.</p>
+  </div>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; cost</div>
+    <h2>What it costs</h2>
+    <p class="key-idea"><b>Key idea.</b> On <code>town</code>, the fix costs the M4 Pro's GPU frame about 2.8 ms, most of it in the shadow mask, plus 58,982,400 bytes of memory. The rays-off gate barely moves. Each alternative without the triangle normal cost more, because it traced more rays, or traced them twice.</p>
+    <p>Medians from <code>praxis report</code> on <code>town</code>, on a quiet machine, run back to back with a build of main at eeb18e9:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts">
+      <thead><tr><th>M4 Pro, <code>town</code></th><th class="n">main</th><th class="n">PR #366</th><th class="n">change</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>GPU frame</td><td class="n">12.62 ms</td><td class="n">15.40 ms</td><td class="n">+2.78 ms</td></tr>
+        <tr><td>Shadow-ray time</td><td class="n">3.64 ms</td><td class="n">6.34 ms</td><td class="n">+2.70 ms</td></tr>
+        <tr><td>Gate, rays off</td><td class="n">8.64 ms</td><td class="n">8.65 ms</td><td class="n">+0.01 ms</td></tr>
+        <tr><td><code>depth_prepass</code></td><td class="n">1.76 ms</td><td class="n">2.12 ms</td><td class="n">+0.36 ms</td></tr>
+        <tr><td><code>shadow_mask_pass</code></td><td class="n">4.65 ms</td><td class="n">7.04 ms</td><td class="n">+2.39 ms</td></tr>
+        <tr><td><code>lit_pass</code>, its span</td><td class="n">8.92 ms</td><td class="n">11.27 ms</td><td class="n">+2.35 ms</td></tr>
+        <tr><td>GPU memory</td><td class="n">616,555,464 B</td><td class="n">675,537,864 B</td><td class="n">+58,982,400 B</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <ul class="keypoints">
+      <li><b>The frame total is the cost.</b> Metal overlaps the mask with the lit pass, so the lit pass's own span grows by nearly as much, absorbing the mask's growth; the spans do not add. Shadow-ray time, the GPU frame with rays on less the same frame's with them off, grows by 2.70 ms. Earlier, three interleaved quiet rounds against main read +2.81 ms. The CPU frame moved by 0.12 ms, within its noise.</li>
+      <li><b>Partly the fix at work.</b> <code>town</code>'s posts, trees, wires and pillars are smooth-shaded cylinders and cones of 6 to 24 sides: coarse, with wide terminator bands, so many of their pixels now trace the two-query inside ray where they used to be hidden with none.</li>
+      <li><b>The pre-pass.</b> Its 0.36 ms is the new fragment shader and the 4x target it writes.</li>
+    </ul>
+    <p>The PR's A/B against main measured every Reference scene. The largest costs come from grazing light. On <code>minification</code>, whose flat floor the 5&deg; margin sends down the inside path, the mask rose from 1.05 to 3.07 ms and the GPU frame by 2.0 ms. On <code>helmet</code>, the mask rose from 2.53 to 4.13 ms and the GPU frame by 1.6 ms. On <code>pbr-sweep</code>, the GPU frame rose by 0.6 ms. Ticket #368 is where those come down.</p>
+    <h3>The alternatives, measured</h3>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Option, on the same machine</th><th class="n">GPU frame</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td>No attachment, a fixed band of 10&deg;</td><td class="n">+5.7 ms</td><td>helmet only partly fixed</td></tr>
+        <tr><td>No attachment, a fixed band of 30&deg;</td><td class="n">+8.4 ms</td><td></td></tr>
+        <tr><td>Option 2: the interpolated normal alone, the face normal still rebuilt from depth</td><td class="n">+6.2 ms</td><td>the rebuilt normal is wrong at triangle edges, so every grazing ray that hit had to be traced again</td></tr>
+        <tr class="focus"><td>Option 2b: both normals, as shipped</td><td class="n">+2.81 ms</td><td>three quiet interleaved rounds</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>The more precisely the mask knows which pixels are in the band, the fewer rays it traces twice. That is what the second, exact triangle normal buys.</p>
+    <h3>Goldens</h3>
+    <p>Six Metal Goldens moved by more than one step: <code>town</code> in 1,280 pixels, at wire, cone and cylinder terminators and at wall edges the depth-rebuilt normal used to darken; <code>pbr-sweep</code> in 546; <code>normal-tangent</code> in 504; <code>shadows</code> in 131; <code>orrery</code> in 52, by at most 6 steps; and <code>uv-grid</code> in 2. The vulkan-cpu Goldens and lavapipe Baselines came from the PR's CI, and the M4 Pro Baselines were re-recorded on a quiet machine, with <code>gpu_memory_bytes</code> 58,982,400 higher on every scene.</p>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>The mask used to rebuild a face normal from the depths at neighbouring pixels. Why was that normal wrong at a triangle's edge, and why is <code>cross(dpdx(p), dpdy(p))</code> in the depth pass right there?</summary><p>At an edge, the neighbouring pixel can show the next triangle, or another surface altogether, so the step to it does not lie in the sample's triangle, and neither does the normal built from it. In the depth pass, the derivatives come from the 2&times;2 quad the fragment shader runs in. Pixels of the quad outside the triangle still run, as helper invocations of the same triangle, with its attributes extrapolated over its plane. So both derivatives lie in that one plane, and their cross product is its normal, at the edge as in the middle.</p></details>
+    <details class="check"><summary>An inside ray's nearest hit is a front face. What does the mask conclude, and why is that the safe answer?</summary><p>The light is hidden. A ray that starts just inside a closed mesh should first meet the back of a triangle, where it leaves. A front face means it met something else first: an occluder it entered from outside, or another shell or mesh it started inside of. Hiding is the answer that cannot let light into a cast shadow. Its cost is the occasional dark pixel where shells overlap, as on the helmet.</p></details>
+    <details class="check"><summary>Why does the mask hide a light with no ray only past &minus;sin 2&deg;, rather than at zero?</summary><p>The interpolated normal reaches the mask through two 8-bit octahedral coordinates, within 0.95&deg; of the lit pass's on Metal and about twice that where Vulkan rounds to either neighbour. At zero, a pixel whose stored normal had rounded just past the horizon would be hidden while the lit pass's interpolated normal still faced the light. Within the 2&deg; margin the mask traces a ray instead, and the lit pass's clamp of N&middot;L at zero darkens whatever is truly past the horizon.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the code are pinned to b8bb97f.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/350">Ticket #350</a> <span>the steps on the helmet and the sphere, the three options, the acceptance criteria</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/350#issuecomment-6468831265">The owner's decision on #350</a> <span>option 2b, its measured cost, and the alternatives declined</span></li>
+        <li><a href="https://github.com/gariasf/praxis/pull/366">PR #366</a> <span>the images, the metrics, the sources checked and the review</span></li>
+      </ul>
+      <h4>The code</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/main.wgsl"><code>src/render/shaders/main.wgsl</code></a> <span><code>vs_depth_normals</code>, <code>fs_surface_normals</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/shadow_mask.wgsl"><code>src/render/shaders/shadow_mask.wgsl</code></a> <span><code>shadowed</code>, <code>nearest_hit</code>, <code>hit_any</code> and the margins</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shaders/common.wgsl"><code>src/render/shaders/common.wgsl</code></a> <span><code>octahedral_encode</code>, <code>octahedral_decode</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/targets.rs"><code>src/render/targets.rs</code></a> <span><code>SURFACE_NORMALS_FORMAT</code> and the target</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/src/render/shader_function_tests.rs"><code>src/render/shader_function_tests.rs</code></a> <span>the octahedral oracle and its 0.95&deg; bound</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/tests/shadows.rs"><code>tests/shadows.rs</code></a> <span>the analytic test, now judging the terminator band</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8bb97f0a1e30d535b4bbbdd09235d35c87e3e0f/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the main pass, amended for the surface normals</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and specifications</h3>
+      <ul>
+        <li>Hanika, "Hacking the Shadow Terminator", in <a href="https://link.springer.com/book/10.1007/978-1-4842-7185-8"><i>Ray Tracing Gems II</i></a>, chapter 4, Apress, 2021 (open access) <span>option 1: moving the origin by the shading normals, the general treatment of the terminator</span></li>
+        <li>Cigolle, Donow, Evangelakos, Mara, McGuire and Meyer, <a href="https://jcgt.org/published/0003/02/01/">"Survey of Efficient Representations for Independent Unit Vectors"</a>, JCGT 2014 <span>octahedral coordinates against the alternatives, with their errors per bit count</span></li>
+        <li>W&auml;chter and Binder, "A Fast and Robust Method for Avoiding Self-Intersection", in <a href="https://link.springer.com/book/10.1007/978-1-4842-4427-2"><i>Ray Tracing Gems</i></a>, chapter 6, Apress, 2019 (open access) <span>offsetting a ray's origin off a surface, the problem the offset scale solves</span></li>
+        <li>Khronos, <a href="https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#ray-traversal-culling-face">Vulkan specification, Ray Traversal: Face Culling</a> <span>which side of a triangle is its front, decided in object space</span></li>
+        <li>W3C, <a href="https://www.w3.org/TR/WGSL/#helper-invocation">WGSL, helper invocations</a> <span>the quad's extra invocations that make derivatives work at a triangle's edge</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Pharr, Jakob and Humphreys, <a href="https://pbr-book.org/4ed/Shapes/Managing_Rounding_Error"><i>Physically Based Rendering</i>, 4th edition, section 6.8, Managing Rounding Error</a> <span>where a spawned ray's origin must sit to avoid its own surface</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Surface normals, Shadow mask, Reference scene and Golden are <code>CONTEXT.md</code>'s definitions at b8bb97f. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Surface normals</dt><dd>Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.</dd></div>
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.</dd></div>
+    <div><dt>Terminator</dt><dd>The line where a curved surface turns from facing a light to facing away from it.</dd></div>
+    <div><dt>Smooth shading</dt><dd>Shading flat triangles with normals interpolated from their vertices, so a coarse mesh looks curved.</dd></div>
+    <div><dt>Octahedral coordinates</dt><dd>Two numbers in [&minus;1, 1] for a unit vector: its projection onto the octahedron |x| + |y| + |z| = 1, with the lower half folded over the upper.</dd></div>
+    <div><dt>Front face</dt><dd>The side of a triangle that its normal, taken from its vertices in index order (counter-clockwise), points toward. Its other side is the back face.</dd></div>
+    <div><dt>Inside origin</dt><dd>A shadow ray started just inside the surface, against the triangle normal, which passes the nearest hit only if it is a back face.</dd></div>
+    <div><dt>Helper invocation</dt><dd>A fragment shader invocation for a pixel of a 2&times;2 quad that its triangle does not cover. It runs so that derivatives have neighbours, and writes nothing.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/350">#350</a>, PR <a href="https://github.com/gariasf/praxis/pull/366">#366</a> at b8bb97f, the code and tests at that commit, <code>CONTEXT.md</code>, ADR 0019 and the sources in the reading list. The cost figures and image counts are the PR's own, on the M4 Pro. The octahedral error over 400,000 directions is this page's arithmetic, in f64. The terminator demo is this page's two-dimensional model of the shader's rules, not a trace of the GPU's.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="specular-antialiasing.html">Previous: Specular Antialiasing Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const degree = Math.PI / 180;
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function sizeCanvas(canvas, width, height) {
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.aspectRatio = width + " / " + height;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return context;
+  }
+  function pointerAt(canvas, event, width, height) {
+    const box = canvas.getBoundingClientRect();
+    return [(event.clientX - box.left) * width / box.width, (event.clientY - box.top) * height / box.height];
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+  const format = (value, digits) => value.toFixed(digits).replace("-", "−");
+
+  // ---- Demo 1: octahedral coordinates, as common.wgsl encodes and decodes them.
+  function octahedralEncode(x, y, z) {
+    const sum = Math.abs(x) + Math.abs(y) + Math.abs(z);
+    const u = x / sum, v = y / sum;
+    if (z >= 0) return [u, v];
+    return [(1 - Math.abs(v)) * (u >= 0 ? 1 : -1), (1 - Math.abs(u)) * (v >= 0 ? 1 : -1)];
+  }
+  function octahedralDecode(u, v) {
+    const z = 1 - Math.abs(u) - Math.abs(v);
+    let x = u, y = v;
+    if (z < 0) {
+      x = (1 - Math.abs(v)) * (u >= 0 ? 1 : -1);
+      y = (1 - Math.abs(u)) * (v >= 0 ? 1 : -1);
+    }
+    const length = Math.hypot(x, y, z);
+    return [x / length, y / length, z / length];
+  }
+  // A coordinate in [-1, 1] stored in `bits` from [0, 1] and read back, rounded to nearest.
+  function stored(coordinate, bits) {
+    const steps = (1 << bits) - 1;
+    return Math.round((coordinate * 0.5 + 0.5) * steps) / steps * 2 - 1;
+  }
+  function angleBetween(a, b) {
+    return Math.acos(Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))) / degree;
+  }
+  // The test's 4,110 directions: the six axes, eight edge directions and a 4,096-point Fibonacci lattice.
+  const testDirections = (() => {
+    const directions = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0], [0, -1, 0], [0, 0, -1]];
+    const edges = [[1, 1, 0], [1, 0, -1], [0, -1, -1], [-1, 1, 0]].map(([x, y, z]) => {
+      const length = Math.hypot(x, y, z);
+      return [x / length, y / length, z / length];
+    });
+    edges.forEach((edge) => directions.push(edge, edge.map((c) => -c)));
+    const count = 4096, golden = Math.PI * (3 - Math.sqrt(5));
+    for (let index = 0; index < count; index++) {
+      const z = 1 - (2 * index + 1) / count, radius = Math.sqrt(1 - z * z), angle = golden * index;
+      directions.push([radius * Math.cos(angle), radius * Math.sin(angle), z]);
+    }
+    return directions;
+  })();
+  function largestError(bits) {
+    let largest = 0;
+    for (const direction of testDirections) {
+      const [u, v] = octahedralEncode(direction[0], direction[1], direction[2]);
+      largest = Math.max(largest, angleBetween(direction, octahedralDecode(stored(u, bits), stored(v, bits))));
+    }
+    return largest;
+  }
+
+  // ---- Demo 2: a cross-section of a coarse sphere, and each sample's shadow ray toward the sun.
+  const RADIUS = 0.5;
+  const OFFSET = 1.52587890625e-5; // the shader's 2^-16 m, for a point within 1 m of the camera
+  const INTERPOLATED_TURN_MARGIN = Math.sin(2 * degree);
+  const AGREEING_TRIANGLE_TURN_MARGIN = Math.sin(5 * degree);
+  const TRIANGLE_TURN_MARGIN = Math.sin(10 * degree);
+  const NORMALS_AGREE = Math.cos(3 * degree);
+  const SAMPLES = 96;
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const along = (point, direction, distance) => [point[0] + direction[0] * distance, point[1] + direction[1] * distance];
+  const unit = (a) => { const length = Math.hypot(a[0], a[1]); return [a[0] / length, a[1] / length]; };
+
+  function buildScene(facets, sunAngle) {
+    const sun = [Math.cos(sunAngle * degree), Math.sin(sunAngle * degree)];
+    const side = [-sun[1], sun[0]];
+    const segments = [];
+    const vertices = [];
+    for (let index = 0; index < facets; index++) {
+      const angle = 2 * Math.PI * index / facets;
+      vertices.push([RADIUS * Math.cos(angle), RADIUS * Math.sin(angle)]);
+    }
+    for (let index = 0; index < facets; index++) {
+      const start = vertices[index], end = vertices[(index + 1) % facets];
+      const edge = [end[0] - start[0], end[1] - start[1]];
+      segments.push({ start, end, normal: unit([edge[1], -edge[0]]), mesh: "sphere", facet: index });
+    }
+    // A block that turns with the sun, so its shadow always falls across one terminator.
+    const centre = along(along([0, 0], side, RADIUS), sun, 0.85), half = 0.08;
+    const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([a, b]) => along(along(centre, sun, a * half), side, b * half));
+    for (let index = 0; index < 4; index++) {
+      const start = corners[index], end = corners[(index + 1) % 4];
+      const edge = [end[0] - start[0], end[1] - start[1]];
+      segments.push({ start, end, normal: unit([-edge[1], edge[0]]), mesh: "block" });
+    }
+    // Outward normals for the block: its corners run counter-clockwise, so flip if one points inward.
+    segments.filter((segment) => segment.mesh === "block").forEach((segment) => {
+      const middle = [(segment.start[0] + segment.end[0]) / 2 - centre[0], (segment.start[1] + segment.end[1]) / 2 - centre[1]];
+      if (dot(segment.normal, middle) < 0) segment.normal = [-segment.normal[0], -segment.normal[1]];
+    });
+    const perFacet = Math.max(2, Math.round(SAMPLES / facets));
+    const samples = [];
+    for (let index = 0; index < facets; index++) {
+      const start = vertices[index], end = vertices[(index + 1) % facets];
+      for (let step = 0; step < perFacet; step++) {
+        const t = (step + 0.5) / perFacet;
+        const point = [start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t];
+        const startNormal = unit(start), endNormal = unit(end);
+        const interpolated = unit([startNormal[0] * (1 - t) + endNormal[0] * t, startNormal[1] * (1 - t) + endNormal[1] * t]);
+        samples.push({ point, triangle: segments[index].normal, interpolated, facet: index });
+      }
+    }
+    return { sun, side, segments, samples, centre, half, corners, vertices };
+  }
+
+  // The nearest crossing of the ray with a segment, from `near` to `far`.
+  function intersect(origin, direction, segment, near, far) {
+    const edge = [segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]];
+    const denominator = direction[0] * edge[1] - direction[1] * edge[0];
+    if (denominator === 0) return null;
+    const relative = [segment.start[0] - origin[0], segment.start[1] - origin[1]];
+    const t = (relative[0] * edge[1] - relative[1] * edge[0]) / denominator;
+    const s = (relative[0] * direction[1] - relative[1] * direction[0]) / denominator;
+    if (s < 0 || s > 1 || t < near || t > far) return null;
+    return { t, segment, frontFace: dot(segment.normal, direction) < 0 };
+  }
+  function nearestHit(scene, origin, direction, near, far) {
+    let best = null;
+    for (const segment of scene.segments) {
+      const hit = intersect(origin, direction, segment, near, far);
+      if (hit && (!best || hit.t < best.t)) best = hit;
+    }
+    return best;
+  }
+  const blockShadows = (scene, point) => scene.segments.some((segment) => segment.mesh === "block" && intersect(point, scene.sun, segment, 0, Infinity));
+
+  // What each rule decides for one sample: whether it hides the sun, and how it got there.
+  function decide(scene, sample, rule) {
+    const sun = scene.sun;
+    const interpolatedFacing = dot(sample.interpolated, sun);
+    const facing = dot(sample.triangle, sun);
+    const outside = along(sample.point, sample.triangle, OFFSET);
+    if (rule === "face") {
+      if (facing <= 0) return { hidden: true, path: "none" };
+      const hit = nearestHit(scene, outside, sun, 0, Infinity);
+      return { hidden: !!hit, path: "outside", origin: outside, hit };
+    }
+    if (rule === "skip") {
+      if (interpolatedFacing <= 0) return { hidden: true, path: "none" };
+      if (facing <= 0) return { hidden: false, path: "skipped" };
+      const hit = nearestHit(scene, outside, sun, 0, Infinity);
+      return { hidden: !!hit, path: "outside", origin: outside, hit };
+    }
+    if (interpolatedFacing <= -INTERPOLATED_TURN_MARGIN) return { hidden: true, path: "none" };
+    if (facing >= TRIANGLE_TURN_MARGIN || (facing >= AGREEING_TRIANGLE_TURN_MARGIN && dot(sample.triangle, sample.interpolated) >= NORMALS_AGREE)) {
+      const hit = nearestHit(scene, outside, sun, 0, Infinity);
+      return { hidden: !!hit, path: "outside", origin: outside, hit };
+    }
+    const origin = along(sample.point, sample.triangle, -OFFSET);
+    const exit = nearestHit(scene, origin, sun, 0, Infinity);
+    if (!exit) return { hidden: false, path: "inside", origin };
+    if (exit.frontFace) return { hidden: true, path: "inside", origin, exit };
+    const beyond = nearestHit(scene, origin, sun, exit.t + OFFSET, Infinity);
+    return { hidden: !!beyond, path: "inside", origin, exit, hit: beyond };
+  }
+  function classify(scene, sample, rule) {
+    const decision = decide(scene, sample, rule);
+    const facesSun = dot(sample.interpolated, scene.sun) > 0;
+    const lit = facesSun && !decision.hidden;
+    const truth = facesSun && !blockShadows(scene, sample.point);
+    const kind = lit === truth ? (lit ? "lit" : "dark") : (lit ? "wrong-lit" : "wrong-dark");
+    return { decision, lit, truth, kind };
+  }
+
+  if (typeof module !== "undefined") {
+    module.exports = { octahedralEncode, octahedralDecode, stored, largestError, testDirections, buildScene, decide, classify };
+    return;
+  }
+
+  // ---- Demo 1, drawn.
+  (function () {
+    const canvas = document.getElementById("o-canvas");
+    if (!canvas) return;
+    const SIZE = 320;
+    let bits = 4;
+    let probe = [0.62, -0.18];
+    const errors = {};
+    function draw() {
+      const context = sizeCanvas(canvas, SIZE, SIZE);
+      const scale = ratio();
+      const pixels = Math.round(SIZE * scale);
+      const image = context.createImageData(pixels, pixels);
+      for (let row = 0; row < pixels; row++) {
+        for (let column = 0; column < pixels; column++) {
+          const u = (column + 0.5) / pixels * 2 - 1, v = 1 - (row + 0.5) / pixels * 2;
+          const normal = octahedralDecode(stored(u, bits), stored(v, bits));
+          const at = (row * pixels + column) * 4;
+          image.data[at] = Math.round((normal[0] * 0.5 + 0.5) * 255);
+          image.data[at + 1] = Math.round((normal[1] * 0.5 + 0.5) * 255);
+          image.data[at + 2] = Math.round((normal[2] * 0.5 + 0.5) * 255);
+          image.data[at + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      const toCanvas = (u, v) => [(u + 1) / 2 * SIZE, (1 - v) / 2 * SIZE];
+      context.strokeStyle = "rgba(0, 0, 0, 0.55)";
+      context.lineWidth = 1.5;
+      context.setLineDash([5, 4]);
+      context.beginPath();
+      [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 0]].forEach(([u, v], index) => {
+        const [x, y] = toCanvas(u, v);
+        if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+      });
+      context.stroke();
+      context.setLineDash([]);
+      const [x, y] = toCanvas(probe[0], probe[1]);
+      context.lineWidth = 2;
+      context.strokeStyle = "#000";
+      context.beginPath(); context.arc(x, y, 7, 0, 2 * Math.PI); context.stroke();
+      context.strokeStyle = "#fff";
+      context.beginPath(); context.arc(x, y, 9, 0, 2 * Math.PI); context.stroke();
+      readout();
+    }
+    function readout() {
+      const direction = octahedralDecode(probe[0], probe[1]);
+      const [u, v] = octahedralEncode(direction[0], direction[1], direction[2]);
+      const steps = (1 << bits) - 1;
+      const storedU = Math.round((u * 0.5 + 0.5) * steps), storedV = Math.round((v * 0.5 + 0.5) * steps);
+      const back = octahedralDecode(stored(u, bits), stored(v, bits));
+      const vector = (a) => "(" + a.map((c) => format(c, 3)).join(", ") + ")";
+      if (errors[bits] === undefined) errors[bits] = largestError(bits);
+      document.getElementById("o-readout").innerHTML =
+        "Direction <b>" + vector(direction) + "</b>, " + (direction[2] >= 0 ? "upper half" : "lower half, folded") +
+        ".<br>Coordinates (" + format(u, 3) + ", " + format(v, 3) + ") stored as <b>" + storedU + ", " + storedV + "</b> of " + steps +
+        ".<br>Read back as " + vector(back) + ": <b>" + format(angleBetween(direction, back), 2) + "&deg;</b> off.";
+      document.getElementById("o-largest").innerHTML =
+        "Largest error over the test's 4,110 directions at " + bits + " bits: <b>" + format(errors[bits], 2) + "&deg;</b>" +
+        (bits === 8 ? ", inside the test's bound of 0.95&deg;." : ".");
+    }
+    function move(event) {
+      const [x, y] = pointerAt(canvas, event, SIZE, SIZE);
+      probe = [Math.max(-1, Math.min(1, x / SIZE * 2 - 1)), Math.max(-1, Math.min(1, 1 - y / SIZE * 2))];
+      draw();
+    }
+    canvas.addEventListener("pointerdown", (event) => { canvas.setPointerCapture(event.pointerId); move(event); });
+    canvas.addEventListener("pointermove", (event) => { if (event.buttons || event.pointerType === "mouse") move(event); });
+    segmented(document.getElementById("o-bits"), "bits", (value) => { bits = Number(value); draw(); });
+    draw();
+  })();
+
+  // ---- Demo 2, drawn.
+  (function () {
+    const canvas = document.getElementById("t2-canvas");
+    if (!canvas) return;
+    const WIDTH = 560, HEIGHT = 440, SCALE = 180;
+    const slider = document.getElementById("t2-sun");
+    let facets = 12, rule = "inside", selected = null;
+    const toCanvas = (p) => [WIDTH / 2 + p[0] * SCALE, HEIGHT / 2 - p[1] * SCALE];
+    const toWorld = (x, y) => [(x - WIDTH / 2) / SCALE, (HEIGHT / 2 - y) / SCALE];
+    function defaultSample(scene) {
+      // Under the block, the sample whose facet turns furthest from the sun while its interpolated normal faces it.
+      let best = null, bestFacing = Infinity;
+      scene.samples.forEach((sample, index) => {
+        const facing = dot(sample.triangle, scene.sun);
+        if (dot(sample.interpolated, scene.sun) > 0 && facing < bestFacing && dot(sample.point, scene.side) > 0) { best = index; bestFacing = facing; }
+      });
+      return best;
+    }
+    function rayEnd(origin, direction, hit) {
+      if (hit) return along(origin, direction, hit.t);
+      return along(origin, direction, 3);
+    }
+    function draw() {
+      const sunAngle = Number(slider.value);
+      document.getElementById("t2-sun-out").textContent = sunAngle + "°";
+      const scene = buildScene(facets, sunAngle);
+      if (selected === null || selected >= scene.samples.length) selected = defaultSample(scene);
+      const context = sizeCanvas(canvas, WIDTH, HEIGHT);
+      const ink = css("--ink"), soft = css("--ink-soft"), accent = css("--accent"), warm = css("--warm"), bad = css("--bad"), panel = css("--panel"), rule_ = css("--rule");
+      context.fillStyle = panel;
+      context.fillRect(0, 0, WIDTH, HEIGHT);
+      // The block's shadow, toward the sphere.
+      context.fillStyle = css("--figure-bg");
+      context.beginPath();
+      const far = scene.corners.map((corner) => toCanvas(along(corner, scene.sun, -3)));
+      const near = scene.corners.map(toCanvas);
+      const hull = [near[0], near[1], far[1], far[2], far[3], near[3]];
+      hull.forEach(([x, y], index) => { if (index === 0) context.moveTo(x, y); else context.lineTo(x, y); });
+      context.closePath();
+      context.fill();
+      // The true circle, dotted, and the facets.
+      const [cx, cy] = toCanvas([0, 0]);
+      context.setLineDash([2, 4]);
+      context.strokeStyle = soft;
+      context.lineWidth = 1;
+      context.beginPath(); context.arc(cx, cy, RADIUS * SCALE, 0, 2 * Math.PI); context.stroke();
+      context.setLineDash([]);
+      context.strokeStyle = ink;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      scene.vertices.concat([scene.vertices[0]]).forEach((vertex, index) => {
+        const [x, y] = toCanvas(vertex);
+        if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+      });
+      context.stroke();
+      // The block.
+      context.fillStyle = soft;
+      context.beginPath();
+      near.forEach(([x, y], index) => { if (index === 0) context.moveTo(x, y); else context.lineTo(x, y); });
+      context.closePath();
+      context.fill();
+      // True terminators.
+      context.strokeStyle = warm;
+      context.lineWidth = 2;
+      [1, -1].forEach((sign) => {
+        const a = toCanvas(along([0, 0], scene.side, sign * (RADIUS - 0.04)));
+        const b = toCanvas(along([0, 0], scene.side, sign * (RADIUS + 0.04)));
+        context.beginPath(); context.moveTo(a[0], a[1]); context.lineTo(b[0], b[1]); context.stroke();
+      });
+      // The sun's direction.
+      const sunFrom = toCanvas(along([0, 0], scene.sun, 1.12)), sunTo = toCanvas(along([0, 0], scene.sun, 0.92));
+      context.strokeStyle = warm;
+      context.lineWidth = 2.5;
+      context.beginPath(); context.moveTo(sunFrom[0], sunFrom[1]); context.lineTo(sunTo[0], sunTo[1]); context.stroke();
+      context.fillStyle = warm;
+      context.beginPath(); context.arc(sunFrom[0], sunFrom[1], 7, 0, 2 * Math.PI); context.fill();
+      // The selected sample's ray.
+      const results = scene.samples.map((sample) => classify(scene, sample, rule));
+      const chosen = scene.samples[selected], chosenResult = results[selected];
+      const decision = chosenResult.decision;
+      if (decision.origin) {
+        const start = toCanvas(chosen.point);
+        const end = toCanvas(rayEnd(decision.origin, scene.sun, decision.hit || (decision.exit && decision.exit.frontFace ? decision.exit : null)));
+        context.strokeStyle = decision.path === "inside" ? warm : accent;
+        context.lineWidth = 1.75;
+        context.beginPath(); context.moveTo(start[0], start[1]); context.lineTo(end[0], end[1]); context.stroke();
+        if (decision.exit && !decision.exit.frontFace) {
+          const [ex, ey] = toCanvas(along(decision.origin, scene.sun, decision.exit.t));
+          context.strokeStyle = warm;
+          context.lineWidth = 2;
+          context.beginPath(); context.arc(ex, ey, 5, 0, 2 * Math.PI); context.stroke();
+        }
+      }
+      // The samples, each drawn just off its facet.
+      scene.samples.forEach((sample, index) => {
+        const [x, y] = toCanvas(along(sample.point, sample.triangle, 0.035));
+        const kind = results[index].kind;
+        context.lineWidth = 1.5;
+        if (kind === "lit" || kind === "wrong-lit") { context.fillStyle = accent; context.strokeStyle = accent; }
+        else if (kind === "dark") { context.fillStyle = panel; context.strokeStyle = soft; }
+        else { context.fillStyle = bad; context.strokeStyle = bad; }
+        context.beginPath(); context.arc(x, y, 4, 0, 2 * Math.PI); context.fill(); context.stroke();
+        if (kind === "wrong-dark") {
+          context.strokeStyle = panel;
+          context.beginPath(); context.moveTo(x - 3, y - 3); context.lineTo(x + 3, y + 3); context.moveTo(x - 3, y + 3); context.lineTo(x + 3, y - 3); context.stroke();
+        }
+        if (kind === "wrong-lit") {
+          context.strokeStyle = bad;
+          context.beginPath(); context.arc(x, y, 7.5, 0, 2 * Math.PI); context.stroke();
+        }
+        if (index === selected) {
+          context.strokeStyle = ink;
+          context.lineWidth = 1.25;
+          context.strokeRect(x - 10, y - 10, 20, 20);
+        }
+      });
+      context.strokeStyle = rule_;
+      readout(scene, results);
+    }
+    function readout(scene, results) {
+      const counts = { "wrong-dark": 0, "wrong-lit": 0 };
+      let inside = 0;
+      results.forEach((result) => {
+        if (result.kind in counts) counts[result.kind]++;
+        if (result.decision.path === "inside") inside++;
+      });
+      const sample = scene.samples[selected], result = results[selected], decision = result.decision;
+      const interpolatedAngle = 90 - Math.acos(Math.max(-1, Math.min(1, dot(sample.interpolated, scene.sun)))) / degree;
+      const triangleAngle = 90 - Math.acos(Math.max(-1, Math.min(1, dot(sample.triangle, scene.sun)))) / degree;
+      const facesText = (angle) => Math.abs(angle) < 0.05 ? "is edge-on to it" : angle >= 0 ? "faces it by " + format(angle, 1) + "&deg;" : "turns from it by " + format(-angle, 1) + "&deg;";
+      const where = (hit) => hit.segment.mesh === "block" ? "the block" : "a facet";
+      let story;
+      if (decision.path === "none") story = "No ray: the rule hides the sun with the surface itself.";
+      else if (decision.path === "skipped") story = "No ray: the rejected rule lights it, whatever stands in the way.";
+      else if (decision.path === "outside") story = "Ray from just outside its facet: " + (decision.hit ? "hits " + where(decision.hit) + " at " + format(decision.hit.t, 2) + " m." : "reaches the sun.");
+      else if (!decision.exit) story = "Ray from just inside: no hit at all.";
+      else if (decision.exit.frontFace) story = "Ray from just inside: its nearest hit is the front of " + where(decision.exit) + ", so the sun is hidden.";
+      else story = "Ray from just inside: its nearest hit, " + format(decision.exit.t * 100, 2) + " cm on, is the back of a facet, where the ray leaves the sphere; passed. Beyond it: " + (decision.hit ? where(decision.hit) + " at " + format(decision.hit.t, 2) + " m." : "nothing.");
+      const verdict = result.kind === "wrong-dark" ? "<span class=\"bad-text\">Wrong: dark where the shading says lit.</span>"
+        : result.kind === "wrong-lit" ? "<span class=\"bad-text\">Wrong: lit in the block's shadow.</span>"
+        : "<span class=\"good-text\">Right" + (result.lit ? ": lit." : ": dark.") + "</span>";
+      document.getElementById("t2-note").innerHTML =
+        "Selected sample: its interpolated normal " + facesText(interpolatedAngle) + ", its facet " + facesText(triangleAngle) + ". " + story + " " + verdict;
+      document.getElementById("t2-counts").innerHTML =
+        "Of " + results.length + " samples: <b>" + counts["wrong-dark"] + "</b> dark where the shading says lit, <b>" + counts["wrong-lit"] + "</b> lit in the block's shadow" +
+        (rule === "inside" ? "; <b>" + inside + "</b> start their ray inside." : ".");
+    }
+    canvas.addEventListener("pointerdown", (event) => {
+      const [x, y] = pointerAt(canvas, event, WIDTH, HEIGHT);
+      const point = toWorld(x, y);
+      const scene = buildScene(facets, Number(slider.value));
+      let best = 0, bestDistance = Infinity;
+      scene.samples.forEach((sample, index) => {
+        const distance = Math.hypot(sample.point[0] - point[0], sample.point[1] - point[1]);
+        if (distance < bestDistance) { best = index; bestDistance = distance; }
+      });
+      selected = best;
+      draw();
+    });
+    slider.addEventListener("input", () => { selected = null; draw(); });
+    segmented(document.getElementById("t2-facets"), "facets", (value) => { facets = Number(value); selected = null; draw(); });
+    segmented(document.getElementById("t2-rule"), "rule", (value) => { rule = value; draw(); });
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+    window.addEventListener("resize", draw);
+    draw();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

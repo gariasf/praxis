@@ -237,6 +237,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="specular-antialiasing.html" aria-label="Read Specular Antialiasing Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="shadow-terminator.html">Shadow Terminator Explained</a></h3>
+        <p class="meta">M3 · ticket #350 · PR #366</p>
+        <p class="summary">Follows #350's fix for the terminator that stepped along a coarse smooth-shaded mesh's triangles, where the shadow mask hid each light from whole triangles that turn from it while their interpolated normals face it. It covers why skipping the ray there leaks light into cast shadows, the Surface normals the depth passes now write, each sample's triangle normal from screen-space derivatives and its interpolated normal, packed as 8-bit octahedral coordinates within 0.95°, and the ray that starts inside the surface and passes only the back face where it leaves its own mesh, with live demos. It costs town's GPU frame about 2.8 ms.</p>
+        <a class="read" href="shadow-terminator.html" aria-label="Read Shadow Terminator Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
