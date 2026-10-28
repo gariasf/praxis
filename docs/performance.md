@@ -4,6 +4,97 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## `town`'s submit is wgpu's TLAS bookkeeping, not a GPU wait (2026-10-28, #352)
+
+**Verdict.** `town`'s 13 ms `submit` stage is CPU work inside
+`queue.submit`, not the main thread waiting on the GPU. wgpu-core 30.0.1
+records a TLAS's dependencies as one BLAS per Instance it holds, not one
+per distinct BLAS [ref:wgpu-30-tlas-dependency-per-instance]: about
+244,000 in the static TLAS. Each flush of a bind group holding a TLAS
+adds a use [ref:wgpu-30-use-tlas-per-flush], and at submit every use
+walks that whole list twice. Validation reads each BLAS's build index
+[ref:wgpu-30-validate-tlas-dependencies], and every dependency joins a residency set made fresh for the submission
+[ref:wgpu-30-submit-tlas-dependencies], one `addAllocation` each on Metal
+[ref:wgpu-hal-30-metal-residency-per-submit]. The scene-geometry group
+holds both TLAS, and the culling phases, the depth passes, the shadow
+mask pass and the lit pass all bind it. #204's hand-off to #207 named
+this mechanism; these runs measure it. The CPU frame already excludes
+GPU waits: capture waits on the oldest frame in flight before `update`,
+and a window waits in `get_current_texture`. So the CPU frame is the
+main thread's critical path, and the owner kept criterion 1 and ADR
+0013's CPU Budget on it, with no new line
+([decision](https://github.com/gariasf/praxis/issues/352#issuecomment-6479018726)). Upstream
+fixed the duplication on trunk after 30.0.0, in
+gfx-rs/wgpu#9835 [ref:wgpu-pr-9835], which is not in 30.0.1.
+
+**Tonemapping's 4 ms is overlap.** In every measured frame the tonemapping
+pass's start timestamp lands about 3.7 ms before the lit pass's end, and
+its end lands 0.32 ms after it. With its draw removed, the pass reads 32
+µs and the GPU frame drops 0.24 to 0.28 ms. Its own cost is about 0.3 ms, and the
+rest of its 4 ms is the lit pass's tail. Per-pass times on Metal overlap,
+so they do not sum to the GPU frame. The GPU frame and the gate are the
+figures to judge.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of `main`
+at 5d03cf2 with a measurement patch, not committed. The patch logged each
+CPU stage's median and each frame's lit and tonemapping timestamps. It
+took frames in flight from an environment variable, with the readback
+ring and staging sized for three, which adds 33,552,512 bytes to
+`gpu_memory_bytes`. Switches turned off the tonemapping pass's draw, and
+bound a twin scene-geometry group whose TLAS bindings held an empty TLAS
+in every pass but the shadow mask pass. `praxis bench <dir> town` at
+2560×1440 with 4x MSAA, 1,800 measured frames, no other GPU work. A
+5-second `sample` of the main thread during the 2-in-flight run found
+2,695 of its 3,288 samples (82%) in these two wgpu-core functions, and
+the rest of `submit` at 36.
+
+Medians in µs. The rays-off figures come from the same run's second pass
+with shadow rays off.
+
+| Run | Frames in flight | `submit` | CPU frame | `submit`, rays off | CPU frame, rays off |
+|---|---:|---:|---:|---:|---:|
+| Base | 1 | 13,434 | 16,349 | 11,570 | 14,590 |
+| Base | 2 | 13,358 | 16,363 | 11,404 | 14,361 |
+| Base | 2 | 13,687 | 16,749 | 11,334 | 14,285 |
+| Base | 3 | 14,100 | 17,388 | 11,471 | 14,578 |
+| TLAS in the shadow mask pass only | 2 | 2,799 | 6,280 | 32 | 3,559 |
+| TLAS in the shadow mask pass only | 2 | 2,850 | 6,355 | 31 | 3,781 |
+
+With one frame in flight, the GPU is idle when `submit` starts, and
+`submit` reads the same: nothing in it waits on the GPU. With rays off,
+the split run's frame binds no TLAS, and its `submit` falls to 31 µs. The
+split run against `town`'s Baseline, as `praxis report` prints it:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 6,280.1 | 12,374.8 | 16,901.6 | 18,152.2 | -10,621.5 | 0.372 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,208.8 | 2,430.7 | 1,014.2 | 1,155.1 | +194.6 | 1.192 | 1,100.0 |
+| GPU frame | 16,505.6 | 17,392.0 | 15,399.8 | 16,383.5 | +1,105.9 | 1.072 | 12,000.0 |
+| Gate, rays off | 8,736.2 | 9,433.3 | 8,654.9 | 9,256.8 | +81.2 | 1.009 | 6,000.0 |
+| Shadow-ray time | 7,273.2 | 8,279.4 | 6,338.3 | 7,388.1 | +934.9 | 1.147 | — |
+| `dynamic_tlas_build` | 0.0 | 0.0 | 100.5 | 573.2 | -100.5 | 0.000 | 1,000.0 |
+| `lit_pass` | 5,605.7 | 6,122.8 | 11,269.8 | 12,014.8 | -5,664.0 | 0.497 | — |
+| `shadow_mask_pass` | 6,579.5 | 7,206.2 | 7,041.0 | 7,802.9 | -461.6 | 0.934 | — |
+| `tonemapping_pass` | 3,960.0 | 4,356.8 | 4,010.0 | 6,448.4 | -50.1 | 0.988 | — |
+
+The split takes 10.6 ms off the CPU frame, but the GPU frame grows 1.1
+ms, 0.9 ms of it in shadow-ray time. The cause is not yet measured: #378
+finds it before the split lands. Upstream's fix comes
+with wgpu 31, a dependency bump that is the owner's call.
+
+The tonemapping runs, both with two frames in flight. Timestamps are
+medians over the measured frames, relative to the lit pass's start:
+
+| Run | GPU frame | `tonemapping_pass` | Lit pass end | Tonemapping start | Tonemapping end |
+|---|---:|---:|---:|---:|---:|
+| Base | 15,374.6 | 4,029.4 | 11,271.9 | 7,564.8 | 11,594.6 |
+| Base | 15,417.4 | 4,035.3 | 11,255.6 | 7,568.4 | 11,583.5 |
+| Tonemapping draw removed | 15,134.2 | 32.4 | 11,265.1 | — | — |
+
+The tonemapping start came before the lit pass's end in every frame of
+both base runs, and in the one-in-flight run, whose end-to-end gap read
+320.3 µs.
+
 ## Meshlet culling prototyped on `town`: the gate stays past 6 ms (2026-10-28, #347)
 
 **Verdict.** Testing each Meshlet of a drawn Instance does not pay on
@@ -630,7 +721,11 @@ off. The GPU frame, the CPU frame and the gate are over their Budgets.
   Where it goes on `town` is not yet measured.
 - **Tonemapping reads 0.6 to 4 ms on every scene**, and 3.8 ms on `town`
   with one frame in flight. One full-screen pass should not take that
-  long. It is outside the gate, and its cause is not yet measured.
+  long. It is outside the gate. Measured 2026-10-28 (#352, section
+  above): it overlaps the lit pass, and its own cost is about 0.3 ms.
+- **CPU frame.** 13 of its 17 ms are `queue.submit`, which wgpu-core
+  30.0.1 spends walking the TLASes' per-Instance dependencies, not
+  waiting on the GPU (#352, section above).
 
 ## The crowd's two forms (2026-10-26, #209)
 

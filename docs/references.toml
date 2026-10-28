@@ -3222,3 +3222,66 @@ url = "https://www.microsoft.com/en-us/research/?p=159994"
 section = "Fatahalian, Boulos, Hegarty, Akeley, Mark, Moreton and Hanrahan, Reducing Shading on GPUs using Quad-Fragment Merging, ACM Transactions on Graphics 29(4), SIGGRAPH 2010, abstract"
 quote = '''We address this inefficiency by augmenting the GPU pipeline to gather and merge rasterized fragments from adjacent triangles in a mesh.'''
 checked = 2026-10-28
+
+["wgpu-30-tlas-dependency-per-instance"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L268-L270"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, the TLAS build's loop over its instances: one dependency pushed per instance, not per distinct BLAS"
+quote = '''            instance_count += 1;
+
+            dependencies.push(blas.clone());'''
+checked = 2026-10-28
+
+["wgpu-30-use-tlas-per-flush"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174"
+section = "wgpu-core 30.0.1, command/pass.rs, flush_bindings_helper: each bind group flushed records a UseTlas action per TLAS it holds"
+quote = '''pub(super) fn flush_bindings_helper(state: &mut PassState) -> Result<(), DestroyedResourceError> {
+[...]
+        let used_resource = bind_group
+            .used
+            .acceleration_structures
+            .into_iter()
+            .map(|tlas| crate::ray_tracing::AsAction::UseTlas(tlas.clone()));
+
+        state.base.as_actions.extend(used_resource);'''
+checked = 2026-10-28
+
+["wgpu-30-validate-tlas-dependencies"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L515-L523"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, validate_acceleration_structure_actions, run at submit: each UseTlas action reads the build index of every dependency"
+quote = '''                AsAction::UseTlas(tlas) => {
+                    let tlas_build_index = tlas.built_index.read();
+                    let dependencies = tlas.dependencies.read();
+[...]
+                    for blas in dependencies.deref() {
+                        let blas_build_index = *blas.built_index.read();'''
+checked = 2026-10-28
+
+["wgpu-30-submit-tlas-dependencies"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, set_acceleration_structure_dependencies, run at submit: every dependency of every UseTlas action is passed on"
+quote = '''                AsAction::UseTlas(_tlas) => {
+                    let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
+                    for dependency in tlas_dependencies.iter() {
+                        if let Some(dependency) = dependency.raw(snatch_guard) {
+                            dependencies.push(dependency);
+                        }
+                    }
+                }'''
+checked = 2026-10-28
+
+["wgpu-hal-30-metal-residency-per-submit"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1896-L1917"
+section = "wgpu-hal 30.0.1, metal/command.rs, set_acceleration_structure_dependencies: a new residency set per submission, one addAllocation per dependency"
+quote = '''            .newResidencySetWithDescriptor_error(&desc)
+[...]
+        for dependency in dependencies {
+            residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
+        }
+        residency_set.commit();'''
+checked = 2026-10-28
+
+["wgpu-pr-9835"]
+url = "https://github.com/gfx-rs/wgpu/pull/9835"
+section = "gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS (merged into trunk 2026-07-17, after v30.0.0; not in v30.0.1)"
+quote = '''A built TLAS recorded one dependency entry per instance, making Queue::submit's acceleration-structure validation and residency tracking O(instance count). Collapse to unique BLASes via a FastHashSet<TrackerIndex> so it is O(unique BLASes) instead.'''
+checked = 2026-10-28
