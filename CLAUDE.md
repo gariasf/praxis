@@ -91,7 +91,8 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image,
-                                 and where its Goldens live
+                                 where its Goldens live, and how two
+                                 images differ
   preflight/                   # `praxis preflight`: a session's starting
                                  state, a line per check
   bench/                       # Reference scene medians, compared with
@@ -179,6 +180,9 @@ bench/                         # budgets.json (ADR 0013) and baselines/
 scripts/pr-lint.sh             # CI's PR form check: body and commits
                                  against docs/agents/workflow.md, tested
                                  by scripts/pr-lint-test.sh
+scripts/gallery.sh             # the visual audit's capture gallery: each
+                                 Reference scene at 2560x1440, with
+                                 difference images against an earlier one
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets

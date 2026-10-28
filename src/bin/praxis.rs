@@ -45,6 +45,13 @@ enum Command {
         output: String,
         size: String,
         crowd_form: CrowdForm,
+        frame: Option<u32>,
+    },
+    #[cfg(feature = "cook")]
+    Difference {
+        expected: String,
+        actual: String,
+        output: String,
     },
     Bench {
         output: String,
@@ -76,7 +83,14 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             output,
             size,
             crowd_form,
-        } => capture(&scene, &output, &size, crowd_form),
+            frame,
+        } => capture(&scene, &output, &size, crowd_form, frame),
+        #[cfg(feature = "cook")]
+        Command::Difference {
+            expected,
+            actual,
+            output,
+        } => difference(&expected, &actual, &output),
         Command::Bench {
             output,
             configuration,
@@ -89,14 +103,30 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
 }
 
 fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
-    let (arguments, crowd_form) = take_crowd_form(arguments)?;
-    let takes_crowd_form = matches!(
-        arguments.first().map(String::as_str),
-        Some("bench" | "capture")
+    let mut arguments = arguments.to_vec();
+    let crowd_form = take_option(&mut arguments, "--crowd-form")?
+        .map(|name| {
+            CrowdForm::from_name(&name).ok_or_else(|| {
+                let names = CrowdForm::ALL.map(CrowdForm::name);
+                anyhow::anyhow!("--crowd-form takes one of {names:?}")
+            })
+        })
+        .transpose()?;
+    let frame = take_option(&mut arguments, "--frame")?
+        .map(|frame| {
+            frame
+                .parse::<u32>()
+                .map_err(|_| anyhow::anyhow!("--frame takes a frame number, not {frame:?}"))
+        })
+        .transpose()?;
+    let command = arguments.first().map(String::as_str);
+    anyhow::ensure!(
+        crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
+        "only `bench` and `capture` take --crowd-form"
     );
     anyhow::ensure!(
-        crowd_form.is_none() || takes_crowd_form,
-        "only `bench` and `capture` take --crowd-form"
+        frame.is_none() || command == Some("capture"),
+        "only `capture` takes --frame"
     );
     let crowd_form = crowd_form.unwrap_or_default();
     let bench = |output: &String, configuration, scenes: &[String]| Command::Bench {
@@ -119,6 +149,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: DEFAULT_CAPTURE_SIZE.into(),
             crowd_form,
+            frame,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => Command::Capture {
@@ -126,6 +157,13 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: size.clone(),
             crowd_form,
+            frame,
+        },
+        #[cfg(feature = "cook")]
+        [command, expected, actual, output] if command == "difference" => Command::Difference {
+            expected: expected.clone(),
+            actual: actual.clone(),
+            output: output.clone(),
         },
         [command, output, flag, scenes @ ..] if command == "bench" && flag == "--ci" => {
             bench(output, Configuration::CI, scenes)
@@ -155,7 +193,8 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         }
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
-             `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>]`, \
+             `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+             `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
@@ -164,22 +203,16 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     })
 }
 
-/// `arguments` without `--crowd-form <form>`, and the form it names.
-fn take_crowd_form(arguments: &[String]) -> anyhow::Result<(Vec<String>, Option<CrowdForm>)> {
-    let mut arguments = arguments.to_vec();
-    let Some(flag) = arguments
-        .iter()
-        .position(|argument| argument == "--crowd-form")
-    else {
-        return Ok((arguments, None));
+/// Removes `flag` and the value after it from `arguments`, and returns the
+/// value.
+fn take_option(arguments: &mut Vec<String>, flag: &str) -> anyhow::Result<Option<String>> {
+    let Some(position) = arguments.iter().position(|argument| argument == flag) else {
+        return Ok(None);
     };
-    let names = CrowdForm::ALL.map(CrowdForm::name);
-    let form = arguments
-        .get(flag + 1)
-        .and_then(|name| CrowdForm::from_name(name))
-        .ok_or_else(|| anyhow::anyhow!("--crowd-form takes one of {names:?}"))?;
-    arguments.drain(flag..flag + 2);
-    Ok((arguments, Some(form)))
+    anyhow::ensure!(position + 1 < arguments.len(), "{flag} takes a value");
+    let value = arguments.remove(position + 1);
+    arguments.remove(position);
+    Ok(Some(value))
 }
 
 /// Prints the capability report of the adapter a headless context would use.
@@ -438,29 +471,48 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, its crowd in `crowd_form`, writes the last frame to
-/// `output` as a PNG, and prints that frame's stats, its point lights per
-/// lit pixel counted. The PNG encoder comes with `cook`.
+/// `<width>x<height>`, its crowd in `crowd_form`, and writes `frame` of its
+/// camera path to `output` as a PNG. With no `frame`, it writes the last
+/// frame `praxis::capture` renders and prints that frame's stats, its point
+/// lights per lit pixel counted. The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
-fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyhow::Result<()> {
+fn capture(
+    scene: &str,
+    output: &str,
+    size: &str,
+    crowd_form: CrowdForm,
+    frame: Option<u32>,
+) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
         .split_once('x')
         .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
-    let (pixels, frame_stats) = praxis::capture(
-        &context,
-        scene,
-        glam::DVec3::ZERO,
-        width,
-        height,
-        RenderSwitches {
-            count_point_lights: true,
-            crowd_form,
-            ..RenderSwitches::default()
-        },
-    )?;
+    let switches = RenderSwitches {
+        count_point_lights: frame.is_none(),
+        crowd_form,
+        ..RenderSwitches::default()
+    };
+    let (pixels, last_frame) = match frame {
+        Some(frame) => {
+            let mut pixels = praxis::capture_frames(
+                &context,
+                scene,
+                glam::DVec3::ZERO,
+                width,
+                height,
+                &[frame],
+                switches,
+            )?;
+            (pixels.remove(0), None)
+        }
+        None => {
+            let (pixels, mut frame_stats) =
+                praxis::capture(&context, scene, glam::DVec3::ZERO, width, height, switches)?;
+            (pixels, frame_stats.pop())
+        }
+    };
     image::save_buffer_with_format(
         output,
         &pixels,
@@ -474,11 +526,48 @@ fn capture(scene: &str, output: &str, size: &str, crowd_form: CrowdForm) -> anyh
         path = output,
         width,
         height,
+        frame,
         "capture written"
     );
-    if let Some(last_frame) = frame_stats.last() {
+    if let Some(last_frame) = last_frame {
         std::io::stdout().write_all(last_frame.to_string().as_bytes())?;
     }
+    Ok(())
+}
+
+/// Writes the difference image of two PNGs of equal size to `output`, as the
+/// Goldens test does on a mismatch, and prints how many pixels differ.
+#[cfg(feature = "cook")]
+fn difference(expected: &str, actual: &str, output: &str) -> anyhow::Result<()> {
+    let open = |path: &str| {
+        image::open(path)
+            .with_context(|| format!("reading {path}"))
+            .map(image::DynamicImage::into_rgba8)
+    };
+    let (expected_image, actual_image) = (open(expected)?, open(actual)?);
+    anyhow::ensure!(
+        expected_image.dimensions() == actual_image.dimensions(),
+        "{expected} is {:?} and {actual} is {:?}",
+        expected_image.dimensions(),
+        actual_image.dimensions()
+    );
+    let (width, height) = actual_image.dimensions();
+    image::save_buffer_with_format(
+        output,
+        &praxis::difference_image(expected_image.as_raw(), actual_image.as_raw()),
+        width,
+        height,
+        image::ExtendedColorType::Rgba8,
+        image::ImageFormat::Png,
+    )?;
+    let difference = praxis::compare_images(expected_image.as_raw(), actual_image.as_raw());
+    writeln!(
+        std::io::stdout(),
+        "{} pixels differ by more than {} (max channel delta {})",
+        difference.differing_pixels,
+        praxis::GOLDEN_TOLERANCE,
+        difference.max_channel_delta
+    )?;
     Ok(())
 }
 
@@ -536,6 +625,37 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn capture_parses_a_frame_wherever_it_stands() {
+        for arguments in [
+            ["capture", "town", "out.png", "64x36", "--frame", "300"],
+            ["capture", "--frame", "300", "town", "out.png", "64x36"],
+        ] {
+            let Command::Capture { scene, frame, .. } = parse(&arguments).unwrap() else {
+                panic!("capture parsed as another command");
+            };
+            assert_eq!(scene, "town");
+            assert_eq!(frame, Some(300));
+        }
+    }
+
+    #[test]
+    fn a_frame_that_is_no_number_or_not_on_capture_is_refused() {
+        let error = parse(&["capture", "town", "out.png", "--frame", "last"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("\"last\""), "{error}");
+        let error = parse(&["capture", "town", "out.png", "--frame"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--frame takes a value"), "{error}");
+        let error = parse(&["bench", "out", "--frame", "3"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("only `capture` takes --frame"), "{error}");
     }
 
     #[test]

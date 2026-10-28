@@ -60,3 +60,41 @@ fn capture_draws_the_scene_over_the_tonemapped_background() {
         "nothing drawn at the centre"
     );
 }
+
+/// `praxis capture --frame` lands on the frame it names: `town`'s camera
+/// moves along its path, so its first frame and its Golden's differ.
+#[cfg(feature = "cook")]
+#[test]
+fn capture_command_renders_the_frame_it_names() {
+    if let Err(error) = pollster::block_on(GpuContext::headless()) {
+        assert!(error.is::<wgpu::RequestAdapterError>(), "{error:#}");
+        writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+        return;
+    }
+    let capture = |frame: u32| {
+        let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
+            "capture-town-frame-{frame}-{}.png",
+            std::process::id()
+        ));
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_praxis"))
+            .args(["capture", "town"])
+            .arg(&path)
+            .args(["64x36", "--frame", &frame.to_string()])
+            .output()
+            .expect("praxis runs");
+        assert!(
+            output.status.success(),
+            "capturing frame {frame} failed: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let pixels = image::open(&path).expect("capture written").into_rgba8();
+        std::fs::remove_file(&path).ok();
+        pixels
+    };
+
+    let first = capture(0);
+    let golden_frame = capture(59);
+    assert_eq!(first.dimensions(), (64, 36));
+    assert!(first != golden_frame, "frames 0 and 59 render alike");
+}
