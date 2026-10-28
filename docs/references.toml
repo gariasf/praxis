@@ -767,6 +767,23 @@ quote = '''int used_extra = (av < 0) + (bv < 0) + (cv < 0);
 if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)'''
 checked = 2026-10-26
 
+["meshoptimizer-0.25-cluster-bounds"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L721-L744"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), meshoptimizer.h, the documentation of meshopt_computeClusterBounds and meshopt_computeMeshletBounds"
+quote = '''Creates bounding volumes that can be used for frustum, backface and occlusion culling. [...] Alternatively, you can use the formula that doesn't need cone apex and uses bounding sphere instead: [...] or an equivalent formula that doesn't have a singularity at center = camera_position:
+ *   dot(center - camera_position, cone_axis) >= cone_cutoff * length(center - camera_position) + radius
+ *
+ * The formula that uses the apex is slightly more accurate but needs the apex; if you are already using bounding sphere
+ * to do frustum/occlusion culling, the formula that doesn't use the apex may be preferable (for derivation see
+ * Real-Time Rendering 4th Edition, section 19.3).'''
+checked = 2026-10-28
+
+["meshoptimizer-0.25-cone-quantization"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/clusterizer.cpp#L1497-L1555"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), clusterizer.cpp, meshopt_computeClusterBounds: the wide cone's cutoff and the Snorm8 cone"
+quote = '''// degenerate cluster, normal cone is larger than a hemisphere => trivial accept [...] if (mindp <= 0.1f) [...] bounds.cone_cutoff = 1; [...] bounds.cone_cutoff_s8 = 127; [...] // for the 8-bit test to be conservative, we need to adjust the cutoff by measuring the max. error [...] // note that we need to round this up instead of rounding to nearest, hence +1 [...] int cone_cutoff_s8 = int(127 * (bounds.cone_cutoff + cone_axis_s8_e0 + cone_axis_s8_e1 + cone_axis_s8_e2) + 1);'''
+checked = 2026-10-28
+
 ["meshoptimizer-0.25-vertex-codec"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L125"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), the default vertex codec version, which meshopt_encodeVertexBuffer uses (L1781)"

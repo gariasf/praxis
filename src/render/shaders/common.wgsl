@@ -147,20 +147,28 @@ struct MeshData {
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
 // the Meshlet vertex Arena, each an index into the vertex Arena; its first
 // triangle in the Meshlet triangle Arena, each three corners indexing those
-// vertices, a byte each, lowest byte first; and its Primitive's Material ID.
+// vertices, a byte each, lowest byte first; its Primitive's Material ID; the
+// box that holds its triangles in mesh space, its lowest corner, then its
+// highest; and its triangles' normal cone, its axis then its cutoff, each
+// Snorm8, lowest byte first.
 struct MeshletData {
     first_vertex: u32,
     first_triangle: u32,
     triangle_count: u32,
     material_id: u32,
+    bounds_min: array<f32, 3>,
+    bounds_max: array<f32, 3>,
+    cone: u32,
 }
 
 // One Meshlet of one Instance in the frame's draw, by the Instance's slot,
-// with the Material it is drawn with.
+// with the Material it is drawn with, and where its packed indices start
+// after its Instance's first, or NOT_KEPT where the culling pass drops it.
 struct MeshletRecord {
     instance_slot: u32,
     meshlet: u32,
     material_id: u32,
+    index_offset: u32,
 }
 
 // An index of the frame's draw, unpacked: the Meshlet record it is drawn

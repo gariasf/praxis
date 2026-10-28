@@ -257,6 +257,9 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             first_triangle,
             triangle_count,
             material_id,
+            bounds_min,
+            bounds_max,
+            cone,
         }),
         twin!(MaterialData {
             base_color,
@@ -578,6 +581,11 @@ impl ShaderScalar for u32 {
 
 /// WGSL has no 16-bit integers, so a shader reads them in pairs, as u32s.
 impl ShaderScalar for i16 {
+    const SCALAR: naga::Scalar = naga::Scalar::U32;
+}
+
+/// Nor 8-bit ones, so a shader reads them in fours, as a u32.
+impl ShaderScalar for i8 {
     const SCALAR: naga::Scalar = naga::Scalar::U32;
 }
 

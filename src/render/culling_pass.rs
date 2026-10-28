@@ -5,12 +5,16 @@
 //! one of both phases for the lit pipeline (ADR 0019). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
 //! two, after the depth pyramid, the others in view that the pyramid does
-//! not hide, and it records each Instance's visibility for the next frame. With the `culling` Render switch on, it
-//! draws only the Instances whose Mesh bounds reach into the view frustum;
-//! off, phase one draws every Instance in use. Each phase sums its
-//! Instances' offsets over the slots in use, writes their Meshlet records,
-//! then their packed indices with a workgroup per Meshlet record, dispatched
-//! indirectly, all in one compute pass.
+//! not hide, and it records each Instance's visibility for the next frame.
+//! With the `culling` Render switch on, it draws only the Instances whose
+//! Mesh bounds reach into the view frustum, and of those only the Meshlets
+//! whose own bounds do, that can face the camera and, in phase two, that the
+//! pyramid does not hide; off, phase one draws every Meshlet of every
+//! Instance in use. Each phase sums its Instances' Meshlet records over the
+//! slots in use, writes them, testing each Meshlet once, sums the packed
+//! indices of the Meshlets kept, counts the Instances drawn, then writes
+//! those indices with a workgroup per Meshlet record, dispatched indirectly,
+//! all in one compute pass.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::INSTANCE_CAPACITY;
@@ -63,7 +67,7 @@ impl DrawCapacity {
     /// 2^25 packed indices, 128 MiB, the most one storage binding holds at
     /// the Capability floor (ADR 0021), draw 11.2 million triangles: all of
     /// M3's dense scene with culling off, as its Goldens compare.
-    /// 2^20 Meshlet records, 12 MiB, are as many Meshlets of 10.7 triangles
+    /// 2^20 Meshlet records, 16 MiB, are as many Meshlets of 10.7 triangles
     /// on average.
     pub const PROVISIONAL: DrawCapacity = DrawCapacity {
         meshlet_records: 1 << 20,
@@ -73,8 +77,8 @@ impl DrawCapacity {
 
 /// The frame's draw as `culling.wgsl` lays it out, which the GPU stats
 /// readback reads: the indirect arguments of the indexed draw of both
-/// phases, its index count first, then the Instances it holds and those it
-/// has no room for, then phase two's own draw's arguments, where phase
+/// phases, its index count first, then the Instances it holds, those with a
+/// Meshlet kept, and those it has no room for, then phase two's own draw's arguments, where phase
 /// two's Meshlet records and packed indices start, and the phase's dispatch
 /// of `append_triangles`.
 #[repr(C)]
@@ -98,8 +102,8 @@ pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
 const APPEND_DISPATCH_OFFSET: u64 = std::mem::offset_of!(FrameDraw, append_dispatch) as u64;
 
 impl FrameDraw {
-    /// Its index count over 3: the drawn Instances' indices fill the draw
-    /// from index 0 with no gap, in slot order within each phase.
+    /// Its index count over 3: the kept Meshlets' indices fill the draw from
+    /// index 0 with no gap, in slot order within each phase.
     pub(crate) fn triangles_drawn(&self) -> u32 {
         self.draw.index_count / 3
     }
@@ -115,6 +119,8 @@ struct PhasePipelines {
     offset_slots: wgpu::ComputePipeline,
     offset_blocks: wgpu::ComputePipeline,
     append_records: wgpu::ComputePipeline,
+    offset_index_blocks: wgpu::ComputePipeline,
+    count_instances: wgpu::ComputePipeline,
     append_triangles: wgpu::ComputePipeline,
 }
 
@@ -135,8 +141,10 @@ pub struct CullingPass {
 struct FrameDrawBuffers {
     /// The Instance slots in use, which the CPU writes when they change.
     instance_slot_count: wgpu::Buffer,
-    /// Each slot's first Meshlet record and packed index within its block of
-    /// `SCAN_BLOCK_SIZE` slots, then each block's.
+    /// Each slot's first Meshlet record within its block of `SCAN_BLOCK_SIZE`
+    /// slots, then each block's; once its records are written, each slot's
+    /// kept packed indices and the first within its block, then each
+    /// block's.
     instance_offsets: wgpu::Buffer,
     meshlet_records: wgpu::Buffer,
     packed_indices: wgpu::Buffer,
@@ -188,10 +196,11 @@ impl CullingPass {
                 * size_of::<[u32; 2]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
-        // A record is three u32s: Instance slot, Meshlet and Material ID.
+        // A record is four u32s: Instance slot, Meshlet, Material ID and
+        // index offset.
         let meshlet_records = buffer(
             "Meshlet Record Buffer",
-            u64::from(capacity.meshlet_records) * size_of::<[u32; 3]>() as u64,
+            u64::from(capacity.meshlet_records) * size_of::<[u32; 4]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         let packed_indices = buffer(
@@ -261,6 +270,8 @@ impl CullingPass {
                 offset_slots: pipeline("offset_slots"),
                 offset_blocks: pipeline("offset_blocks"),
                 append_records: pipeline("append_records"),
+                offset_index_blocks: pipeline("offset_index_blocks"),
+                count_instances: pipeline("count_instances"),
                 append_triangles: pipeline("append_triangles"),
             }
         };
@@ -307,14 +318,20 @@ impl CullingPass {
         let slots = frame.instance_slot_count;
         if slots > 0 {
             // Each slot's offsets are the sum of the earlier slots' Meshlet
-            // records and packed indices: summed by block, then the blocks.
+            // records, then of their kept packed indices: summed by block,
+            // then the blocks.
+            let blocks = slots.div_ceil(SCAN_BLOCK_SIZE);
             pass.set_pipeline(&pipelines.offset_slots);
-            pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+            pass.dispatch_workgroups(blocks, 1, 1);
             pass.set_pipeline(&pipelines.offset_blocks);
             pass.dispatch_workgroups(1, 1, 1);
-            // An invocation per slot.
             pass.set_pipeline(&pipelines.append_records);
-            pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+            pass.dispatch_workgroups(blocks, 1, 1);
+            pass.set_pipeline(&pipelines.offset_index_blocks);
+            pass.dispatch_workgroups(1, 1, 1);
+            // An invocation per slot.
+            pass.set_pipeline(&pipelines.count_instances);
+            pass.dispatch_workgroups(blocks, 1, 1);
             // A workgroup per Meshlet record the phase appends.
             pass.set_bind_group(FRAME_DRAW.index, &self.append_bind_group, &[]);
             pass.set_pipeline(&pipelines.append_triangles);

@@ -793,7 +793,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::assets::material::MaterialData;
     use crate::assets::pools::tests::{logged, read_storage};
-    use crate::assets::{MaterialHandle, MeshHandle};
+    use crate::assets::{MaterialHandle, MeshHandle, MeshUse};
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
@@ -2012,7 +2012,8 @@ pub(crate) mod tests {
     /// culling on, the frame's draw holds the Meshlets of exactly those
     /// whose Mesh bounds reach into the frustum by their corners in f64, in
     /// slot order, and Frame stats count only those drawn; with it off, of
-    /// every Instance in use.
+    /// every Instance in use. The Mesh is a bent one, so its Meshlet has its
+    /// bounds and no normal cone to cull it by.
     #[test]
     fn the_culling_pass_draws_the_instances_whose_bounds_reach_into_the_frustum() {
         let Some(context) = gpu_context() else {
@@ -2116,7 +2117,8 @@ pub(crate) mod tests {
         ] {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
             let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
-            let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
+            let mesh =
+                load_triangles_for(&mut renderer, &[[0.0, 0.0]], &[Some(red)], MeshUse::Drawn);
             let instances = (0..placed.len())
                 .map(|slot| {
                     let (pivot, rotation_scale, _) = placed[slot];
@@ -2145,7 +2147,7 @@ pub(crate) mod tests {
             // triangle per Instance drawn, each a Meshlet record naming its
             // slot.
             let drawn = read_storage::<u32>(&context, renderer.culling_pass.frame_draw(), 1)[0] / 3;
-            let records = read_storage::<[u32; 3]>(
+            let records = read_storage::<[u32; 4]>(
                 &context,
                 renderer.culling_pass.meshlet_records(),
                 drawn as usize,
@@ -2168,8 +2170,9 @@ pub(crate) mod tests {
     /// over two Primitives, in more slots than a block of the culling pass's
     /// scans holds, every third outside the target and one freed, half with
     /// their Material overridden. Each frame's draw holds, in slot order
-    /// within each phase, a Meshlet record per Meshlet of each Instance drawn
-    /// and its triangles' cooked corners, each packed with its record:
+    /// within each phase, a Meshlet record per Meshlet of each Instance drawn,
+    /// with its index offset within the Instance, and its triangles' cooked
+    /// corners, each packed with its record:
     /// culling off, every Instance in use, in phase one; culling on, those in
     /// view, in phase two the first frame, when none was visible before; and
     /// the next frame, when every fifth enters the view, those visible before
@@ -2287,6 +2290,7 @@ pub(crate) mod tests {
             let mut expected_records = Vec::new();
             let mut expected_indices = Vec::new();
             for slot in drawn_slots {
+                let mut index_offset = 0;
                 for (meshlet_in_mesh, meshlet) in meshlets.iter().enumerate() {
                     let record = expected_records.len() as u32;
                     let material = material_of(slot);
@@ -2295,7 +2299,8 @@ pub(crate) mod tests {
                     } else {
                         material
                     };
-                    expected_records.push((slot, meshlet_in_mesh as u32, material));
+                    expected_records.push((slot, meshlet_in_mesh as u32, material, index_offset));
+                    index_offset += 3 * meshlet.triangles.len() as u32;
                     expected_indices.extend(meshlet.triangles.iter().flatten().map(|&corner| {
                         (record << MESHLET_MAX_VERTICES.ilog2()) | u32::from(corner)
                     }));
@@ -2303,15 +2308,17 @@ pub(crate) mod tests {
             }
             let draw =
                 read_storage::<FrameDraw>(&context, renderer.culling_pass.frame_draw(), 1)[0];
-            let records = read_storage::<[u32; 3]>(
+            let records = read_storage::<[u32; 4]>(
                 &context,
                 renderer.culling_pass.meshlet_records(),
                 expected_records.len(),
             );
             let first_meshlet = records[0][1];
-            let records: Vec<(u32, u32, u32)> = records
+            let records: Vec<(u32, u32, u32, u32)> = records
                 .iter()
-                .map(|&[slot, meshlet, material]| (slot, meshlet - first_meshlet, material))
+                .map(|&[slot, meshlet, material, index_offset]| {
+                    (slot, meshlet - first_meshlet, material, index_offset)
+                })
                 .collect();
             let indices = read_storage::<u32>(
                 &context,
@@ -2321,6 +2328,136 @@ pub(crate) mod tests {
             let case = (culling, frame_count);
             assert_eq!(records, expected_records, "{case:?}");
             assert_eq!(indices, expected_indices, "{case:?}");
+        }
+    }
+
+    /// A Mesh of four one-triangle Meshlets, 4 m in front of the camera: one
+    /// facing it, one facing away, one far outside the view, and one 2 m
+    /// further back, behind a nearer quad. Out of view in the first frame,
+    /// the Instance enters in the second, where phase two appends only the
+    /// Meshlet facing the camera, the others outside the frustum, facing away
+    /// or behind the depth pyramid; in the third, phase one appends the one
+    /// behind the quad too, as it has no pyramid to test. Each Meshlet's
+    /// record is kept in slot order, its triangles' index offset within its
+    /// Instance or none. Culling off appends every Meshlet, and every frame
+    /// draws the image culling off draws.
+    #[test]
+    fn the_culling_pass_drops_the_meshlets_outside_the_frustum_facing_away_or_hidden() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const NOT_KEPT: u32 = u32::MAX;
+        let camera = CameraUniform {
+            view_proj: (projection_matrix(1.0) * Camera::new().view_matrix()).to_cols_array_2d(),
+            exposure: 1.0,
+            ..CameraUniform::default()
+        };
+        // A triangle 0.6 m wide about `centre`, counter-clockwise from +Z
+        // when it faces +Z.
+        let triangle = |[x, y, z]: [f32; 3], faces_positive_z: bool| {
+            let corners = [[x - 0.3, y - 0.3], [x + 0.3, y - 0.3], [x, y + 0.3]];
+            let order = if faces_positive_z {
+                [0, 1, 2]
+            } else {
+                [0, 2, 1]
+            };
+            order.map(|corner: usize| CookedVertex {
+                position: [corners[corner][0], corners[corner][1], z],
+                uv: [0.0, 0.0],
+                qtangent: [0, 0, 0, i16::MAX],
+            })
+        };
+        let facing = triangle([0.5, 0.5, 0.0], true);
+        let facing_away = triangle([-0.5, 0.5, 0.0], false);
+        let outside = triangle([40.0, 0.0, 0.0], true);
+        let hidden = triangle([0.0, -2.0, -2.0], true);
+        let vertices: Vec<CookedVertex> = [facing, facing_away, outside, hidden].concat();
+        let positions = vertices
+            .iter()
+            .map(|vertex| glam::Vec3::from(vertex.position));
+        let cooked = CookedMesh {
+            indices: (0..12).collect(),
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 12,
+                material: None,
+                meshlets: (0..4)
+                    .map(|meshlet| CookedMeshlet {
+                        vertices: (3 * meshlet..3 * meshlet + 3).collect(),
+                        triangles: vec![[0, 1, 2]],
+                    })
+                    .collect(),
+            }],
+            bounds: [
+                positions
+                    .clone()
+                    .fold(glam::Vec3::INFINITY, glam::Vec3::min)
+                    .into(),
+                positions
+                    .fold(glam::Vec3::NEG_INFINITY, glam::Vec3::max)
+                    .into(),
+            ],
+            vertices,
+        };
+
+        // Each frame's image, the draw's index count and the Mesh's records.
+        let frames = |culling| {
+            let switches = RenderSwitches {
+                culling,
+                ..RenderSwitches::default()
+            };
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let [red, green] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+                .map(|emissive| emissive_material(&mut renderer, emissive));
+            let mesh = renderer
+                .mesh_pool
+                .load(&mut renderer.load_staging, &cooked, &[Some(red)])
+                .expect("the Mesh fits");
+            let quad = load_quad(&mut renderer);
+            // The lower half of the view at 3 m, over the hidden Meshlet.
+            let occluder = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    6.0, 2.7, 1.0,
+                ))),
+                offset: [0.0, -1.65, -3.0],
+                ..instance(quad, green.index(), [0.0, 0.0])
+            };
+            [100.0, 0.0, 0.0].map(|x| {
+                let shown = InstanceData {
+                    offset: [x, 0.0, -4.0],
+                    ..instance(mesh, NO_MATERIAL, [0.0, 0.0])
+                };
+                let frame = FrameData {
+                    camera,
+                    ..frame_of(vec![occluder, shown])
+                };
+                let (image, _, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+                let draw =
+                    read_storage::<FrameDraw>(&context, renderer.culling_pass.frame_draw(), 1)[0];
+                let records =
+                    read_storage::<[u32; 4]>(&context, renderer.culling_pass.meshlet_records(), 5);
+                let records: Vec<(u32, u32)> = records[1..]
+                    .iter()
+                    .map(|&[slot, _, _, index_offset]| (slot, index_offset))
+                    .collect();
+                (image, draw.draw.index_count, records)
+            })
+        };
+        let culled = frames(true);
+        let unculled = frames(false);
+
+        let records = |offsets: [u32; 4]| offsets.map(|offset| (1, offset)).to_vec();
+        assert_eq!(culled[1].1, 3 * (2 + 1));
+        assert_eq!(culled[1].2, records([0, NOT_KEPT, NOT_KEPT, NOT_KEPT]));
+        assert_eq!(culled[2].1, 3 * (2 + 2));
+        assert_eq!(culled[2].2, records([0, NOT_KEPT, NOT_KEPT, 3]));
+        assert_eq!(unculled[2].1, 3 * (2 + 4));
+        assert_eq!(unculled[2].2, records([0, 3, 6, 9]));
+        for (frame, (culled, unculled)) in culled.iter().zip(&unculled).enumerate() {
+            assert!(
+                culled.0 == unculled.0,
+                "frame {frame} differs with culling off"
+            );
         }
     }
 
@@ -2373,6 +2510,16 @@ pub(crate) mod tests {
         centres: &[[f32; 2]],
         materials: &[Option<MaterialHandle>],
     ) -> MeshHandle {
+        load_triangles_for(renderer, centres, materials, MeshUse::DrawnAndTraced)
+    }
+
+    /// Loads the Mesh `load_triangles` loads, for `mesh_use`.
+    fn load_triangles_for(
+        renderer: &mut Renderer,
+        centres: &[[f32; 2]],
+        materials: &[Option<MaterialHandle>],
+        mesh_use: MeshUse,
+    ) -> MeshHandle {
         let vertex = |x: f32, y: f32| CookedVertex {
             position: [x, y, 0.5],
             uv: [0.0, 0.0],
@@ -2407,7 +2554,7 @@ pub(crate) mod tests {
         };
         renderer
             .mesh_pool
-            .load(&mut renderer.load_staging, &mesh, materials)
+            .load_for(&mut renderer.load_staging, &mesh, materials, mesh_use)
             .expect("the triangles fit")
     }
 

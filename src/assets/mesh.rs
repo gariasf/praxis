@@ -29,8 +29,8 @@ pub struct MeshData {
 /// A Meshlet as the Meshlet Arena holds it: its vertices in the Meshlet
 /// vertex Arena, each an index into the vertex Arena; its triangles in the
 /// Meshlet triangle Arena, each its three corners as indices into those
-/// vertices, a byte each, lowest byte first; and its Primitive's Material ID,
-/// or `NO_MATERIAL`.
+/// vertices, a byte each, lowest byte first; its Primitive's Material ID,
+/// or `NO_MATERIAL`; and what the culling pass tests it by.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshletData {
@@ -38,4 +38,12 @@ pub struct MeshletData {
     pub first_triangle: u32,
     pub triangle_count: u32,
     pub material_id: u32,
+    /// The box that holds its triangles in mesh space, lowest corner then
+    /// highest: its Mesh's for a Mesh the GPU bends.
+    pub bounds_min: [f32; 3],
+    pub bounds_max: [f32; 3],
+    /// Its triangles' normal cone as meshoptimizer gives it, its axis then
+    /// its cutoff, each Snorm8 over 127: a cutoff of 1 culls nothing, as for
+    /// a Mesh the GPU bends.
+    pub cone: [i8; 4],
 }

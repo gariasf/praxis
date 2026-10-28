@@ -1,6 +1,6 @@
 use crate::{
     assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
-    cooked::{CookedMesh, CookedVertex},
+    cooked::{CookedMesh, CookedMeshlet, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
 };
 
@@ -37,6 +37,12 @@ impl MeshUse {
     /// BLAS is built from.
     fn traced(self) -> bool {
         self != MeshUse::Drawn
+    }
+
+    /// Whether the GPU bends it, so its cooked triangles bound none of the
+    /// shapes it takes but its cooked bounds hold them all.
+    fn bent(self) -> bool {
+        matches!(self, MeshUse::Drawn | MeshUse::Refitted)
     }
 }
 
@@ -233,13 +239,27 @@ impl MeshPool {
         let mut meshlet_table = Vec::with_capacity(meshlet_count);
         let mut vertex_indices = Vec::with_capacity(meshlet_vertex_count);
         let mut triangles = Vec::with_capacity(triangle_count);
+        let positions = meshopt::VertexDataAdapter::new(
+            bytemuck::cast_slice(&mesh.vertices),
+            size_of::<CookedVertex>(),
+            0,
+        )
+        .expect("a whole number of vertices, position first");
         for (primitive, material) in drawn_primitives.iter().zip(materials) {
             for meshlet in &primitive.meshlets {
+                let ([bounds_min, bounds_max], cone) = if mesh_use.bent() {
+                    (mesh.bounds, NO_CONE)
+                } else {
+                    meshlet_bounds(&mesh.vertices, &positions, meshlet)
+                };
                 meshlet_table.push(MeshletData {
                     first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
                     first_triangle: meshlet_triangles.offset + triangles.len() as u32,
                     triangle_count: meshlet.triangles.len() as u32,
                     material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
+                    bounds_min,
+                    bounds_max,
+                    cone,
                 });
                 vertex_indices.extend(
                     meshlet
@@ -495,6 +515,42 @@ impl MeshPool {
     pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
         self.meshes.get(handle.0 as usize)
     }
+}
+
+/// A normal cone whose cutoff of 1 culls nothing.
+const NO_CONE: [i8; 4] = [0, 0, 0, i8::MAX];
+
+/// The box that holds the triangles of `meshlet`, a Meshlet of `vertices`
+/// whose `positions` they are, and their normal cone, which meshoptimizer
+/// quantizes so that a test of its Snorm8 axis and cutoff culls no triangle
+/// the exact cone keeps [ref:meshoptimizer-0.25-cone-quantization].
+fn meshlet_bounds(
+    vertices: &[CookedVertex],
+    positions: &meshopt::VertexDataAdapter,
+    meshlet: &CookedMeshlet,
+) -> ([[f32; 3]; 2], [i8; 4]) {
+    let corners = meshlet
+        .vertices
+        .iter()
+        .map(|&vertex| glam::Vec3::from(vertices[vertex as usize].position));
+    let bounds = [
+        corners
+            .clone()
+            .fold(glam::Vec3::INFINITY, glam::Vec3::min)
+            .into(),
+        corners
+            .fold(glam::Vec3::NEG_INFINITY, glam::Vec3::max)
+            .into(),
+    ];
+    let cone = meshopt::compute_meshlet_bounds(
+        meshopt::Meshlet {
+            vertices: &meshlet.vertices,
+            triangles: meshlet.triangles.as_flattened(),
+        },
+        positions,
+    );
+    let [x, y, z] = cone.cone_axis_s8;
+    (bounds, [x, y, z, cone.cone_cutoff_s8])
 }
 
 /// A range of each of `counts` elements in each of `arenas`, or None, with
