@@ -2167,12 +2167,13 @@ pub(crate) mod tests {
     /// Instances of a Mesh of four Meshlets, of 124, 7, 60 and 1 triangles
     /// over two Primitives, in more slots than a block of the culling pass's
     /// scans holds, every third outside the target and one freed, half with
-    /// their Material overridden. Each frame's draw holds, in slot order, a
-    /// Meshlet record per Meshlet of each Instance drawn and its triangles'
-    /// cooked corners, each packed with its record: culling off, every
-    /// Instance in use, in phase one; culling on, those in view, in phase
-    /// two the first frame, when none was visible before, and in phase one
-    /// the next.
+    /// their Material overridden. Each frame's draw holds, in slot order
+    /// within each phase, a Meshlet record per Meshlet of each Instance drawn
+    /// and its triangles' cooked corners, each packed with its record:
+    /// culling off, every Instance in use, in phase one; culling on, those in
+    /// view, in phase two the first frame, when none was visible before; and
+    /// the next frame, when every fifth enters the view, those visible before
+    /// in phase one, then those entering in phase two, after them.
     #[test]
     fn the_draw_holds_each_drawn_instances_meshlets_and_their_cooked_corners_in_slot_order() {
         let Some(context) = gpu_context() else {
@@ -2228,6 +2229,7 @@ pub(crate) mod tests {
         };
         let freed = |slot: u32| slot == 100;
         let in_view = |slot: u32| slot % 3 != 2;
+        let entering = |slot: u32| slot.is_multiple_of(5) && in_view(slot);
 
         for (culling, frame_count) in [(false, 1), (true, 1), (true, 2)] {
             let switches = RenderSwitches {
@@ -2248,27 +2250,40 @@ pub(crate) mod tests {
                     NO_MATERIAL
                 }
             };
-            let instances = (0..SLOTS)
-                .map(|slot| InstanceData {
-                    mesh: if freed(slot) { NO_MESH } else { mesh.0 },
-                    ..instance(
-                        mesh,
-                        material_of(slot),
-                        if in_view(slot) {
-                            [0.0, 0.0]
-                        } else {
-                            [5.0, 5.0]
-                        },
-                    )
-                })
-                .collect();
-            let frame = frame_of(instances);
-            for _ in 0..frame_count {
+            // In the first of two frames the entering Instances are outside
+            // the target.
+            let frame = |frame: u32| {
+                frame_of(
+                    (0..SLOTS)
+                        .map(|slot| {
+                            let shown =
+                                in_view(slot) && !(frame + 1 < frame_count && entering(slot));
+                            InstanceData {
+                                mesh: if freed(slot) { NO_MESH } else { mesh.0 },
+                                ..instance(
+                                    mesh,
+                                    material_of(slot),
+                                    if shown { [0.0, 0.0] } else { [5.0, 5.0] },
+                                )
+                            }
+                        })
+                        .collect(),
+                )
+            };
+            for frame in (0..frame_count).map(frame) {
                 render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
             }
 
-            let drawn_slots =
-                (0..SLOTS).filter(|&slot| !freed(slot) && (!culling || in_view(slot)));
+            // Phase one, then phase two, each in slot order.
+            let phase = |slot: u32| match (culling, frame_count) {
+                (false, _) => 1,
+                (true, 1) => 2,
+                _ => 1 + u32::from(entering(slot)),
+            };
+            let mut drawn_slots: Vec<u32> = (0..SLOTS)
+                .filter(|&slot| !freed(slot) && (!culling || in_view(slot)))
+                .collect();
+            drawn_slots.sort_by_key(|&slot| (phase(slot), slot));
             let mut expected_records = Vec::new();
             let mut expected_indices = Vec::new();
             for slot in drawn_slots {

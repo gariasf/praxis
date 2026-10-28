@@ -318,8 +318,9 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
         let record_capacity = arrayLength(&meshlet_records);
         frame_draw.records_end = min(offset.x, record_capacity);
         let records = frame_draw.records_end - min(first.x, record_capacity);
-        let rows = (records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION;
-        frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / max(rows, 1u), rows, 1u);
+        // At least one row, so no records dispatch no workgroups.
+        let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
+        frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);
     }
     if invocation == 0u {
         if PHASE_TWO {

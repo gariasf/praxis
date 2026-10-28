@@ -46,7 +46,9 @@ impl CullingPhase {
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
 /// The workgroups in each dimension of a dispatch the Capability floor
-/// guarantees (ADR 0021): `append_triangles` is dispatched in rows of these.
+/// guarantees, wgpu's default (ADR 0021)
+/// [ref:wgpu-types-30-default-workgroups-per-dimension]: `append_triangles`
+/// is dispatched in rows of these.
 pub(crate) const MAX_WORKGROUPS_PER_DIMENSION: u32 = 65_535;
 
 /// What the frame's draw holds, provisional until ADR 0013's split of the 8 GB
@@ -125,7 +127,9 @@ pub struct CullingPass {
     /// Its group 3 (`FRAME_DRAW`), built by `frame_draw_bind_group`.
     bind_group: wgpu::BindGroup,
     /// The phase's dispatch of `append_triangles`, copied from the frame's
-    /// draw: a buffer the dispatch also binds for writing cannot hold it.
+    /// draw: a buffer the dispatch also binds for writing cannot hold it,
+    /// as each dispatch's bindings and its indirect buffer are one usage
+    /// scope [ref:wgpu-core-30-dispatch-usage-scope].
     append_dispatch: wgpu::Buffer,
 }
 
@@ -159,6 +163,9 @@ impl CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
         assert!(capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
+        assert!(
+            device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
+        );
         let buffer = |label, size, usage| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),

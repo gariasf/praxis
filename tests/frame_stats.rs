@@ -85,8 +85,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
     // offsets for each slot and block of 256 slots and visibility bit for
     // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^25
-    // packed indices of 4 bytes and 56 bytes of both phases' indirect
-    // arguments, counts and phase two's offsets, the 160×90 Depth32Float
+    // packed indices of 4 bytes and 72 bytes of both phases' indirect
+    // arguments, counts, phase two's offsets, the phase's dispatch and where
+    // its records end, the 12-byte copy of that dispatch, the 160×90 Depth32Float
     // texture at 4 samples, its 4x RGBA16F colour, which Apple GPUs keep in
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
@@ -94,7 +95,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // u32s a pixel and its 4-byte overflow count, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the GPU stats
     // readback: its resolve buffer of a begin and an end timestamp of 8
-    // bytes for each of the twelve timed passes, and six slots of 272 bytes,
+    // bytes for each of the twelve timed passes, and six slots of 288 bytes,
     // the tonemapping pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
     // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
@@ -119,7 +120,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 524_288 / 8
             + (1 << 20) * 12
             + (1 << 25) * 4
-            + 56
+            + 72
+            + 12
             + 160 * 90 * 4 * 4
             + multisampled_color
             + 160 * 90 * 8
@@ -128,7 +130,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 4
             + 3 * 2048
             + 12 * 2 * 8
-            + 6 * 272
+            + 6 * 288
             + 64 * 64
             + 32 * 18 * 32 * 128 * 4
             + 16
