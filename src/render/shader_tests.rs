@@ -37,6 +37,31 @@ fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
+/// At submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one BLAS per
+/// Instance, for each pass that binds a group holding it, so only the pass
+/// that traces rays and the markers that time the dynamic TLAS's build
+/// declare one.
+#[test]
+fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
+    let declaring: Vec<&str> = MODULES
+        .iter()
+        .filter(|module| {
+            module
+                .bind_groups
+                .iter()
+                .flat_map(|group| group.bindings)
+                .any(|binding| {
+                    matches!(
+                        binding.binding_type,
+                        wgpu::BindingType::AccelerationStructure { .. }
+                    )
+                })
+        })
+        .map(|module| module.name)
+        .collect();
+    assert_eq!(declaring, ["shadow_mask", "dynamic_tlas_marker"]);
+}
+
 /// A group's layout serves every module that declares it, so a binding is
 /// judged by the stages that use it in any of them.
 #[test]

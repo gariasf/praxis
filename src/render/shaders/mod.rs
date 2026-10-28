@@ -12,7 +12,7 @@ use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
     FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
-    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -81,9 +81,8 @@ pub struct ShaderModule {
 /// The main pass.
 pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
-    // Each Channel is a binding array indexed by Layer (ADR 0017), and the
-    // scene geometry holds both TLAS (ADR 0020).
-    enables: &["wgpu_binding_array", "wgpu_ray_query"],
+    // Each Channel is a binding array indexed by Layer (ADR 0017).
+    enables: &["wgpu_binding_array"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
 };
@@ -93,15 +92,14 @@ pub const SHADOW_MASK: ShaderModule = ShaderModule {
     name: "shadow_mask",
     // It traces rays against both TLAS.
     enables: &["wgpu_ray_query"],
-    bind_groups: &[&SCENE_GEOMETRY, &SHADOW_MASK_BUILD],
+    bind_groups: &[&SHADOW_RAY_SCENE, &SHADOW_MASK_BUILD],
     parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
 };
 
 /// The culling pass.
 pub const CULLING: ShaderModule = ShaderModule {
     name: "culling",
-    // The scene geometry holds both TLAS.
-    enables: &["wgpu_ray_query"],
+    enables: &[],
     bind_groups: &[&FRAME, &SCENE_GEOMETRY, &FRAME_DRAW],
     parts: &[COMMON, part!("culling.wgsl")],
 };

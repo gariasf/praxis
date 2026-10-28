@@ -4,6 +4,63 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The TLAS bound in the shadow mask pass alone: the GPU frame's 1.1 ms is the dynamic TLAS's build, no longer hidden (2026-10-28, #378)
+
+**Verdict.** Binding both TLAS only in the shadow mask pass adds no GPU
+work. `town`'s `submit` falls from 13.3 to 2.8 ms with rays on and from
+11.3 ms to 26 µs with rays off, and the CPU frame from 16.5–16.7 to
+6.8–7.2 ms. The GPU frame's growth, 1.1 ms, as #352's probe saw, has
+two parts. The dynamic TLAS's build, about 0.67 ms of GPU, used to run
+beside the previous frame, so it read 100 µs from that frame's end: its
+command buffer was submitted 13 ms before the frame's own, which the
+TLAS walks held back. With `submit` short, the GPU runs the frames back
+to back, and their spans grow about 0.5 ms more, by a cause not
+measured here. Paced so that the GPU is idle when each frame starts, as
+base was, every pass reads as base within 1%, the gate too, and the GPU
+frame grows only by the build. The GPU is now the bottleneck: the frame
+period with rays on, 16.4 ms, is no longer than base's.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`main` at 4ef4f7d3 (base) and of this change (split), both with a
+measurement patch, not committed. The patch logged the median interval
+between frames over all but the first 100 frames, and each CPU stage's
+median. Set to 17 ms, an environment variable made each frame sleep out
+the rest of that time after it was submitted (paced); the frames then
+took about 20 ms. `praxis bench <dir> town` at 2560×1440 with 4x MSAA,
+1,800 measured frames, interleaved base, split and paced, three rounds,
+no other GPU work.
+
+Medians in µs, as `praxis report` prints them, rounds 1 and 2. The
+interval is the patch's, with rays on.
+
+| Run | Round | Interval | CPU frame | GPU frame | `dynamic_tlas_build` | Gate, rays off | Shadow-ray time | Dynamic TLAS, CPU |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Base | 1 | 16,731 | 16,727.3 | 15,392.4 | 104.5 | 8,606.1 | 6,357.9 | 963.0 |
+| Split | 1 | 16,427 | 7,229.3 | 16,482.3 | 0.0 | 8,687.4 | 7,367.5 | 1,282.5 |
+| Split, paced | 1 | 20,017 | 4,984.2 | 15,972.5 | 670.4 | 8,730.3 | 6,103.2 | 918.0 |
+| Base | 2 | 16,471 | 16,480.6 | 15,384.3 | 95.2 | 8,614.2 | 6,323.4 | 967.7 |
+| Split | 2 | 16,438 | 6,846.2 | 16,483.9 | 0.0 | 8,700.6 | 6,617.5 | 1,240.5 |
+| Split, paced | 2 | 19,889 | 5,490.8 | 16,006.5 | 671.4 | 8,618.9 | 6,298.5 | 969.8 |
+
+The GPU frame less the build: base 15,287.9 and 15,289.1, paced
+15,302.1 and 15,335.1. Round 1's passes, base against paced:
+`culling_phase_one` 1,113.2 and 1,109.7, `depth_prepass` 2,138.7 and
+2,156.8, `shadow_mask_pass` 7,009.1 and 6,972.8, `lit_pass` 11,244.3 and
+11,224.6. Unpaced, frames overlap, so per-pass times shift (the split's
+`lit_pass` reads 5,593.8); the GPU frame and the interval are the
+figures to judge.
+
+**Every CPU stage runs slower when the GPU is the bottleneck.** Round 3's
+stage medians, rays on, base, split and paced: `prepare_frame` 1,284,
+1,671 and 1,288; `propagate_world_transforms` 366, 453 and 346; the
+dynamic TLAS's recording 596, 721 and 552, and its submit 331, 474 and
+415; `submit` 13,310, 2,783 and 2,566. Unpaced, the main thread waits
+for the GPU in each frame, and stages that touch no TLAS slow by the
+same 20–40% as the dynamic TLAS's. Paced with rays off, where the
+thread sleeps most of each frame, they slow too (`prepare_frame` 2,445).
+So the dynamic TLAS's CPU line's 1.24–1.28 ms, over the 1.1 ms ceiling,
+is not the split's cost; #381 measures the cause.
+
 ## `town`'s submit is wgpu's TLAS bookkeeping, not a GPU wait (2026-10-28, #352)
 
 **Verdict.** `town`'s 13 ms `submit` stage is CPU work inside

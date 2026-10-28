@@ -5,7 +5,7 @@
 //! reads. It runs once both culling phases' Instances are in the depth
 //! target.
 
-use crate::render::bind_groups::{SCENE_GEOMETRY, SHADOW_MASK_BUILD, pipeline_layout};
+use crate::render::bind_groups::{SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, pipeline_layout};
 use crate::render::froxel_pass::FROXEL_SLICES;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
@@ -47,9 +47,11 @@ const _: () = assert!(FROXEL_SLICES.is_power_of_two());
 const _: () = assert!(SHADOW_MASK_LIGHTS > u32::BITS);
 const _: () = assert!(SHADOW_MASK_LIGHTS + FROXEL_SLICES.ilog2() == 2 * u32::BITS);
 
-/// The pass's pipeline, and its group 3 with the buffers it reads.
+/// The pass's pipeline, its group 2 with the TLAS it traces, and its group
+/// 3 with the buffers it reads.
 pub struct ShadowMaskPass {
     pipeline: wgpu::ComputePipeline,
+    shadow_ray_scene: wgpu::BindGroup,
     layout: wgpu::BindGroupLayout,
     /// The camera, the lights' counts, the lights and the Froxel lists.
     buffers: [(&'static str, wgpu::Buffer); 4],
@@ -63,17 +65,23 @@ pub struct ShadowMaskPass {
 }
 
 impl ShadowMaskPass {
-    /// The pass, given the scene geometry's layout, reading the Renderer's
-    /// `camera`, `light` and `lights` buffers and the Froxel pass's
-    /// `froxel_lists`, and writing the shadow mask of `render_targets`, with
-    /// its Froxel lookups as `switches` set.
+    /// The pass, tracing against the `static_tlas` and `dynamic_tlas`
+    /// bindings, reading the Renderer's `camera`, `light` and `lights`
+    /// buffers and the Froxel pass's `froxel_lists`, and writing the shadow
+    /// mask of `render_targets`, with its Froxel lookups as `switches` set.
     pub fn new(
         device: &wgpu::Device,
-        scene_geometry_layout: &wgpu::BindGroupLayout,
+        [static_tlas, dynamic_tlas]: [wgpu::BindingResource<'_>; 2],
         buffers: [(&'static str, &wgpu::Buffer); 4],
         render_targets: &RenderTargets,
         switches: RenderSwitches,
     ) -> ShadowMaskPass {
+        let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
+        let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
+            device,
+            &shadow_ray_scene_layout,
+            [("static_tlas", static_tlas), ("dynamic_tlas", dynamic_tlas)],
+        );
         let layout = SHADOW_MASK_BUILD.layout(device);
         let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor());
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -82,7 +90,7 @@ impl ShadowMaskPass {
                 device,
                 "Shadow Mask Pipeline Layout",
                 &[
-                    (&SCENE_GEOMETRY, scene_geometry_layout),
+                    (&SHADOW_RAY_SCENE, &shadow_ray_scene_layout),
                     (&SHADOW_MASK_BUILD, &layout),
                 ],
             )),
@@ -113,6 +121,7 @@ impl ShadowMaskPass {
         let size = render_targets.shadow_mask().texture().size();
         ShadowMaskPass {
             pipeline,
+            shadow_ray_scene,
             layout,
             buffers,
             shadow_mask_lights_overflowed,
@@ -170,12 +179,10 @@ impl ShadowMaskPass {
         )
     }
 
-    /// Records the pass into `encoder`, with the scene geometry's
-    /// `scene_geometry` set, timed into `timestamp_writes`.
+    /// Records the pass into `encoder`, timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        scene_geometry: &wgpu::BindGroup,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
@@ -184,7 +191,7 @@ impl ShadowMaskPass {
             timestamp_writes,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(SCENE_GEOMETRY.index, scene_geometry, &[]);
+        pass.set_bind_group(SHADOW_RAY_SCENE.index, &self.shadow_ray_scene, &[]);
         pass.set_bind_group(SHADOW_MASK_BUILD.index, &self.bind_group, &[]);
         let (width, height) = self.size;
         pass.dispatch_workgroups(
