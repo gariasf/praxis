@@ -83,11 +83,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // of 80 bytes, the camera and light uniforms, the light buffer of 4,096
     // lights of 48 bytes, 524,288 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
-    // offsets for each slot and block of 256 slots and visibility bit for
+    // offsets for each slot and block of 256 slots and of the phase's
+    // records, and visibility bit for
     // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^25
     // packed indices of 4 bytes and 72 bytes of both phases' indirect
-    // arguments, counts, phase two's offsets, the phase's dispatch and where
-    // its records end, the 12-byte copy of that dispatch, the 160×90 Depth32Float
+    // arguments, counts, phase two's offsets and the phase's dispatch, and
+    // its 72-byte stand-in, the 160×90 Depth32Float
     // texture at 4 samples, its 4x RGBA16F colour, which Apple GPUs keep in
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
@@ -116,12 +117,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 4096 * 48
             + 524_288 * 128
             + 4
-            + (524_288 + 2048) * 8
+            + (524_288 + 2048 + 1) * 8
             + 524_288 / 8
             + (1 << 20) * 12
             + (1 << 25) * 4
             + 72
-            + 12
+            + 72
             + 160 * 90 * 4 * 4
             + multisampled_color
             + 160 * 90 * 8

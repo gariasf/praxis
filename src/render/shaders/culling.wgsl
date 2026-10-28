@@ -40,9 +40,8 @@ struct DispatchIndirect {
 // and those it has no room for, which Frame stats read back; phase two's own
 // draw, of the indices after phase one's, which the lit pass draws into
 // depth before it shades; where phase two's Meshlet records and packed
-// indices start, phase one's sums; the phase's dispatch of append_triangles,
-// which the pass copies out to dispatch it; and where the phase's Meshlet
-// records end, short of the buffer's end.
+// indices start, phase one's sums; and the phase's dispatch of
+// append_triangles.
 struct FrameDraw {
     draw: DrawIndexedIndirect,
     instances_drawn: atomic<u32>,
@@ -50,8 +49,13 @@ struct FrameDraw {
     phase_two_draw: DrawIndexedIndirect,
     phase_two_offsets: vec2<u32>,
     append_dispatch: DispatchIndirect,
-    records_end: u32,
 }
+
+// Where instance_offsets holds, after each slot's and block's, the phase's
+// first Meshlet record and where its records end, short of the buffer's
+// end: append_triangles reads them there, as it runs with another buffer in
+// frame_draw's binding, so that frame_draw can hold its dispatch.
+const APPENDED_RECORDS = INSTANCE_CAPACITY + INSTANCE_CAPACITY / SCAN_BLOCK_SIZE;
 
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
 
@@ -316,8 +320,9 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
             frame_draw.phase_two_offsets = offset;
         }
         let record_capacity = arrayLength(&meshlet_records);
-        frame_draw.records_end = min(offset.x, record_capacity);
-        let records = frame_draw.records_end - min(first.x, record_capacity);
+        let appended = min(vec2<u32>(first.x, offset.x), vec2<u32>(record_capacity));
+        instance_offsets[APPENDED_RECORDS] = appended;
+        let records = appended.y - appended.x;
         // At least one row, so no records dispatch no workgroups.
         let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
         frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);
@@ -393,11 +398,9 @@ fn append_triangles(
     @builtin(num_workgroups) workgroups: vec3<u32>,
     @builtin(local_invocation_index) triangle: u32
 ) {
-    var record_index = workgroup.y * workgroups.x + workgroup.x;
-    if PHASE_TWO {
-        record_index += frame_draw.phase_two_offsets.x;
-    }
-    if record_index >= frame_draw.records_end {
+    let appended = instance_offsets[APPENDED_RECORDS];
+    let record_index = appended.x + workgroup.y * workgroups.x + workgroup.x;
+    if record_index >= appended.y {
         return;
     }
     let record = meshlet_records[record_index];
