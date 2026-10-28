@@ -39,7 +39,9 @@ pub struct FrameStats {
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013), and of
     /// its acceleration structures, estimated. The render target and
-    /// capture's own buffers are the caller's.
+    /// capture's own buffers are the caller's, and the GPU stats
+    /// readback's are left out, since they measure the frame rather than
+    /// hold it.
     pub gpu_memory_bytes: u64,
     /// Of `gpu_memory_bytes`, the acceleration structures', estimated from
     /// the bytes measured on the backend, since wgpu exposes no

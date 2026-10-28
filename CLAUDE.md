@@ -313,8 +313,9 @@ When reviewing changes, check for:
 - [ ] Frame stats still see new work: GPU buffers and textures join
       their owner's `gpu_memory_bytes`, and so do acceleration
       structures, by the measured per-adapter estimate
-      (`AccelerationStructureBytes`); per-frame GPU writes add to
-      `uploaded_bytes`, and systems are added inside
+      (`AccelerationStructureBytes`); the GPU stats readback's buffers
+      stay out, as they measure the frame (ADR 0013); per-frame GPU
+      writes add to `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never
       `Queue::write_texture`; no GPU buffer grows at runtime, and a

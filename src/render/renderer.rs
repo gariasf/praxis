@@ -735,7 +735,8 @@ impl Renderer {
 
     /// Bytes of the buffers and textures this Renderer created, its Pools
     /// included, and of its acceleration structures, estimated; the render
-    /// target is the caller's.
+    /// target is the caller's. The GPU stats readback's buffers are left
+    /// out, since they measure the frame rather than hold it.
     pub fn gpu_memory_bytes(&self) -> u64 {
         let buffers = [
             &self.camera_buffer,
@@ -762,7 +763,6 @@ impl Renderer {
                 .material_pool
                 .gpu_memory_bytes(self.transient_saves_memory)
             + self.frame_staging.gpu_memory_bytes()
-            + self.gpu_stats.gpu_memory_bytes()
             + self.tonemapping_pass.gpu_memory_bytes()
     }
 
