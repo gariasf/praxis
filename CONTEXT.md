@@ -109,8 +109,12 @@ A cell of the view frustum, bounded in screen space and depth, that holds the li
 _Avoid_: Cluster, light cluster, tile
 
 **Shadow mask**:
-A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where it faces away or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target; the lit pass reads it.
+A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.
 _Avoid_: Shadow map, shadow buffer, visibility buffer
+
+**Surface normals**:
+Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.
+_Avoid_: G-buffer, normal buffer
 
 **Meshlet**:
 A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.

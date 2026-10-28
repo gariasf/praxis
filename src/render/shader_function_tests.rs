@@ -1579,6 +1579,96 @@ fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
     }
 }
 
+/// Octahedral coordinates hold a unit vector: decoded, they give it back,
+/// over the axes, the octahedron's edges where the lower half folds, and an
+/// even spread of directions; stored as 8-bit unorms, as the surface normals
+/// store them, within 0.95° of it, the bound the shadow mask's margins take.
+#[test]
+fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let axes = [glam::DVec3::X, glam::DVec3::Y, glam::DVec3::Z].into_iter();
+    let edges = [
+        (1.0, 1.0, 0.0),
+        (1.0, 0.0, -1.0),
+        (0.0, -1.0, -1.0),
+        (-1.0, 1.0, 0.0),
+    ]
+    .map(|(x, y, z)| glam::dvec3(x, y, z).normalize())
+    .into_iter();
+    // A Fibonacci lattice: even in z, the golden angle apart around it.
+    let count = 4096;
+    let golden_angle = std::f64::consts::PI * (3.0 - 5f64.sqrt());
+    let spread = (0..count).map(|index| {
+        let z = 1.0 - (2.0 * index as f64 + 1.0) / count as f64;
+        let radius = (1.0 - z * z).sqrt();
+        let angle = golden_angle * index as f64;
+        glam::dvec3(radius * angle.cos(), radius * angle.sin(), z)
+    });
+    let directions: Vec<glam::DVec3> = axes
+        .clone()
+        .chain(axes.map(|axis| -axis))
+        .chain(edges.clone())
+        .chain(edges.map(|edge| -edge))
+        .chain(spread)
+        .collect();
+    let inputs: Vec<[f32; 4]> = directions
+        .iter()
+        .map(|direction| direction.as_vec3().extend(0.0).to_array())
+        .collect();
+    let encoded = evaluate(
+        &context,
+        "vec4<f32>(octahedral_encode(input.xyz), 0.0, 0.0)",
+        &inputs,
+    );
+    // Each coordinate as the full float, then rounded to 8 bits from [0, 1]
+    // and mapped back to [-1, 1], as an Rgba8Unorm target stores it.
+    let stored: Vec<[f32; 4]> = encoded
+        .iter()
+        .map(|&[x, y, _, _]| {
+            let quantised =
+                |coordinate: f32| (((coordinate * 0.5 + 0.5) * 255.0).round() / 255.0) * 2.0 - 1.0;
+            [x, y, quantised(x), quantised(y)]
+        })
+        .collect();
+    let decoded = evaluate(
+        &context,
+        "vec4<f32>(octahedral_decode(input.xy), 0.0)",
+        &stored,
+    );
+    let decoded_from_8_bits = evaluate(
+        &context,
+        "vec4<f32>(octahedral_decode(input.zw), 0.0)",
+        &stored,
+    );
+
+    let largest_8_bit_error = 0.95f64.to_radians();
+    for (((direction, coordinates), full), quantised) in directions
+        .iter()
+        .zip(&encoded)
+        .zip(decoded)
+        .zip(decoded_from_8_bits)
+    {
+        assert!(
+            coordinates[0].abs().max(coordinates[1].abs()) <= 1.0,
+            "{direction} encodes to {coordinates:?}, outside [-1, 1]²"
+        );
+        let full = glam::Vec3::from_slice(&full).as_dvec3();
+        assert!(
+            full.distance(*direction) <= 4.0 * f64::from(TOLERANCE),
+            "{direction} decodes back as {full}"
+        );
+        let quantised = glam::Vec3::from_slice(&quantised).as_dvec3();
+        let angle = quantised.dot(*direction).clamp(-1.0, 1.0).acos();
+        assert!(
+            angle <= largest_8_bit_error,
+            "{direction} decodes from 8 bits as {quantised}, {}° off",
+            angle.to_degrees()
+        );
+    }
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;

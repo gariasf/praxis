@@ -93,13 +93,13 @@ impl MainPass {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        let depth_pipeline = |label, fragment| {
+        let depth_pipeline = |label, vertex_entry_point, fragment| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&depth_prepass_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some("vs_depth_prepass"),
+                    entry_point: Some(vertex_entry_point),
                     buffers: &[],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
@@ -111,11 +111,31 @@ impl MainPass {
                 cache: None,
             })
         };
-        let depth_prepass_pipeline = depth_pipeline("Depth Pre-pass Pipeline", None);
+        // With shadow rays on, the depth passes write each sample's surface
+        // normals beside its depth, for the shadow mask pass.
+        let depth_prepass_pipeline = if switches.shadow_rays {
+            depth_pipeline(
+                "Depth Pre-pass Pipeline",
+                "vs_depth_normals",
+                Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_surface_normals"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: targets::SURFACE_NORMALS_FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+            )
+        } else {
+            depth_pipeline("Depth Pre-pass Pipeline", "vs_depth_prepass", None)
+        };
         // Every pipeline the lit pass sets names its colour target, so its
         // depth draw names it too, and writes nothing to it.
         let lit_pass_depth_pipeline = depth_pipeline(
             "Lit Pass Depth Pipeline",
+            "vs_depth_prepass",
             Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_depth"),
@@ -199,11 +219,11 @@ impl MainPass {
         )
     }
 
-    /// Records the depth pre-pass into `encoder`: clears the depth target
-    /// and draws the frame's draw as phase one leaves it, its packed indices
-    /// `packed_indices` and its indirect arguments `frame_draw`, with the
-    /// groups of `bind_groups` its vertex stage reads set, timed into
-    /// `timestamp_writes`.
+    /// Records the depth pre-pass into `encoder`: clears the depth target,
+    /// and with shadow rays on the surface normals, and draws the frame's
+    /// draw as phase one leaves it, its packed indices `packed_indices` and
+    /// its indirect arguments `frame_draw`, with the groups of `bind_groups`
+    /// its vertex stage reads set, timed into `timestamp_writes`.
     pub fn record_depth_prepass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -213,9 +233,14 @@ impl MainPass {
         frame_draw: &wgpu::Buffer,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
+        let surface_normals = [Some(render_targets.surface_normals_attachment(true))];
         let mut depth_prepass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(DEPTH_PREPASS),
-            color_attachments: &[],
+            color_attachments: if self.shadow_rays {
+                &surface_normals
+            } else {
+                &[]
+            },
             depth_stencil_attachment: Some(render_targets.depth_attachment()),
             occlusion_query_set: None,
             timestamp_writes,
@@ -234,9 +259,10 @@ impl MainPass {
     }
 
     /// Records phase two's depth pass into `encoder`, with shadow rays on:
-    /// draws phase two's draw into the depth target, which it loads and
-    /// stores for the shadow mask pass, the buffers and groups as
-    /// `record_depth_prepass` takes them, timed into `timestamp_writes`.
+    /// draws phase two's draw into the depth target and the surface
+    /// normals, which it loads and stores for the shadow mask pass, the
+    /// buffers and groups as `record_depth_prepass` takes them, timed into
+    /// `timestamp_writes`.
     pub fn record_phase_two_depth(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -248,7 +274,7 @@ impl MainPass {
     ) {
         let mut depth_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(PHASE_TWO_DEPTH_PASS),
-            color_attachments: &[],
+            color_attachments: &[Some(render_targets.surface_normals_attachment(false))],
             depth_stencil_attachment: Some(render_targets.loaded_depth_attachment()),
             occlusion_query_set: None,
             timestamp_writes,

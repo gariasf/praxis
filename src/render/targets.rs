@@ -25,6 +25,11 @@ pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// and the Froxel slice the bits follow.
 pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
+/// The surface normals' format: each sample's triangle normal, then the
+/// normal interpolated over the triangle, as octahedral coordinates
+/// (`octahedral_encode`, common.wgsl) of 8 bits each, mapped from [-1, 1].
+pub const SURFACE_NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
 /// unit of each: ITU-R BT.709-6's luma weights (item 3.2), which are the Y
 /// row of its linear RGB-to-XYZ matrix as ITU-R BT.2087-0 prints it
@@ -55,6 +60,9 @@ pub struct RenderTargets {
     /// Which lights the shadow mask pass found hidden at each pixel, which
     /// the lit pass reads.
     shadow_mask: wgpu::TextureView,
+    /// Each sample's surface normals, which the depth passes write with
+    /// shadow rays on and the shadow mask pass reads.
+    surface_normals: wgpu::TextureView,
 }
 
 impl RenderTargets {
@@ -130,6 +138,35 @@ impl RenderTargets {
                 1,
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
+            surface_normals: target(
+                "Surface Normals",
+                SURFACE_NORMALS_FORMAT,
+                SAMPLE_COUNT,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            ),
+        }
+    }
+
+    /// The surface normals.
+    pub fn surface_normals(&self) -> &wgpu::TextureView {
+        &self.surface_normals
+    }
+
+    /// The surface normals as a depth pass writes them: cleared where
+    /// `clear`, loaded otherwise, and stored for the shadow mask pass.
+    pub fn surface_normals_attachment(&self, clear: bool) -> wgpu::RenderPassColorAttachment<'_> {
+        wgpu::RenderPassColorAttachment {
+            view: &self.surface_normals,
+            resolve_target: None,
+            depth_slice: None,
+            ops: wgpu::Operations {
+                load: if clear {
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                } else {
+                    wgpu::LoadOp::Load
+                },
+                store: wgpu::StoreOp::Store,
+            },
         }
     }
 
@@ -241,6 +278,7 @@ impl RenderTargets {
             &self.hdr,
             &self.depth_pyramid_levels[0],
             &self.shadow_mask,
+            &self.surface_normals,
         ]
         .into_iter()
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))

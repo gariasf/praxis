@@ -18,6 +18,34 @@ fn vs_depth_prepass(@builtin(vertex_index) packed_index: u32) -> @builtin(positi
     return vertex_output(packed_index).clip_position;
 }
 
+// With shadow rays on, the depth passes' vertex output: the lit pass's
+// position and normal, so their depths meet its.
+struct DepthNormalsOutput {
+    @builtin(position) @invariant clip_position: vec4<f32>,
+    @location(0) camera_relative_position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+}
+
+@vertex
+fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOutput {
+    let out = vertex_output(packed_index);
+    return DepthNormalsOutput(out.clip_position, out.camera_relative_position, out.normal);
+}
+
+// The surface normals the shadow mask pass reads (SURFACE_NORMALS_FORMAT,
+// src/render/targets.rs): the triangle's own normal, facing the camera, from
+// the position's screen-space derivatives, both in the triangle's plane, and
+// the normal interpolated over it.
+@fragment
+fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
+    let crossed = normalize(cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position)));
+    let triangle_normal = select(crossed, -crossed, dot(crossed, in.camera_relative_position) > 0.0);
+    return vec4<f32>(
+        octahedral_encode(triangle_normal),
+        octahedral_encode(normalize(in.normal))
+    ) * 0.5 + 0.5;
+}
+
 // With shadow rays off, the lit pass draws phase two's Instances into depth
 // before it shades, with this and `vs_depth_prepass`: it writes no colour.
 @fragment

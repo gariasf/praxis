@@ -205,6 +205,13 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
             true,
             wgpu::ShaderStages::COMPUTE,
         ),
+        loaded_texture(
+            "surface_normals",
+            "texture_multisampled_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            true,
+            wgpu::ShaderStages::COMPUTE,
+        ),
         Binding {
             name: "shadow_mask",
             wgsl_type: "texture_storage_2d<rg32uint, write>",

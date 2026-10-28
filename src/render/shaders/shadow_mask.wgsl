@@ -6,10 +6,10 @@
 // the point lights its Froxel lists, as many as SHADOW_MASK_LIGHTS, across
 // the word's two halves; the second half's top bits hold the Froxel's slice.
 // A light past them casts no shadow there, and is counted. The depth target
-// holds both culling phases' Instances when it runs; the surface's position
-// is rebuilt from the sample's depth, and its face normal from the depths
-// the same sample holds at the neighbouring pixels. Its bindings are
-// declared from their bind groups' definitions (src/render/bind_groups.rs).
+// holds both culling phases' Instances when it runs, and the surface normals
+// what each sample shows; the surface's position is rebuilt from the
+// sample's depth. Its bindings are declared from their bind groups'
+// definitions (src/render/bind_groups.rs).
 
 // A directional light's shadow ray runs to f32's largest distance, past
 // anything a TLAS holds.
@@ -22,34 +22,35 @@ const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;
 // by a few times 2^-24 of its size at most, well inside the offset's 256.
 const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
 
-// Whether either TLAS holds geometry within `distance` of the surface point
-// at `position`, relative to the camera, along `direction`, a unit vector:
-// one hard shadow ray (ADR 0020), traced against the static TLAS, then,
-// where that finds nothing, against the dynamic TLAS unless it is empty: a
-// query of an empty TLAS still costs. It starts off the surface along
-// `normal`, its unit face normal, in the frame both TLAS share, whose origin
-// is the corner of the camera's `tlas_anchor`, composed as an Instance's
-// position is (ADR 0014).
-fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distance: f32) -> bool {
-    // The camera stands where an Instance does in this composition, and the
-    // TLAS's frame, with no offset from its Anchor, where the camera does.
-    let tlas_position = camera_relative_position(
-        camera.anchor,
-        camera.offset,
-        camera.tlas_anchor,
-        vec3<f32>(0.0),
-        position
-    );
-    let extent = max(abs(tlas_position), abs(position));
-    let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
+// The cosines, of a light's angle from a plane, past which a sample's normals
+// face the light or turn from it: sin 2°, 5° and 10°. The surface normals'
+// 8-bit octahedral coordinates hold each within 0.95° (`octahedral_decode`).
+// The interpolated normal turns from a light it may face at the pixel's
+// centre, where the lit pass shades, within the first; a triangle faces a
+// light its ray then clears by the second where its normals agree, and by
+// the third where the interpolated normal bends from it; past them, its ray
+// starts inside the surface.
+const INTERPOLATED_TURN_MARGIN: f32 = 0.03489949670250097;
+const AGREEING_TRIANGLE_TURN_MARGIN: f32 = 0.08715574274765817;
+const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
+
+// The cosine within which a triangle's normal and the normal interpolated
+// over it agree, as on a flat surface or a flat-shaded mesh: 3°.
+const NORMALS_AGREE: f32 = 0.9986295347545738;
+
+// Whether either TLAS holds geometry between `t_min` and `t_max` along the
+// ray from `origin`, in the TLAS's frame, along `direction`, a unit vector:
+// traced against the static TLAS, then, where that finds nothing, against
+// the dynamic TLAS unless it is empty: a query of an empty TLAS still costs.
+fn hit_any(origin: vec3<f32>, direction: vec3<f32>, t_min: f32, t_max: f32) -> bool {
     // Opaque, so one rayQueryProceed completes a traversal, and any hit
     // shadows the point.
     let ray = RayDesc(
         RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
         0xffu,
-        0.0,
-        distance,
-        tlas_position + normal * offset,
+        t_min,
+        t_max,
+        origin,
         direction
     );
     var query: ray_query;
@@ -64,6 +65,75 @@ fn shadowed(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, distan
     return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
 }
 
+// The nearest triangle either TLAS holds within `t_max` along the ray from
+// `origin`, in the TLAS's frame, along `direction`, a unit vector; its kind
+// is RAY_QUERY_INTERSECTION_NONE where there is none.
+fn nearest_hit(origin: vec3<f32>, direction: vec3<f32>, t_max: f32) -> RayIntersection {
+    var query: ray_query;
+    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, t_max, origin, direction));
+    rayQueryProceed(&query);
+    let static_hit = rayQueryGetCommittedIntersection(&query);
+    if camera.dynamic_tlas_entries == 0u {
+        return static_hit;
+    }
+    // Only a dynamic triangle nearer than the static one can replace it.
+    let dynamic_t_max = select(t_max, static_hit.t, static_hit.kind != RAY_QUERY_INTERSECTION_NONE);
+    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, dynamic_t_max, origin, direction));
+    rayQueryProceed(&query);
+    let dynamic_hit = rayQueryGetCommittedIntersection(&query);
+    if dynamic_hit.kind == RAY_QUERY_INTERSECTION_NONE {
+        return static_hit;
+    }
+    return dynamic_hit;
+}
+
+// Whether either TLAS holds geometry within `distance` of the surface point
+// at `position`, relative to the camera, along `direction`, a unit vector:
+// one hard shadow ray (ADR 0020), in the frame both TLAS share, whose origin
+// is the corner of the camera's `tlas_anchor`, composed as an Instance's
+// position is (ADR 0014). It starts off the surface along
+// `triangle_normal` where the triangle faces the light. Near a smooth-shaded
+// mesh's terminator, though, the triangle can turn from a light that
+// `interpolated_normal` faces, and a ray leaving it would cross the mesh's
+// own triangles: there it starts inside the surface, and passes the back of
+// the first triangle it meets, where it leaves the mesh. A ray that enters
+// a closed mesh meets a front face first, so whatever stands beyond still
+// shadows the point.
+fn shadowed(
+    position: vec3<f32>,
+    triangle_normal: vec3<f32>,
+    interpolated_normal: vec3<f32>,
+    direction: vec3<f32>,
+    distance: f32
+) -> bool {
+    // The camera stands where an Instance does in this composition, and the
+    // TLAS's frame, with no offset from its Anchor, where the camera does.
+    let tlas_position = camera_relative_position(
+        camera.anchor,
+        camera.offset,
+        camera.tlas_anchor,
+        vec3<f32>(0.0),
+        position
+    );
+    let extent = max(abs(tlas_position), abs(position));
+    let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
+    let facing = dot(triangle_normal, direction);
+    if facing >= TRIANGLE_TURN_MARGIN
+        || (facing >= AGREEING_TRIANGLE_TURN_MARGIN
+            && dot(triangle_normal, interpolated_normal) >= NORMALS_AGREE) {
+        return hit_any(tlas_position + triangle_normal * offset, direction, 0.0, distance);
+    }
+    let origin = tlas_position - triangle_normal * offset;
+    let exit = nearest_hit(origin, direction, distance);
+    if exit.kind == RAY_QUERY_INTERSECTION_NONE {
+        return false;
+    }
+    if exit.front_face || exit.t + offset >= distance {
+        return exit.front_face;
+    }
+    return hit_any(origin, direction, exit.t + offset, distance);
+}
+
 // Where `sample` of a pixel lies, from the pixel's top left corner, in
 // pixels: SAMPLE_OFFSETS, declared from Rust's, which a test checks the
 // depth target's samples against (src/render/shadow_mask_pass.rs).
@@ -73,57 +143,6 @@ fn sample_offset(sample: u32) -> vec2<f32> {
         select(SAMPLE_OFFSETS[1], SAMPLE_OFFSETS[0], sample == 0u),
         sample < 2u
     );
-}
-
-// The step in position from `position`, where `sample` of `pixel` shows a
-// surface at `depth`, to where the same sample shows one at the pixel
-// `axis` away, or at the pixel `axis` back, whichever is nearer in depth and
-// so likelier on the same surface, taken in the direction of `axis`; zero
-// where neither shows a surface.
-fn neighbour_step(
-    pixel: vec2<i32>,
-    axis: vec2<i32>,
-    sample: u32,
-    depth: f32,
-    position: vec3<f32>,
-    size: vec2<i32>
-) -> vec3<f32> {
-    let ahead = pixel + axis;
-    let behind = pixel - axis;
-    let ahead_inside = all(ahead >= vec2<i32>(0)) && all(ahead < size);
-    let behind_inside = all(behind >= vec2<i32>(0)) && all(behind < size);
-    let ahead_depth = select(0.0, textureLoad(depth_target, clamp(ahead, vec2<i32>(0), size - 1), sample), ahead_inside);
-    let behind_depth = select(0.0, textureLoad(depth_target, clamp(behind, vec2<i32>(0), size - 1), sample), behind_inside);
-    if ahead_depth == 0.0 && behind_depth == 0.0 {
-        return vec3<f32>(0.0);
-    }
-    let take_ahead = behind_depth == 0.0
-        || (ahead_depth != 0.0 && abs(ahead_depth - depth) <= abs(behind_depth - depth));
-    let neighbour = select(behind, ahead, take_ahead);
-    let neighbour_position = position_at(
-        camera.view_proj,
-        vec2<f32>(neighbour) + sample_offset(sample),
-        select(behind_depth, ahead_depth, take_ahead),
-        vec2<f32>(size)
-    );
-    return select(position - neighbour_position, neighbour_position - position, take_ahead);
-}
-
-// The unit face normal of the surface that `sample` of `pixel` shows at
-// `depth` and `position`, facing the camera, from the steps to its
-// neighbours across and down; toward the camera where it has none along an
-// axis.
-fn face_normal(pixel: vec2<i32>, sample: u32, depth: f32, position: vec3<f32>, size: vec2<i32>) -> vec3<f32> {
-    let across = neighbour_step(pixel, vec2<i32>(1, 0), sample, depth, position, size);
-    let down = neighbour_step(pixel, vec2<i32>(0, 1), sample, depth, position, size);
-    let normal = cross(across, down);
-    let length_squared = dot(normal, normal);
-    let toward_camera = -normalize(position);
-    if length_squared == 0.0 {
-        return toward_camera;
-    }
-    let unit = normal * inverseSqrt(length_squared);
-    return select(unit, -unit, dot(unit, toward_camera) < 0.0);
 }
 
 // `bits` with bit `bit` of the word's 64 set, across its two halves.
@@ -164,18 +183,20 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             depth,
             vec2<f32>(size)
         );
-        let normal = face_normal(pixel, sample, depth, position, size);
+        let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
+        let triangle_normal = octahedral_decode(normals.xy);
+        let interpolated_normal = octahedral_decode(normals.zw);
         var overflowed = 0u;
         for (var index = 0u; index < light.directional_light_count; index++) {
             if index >= SHADOW_MASK_LIGHTS {
                 overflowed++;
                 continue;
             }
-            // A light the face turns from is hidden by the surface itself,
-            // with no ray.
+            // A light the interpolated normal turns from is hidden by the
+            // surface itself, with no ray.
             let direction = normalize(-lights[index].offset);
-            if dot(normal, direction) <= 0.0
-                || shadowed(position, normal, direction, UNBOUNDED_RAY_DISTANCE) {
+            if dot(interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN
+                || shadowed(position, triangle_normal, interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE) {
                 hidden = with_bit(hidden, index);
             }
         }
@@ -209,8 +230,8 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             // Facing first, so a light at the surface, at no distance, is
             // hidden without dividing by it.
             let distance = sqrt(distance_squared);
-            if dot(normal, to_light) <= 0.0
-                || shadowed(position, normal, to_light / distance, distance) {
+            if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance
+                || shadowed(position, triangle_normal, interpolated_normal, to_light / distance, distance) {
                 hidden = with_bit(hidden, bit);
             }
         }
