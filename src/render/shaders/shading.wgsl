@@ -22,8 +22,8 @@ const DIELECTRIC_BASE_REFLECTANCE: f32 = 0.04;
 const MINIMUM_ROUGHNESS: f32 = 0.04;
 
 // Tokuyoshi and Kaplanyan's pixel filter, a Gaussian of standard deviation
-// σ = 0.5 pixels, as σ², and κ, their cap on the roughness it adds
-// [ref:tokuyoshi-2019-normal-derivatives].
+// σ = 0.5 pixels, as σ² [ref:tokuyoshi-2019-normal-derivatives], and κ,
+// their cap on the roughness it adds [ref:tokuyoshi-2019-roughness-matrix].
 const PIXEL_FILTER_VARIANCE: f32 = 0.25;
 const MAXIMUM_FILTER_ALPHA_SQUARED: f32 = 0.18;
 
@@ -104,15 +104,19 @@ fn fresnel_weight(view_dot_half: f32) -> f32 {
 //   α² χ⁺(N·H) / (π ((N·H)² (α² − 1) + 1)²),
 // its (N·H)² (α² − 1) + 1 summed as (N·H)² α² + 1 − (N·H)², with
 // 1 − (N·H)² given as |N × H|², `normal_cross_half_squared`, by Lagrange's
-// identity for unit N and H, as Filament (Apache-2.0) computes it
-// [ref:filament-ggx-lagrange-identity]. Near the peak, at the roughness
-// floor, 1 − N·H is a few f32 steps below 1 and errs by several percent,
-// which D's steep peak sums to about 1% too much light; |N × H|² keeps its
-// relative precision there.
+// identity for unit N and H, as Filament's mobile path (Apache-2.0) computes
+// it [ref:filament-ggx-lagrange-identity]. Near the peak, at the roughness
+// floor, N·H is a few f32 steps below 1, so 1 − N·H errs by several percent,
+// which summed over the hemisphere gave a white metal seen head-on 1.1% more
+// light than it received; |N × H|² keeps its relative precision there. For
+// unit N and H the sum is at least α², which it is held to, so a zero H,
+// where L and V are opposite, gives no infinity.
 fn distribution_ggx(normal_dot_half: f32, normal_cross_half_squared: f32, alpha: f32) -> f32 {
     let alpha_squared = alpha * alpha;
-    let denominator = normal_dot_half * normal_dot_half * alpha_squared
-        + normal_cross_half_squared;
+    let denominator = max(
+        normal_dot_half * normal_dot_half * alpha_squared + normal_cross_half_squared,
+        alpha_squared
+    );
     let distribution = alpha_squared / (PI * denominator * denominator);
     return select(0.0, distribution, normal_dot_half > 0.0);
 }

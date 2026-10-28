@@ -224,12 +224,13 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
                             cosines(glam::DVec3::Z, view, light).map(|cosine| cosine as f32);
                         // 1 − (N·H)², from the N·H the shader takes.
                         let normal_dot_half = f64::from(cosines[2]);
-                        let normal_cross_half = (1.0 - normal_dot_half) * (1.0 + normal_dot_half);
+                        let normal_cross_half_squared =
+                            (1.0 - normal_dot_half) * (1.0 + normal_dot_half);
                         let [red, green, blue] = GOLD;
                         cases.push([
                             cosines,
                             [red, green, blue, metallic],
-                            [roughness, normal_cross_half as f32, 0.0, 0.0],
+                            [roughness, normal_cross_half_squared as f32, 0.0, 0.0],
                         ]);
                     }
                 }
@@ -279,7 +280,9 @@ fn metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal() {
 /// surface reflects sums to what the reference's sum gives and stays under
 /// its bound: a white metal reflects at most what it receives, 1; a white
 /// dielectric at most its base colour, 1, plus the Fresnel it receives, what
-/// a black dielectric reflects. Appendix B's dielectric is held to no more,
+/// a black dielectric reflects, whose lobe is the white metal's weighted by
+/// F ≤ 1, so the metal's bound holds its specular too. Appendix B's
+/// dielectric is held to no more,
 /// since its fresnel_mix weighs only the diffuse lobe by 1 − F and is not
 /// energy conserving (Appendix B, "Coupling Diffuse and Specular Reflection"
 /// [ref:gltf-2.0-coupling]).
@@ -320,8 +323,6 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
     // specular lobe, as narrow as α about the normal in H, is as narrow at
     // every view. Cells are rings about the normal, 2π/48 apart in azimuth,
     // each 10% wider than the one inside it, from 1e-5 radians, up to 1°.
-    // Midpoint sums over cells half or a quarter that size differ by at most
-    // 1.2e-4 at these cases.
     let mut ring_edges = vec![0.0, 1e-5];
     while let Some(&edge) = ring_edges.last()
         && edge < std::f64::consts::FRAC_PI_2
@@ -455,7 +456,7 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
             .map(|((expected, _), solid_angle)| expected[0] * solid_angle)
             .sum();
         assert!(
-            (albedo - reference).abs() <= FURNACE_TOLERANCE,
+            (albedo - reference).abs() <= FURNACE_SUM_TOLERANCE,
             "a furnace at roughness {roughness}, seen {view_angle}° off its normal, reflects \
              {albedo}, expected {reference}"
         );
@@ -468,19 +469,24 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
         let (white_metal, white, black) = (albedos[0], albedos[1], albedos[2]);
         let case = format!("roughness {roughness}, seen {view_angle}° off its normal");
         assert!(
-            white_metal <= 1.0 + FURNACE_TOLERANCE,
+            white_metal <= 1.0 + QUADRATURE_TOLERANCE,
             "a white metal of {case} reflects {white_metal} of what it receives"
         );
         assert!(
-            white <= 1.0 + black + FURNACE_TOLERANCE,
+            white <= 1.0 + black + QUADRATURE_TOLERANCE,
             "a white dielectric of {case} reflects {white}, past 1 plus a black one's {black}"
         );
     }
 }
 
-/// How far a white furnace's sum may stray from the reference's, and past its
-/// bound: the cells' midpoint sums land within 1.2e-4 of finer grids'.
-const FURNACE_TOLERANCE: f64 = 1e-3;
+/// How far a white furnace's sum may stray from the reference's over the same
+/// cells: they land within 2e-7 of each other on the M4 Pro.
+const FURNACE_SUM_TOLERANCE: f64 = 1e-5;
+
+/// How far a white furnace's sum may pass its bound: sums over the cells
+/// land within 7.1e-4 of sums over cells half or a quarter their size, low
+/// where the lobe is narrow.
+const QUADRATURE_TOLERANCE: f64 = 1e-3;
 
 /// A point light's attenuation is KHR_lights_punctual's
 /// max(min(1 − (d / r)⁴, 1), 0) / d², evaluated in f64 from the same d² the
@@ -1240,7 +1246,8 @@ fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
 /// Roughness widens for the shading normal's screen-space derivatives as
 /// Tokuyoshi and Kaplanyan's eq. (4) gives it, evaluated in f64
 /// [ref:tokuyoshi-2019-normal-derivatives]: α² + min(2σ² (|∂n/∂x|² +
-/// |∂n/∂y|²), κ) with σ = 0.5 and κ = 0.18, capped at 1, α = roughness². A
+/// |∂n/∂y|²), κ) with σ = 0.5 and κ = 0.18
+/// [ref:tokuyoshi-2019-roughness-matrix], capped at 1, α = roughness². A
 /// still normal leaves roughness as it is; the added α² grows with the
 /// derivatives' squared lengths in either axis and any direction, stops at
 /// κ, and the total stops at 1, roughness 1.

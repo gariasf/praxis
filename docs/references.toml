@@ -669,7 +669,7 @@ checked = 2026-10-26
 ["tokuyoshi-2019-normal-derivatives"]
 url = "https://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf#page=5"
 section = "Tokuyoshi and Kaplanyan, Improved Geometric Specular Antialiasing (I3D 2019), §4.5, eq. (4) and Listing 2, p. 5; σ, §2.2, p. 3"
-quote = '''where σ = 0.5 is the standard deviation of the pixel filter kernel in image space measured in pixels [...] Hence, our roughness for the filtered isotropic NDF is yielded as ᾱ² = α² + min(2σ²(∥∆nu∥² + ∥∆nv∥²), κ). (4) [...] float filteredRoughness2 = saturate(roughness2 + kernelRoughness2);'''
+quote = '''where σ = 0.5 is the standard deviation of the pixel filter kernel in image space measured in pixels [...] Hence, our roughness for the filtered isotropic NDF is yielded as ᾱ² = α² + min(2σ²(∥∆nᵤ∥² + ∥∆nᵥ∥²), κ). (4) [...] float filteredRoughness2 = saturate(roughness2 + kernelRoughness2);'''
 checked = 2026-10-28
 
 ["gltf-2.0-texture-origin"]
