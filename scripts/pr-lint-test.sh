@@ -161,6 +161,8 @@ expect_pass "a docs PR without images" "$body"
 changed_paths=$'src/render/main_pass.rs\nREADME.md'
 expect_pass "a rendering PR with images in a table" "$(images_body "$gallery_table")"
 expect_pass "a rendering PR with images named by their links" "$(images_body "$gallery_links")"
+expect_pass "a rendering PR with titled image links" \
+  "$(images_body "${gallery_table//.png)/.png \"town\")}")"
 expect_fail "a rendering PR without images" 'missing: before after difference' "$body"
 expect_fail "a rendering PR without a difference image" 'missing: difference' \
   "$(images_body "${gallery_table/-difference.png/.png}")"

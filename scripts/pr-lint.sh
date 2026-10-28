@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks a PR's body and commit messages against docs/agents/workflow.md (PRs,
 # Review) and the sections of .github/pull_request_template.md, and that a PR
-# changing what Reference scenes render links its gallery images.
+# touching rendering paths links before, after and difference images.
 # Usage: pr-lint.sh <body-file> <changed-paths-file> [<commit-message-file>...]
 # The changed-paths file lists the PR's paths, one per line.
 # Prints one line per miss, naming the rule it breaks; exits non-zero on any.
@@ -66,7 +66,7 @@ elif grep -Eq '^(src/render/|src/cook/(texture|mesh)(\.rs$|/)|docs/adr/00(19|20)
   unlinked=()
   for kind in before after difference; do
     if ! KIND="$kind" perl -ne '
-      while (/(!?)\[([^\]]*)\]\(([^)\s]+)\)/g) {
+      while (/(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) {
         my ($embedded, $text, $url) = ($1, $2, $3);
         next unless $embedded || $url =~ /\.(png|jpe?g|gif|webp)(\?\S*)?$/i;
         my $name = $text . " " . ($url =~ s{.*/}{}r);

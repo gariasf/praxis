@@ -38,7 +38,7 @@ jobs:
       # The body, commit messages and changed paths reach the script through an
       # environment variable and files, never expanded into the script itself,
       # so no text in them runs. A renamed file lists both its paths.
-      - name: Lint the body and commits
+      - name: Lint the body, commits and rendering images
         env:
           GH_TOKEN: ${{ github.token }}
           BODY: ${{ github.event.pull_request.body }}
