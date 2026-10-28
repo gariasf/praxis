@@ -889,8 +889,10 @@ figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
       context.textBaseline = "top";
       for (let tick = 0; tick <= 4; tick++) {
         const angleDegrees = tick * span / 4 * 180 / Math.PI;
+        context.textAlign = tick === 0 ? "left" : tick === 4 ? "right" : "center";
         context.fillText(angleDegrees.toPrecision(2) + "°", left + (right - left) * tick / 4, bottom + 6);
       }
+      context.textAlign = "center";
       context.fillText("angle between N and H", (left + right) / 2, bottom + 22);
       function series(errors, colour, dashed) {
         context.strokeStyle = colour;
