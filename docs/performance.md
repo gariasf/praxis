@@ -4,6 +4,91 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Meshlet culling prototyped on `town`: the gate stays past 6 ms (2026-10-28, #347)
+
+**Verdict.** Testing each Meshlet of a drawn Instance does not pay on
+`town`: it drops 4.9% of the triangles drawn, the lit pass and depth
+pre-pass give back about 90 µs, the culling phases spend about 130 µs
+more (rounds 2 and 3 below, each against its A), and the gate is
+unchanged at 8.6 ms against 6. The culling
+phases read 1,451 µs, 60% of #347's 2.4 ms, not under half. Fewer
+triangles is the only lever on phase one, whose cost is its packed-index
+writes (#363), and 4.9% fewer could not bring the phases under 1.2 ms even
+if the tests cost nothing. The prototype stays on its branch,
+`prototype/347-meshlet-culling` at d242a68; culling still tests
+Instances, as ADR 0019 records. With the gate breached under option A
+after #363 and this, #297 (option D) is the next prototype on `town`.
+
+**Why so few.** Of the 244,256 Instances `town` places besides its
+10,000 pigeons, 171,649 draw a Mesh of one Meshlet, among them 109,760
+railing posts and 56,932 boxes, and each pigeon does too. A box's one
+Meshlet faces every way, so its normal cone culls nothing; only the
+rasterizer drops its six back-facing triangles, after their vertex work.
+The other Meshes hold 2 to 5 Meshlets, cut in index order, and 33 of
+their 37 Meshlets have a normal cone too wide to cull by, at its Snorm8
+cutoff of 127, so only 4 can be dropped for facing away.
+Instances already pass the frustum test and, in phase two, the depth
+pyramid; the Meshlet test adds only what a Meshlet's own box and cone
+rule out.
+
+**What the prototype did.** Per phase, `append_records` tests each
+Meshlet of a drawn Instance once against the frustum, in phase two the
+depth pyramid, and its normal cone with meshoptimizer's apex-free test on
+the sphere around its box [ref:meshoptimizer-0.25-cluster-bounds]. It
+writes every record with its index offset within the Instance, or none,
+and scans the kept indices per block; a one-workgroup pass scans the
+blocks and a pass per slot counts the Instances drawn. Testing once
+matters: Metal compiles with fast math by default [ref:msl-4.1-fast-math],
+so two entry points testing the same Meshlet could disagree and corrupt
+the offsets. The Mesh pool computes each Meshlet's box and cone at load,
+since SciFiHelmet's Mesh Blob reads 13.822 bytes per triangle against its
+13.83 ceiling, with no room for them. Culling on and off drew the same
+image at `town`'s eight frames. On `helmet`, 23 pixels differed with
+shadow rays on, the bug #369 names: the normals pass reads no flat input,
+so which fragments merge (#348) depends on the triangles the draw holds.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
+prototype (M) and of `main` at 7525b7d (A). `praxis bench <dir> town` at
+2560×1440 with 4x MSAA, 1,800 measured frames, three rounds, each M then
+A, no other GPU work. Medians per round, in µs:
+
+| Round | Build | Gate, rays off | `culling_phase_one` | `culling_phase_two` | `depth_prepass` | `lit_pass` | Triangles drawn |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 1 | A (main) | 8,621 | 1,110 | 168 | 2,119 | 11,283 | 5,552,214 |
+| 1 | M (Meshlet test) | 8,620 | 1,197 | 211 | 2,081 | 9,656 | 5,280,720 |
+| 2 | A (main) | 8,728 | 1,129 | 180 | 2,089 | 11,288 | 5,552,214 |
+| 2 | M (Meshlet test) | 8,735 | 1,219 | 211 | 2,081 | 11,220 | 5,280,720 |
+| 3 | A (main) | 8,625 | 1,128 | 178 | 2,094 | 11,267 | 5,552,214 |
+| 3 | M (Meshlet test) | 8,631 | 1,234 | 217 | 2,062 | 11,201 | 5,280,720 |
+
+Round 1's M `lit_pass` median stands apart from the other five, while its
+gate does not. M's median round, 3, against `town`'s Baseline, which is A
+as `main` runs it:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| GPU frame | 15,441.8 | 16,476.7 | 15,399.8 | 16,383.5 | +42.1 | 1.003 | 12,000.0 |
+| Gate, rays off | 8,630.9 | 8,997.9 | 8,654.9 | 9,256.8 | -24.0 | 0.997 | 6,000.0 |
+| `culling_phase_one` | 1,233.6 | 1,290.7 | 1,113.1 | 1,154.9 | +120.5 | 1.108 | — |
+| `culling_phase_two` | 217.3 | 247.6 | 169.4 | 192.6 | +47.9 | 1.283 | — |
+| `depth_prepass` | 2,061.5 | 2,122.3 | 2,117.8 | 2,213.8 | -56.2 | 0.973 | — |
+| `lit_pass` | 11,200.8 | 11,912.8 | 11,269.8 | 12,014.8 | -68.9 | 0.994 | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `instances_drawn` | 137,697 | 137,730 | -33 | 1.000 | — |
+| `triangles_drawn` | 5,280,720 | 5,552,214 | -271,494 | 0.951 | — |
+| `gpu_memory_bytes` | 679,732,168 | 675,537,864 | +4,194,304 | 1.006 | 8,000,000,000 |
+
+`instances_drawn` counts, with the test, only Instances that keep a
+Meshlet; `gpu_memory_bytes` grows by the fourth field of each of the 2^20
+Meshlet records.
+
+**What would make it pay.** A cut that gives Meshlets narrow cones, such
+as a box as its faces, at the cost of more records per Instance; or
+denser Meshes than `town`'s, where a Meshlet is a small part of an
+Instance. Neither is ticketed: option D is the next step on the gate.
+
 ## Index-sharing fragments merge on the M4 Pro unless a flat input is read (2026-10-28, #348)
 
 **Verdict.** Under 2x or 4x MSAA, when the fragment stage reads no
