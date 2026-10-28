@@ -7,7 +7,10 @@
 //! two, after the depth pyramid, the others in view that the pyramid does
 //! not hide, and it records each Instance's visibility for the next frame. With the `culling` Render switch on, it
 //! draws only the Instances whose Mesh bounds reach into the view frustum;
-//! off, phase one draws every Instance in use.
+//! off, phase one draws every Instance in use. Each phase sums its
+//! Instances' offsets over the slots in use, writes their Meshlet records,
+//! then their packed indices with a workgroup per Meshlet record, dispatched
+//! indirectly.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::INSTANCE_CAPACITY;
@@ -42,6 +45,10 @@ impl CullingPhase {
 /// invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
+/// The workgroups in each dimension of a dispatch the Capability floor
+/// guarantees (ADR 0021): `append_triangles` is dispatched in rows of these.
+pub(crate) const MAX_WORKGROUPS_PER_DIMENSION: u32 = 65_535;
+
 /// What the frame's draw holds, provisional until ADR 0013's split of the 8 GB
 /// Budget sizes it.
 #[derive(Clone, Copy)]
@@ -65,8 +72,9 @@ impl DrawCapacity {
 /// The frame's draw as `culling.wgsl` lays it out, which the GPU stats
 /// readback reads: the indirect arguments of the indexed draw of both
 /// phases, its index count first, then the Instances it holds and those it
-/// has no room for, then phase two's own draw's arguments, and where phase
-/// two's Meshlet records and packed indices start.
+/// has no room for, then phase two's own draw's arguments, where phase
+/// two's Meshlet records and packed indices start, the phase's dispatch of
+/// `append_triangles`, and where the phase's Meshlet records end.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct FrameDraw {
@@ -75,11 +83,16 @@ pub(crate) struct FrameDraw {
     pub(crate) instances_overflowed: u32,
     pub(crate) phase_two_draw: wgpu::util::DrawIndexedIndirectArgs,
     phase_two_offsets: [u32; 2],
+    append_dispatch: wgpu::util::DispatchIndirectArgs,
+    records_end: u32,
 }
 
 /// Where the frame's draw holds the indirect arguments of phase two's draw.
 pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
     std::mem::offset_of!(FrameDraw, phase_two_draw) as u64;
+
+/// Where the frame's draw holds the phase's dispatch of `append_triangles`.
+const APPEND_DISPATCH_OFFSET: u64 = std::mem::offset_of!(FrameDraw, append_dispatch) as u64;
 
 impl FrameDraw {
     /// Its index count over 3: the drawn Instances' indices fill the draw
@@ -98,7 +111,8 @@ impl FrameDraw {
 struct PhasePipelines {
     offset_slots: wgpu::ComputePipeline,
     offset_blocks: wgpu::ComputePipeline,
-    append_meshlets: wgpu::ComputePipeline,
+    append_records: wgpu::ComputePipeline,
+    append_triangles: wgpu::ComputePipeline,
 }
 
 /// The culling pass's pipelines, each phase's, and the frame's draw it
@@ -110,7 +124,9 @@ pub struct CullingPass {
     frame_draw_layout: wgpu::BindGroupLayout,
     /// Its group 3 (`FRAME_DRAW`), built by `frame_draw_bind_group`.
     bind_group: wgpu::BindGroup,
-    max_workgroups_per_dimension: u32,
+    /// The phase's dispatch of `append_triangles`, copied from the frame's
+    /// draw: a buffer the dispatch also binds for writing cannot hold it.
+    append_dispatch: wgpu::Buffer,
 }
 
 /// The buffers of the pass's group 3, which holds the depth pyramid besides.
@@ -197,6 +213,11 @@ impl CullingPass {
             frame_draw,
             instance_visibility,
         };
+        let append_dispatch = buffer(
+            "Append Dispatch Buffer",
+            size_of::<wgpu::util::DispatchIndirectArgs>() as u64,
+            wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+        );
         let frame_draw_layout = FRAME_DRAW.layout(device);
         let bind_group =
             frame_draw_bind_group(device, &frame_draw_layout, &buffers, render_targets);
@@ -228,7 +249,8 @@ impl CullingPass {
             PhasePipelines {
                 offset_slots: pipeline("offset_slots"),
                 offset_blocks: pipeline("offset_blocks"),
-                append_meshlets: pipeline("append_meshlets"),
+                append_records: pipeline("append_records"),
+                append_triangles: pipeline("append_triangles"),
             }
         };
         CullingPass {
@@ -237,7 +259,7 @@ impl CullingPass {
             buffers,
             frame_draw_layout,
             bind_group,
-            max_workgroups_per_dimension: device.limits().max_compute_workgroups_per_dimension,
+            append_dispatch,
         }
     }
 
@@ -263,27 +285,59 @@ impl CullingPass {
             }
             CullingPhase::Two => &self.phase_two,
         };
-        // Each slot's offsets are the sum of the earlier slots' Meshlet
-        // records and packed indices: summed by block, then the blocks.
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        let slots = frame.instance_slot_count;
+        // Timed from the first pass's start to the second's end, the copy
+        // of the dispatch between them.
+        let [first_timestamps, second_timestamps] = match timestamp_writes {
+            Some(writes) if slots > 0 => [
+                Some(wgpu::ComputePassTimestampWrites {
+                    end_of_pass_write_index: None,
+                    ..writes
+                }),
+                Some(wgpu::ComputePassTimestampWrites {
+                    beginning_of_pass_write_index: None,
+                    ..writes
+                }),
+            ],
+            writes => [writes, None],
+        };
+        let set_bind_groups = |pass: &mut wgpu::ComputePass| {
+            for &(definition, bind_group) in bind_groups {
+                pass.set_bind_group(definition.index, bind_group, &[]);
+            }
+            pass.set_bind_group(FRAME_DRAW.index, &self.bind_group, &[]);
+        };
+        let descriptor = |timestamp_writes| wgpu::ComputePassDescriptor {
             label: Some(phase.label()),
             timestamp_writes,
-        });
-        for &(definition, bind_group) in bind_groups {
-            pass.set_bind_group(definition.index, bind_group, &[]);
+        };
+        let mut pass = encoder.begin_compute_pass(&descriptor(first_timestamps));
+        set_bind_groups(&mut pass);
+        if slots == 0 {
+            return;
         }
-        pass.set_bind_group(FRAME_DRAW.index, &self.bind_group, &[]);
-        let slots = frame.instance_slot_count;
-        if slots > 0 {
-            pass.set_pipeline(&pipelines.offset_slots);
-            pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
-            pass.set_pipeline(&pipelines.offset_blocks);
-            pass.dispatch_workgroups(1, 1, 1);
-            // A workgroup per slot, in rows each dimension's limit holds.
-            pass.set_pipeline(&pipelines.append_meshlets);
-            let rows = slots.div_ceil(self.max_workgroups_per_dimension);
-            pass.dispatch_workgroups(slots.div_ceil(rows), rows, 1);
-        }
+        // Each slot's offsets are the sum of the earlier slots' Meshlet
+        // records and packed indices: summed by block, then the blocks.
+        pass.set_pipeline(&pipelines.offset_slots);
+        pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+        pass.set_pipeline(&pipelines.offset_blocks);
+        pass.dispatch_workgroups(1, 1, 1);
+        // An invocation per slot.
+        pass.set_pipeline(&pipelines.append_records);
+        pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+        drop(pass);
+        encoder.copy_buffer_to_buffer(
+            &self.buffers.frame_draw,
+            APPEND_DISPATCH_OFFSET,
+            &self.append_dispatch,
+            0,
+            self.append_dispatch.size(),
+        );
+        // A workgroup per Meshlet record the phase appends.
+        let mut pass = encoder.begin_compute_pass(&descriptor(second_timestamps));
+        set_bind_groups(&mut pass);
+        pass.set_pipeline(&pipelines.append_triangles);
+        pass.dispatch_workgroups_indirect(&self.append_dispatch, 0);
     }
 
     /// Builds the bind group that reads `render_targets` again, as `new`
@@ -317,14 +371,15 @@ impl CullingPass {
         &self.buffers.frame_draw
     }
 
-    /// Bytes of the frame's draw, and of the Instance slot count, offsets
-    /// and visibility.
+    /// Bytes of the frame's draw, of the Instance slot count, offsets and
+    /// visibility, and of the dispatch copied out.
     pub fn gpu_memory_bytes(&self) -> u64 {
         self.buffers
             .named()
             .iter()
             .map(|(_, buffer)| buffer.size())
-            .sum()
+            .sum::<u64>()
+            + self.append_dispatch.size()
     }
 }
 

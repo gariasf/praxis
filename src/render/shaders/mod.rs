@@ -14,7 +14,7 @@ use crate::render::bind_groups::{
     FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
     SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
-use crate::render::culling_pass::SCAN_BLOCK_SIZE;
+use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
 use crate::render::froxel_pass::{
     FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS, FROXEL_SLICES,
@@ -238,6 +238,7 @@ impl ShaderModule {
              const NO_MESH: u32 = {NO_MESH}u;\n\
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
+             const MAX_WORKGROUPS_PER_DIMENSION: u32 = {MAX_WORKGROUPS_PER_DIMENSION}u;\n\
              const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\

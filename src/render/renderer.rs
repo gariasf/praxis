@@ -797,7 +797,9 @@ pub(crate) mod tests {
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
-    use crate::cooked::{CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
+    use crate::cooked::{
+        CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex, MESHLET_MAX_VERTICES,
+    };
     use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
     use crate::render::depth_pyramid_pass::tests::read_texture;
@@ -2159,6 +2161,151 @@ pub(crate) mod tests {
             assert_eq!(gpu.instances_drawn as usize, expected.len(), "{switches:?}");
             let drawn_slots: Vec<u32> = records.iter().map(|record| record[0]).collect();
             assert_eq!(drawn_slots, expected, "{switches:?}");
+        }
+    }
+
+    /// Instances of a Mesh of four Meshlets, of 124, 7, 60 and 1 triangles
+    /// over two Primitives, in more slots than a block of the culling pass's
+    /// scans holds, every third outside the target and one freed, half with
+    /// their Material overridden. Each frame's draw holds, in slot order, a
+    /// Meshlet record per Meshlet of each Instance drawn and its triangles'
+    /// cooked corners, each packed with its record: culling off, every
+    /// Instance in use, in phase one; culling on, those in view, in phase
+    /// two the first frame, when none was visible before, and in phase one
+    /// the next.
+    #[test]
+    fn the_draw_holds_each_drawn_instances_meshlets_and_their_cooked_corners_in_slot_order() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const SLOTS: u32 = 300;
+        let triangle_counts = [[124, 7], [60, 1]];
+        let vertex = |corner: u32| {
+            let angle = corner as f32 * std::f32::consts::TAU / 63.0;
+            CookedVertex {
+                position: [0.3 * angle.cos(), 0.3 * angle.sin(), 0.5],
+                uv: [0.0, 0.0],
+                qtangent: [0, 0, 0, i16::MAX],
+            }
+        };
+        // Each Meshlet's triangle t takes three of 63 vertices from t on, so
+        // every triangle's corners differ from its neighbours'.
+        let meshlet = |triangles: u32| CookedMeshlet {
+            vertices: (0..63).collect(),
+            triangles: (0..triangles)
+                .map(|triangle| [0, 1, 2].map(|corner| ((triangle + corner) % 63) as u8))
+                .collect(),
+        };
+        let mut first_index = 0;
+        let primitives: Vec<CookedPrimitive> = triangle_counts
+            .iter()
+            .map(|counts| {
+                let index_count = 3 * counts.iter().sum::<u32>();
+                let primitive = CookedPrimitive {
+                    first_index,
+                    index_count,
+                    material: None,
+                    meshlets: counts.iter().map(|&count| meshlet(count)).collect(),
+                };
+                first_index += index_count;
+                primitive
+            })
+            .collect();
+        let meshlets: Vec<&CookedMeshlet> = primitives
+            .iter()
+            .flat_map(|primitive| &primitive.meshlets)
+            .collect();
+        let indices = meshlets
+            .iter()
+            .flat_map(|meshlet| meshlet.triangles.iter().flatten())
+            .map(|&corner| u32::from(corner))
+            .collect();
+        let cooked = CookedMesh {
+            vertices: (0..63).map(vertex).collect(),
+            indices,
+            primitives: primitives.clone(),
+            bounds: TRIANGLE_BOUNDS,
+        };
+        let freed = |slot: u32| slot == 100;
+        let in_view = |slot: u32| slot % 3 != 2;
+
+        for (culling, frame_count) in [(false, 1), (true, 1), (true, 2)] {
+            let switches = RenderSwitches {
+                culling,
+                ..RenderSwitches::default()
+            };
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
+            let green = emissive_material(&mut renderer, [0.0, 1.0, 0.0]);
+            let mesh = renderer
+                .mesh_pool
+                .load(&mut renderer.load_staging, &cooked, &[Some(green); 2])
+                .expect("the Mesh fits");
+            let material_of = |slot: u32| {
+                if slot.is_multiple_of(2) {
+                    red.index()
+                } else {
+                    NO_MATERIAL
+                }
+            };
+            let instances = (0..SLOTS)
+                .map(|slot| InstanceData {
+                    mesh: if freed(slot) { NO_MESH } else { mesh.0 },
+                    ..instance(
+                        mesh,
+                        material_of(slot),
+                        if in_view(slot) {
+                            [0.0, 0.0]
+                        } else {
+                            [5.0, 5.0]
+                        },
+                    )
+                })
+                .collect();
+            let frame = frame_of(instances);
+            for _ in 0..frame_count {
+                render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+            }
+
+            let drawn_slots =
+                (0..SLOTS).filter(|&slot| !freed(slot) && (!culling || in_view(slot)));
+            let mut expected_records = Vec::new();
+            let mut expected_indices = Vec::new();
+            for slot in drawn_slots {
+                for (meshlet_in_mesh, meshlet) in meshlets.iter().enumerate() {
+                    let record = expected_records.len() as u32;
+                    let material = material_of(slot);
+                    let material = if material == NO_MATERIAL {
+                        green.index()
+                    } else {
+                        material
+                    };
+                    expected_records.push((slot, meshlet_in_mesh as u32, material));
+                    expected_indices.extend(meshlet.triangles.iter().flatten().map(|&corner| {
+                        (record << MESHLET_MAX_VERTICES.ilog2()) | u32::from(corner)
+                    }));
+                }
+            }
+            let draw =
+                read_storage::<FrameDraw>(&context, renderer.culling_pass.frame_draw(), 1)[0];
+            let records = read_storage::<[u32; 3]>(
+                &context,
+                renderer.culling_pass.meshlet_records(),
+                expected_records.len(),
+            );
+            let first_meshlet = records[0][1];
+            let records: Vec<(u32, u32, u32)> = records
+                .iter()
+                .map(|&[slot, meshlet, material]| (slot, meshlet - first_meshlet, material))
+                .collect();
+            let indices = read_storage::<u32>(
+                &context,
+                renderer.culling_pass.packed_indices(),
+                draw.draw.index_count as usize,
+            );
+            let case = (culling, frame_count);
+            assert_eq!(records, expected_records, "{case:?}");
+            assert_eq!(indices, expected_indices, "{case:?}");
         }
     }
 
