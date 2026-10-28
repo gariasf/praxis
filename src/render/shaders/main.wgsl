@@ -19,17 +19,26 @@ fn vs_depth_prepass(@builtin(vertex_index) packed_index: u32) -> @builtin(positi
 }
 
 // With shadow rays on, the depth passes' vertex output: the lit pass's
-// position and normal, so their depths meet its.
+// position and normal, so their depths meet its, and its flat Material ID,
+// which their fragment stage reads, as the lit pass's does, so that the
+// M4 Pro merges neither's fragments and each sample's normals come from the
+// triangle the lit pass shades there (ADR 0019).
 struct DepthNormalsOutput {
     @builtin(position) @invariant clip_position: vec4<f32>,
     @location(0) camera_relative_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) @interpolate(flat) material_id: u32,
 }
 
 @vertex
 fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOutput {
     let out = vertex_output(packed_index);
-    return DepthNormalsOutput(out.clip_position, out.camera_relative_position, out.normal);
+    return DepthNormalsOutput(
+        out.clip_position,
+        out.camera_relative_position,
+        out.normal,
+        out.material_id
+    );
 }
 
 // The surface normals the shadow mask pass reads (SURFACE_NORMALS_FORMAT,
@@ -55,8 +64,12 @@ fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
         in.normal * inverseSqrt(normal_length_squared),
         normal_length_squared > 0.0
     );
-    return vec4<f32>(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal)) * 0.5
-        + 0.5;
+    let encoded_normals = vec4<f32>(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
+        * 0.5 + 0.5;
+    // Reads the flat input, so the stage has one the compiler cannot drop,
+    // to no effect: Material IDs index the Material table, far below
+    // NO_MATERIAL - 1.
+    return select(encoded_normals, vec4<f32>(0.0), in.material_id == NO_MATERIAL - 1u);
 }
 
 // With shadow rays off, the lit pass draws phase two's Instances into depth

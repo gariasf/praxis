@@ -63,15 +63,12 @@ const FAR_SHIFT: glam::DVec3 = glam::DVec3::new(100_032.0, 0.0, 100_032.0);
 const SOFTWARE_UNCULLED_PIXELS: usize = 1;
 
 /// Pixels per frame that may differ between culling on and off on a
-/// hardware driver. With culling on, the depth passes draw the two culling
-/// phases' Instances in two draws, which write the surface normals, while
-/// the lit pass draws them in one. On the M4 Pro, which of two triangles
-/// sharing an edge covers a sample on that edge depends on what else the
-/// draw holds, so at a few edge samples the shadow mask reads one
-/// triangle's normals while the lit pass shades the other, at the same
-/// depth. With culling off, the depth pass and the lit pass make the same
-/// draw and agree. `town`'s eight frames differ by at most 6 pixels each.
-const HARDWARE_UNCULLED_PIXELS: usize = 8;
+/// hardware driver: none. The depth passes, which write the surface normals,
+/// and the lit pass each read a flat input, so the M4 Pro merges neither's
+/// fragments, and every sample's normals come from the triangle the lit pass
+/// shades there, whichever draws hold the culling phases' Instances
+/// (ADR 0019).
+const HARDWARE_UNCULLED_PIXELS: usize = 0;
 
 const UPDATE_GOLDENS_VARIABLE: &str = "PRAXIS_UPDATE_GOLDENS";
 const REQUIRE_GOLDENS_VARIABLE: &str = "PRAXIS_REQUIRE_GOLDENS";
