@@ -47,13 +47,6 @@ const SCENES: [ReferenceScene; 9] = [
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
 
-/// The largest channel difference, in 8-bit steps, that still matches.
-/// Measured noise on the M4 Pro (Metal) and on CI's lavapipe: 20 captures per
-/// scene, each in its own process, were byte-identical, so the noise is 0.
-/// One step above it absorbs a driver rounding a value on the other side of
-/// .5; any larger difference in any pixel fails.
-const TOLERANCE: u8 = 1;
-
 /// The 100 km check (ADR 0014): each scene, shifted with its camera by this
 /// much, matches its origin Golden, so no World position reaches the GPU in
 /// f32. The shift is whole 64 m anchor cells (1563 of them), so the shifted
@@ -85,73 +78,6 @@ fn skip(reason: &str) {
     );
     // Not `eprintln!`, which libtest captures from passing tests.
     writeln!(std::io::stderr(), "skipped: {reason}").ok();
-}
-
-#[derive(Debug, PartialEq)]
-struct Difference {
-    /// Pixels with a channel that differs by more than `TOLERANCE`.
-    differing_pixels: usize,
-    max_channel_delta: u8,
-}
-
-/// Compares two images of equal size channel by channel.
-fn compare(golden: &image::RgbaImage, actual: &image::RgbaImage) -> Difference {
-    let mut difference = Difference {
-        differing_pixels: 0,
-        max_channel_delta: 0,
-    };
-    for (golden_pixel, actual_pixel) in golden.pixels().zip(actual.pixels()) {
-        let pixel_delta = channel_delta(golden_pixel, actual_pixel);
-        difference.max_channel_delta = difference.max_channel_delta.max(pixel_delta);
-        if pixel_delta > TOLERANCE {
-            difference.differing_pixels += 1;
-        }
-    }
-    difference
-}
-
-fn channel_delta(golden: &image::Rgba<u8>, actual: &image::Rgba<u8>) -> u8 {
-    golden
-        .0
-        .iter()
-        .zip(actual.0)
-        .map(|(&golden_channel, actual_channel)| golden_channel.abs_diff(actual_channel))
-        .max()
-        .unwrap_or(0)
-}
-
-/// The capture dimmed to a third, with every pixel beyond `TOLERANCE` in
-/// opaque red.
-fn difference_image(golden: &image::RgbaImage, actual: &image::RgbaImage) -> image::RgbaImage {
-    image::RgbaImage::from_fn(actual.width(), actual.height(), |x, y| {
-        let actual_pixel = actual.get_pixel(x, y);
-        if channel_delta(golden.get_pixel(x, y), actual_pixel) > TOLERANCE {
-            image::Rgba([255, 0, 0, 255])
-        } else {
-            let [red, green, blue, _] = actual_pixel.0;
-            image::Rgba([red / 3, green / 3, blue / 3, 255])
-        }
-    })
-}
-
-#[test]
-fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
-    let golden = image::RgbaImage::from_pixel(3, 1, image::Rgba([90, 90, 90, 255]));
-    let mut actual = golden.clone();
-    actual.put_pixel(1, 0, image::Rgba([90 + TOLERANCE, 90, 90, 255]));
-    actual.put_pixel(2, 0, image::Rgba([90, 70, 90, 255]));
-
-    assert_eq!(
-        compare(&golden, &actual),
-        Difference {
-            differing_pixels: 1,
-            max_channel_delta: 20,
-        }
-    );
-    let difference_pixels = difference_image(&golden, &actual);
-    assert_eq!(difference_pixels.get_pixel(0, 0).0, [30, 30, 30, 255]);
-    assert_eq!(difference_pixels.get_pixel(1, 0).0, [30, 30, 30, 255]);
-    assert_eq!(difference_pixels.get_pixel(2, 0).0, [255, 0, 0, 255]);
 }
 
 #[test]
@@ -306,21 +232,24 @@ fn mismatch(
         actual.dimensions(),
         "{label} Golden size differs from the capture"
     );
-    let difference = compare(golden, actual);
+    let difference = praxis::compare_images(golden.as_raw(), actual.as_raw());
     if difference.differing_pixels <= allowed_pixels {
         return None;
     }
     std::fs::create_dir_all(directory).expect("difference directory");
     let difference_path = directory.join(format!("{label}-difference.png"));
-    difference_image(golden, actual)
+    let difference_pixels = praxis::difference_image(golden.as_raw(), actual.as_raw());
+    image::RgbaImage::from_raw(actual.width(), actual.height(), difference_pixels)
+        .expect("a difference image is the capture's size")
         .save(&difference_path)
         .expect("write difference image");
     actual
         .save(directory.join(format!("{label}-actual.png")))
         .expect("write capture");
     Some(format!(
-        "{label}: {} pixels differ by more than {TOLERANCE} (max channel delta {}); difference image {}",
+        "{label}: {} pixels differ by more than {} (max channel delta {}); difference image {}",
         difference.differing_pixels,
+        praxis::GOLDEN_TOLERANCE,
         difference.max_channel_delta,
         difference_path.display()
     ))

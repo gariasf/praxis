@@ -24,6 +24,67 @@ pub fn golden_key(backend: wgpu::Backend, device_type: wgpu::DeviceType) -> Stri
     }
 }
 
+/// The largest channel difference, in 8-bit steps, that still matches.
+/// Measured noise on the M4 Pro (Metal) and on CI's lavapipe: 20 captures per
+/// scene, each in its own process, were byte-identical, so the noise is 0.
+/// One step above it absorbs a driver rounding a value on the other side of
+/// .5; any larger difference in any pixel fails.
+pub const GOLDEN_TOLERANCE: u8 = 1;
+
+/// How two captures of equal size differ.
+#[derive(Debug, PartialEq)]
+pub struct Difference {
+    /// Pixels with a channel that differs by more than `GOLDEN_TOLERANCE`.
+    pub differing_pixels: usize,
+    pub max_channel_delta: u8,
+}
+
+/// Compares two RGBA8 images of equal size channel by channel.
+pub fn compare_images(expected: &[u8], actual: &[u8]) -> Difference {
+    let mut difference = Difference {
+        differing_pixels: 0,
+        max_channel_delta: 0,
+    };
+    for (expected_pixel, actual_pixel) in expected.chunks_exact(4).zip(actual.chunks_exact(4)) {
+        let pixel_delta = channel_delta(expected_pixel, actual_pixel);
+        difference.max_channel_delta = difference.max_channel_delta.max(pixel_delta);
+        if pixel_delta > GOLDEN_TOLERANCE {
+            difference.differing_pixels += 1;
+        }
+    }
+    difference
+}
+
+/// `actual`, an RGBA8 image the size of `expected`, dimmed to a third, with
+/// every pixel beyond `GOLDEN_TOLERANCE` in opaque red.
+pub fn difference_image(expected: &[u8], actual: &[u8]) -> Vec<u8> {
+    expected
+        .chunks_exact(4)
+        .zip(actual.chunks_exact(4))
+        .flat_map(|(expected_pixel, actual_pixel)| {
+            if channel_delta(expected_pixel, actual_pixel) > GOLDEN_TOLERANCE {
+                [255, 0, 0, 255]
+            } else {
+                [
+                    actual_pixel[0] / 3,
+                    actual_pixel[1] / 3,
+                    actual_pixel[2] / 3,
+                    255,
+                ]
+            }
+        })
+        .collect()
+}
+
+fn channel_delta(expected: &[u8], actual: &[u8]) -> u8 {
+    expected
+        .iter()
+        .zip(actual)
+        .map(|(expected_channel, actual_channel)| expected_channel.abs_diff(*actual_channel))
+        .max()
+        .unwrap_or(0)
+}
+
 /// Frames rendered per capture; the last one is read back.
 const FRAME_COUNT: u32 = 60;
 
@@ -248,4 +309,29 @@ pub(crate) fn submit_and_map(
     context.device.poll(wgpu::PollType::wait_indefinitely())?;
     receiver.recv()??;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {
+        let expected = [90, 90, 90, 255].repeat(3);
+        let mut actual = expected.clone();
+        actual[4] = 90 + GOLDEN_TOLERANCE;
+        actual[9] = 70;
+
+        assert_eq!(
+            compare_images(&expected, &actual),
+            Difference {
+                differing_pixels: 1,
+                max_channel_delta: 20,
+            }
+        );
+        assert_eq!(
+            difference_image(&expected, &actual),
+            [[30, 30, 30, 255], [30, 30, 30, 255], [255, 0, 0, 255]].concat()
+        );
+    }
 }

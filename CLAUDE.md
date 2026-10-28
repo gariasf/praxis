@@ -179,6 +179,9 @@ bench/                         # budgets.json (ADR 0013) and baselines/
 scripts/pr-lint.sh             # CI's PR form check: body and commits
                                  against docs/agents/workflow.md, tested
                                  by scripts/pr-lint-test.sh
+scripts/gallery.sh             # the visual audit's capture gallery: each
+                                 Reference scene at 2560x1440, with
+                                 difference images against an earlier one
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets

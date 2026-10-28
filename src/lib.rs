@@ -36,7 +36,10 @@ mod time;
 mod transform;
 
 pub use assets::cooked;
-pub use capture::{GOLDEN_DIRECTORY, capture, capture_frames, golden_key};
+pub use capture::{
+    Difference, GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, capture, capture_frames, compare_images,
+    difference_image, golden_key,
+};
 pub use render::{CrowdForm, RenderSwitches};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
