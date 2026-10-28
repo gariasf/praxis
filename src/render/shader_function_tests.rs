@@ -464,9 +464,12 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
     }
     // Each view and roughness's white metal, white dielectric and black
     // dielectric, in turn.
-    for (furnace, albedos) in furnaces.chunks_exact(3).zip(albedos.chunks_exact(3)) {
-        let (view_angle, roughness, ..) = &furnace[0];
-        let (white_metal, white, black) = (albedos[0], albedos[1], albedos[2]);
+    for ([(view_angle, roughness, ..), ..], &[white_metal, white, black]) in furnaces
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(albedos.as_chunks::<3>().0)
+    {
         let case = format!("roughness {roughness}, seen {view_angle}° off its normal");
         assert!(
             white_metal <= 1.0 + QUADRATURE_TOLERANCE,
