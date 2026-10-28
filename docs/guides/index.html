@@ -245,6 +245,22 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="shadow-terminator.html" aria-label="Read Shadow Terminator Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="meshlet-culling.html">Meshlet Culling Explained</a></h3>
+        <p class="meta">M3 · ticket #347 · PRs #363, #371</p>
+        <p class="summary">Follows #347's two parts. The culling pass now writes the frame's packed indices with a workgroup per Meshlet record, dispatched indirectly with a count the GPU sums. It binds a stand-in buffer, since wgpu puts the indirect buffer and every bound group in one usage scope. The second part, a test of each Meshlet against the frustum, the depth pyramid and its normal cone, was prototyped and kept out of main. The guide covers the apex-free cone test and why any bounding sphere serves, why each Meshlet is tested once under Metal's fast math, and why town gained nothing: most of its Instances draw one Meshlet. With live demos.</p>
+        <a class="read" href="meshlet-culling.html" aria-label="Read Meshlet Culling Explained">Read</a>
+      </div>
+    </li>
+    <li class="guide">
+      <div>
+        <h3><a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a></h3>
+        <p class="meta">M3 · tickets #348, #369 · PRs #370, #373</p>
+        <p class="summary">Follows #348's finding. Under 2x or 4x MSAA, when a fragment stage reads no flat input, the M4 Pro merges the fragments of index-sharing triangles, so a sample can show its neighbour's inputs while coverage stays exact. It covers how that cost option B's ID pass samples, and how it gave the shadow mask one triangle's normals while the lit pass shaded the other, which culling exposed. The fix, #369's, has the normals pass read a flat input, and the guide says why invariance could not do it and what stays open with one GPU measured. With live demos.</p>
+        <a class="read" href="msaa-fragment-merging.html" aria-label="Read MSAA Fragment Merging Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
