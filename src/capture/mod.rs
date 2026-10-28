@@ -47,7 +47,12 @@ pub fn compare_images(expected: &[u8], actual: &[u8]) -> ImageDifference {
         differing_pixels: 0,
         max_channel_delta: 0,
     };
-    for (expected_pixel, actual_pixel) in expected.chunks_exact(4).zip(actual.chunks_exact(4)) {
+    for (expected_pixel, actual_pixel) in expected
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(actual.as_chunks::<4>().0)
+    {
         let pixel_delta = channel_delta(expected_pixel, actual_pixel);
         difference.max_channel_delta = difference.max_channel_delta.max(pixel_delta);
         if pixel_delta > GOLDEN_TOLERANCE {
@@ -62,8 +67,10 @@ pub fn compare_images(expected: &[u8], actual: &[u8]) -> ImageDifference {
 pub fn difference_image(expected: &[u8], actual: &[u8]) -> Vec<u8> {
     assert_eq!(expected.len(), actual.len(), "images differ in size");
     expected
-        .chunks_exact(4)
-        .zip(actual.chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(actual.as_chunks::<4>().0)
         .flat_map(|(expected_pixel, actual_pixel)| {
             if channel_delta(expected_pixel, actual_pixel) > GOLDEN_TOLERANCE {
                 [255, 0, 0, 255]
