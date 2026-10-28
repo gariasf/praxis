@@ -24,12 +24,13 @@ const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
 
 // The cosines, of a light's angle from a plane, past which a sample's normals
 // face the light or turn from it: sin 2°, 5° and 10°. The surface normals'
-// 8-bit octahedral coordinates hold each within 0.95° (`octahedral_decode`).
-// The interpolated normal turns from a light it may face at the pixel's
-// centre, where the lit pass shades, within the first; a triangle faces a
-// light its ray then clears by the second where its normals agree, and by
-// the third where the interpolated normal bends from it; past them, its ray
-// starts inside the surface.
+// 8-bit octahedral coordinates hold each within 0.95° where the store rounds
+// to the nearest step, as Metal's does, and about twice that where it may
+// round to either (`octahedral_decode`). Within the first, the stored
+// interpolated normal may turn from a light the lit pass's still faces; a
+// triangle faces a light its ray then clears by the second where its
+// normals agree, and by the third where the interpolated normal bends from
+// it; short of them, its ray starts inside the surface.
 const INTERPOLATED_TURN_MARGIN: f32 = 0.03489949670250097;
 const AGREEING_TRIANGLE_TURN_MARGIN: f32 = 0.08715574274765817;
 const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
@@ -38,18 +39,19 @@ const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
 // over it agree, as on a flat surface or a flat-shaded mesh: 3°.
 const NORMALS_AGREE: f32 = 0.9986295347545738;
 
-// Whether either TLAS holds geometry between `t_min` and `t_max` along the
-// ray from `origin`, in the TLAS's frame, along `direction`, a unit vector:
+// Whether either TLAS holds geometry from `start_distance` to `end_distance`
+// (the ray's tmin and tmax) along the ray from `origin`, in the TLAS's
+// frame, along `direction`, a unit vector:
 // traced against the static TLAS, then, where that finds nothing, against
 // the dynamic TLAS unless it is empty: a query of an empty TLAS still costs.
-fn hit_any(origin: vec3<f32>, direction: vec3<f32>, t_min: f32, t_max: f32) -> bool {
+fn hit_any(origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> bool {
     // Opaque, so one rayQueryProceed completes a traversal, and any hit
     // shadows the point.
     let ray = RayDesc(
         RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
         0xffu,
-        t_min,
-        t_max,
+        start_distance,
+        end_distance,
         origin,
         direction
     );
@@ -65,20 +67,20 @@ fn hit_any(origin: vec3<f32>, direction: vec3<f32>, t_min: f32, t_max: f32) -> b
     return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
 }
 
-// The nearest triangle either TLAS holds within `t_max` along the ray from
+// The nearest triangle either TLAS holds within `end_distance` along the ray from
 // `origin`, in the TLAS's frame, along `direction`, a unit vector; its kind
 // is RAY_QUERY_INTERSECTION_NONE where there is none.
-fn nearest_hit(origin: vec3<f32>, direction: vec3<f32>, t_max: f32) -> RayIntersection {
+fn nearest_hit(origin: vec3<f32>, direction: vec3<f32>, end_distance: f32) -> RayIntersection {
     var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, t_max, origin, direction));
+    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, end_distance, origin, direction));
     rayQueryProceed(&query);
     let static_hit = rayQueryGetCommittedIntersection(&query);
     if camera.dynamic_tlas_entries == 0u {
         return static_hit;
     }
     // Only a dynamic triangle nearer than the static one can replace it.
-    let dynamic_t_max = select(t_max, static_hit.t, static_hit.kind != RAY_QUERY_INTERSECTION_NONE);
-    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, dynamic_t_max, origin, direction));
+    let dynamic_end_distance = select(end_distance, static_hit.t, static_hit.kind != RAY_QUERY_INTERSECTION_NONE);
+    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, dynamic_end_distance, origin, direction));
     rayQueryProceed(&query);
     let dynamic_hit = rayQueryGetCommittedIntersection(&query);
     if dynamic_hit.kind == RAY_QUERY_INTERSECTION_NONE {
