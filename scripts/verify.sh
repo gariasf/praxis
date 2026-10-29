@@ -31,6 +31,17 @@ step() {
 # the ones with a Baseline on any adapter, so a fetched helmet does not fail
 # for lack of one; a scene without one for this adapter fails compare, and
 # with no Baseline at all, every scene runs and compare fails for each.
+# Aliasing renders each scene twice more, once at three times the Goldens'
+# size, so it is measured only when the diff against main can change what
+# renders: the renderer and its shaders, the cooker or the assets.
+skip_aliasing=--skip-aliasing
+base=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null)
+if [ -z "$base" ] ||
+  [ -n "$(git diff --name-only "$base" -- src/render src/cook assets)" ] ||
+  [ -n "$(git ls-files --others --exclude-standard -- src/render src/cook assets)" ]; then
+  skip_aliasing=
+fi
+
 bench() {
   local scenes=()
   local scene
@@ -38,7 +49,7 @@ bench() {
   for scene in $(printf '%s\n' bench/baselines/*/*.json | sed 's|.*/||; s|\.json$||' | sort -u); do
     scenes+=("$scene")
   done
-  target/release/praxis bench "$results" --counters ${scenes[@]+"${scenes[@]}"} &&
+  target/release/praxis bench "$results" --counters $skip_aliasing ${scenes[@]+"${scenes[@]}"} &&
     target/release/praxis compare "$results" --ci
 }
 
@@ -47,4 +58,5 @@ step clippy cargo clippy --all-targets -- -D warnings
 step build cargo build --release
 step test env PRAXIS_REQUIRE_GOLDENS=1 cargo test
 step bench bench
+[ -z "$skip_aliasing" ] || printf 'ok    bench   aliasing skipped: no change under src/render, src/cook or assets\n'
 printf 'ok    verify  %4ss\n' "$SECONDS"

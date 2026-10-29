@@ -219,6 +219,12 @@ section = "Khronos Data Format Specification 1.3, §13.3.2 sRGB EOTF⁻¹, resta
 quote = '''The corresponding sRGB EOTF⁻¹ conversion from linear (R, G, B) encoding to non-linear (R′, G′, B′) encoding is: R′ = R × 12.92, R ≤ 0.0031308; 1.055 × R^(1/2.4) − 0.055, R > 0.0031308'''
 checked = 2026-10-26
 
+["khronos-dfs-srgb-eotf"]
+url = "https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB_EOTF"
+section = "Khronos Data Format Specification 1.3, §13.3.1 sRGB EOTF, restating IEC 61966-2-1"
+quote = '''The EOTF conversion from non-linear (R′, G′, B′) encoding to linear (R, G, B) encoding is: R = R′ / 12.92, R′ ≤ 0.04045; ((R′ + 0.055) / 1.055)^2.4, R′ > 0.04045'''
+checked = 2026-10-29
+
 ["wgsl-f16-largest"]
 url = "https://www.w3.org/TR/2026/CRD-WGSL-20261021/#floating-point-types"
 section = "WGSL, §6.2.4 Floating Point Types, table Extreme values for floating point types"

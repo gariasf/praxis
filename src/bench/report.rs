@@ -7,8 +7,9 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 
 use super::{Budgets, Measurements, Spread, compared_counters, ensure_comparable};
 
-/// `current`'s times and counters as markdown tables, each against its
-/// `baseline`, when there is one, and the Budgets. Times compare only with a
+/// `current`'s times and counters, its aliasing among them when it was
+/// measured, as markdown tables, each against its `baseline`, when there is
+/// one, and the Budgets. Times compare only with a
 /// Baseline of as many frames on the same adapter, as `compare` judges them,
 /// each pass with the Baseline's pass of its name; counters compare as
 /// `compare` reads them. A Baseline of another scene,
@@ -131,7 +132,15 @@ pub fn report(
     let baseline_values = baseline_counters.map_or([None; 8], |baseline_counters| {
         baseline_counters.named().map(|(_, value)| Some(value))
     });
-    for ((counter, value), baseline_value) in counters.named().into_iter().zip(baseline_values) {
+    let baseline_aliasing = baseline.and_then(|baseline| baseline.aliasing);
+    let aliasing = current.aliasing.iter().flat_map(|aliasing| {
+        let baseline_values = baseline_aliasing.map_or([None; 2], |baseline_aliasing| {
+            baseline_aliasing.named().map(|(_, value)| Some(value))
+        });
+        aliasing.named().into_iter().zip(baseline_values)
+    });
+    let rows = counters.named().into_iter().zip(baseline_values);
+    for ((counter, value), baseline_value) in rows.chain(aliasing) {
         let value = value as f64;
         let [baseline_value, delta, ratio_text] = match baseline_value {
             Some(baseline_value) => {
@@ -198,7 +207,7 @@ fn ratio(current: f64, baseline: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bench::{CounterFrames, Counters, Spread};
+    use crate::bench::{Aliasing, CounterFrames, Counters, Spread};
 
     const COUNTERS: Counters = Counters {
         draw_calls: 4,
@@ -253,6 +262,7 @@ mod tests {
                 frames: 8..72,
                 counters,
             },
+            aliasing: None,
         }
     }
 
@@ -360,6 +370,41 @@ mod tests {
                 "**helmet** on Apple M4 Pro, release, 2560x1440, 1800 measured frames",
                 "| GPU frame | 4,208.6 | 5,204.5 | — | — | — | — | 12,000.0 |",
                 "| `gpu_memory_bytes` | 536,471,449 | — | — | — | 8,000,000,000 |",
+            ]
+        );
+    }
+
+    /// The aliasing counters follow the others, against the Baseline's when
+    /// it has them.
+    #[test]
+    fn aliasing_shows_beside_the_counters() {
+        let mut current = current();
+        current.aliasing = Some(Aliasing {
+            aliasing_rmse: 21_500,
+            aliasing_p99: 150_000,
+        });
+        let mut baseline = baseline();
+        baseline.aliasing = Some(Aliasing {
+            aliasing_rmse: 20_000,
+            aliasing_p99: 150_000,
+        });
+        let names = ["`heap_allocations`", "`aliasing_rmse`", "`aliasing_p99`"];
+        let report = report(&current, Some(&baseline), &BUDGETS).expect("comparable");
+        assert_eq!(
+            lines(&report, &names)[1..],
+            [
+                "| `heap_allocations` | 326 | 300 | +26 | 1.087 | — |",
+                "| `aliasing_rmse` | 21,500 | 20,000 | +1,500 | 1.075 | — |",
+                "| `aliasing_p99` | 150,000 | 150,000 | +0 | 1.000 | — |",
+            ]
+        );
+        baseline.aliasing = None;
+        let report = super::report(&current, Some(&baseline), &BUDGETS).expect("comparable");
+        assert_eq!(
+            lines(&report, &names[1..])[1..],
+            [
+                "| `aliasing_rmse` | 21,500 | — | — | — | — |",
+                "| `aliasing_p99` | 150,000 | — | — | — | — |",
             ]
         );
     }

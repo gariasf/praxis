@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use crate::capture::render_frames;
+use crate::capture::{capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::{
@@ -38,6 +38,8 @@ pub struct Configuration {
     /// and the GPU's clocks settle; the counter frames among them are counted.
     pub warm_up_frames: u32,
     pub measured_frames: u32,
+    /// Whether the run measures `Aliasing`, which costs two more captures.
+    pub aliasing: bool,
 }
 
 impl Configuration {
@@ -48,15 +50,19 @@ impl Configuration {
         height: 1440,
         warm_up_frames: 248,
         measured_frames: 1800,
+        aliasing: true,
     };
 
     /// CI's lavapipe renders on the CPU, so CI benches at the Goldens' size
-    /// and for fewer frames: `compare --ci` reads counters only.
+    /// and for fewer frames, and without `Aliasing`, whose render at three
+    /// times the Goldens' size it is too slow for: `compare --ci` reads
+    /// counters only.
     pub const CI: Self = Self {
         width: 640,
         height: 360,
         warm_up_frames: 248,
         measured_frames: 256,
+        aliasing: false,
     };
 
     /// The reference size, rendering the counter frames and no more: the
@@ -66,6 +72,7 @@ impl Configuration {
         height: Self::REFERENCE.height,
         warm_up_frames: COUNTER_FRAMES.start,
         measured_frames: COUNTER_FRAMES.end - COUNTER_FRAMES.start,
+        aliasing: true,
     };
 
     /// CI's size, rendering the counter frames and no more: CI's bench of a
@@ -73,6 +80,7 @@ impl Configuration {
     pub const CI_COUNTERS: Self = Self {
         width: Self::CI.width,
         height: Self::CI.height,
+        aliasing: Self::CI.aliasing,
         ..Self::COUNTERS
     };
 }
@@ -154,6 +162,9 @@ pub struct Measurements {
     #[serde(flatten)]
     pub counters: Counters,
     pub counter_frames: CounterFrames,
+    /// Measured unless the run skipped it.
+    #[serde(flatten)]
+    pub aliasing: Option<Aliasing>,
 }
 
 impl Measurements {
@@ -214,6 +225,104 @@ impl Counters {
             ("heap_allocations", self.heap_allocations),
         ]
     }
+}
+
+/// The aliasing of the Goldens' frame, which is among `COUNTER_FRAMES`:
+/// the scene captured at the Goldens' size against the same frame captured
+/// at three times it and box-filtered 3x3 in linear light. The reference is
+/// the engine's own render, so this measures aliasing (specular sparkle,
+/// shimmering edges, terminator steps), not bias. Each pixel's error is the
+/// root mean square of its three channels' differences in linear light; the
+/// counters are the root mean square of every pixel's error and the 99th
+/// percentile pixel error, in millionths, so they compare as integers.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Aliasing {
+    pub aliasing_rmse: u64,
+    pub aliasing_p99: u64,
+}
+
+impl Aliasing {
+    /// The aliasing of `image`, RGBA8 sRGB-encoded rows of `width` pixels,
+    /// against `supersampled`, the same frame at three times its width and
+    /// height.
+    pub fn between(image: &[u8], supersampled: &[u8], width: usize) -> Self {
+        assert_eq!(
+            image.len() * 9,
+            supersampled.len(),
+            "the supersampled image is not three times the size"
+        );
+        // The sRGB EOTF, ≤ at the knee [ref:khronos-dfs-srgb-eotf].
+        let linear: [f64; 256] = std::array::from_fn(|value| {
+            let encoded = value as f64 / 255.0;
+            if encoded <= 0.04045 {
+                encoded / 12.92
+            } else {
+                ((encoded + 0.055) / 1.055).powf(2.4)
+            }
+        });
+        let supersampled_width = width * 3;
+        let squared_errors: Vec<f64> = image
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .enumerate()
+            .map(|(pixel, color)| {
+                let (column, row) = (pixel % width, pixel / width);
+                let mut filtered = [0.0; 3];
+                for block_row in row * 3..row * 3 + 3 {
+                    let start = (block_row * supersampled_width + column * 3) * 4;
+                    for sample in supersampled[start..start + 12].as_chunks::<4>().0 {
+                        for channel in 0..3 {
+                            filtered[channel] += linear[sample[channel] as usize] / 9.0;
+                        }
+                    }
+                }
+                (0..3)
+                    .map(|channel| (linear[color[channel] as usize] - filtered[channel]).powi(2))
+                    .sum::<f64>()
+                    / 3.0
+            })
+            .collect();
+        let millionths = |value: f64| (value * 1e6).round() as u64;
+        let mean = squared_errors.iter().sum::<f64>() / squared_errors.len() as f64;
+        Self {
+            aliasing_rmse: millionths(mean.sqrt()),
+            aliasing_p99: millionths(percentile(squared_errors, 0.99).sqrt()),
+        }
+    }
+
+    fn named(&self) -> [(&'static str, u64); 2] {
+        [
+            ("aliasing_rmse", self.aliasing_rmse),
+            ("aliasing_p99", self.aliasing_p99),
+        ]
+    }
+}
+
+/// `scene`'s `Aliasing`, captured as its Golden is, as `switches` set.
+fn measure_aliasing(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    switches: RenderSwitches,
+) -> anyhow::Result<Aliasing> {
+    // CI benches at the Goldens' size.
+    let (width, height) = (Configuration::CI.width, Configuration::CI.height);
+    let capture = |scale| {
+        let (pixels, _) = capture(
+            context,
+            scene,
+            glam::DVec3::ZERO,
+            width * scale,
+            height * scale,
+            switches,
+        )?;
+        anyhow::Ok(pixels)
+    };
+    Ok(Aliasing::between(
+        &capture(1)?,
+        &capture(3)?,
+        width as usize,
+    ))
 }
 
 /// The counters of `COUNTER_FRAMES` alone, which every run renders.
@@ -316,14 +425,22 @@ pub fn run(
         ..switches
     })?;
     let adapter = context.adapter.get_info();
-    measure(
+    let measurements = measure(
         scene,
         adapter.name,
         adapter.backend,
         configuration,
         &frames,
         &frames_without_rays,
-    )
+    )?;
+    let aliasing = configuration
+        .aliasing
+        .then(|| measure_aliasing(context, scene, switches))
+        .transpose()?;
+    Ok(Measurements {
+        aliasing,
+        ..measurements
+    })
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
@@ -424,6 +541,7 @@ fn measure(
                 &frames[COUNTER_FRAMES.start as usize..COUNTER_FRAMES.end as usize],
             ),
         },
+        aliasing: None,
     })
 }
 
@@ -454,7 +572,8 @@ impl std::fmt::Display for Measurements {
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
-        for (counter, value) in self.counters.named() {
+        let aliasing = self.aliasing.iter().flat_map(Aliasing::named);
+        for (counter, value) in self.counters.named().into_iter().chain(aliasing) {
             write!(formatter, " {counter}={value}")?;
         }
         Ok(())
@@ -492,6 +611,7 @@ pub fn compare(
         current.counters.gpu_memory_bytes as f64,
         budgets.gpu_memory_bytes as f64,
     );
+    check_aliasing(&mut findings, current.aliasing, baseline.aliasing);
     if mode == CompareMode::Ci {
         return Ok(findings);
     }
@@ -636,6 +756,33 @@ fn compared_counters(current: &Measurements, baseline: &Measurements) -> (Counte
     }
 }
 
+/// Judges `current`'s aliasing against `baseline`'s by the ratios times
+/// answer to, with no noise floor: on the M4 Pro two runs of every
+/// Reference scene measured equal counters, so a rise past the ratios is a
+/// change of the image. A run that skipped it passes, and one that measured it
+/// against a Baseline without it fails.
+fn check_aliasing(
+    findings: &mut Vec<Finding>,
+    current: Option<Aliasing>,
+    baseline: Option<Aliasing>,
+) {
+    let Some(current) = current else {
+        return;
+    };
+    let Some(baseline) = baseline else {
+        findings.extend(current.named().map(|(metric, _)| Finding {
+            metric,
+            verdict: Verdict::Fail,
+            detail: "measured, and its Baseline has no value: re-record the Baseline".to_owned(),
+        }));
+        return;
+    };
+    for ((metric, current), (_, baseline)) in current.named().into_iter().zip(baseline.named()) {
+        let (current, baseline) = (current as f64, baseline as f64);
+        check_regression(findings, metric, current, baseline, 0.0);
+    }
+}
+
 /// Warns when the time `current` exceeds `baseline` by more than
 /// `WARN_RATIO`, and fails above `FAIL_RATIO` when it also grew by more than
 /// `noise_floor`. A time that did not grow passes, whatever its sign.
@@ -756,6 +903,7 @@ mod tests {
                 frames: COUNTER_FRAMES,
                 counters: COUNTERS,
             },
+            aliasing: None,
         }
     }
 
@@ -1234,6 +1382,116 @@ mod tests {
             baseline_directory("NVIDIA GeForce RTX 2070 SUPER", "dx12"),
             PathBuf::from("bench/baselines/nvidia-geforce-rtx-2070-super-dx12")
         );
+    }
+
+    /// An RGBA8 image of `width` by `height` pixels of grey `value`.
+    fn grey(value: u8, width: usize, height: usize) -> Vec<u8> {
+        [value, value, value, 255].repeat(width * height)
+    }
+
+    #[test]
+    fn an_image_matching_its_supersampled_render_has_no_aliasing() {
+        let aliasing = Aliasing::between(&grey(188, 2, 1), &grey(188, 6, 3), 2);
+        assert_eq!(
+            aliasing,
+            Aliasing {
+                aliasing_rmse: 0,
+                aliasing_p99: 0
+            }
+        );
+    }
+
+    /// The 3x render is filtered in linear light: a block of three white and
+    /// six black pixels averages to a third, where averaging the encoded
+    /// bytes, to 85, would decode to 0.0908.
+    #[test]
+    fn the_supersampled_render_is_box_filtered_in_linear_light() {
+        let mut supersampled = grey(0, 3, 3);
+        supersampled[..3 * 4].copy_from_slice(&grey(255, 3, 1));
+        let aliasing = Aliasing::between(&grey(0, 1, 1), &supersampled, 1);
+        assert_eq!(aliasing.aliasing_rmse, 333_333);
+        assert_eq!(aliasing.aliasing_p99, 333_333);
+    }
+
+    /// Of two pixels, one black against a white block (an error of 1 in each
+    /// channel) and one exact: the RMSE is the root of half of 1, the 99th
+    /// percentile the worse pixel. Alpha is no channel of the error.
+    #[test]
+    fn the_rmse_spans_every_pixel_and_the_p99_the_worst_ones() {
+        let mut image = grey(255, 2, 1);
+        image[..4].copy_from_slice(&[0, 0, 0, 0]);
+        let aliasing = Aliasing::between(&image, &grey(255, 6, 3), 2);
+        assert_eq!(
+            aliasing,
+            Aliasing {
+                aliasing_rmse: 707_107,
+                aliasing_p99: 1_000_000
+            }
+        );
+    }
+
+    const ALIASING: Aliasing = Aliasing {
+        aliasing_rmse: 20_000,
+        aliasing_p99: 150_000,
+    };
+
+    fn with_aliasing(aliasing: Option<Aliasing>) -> Measurements {
+        Measurements {
+            aliasing,
+            ..baseline()
+        }
+    }
+
+    #[test]
+    fn aliasing_fails_past_its_tolerance_against_its_baseline() {
+        let baseline = with_aliasing(Some(ALIASING));
+        let mut current = baseline.clone();
+        assert_eq!(verdicts(&current, &baseline, CompareMode::Ci), []);
+        current.aliasing = Some(Aliasing {
+            aliasing_rmse: 23_000,
+            aliasing_p99: 160_000,
+        });
+        assert_eq!(
+            verdicts(&current, &baseline, CompareMode::Ci),
+            [
+                ("aliasing_rmse", Verdict::Fail),
+                ("aliasing_p99", Verdict::Warn)
+            ]
+        );
+    }
+
+    /// A run that skipped the aliasing counters compares the rest; a run that
+    /// measured them against a Baseline without them fails until the
+    /// Baseline is re-recorded.
+    #[test]
+    fn skipped_aliasing_passes_and_aliasing_without_a_baseline_fails() {
+        let measured = with_aliasing(Some(ALIASING));
+        let skipped = with_aliasing(None);
+        assert_eq!(verdicts(&skipped, &measured, CompareMode::Ci), []);
+        let findings = compare(&measured, &skipped, &BUDGETS, CompareMode::Ci).expect("comparable");
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| (finding.metric, finding.verdict))
+                .collect::<Vec<_>>(),
+            [
+                ("aliasing_rmse", Verdict::Fail),
+                ("aliasing_p99", Verdict::Fail)
+            ]
+        );
+        assert!(findings[0].detail.contains("re-record"), "{}", findings[0]);
+    }
+
+    #[test]
+    fn aliasing_is_written_only_when_measured() {
+        let skipped = serde_json::to_string(&with_aliasing(None)).expect("serializable");
+        assert!(!skipped.contains("aliasing"), "{skipped}");
+        let measured = with_aliasing(Some(ALIASING));
+        let json = serde_json::to_vec(&measured).expect("serializable");
+        let parsed = Measurements::from_baseline_json(&json).expect("the current form");
+        assert_eq!(parsed, measured);
+        let parsed = Measurements::from_baseline_json(skipped.as_bytes()).expect("skipped");
+        assert_eq!(parsed.aliasing, None);
     }
 
     #[test]
