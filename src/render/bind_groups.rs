@@ -10,7 +10,9 @@
 use std::num::NonZeroU32;
 
 use crate::assets::material::TEXTURES_PER_CHANNEL;
-use crate::render::targets::{DEPTH_PYRAMID_FORMAT, SHADOW_MASK_FORMAT};
+use crate::render::targets::{
+    DEPTH_PYRAMID_FORMAT, SHADOW_MASK_FORMAT, SHADOW_MASK_SAMPLES_FORMAT,
+};
 
 /// Group 0, written every frame: the camera, the light buffer with its
 /// counts, and each Froxel's list of its lights, which the Froxel pass
@@ -195,8 +197,10 @@ pub const BENDS: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 3 of the shadow mask pass, which builds the mask: the camera, the
 /// lights and the Froxel lists, which `FRAME` holds, the depth target, and
-/// what the pass writes: the shadow mask, and how many lights it had no bit
-/// for, which the CPU reads back.
+/// what the pass writes: the shadow mask, which samples show its second
+/// surface, how many lights it had no bit for, which the CPU reads back, and
+/// the list of second surfaces its first dispatch writes for its second,
+/// with that dispatch's size.
 pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Shadow Mask Build Bind Group",
@@ -228,10 +232,22 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
         ),
         Binding {
             name: "shadow_mask",
-            wgsl_type: "texture_storage_2d<rg32uint, write>",
+            wgsl_type: "texture_storage_2d_array<rg32uint, write>",
             binding_type: wgpu::BindingType::StorageTexture {
                 access: wgpu::StorageTextureAccess::WriteOnly,
                 format: SHADOW_MASK_FORMAT,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+            },
+            stages: wgpu::ShaderStages::COMPUTE,
+            count: None,
+            writer: Writer::Gpu,
+        },
+        Binding {
+            name: "shadow_mask_samples",
+            wgsl_type: "texture_storage_2d<r32uint, write>",
+            binding_type: wgpu::BindingType::StorageTexture {
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                format: SHADOW_MASK_SAMPLES_FORMAT,
                 view_dimension: wgpu::TextureViewDimension::D2,
             },
             stages: wgpu::ShaderStages::COMPUTE,
@@ -239,12 +255,14 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
             writer: Writer::Gpu,
         },
         storage("shadow_mask_lights_overflowed", "atomic<u32>"),
+        storage("second_surfaces", "SecondSurfaces"),
+        storage("second_surface_dispatch", "array<atomic<u32>, 3>"),
     ],
 };
 
 /// Group 3 of the main pass: the Meshlet records of the frame's draw, which
-/// the culling pass writes, and the shadow mask, which the shadow mask pass
-/// writes.
+/// the culling pass writes, and the shadow mask and which samples show its
+/// second surface, which the shadow mask pass writes.
 pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Main Pass Inputs Bind Group",
@@ -257,8 +275,20 @@ pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
                 wgpu::ShaderStages::VERTEX,
             )
         },
+        Binding {
+            name: "shadow_mask",
+            wgsl_type: "texture_2d_array<u32>",
+            binding_type: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Uint,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            stages: wgpu::ShaderStages::FRAGMENT,
+            count: None,
+            writer: Writer::Gpu,
+        },
         loaded_texture(
-            "shadow_mask",
+            "shadow_mask_samples",
             "texture_2d<u32>",
             wgpu::TextureSampleType::Uint,
             false,

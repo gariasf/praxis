@@ -1397,15 +1397,18 @@ pub(crate) mod tests {
     }
 
     /// A white floor ahead of the camera, lit by `lights`, directional lights
-    /// first, and a square `size` metres across `behind` the camera, out of
-    /// view, if any, between the floor's middle and the light that lights
-    /// it, as `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none` and
-    /// `a_point_lights_shadow_ray_ends_at_the_light` place them: the Renderer
-    /// that drew it, the image, the frame's GPU stats and what it logged.
+    /// first, and white `rectangles` facing the camera, each its centre,
+    /// relative to the camera, and its width and height in metres: behind
+    /// the camera, out of view, a rectangle between the floor's middle and
+    /// the light that lights it, as
+    /// `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none` and
+    /// `a_point_lights_shadow_ray_ends_at_the_light` place them, shadows it.
+    /// The Renderer that drew it, the image, the frame's GPU stats and what
+    /// it logged.
     fn shadowed_floor(
         context: &GpuContext,
         lights: &[LightData],
-        square: Option<(f32, f32)>,
+        rectangles: &[([f32; 3], [f32; 2])],
     ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
         let mut renderer = Renderer::new(
             context,
@@ -1425,15 +1428,20 @@ pub(crate) mod tests {
             },
         );
         let quad = load_quad(&mut renderer);
-        // A square of `size` metres facing +Z at `distance` ahead of the
-        // camera, which looks down -Z, or behind it when negative.
-        let square_at = |size: f32, distance: f32| InstanceData {
-            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(size, size, 1.0))),
-            offset: [0.0, 0.0, -distance],
+        // The quad, facing +Z, toward the camera, which looks down -Z.
+        let rectangle = |centre: [f32; 3], [width, height]: [f32; 2]| InstanceData {
+            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                width, height, 1.0,
+            ))),
+            offset: centre,
             ..instance(quad, white.index(), [0.0, 0.0])
         };
-        let mut instances = vec![square_at(4.0, FLOOR_DISTANCE)];
-        instances.extend(square.map(|(size, behind)| square_at(size, -behind)));
+        let mut instances = vec![rectangle([0.0, 0.0, -FLOOR_DISTANCE], [4.0; 2])];
+        instances.extend(
+            rectangles
+                .iter()
+                .map(|&(centre, size)| rectangle(centre, size)),
+        );
         // A directional light has no range.
         let directional_light_count = lights.iter().filter(|light| light.range == 0.0).count();
         let frame = FrameData {
@@ -1472,23 +1480,24 @@ pub(crate) mod tests {
         _pad_intensity: 0,
     };
 
-    /// The pixel's word in the shadow mask, its two halves: a bit per light,
-    /// the first the sun's, which the square hides from the floor's middle
-    /// and not from its corner, then the slice of the Froxel whose lights the
-    /// bits follow, the floor's, in the second half's top bits.
+    /// The pixel's word in the shadow mask's first layer, its two halves: a
+    /// bit per light, the first the sun's, which the square hides from the
+    /// floor's middle and not from its corner, then the slice of the Froxel
+    /// whose lights the bits follow, the floor's, in the second half's top
+    /// bits.
     #[test]
     fn the_shadow_mask_holds_each_lights_bit_and_its_froxels_slice() {
         let Some(context) = gpu_context() else {
             return;
         };
-        let (renderer, ..) = shadowed_floor(&context, &[SUN], Some((1.0, 1.0)));
+        let (renderer, ..) = shadowed_floor(&context, &[SUN], &[([0.0, 0.0, 1.0], [1.0; 2])]);
         let halves: Vec<u32> = read_texture(
             &context,
-            "@group(0) @binding(0) var source: texture_2d<u32>;
+            "@group(0) @binding(0) var source: texture_2d_array<u32>;
             @group(0) @binding(1) var<storage, read_write> values: array<u32>;
             @compute @workgroup_size(1)
             fn copy(@builtin(global_invocation_id) texel: vec3<u32>) {
-                let word = textureLoad(source, texel.xy, 0);
+                let word = textureLoad(source, texel.xy, 0, 0);
                 let first = 2u * (texel.y * textureDimensions(source).x + texel.x);
                 values[first] = word.r;
                 values[first + 1u] = word.g;
@@ -1510,6 +1519,55 @@ pub(crate) mod tests {
         };
         assert_eq!(word(SIZE / 2, SIZE / 2), [1, second_half]);
         assert_eq!(word(0, 0), [0, second_half]);
+    }
+
+    /// A panel 1.5 m ahead whose right edge crosses a pixel's middle, over
+    /// the floor, under the sun and a square behind the camera whose shadow
+    /// covers either the panel there and not the floor, or the floor and not
+    /// the panel: the edge pixel's two left samples show the panel and its
+    /// two right ones the floor (`SAMPLE_OFFSETS`), so it resolves between
+    /// the panel left of it and the floor right of it, each fragment shaded
+    /// with its own surface's shadow, whichever surface the shadow covers.
+    #[test]
+    fn an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        // The edge crosses the middle of column 13, where a point at 1 m
+        // ahead of the camera lies 0.285 m right of its axis: the panel's
+        // side there lies 0.43 m right of it, the floor's 0.64 m, and the
+        // floor's in the next column 0.76 m.
+        let (column, row) = (13, SIZE / 2);
+        let panel_distance = 1.5;
+        let half_view = (std::f32::consts::FRAC_PI_4 / 2.0).tan();
+        let across = ((column as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0) * half_view;
+        let edge = across * panel_distance;
+        let panel = (
+            [(edge - 1.0) / 2.0, 0.0, -panel_distance],
+            [1.0 + edge, 1.0],
+        );
+        // The square's shadow, the sun shining along the view: from 0.5 m
+        // left of the axis to 0.5 m right of it, over the panel's side, or
+        // from 0.5 m to 0.8 m right of it, over the floor's.
+        for (square, panel_shadowed) in [
+            (([0.0, 0.0, 1.0], [1.0; 2]), true),
+            (([0.65, 0.0, 1.0], [0.3, 1.0]), false),
+        ] {
+            let (_, image, ..) = shadowed_floor(&context, &[SUN], &[square, panel]);
+
+            let red = |column| image.get_pixel(column, row).0[0];
+            let (panel, edge, floor) = (red(column - 1), red(column), red(column + 1));
+            let (shadowed, lit) = if panel_shadowed {
+                (panel, floor)
+            } else {
+                (floor, panel)
+            };
+            // Far more than the dither's step from either.
+            assert!(
+                shadowed.saturating_add(16) < edge && edge.saturating_add(16) < lit,
+                "the edge pixel {edge} is not between the panel {panel} and the floor {floor}"
+            );
+        }
     }
 
     /// The mask holds no bit for a light past SHADOW_MASK_LIGHTS: the sun
@@ -1534,11 +1592,14 @@ pub(crate) mod tests {
         };
         // The sun's square, 1 m across 1 m behind the camera, and the point
         // light's, 0.2 m across 0.5 m behind it, between it and the floor.
-        for (light, square) in [(SUN, (1.0, 1.0)), (point, (0.2, 0.5))] {
+        for (light, square) in [
+            (SUN, ([0.0, 0.0, 1.0], [1.0; 2])),
+            (point, ([0.0, 0.0, 0.5], [0.2; 2])),
+        ] {
             let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize];
             lights.push(light);
-            let (_, unshadowed, ..) = shadowed_floor(&context, &lights, None);
-            let (_, past, gpu, log) = shadowed_floor(&context, &lights, Some(square));
+            let (_, unshadowed, ..) = shadowed_floor(&context, &lights, &[]);
+            let (_, past, gpu, log) = shadowed_floor(&context, &lights, &[square]);
             assert!(
                 past == unshadowed,
                 "a light past the mask's bits shadowed the floor"

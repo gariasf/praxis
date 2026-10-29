@@ -3291,3 +3291,21 @@ url = "https://github.com/gfx-rs/wgpu/pull/9835"
 section = "gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS (merged into trunk 2026-07-17, after v30.0.0; not in v30.0.1)"
 quote = '''A built TLAS recorded one dependency entry per instance, making Queue::submit's acceleration-structure validation and residency tracking O(instance count). Collapse to unique BLASes via a FastHashSet<TrackerIndex> so it is O(unique BLASes) instead.'''
 checked = 2026-10-28
+
+["lauritzen-2010-edge-detection"]
+url = "https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf"
+section = "Lauritzen, Deferred Rendering for Current and Future Rendering Pipelines, SIGGRAPH 2010 course Beyond Programmable Shading, slides 19-20, Anti-aliasing and Identifying Edges"
+quote = '''Store G-buffer at sample frequency [...] Only apply per-sample shading where necessary [...] Want to find surface discontinuities [...] Compare sample depths to depth derivatives [...] Compare (shading) normal deviation over samples'''
+checked = 2026-10-29
+
+["salvi-2012-sbaa-surfaces"]
+url = "https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf"
+section = "Salvi and Vidimče, Surface Based Anti-Aliasing, I3D 2012 (doi:10.1145/2159616.2159643), pp. 159-164, §3.1 Surface Based Anti-Aliasing"
+quote = '''Our method pushes multi-sampling one step further by observing that even when a pixel is covered by multiple primitives it is generally only covered by a very small number of distinct surfaces. [...] Thus, we can further reduce the per-pixel shading rate by computing only one color sample per surface. [...] If we assign to each surface sample Sᵢ a G-buffer sample and store only a small and fixed (e.g. 2 or 3) number of surfaces per pixel this approach also makes possible to significantly reduce the size of the frame-buffer'''
+checked = 2026-10-29
+
+["lauritzen-2010-per-sample-scheduling"]
+url = "https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf"
+section = "Lauritzen, Deferred Rendering for Current and Future Rendering Pipelines, SIGGRAPH 2010 course Beyond Programmable Shading, slides 23-24, Per-Sample Scheduling and MSAA with Tile-Based Methods"
+quote = '''Lack of spatial locality causes hardware scheduling inefficiency [...] Handle per-pixel and per-sample in one pass [...] Can use branching, but incurs scheduling problems [...] Instead, reschedule per-sample pixels [...] Shade sample 0 for the whole tile [...] Pack a list of pixels that require per-sample shading [...] Redistribute threads to process additional samples [...] Scatter per-sample shaded results'''
+checked = 2026-10-29

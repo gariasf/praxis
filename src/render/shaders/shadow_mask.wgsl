@@ -1,15 +1,18 @@
 // The shadow mask pass (src/render/shadow_mask_pass.rs): an invocation per
 // pixel traces one hard shadow ray toward each light that reaches the surface
 // the pixel's nearest sample shows (ADR 0020), and keeps a bit per light that
-// its ray found hidden, for the lit pass to read. The bits follow the pixel's
-// lights in the order the lit pass sums them: the directional lights, then
-// the point lights its Froxel lists, as many as SHADOW_MASK_LIGHTS, across
-// the word's two halves; the second half's top bits hold the Froxel's slice.
-// A light past them casts no shadow there, and is counted. The depth target
-// holds both culling phases' Instances when it runs, and the surface normals
-// what each sample shows; the surface's position is rebuilt from the
-// sample's depth. Its bindings are declared from their bind groups'
-// definitions (src/render/bind_groups.rs).
+// its ray found hidden, for the lit pass to read. Where other samples of the
+// pixel show another surface, it does the same from the farthest of them
+// into the mask's second layer, and marks which samples show it, so each
+// fragment of an edge pixel reads its own surface's bits. The bits follow
+// the pixel's lights in the order the lit pass sums them: the directional
+// lights, then the point lights its Froxel lists, as many as
+// SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top
+// bits hold the Froxel's slice. A light past them casts no shadow there,
+// and is counted. The depth target holds both culling phases' Instances
+// when it runs, and the surface normals what each sample shows; the
+// surface's position is rebuilt from the sample's depth. Its bindings are
+// declared from their bind groups' definitions (src/render/bind_groups.rs).
 
 // A directional light's shadow ray runs to f32's largest distance, past
 // anything a TLAS holds.
@@ -153,28 +156,11 @@ fn with_bit(bits: vec2<u32>, bit: u32) -> vec2<u32> {
     return bits | select(vec2<u32>(shifted, 0u), vec2<u32>(0u, shifted), bit >= 32u);
 }
 
-@compute @workgroup_size(SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE)
-fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
-    let size = vec2<i32>(textureDimensions(depth_target));
-    let pixel = vec2<i32>(invocation.xy);
-    if any(pixel >= size) {
-        return;
-    }
-    // The four samples Rust asserts the depth target has (SAMPLE_COUNT),
-    // loaded together: Metal's compiler does not unroll a loop over them.
-    let depths = vec4<f32>(
-        textureLoad(depth_target, pixel, 0),
-        textureLoad(depth_target, pixel, 1),
-        textureLoad(depth_target, pixel, 2),
-        textureLoad(depth_target, pixel, 3)
-    );
-    // The nearest sample has the greatest depth (ADR 0015); the first such.
-    let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
-    let sample = select(
-        select(select(3u, 2u, depths.z == depth), 1u, depths.y == depth),
-        0u,
-        depths.x == depth
-    );
+// The word of the bits for the pixel's lights whose rays the surface that
+// its `sample` shows, at `depth`, found hidden, with the slice of the
+// Froxel they follow in the second half's top bits; none where `depth` is
+// the background's.
+fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> vec2<u32> {
     var hidden = vec2<u32>(0u);
     var slice = 0u;
     // Depth 0 is the far plane, the background, which nothing shadows.
@@ -183,7 +169,7 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             camera.view_proj,
             vec2<f32>(pixel) + sample_offset(sample),
             depth,
-            vec2<f32>(size)
+            size
         );
         let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
         let triangle_normal = octahedral_decode(normals.xy);
@@ -209,7 +195,7 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
         var point_light_count = light.point_light_count;
         if FROXEL_LIGHTS {
             let view_depth = camera.view_proj[3].z / depth;
-            froxel = froxel_at(vec2<f32>(pixel) + 0.5, vec2<f32>(size), view_depth);
+            froxel = froxel_at(vec2<f32>(pixel) + 0.5, size, view_depth);
             slice = froxel % FROXEL_SLICES;
             point_light_count = froxel_lists[froxel].light_count;
         }
@@ -242,5 +228,126 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
         }
     }
     let slice_shift = SHADOW_MASK_LIGHTS - 32u;
-    textureStore(shadow_mask, pixel, vec4<u32>(hidden.x, hidden.y | (slice << slice_shift), 0u, 0u));
+    return vec2<u32>(hidden.x, hidden.y | (slice << slice_shift));
+}
+
+// The index of the first of four samples whose value in `values` is `value`.
+fn first_sample_of(values: vec4<f32>, value: f32) -> u32 {
+    return select(
+        select(select(3u, 2u, values.z == value), 1u, values.y == value),
+        0u,
+        values.x == value
+    );
+}
+
+// The second surfaces of the frame's pixels, listed for the second dispatch
+// to trace: how many, then each one's pixel, its column in the low 16 bits
+// and its row above them, and from bit 30 the sample to trace it from.
+struct SecondSurfaces {
+    count: atomic<u32>,
+    entries: array<u32>,
+}
+
+// Each invocation lists its pixel's second surface, if any, and traces its
+// nearest surface; `trace_second_surfaces` then traces the frame's list, an
+// invocation each, as tile-based deferred renderers shade one sample of
+// every pixel, then a packed list of the pixels that need the others: a ray
+// traced for a few pixels of a SIMD group would hold up all its others
+// [ref:lauritzen-2010-per-sample-scheduling].
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE)
+fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let size = vec2<i32>(textureDimensions(depth_target));
+    let pixel = vec2<i32>(invocation.xy);
+    if any(pixel >= size) {
+        return;
+    }
+    let target_size = vec2<f32>(size);
+    // The four samples Rust asserts the depth target has (SAMPLE_COUNT),
+    // loaded together: Metal's compiler does not unroll a loop over them.
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    // The nearest sample has the greatest depth (ADR 0015); the first such.
+    let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
+    let sample = first_sample_of(depths, depth);
+
+    // The samples that show another surface than the nearest: a surface
+    // discontinuity, found as deferred renderers find the pixels they shade
+    // per sample, by comparing each sample's depth with the depth the
+    // nearest sample's plane gives it [ref:lauritzen-2010-edge-detection]:
+    // those off the plane of its triangle by more than a pixel's width at
+    // its distance, other than the background's.
+    var second_samples = 0u;
+    if depth > 0.0 {
+        let point = vec2<f32>(pixel) + sample_offset(sample);
+        let position = position_at(camera.view_proj, point, depth, target_size);
+        let pixel_width = distance(
+            position,
+            position_at(camera.view_proj, point + vec2<f32>(1.0, 0.0), depth, target_size)
+        );
+        let plane_normal = octahedral_decode(textureLoad(surface_normals, pixel, sample).xy * 2.0 - 1.0);
+        let off_plane = vec4<f32>(
+            dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[0], depths.x, target_size) - position, plane_normal),
+            dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[1], depths.y, target_size) - position, plane_normal),
+            dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[2], depths.z, target_size) - position, plane_normal),
+            dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[3], depths.w, target_size) - position, plane_normal)
+        );
+        let second = abs(off_plane) > vec4<f32>(pixel_width) & depths > vec4<f32>(0.0);
+        let bits = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), second);
+        second_samples = bits.x | bits.y | bits.z | bits.w;
+        // The farthest of them, the least depth, gives the second surface's
+        // word: where they show more than one surface, theirs all.
+        if second_samples != 0u {
+            // Depth 2 lies past the near plane's 1, so no other is less.
+            let candidates = select(vec4<f32>(2.0), depths, second);
+            let second_depth = min(min(candidates.x, candidates.y), min(candidates.z, candidates.w));
+            let second_sample = first_sample_of(candidates, second_depth);
+            let entry = atomicAdd(&second_surfaces.count, 1u);
+            second_surfaces.entries[entry] = invocation.x | (invocation.y << 16u) | (second_sample << 30u);
+            // The entry that opens a workgroup's run of the second dispatch
+            // adds that workgroup, in rows of MAX_WORKGROUPS_PER_DIMENSION.
+            let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+            if entry % group_size == 0u {
+                let groups = entry / group_size + 1u;
+                atomicMax(&second_surface_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+                atomicMax(
+                    &second_surface_dispatch[1],
+                    (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+                );
+                atomicStore(&second_surface_dispatch[2], 1u);
+            }
+        }
+    }
+    textureStore(shadow_mask_samples, pixel, vec4<u32>(second_samples, 0u, 0u, 0u));
+    textureStore(shadow_mask, pixel, 0, vec4<u32>(surface_word(pixel, sample, depth, target_size), 0u, 0u));
+}
+
+// How many second surfaces the frame lists, read once per workgroup: an
+// atomic every invocation loads from one address serialises them.
+var<workgroup> listed_count: u32;
+
+// Traces the second surface `build_shadow_mask` listed at this invocation's
+// entry, if any, into the shadow mask's second layer.
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE)
+fn trace_second_surfaces(
+    @builtin(workgroup_id) group: vec3<u32>,
+    @builtin(num_workgroups) groups: vec3<u32>,
+    @builtin(local_invocation_index) lane: u32
+) {
+    if lane == 0u {
+        listed_count = atomicLoad(&second_surfaces.count);
+    }
+    let entry = (group.y * groups.x + group.x) * SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE + lane;
+    if entry >= workgroupUniformLoad(&listed_count) {
+        return;
+    }
+    let listed = second_surfaces.entries[entry];
+    let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, (listed >> 16u) & 0x3fffu));
+    let sample = listed >> 30u;
+    let depth = textureLoad(depth_target, pixel, sample);
+    let word = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
+    textureStore(shadow_mask, pixel, 1, vec4<u32>(word, 0u, 0u));
 }
