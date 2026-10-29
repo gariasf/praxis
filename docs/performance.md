@@ -4,6 +4,200 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Option D, a visibility buffer, prototyped on `town`: the gate stays past 6 ms (2026-10-28, #297)
+
+**Verdict.** Option D does not reach ADR 0019's gate on `town` and does
+not beat A there: in the median rounds the gate reads 8.77 ms against
+A's 8.67 and the 6 ms limit, 1.2% slower (D 8.77 to 8.81 ms over three
+rounds, A 8.63 to 8.69), and 8.43 ms, 2.3% faster than A's 8.63 in its
+round, with each pixel's own derivatives in place of A's per-quad ones. Shading
+from IDs in compute costs on the M4 Pro about what the forward lit pass
+costs: the IDs themselves are cheap, about 0.22 ms in the depth pre-pass,
+but nothing D removes from the gate (quad overdraw, the lit pass's vertex
+work at depth equal) outweighs the per-pixel triangle rebuild. With shadow
+rays on, D's GPU frame reads 1.5 ms longer than A's (16.9 against 15.4 ms),
+and it takes 58,982,432 bytes more GPU memory, the 4x IDs and a 32-byte
+uniform. Its CPU frame reads 2.1 ms shorter. The image matches A's at
+`town`'s eight frames within the Goldens' tolerance but at 5 to 617 of
+230,400 pixels at 640×360, and at 23 to 8,947 of 3,686,400 at 2560×1440:
+isolated pixels on the silhouettes of sub-pixel geometry. The prototype
+stays on its branch, `prototype/visibility-d` at b846161. Both options
+ADR 0019 named are now measured on `town`, and neither moves the gate:
+what breaches it is the triangles every option draws.
+
+**Shape as built.** With the `visibility_buffer` Render switch on
+(`--visibility-buffer` on `bench` and `capture`), both depth passes write
+each sample's triangle, its primitive index in its phase's draw with a bit
+marking phase two's, into a 4x Rg16Uint target beside depth, and with
+shadow rays on the surface normals beside it; phase two's depth is a pass
+of its own either way. The IDs are written in the depth passes, not in a
+pass at depth equal as option B's prototype wrote them, so they cost 0.22
+ms in the pre-pass rather than B's 2.08 ms pass; D draws nothing again, so
+the IDs need only agree with themselves. Each ID entry point reads a flat
+input, the Material ID, so the M4 Pro merges no fragments (#348). A compute
+material pass replaces the lit pass: per pixel it reads the four samples'
+IDs, and for each distinct triangle among them, rebuilds its corners from
+the frame's draw as the vertex shader does, takes perspective-correct
+weights from the corners' clip x, y and w (2D homogeneous coordinates, no
+divide by w, so corners behind the camera need no clipping), samples every
+Material with `textureSampleGrad` in one shader, lights the surface with
+the lit pass's own code, moved into a part both share, and averages the
+triangles' colours weighted by the samples each covers, uncovered samples
+taking the clear colour, into the HDR target. That is the lit pass's
+shading rate under 4x MSAA, once per triangle per pixel at the pixel's
+centre, resolved as its hardware resolve averages: neither every sample
+shaded at edges nor sample 0 alone. The pass reads 9 storage buffers in
+its compute stage, the Capability floor's limit, so it declares the frame
+and geometry buffers it reads in groups of its own and has the GPU copy
+phase two's first index into its uniform rather than bind the frame's
+draw. The device requests `PRIMITIVE_INDEX` beside the floor where the
+adapter has it, as B's prototype did.
+
+**Derivatives.** Gradients come from evaluating the triangle on its plane
+at neighbouring pixel centres, as helper lanes would. Taken from each
+pixel's own right and lower neighbours, `town` differed from A past the
+tolerance at 132 to 2,054 pixels per frame at 640×360; taken across the
+pixel's 2×2 quad, from its top left pixel, at 5 to 617, so the lit
+pass's `dpdx` and `dpdy` on the M4 Pro behave as one difference per quad.
+The prototype measures the quad form, which matches A's image; it costs
+the material pass one more normal-Texture sample and weight evaluation per
+triangle, and the gate 365 µs (round 4 below).
+The per-pixel form is the one option D's research note credits with right
+filtering, and neither is wrong; it is what a D adopted for its own sake
+would ship.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the
+prototype branch. `praxis bench <dir> town` at 2560×1440 with 4x MSAA,
+1,800 measured frames, three rounds, each A (the switch off) then D
+(`--visibility-buffer`), no other GPU work, load average 4.2 at the start; round
+4 adds D after the review's fix (b846161) and F, D with per-pixel
+derivatives, a local variant. Medians per round, in µs:
+
+| Round | Build | Gate, rays off | GPU frame | CPU frame | `depth_prepass` | `material_pass` |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | A | 8,667.3 | 15,378.7 | 16,439.0 | 2,139.1 | — |
+| 1 | D | 8,806.8 | 16,941.5 | 14,583.0 | 2,355.4 | 5,390.5 |
+| 2 | A | 8,691.3 | 15,404.7 | 16,850.0 | 2,138.1 | — |
+| 2 | D | 8,770.2 | 16,961.7 | 14,372.5 | 2,355.8 | 5,412.8 |
+| 3 | A | 8,631.6 | 15,328.0 | 16,350.5 | 2,140.0 | — |
+| 3 | D | 8,767.2 | 16,883.3 | 14,197.6 | 2,357.0 | 5,375.0 |
+| 4 | A | 8,631.7 | 15,329.5 | 16,528.8 | 2,141.0 | — |
+| 4 | D | 8,795.0 | 16,945.0 | 14,360.0 | 2,357.4 | 5,419.5 |
+| 4 | F | 8,430.5 | 16,634.8 | 14,470.6 | 2,337.4 | 5,064.0 |
+
+Pass times are taken in frames with shadow rays on and overlap on Metal:
+A's `lit_pass` reads 11,256 µs and D's `tonemapping_pass` 12,424 µs
+against A's 4,029, each spanning time it spends waiting on the pass
+before. They do not add up to either frame, and the A/B compares spans,
+the gate and the GPU frame. D's GPU frame grows by more than its gate,
+with shadow-ray time 7,154 µs against A's 6,265, by the mechanism #378
+found (the section below): D's CPU frame, 14.4 ms, is shorter than its
+GPU frame, so frames queue and Metal stops overlapping the passes it
+overlaps when the GPU is idle at a frame's start, as it is under A's
+16.4 ms CPU frame. That CPU frame is 2.1 ms shorter because the material
+pass binds no TLAS, each use of which cost wgpu-core 30.0.1 a walk over
+every Instance's BLAS (#352). Since #378 only the shadow mask pass binds
+them, so on `main` A loses this CPU gap and the overlap alike, and the
+GPU-frame comparison above holds for the code it measured, not for
+today's.
+
+A's median round, 1, against `town`'s Baseline:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 16,439.0 | 17,179.0 | 16,901.6 | 18,152.2 | -462.6 | 0.973 | 6,000.0 |
+| Dynamic TLAS, CPU | 974.1 | 1,100.1 | 1,014.2 | 1,155.1 | -40.1 | 0.960 | 1,100.0 |
+| GPU frame | 15,378.7 | 16,476.0 | 15,399.8 | 16,383.5 | -21.1 | 0.999 | 12,000.0 |
+| Gate, rays off | 8,667.3 | 9,381.3 | 8,654.9 | 9,256.8 | +12.4 | 1.001 | 6,000.0 |
+| Shadow-ray time | 6,265.3 | 7,488.9 | 6,338.3 | 7,388.1 | -73.0 | 0.988 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,107.9 | 1,154.2 | 1,113.1 | 1,154.9 | -5.2 | 0.995 | — |
+| `culling_phase_two` | 169.4 | 193.2 | 169.4 | 192.6 | +0.0 | 1.000 | — |
+| `depth_prepass` | 2,139.1 | 2,235.1 | 2,117.8 | 2,213.8 | +21.3 | 1.010 | — |
+| `depth_pyramid_pass` | 260.4 | 322.7 | 260.3 | 305.2 | +0.1 | 1.000 | — |
+| `dynamic_tlas_build` | 49.7 | 544.7 | 100.5 | 573.2 | -50.8 | 0.494 | 1,000.0 |
+| `froxel_pass` | 528.2 | 680.1 | 536.5 | 684.5 | -8.2 | 0.985 | — |
+| `lit_pass` | 11,256.4 | 11,999.5 | 11,269.8 | 12,014.8 | -13.4 | 0.999 | — |
+| `material_pass` | 0.0 | 0.0 | — | — | — | — | — |
+| `phase_two_depth_pass` | 58.3 | 112.8 | 59.0 | 113.6 | -0.7 | 0.988 | — |
+| `shadow_mask_pass` | 6,983.8 | 7,758.0 | 7,041.0 | 7,802.9 | -57.2 | 0.992 | — |
+| `tonemapping_pass` | 4,028.5 | 7,053.5 | 4,010.0 | 6,448.4 | +18.5 | 1.005 | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 4 | 4 | +0 | 1.000 | — |
+| `instances_drawn` | 137,730 | 137,730 | +0 | 1.000 | — |
+| `triangles_drawn` | 5,552,214 | 5,552,214 | +0 | 1.000 | — |
+| `instances_overflowed` | 0 | 0 | +0 | — | — |
+| `uploaded_bytes` | 2,049,344 | 2,049,344 | +0 | 1.000 | — |
+| `gpu_memory_bytes` | 675,535,944 | 675,537,864 | -1,920 | 1.000 | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
+| `heap_allocations` | 10,489 | 10,489 | +0 | 1.000 | — |
+
+D's median round, 2, against the same Baseline:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 14,372.5 | 14,907.5 | 16,901.6 | 18,152.2 | -2,529.1 | 0.850 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,001.5 | 1,096.8 | 1,014.2 | 1,155.1 | -12.6 | 0.988 | 1,100.0 |
+| GPU frame | 16,961.7 | 18,031.7 | 15,399.8 | 16,383.5 | +1,561.9 | 1.101 | 12,000.0 |
+| Gate, rays off | 8,770.2 | 9,133.8 | 8,654.9 | 9,256.8 | +115.3 | 1.013 | 6,000.0 |
+| Shadow-ray time | 7,154.0 | 8,255.9 | 6,338.3 | 7,388.1 | +815.7 | 1.129 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,131.8 | 1,170.8 | 1,113.1 | 1,154.9 | +18.8 | 1.017 | — |
+| `culling_phase_two` | 168.2 | 184.4 | 169.4 | 192.6 | -1.2 | 0.993 | — |
+| `depth_prepass` | 2,355.8 | 2,619.8 | 2,117.8 | 2,213.8 | +238.0 | 1.112 | — |
+| `depth_pyramid_pass` | 258.7 | 269.0 | 260.3 | 305.2 | -1.6 | 0.994 | — |
+| `dynamic_tlas_build` | 511.0 | 663.5 | 100.5 | 573.2 | +410.5 | 5.085 | 1,000.0 |
+| `froxel_pass` | 560.2 | 582.8 | 536.5 | 684.5 | +23.8 | 1.044 | — |
+| `lit_pass` | 0.0 | 0.0 | 11,269.8 | 12,014.8 | -11,269.8 | 0.000 | — |
+| `material_pass` | 5,412.8 | 5,920.3 | — | — | — | — | — |
+| `phase_two_depth_pass` | 60.9 | 115.8 | 59.0 | 113.6 | +1.9 | 1.032 | — |
+| `shadow_mask_pass` | 6,569.5 | 7,272.7 | 7,041.0 | 7,802.9 | -471.5 | 0.933 | — |
+| `tonemapping_pass` | 12,423.6 | 13,334.3 | 4,010.0 | 6,448.4 | +8,413.5 | 3.098 | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 3 | 4 | -1 | 0.750 | — |
+| `instances_drawn` | 137,730 | 137,730 | +0 | 1.000 | — |
+| `triangles_drawn` | 5,552,214 | 5,552,214 | +0 | 1.000 | — |
+| `instances_overflowed` | 0 | 0 | +0 | — | — |
+| `uploaded_bytes` | 2,049,360 | 2,049,344 | +16 | 1.000 | — |
+| `gpu_memory_bytes` | 734,518,376 | 675,537,864 | +58,980,512 | 1.087 | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
+| `heap_allocations` | 10,484 | 10,489 | -5 | 1.000 | — |
+
+`gpu_memory_bytes` reads 1,920 bytes under the Baseline on both sides: the
+GPU stats readback left the count after the Baseline was recorded (#349).
+D adds the 4x visibility IDs, 58,982,400 bytes, and its uniform; its 4x
+colour target stays allocated unused, memoryless on the M4 Pro. `uploaded_bytes`
+grows by the clear colour's 16 bytes a frame.
+
+**Images.** `cargo test --release --test visibility_buffer` captures
+`town` at the Goldens test's eight frames with the switch off and on, and
+with `PRAXIS_VISIBILITY_IMAGES=<directory>` writes both and their
+difference; it allows 700 pixels past the tolerance per frame. Pixels past
+one 8-bit step, per frame, at 640×360: 5, 10, 107, 561, 604, 657, 590 and
+617; at 2560×1440 (`praxis capture town <png> 2560x1440 --frame <n>` with
+and without `--visibility-buffer`, then `praxis difference`): 23, 29, 735,
+8,060, 8,802, 8,947, 8,693 and 8,719, the largest channel difference 132.
+The differing pixels sit alone on the edges of rooftop objects and other
+geometry under a pixel wide.
+
+**What it leaves.** The owner kept A and the 6 ms, and ADR 0019 now
+records the reopen clause as spent on `town` until LOD
+([decision](https://github.com/gariasf/praxis/issues/297#issuecomment-6491023439)): B and D
+are prototyped, and no form of either takes more than 2.3% off A's gate
+(B added 1.9 to 3.5 ms). The gate's 8.6 ms is the frame's triangles: culling 1.3 ms, the depth
+pre-pass 2.1 and shading, in the lit pass or the material pass, roughly 5,
+the pass times overlapping as above. Fewer triangles is the lever every
+option shares, which on `town` means LOD (#360, M4's charting). A D for its
+own sake would need `PRIMITIVE_INDEX` in the floor, 59 MB at 1440p, a
+storage-buffer limit above the floor's 9 for any more inputs, and the
+transparent pass forward beside it.
+
 ## The TLAS bound in the shadow mask pass alone: queued frames, not the split, cost the GPU 1.1 ms (2026-10-28, #378)
 
 **Verdict.** Binding both TLAS only in the shadow mask pass adds no GPU
