@@ -261,6 +261,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="msaa-fragment-merging.html" aria-label="Read MSAA Fragment Merging Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="visibility-buffer.html">Visibility Buffer Explained</a></h3>
+        <p class="meta">M3 · ticket #297 · PR #380</p>
+        <p class="summary">Follows #297's prototype of option D, kept off main. The depth passes write each sample's triangle ID, and a compute material pass rebuilds each pixel's triangles and shades them in place of the lit pass. It covers the 16-bit halves and the phase bit, perspective-correct weights from the corners' clip x, y and w with no divide by w, gradients from neighbouring pixel centres and why the per-quad form matched the lit pass, and MSAA kept by shading each triangle once per pixel. On town the gate stayed within about 2% of A's, so A stays. With live demos.</p>
+        <a class="read" href="visibility-buffer.html" aria-label="Read Visibility Buffer Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
