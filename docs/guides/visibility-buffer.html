@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Visibility Buffer Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 23 of the series, after MSAA Fragment Merging Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* This volume's own parts: the pass order, the demos' legends and canvases. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); font-weight: 600; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.ring { background: transparent; border-color: var(--bad); }
+.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-canvas { width: 100%; }
+.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
+.vb-figure-note { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 8px 0 0; }
+.readout .weights { display: block; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #297 &middot; PR #380 &middot; prototype branch prototype/visibility-d</div>
+  <h1>Visibility Buffer Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p><code>town</code>'s main pass takes 8.6 ms against ADR 0019's 6 ms gate. Option D replaces the forward lit pass with a visibility buffer: the depth passes write each sample's triangle ID, and a compute pass rebuilds each pixel's triangles and shades them. The IDs cost 0.22 ms and the image nearly matches A's, but the gate read from 2.3% faster to 1.2% slower than A. The idea to keep: moving shading out of the rasteriser does not shrink it; the gate is the triangles every option draws.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Where a forward pass spends shading work that a visibility buffer avoids</li>
+      <li>How the depth passes write a 32-bit triangle ID per sample, and why they read a flat input</li>
+      <li>How perspective-correct weights come from the corners' clip x, y and w with no divide by w</li>
+      <li>How a compute pass gets texture gradients without a 2&times;2 quad, and why the per-quad form matched A</li>
+      <li>How shading from IDs keeps 4x MSAA, and how to read the gate, the GPU frame and the CPU frame</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="visibility-prepass.html#shape">Visibility Pre-pass Explained</a>, for option B and its IDs; <a href="msaa-fragment-merging.html#fix">MSAA Fragment Merging Explained</a>, for the flat-input rule; <a href="specular-antialiasing.html#filter">Specular Antialiasing Explained</a>, for the normal's derivatives; <a href="frame-timing.html#frame">Frame Timing Explained</a>, for spans and overlap</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at main 496e7e70 (PR #380, 2026-10-29) and the unmerged prototype branch <code>prototype/visibility-d</code> at b846161. <b>Since then:</b> nothing yet.</p>
+  </aside>
+  <p class="lede">ADR 0019 chose a clustered forward main pass, option A, and set a gate: past 6 ms of GPU on a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>, options B and D are prototyped on that scene before anything changes. <code>town</code> read 8.6 ms. B, a visibility pre-pass, added 1.9 to 3.5 ms. This guide is D: a visibility buffer, in which the depth passes record which triangle each sample shows and a compute pass shades from that record instead of rasterising the scene a third time. It explains what D was meant to save, how its IDs are written, how a compute shader rebuilds a triangle and its perspective-correct weights, how it gets texture gradients with no quad of neighbours, how it keeps MSAA, and what the measurements say. Two live demos show the weights with a corner behind the camera, and which neighbours each derivative form differences against.</p>
+  <p class="status"><b>Provenance.</b> The prototype is two commits on <code>prototype/visibility-d</code>, 358067b and b846161, and stays unmerged. Its findings and measurements are PR #380's, recorded in <code>docs/performance.md</code> and in ADR 0019's amendment at 496e7e70, measured on an Apple M4 Pro under macOS 27.0.1 with wgpu 30.0.1 on Metal. The owner's <a href="https://github.com/gariasf/praxis/issues/297#issuecomment-6491023439">decision of 2026-10-29</a> keeps option A. Where the guide brings in the published literature, it names the source.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#forward">1 &middot; What D was meant to save</a>
+    <a href="#ids">2 &middot; Writing the IDs</a>
+    <a href="#rebuild">3 &middot; Rebuilding the triangle</a>
+    <a href="#derivatives">4 &middot; Derivatives without a quad</a>
+    <a href="#msaa">5 &middot; MSAA from IDs</a>
+    <a href="#result">6 &middot; Reading the result</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="forward">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; background</div>
+    <h2>What D was meant to save</h2>
+    <p class="key-idea"><b>Key idea.</b> A forward lit pass pays for its shading in rasteriser work: every triangle's vertices again at depth Equal, and 2&times;2 quads of fragment invocations that small triangles fill mostly with helpers. A visibility buffer shades each pixel's triangles once, in compute, so D tested whether that waste is what breaches the gate.</p>
+    <p class="plain">Option A draws <code>town</code>'s triangles twice: once into depth, once to shade at depth Equal. A visibility buffer draws them once, writing which triangle each sample shows, and shades from that record in a compute pass.</p>
+    <p>A fragment shader never runs alone. The GPU runs fragment invocations in 2&times;2 <span class="concept" data-term="Quad" data-tip="A 2×2 group of neighbouring fragment invocations that run together, so that each can difference its values against its neighbours'. WGSL numbers them 0 to 3 from the upper left.">quads</span>, so each can take a derivative by subtracting its neighbour's value: that is how <code>textureSample</code> picks a mip level. Where a triangle covers only some of a quad's pixels, the GPU fills the rest with <span class="concept" data-term="Helper invocation" data-tip="A fragment invocation the GPU runs for a pixel of a quad the triangle does not cover, only so its neighbours can take derivatives. Its writes and outputs are discarded.">helper invocations</span>, which compute values only so their neighbours can difference against them, and whose outputs are discarded. A triangle about a pixel across can occupy a whole quad to shade one pixel, and a pixel on the edge between two triangles is shaded in two quads. That waste is called quad overdraw.</p>
+    <p><code>town</code> is the scene where it should bite. Its frames draw a median of 5,552,214 triangles over 137,730 <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span>, about 1.5 triangles per pixel of a 2560&times;1440 target (this page's arithmetic). On top of the quads, A's lit pass runs the vertex shader for every triangle of the frame's draw a second time, though many own no sample once the depth pre-pass has run.</p>
+    <p>D removes both. Its compute pass runs one invocation per pixel, so no helper runs, and nothing is rasterised a second time. The research note behind ADR 0019 describes it: a pre-pass writes per-sample triangle IDs, then a compute pass "rebuilds each pixel's triangle from the IDs and the vertex and index buffers, interpolates attributes with analytic derivatives, samples with <code>textureSampleGrad</code>, shades every Material in one shader". Burns and Hunt proposed it in 2013, a buffer that "only stores a triangle index and instance ID per sample, encoded in as few as four bytes" in place of a G-buffer, "often 20+ bytes per visibility sample". Their aim was memory bandwidth. D's aim on <code>town</code> was the gate.</p>
+    <p>D pays for what it removes. Each pixel must find its triangle's three corners, run the vertex shader's work for each, and compute its own weights and gradients: work the rasteriser does in fixed-function hardware for a forward pass. Whether that costs less than the quads and the second vertex pass is what the prototype measured.</p>
+  </div>
+  <figure class="wide">
+    <p class="order-label">The frame's passes with the <code>visibility_buffer</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships. The prototype adds the visibility buffer.">Render switch</span> on</p>
+    <ol class="pass-order">
+      <li>culling phase one</li>
+      <li>Froxel pass</li>
+      <li class="warm">depth pre-pass, with IDs</li>
+      <li>depth pyramid</li>
+      <li>culling phase two</li>
+      <li class="warm">phase two's depth pass, with IDs</li>
+      <li>shadow mask pass (rays on)</li>
+      <li class="focus">material pass</li>
+      <li>tonemapping</li>
+    </ol>
+    <figcaption>Orange: the depth passes now write a triangle ID per sample beside depth, and with shadow rays on the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">Surface normals</span> as before. With the switch on, phase two's depth pass is always a pass of its own. Blue: the material pass, a compute pass, replaces the lit pass and writes the HDR target. <code>draw_calls</code> reads 3 against A's 4. The switch is <code>--visibility-buffer</code> on <code>praxis bench</code> and <code>praxis capture</code>.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="ids">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>visibility_ids.wgsl</code> &middot; <code>visibility_id.wgsl</code></div>
+    <h2>Writing the IDs</h2>
+    <p class="key-idea"><b>Key idea.</b> Each sample's ID is the triangle's <code>primitive_index</code> within its phase's draw, with a bit for phase two, split into two 16-bit halves because a multisampled 32-bit integer target is not guaranteed. Written in the depth passes, the last ID a sample keeps is the nearest triangle's, and a flat input makes it that triangle's own.</p>
+    <p>The ID is the fragment stage's <span class="concept" data-term="Primitive index" data-tip="A fragment-stage built-in value: the index of the fragment's triangle among the primitives processed for the current instance. WebGPU makes it an optional feature, primitive-index; wgpu calls it PRIMITIVE_INDEX.">primitive index</span>, which WGSL defines as a "per-primitive index based on the number of primitives processed for the current instance". Praxis draws each culling phase's triangles in one indexed draw, so within a phase the index names a triangle of the frame's draw. Phase two's draw starts where phase one's ends, and its <code>primitive_index</code> starts again at 0, so phase two's IDs carry bit 31, <code>PHASE_TWO_BIT</code>. A pipeline override constant, <code>PHASE_TWO</code>, tells each depth pass's pipeline whether to set it.</p>
+<pre class="code"><code><span class="comment">// visibility_ids.wgsl at b846161: the ID a depth pass writes.</span>
+fn visibility_id(primitive: u32, material_id: u32) -&gt; vec2&lt;u32&gt; {
+    let id = select(primitive, primitive | PHASE_TWO_BIT, PHASE_TWO);
+    return encode_visibility_id(select(id, 0u, material_id == NO_MATERIAL - 1u));
+}
+
+<span class="comment">// visibility_id.wgsl: two 16-bit halves.</span>
+fn encode_visibility_id(id: u32) -&gt; vec2&lt;u32&gt; {
+    return vec2&lt;u32&gt;(id &amp; 0xffffu, id &gt;&gt; 16u);
+}</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>The format.</b> The IDs go into a 4x MSAA <code>Rg16Uint</code> target beside depth. WebGPU's table of plain colour formats gives <code>r32uint</code> no multisampling; <code>rg16uint</code> has it wherever the device has WebGPU's core features and limits. Cleared to all bits set, the ID <code>NO_TRIANGLE</code>, they take 2560 &times; 1440 &times; 4 samples &times; 4 bytes = 58,982,400 bytes at 1440p.</li>
+      <li><b>The feature.</b> <code>primitive_index</code> needs wgpu's <code>PRIMITIVE_INDEX</code>, which is outside Praxis's <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span>. The prototype requests it where the adapter has it, as B's did.</li>
+      <li><b>The flat input.</b> Each ID entry point reads the flat <span class="concept" data-term="Material ID" data-tip="The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.">Material ID</span> and compares it with <code>NO_MATERIAL - 1</code>, an ID no Material has, so the read has no effect but survives the compiler. On the M4 Pro, a fragment stage that reads no flat input can merge the fragments of index-sharing triangles, and one triangle's ID would land on its neighbour's samples (<a href="msaa-fragment-merging.html#measured">MSAA Fragment Merging Explained</a>). With the read, each sample's ID names the triangle that covers it.</li>
+      <li><b>With shadow rays on,</b> the same fragment stage writes two colour targets, the Surface normals the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span> pass reads and the ID.</li>
+    </ul>
+    <h3>Why in the depth passes, when B could not</h3>
+    <p>B wrote its IDs in a pass of its own, drawing the frame again at depth Equal, which cost 2.08 ms. It had to: B's lit pass rasterised the named triangles again at depth Equal, so the IDs had to name the triangles that pass would show, under the same depth state. D draws nothing again. The depth passes test depth with <code>Greater</code> and write it, so a fragment writes its ID only when it is nearer than everything before it, and the last ID a sample keeps belongs to the nearest triangle. Nothing later must agree with that choice, so D's IDs need agree only with themselves.</p>
+    <p>That made them cheap. In frames with shadow rays on, <code>depth_prepass</code> went from 2,139 &micro;s under A to 2,356 &micro;s under D, about 0.22 ms. GPU memory grew by 58,982,432 bytes: the IDs plus the material pass's 32-byte uniform.</p>
+  </div>
+</section>
+
+<section class="chapter" id="rebuild">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>material_pass.wgsl</code> &middot; <code>surface.wgsl</code></div>
+    <h2>Rebuilding the triangle</h2>
+    <p class="key-idea"><b>Key idea.</b> With the three corners' clip x, y and w as the rows of a matrix M, a pixel's perspective-correct weights are proportional to its device point times M's inverse. Each column of the inverse is a cross product of two rows, and normalising the weights to sum to 1 cancels the determinant, so no corner is ever divided by its w.</p>
+    <p class="plain">A forward pass gets its interpolated attributes from the rasteriser. A compute pass gets only an ID, and must find the triangle, run its corners through the vertex shader's work, and work out how much of each corner the pixel sees.</p>
+    <h3>From an ID to three corners</h3>
+    <p>The material pass clears bit 31, and if it was set adds phase two's first index divided by 3, to get the triangle's place in the frame's draw. That draw's packed indices give three vertices. For each, it calls <code>vertex_output</code>, the very function the lit pass's vertex shader calls, moved into a part both share, <code>surface.wgsl</code>: the packed index names a Meshlet record, which names the Instance, the <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.">Meshlet</span> and the Material; the vertex comes from the vertex Arena; and out come the camera-relative position (ADR 0014), the clip position, normal, tangent and UV. Calling the same function is what lets D draw A's image: the corners are computed exactly as A's vertex shader computes them.</p>
+    <h3>Weights without dividing by w</h3>
+    <p>Rasterisers interpolate in screen space and then correct for perspective, dividing by each corner's w. A compute pass could do the same: project each corner, take 2D weights on the projected triangle, and correct each by 1/w. The prototype does not. Write each corner's clip coordinates (x, y, w) as a row of a 3&times;3 matrix M, and let p = (x<sub>ndc</sub>, y<sub>ndc</sub>, 1) be the pixel centre's device point.</p>
+    <div class="formula">point with weights &lambda; on the triangle, in clip space:   &lambda;&#x1D40; M
+it projects to p exactly when   &lambda;&#x1D40; M = s p   for some s &gt; 0
+so   &lambda;&#x1D40; = s p M&#x207B;&sup1;   &prop;   p M&#x207B;&sup1;
+column i of M&#x207B;&sup1; = (row i+1 &times; row i+2) / det M
+normalise &lambda; to sum to 1: s and det M cancel</div>
+    <pre class="code"><code><span class="comment">// material_pass.wgsl at b846161.</span>
+let rows = mat3x3&lt;f32&gt;(first_corner.clip_position.xyw,
+                       second_corner.clip_position.xyw,
+                       third_corner.clip_position.xyw);
+let edges = mat3x3&lt;f32&gt;(cross(rows[1], rows[2]), cross(rows[2], rows[0]), cross(rows[0], rows[1]));
+
+fn barycentric_weights(edges: mat3x3&lt;f32&gt;, point: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    let unnormalised = point * edges;   <span class="comment">// a row vector times the matrix: dot(point, each column)</span>
+    let sum = unnormalised.x + unnormalised.y + unnormalised.z;
+    return unnormalised / select(sum, 1.0, sum == 0.0);
+}</code></pre>
+    <p style="margin-top: 16px">The only division is by the sum of the unnormalised weights. That sum is 0 only where the pixel's ray runs parallel to the triangle's plane, which a neighbour pixel evaluated for a derivative (chapter 4) can reach at a grazing angle; the prototype then leaves the weights unnormalised, and finite. A corner behind the camera has a negative w, and nothing divides by it, so it needs no clipping. The same identity gives the depth along the ray: the plane is met at w = det M / sum.</p>
+    <p>This is Olano and Greer's 1997 scan conversion in 2D homogeneous coordinates: "three edge functions = M-1 = inverse of 2D homogeneous vertex matrix", and each parameter's "interpolation function = parameter vector * M-1". Their algorithm "avoids costly clipping tests" and handles clipping "by the addition of clip edges, without the need to actually split the clipped triangle". They still add a near clip edge when interpolating, because values such as 1/w can overflow near the eye, and the clip edge lets them store 1/w in fixed point; the material pass works in f32, at pixels whose samples the triangle covers and their neighbours. It needs only the interpolation half. Which pixels a triangle covers is already settled: the depth passes' rasteriser, which does clip, wrote the IDs.</p>
+  </div>
+  <figure class="wide" id="demo-weights">
+    <div class="demo-grid merge">
+      <div class="canvas-frame"><canvas id="w-canvas" class="demo demo-canvas" role="img" aria-label="Left, a top-down view of a camera and a triangle whose corners can be dragged, one of them behind the camera. Right, the screen, with the triangle's visible part coloured by its weights and the triangle formed by dividing each corner by w drawn dashed."></canvas></div>
+      <div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Presets</span>
+            <div class="seg" role="group" aria-label="Presets" id="w-preset">
+              <button type="button" data-preset="front" aria-pressed="true">all in front</button>
+              <button type="button" data-preset="behind" aria-pressed="false">a corner behind</button>
+              <button type="button" data-preset="plane" aria-pressed="false">a corner at w = 0</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i></i>the triangle, top down</span>
+          <span><i class="dashed"></i>corners divided by w</span>
+          <span><span class="dot ring"></span>probe pixel (drag it)</span>
+        </div>
+        <p class="readout" id="w-readout" aria-live="polite"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> Left: the scene from above, the camera at the bottom looking up, its 90&deg; view between the grey lines; drag corners A, B and C, even below the camera's line, where w turns negative. Each corner keeps its own height. Right: the screen. Pixels whose homogeneous weights are all positive, with the point in front of the camera, are coloured by the weights (A red, B green, C blue), which is exactly perspective-correct interpolation. The dashed outline joins the corners divided by w: with every corner in front it is the triangle; with one behind, that corner lands mirrored, and the outline no longer bounds what is visible, which is why a rasteriser clips first. Drag the probe ring to read both sets of weights. In exact arithmetic they are the same function, since the 2D weights over w, normalised, equal p M<sup>-1</sup> normalised; the divided route fails where a corner's w is 0, and the homogeneous route never divides by a corner's w.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="derivatives">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>shade_triangle</code></div>
+    <h2>Derivatives without a quad</h2>
+    <p class="key-idea"><b>Key idea.</b> A compute invocation has no quad to difference against, so the material pass evaluates the triangle on its own plane at neighbouring pixel centres, as helper invocations would. Differencing across the 2&times;2 quad from its top-left pixel matched A's image on the M4 Pro; differencing each pixel against its own neighbours did not.</p>
+    <p>Texture sampling picks a mip level from how fast the UV changes from one pixel to the next. In a fragment shader the hardware takes that from the quad. WGSL's <code>dpdx</code> returns "the same as either <code>dpdxFine</code>(e) or <code>dpdxCoarse</code>(e)": the fine form differences within each row and column of the quad, the coarse form "may result in fewer unique positions", and WGSL leaves the choice to the implementation. A compute shader has none of this, so it computes gradients itself and samples with <code>textureSampleGrad</code>, which "samples a texture using explicit gradients".</p>
+    <p>Where the gradients come from matters. Karis's Nanite talk, whose material pass still runs as pixel shaders, notes that its quads "span across triangles", and also depth discontinuities, UV seams and different objects: "Finite differences of discontinuities are nonsense and often huge which results in high mip levels being used". Nanite computes analytic derivatives of the attributes across the triangle and replaces every <code>Sample</code> with <code>SampleGrad</code>, at an overhead it measured as "less than 2%". The prototype stays on the triangle's own plane as well. It evaluates the same triangle, with the same weights function, at neighbouring pixel centres, even where those centres fall outside it, just as a helper invocation extrapolates the triangle. No difference crosses into another triangle.</p>
+    <h3>Two forms, measured</h3>
+    <p>The prototype measured two forms against A's image of <code>town</code> at 640&times;360, counting pixels that differ by more than one 8-bit step at the eight frames the Goldens test uses:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Frame</th><th class="n">59</th><th class="n">300</th><th class="n">500</th><th class="n">700</th><th class="n">900</th><th class="n">1200</th><th class="n">1500</th><th class="n">1800</th></tr></thead>
+      <tbody>
+        <tr><td>Each pixel's own right and lower neighbours</td><td class="n">148</td><td class="n">132</td><td class="n">2,054</td><td class="n">1,881</td><td class="n">1,797</td><td class="n">1,708</td><td class="n">1,565</td><td class="n">1,369</td></tr>
+        <tr class="focus"><td>The quad's top-left pixel to its right and lower neighbours, shared by the quad</td><td class="n">5</td><td class="n">10</td><td class="n">107</td><td class="n">561</td><td class="n">604</td><td class="n">657</td><td class="n">590</td><td class="n">617</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">Pixels past one 8-bit step from A's image, of 230,400. The per-quad row is <code>docs/performance.md</code>'s at 496e7e70; the per-pixel row is the prototype test's output, whose range, 132 to 2,054, the findings give.</p>
+    <p>The per-quad form cut the differences by a factor of 2 to 30, so the M4 Pro's <code>dpdx</code> and <code>dpdy</code> in the lit pass behave as one difference per quad. The prototype ships that form, to match A. It costs one more weight evaluation and one more normal-Texture sample per triangle than the per-pixel form, since the quad's top-left pixel is a fourth point: in round 4 the gate read 8,795.0 &micro;s with it and 8,430.5 &micro;s with the per-pixel form, about 365 &micro;s. Neither form is wrong. The per-pixel one, whose gate was the reading below A's, is the one a D adopted for its own sake would ship, the findings say.</p>
+    <p>The same neighbours serve two purposes. The UV differences are the gradients every Texture is sampled with, anisotropic filtering included. The shading normal's differences, with the normal Texture sampled at the neighbours' UVs too, widen roughness for specular antialiasing (<a href="specular-antialiasing.html#filter">Specular Antialiasing Explained</a>), as <code>dpdx(normal)</code> does in the lit pass.</p>
+  </div>
+  <figure class="wide" id="demo-quads">
+    <div class="demo-grid merge">
+      <div class="canvas-frame"><canvas id="q-canvas" class="demo demo-canvas" role="img" aria-label="An eight by eight grid of pixels in two by two quads, a receding triangle over it, each covered pixel labelled with its mip level, and arrows from the chosen pixel to the neighbours its derivatives use."></canvas></div>
+      <div>
+        <div class="sliders stacked">
+          <label for="q-far" class="control-label">Far corner's w <output id="q-far-out" for="q-far"></output></label>
+          <input type="range" id="q-far" min="1" max="16" step="0.5" value="16">
+        </div>
+        <div class="control-rows">
+          <div>
+            <span class="control-label">Derivative form</span>
+            <div class="seg" role="group" aria-label="Derivative form" id="q-form">
+              <button type="button" data-form="quad" aria-pressed="true">per quad</button>
+              <button type="button" data-form="fine" aria-pressed="false">WGSL fine</button>
+              <button type="button" data-form="own" aria-pressed="false">per pixel</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot one"></span>points the chosen pixel differences</span>
+          <span><span class="dot ring"></span>level differs from per quad</span>
+          <span><span class="box"></span>helper invocation</span>
+        </div>
+        <p class="readout" id="q-readout" aria-live="polite"></p>
+      </div>
+    </div>
+    <figcaption><b>Live demo.</b> A triangle receding from the camera over an 8&times;8 grid of pixels, its UV interpolated with the homogeneous weights of chapter 3 and sampled from a 256-texel Texture. Each covered pixel shows its mip level, the base-2 log of its longer UV gradient in texels, a simplified isotropic rule; the dashed pixels are the helper invocations a fragment shader would run. Click a pixel to see which points its derivatives use. <b>Per quad</b> is the prototype's shipped form, one difference for the whole quad from its top-left pixel. <b>WGSL fine</b> differences within the pixel's own row and column of the quad, as <code>dpdxFine</code> and <code>dpdyFine</code> are defined. <b>Per pixel</b> is the prototype's other form, each pixel's own right and lower neighbours, which can lie in the next quad. With the far corner's w at 1 there is no perspective, the UV is linear across the screen, and all three agree. The more the triangle recedes, the more the levels differ; whether a pixel then lands on another mip depends on how near a whole level it sits.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="msaa">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>shade_pixels</code></div>
+    <h2>MSAA from IDs</h2>
+    <p class="key-idea"><b>Key idea.</b> The material pass shades each distinct triangle among a pixel's four samples once, at the pixel centre, and weights it by the samples it covers: the lit pass's own MSAA rate and resolve, so edges stay antialiased without shading every sample.</p>
+    <p>A 4x MSAA forward pass shades each triangle once per pixel, at the pixel centre, and writes the result into the samples that triangle covers; the resolve then averages the four (<a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>). The research note offered D two ways to keep MSAA: per-sample IDs and per-sample shading at edges, or else SMAA 1x. The prototype found a third, the one the forward pass itself uses. One invocation per pixel, in 8&times;8 workgroups, loads the four samples' IDs and walks the distinct ones:</p>
+<pre class="code"><code><span class="comment">// material_pass.wgsl at b846161, the end of shade_pixels.</span>
+var colour = vec4&lt;f32&gt;(0.0);
+var unshaded = 0xfu;
+while unshaded != 0u {
+    let id = ids[firstTrailingBit(unshaded)];
+    let sample_bits = select(vec4&lt;u32&gt;(0u), vec4&lt;u32&gt;(1u, 2u, 4u, 8u), ids == vec4&lt;u32&gt;(id));
+    let matching = dot(sample_bits, vec4&lt;u32&gt;(1u));
+    var shaded = cleared;
+    if id != NO_TRIANGLE {
+        shaded = shade_triangle(id, pixel_centre, vec2&lt;f32&gt;(size));
+    }
+    colour += shaded * f32(countOneBits(matching));
+    unshaded &amp;= ~matching;
+}
+textureStore(hdr_target, pixel, colour / 4.0);</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>One shade per triangle per pixel.</b> A pixel inside one triangle shades once. A pixel on an edge shades once per triangle its samples show, up to four, so edges cost more, exactly as they do in the forward pass. Samples no triangle covers take the clear colour.</li>
+      <li><b>The same resolve.</b> The lit pass writes each colour weighted by 1/(1 + luminance), so that a plain average of the samples is a luminance-weighted resolve, as Karis describes: "weight = 1/(1 + luma). For a weighted average, sum all samples and divide by the summed weights." The material pass calls the same <code>lit_colour</code>, which applies that weight, and weights the clear colour the same way, so its sum over 4 equals the hardware resolve.</li>
+      <li><b>The same lighting.</b> <code>lit_colour</code>, shared with the lit pass's <code>fs_main</code>, reads the Froxel lights, the shadow mask, ambient and emissive, applies exposure and clamps to fp16's largest value.</li>
+    </ul>
+    <p>Burns and Hunt resolve MSAA the same way. Their deferred pass creates "one shading sample record &hellip; for each unique visibility sample", weighted "in proportion to the number of times they appear within the pixel", which "results in one shading sample per pixel, per triangle".</p>
+    <h3>How the match was checked</h3>
+    <p><code>the_visibility_buffer_shades_the_image_the_lit_pass_shades</code> renders a white wall lit by nine point lights with a red quad turned 0.5 rad over it, partly over the background, at 64&times;64. Every pixel must be within one 8-bit step of A's, with shadow rays on and off; dividing by 3.9 instead of 4, which brightens it about 2.6%, fails it. <code>tests/visibility_buffer.rs</code> captures <code>town</code> at the Goldens test's eight frames at 640&times;360 and allows at most 700 pixels past one step per frame.</p>
+    <h3>Nine storage buffers</h3>
+    <p>The material pass's compute stage reads nine storage buffers: lights, Froxel lists, Materials, Instances, vertices, Meshlets, Meshlet vertices, Meshlet records and packed indices. Nine is the Capability floor's <code>max_storage_buffers_per_shader_stage</code>. So the pass declares the frame and geometry buffers it reads in bind groups of its own, leaving the culling pass's layout as it was, and instead of binding the frame's draw, a tenth buffer, it has the GPU copy phase two's first index, 4 bytes, into its uniform each frame with <code>copy_buffer_to_buffer</code>. The uniform also holds the clear colour, which the CPU writes: 16 more uploaded bytes a frame.</p>
+  </div>
+</section>
+
+<section class="chapter" id="result">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; PR #380</div>
+    <h2>Reading the result</h2>
+    <p class="key-idea"><b>Key idea.</b> Judge spans, not passes. D's gate stayed within about 2% of A's either way, its GPU frame grew because its CPU frame shrank, and the 8.6 ms is the triangles every option draws.</p>
+    <p><code>praxis bench</code> on <code>town</code> at 2560&times;1440 with 4x MSAA, 1,800 measured frames, A then D in each of three rounds, and a fourth round adding F, D with per-pixel derivatives. Medians in &micro;s:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Round</th><th>Build</th><th class="n">Gate, rays off</th><th class="n">GPU frame</th><th class="n">CPU frame</th><th class="n"><code>depth_prepass</code></th><th class="n"><code>material_pass</code></th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>A</td><td class="n">8,667.3</td><td class="n">15,378.7</td><td class="n">16,439.0</td><td class="n">2,139.1</td><td class="n">&mdash;</td></tr>
+        <tr class="focus"><td>1</td><td>D</td><td class="n">8,806.8</td><td class="n">16,941.5</td><td class="n">14,583.0</td><td class="n">2,355.4</td><td class="n">5,390.5</td></tr>
+        <tr><td>2</td><td>A</td><td class="n">8,691.3</td><td class="n">15,404.7</td><td class="n">16,850.0</td><td class="n">2,138.1</td><td class="n">&mdash;</td></tr>
+        <tr class="focus"><td>2</td><td>D</td><td class="n">8,770.2</td><td class="n">16,961.7</td><td class="n">14,372.5</td><td class="n">2,355.8</td><td class="n">5,412.8</td></tr>
+        <tr><td>3</td><td>A</td><td class="n">8,631.6</td><td class="n">15,328.0</td><td class="n">16,350.5</td><td class="n">2,140.0</td><td class="n">&mdash;</td></tr>
+        <tr class="focus"><td>3</td><td>D</td><td class="n">8,767.2</td><td class="n">16,883.3</td><td class="n">14,197.6</td><td class="n">2,357.0</td><td class="n">5,375.0</td></tr>
+        <tr><td>4</td><td>A</td><td class="n">8,631.7</td><td class="n">15,329.5</td><td class="n">16,528.8</td><td class="n">2,141.0</td><td class="n">&mdash;</td></tr>
+        <tr class="focus"><td>4</td><td>D</td><td class="n">8,795.0</td><td class="n">16,945.0</td><td class="n">14,360.0</td><td class="n">2,357.4</td><td class="n">5,419.5</td></tr>
+        <tr><td>4</td><td>F</td><td class="n">8,430.5</td><td class="n">16,634.8</td><td class="n">14,470.6</td><td class="n">2,337.4</td><td class="n">5,064.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of the prototype branch, from <code>docs/performance.md</code> at 496e7e70. Pass times are from frames with shadow rays on.</p>
+    <h3>The gate</h3>
+    <p>The gate runs from the first culling dispatch to the end of the lit pass, or here the material pass, with shadow rays off (<a href="frame-timing.html#gate">Frame Timing Explained</a>). In the median rounds D read 8.77 ms against A's 8.67, 1.2% slower; F read 8.43 ms against 8.63 in its round, 2.3% faster. Neither is near 6 ms. The IDs cost about 0.22 ms, and shading takes roughly 5 ms in the lit pass or the material pass alike: rebuilding each pixel's triangles in compute costs on the M4 Pro about what rasterising them again did.</p>
+    <h3>Why the pass times do not add up</h3>
+    <p>On Metal, passes that do not write what each other binds overlap, so a pass's own timestamps include time spent waiting on the pass before. A's <code>lit_pass</code> reads 11,256 &micro;s in rays-on frames; D's <code>tonemapping_pass</code> reads 12,424 against A's 4,029, though tonemapping did not change. Only spans, the gate and the GPU frame, count shared time once (<a href="frame-timing.html#frame">Frame Timing Explained</a>).</p>
+    <h3>Why the GPU frame grew 1.5 ms</h3>
+    <p>With shadow rays on, D's GPU frame read 16.9 ms against A's 15.4, while its gate moved about 1%. Ticket #378 found the mechanism: when the CPU frame is shorter than the GPU frame, frames queue behind each other, and Metal stops overlapping passes that it overlaps when the GPU is idle at a frame's start. D's CPU frame, 14.4 ms, is shorter than its GPU frame; A's, 16.4 ms, is longer than its own. D's CPU frame was 2.1 ms shorter because the material pass binds no TLAS, and each use of a bind group holding a TLAS cost wgpu-core 30.0.1 a walk over every Instance's BLAS (#352). Since PR #383, only the shadow mask pass binds the TLASes on main, so today's A loses the CPU gap and the overlap alike. The GPU-frame comparison holds for the code it measured, not for today's.</p>
+    <h3>The image</h3>
+    <p>At 2560&times;1440 the eight frames differ from A's by more than one step at 23, 29, 735, 8,060, 8,802, 8,947, 8,693 and 8,719 of 3,686,400 pixels, the largest channel difference 132. The differing pixels sit alone on the silhouettes of rooftop objects and other geometry under a pixel wide. The PR's images, A, D and their difference, are in the reading list.</p>
+    <h3>The decision</h3>
+    <p>Both options ADR 0019 named have now run on <code>town</code>, and neither moves the gate: B added 1.9 to 3.5 ms, and D read from 2.3% under A to 1.2% over it. The 8.6 ms is the frame's triangles: culling 1.3 ms, the depth pre-pass 2.1 and shading roughly 5, overlapping. The owner kept A and the provisional 6 ms, the prototype stays on its branch, <code>PRIMITIVE_INDEX</code> stays out of the Capability floor, and ADR 0019 records the reopen clause as spent on <code>town</code> until LOD (#360) reduces its triangles. Fewer triangles is the lever every option shares.</p>
+    <ul class="keypoints">
+      <li><b>What a D for its own sake would still need.</b> <code>PRIMITIVE_INDEX</code> in the Capability floor; 59 MB of IDs at 1440p; a storage-buffer limit above the floor's 9 for any further inputs; and a forward pass beside it for transparency.</li>
+      <li><b>What it showed regardless.</b> Shading from IDs in compute can reproduce a forward MSAA image within a step at nearly every pixel, and on this GPU a forward pass's quad derivatives are per quad.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>B wrote its IDs in a pass of its own at depth Equal. Why can D write them in the depth passes?</summary><p>B's lit pass drew the named triangles again at depth Equal, so its IDs had to name what that pass would show, under its depth state. D draws nothing again. In the depth passes, a fragment writes its ID only when it passes the <code>Greater</code> test, so each sample keeps the nearest triangle's ID, and the flat Material ID read keeps the M4 Pro from merging fragments. The IDs need agree only with themselves, and cost about 0.22 ms instead of B's 2.08.</p></details>
+    <details class="check"><summary>The material pass never divides a corner by its w. What does it divide by, and when is that zero?</summary><p>By the sum of the unnormalised weights, p &middot; (row i+1 &times; row i+2) over the three corners. Normalising to sum 1 cancels the unknown scale and det M. The sum is zero only where the pixel's ray runs parallel to the triangle's plane, which a neighbour evaluated for a derivative can reach at a grazing angle; the weights are then left unnormalised. A corner behind the camera, with negative w, needs no clipping.</p></details>
+    <details class="check"><summary>D's gate moved about 1%, but its GPU frame with rays on grew 1.5 ms. Which figure judges D, and why does the GPU frame comparison not hold for today's main?</summary><p>The gate, a span that counts overlapping passes once. The GPU frame grew because D's CPU frame, 2.1 ms shorter since the material pass binds no TLAS, fell below its GPU frame: frames queued, and Metal stopped overlapping passes it overlaps when the GPU is idle at a frame's start (#378). Since PR #383 only the shadow mask pass binds the TLASes, so A on main is in the same position.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Links into the prototype are pinned to b846161, and the findings to main at 496e7e70.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/297">Ticket #297</a> and <a href="https://github.com/gariasf/praxis/pull/380">PR #380</a> <span>the prototype's brief, findings and review</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/297#issuecomment-6491023439">The owner's decision</a> <span>keep A and the 6 ms; the prototype stays unmerged</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/496e7e70ad2368736f72f0deb5b1c0f037d87f02/docs/performance.md#option-d-a-visibility-buffer-prototyped-on-town-the-gate-stays-past-6-ms-2026-10-28-297"><code>docs/performance.md</code>, option D's section</a> <span>every table this guide quotes, and the Baseline comparisons</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/496e7e70ad2368736f72f0deb5b1c0f037d87f02/docs/performance.md#the-tlas-bound-in-the-shadow-mask-pass-alone-queued-frames-not-the-split-cost-the-gpu-11-ms-2026-10-28-378"><code>docs/performance.md</code>, #378's section</a> <span>why queued frames lose Metal's overlap</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/496e7e70ad2368736f72f0deb5b1c0f037d87f02/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the gate, and the amendment that spends its reopen clause on <code>town</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/496e7e70ad2368736f72f0deb5b1c0f037d87f02/docs/research/visibility-and-gpu-driven-main-pass.md">The research note</a> <span>options A to E, D among them, as researched before the gate fired</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/b4c3ee0b2a861f84b933e5f58b59b83c3092b4be/pr-297">The PR's images</a> <span>A, D and their difference at the eight frames, and a crop of frame 1200</span></li>
+      </ul>
+      <h4>The code, at b846161</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/src/render/shaders/material_pass.wgsl"><code>material_pass.wgsl</code></a> <span><code>barycentric_weights</code>, <code>shade_triangle</code>, <code>shade_pixels</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/src/render/shaders/visibility_ids.wgsl"><code>visibility_ids.wgsl</code></a> and <a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/src/render/shaders/visibility_id.wgsl"><code>visibility_id.wgsl</code></a> <span>the ID entry points and encoding</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/src/render/shaders/surface.wgsl"><code>surface.wgsl</code></a> <span><code>vertex_output</code> and <code>lit_colour</code>, shared with the lit pass</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/src/render/material_pass.rs"><code>material_pass.rs</code></a> <span>the bind groups and the uniform's copy</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/b8461619ebe55dcaf14108747f2f7c61b0b08663/tests/visibility_buffer.rs"><code>tests/visibility_buffer.rs</code></a> <span><code>town</code> against A at eight frames</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and specifications</h3>
+      <ul>
+        <li>Burns and Hunt, <a href="https://jcgt.org/published/0002/02/04/paper.pdf">&ldquo;The Visibility Buffer: A Cache-Friendly Approach to Deferred Shading&rdquo;</a>, JCGT 2(2), 2013, the abstract and &sect;3.3 Anti-Aliasing, pp. 62&ndash;63 <span>the idea, and the MSAA resolve chapter 5 matches</span></li>
+        <li>Schied and Dachsbacher, <a href="https://cg.ivd.kit.edu/publications/2015/dais/DAIS.pdf">&ldquo;Deferred Attribute Interpolation for Memory-Efficient Deferred Shading&rdquo;</a>, High-Performance Graphics 2015 <span>a visibility buffer whose triangles carry screen-space partial derivatives of every attribute, at 8x MSAA</span></li>
+        <li>Olano and Greer, <a href="https://userpages.cs.umbc.edu/olano/papers/2dh-tri/2dh-tri.pdf">&ldquo;Triangle Scan Conversion using 2D Homogeneous Coordinates&rdquo;</a>, Workshop on Graphics Hardware 1997 <span>edge and interpolation functions from the inverse of the corners' (x, y, w) matrix, the summary at the paper's end</span></li>
+        <li>Karis et al., <a href="https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=106">&ldquo;Nanite: A Deep Dive&rdquo;</a>, SIGGRAPH 2021 Advances in Real-Time Rendering, pp. 106&ndash;107 <span>finite differences across discontinuities, and analytic derivatives with <code>SampleGrad</code></span></li>
+        <li>Karis, <a href="https://graphicrants.blogspot.com/2013/12/tone-mapping.html">&ldquo;Tone mapping&rdquo;</a>, Graphic Rants, 2013 <span>the 1/(1 + luma) weighting behind the resolve</span></li>
+        <li>W3C, WGSL: <a href="https://www.w3.org/TR/WGSL/#primitive-index-builtin-value"><code>primitive_index</code></a>, <a href="https://www.w3.org/TR/WGSL/#fragment-shaders-helper-invocations">quads and helper invocations</a>, <a href="https://www.w3.org/TR/WGSL/#dpdx-builtin"><code>dpdx</code></a> and <a href="https://www.w3.org/TR/WGSL/#dpdxFine-builtin"><code>dpdxFine</code></a>, <a href="https://www.w3.org/TR/WGSL/#texturesamplegrad"><code>textureSampleGrad</code></a> <span>the definitions chapters 2 and 4 quote</span></li>
+        <li>W3C, WebGPU: <a href="https://www.w3.org/TR/webgpu/#plain-color-formats">plain colour formats</a> and the <a href="https://www.w3.org/TR/webgpu/#dom-gpufeaturename-primitive-index"><code>"primitive-index"</code> feature</a> <span>why the IDs are two 16-bit halves, and the feature they need</span></li>
+        <li>The Forge, <a href="https://github.com/ConfettiFX/The-Forge/releases/tag/v1.57">release 1.57 notes</a> <span>its Triangle Visibility Buffer, with a reference to Engel's GDC Europe 2016 talk &ldquo;The Filtered and Culled Visibility Buffer&rdquo;, whose slides were not reachable</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman et al., <i>Real-Time Rendering</i>, 4th ed., &sect;20.5 Deferred Texturing, pp. 905&ndash;908, and &sect;23.1 Rasterization, pp. 993&ndash;1002 <span>the visibility buffer among deferred techniques, and rasterisation with 2D homogeneous coordinates and quads. Sections and pages from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">contents, bibliography and index</a>.</span></li>
+        <li>Pharr, Jakob and Humphreys, <i>Physically Based Rendering</i>, 4th ed., <a href="https://pbr-book.org/4ed/Textures_and_Materials/Texture_Sampling_and_Antialiasing">&sect;10.1.1 Finding the Texture Sampling Rate</a> <span>texture gradients from screen-space partial derivatives, the problem chapter 4 solves</span></li>
+        <li>Lengyel, <i>Foundations of Game Engine Development, Volume 2: Rendering</i> <span>projections, homogeneous coordinates and rasterisation</span></li>
+        <li>Gregory, <i>Game Engine Architecture</i> <span>where a renderer's passes sit in an engine</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Instance, Meshlet, Material ID, Surface normals, Shadow mask, Render switches, Reference scene and Capability floor are <code>CONTEXT.md</code>'s definitions. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Visibility buffer</dt><dd>A triangle ID per sample, written while depth is resolved, from which a later pass rebuilds and shades the surface each pixel shows.</dd></div>
+    <div><dt>Visibility ID</dt><dd>In the prototype, a triangle's <code>primitive_index</code> in its phase's draw, with bit 31 for phase two, stored as two 16-bit halves.</dd></div>
+    <div><dt>Material pass</dt><dd>The prototype's compute pass that shades each pixel from its samples' IDs, in place of the lit pass.</dd></div>
+    <div><dt>Primitive index</dt><dd>A fragment-stage built-in value: the index of the fragment's triangle among those processed for the current instance.</dd></div>
+    <div><dt>Quad</dt><dd>A 2&times;2 group of fragment invocations that run together so each can take derivatives against its neighbours.</dd></div>
+    <div><dt>Helper invocation</dt><dd>A fragment invocation for a pixel of a quad the triangle does not cover, run only so its neighbours can take derivatives.</dd></div>
+    <div><dt>Coarse and fine derivatives</dt><dd>A coarse derivative may share one difference across a quad; a fine one differences within the invocation's own row or column of it.</dd></div>
+    <div><dt>Homogeneous barycentrics</dt><dd>Perspective-correct weights from a pixel's device point times the inverse of the corners' (x, y, w) matrix, normalised, with no divide by any corner's w.</dd></div>
+    <div><dt>Instance</dt><dd>One Renderable's data on the GPU: its World transform, its Mesh, and the Material ID that overrides its Mesh's Materials, if any.</dd></div>
+    <div><dt>Meshlet</dt><dd>A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.</dd></div>
+    <div><dt>Material ID</dt><dd>The number that identifies a Material to the GPU.</dd></div>
+    <div><dt>Capability floor</dt><dd>The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/297">#297</a>, PR <a href="https://github.com/gariasf/praxis/pull/380">#380</a> at 496e7e70, the prototype at b846161, <code>docs/performance.md</code>, ADR 0019, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is the PR's own, on one Apple M4 Pro. Both demos are this page's illustrative models; the second's mip rule is simplified.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="msaa-fragment-merging.html">Previous: MSAA Fragment Merging Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  // ---- The model, shared by both demos: material_pass.wgsl's weights.
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  // The weights of the device point `point`, (x, y, 1), on the triangle whose
+  // corners' clip (x, y, w) are `rows`, as barycentric_weights takes them,
+  // and the w at which the point's ray meets the triangle's plane.
+  function homogeneous(rows, point) {
+    const edges = [cross(rows[1], rows[2]), cross(rows[2], rows[0]), cross(rows[0], rows[1])];
+    const unnormalised = edges.map((edge) => dot(point, edge));
+    const sum = unnormalised[0] + unnormalised[1] + unnormalised[2];
+    return {
+      weights: unnormalised.map((value) => value / (sum === 0 ? 1 : sum)),
+      w: dot(rows[0], edges[0]) / sum,
+    };
+  }
+  // Whether the point shows the triangle: every weight non-negative, in front of the camera.
+  const shows = (result) => result.w > 0 && result.weights.every((weight) => weight >= 0);
+  // The textbook route: divide each corner by its w, take 2D weights on the
+  // projected triangle, correct each by 1/w and normalise.
+  function dividedByW(rows, point) {
+    const projected = rows.map(([x, y, w]) => [x / w, y / w]);
+    const area = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const total = area(projected[0], projected[1], projected[2]);
+    const at = [point[0], point[1]];
+    const screen = [
+      area(at, projected[1], projected[2]) / total,
+      area(projected[0], at, projected[2]) / total,
+      area(projected[0], projected[1], at) / total,
+    ];
+    const corrected = screen.map((value, index) => value / rows[index][2]);
+    const sum = corrected[0] + corrected[1] + corrected[2];
+    return { projected, weights: corrected.map((value) => value / sum) };
+  }
+
+  // Demo 1's scene: view space seen from above, x across and depth d ahead,
+  // a 90° view, so a corner's clip (x, y, w) is (x, y, d).
+  const PRESETS = {
+    front: [[-1.7, 2.2], [1.5, 3.3], [0.3, 1.4]],
+    behind: [[-1.7, 2.2], [1.5, 3.3], [0.6, -0.8]],
+    plane: [[-1.7, 2.2], [1.5, 3.3], [0.6, 0]],
+  };
+  const HEIGHTS = [-1.0, -0.7, 1.0];
+  const clipRows = (corners) => corners.map(([x, d], index) => [x, HEIGHTS[index], d]);
+
+  // Demo 2's scene: an 8×8 grid of pixels, a triangle receding to `far`.
+  const GRID = 8, TEXTURE_SIZE = 256;
+  const UVS = [[0, 0], [1, 0], [0.5, 1]];
+  const devicePoint = (x, y) => [x / GRID * 2 - 1, 1 - y / GRID * 2, 1];
+  function floorRows(far) {
+    return [[-1.25, -1.1, 1], [1.2, -1.0, 1], [0.15, 1.25, far]].map(([x, y, w]) => [x * w, y * w, w]);
+  }
+  // The UV at the centre of pixel (x, y), on the triangle's plane, inside it or not.
+  function uvAt(rows, x, y) {
+    const { weights } = homogeneous(rows, devicePoint(x + 0.5, y + 0.5));
+    return [0, 1].map((axis) => UVS[0][axis] * weights[0] + UVS[1][axis] * weights[1] + UVS[2][axis] * weights[2]);
+  }
+  // The pixels whose UVs pixel (x, y) differences, by form: per quad from its
+  // top-left pixel; WGSL's fine form within its own row and column of the
+  // quad; per pixel against its own right and lower neighbours.
+  function derivativePoints(x, y, form) {
+    const quadX = x - (x % 2), quadY = y - (y % 2);
+    if (form === "quad") return { xFrom: [quadX, quadY], xTo: [quadX + 1, quadY], yFrom: [quadX, quadY], yTo: [quadX, quadY + 1] };
+    if (form === "fine") return { xFrom: [quadX, y], xTo: [quadX + 1, y], yFrom: [x, quadY], yTo: [x, quadY + 1] };
+    return { xFrom: [x, y], xTo: [x + 1, y], yFrom: [x, y], yTo: [x, y + 1] };
+  }
+  function mipLevel(rows, x, y, form) {
+    const points = derivativePoints(x, y, form);
+    const difference = (from, to) => {
+      const start = uvAt(rows, from[0], from[1]), end = uvAt(rows, to[0], to[1]);
+      return Math.hypot(end[0] - start[0], end[1] - start[1]) * TEXTURE_SIZE;
+    };
+    return Math.log2(Math.max(difference(points.xFrom, points.xTo), difference(points.yFrom, points.yTo)));
+  }
+  const covers = (rows, x, y) => shows(homogeneous(rows, devicePoint(x + 0.5, y + 0.5)));
+
+  if (typeof module !== "undefined") {
+    module.exports = { homogeneous, dividedByW, shows, PRESETS, clipRows, floorRows, uvAt, derivativePoints, mipLevel, covers, GRID };
+    return;
+  }
+
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  function sizeCanvas(canvas, width, height) {
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.aspectRatio = width + " / " + height;
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return context;
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+  // The pointer's position in a canvas's own units of `width`.
+  function pointerAt(canvas, event, width) {
+    const box = canvas.getBoundingClientRect();
+    const scale = width / box.width;
+    return [(event.clientX - box.left) * scale, (event.clientY - box.top) * scale];
+  }
+  const format = (value) => Number.isFinite(value) ? value.toFixed(3) : String(value);
+  const scheme = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  // ---- Demo 1: weights with a corner behind the camera.
+  (function () {
+    const canvas = document.getElementById("w-canvas");
+    if (!canvas) return;
+    const WIDTH = 600, HEIGHT = 300, PANEL = 300, RESOLUTION = 3;
+    const NAMES = ["A", "B", "C"];
+    let corners = PRESETS.front.map((corner) => corner.slice());
+    let probe = [0.0, -0.25];
+    let dragging = null;
+    // The top-down panel: x from -3 to 3, depth from -1.5 to 4.5, the camera 1.5 above the bottom.
+    const topDown = ([x, d]) => [PANEL / 2 + x * 50, HEIGHT - (d + 1.5) * 50];
+    const fromTopDown = ([u, v]) => [(u - PANEL / 2) / 50, (HEIGHT - v) / 50 - 1.5];
+    const screen = ([x, y]) => [PANEL + (x + 1) * PANEL / 2, (1 - y) * HEIGHT / 2];
+    const fromScreen = ([u, v]) => [(u - PANEL) / (PANEL / 2) - 1, 1 - v / (HEIGHT / 2)];
+    function draw() {
+      const context = sizeCanvas(canvas, WIDTH, HEIGHT);
+      const ink = css("--ink"), soft = css("--ink-soft"), rule = css("--rule"), accent = css("--accent"), warm = css("--warm"), bad = css("--bad");
+      context.fillStyle = css("--figure-bg");
+      context.fillRect(0, 0, PANEL, HEIGHT);
+      context.fillStyle = css("--panel");
+      context.fillRect(PANEL, 0, PANEL, HEIGHT);
+      const rows = clipRows(corners);
+      // The screen: each cell coloured by its weights where the triangle shows.
+      for (let v = 0; v < HEIGHT; v += RESOLUTION) {
+        for (let u = PANEL; u < WIDTH; u += RESOLUTION) {
+          const [x, y] = fromScreen([u + RESOLUTION / 2, v + RESOLUTION / 2]);
+          const result = homogeneous(rows, [x, y, 1]);
+          if (!shows(result)) continue;
+          const [a, b, c] = result.weights.map((weight) => Math.round(70 + 170 * weight));
+          context.fillStyle = "rgb(" + a + "," + b + "," + c + ")";
+          context.fillRect(u, v, RESOLUTION, RESOLUTION);
+        }
+      }
+      // The corners divided by w, dashed, where the division gives a point.
+      const divided = dividedByW(rows, [probe[0], probe[1], 1]);
+      context.save();
+      context.beginPath();
+      context.rect(PANEL, 0, PANEL, HEIGHT);
+      context.clip();
+      if (divided.projected.every((point) => point.every(Number.isFinite))) {
+        context.strokeStyle = warm;
+        context.lineWidth = 2;
+        context.setLineDash([6, 5]);
+        context.beginPath();
+        divided.projected.forEach((point, index) => {
+          const [u, v] = screen(point);
+          if (index === 0) context.moveTo(u, v); else context.lineTo(u, v);
+        });
+        context.closePath();
+        context.stroke();
+        context.setLineDash([]);
+        context.font = "600 12px " + css("--mono");
+        context.fillStyle = warm;
+        divided.projected.forEach((point, index) => {
+          const [u, v] = screen(point);
+          context.fillText(NAMES[index] + "/w", u + 6, v - 6);
+        });
+      }
+      context.restore();
+      const [probeU, probeV] = screen(probe);
+      context.strokeStyle = bad;
+      context.lineWidth = 2.5;
+      context.beginPath();
+      context.arc(probeU, probeV, 8, 0, 2 * Math.PI);
+      context.stroke();
+      context.strokeStyle = rule;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(PANEL + 0.5, 0);
+      context.lineTo(PANEL + 0.5, HEIGHT);
+      context.stroke();
+      // The top-down view: the camera's plane, its view and the probe's ray.
+      const eye = topDown([0, 0]);
+      context.strokeStyle = soft;
+      context.setLineDash([3, 4]);
+      context.beginPath();
+      context.moveTo(0, eye[1]);
+      context.lineTo(PANEL, eye[1]);
+      context.stroke();
+      context.setLineDash([]);
+      context.strokeStyle = rule;
+      context.lineWidth = 1.5;
+      [-1, 1].forEach((side) => {
+        const end = topDown([side * 4.5, 4.5]);
+        context.beginPath();
+        context.moveTo(eye[0], eye[1]);
+        context.lineTo(end[0], end[1]);
+        context.stroke();
+      });
+      const rayEnd = topDown([probe[0] * 4.5, 4.5]);
+      context.strokeStyle = bad;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(eye[0], eye[1]);
+      context.lineTo(rayEnd[0], rayEnd[1]);
+      context.stroke();
+      context.strokeStyle = accent;
+      context.lineWidth = 2.5;
+      context.beginPath();
+      corners.forEach((corner, index) => {
+        const [u, v] = topDown(corner);
+        if (index === 0) context.moveTo(u, v); else context.lineTo(u, v);
+      });
+      context.closePath();
+      context.stroke();
+      context.font = "700 13px " + css("--display");
+      corners.forEach((corner, index) => {
+        const [u, v] = topDown(corner);
+        context.fillStyle = corner[1] > 0 ? accent : bad;
+        context.beginPath();
+        context.arc(u, v, 7, 0, 2 * Math.PI);
+        context.fill();
+        context.fillStyle = ink;
+        context.fillText(NAMES[index], u + 10, v + 4);
+      });
+      context.fillStyle = ink;
+      context.beginPath();
+      context.arc(eye[0], eye[1], 4, 0, 2 * Math.PI);
+      context.fill();
+      context.font = "12px " + css("--mono");
+      context.fillStyle = soft;
+      context.fillText("camera, w = 0", 8, eye[1] + 16);
+      context.fillText("top down", 8, 16);
+      context.fillText("screen", PANEL + 8, 16);
+      // The readout at the probe.
+      const result = homogeneous(rows, [probe[0], probe[1], 1]);
+      const state = shows(result) ? "shows the triangle" : result.w > 0 ? "misses the triangle" : "meets its plane behind the camera";
+      const behind = corners.filter((corner) => corner[1] < 0).length, onPlane = corners.filter((corner) => corner[1] === 0).length;
+      document.getElementById("w-readout").innerHTML =
+        "The probe <b>" + state + "</b>." +
+        "<span class=\"weights\">p M<sup>-1</sup>, normalised: <b>" + result.weights.map(format).join(", ") + "</b></span>" +
+        "<span class=\"weights\">divided by w: <b>" + divided.weights.map(format).join(", ") + "</b></span>" +
+        (onPlane ? "A corner at w = 0: dividing by it gives no point, and its weights are NaN. The homogeneous weights are finite." :
+          behind ? behind + " corner" + (behind > 1 ? "s" : "") + " behind the camera: the weights still agree, but the dashed triangle no longer bounds what is visible." :
+            "Every corner in front: the two routes agree, and the dashed triangle is the visible one.");
+    }
+    function pick(point) {
+      if (point[0] >= PANEL) return "probe";
+      let nearest = null, distance = 22;
+      corners.forEach((corner, index) => {
+        const [u, v] = topDown(corner);
+        const away = Math.hypot(u - point[0], v - point[1]);
+        if (away < distance) { distance = away; nearest = index; }
+      });
+      return nearest;
+    }
+    function move(point) {
+      if (dragging === "probe") {
+        probe = fromScreen([Math.min(Math.max(point[0], PANEL), WIDTH), Math.min(Math.max(point[1], 0), HEIGHT)]);
+      } else if (dragging !== null) {
+        let [x, d] = fromTopDown([Math.min(Math.max(point[0], 0), PANEL), Math.min(Math.max(point[1], 0), HEIGHT)]);
+        // A band around the camera's plane snaps to w = 0 exactly.
+        if (Math.abs(d) < 0.06) d = 0;
+        corners[dragging] = [x, d];
+      }
+      draw();
+    }
+    canvas.addEventListener("pointerdown", (event) => {
+      const point = pointerAt(canvas, event, WIDTH);
+      dragging = pick(point);
+      if (dragging === null) return;
+      canvas.setPointerCapture(event.pointerId);
+      move(point);
+    });
+    canvas.addEventListener("pointermove", (event) => { if (dragging !== null) move(pointerAt(canvas, event, WIDTH)); });
+    const release = () => { dragging = null; };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    segmented(document.getElementById("w-preset"), "preset", (value) => {
+      corners = PRESETS[value].map((corner) => corner.slice());
+      draw();
+    });
+    if (scheme && scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+
+  // ---- Demo 2: which neighbours each derivative form differences.
+  (function () {
+    const canvas = document.getElementById("q-canvas");
+    if (!canvas) return;
+    const slider = document.getElementById("q-far");
+    const SIDE = 400, CELL = SIDE / GRID;
+    let form = "quad", chosen = [3, 4];
+    const centre = ([x, y]) => [(x + 0.5) * CELL, (y + 0.5) * CELL];
+    function draw() {
+      const far = Number(slider.value);
+      document.getElementById("q-far-out").textContent = far.toFixed(1);
+      const rows = floorRows(far);
+      const context = sizeCanvas(canvas, SIDE, SIDE);
+      const ink = css("--ink"), soft = css("--ink-soft"), rule = css("--rule"), accent = css("--accent"), bad = css("--bad");
+      const shades = [css("--accent-wash"), css("--warm-wash"), css("--figure-bg"), css("--bad-wash")];
+      context.fillStyle = css("--panel");
+      context.fillRect(0, 0, SIDE, SIDE);
+      let covered = 0, differing = 0, largest = 0;
+      context.font = "11px " + css("--mono");
+      for (let y = 0; y < GRID; y++) {
+        for (let x = 0; x < GRID; x++) {
+          if (covers(rows, x, y)) {
+            covered++;
+            const level = mipLevel(rows, x, y, form);
+            context.fillStyle = shades[((Math.floor(level) % 4) + 4) % 4];
+            context.fillRect(x * CELL, y * CELL, CELL, CELL);
+            context.fillStyle = ink;
+            context.fillText(level.toFixed(2), x * CELL + 6, y * CELL + CELL - 8);
+            const perQuad = mipLevel(rows, x, y, "quad");
+            largest = Math.max(largest, Math.abs(level - perQuad));
+            if (Math.floor(level) !== Math.floor(perQuad)) {
+              differing++;
+              context.strokeStyle = bad;
+              context.lineWidth = 2;
+              context.beginPath();
+              context.arc(x * CELL + CELL - 11, y * CELL + 11, 6, 0, 2 * Math.PI);
+              context.stroke();
+            }
+          } else {
+            const quadX = x - (x % 2), quadY = y - (y % 2);
+            const quadCovered = [0, 1].some((dx) => [0, 1].some((dy) => covers(rows, quadX + dx, quadY + dy)));
+            if (quadCovered) {
+              context.strokeStyle = soft;
+              context.lineWidth = 1.5;
+              context.setLineDash([4, 3]);
+              context.strokeRect(x * CELL + 4.5, y * CELL + 4.5, CELL - 9, CELL - 9);
+              context.setLineDash([]);
+            }
+          }
+        }
+      }
+      // The triangle's outline: every corner is in front, so dividing by w is safe here.
+      context.strokeStyle = ink;
+      context.lineWidth = 1.5;
+      const corners = rows.map(([x, y, w]) => [(x / w + 1) / 2 * SIDE, (1 - y / w) / 2 * SIDE]);
+      context.beginPath();
+      corners.forEach(([u, v], index) => { if (index === 0) context.moveTo(u, v); else context.lineTo(u, v); });
+      context.closePath();
+      context.stroke();
+      // Pixels thin, quads thick.
+      for (let line = 0; line <= GRID; line++) {
+        context.strokeStyle = line % 2 === 0 ? soft : rule;
+        context.lineWidth = line % 2 === 0 ? 2 : 1;
+        context.beginPath(); context.moveTo(line * CELL, 0); context.lineTo(line * CELL, SIDE); context.stroke();
+        context.beginPath(); context.moveTo(0, line * CELL); context.lineTo(SIDE, line * CELL); context.stroke();
+      }
+      // The chosen pixel and the points its derivatives use.
+      context.strokeStyle = accent;
+      context.lineWidth = 3;
+      context.strokeRect(chosen[0] * CELL + 1.5, chosen[1] * CELL + 1.5, CELL - 3, CELL - 3);
+      const points = derivativePoints(chosen[0], chosen[1], form);
+      [[points.xFrom, points.xTo], [points.yFrom, points.yTo]].forEach(([from, to]) => {
+        const [startU, startV] = centre(from), [endU, endV] = centre(to);
+        context.strokeStyle = accent;
+        context.lineWidth = 2.5;
+        context.beginPath(); context.moveTo(startU, startV); context.lineTo(endU, endV); context.stroke();
+        const angle = Math.atan2(endV - startV, endU - startU);
+        context.fillStyle = accent;
+        context.beginPath();
+        context.moveTo(endU, endV);
+        context.lineTo(endU - 10 * Math.cos(angle - 0.4), endV - 10 * Math.sin(angle - 0.4));
+        context.lineTo(endU - 10 * Math.cos(angle + 0.4), endV - 10 * Math.sin(angle + 0.4));
+        context.closePath();
+        context.fill();
+        [from, to].forEach((point) => {
+          const [u, v] = centre(point);
+          context.beginPath(); context.arc(u, v, 4.5, 0, 2 * Math.PI); context.fill();
+        });
+      });
+      const levels = ["quad", "fine", "own"].map((each) => mipLevel(rows, chosen[0], chosen[1], each).toFixed(2));
+      document.getElementById("q-readout").innerHTML =
+        "Pixel (" + chosen[0] + ", " + chosen[1] + ")" + (covers(rows, chosen[0], chosen[1]) ? "" : ", not covered") +
+        ": mip level <b>" + levels[0] + "</b> per quad, <b>" + levels[1] + "</b> WGSL fine, <b>" + levels[2] + "</b> per pixel. " +
+        (form === "quad" ? "<b>" + covered + "</b> pixels covered; the other forms are compared against this one."
+          : "<b class=\"bad-text\">" + differing + "</b> of <b>" + covered + "</b> covered pixels pick a different level, rounded down, than per quad; the largest difference is <b>" + largest.toFixed(2) + "</b> of a level.");
+    }
+    canvas.addEventListener("click", (event) => {
+      const [u, v] = pointerAt(canvas, event, SIDE);
+      chosen = [Math.min(GRID - 1, Math.max(0, Math.floor(u / CELL))), Math.min(GRID - 1, Math.max(0, Math.floor(v / CELL)))];
+      draw();
+    });
+    slider.addEventListener("input", draw);
+    segmented(document.getElementById("q-form"), "form", (value) => { form = value; draw(); });
+    if (scheme && scheme.addEventListener) scheme.addEventListener("change", draw);
+    draw();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
