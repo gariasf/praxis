@@ -186,7 +186,9 @@ and without `--visibility-buffer`, then `praxis difference`): 23, 29, 735,
 The differing pixels sit alone on the edges of rooftop objects and other
 geometry under a pixel wide.
 
-**What it leaves.** ADR 0019's reopen clause is spent on `town`: B and D
+**What it leaves.** The owner kept A and the 6 ms, and ADR 0019 now
+records the reopen clause as spent on `town` until LOD
+([decision](https://github.com/gariasf/praxis/issues/297#issuecomment-6491023439)): B and D
 are prototyped, and no form of either takes more than 2.3% off A's gate
 (B added 1.9 to 3.5 ms). The gate's 8.6 ms is the frame's triangles: culling 1.3 ms, the depth
 pre-pass 2.1 and shading, in the lit pass or the material pass, roughly 5,
@@ -195,6 +197,7 @@ option shares, which on `town` means LOD (#360, M4's charting). A D for its
 own sake would need `PRIMITIVE_INDEX` in the floor, 59 MB at 1440p, a
 storage-buffer limit above the floor's 9 for any more inputs, and the
 transparent pass forward beside it.
+
 ## The TLAS bound in the shadow mask pass alone: queued frames, not the split, cost the GPU 1.1 ms (2026-10-28, #378)
 
 **Verdict.** Binding both TLAS only in the shadow mask pass adds no GPU
