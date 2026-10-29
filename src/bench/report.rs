@@ -8,8 +8,8 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use super::{Budgets, Measurements, Spread, compared_counters, ensure_comparable};
 
 /// `current`'s times and counters, its aliasing among them when it was
-/// measured, as markdown tables, each against its
-/// `baseline`, when there is one, and the Budgets. Times compare only with a
+/// measured, as markdown tables, each against its `baseline`, when there is
+/// one, and the Budgets. Times compare only with a
 /// Baseline of as many frames on the same adapter, as `compare` judges them,
 /// each pass with the Baseline's pass of its name; counters compare as
 /// `compare` reads them. A Baseline of another scene,

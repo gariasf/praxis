@@ -251,7 +251,7 @@ impl Aliasing {
             supersampled.len(),
             "the supersampled image is not three times the size"
         );
-        // The sRGB encoding inverted, ≤ at the knee [ref:khronos-dfs-srgb].
+        // The sRGB EOTF, ≤ at the knee [ref:khronos-dfs-srgb-eotf].
         let linear: [f64; 256] = std::array::from_fn(|value| {
             let encoded = value as f64 / 255.0;
             if encoded <= 0.04045 {
@@ -757,9 +757,9 @@ fn compared_counters(current: &Measurements, baseline: &Measurements) -> (Counte
 }
 
 /// Judges `current`'s aliasing against `baseline`'s by the ratios times
-/// answer to, with no noise floor: on the M4 Pro its captures repeat byte
-/// for byte, so its counters do too, and a rise past the ratios is a change
-/// of the image. A run that skipped it passes, and one that measured it
+/// answer to, with no noise floor: on the M4 Pro two runs of every
+/// Reference scene measured equal counters, so a rise past the ratios is a
+/// change of the image. A run that skipped it passes, and one that measured it
 /// against a Baseline without it fails.
 fn check_aliasing(
     findings: &mut Vec<Finding>,
