@@ -119,7 +119,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 .map_err(|_| anyhow::anyhow!("--frame takes a frame number, not {frame:?}"))
         })
         .transpose()?;
+    let skip_aliasing = take_flag(&mut arguments, "--skip-aliasing");
     let command = arguments.first().map(String::as_str);
+    anyhow::ensure!(
+        !skip_aliasing || command == Some("bench"),
+        "only `bench` takes --skip-aliasing"
+    );
     anyhow::ensure!(
         crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
         "only `bench` and `capture` take --crowd-form"
@@ -129,9 +134,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         "only `capture` takes --frame"
     );
     let crowd_form = crowd_form.unwrap_or_default();
-    let bench = |output: &String, configuration, scenes: &[String]| Command::Bench {
+    let bench = |output: &String, configuration: Configuration, scenes: &[String]| Command::Bench {
         output: output.clone(),
-        configuration,
+        configuration: Configuration {
+            aliasing: configuration.aliasing && !skip_aliasing,
+            ..configuration
+        },
         scenes: scenes.to_vec(),
         crowd_form,
     };
@@ -195,7 +203,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [<scene>...]`, \
+             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
@@ -213,6 +221,13 @@ fn take_option(arguments: &mut Vec<String>, flag: &str) -> anyhow::Result<Option
     let value = arguments.remove(position + 1);
     arguments.remove(position);
     Ok(Some(value))
+}
+
+/// Whether `arguments` hold `flag`, which it removes.
+fn take_flag(arguments: &mut Vec<String>, flag: &str) -> bool {
+    let length = arguments.len();
+    arguments.retain(|argument| argument != flag);
+    arguments.len() != length
 }
 
 /// Prints the capability report of the adapter a headless context would use.
@@ -625,6 +640,30 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+    }
+
+    #[test]
+    fn bench_skips_aliasing_on_request_only() {
+        let aliasing = |arguments: &[&str]| match parse(arguments).unwrap() {
+            Command::Bench { configuration, .. } => configuration.aliasing,
+            _ => panic!("bench parsed as another command"),
+        };
+        assert!(aliasing(&["bench", "out", "--counters", "town"]));
+        assert!(!aliasing(&[
+            "bench",
+            "out",
+            "--counters",
+            "--skip-aliasing",
+            "town"
+        ]));
+        assert!(!aliasing(&["bench", "--skip-aliasing", "out"]));
+        let error = parse(&["capture", "town", "out.png", "--skip-aliasing"])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("only `bench` takes --skip-aliasing"),
+            "{error}"
+        );
     }
 
     #[cfg(feature = "cook")]

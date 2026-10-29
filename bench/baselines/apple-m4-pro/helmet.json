@@ -97,5 +97,7 @@
     "gpu_memory_bytes": 595452121,
     "arena_bytes_in_use": 844804,
     "heap_allocations": 328
-  }
+  },
+  "aliasing_rmse": 14313,
+  "aliasing_p99": 46629
 }
