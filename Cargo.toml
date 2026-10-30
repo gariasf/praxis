@@ -40,17 +40,12 @@ default = ["cook"]
 # off and links no source decoder or encoder (ADR 0018).
 cook = ["dep:bevy_mikktspace", "dep:gltf", "dep:image", "dep:intel_tex_2"]
 
-# Cooking in tests decodes, hashes and compresses megabytes of texels, and the
-# tests decode the cooked blocks back; these are the crates doing it,
-# optimised so the verify command keeps its budget.
-[profile.dev.package]
-adler2.opt-level = 3
-crc32fast.opt-level = 3
-fdeflate.opt-level = 3
-image.opt-level = 3
-miniz_oxide.opt-level = 3
-png.opt-level = 3
-sha2.opt-level = 3
-simd-adler32.opt-level = 3
-texture2ddecoder.opt-level = 3
-zstd-sys.opt-level = 3
+# Tests render every Reference scene on the CPU's side in a debug build:
+# town's ticks, ECS queries, command encoding and submission. Optimising
+# every crate keeps the verify command in its budget; debug assertions and
+# overflow checks stay on.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
