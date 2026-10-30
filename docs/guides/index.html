@@ -277,6 +277,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="edge-shadows.html" aria-label="Read Edge Shadows Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="box-leakage.html">Box Leakage Explained</a></h3>
+        <p class="meta">M3 · tickets #359, #388 · PR #389</p>
+        <p class="summary">Follows the arcs on <code>minification</code>'s far floor, which #359 found in a reference that averages the checker exactly over each pixel. It covers sampling and Nyquist, the pixel's footprint as a box whose sinc response passes detail past Nyquist as a residue that flips sign and falls only as p/(&pi;w), how one sample per pixel of that residue beats into arcs, why hardware anisotropic filtering is a box along the major axis and LOD bias barely helps, what a Gaussian does instead and what it blurs, and what #388 measured, with live demos. No filter has been chosen.</p>
+        <a class="read" href="box-leakage.html" aria-label="Read Box Leakage Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
