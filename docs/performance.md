@@ -4,6 +4,67 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Shadow rays skip the dynamic TLAS outside its Instances' box (2026-10-30, #412)
+
+**Verdict.** Each frame now carries one box, in the TLAS's frame, that
+holds every triangle of the dynamic TLAS, and a shadow ray whose segment
+misses it skips the dynamic TLAS's query. `town`'s shadow-ray time falls
+from 9,748–9,787 to 9,482–9,487 µs (−0.27 ms) and its GPU frame by the
+same; crowd's falls 41 to 45 µs in both shadow forms, the helmet's 47 µs.
+The orrery pays 9 to 18 µs (+0.6%), well inside `compare`'s tolerance. Every image of
+the gallery is identical to `main`'s, to the bit. The dynamic TLAS's CPU
+line, which now counts filling its entries and growing the box, reads
+1,065–1,083 µs on `town` against 1,043–1,061 (+2%), inside `compare`'s
+5% warning.
+
+The saving is a third of the 0.86 ms that the section below measured for
+the lamps' dynamic-TLAS queries, though the box leaves out every lamp ray:
+the lamps' lights stand 4.7 m up and the flocks fly from about 26 m to
+59 m over the whole town. That figure was measured before each surface's
+rays went through one ray-query call, which cut `town`'s shadow-ray time
+by 0.79 to 0.97 ms; what the lamps' dynamic queries cost after it was not
+measured apart. The sun's rays gain nothing on `town`: the one box spans
+the town at the flocks' height, so every ray towards the sun from below
+crosses it.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`main` at a227b9cb and of this change on it. `praxis bench <dir>
+--skip-aliasing` at 2560×1440 with 4x MSAA, 1,800 measured frames, the
+builds interleaved over three rounds, crowd's refit form in three rounds
+of its own, no other praxis process, load average 1.9 to 6.4. The table
+gives each line's medians over the three rounds, lowest to highest, read
+from the bench JSON by a script, as `praxis report` reads one run against
+the Baselines; µs.
+
+| Scene | Build | GPU frame | Gate | Shadow rays | CPU frame | Dynamic TLAS, CPU |
+|---|---|---:|---:|---:|---:|---:|
+| `town` | `main` | 18,821.5–18,840.2 | 8,631.4–8,656.6 | 9,747.9–9,786.5 | 4,621.7–4,733.3 | 1,042.9–1,060.9 |
+| `town` | Change | 18,552.2–18,564.0 | 8,636.5–8,656.0 | 9,481.6–9,487.0 | 4,731.1–4,831.5 | 1,065.4–1,082.5 |
+| crowd | `main` | 3,745.3–3,751.2 | 1,307.1–1,308.2 | 2,115.6–2,121.3 | 744.8–749.9 | 336.2–338.5 |
+| crowd | Change | 3,704.4–3,709.0 | 1,310.5–1,312.6 | 2,066.3–2,075.2 | 770.9–782.4 | 341.8–351.6 |
+| crowd, refit | `main` | 5,131.6–5,138.0 | 1,258.7–1,261.9 | 2,168.7–2,173.7 | 563.8–569.7 | 387.0–391.2 |
+| crowd, refit | Change | 5,086.8–5,089.9 | 1,259.2–1,261.5 | 2,126.1–2,129.5 | 563.9–569.1 | 385.9–387.8 |
+| orrery | `main` | 2,737.5–2,740.8 | 625.2–627.9 | 1,789.8–1,790.8 | 358.8–369.8 | 180.5–193.1 |
+| orrery | Change | 2,755.1–2,756.5 | 625.7–631.3 | 1,799.0–1,808.5 | 355.0–375.0 | 179.3–193.9 |
+| helmet | `main` | 6,096.9–6,098.5 | 1,231.5–1,232.5 | 4,541.4–4,543.2 | 197.6–200.6 | 0.0 |
+| helmet | Change | 6,049.3–6,049.9 | 1,229.6–1,232.6 | 4,494.1–4,498.0 | 197.1–201.0 | 0.1 |
+
+The other six scenes, which hold no Moving Instance, move within their
+rounds' spread. crowd's CPU frame reads 26 to 33 µs more, inside the 5%
+warning; its refit form's does not move.
+
+**How it stays exact.** The box grows from each Moving Instance's Mesh
+bounds, which hold every shape the bend pass gives a bent Mesh, placed
+by the entry's transform, inside the loop that fills the TLAS's entries.
+Each Mesh's box grows first by 2^-8 of its largest coordinate, for the
+bend pass's fast-math sine and cosine, which err by up to 2^-13
+[ref:msl-4.1-sin-fast-accuracy]; the shader grows the whole box by 2^-16
+of the largest coordinate of its corners and the ray's origin, the share
+a shadow ray's origin leaves its surface by, for rounding in placing and
+intersecting. The test is a separating-axis test with no division, cut
+to the box's reach first, so a ray parallel to a face and a directional
+light's unbounded ray need no case of their own; an oracle covers both.
+
 ## `town`'s CPU frame: prepare walked every Renderable, and wgpu-core's TLAS bookkeeping is the rest (2026-10-30, #405)
 
 **Verdict.** Quiet, `town`'s CPU frame read 5.0 to 5.8 ms at the median
