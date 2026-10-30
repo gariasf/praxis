@@ -9,11 +9,12 @@ its top three offenders and the tickets that take them.
 **Verdict.** On `town`, shadow rays cost 11.0 ms: about 9.3 ms is rays
 and 1.7 ms is fixed. The sun's rays take about 5.7 ms of the rays,
 2.2 ms of them its edge rays. The lamps' rays take 4.1 ms, 0.86 ms of
-that the dynamic TLAS's queries. The second surfaces take 1.7 ms. A
-ray costs what its traversal costs: about 1.1 ns on the helmet's
-257,000 triangles against 0.17 ns on uv-grid's two. Every scene also
-pays about 0.47 ms because the shader holds ray-query code at all,
-even where no ray is traced. Tracing every ray of a surface through a
+that the dynamic TLAS's queries. The second surfaces take 1.7 ms.
+These overlap (the second surfaces trace both kinds of ray), so they do
+not sum. A ray costs what its traversal costs: about 0.96 ns on the
+helmet's 257,000 triangles against 0.08 ns on uv-grid's two. On the
+light scenes, the pass also reads about 0.45 ms longer because the
+shader holds ray-query code at all, even where no ray is traced. Tracing every ray of a surface through a
 single call, from a single light loop, cuts `town`'s shadow-ray time
 by 0.79 to 0.97 ms and the helmet's by 0.83 to 0.95 ms, tracing the
 same rays; 18 single pixels of the gallery's 19 images change, within
@@ -28,6 +29,8 @@ shadow-ray time (GPU frame with rays minus without) and the shadow mask
 pass's line. A probe patch, not committed, added pipeline overrides
 that turn off one stage or one kind of ray at a time. Its variants ran
 interleaved, two rounds of each, and the tables give the median of the
+rounds, from the bench JSON by a script kept with the probe:
+`praxis report` reads one run against the Baselines, not a variant's
 rounds. Load average was 29 at the first run, just after a peer
 session's bench, 18 and 7.5 at the next two, then 2.4 to 5.5, and 1.8
 to 5.0 over the second batch; no other session benched.
@@ -50,33 +53,45 @@ Shadow-ray time, then the shadow mask pass's line, µs.
 | No rays, nearest surfaces only | 1,961 / 813 | 758 / 514 | 654 / 489 |
 | Bare dispatches: load depth, store words | 1,565 / 256 | 698 / 241 | 527 / 241 |
 
-A second probe batch, interleaved the same way, gave these:
+A second probe batch, interleaved the same way, gave these; the
+helmet's and uv-grid's caps ran in a third, at load 2.5 to 7.8:
 
 | Variant | `town` | helmet | uv-grid |
 |---|---:|---:|---:|
 | As shipped | 11,223 / 12,400 | 5,580 / 5,471 | 1,704 / 1,570 |
 | Ray code kept, every ray skipped at run time | 1,493 / 1,907 | 1,280 / 1,150 | 1,281 / 1,141 |
-| At most 1 point-light ray a surface | 10,011 / 11,372 | | |
-| At most 4 | 11,257 / 12,394 | | |
+| No point-light ray, code kept | | 2,562 / 2,406 | 1,405 / 1,257 |
+| At most 1 point-light ray a surface | 10,011 / 11,372 | 3,444 / 3,306 | 1,497 / 1,349 |
+| At most 2 | | 4,245 / 4,058 | 1,562 / 1,420 |
+| At most 4 | 11,257 / 12,394 | 5,633 / 5,442 | 1,707 / 1,564 |
 | At most 16 | 11,265 / 12,388 | | |
 | No dynamic TLAS query for point-light rays | 10,359 / 11,553 | | |
 
 - **Fixed cost.** The bare dispatches take about 0.25 ms on every
   scene. Rebuilding the surface and walking its lights with no ray
   adds 0.25 to 0.56 ms. Holding ray-query code that never runs adds
-  0.42 to 0.49 ms (uv-grid 1,141 against 672 µs, the helmet 1,150
-  against 730, `town` 1,907 against 1,420), which is the occupancy a
-  live query's state takes [ref:nvidia-2022-rtx-best-practices-shadow-rays]
-  [ref:amd-rdna-guide-ray-tracing] [ref:dxr-spec-inline-shadow-fast-path].
+  0.42 to 0.49 ms to the pass's line (uv-grid 1,141 against 672 µs, the
+  helmet 1,150 against 730, `town` 1,907 against 1,420, from the two
+  batches), consistent with the occupancy that a live query's state
+  costs [ref:nvidia-2022-rtx-best-practices-shadow-rays]
+  [ref:dxr-spec-inline-shadow-fast-path]; occupancy itself was not
+  measured. Shadow-ray time shows it on uv-grid (1,281 against 811 µs)
+  and the helmet (1,280 against 873), but not on `town` (1,493 against
+  1,738), whose two figures come from different batches.
   Outside the pass, the frame with rays on spends 0.29 ms (uv-grid) to
   1.3 ms (`town`) more than the frame without, with the pass reduced to
   its bare dispatches.
-- **Per ray.** uv-grid traces up to five rays at each of 1.07 million
-  lit pixels for about 0.9 ms of rays, 0.17 ns a ray. The helmet traces
-  up to five at each of 0.90 million for about 4.8 ms, 1.1 ns a ray.
-  The rays are the same kind and count, so the difference is traversal:
-  257,000 triangles against two.
-- **Per light.** `town`'s surfaces reach 0.64 point lights each on
+- **Per ray.** uv-grid traces at most five rays at each of 1.07
+  million lit pixels, and its pass reads 0.43 ms more with them than
+  with every ray skipped at run time (1,570 against 1,141 µs): at least
+  0.08 ns a ray. The helmet traces at most five at each of 0.90 million
+  for 4.3 ms (5,471 against 1,150), at least 0.96 ns a ray. Both scenes
+  light every lit pixel with the sun and four point lights, so the
+  difference is traversal: 257,000 triangles against two.
+- **Per light.** On the helmet and uv-grid, where every lit pixel
+  reaches four point lights, each light costs about the same: 0.69 to
+  0.88 ms on the helmet and 0.07 to 0.09 ms on uv-grid, with the ray
+  code held throughout. `town`'s surfaces reach 0.64 point lights each on
   average, and capping them at 4 a surface changes nothing. Capping
   them at 1 saves 1.2 ms: most surfaces reach one lamp or none, so the
   rays past a surface's first cost 1.2 ms in all. The sun costs 5.7 ms
@@ -88,9 +103,18 @@ A second probe batch, interleaved the same way, gave these:
   under one root through instancing levels, at "minor" trace cost
   [ref:apple-wwdc23-10128-static-dynamic-split], which wgpu does not
   offer.
+- **Edge rays and MSAA samples.** The edge rays retrace the sun from a
+  pixel's other samples only where its verdict differs from a
+  neighbour's, listed for a dispatch of their own as per-sample
+  shading is [ref:lauritzen-2010-per-sample-scheduling]; Crassin et
+  al. warn that shadowing per sample scales with the samples and the
+  lights [ref:crassin-2015-agaa-shadowing]. They cost 2.2 ms on `town`
+  within the sun's 5.7 ms, the price of the edges that the owner chose
+  with a 4 ms ceiling (#358).
 - **Against the source.** Boksansky, Wimmer and Bittner measure 1.3 to
-  1.6 ms for one light and 3.4 to 4.8 ms for four at 1920×1080
-  [ref:boksansky-2019-rt-hard-shadows]. `town`'s sun alone, 5.7 ms at
+  1.6 ms for one light and 3.4 to 4.8 ms for four at 1920×1080 on a
+  GeForce RTX 2080 Ti [ref:boksansky-2019-rt-hard-shadows], a different
+  GPU. `town`'s sun alone, 5.7 ms at
   2560×1440 with its edge rays, is 2 to 2.5 times their one light
   scaled (2.3 to 2.8 ms).
 
@@ -100,8 +124,9 @@ A second probe batch, interleaved the same way, gave these:
 directional and point lights in two loops. Each loop inlined
 `shadowed`, and `shadowed` held six ray-query initialisations: an
 any-hit query, a nearest-hit query and a second any-hit query, each
-against both TLAS. Now one function, `trace`, holds the static and the
-dynamic query, with its flags passed in. `shadowed` calls it once, or
+against both TLAS. Now one function, `first_intersection`, holds the
+static and the dynamic query, with its flags passed in, as AMD advises
+one live ray query a shader [ref:amd-rdna-guide-ray-tracing]. `shadowed` calls it once, or
 twice in a loop for a ray that starts inside a smooth mesh's
 terminator. One loop walks the directional lights and then the point
 lights. The rays, their flags and their order are as before. Metal's
@@ -127,10 +152,28 @@ to 4.9; the third read 2.5 to 5.1 but for one run at 11.5.
 
 uv-grid's rays are the cheapest of any scene, and they pay for the
 flags arriving as a value rather than a constant: a variant that kept
-the merged light loop but called `trace` with constant flags from three
-places matched `main` on uv-grid (1,723 against 1,721), but `town` got
-slower (11,523) and the helmet kept less than half the gain (5,348).
-uv-grid's GPU frame grows 3 to 4%, inside `praxis compare`'s 5% warning.
+the merged light loop but called `first_intersection` with constant
+flags from three places matched `main` on uv-grid (1,723 against
+1,721), but `town` got slower (11,523) and the helmet kept less than
+half the gain (5,348). uv-grid's shadow-ray time grows 5 to 7% and its
+shadow mask pass line 6%, past `praxis compare`'s 5% warning against
+the Baselines before this change, which are re-recorded with it. ADR
+0019's gate runs with rays off, so it does not move: 774 against 777 µs
+on uv-grid, 1,236 against 1,235 on the helmet, 8,946 against 8,844 on
+`town`, the medians of all nine rounds.
+
+A last interleaved round on the committed shader, two rounds against
+`main` at `a5280dce`, read 4,720 against 5,798 µs on the helmet, 1,807
+against 1,674 on uv-grid and 10,271 against 12,683 on `town`, whose
+`main` rounds (14,133 and 11,233) ran at load 8 to 21. The M4 Pro
+Baselines' shadow-ray, GPU frame and shadow mask pass lines are taken
+from one `praxis bench` run of this change, 21:04 to 21:08 at load 8.0
+falling to 5.3. Their other lines keep their values: `praxis compare`
+read that run's within 5% of them, but the helmet's lit pass (+6.3%)
+and the shadows' first culling phase (+6.6%), which this change does
+not run. texture-wall's shadow-ray time moves from 42.5 to 279.5 µs:
+three interleaved rounds read 200 to 261 µs on `main` and 184 to 333 on
+this change, the difference of two GPU frames of 15.2 ms.
 
 ### Options for the owner
 

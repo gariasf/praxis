@@ -3885,17 +3885,16 @@ quote = '''F+ Renderer : Optimization Performance [...] Structure ( 256 bit arra
 cost = '''Zombies opening scene (PS4 1080p) [...] Base Tile: 5.7 ms ( 100% ): ~3 Based Tile + ZBin: 5.2 ms ( 91%): ~3 Scalarized Tile: 5.1 ms ( 88% ): ~4.3 Scalarized Tile + ZBin: 4.6 ms ( 80% ): ~4.3 [...] Cluster Rasterizer Performance 256 lights in Zombies opening scene'''
 checked = 2026-10-30
 
-
 ["nvidia-2022-rtx-best-practices-shadow-rays"]
 url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
-section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures and Ray tracing: General tips, Inline ray tracing"
+section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: Organizing geometries into BLASes; Hit shading: General tips, Inline ray tracing"
 quote = '''Consider merging BLASes when instance world-space AABBs overlap significantly. When world-space AABBs of instances overlap, each ray going through that region must process separately all the overlapping BLAS instances to find potential intersections. Traversing through one merged BLAS would be more efficient. [...] Terminate rays on the first hit when possible. When resolving the correct closest hit is not required (as for shadow rays), flagging rays with RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH or gl_RayFlagsTerminateOnFirstHitEXT is a simple and efficient optimization. [...] Monitor the register consumption of the query objects. After initialization, the query objects must hold state for the ray traversal when the shader is executing code that may continue the traversal. This consumes registers and complex user code may limit occupancy sooner than usual. [...] Variables initialized before using the query object and used after that may consume additional registers.'''
 checked = 2026-10-30
 
 ["amd-rdna-guide-ray-tracing"]
 url = "https://gpuopen.com/learn/rdna-performance-guide/"
 section = "AMD GPUOpen, RDNA Performance Guide, Ray tracing and DirectX 12 DXR 1.1 sections"
-quote = '''Trace as few rays as possible to achieve the desired level of quality. Investigate scene classification and load balancing systems to let you fire rays just where you need them. [...] Use an 8×4 threadgroup size to optimally use the RDNA WGP. Traversal efficiency Explicitly guide the traversal system: Stop traversing after first hit for opaque shadows. Skip procedural and non-opaque primitives when you can with explicit ray flags. [...] Always have just 1 active RayQuery object in scope'''
+quote = '''Trace as few rays as possible to achieve the desired level of quality. Investigate scene classification and load balancing systems to let you fire rays just where you need them. [...] Use an 8×4 threadgroup size to optimally use the RDNA WGP. Traversal efficiency Explicitly guide the traversal system: Stop traversing after first hit for opaque shadows. Skip procedural and non-opaque primitives when you can with explicit ray flags. [...] Always have just 1 active RayQuery object in scope in your shader at any time'''
 checked = 2026-10-30
 
 ["dxr-spec-inline-shadow-fast-path"]
@@ -3925,7 +3924,7 @@ checked = 2026-10-30
 ["amd-rra-instance-overlap"]
 url = "https://gpuopen.com/learn/improving-rt-perf-with-rra/"
 section = "AMD GPUOpen, Improving raytracing performance with the Radeon Raytracing Analyzer (RRA), Split terrain into chunks; Avoid instance overlap"
-quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap.'''
+quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. A common example of that issue is to make a game’s terrain one big BLAS, with a bounding box overlapping everything in the scene. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap.'''
 checked = 2026-10-30
 
 ["boksansky-2019-distance-light-culling"]
@@ -3936,14 +3935,14 @@ checked = 2026-10-30
 
 ["ward-1991-adaptive-shadow-testing"]
 url = "https://floyd.lbl.gov/radiance/papers/erw91/erw91.html"
-section = "Gregory J. Ward, Adaptive Shadow Testing for Ray Tracing, Second Eurographics Workshop on Rendering, 1991 (LBL-30647), §2 Concept and §4 Results"
+section = "Gregory J. Ward, Adaptive Shadow Testing for Ray Tracing, Second Eurographics Workshop on Rendering, 1991 (LBL-30647), §1 Introduction, §2 Concept and §4 Results"
 quote = '''This observation leads to a simple optimization: we can perform shadow testing on the sources with the highest potential contributions first, and quit testing when the remainder of the contributions is below some threshold (see Figure 1). By itself, this approach can guarantee an absolute error below a given threshold.'''
 cost = '''The algorithm has been tested on many different models and has been found to be robust and reliable, offering speed increases between 20% and 80% in most environments. [...] Figure 5b shows the same scene rendered with adaptive shadow testing using a tolerance of 20% and a certainty of 50%. This resulted in an 80% reduction in shadow testing with an average pixel error of less than 5%.'''
 checked = 2026-10-30
 
 ["walter-2005-lightcuts-error-bound"]
 url = "https://www.cs.cornell.edu/~kb/publications/SIG05lightcuts.pdf#page=2"
-section = "Bruce Walter, Sebastian Fernandez, Adam Arbree, Kavita Bala, Michael Donikian, Donald P. Greenberg, Lightcuts: A Scalable Approach to Illumination, ACM TOG 24(3), SIGGRAPH 2005 (doi:10.1145/1073204.1073318), §3 Lightcuts, pp. 2-3, and §4.1 Bounding Cluster Error, p. 4"
+section = "Bruce Walter, Sebastian Fernandez, Adam Arbree, Kavita Bala, Michael Donikian, Donald P. Greenberg, Lightcuts: A Scalable Approach to Illumination, ACM TOG 24(3), SIGGRAPH 2005 (doi:10.1145/1073204.1073318), §3 The Lightcuts Approach, pp. 2-3, and §4.1 Bounding Cluster Error, p. 3"
 quote = '''To prevent this, we only use clusters when we can guarantee that the approximation error introduced by the cluster will be below a perceptual visibility threshold. Weber’s law [Blackwell 1972] is a standard, well-known perceptual result that says the minimum perceptible change in a visual signal is roughly equal to a fixed percentage of the base signal. [...] In our experience, an error ratio of 2% results in no visible artifacts across a wide variety of scenes and was used for all our results. [...] Conservatively bounding visibility in arbitrary scenes is a hard problem, so we will use the trivial upper bound of one for the visibility term (i.e. all lights are potentially visible).'''
 cost = '''Lightcuts can compute the illumination from many thousands of lights using only a few hundred shadow rays.'''
 checked = 2026-10-30

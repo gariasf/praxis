@@ -75,7 +75,7 @@ const NORMALS_AGREE: f32 = 0.9986295347545738;
 // only at run time, which costs a scene of few, short rays a little more
 // than constant flags would, and saves scenes of many rays more
 // (docs/performance.md).
-fn trace(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
+fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
     // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
     rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, end_distance, origin, direction));
@@ -142,7 +142,7 @@ fn shadowed(
     var start_distance = 0.0;
     var hidden = false;
     loop {
-        let hit = trace(flags, origin, direction, start_distance, distance);
+        let hit = first_intersection(flags, origin, direction, start_distance, distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
         if any_hit || !found || hit.front_face || hit.t + offset >= distance {
@@ -199,7 +199,7 @@ fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) ->
 // the surface itself, with no ray.
 fn directional_hidden(surface: SampleSurface, index: u32) -> bool {
     let direction = normalize(-lights[index].offset);
-    return dot(surface.interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN
+    return !(dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN)
         || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
 }
 
@@ -238,7 +238,7 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
         }
         // The directional lights, then the point lights, in one loop with
         // one call that traces, so the shader holds one ray query's state
-        // (`trace`). Each light's bit is its entry.
+        // (`first_intersection`). Each light's bit is its entry.
         let light_count = light.directional_light_count + point_light_count;
         for (var entry = 0u; entry < light_count; entry++) {
             var direction: vec3<f32>;
@@ -252,7 +252,7 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
                 // surface itself, with no ray.
                 direction = normalize(-lights[entry].offset);
                 distance = UNBOUNDED_RAY_DISTANCE;
-                if dot(interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN {
+                if !(dot(interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN) {
                     hidden = with_bit(hidden, entry);
                     continue;
                 }
