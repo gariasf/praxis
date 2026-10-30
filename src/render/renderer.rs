@@ -22,7 +22,8 @@ use crate::render::{
 };
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
-/// The passes `render` records, in order, each timed from its start to its
+/// The passes `render` records, in order, each timed from its start, or a
+/// render pass from the latest end of the passes before it if later, to its
 /// end, after the dynamic TLAS's build, timed from the end of the marker
 /// before it, or of the frame before's last pass if later, to the start of
 /// the marker after it in frames that build it.
@@ -49,6 +50,14 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
 /// The passes only shadow rays run: with them off, each reads as taking no
 /// time.
 pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
+
+/// The render passes of `TIMED_PASSES`; the others are compute passes.
+pub(crate) const RENDER_PASSES: [&str; 4] = [
+    DEPTH_PREPASS,
+    PHASE_TWO_DEPTH_PASS,
+    LIT_PASS,
+    TONEMAPPING_PASS,
+];
 
 /// The CPU stages of the dynamic TLAS's build: its recording and its
 /// submit, the CPU cost ADR 0020 caps.
