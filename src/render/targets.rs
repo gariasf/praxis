@@ -71,11 +71,20 @@ pub struct RenderTargets {
     /// Which lights the shadow mask pass found hidden at each pixel, from
     /// each of its surfaces, which the lit pass reads.
     shadow_mask: wgpu::TextureView,
-    /// Which samples of each pixel show the shadow mask's second surface.
+    /// Which samples of each pixel show the shadow mask's second surface,
+    /// and the first directional lights' verdicts at each sample of its
+    /// nearest surface.
     shadow_mask_samples: wgpu::TextureView,
     /// The shadow mask pass's list of the pixels whose samples show a second
     /// surface: a count, then an entry per pixel at most.
     second_surfaces: wgpu::Buffer,
+    /// The shadow mask pass's word per pixel of the first directional
+    /// lights' verdicts at its nearest surface, which it compares with the
+    /// neighbours' to find shadow edges.
+    directional_verdicts: wgpu::Buffer,
+    /// The shadow mask pass's list of the pixels at a shadow edge, as
+    /// `second_surfaces`.
+    shadow_edges: wgpu::Buffer,
     /// Each sample's surface normals, which the depth passes write with
     /// shadow rays on and the shadow mask pass reads.
     surface_normals: wgpu::TextureView,
@@ -114,6 +123,15 @@ impl RenderTargets {
         };
         let target = |label, format, sample_count, usage| {
             layered_target(label, format, sample_count, 1, usage)
+        };
+        // A count, then an entry per pixel at most.
+        let pixel_list = |label| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
         };
         let pyramid_size = wgpu::Extent3d {
             width: (width / 2).max(1),
@@ -175,12 +193,14 @@ impl RenderTargets {
                 1,
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
-            second_surfaces: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Second Surfaces Buffer"),
-                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            second_surfaces: pixel_list("Second Surfaces Buffer"),
+            directional_verdicts: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Directional Verdicts Buffer"),
+                size: u64::from(width) * u64::from(height) * size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
+            shadow_edges: pixel_list("Shadow Edges Buffer"),
             surface_normals: target(
                 "Surface Normals",
                 SURFACE_NORMALS_FORMAT,
@@ -246,6 +266,16 @@ impl RenderTargets {
     /// The shadow mask pass's list of second surfaces.
     pub fn second_surfaces(&self) -> &wgpu::Buffer {
         &self.second_surfaces
+    }
+
+    /// The shadow mask pass's directional verdicts.
+    pub fn directional_verdicts(&self) -> &wgpu::Buffer {
+        &self.directional_verdicts
+    }
+
+    /// The shadow mask pass's list of shadow edges.
+    pub fn shadow_edges(&self) -> &wgpu::Buffer {
+        &self.shadow_edges
     }
 
     /// The depth target as the attachment of the frame's first pass that
@@ -323,7 +353,7 @@ impl RenderTargets {
         }
     }
 
-    /// Bytes of the targets' textures and buffer.
+    /// Bytes of the targets' textures and buffers.
     pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
         [
             &self.depth,
@@ -338,6 +368,8 @@ impl RenderTargets {
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))
         .sum::<u64>()
             + self.second_surfaces.size()
+            + self.directional_verdicts.size()
+            + self.shadow_edges.size()
     }
 }
 

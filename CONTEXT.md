@@ -109,7 +109,7 @@ A cell of the view frustum, bounded in screen space and depth, that holds the li
 _Avoid_: Cluster, light cluster, tile
 
 **Shadow mask**:
-A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.
+A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where a directional light's bit at the nearest surface differs from a 4-neighbour's, a shadow edge, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.
 _Avoid_: Shadow map, shadow buffer, visibility buffer
 
 **Surface normals**:

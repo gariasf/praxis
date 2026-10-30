@@ -1570,6 +1570,33 @@ pub(crate) mod tests {
         }
     }
 
+    /// The floor under the sun and a rectangle behind the camera whose
+    /// shadow's right edge crosses a pixel's middle: the pixel's two left
+    /// samples lie in the shadow and its two right ones outside it
+    /// (`SAMPLE_OFFSETS`), so it resolves between the shadowed pixel left of
+    /// it and the lit one right of it.
+    #[test]
+    fn a_pixel_split_by_a_suns_shadow_edge_resolves_between_shadow_and_light() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let (column, row) = (5, SIZE / 2);
+        let half_view = (std::f32::consts::FRAC_PI_4 / 2.0).tan();
+        let across = ((column as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0) * half_view;
+        let edge = across * FLOOR_DISTANCE;
+        // From 1.5 m left of the axis, past the view's side, to the edge.
+        let rectangle = ([(edge - 1.5) / 2.0, 0.0, 1.0], [edge + 1.5, 1.0]);
+        let (_, image, ..) = shadowed_floor(&context, &[SUN], &[rectangle]);
+
+        let red = |column| image.get_pixel(column, row).0[0];
+        let (shadowed, edge, lit) = (red(column - 1), red(column), red(column + 1));
+        // Far more than the dither's step from either.
+        assert!(
+            shadowed.saturating_add(16) < edge && edge.saturating_add(16) < lit,
+            "the edge pixel {edge} is not between the shadowed {shadowed} and the lit {lit}"
+        );
+    }
+
     /// The mask holds no bit for a light past SHADOW_MASK_LIGHTS: the sun
     /// after as many unlit directional lights, or a point light after them,
     /// casts no shadow, so the frame is the one without the square, and each

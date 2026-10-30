@@ -156,36 +156,68 @@ fn with_bit(bits: vec2<u32>, bit: u32) -> vec2<u32> {
     return bits | select(vec2<u32>(shifted, 0u), vec2<u32>(0u, shifted), bit >= 32u);
 }
 
-// The word of the bits for the pixel's lights whose rays the surface that
-// its `sample` shows, at `depth`, found hidden, with the slice of the
-// Froxel they follow in the second half's top bits; none where `depth` is
-// the background's.
-fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> vec2<u32> {
+// The surface that `sample` of `pixel` shows, at `depth`: where it lies,
+// relative to the camera, its triangle's normal and the normal interpolated
+// over it.
+struct SampleSurface {
+    position: vec3<f32>,
+    triangle_normal: vec3<f32>,
+    interpolated_normal: vec3<f32>,
+}
+
+fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> SampleSurface {
+    let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
+    return SampleSurface(
+        position_at(camera.view_proj, vec2<f32>(pixel) + sample_offset(sample), depth, size),
+        octahedral_decode(normals.xy),
+        octahedral_decode(normals.zw)
+    );
+}
+
+// Whether the directional light at `index` of the light buffer is hidden
+// from `surface`, and whether a ray found it so: a light the interpolated
+// normal turns from is hidden by the surface itself, with no ray.
+fn directional_verdict(surface: SampleSurface, index: u32) -> vec2<bool> {
+    let direction = normalize(-lights[index].offset);
+    let traced = dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
+    let hidden = !traced
+        || shadowed(surface.position, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
+    return vec2<bool>(hidden, traced);
+}
+
+// The bits for the pixel's lights whose rays a surface found hidden, with
+// the slice of the Froxel they follow in the second half's top bits, and
+// which of the first SHADOW_EDGE_LIGHTS directional lights it traced a ray
+// toward.
+struct SurfaceWord {
+    word: vec2<u32>,
+    traced_directional_lights: u32,
+}
+
+// The word of the surface that the pixel's `sample` shows, at `depth`;
+// none where `depth` is the background's.
+fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> SurfaceWord {
     var hidden = vec2<u32>(0u);
+    var traced = 0u;
     var slice = 0u;
     // Depth 0 is the far plane, the background, which nothing shadows.
     if depth > 0.0 {
-        let position = position_at(
-            camera.view_proj,
-            vec2<f32>(pixel) + sample_offset(sample),
-            depth,
-            size
-        );
-        let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
-        let triangle_normal = octahedral_decode(normals.xy);
-        let interpolated_normal = octahedral_decode(normals.zw);
+        let surface = sample_surface(pixel, sample, depth, size);
+        let position = surface.position;
+        let triangle_normal = surface.triangle_normal;
+        let interpolated_normal = surface.interpolated_normal;
         var overflowed = 0u;
         for (var index = 0u; index < light.directional_light_count; index++) {
             if index >= SHADOW_MASK_LIGHTS {
                 overflowed++;
                 continue;
             }
-            // A light the interpolated normal turns from is hidden by the
-            // surface itself, with no ray.
-            let direction = normalize(-lights[index].offset);
-            if dot(interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN
-                || shadowed(position, triangle_normal, interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE) {
+            let verdict = directional_verdict(surface, index);
+            if verdict.x {
                 hidden = with_bit(hidden, index);
+            }
+            if verdict.y && index < SHADOW_EDGE_LIGHTS {
+                traced |= 1u << index;
             }
         }
         // The point lights the pixel's Froxel lists, in light order, or, with
@@ -228,7 +260,7 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> v
         }
     }
     let slice_shift = SHADOW_MASK_LIGHTS - 32u;
-    return vec2<u32>(hidden.x, hidden.y | (slice << slice_shift));
+    return SurfaceWord(vec2<u32>(hidden.x, hidden.y | (slice << slice_shift)), traced);
 }
 
 // The index of the first of four samples whose value in `values` is `value`.
@@ -240,10 +272,10 @@ fn first_sample_of(values: vec4<f32>, value: f32) -> u32 {
     );
 }
 
-// The second surfaces of the frame's pixels, listed for the second dispatch
-// to trace: how many, then each one's pixel, its column in the low 16 bits
-// and its row above them, and from bit 30 the sample to trace it from.
-struct SecondSurfaces {
+// Pixels listed for a later dispatch to trace: how many, then each one's
+// pixel, its column in the low 16 bits and its row above them, and, for a
+// second surface, from bit 30 the sample to trace it from.
+struct PixelList {
     count: atomic<u32>,
     entries: array<u32>,
 }
@@ -321,8 +353,22 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             }
         }
     }
-    textureStore(shadow_mask_samples, pixel, vec4<u32>(second_samples, 0u, 0u, 0u));
-    textureStore(shadow_mask, pixel, 0, vec4<u32>(surface_word(pixel, sample, depth, target_size), 0u, 0u));
+    let nearest = surface_word(pixel, sample, depth, target_size);
+    textureStore(shadow_mask, pixel, 0, vec4<u32>(nearest.word, 0u, 0u));
+    // The first SHADOW_EDGE_LIGHTS directional lights' bits, each the
+    // verdict at every sample of the nearest surface until
+    // `trace_shadow_edges` traces it again from the others.
+    let edge_lights = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
+    let hidden = nearest.word.x & ((1u << edge_lights) - 1u);
+    let sample_verdicts = at_every_sample(hidden, edge_lights);
+    textureStore(
+        shadow_mask_samples,
+        pixel,
+        vec4<u32>(second_samples | (sample_verdicts << SAMPLE_COUNT), 0u, 0u, 0u)
+    );
+    directional_verdicts[invocation.y * u32(size.x) + invocation.x] = second_samples
+        | (hidden << VERDICT_HIDDEN_SHIFT)
+        | (nearest.traced_directional_lights << VERDICT_TRACED_SHIFT);
 }
 
 // How many second surfaces the frame lists, read once per workgroup: an
@@ -348,6 +394,145 @@ fn trace_second_surfaces(
     let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, (listed >> 16u) & 0x3fffu));
     let sample = listed >> 30u;
     let depth = textureLoad(depth_target, pixel, sample);
-    let word = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
-    textureStore(shadow_mask, pixel, 1, vec4<u32>(word, 0u, 0u));
+    let surface = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
+    textureStore(shadow_mask, pixel, 1, vec4<u32>(surface.word, 0u, 0u));
+}
+
+// Every sample of a pixel, a bit each.
+const ALL_SAMPLES: u32 = (1u << SAMPLE_COUNT) - 1u;
+
+// The first `light_count` lights' bits of `hidden`, each repeated at every
+// sample, SAMPLE_COUNT bits per light, as the lit pass reads them from the
+// shadow mask samples above the second surface's samples.
+fn at_every_sample(hidden: u32, light_count: u32) -> u32 {
+    var sample_verdicts = 0u;
+    for (var index = 0u; index < light_count; index++) {
+        sample_verdicts |= ((hidden >> index) & 1u) * (ALL_SAMPLES << (SAMPLE_COUNT * index));
+    }
+    return sample_verdicts;
+}
+
+// Where a pixel's word in `directional_verdicts` holds, for its nearest
+// surface and the first SHADOW_EDGE_LIGHTS directional lights, a bit per
+// light its ray or its turn found hidden, and a bit per light it traced a
+// ray toward, above the samples that show its second surface.
+const VERDICT_HIDDEN_SHIFT: u32 = 8u;
+const VERDICT_TRACED_SHIFT: u32 = 16u;
+
+// The first SHADOW_EDGE_LIGHTS directional lights, a bit each.
+const EDGE_LIGHTS: u32 = (1u << SHADOW_EDGE_LIGHTS) - 1u;
+
+// The lights of `own`'s verdicts that differ from `neighbour`'s, among those
+// both traced a ray toward: a surface turned from a light is hidden with no
+// ray, and its shading already fades the light out at its terminator.
+fn differing_lights(own: u32, neighbour: u32) -> u32 {
+    return ((own ^ neighbour) >> VERDICT_HIDDEN_SHIFT)
+        & (own >> VERDICT_TRACED_SHIFT)
+        & (neighbour >> VERDICT_TRACED_SHIFT)
+        & EDGE_LIGHTS;
+}
+
+// The directional lights whose verdicts at the nearest surface of `pixel`,
+// whose word is `own`, differ from a 4-neighbour's, a target's side standing
+// in for the neighbour past it. A directional light's bit is the same at
+// every pixel, whatever Froxel's point lights follow it.
+fn shadow_edge_lights(pixel: vec2<i32>, own: u32, size: vec2<i32>) -> u32 {
+    if (own >> VERDICT_TRACED_SHIFT) == 0u {
+        return 0u;
+    }
+    let last = size - 1;
+    let width = size.x;
+    let left = directional_verdicts[pixel.y * width + max(pixel.x - 1, 0)];
+    let right = directional_verdicts[pixel.y * width + min(pixel.x + 1, last.x)];
+    let up = directional_verdicts[max(pixel.y - 1, 0) * width + pixel.x];
+    let down = directional_verdicts[min(pixel.y + 1, last.y) * width + pixel.x];
+    return differing_lights(own, left) | differing_lights(own, right)
+        | differing_lights(own, up) | differing_lights(own, down);
+}
+
+// Lists each pixel at a directional light's shadow edge, whose verdict
+// differs from a 4-neighbour's, for `trace_shadow_edges`: as with second
+// surfaces, the extra rays of a few pixels traced in place would hold up
+// their SIMD groups [ref:lauritzen-2010-per-sample-scheduling].
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE)
+fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let size = vec2<i32>(textureDimensions(depth_target));
+    let pixel = vec2<i32>(invocation.xy);
+    if any(pixel >= size) {
+        return;
+    }
+    let own = directional_verdicts[pixel.y * size.x + pixel.x];
+    if shadow_edge_lights(pixel, own, size) == 0u {
+        return;
+    }
+    let entry = atomicAdd(&shadow_edges.count, 1u);
+    shadow_edges.entries[entry] = invocation.x | (invocation.y << 16u);
+    let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+    if entry % group_size == 0u {
+        let groups = entry / group_size + 1u;
+        atomicMax(&shadow_edge_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+        atomicMax(
+            &shadow_edge_dispatch[1],
+            (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+        );
+        atomicStore(&shadow_edge_dispatch[2], 1u);
+    }
+}
+
+// Traces each pixel `list_shadow_edges` listed again, toward each
+// directional light whose verdict differs from a neighbour's, from each
+// other sample that shows its nearest surface, and keeps each sample's
+// verdict for the lit pass, which shades a light by the share of its
+// fragment's samples that see it.
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE)
+fn trace_shadow_edges(
+    @builtin(workgroup_id) group: vec3<u32>,
+    @builtin(num_workgroups) groups: vec3<u32>,
+    @builtin(local_invocation_index) lane: u32
+) {
+    if lane == 0u {
+        listed_count = atomicLoad(&shadow_edges.count);
+    }
+    let entry = (group.y * groups.x + group.x) * SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE + lane;
+    if entry >= workgroupUniformLoad(&listed_count) {
+        return;
+    }
+    let listed = shadow_edges.entries[entry];
+    let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, listed >> 16u));
+    let size = vec2<i32>(textureDimensions(depth_target));
+    let own = directional_verdicts[pixel.y * size.x + pixel.x];
+    let edge_lights = shadow_edge_lights(pixel, own, size);
+    let second_samples = own & ALL_SAMPLES;
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    let nearest = first_sample_of(depths, max(max(depths.x, depths.y), max(depths.z, depths.w)));
+    // Each light's verdict at the nearest sample, at every sample, until
+    // traced again.
+    let lights_traced = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
+    var sample_verdicts = at_every_sample((own >> VERDICT_HIDDEN_SHIFT) & EDGE_LIGHTS, lights_traced);
+    for (var sample = 0u; sample < SAMPLE_COUNT; sample++) {
+        let depth = depths[sample];
+        // The nearest sample's verdict stands; another surface's samples
+        // and the background's keep theirs.
+        if sample == nearest || ((second_samples >> sample) & 1u) == 1u || depth <= 0.0 {
+            continue;
+        }
+        let surface = sample_surface(pixel, sample, depth, vec2<f32>(size));
+        for (var index = 0u; index < lights_traced; index++) {
+            if ((edge_lights >> index) & 1u) == 0u {
+                continue;
+            }
+            let bit = 1u << (SAMPLE_COUNT * index + sample);
+            sample_verdicts = select(sample_verdicts & ~bit, sample_verdicts | bit, directional_verdict(surface, index).x);
+        }
+    }
+    textureStore(
+        shadow_mask_samples,
+        pixel,
+        vec4<u32>(second_samples | (sample_verdicts << SAMPLE_COUNT), 0u, 0u, 0u)
+    );
 }
