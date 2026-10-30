@@ -33,7 +33,10 @@ pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uin
 pub const SHADOW_MASK_SURFACES: u32 = 2;
 
 /// The format of the shadow mask's samples: a bit per sample of a pixel,
-/// set where the sample shows the surface of the mask's second layer.
+/// set where the sample shows the surface of the mask's second layer, then,
+/// above those, a bit per sample for each of the first directional lights,
+/// set where the light is hidden from the pixel's nearest surface: at that
+/// sample on a shadow edge, and at the pixel elsewhere.
 pub const SHADOW_MASK_SAMPLES_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
 /// The surface normals' format: each sample's triangle normal, then the
@@ -72,8 +75,8 @@ pub struct RenderTargets {
     /// each of its surfaces, which the lit pass reads.
     shadow_mask: wgpu::TextureView,
     /// Which samples of each pixel show the shadow mask's second surface,
-    /// and the first directional lights' verdicts at each sample of its
-    /// nearest surface.
+    /// and the first directional lights' verdicts at each sample of the
+    /// pixel's nearest surface.
     shadow_mask_samples: wgpu::TextureView,
     /// The shadow mask pass's list of the pixels whose samples show a second
     /// surface: a count, then an entry per pixel at most.
@@ -258,7 +261,9 @@ impl RenderTargets {
         &self.shadow_mask
     }
 
-    /// The samples of each pixel that show the shadow mask's second surface.
+    /// The samples of each pixel that show the shadow mask's second surface,
+    /// and the first directional lights' verdicts at each sample of the
+    /// pixel's nearest surface.
     pub fn shadow_mask_samples(&self) -> &wgpu::TextureView {
         &self.shadow_mask_samples
     }
