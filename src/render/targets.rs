@@ -204,7 +204,7 @@ impl RenderTargets {
             }),
             shadow_edges: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Shadow Edges Buffer"),
-                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                size: (3 * u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }),

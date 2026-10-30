@@ -193,6 +193,8 @@ pub(crate) fn shadow_edge_mode() -> u32 {
         Ok("off") => 0,
         Ok("all") => 2,
         Ok("detect") => 3,
+        Ok("edge-lights") => 4,
+        Ok("sun-edges") => 5,
         _ => 1,
     }
 }

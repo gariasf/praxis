@@ -160,8 +160,10 @@ fn with_bit(bits: vec2<u32>, bit: u32) -> vec2<u32> {
 // its `sample` shows, at `depth`, found hidden, with the slice of the
 // Froxel they follow in the second half's top bits; none where `depth` is
 // the background's.
-// Prototype (#364): the lights `surface_word` last traced a ray toward.
+// Prototype (#364): the lights `surface_word` last traced a ray toward, and
+// those it may trace (all but in `trace_shadow_edges` with edge-lights).
 var<private> traced_bits: vec2<u32>;
+var<private> tracing_bits: vec2<u32> = vec2<u32>(0xffffffffu);
 
 fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> vec2<u32> {
     var hidden = vec2<u32>(0u);
@@ -187,6 +189,9 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> v
             // A light the interpolated normal turns from is hidden by the
             // surface itself, with no ray.
             let direction = normalize(-lights[index].offset);
+            if !masked_bit(tracing_bits, index) {
+                continue;
+            }
             let faces = dot(interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
             if faces {
                 traced_bits = with_bit(traced_bits, index);
@@ -226,6 +231,9 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> v
             // Facing first, so a light at the surface, at no distance, is
             // hidden without dividing by it.
             let distance = sqrt(distance_squared);
+            if !masked_bit(tracing_bits, bit) {
+                continue;
+            }
             let faces = dot(interpolated_normal, to_light) > -INTERPOLATED_TURN_MARGIN * distance;
             if faces {
                 traced_bits = with_bit(traced_bits, bit);
@@ -396,6 +404,17 @@ fn edge_word(pixel: vec2<i32>, width: u32, size: vec2<f32>) -> EdgeWord {
     return EdgeWord(vec2<u32>(listed.x, listed.y & LIGHT_BITS_OF_SECOND_HALF), shadow_edge_coverage[index].xy, froxel);
 }
 
+fn masked_bit(bits: vec2<u32>, bit: u32) -> bool {
+    return ((select(bits.x, bits.y, bit >= 32u) >> (bit & 31u)) & 1u) == 1u;
+}
+
+// The lights whose bits differ from a neighbour's, among those both traced,
+// in one Froxel.
+fn differing(own: EdgeWord, neighbour: EdgeWord) -> vec2<u32> {
+    let compared = own.traced & neighbour.traced;
+    return select(vec2<u32>(0u), (neighbour.hidden ^ own.hidden) & compared, neighbour.froxel == own.froxel);
+}
+
 // Whether a neighbour's bits for the lights both traced a ray toward differ
 // (a light past its range or behind a surface flips a bit invisibly): one whose
 // Froxel differs follows other lights, and is not compared.
@@ -418,18 +437,29 @@ fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let target_size = vec2<f32>(size);
     let index = invocation.y * width + invocation.x;
     var edge = SHADOW_EDGE_MODE == 2u;
+    var lights = vec2<u32>(0xffffffffu);
     if !edge {
         let own = edge_word(pixel, width, target_size);
         let last = size - 1;
-        edge = differs(own, edge_word(vec2<i32>(max(pixel.x - 1, 0), pixel.y), width, target_size))
-            || differs(own, edge_word(vec2<i32>(min(pixel.x + 1, last.x), pixel.y), width, target_size))
-            || differs(own, edge_word(vec2<i32>(pixel.x, max(pixel.y - 1, 0)), width, target_size))
-            || differs(own, edge_word(vec2<i32>(pixel.x, min(pixel.y + 1, last.y)), width, target_size));
+        lights = differing(own, edge_word(vec2<i32>(max(pixel.x - 1, 0), pixel.y), width, target_size))
+            | differing(own, edge_word(vec2<i32>(min(pixel.x + 1, last.x), pixel.y), width, target_size))
+            | differing(own, edge_word(vec2<i32>(pixel.x, max(pixel.y - 1, 0)), width, target_size))
+            | differing(own, edge_word(vec2<i32>(pixel.x, min(pixel.y + 1, last.y)), width, target_size));
+        if SHADOW_EDGE_MODE == 5u {
+            let directional = min(light.directional_light_count, 31u);
+            lights &= vec2<u32>((1u << directional) - 1u, 0u);
+        }
+        edge = any(lights != vec2<u32>(0u));
+        if SHADOW_EDGE_MODE != 4u && SHADOW_EDGE_MODE != 5u {
+            lights = vec2<u32>(0xffffffffu);
+        }
     }
     shadow_edge_pixels[index].w = 0u;
     if edge {
         let entry = atomicAdd(&shadow_edges.count, 1u);
-        shadow_edges.entries[entry] = invocation.x | (invocation.y << 16u);
+        shadow_edges.entries[3u * entry] = invocation.x | (invocation.y << 16u);
+        shadow_edges.entries[3u * entry + 1u] = lights.x;
+        shadow_edges.entries[3u * entry + 2u] = lights.y;
         let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
         if entry % group_size == 0u {
             let groups = entry / group_size + 1u;
@@ -459,8 +489,11 @@ fn trace_shadow_edges(
     if entry >= workgroupUniformLoad(&listed_count) || SHADOW_EDGE_MODE == 3u {
         return;
     }
-    let listed = shadow_edges.entries[entry];
+    let listed = shadow_edges.entries[3u * entry];
     let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, listed >> 16u));
+    // The lights to trace again; the others keep the nearest sample's verdict
+    // at every sample.
+    tracing_bits = vec2<u32>(shadow_edges.entries[3u * entry + 1u], shadow_edges.entries[3u * entry + 2u]);
     let size = textureDimensions(depth_target);
     let index = u32(pixel.y) * size.x + u32(pixel.x);
     let depths = vec4<f32>(
@@ -474,7 +507,9 @@ fn trace_shadow_edges(
         return;
     }
     let nearest = first_sample_of(depths, depth);
-    let second_samples = shadow_edge_pixels[index].z;
+    let listed_pixel = shadow_edge_pixels[index];
+    let second_samples = listed_pixel.z;
+    let kept = vec2<u32>(listed_pixel.x, listed_pixel.y & LIGHT_BITS_OF_SECOND_HALF) & ~tracing_bits;
     var low = vec2<u32>(0u);
     var high = vec2<u32>(0u);
     var traced = 0u;
@@ -484,7 +519,7 @@ fn trace_shadow_edges(
             continue;
         }
         let word = surface_word(pixel, sample, sample_depth, vec2<f32>(size));
-        let hidden = vec2<u32>(word.x, word.y & LIGHT_BITS_OF_SECOND_HALF);
+        let hidden = (vec2<u32>(word.x, word.y & LIGHT_BITS_OF_SECOND_HALF) & tracing_bits) | kept;
         high |= low & hidden;
         low ^= hidden;
         traced++;
