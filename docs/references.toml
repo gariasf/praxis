@@ -3835,3 +3835,15 @@ quote = '''case TASK_UNSPECIFIED:
 			 * USER_INTERACTIVE and USER_INITIATED squashed to LEGACY */
 			next.tep_qos_ceiling = THREAD_QOS_LEGACY;'''
 checked = 2026-10-30
+
+["apple-metal-hazard-tracking-tracked"]
+url = "https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/tracked"
+section = "Apple Developer Documentation, Metal, MTLHazardTrackingMode.tracked, Discussion"
+quote = '''Metal tracks memory dependencies for resources you create with this option. When at least one command writes to a tracked resource, the framework takes the following actions: Delay write operations until all previous read operations finish Prevent subsequent commands from running until write operations finish'''
+checked = 2026-10-30
+
+["apple-metal-fence-per-stage"]
+url = "https://developer.apple.com/documentation/metal/mtlfence"
+section = "Apple Developer Documentation, Metal, MTLFence, Overview"
+quote = '''Apple family GPUs can update and respond to fences on a per-stage basis. This means a GPU can delay running the commands for specific stages that need to wait for another pass while it runs other stages from the same pass. For example, a GPU can run the vertex stage of a pass while the fragment stage waits until another pass updates a fence.'''
+checked = 2026-10-30

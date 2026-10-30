@@ -4,6 +4,93 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## Queued `town` frames keep their pass overlap since the shadow mask pass dispatched indirectly (2026-10-30, #382)
+
+**Verdict.** The overlap #378 saw queued frames lose is back on `main`,
+so the engine needs no fix. Since #387 (`7442717a`), with two frames in
+flight, `town`'s lit pass starts beside the shadow mask pass again, the
+Froxel pass starts beside culling phase one, and the passes span what
+they span with one frame in flight. The lever is the shadow mask pass's
+indirect dispatches. Bisected, #385 loses the overlap and #387, which
+gave the pass its first indirect dispatch, keeps it (#394 added the
+second). On `main`, leaving both out brings the loss back. One indirect dispatch of
+zero workgroups at the pass's start, ahead of its direct dispatches,
+removes it again. The mechanism is the driver's, and Apple does not
+document it. Tracking promises that commands after a write wait for it
+[ref:apple-metal-hazard-tracking-tracked], and Apple GPUs can make a
+pass's fragment stage wait while its vertex stage runs
+[ref:apple-metal-fence-per-stage]. Neither says when Metal runs a
+command buffer's passes one after another. That happens here when the
+shadow mask pass traces rays from direct dispatches only and its command
+buffer is committed behind one still running. An empty shadow mask pass
+keeps the overlap and a doubled one loses it, so the cause is not the
+pass's length. The per-submission residency set is not the cause either
+[ref:wgpu-hal-30-metal-residency-per-submit]: with one set held by the
+queue for its lifetime, the loss stays. Submitting the dynamic TLAS's
+build together with the frame's commands changes nothing. A shadow mask
+pass with only direct dispatches would cost `town`'s queued frames 0.4
+to 1.2 ms of GPU frame again, and a bench against the Baseline shows it.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`17a7fa91` (#383), `14e3446e` (#385), `7442717a` (#387) and `7f318ffd`
+(`main`), each with a measurement patch, not committed. The patch logged
+each pass's median start and end over all but the first 100 frames,
+counted from culling phase one's start, plus each frame's raw
+timestamps. Environment variables set the frames in flight and switched
+the shadow mask pass's variants. One variant also patched wgpu-hal
+30.0.1 to keep one residency set on the queue for its lifetime instead
+of a new one per submission. `praxis bench <dir> town` at 2560×1440 with
+4x MSAA and shadow rays on, 1,800 measured frames, no other GPU work.
+The machine ran slower over the afternoon, so compare rows only within
+one table. CPU frame, GPU frame and `dynamic_tlas_build` are medians as
+`praxis report` prints them, in µs. Each pass column gives the median
+start and end, in µs, from culling phase one's start.
+
+| Build | In flight | CPU frame | GPU frame | `dynamic_tlas_build` | Froxel | Shadow mask | Lit | Tonemapping |
+|---|---:|---:|---:|---:|---|---|---|---|
+| #383 | 2 | 7,009.0 | 16,512.2 | 0.0 | 886–1,271 | 3,896–10,496 | 10,509–16,163 | 12,503–16,488 |
+| #383 | 1 | 4,922.2 | 16,019.6 | 668.0 | 3–589 | 3,783–10,814 | 3,752–15,007 | 11,344–15,328 |
+| #385 | 2 | 7,378.8 | 16,506.0 | 0.0 | 886–1,272 | 3,900–10,508 | 10,521–16,164 | 12,504–16,487 |
+| #387 | 2 | 7,615.8 | 17,615.1 | 0.0 | −3–569 | 3,772–13,407 | 3,757–17,252 | 13,514–17,580 |
+| `main` | 2 | 8,063.7 | 20,192.5 | 0.0 | −3–581 | 3,782–15,981 | 3,755–19,836 | 13,605–20,161 |
+| `main` | 1 | 4,903.4 | 20,702.8 | 670.6 | 56–601 | 3,784–15,984 | 3,752–19,678 | 13,596–20,002 |
+
+#383 reproduces #378's figures: 16.5 ms queued against 15.3 ms of passes
+with one frame in flight. On `main`, the queued GPU frame, 20,192.5, is
+the one-in-flight frame less its exposed build (20,032), within noise.
+
+The variants of `main`'s shadow mask pass, two interleaved rounds. *Direct
+only* leaves out the two indirect dispatches and the work they launch.
+*Zero indirect* is *direct only* with an indirect dispatch of zero
+workgroups added at the pass's start. Its arguments come from the buffer
+the pass clears before it, and it launches nothing.
+
+| Variant | Round | In flight | CPU frame | GPU frame | `dynamic_tlas_build` | Froxel | Shadow mask | Lit | Tonemapping |
+|---|---:|---:|---:|---:|---:|---|---|---|---|
+| Direct only | 1 | 2 | 7,365.2 | 17,491.7 | 0.0 | 892–1,277 | 3,913–11,155 | 11,167–17,123 | 13,157–17,456 |
+| Zero indirect | 1 | 2 | 7,207.1 | 17,114.6 | 0.0 | −3–583 | 3,848–11,853 | 3,879–16,625 | 11,928–17,011 |
+| Direct only | 1 | 1 | 5,061.3 | 17,305.2 | 674.0 | 55–590 | 3,792–11,562 | 3,758–16,073 | 11,836–16,474 |
+| Direct only | 2 | 2 | 7,136.3 | 17,563.5 | 0.0 | 893–1,278 | 3,915–11,218 | 11,232–17,192 | 13,239–17,525 |
+| Zero indirect | 2 | 2 | 6,940.3 | 16,431.6 | 0.0 | −3–598 | 3,801–11,536 | 3,784–16,059 | 11,958–16,397 |
+| Direct only | 2 | 1 | 5,035.9 | 16,958.4 | 670.9 | 55–582 | 3,765–11,508 | 3,734–15,914 | 11,849–16,253 |
+
+Single runs, two frames in flight, all losing the overlap: `main` with
+only the pass's first dispatch (GPU frame 17,212.2), *direct only* with
+the queue's residency set (17,433.4) and with the build submitted with
+the frame (17,408.0), and #385 with its one dispatch issued twice
+(23,127.8). #385 with no workgroups dispatched keeps it: Froxel −3–581,
+lit 3,749–9,798.
+
+The raw timestamps show the whole queued frame running one pass after
+another, and not only the lit pass waiting. In *direct only*, the lit
+pass starts 11 µs after the shadow mask pass ends. The next frame's
+build, which waits for this frame's shadow mask pass, runs beside the
+lit pass's start. That next frame's culling then waits for this frame's
+tonemapping, and its Froxel pass waits for culling. With the overlap
+kept, the lit pass's vertex work runs beside the shadow mask pass, and
+the build ends near the lit pass's end. With rays off there is no shadow
+mask pass, and #378 measured queued frames keeping the overlap.
+
 ## `town`'s CPU stages slow because the P-core clocks down while the main thread waits (2026-10-30, #381)
 
 **Verdict.** When `town` is GPU-bound, the main thread blocks for the
