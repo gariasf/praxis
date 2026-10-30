@@ -10,6 +10,8 @@
 #   quote = '''the claim relied on, verbatim: each gap marked [...], a table's
 #   rows as "cell: cell", and typeset mathematics written in Unicode'''
 #   checked = 2026-01-31  # the date the quote was last read in the source
+#   cost = '''optional: the source's published GPU time for the technique,
+#   verbatim, with the hardware and resolution it was measured on'''
 #
 # Code, ADRs and notes cite an entry by its key in square brackets after
 # `ref:`, beside their prose citation. `cargo test --test references` fails on
@@ -3846,4 +3848,39 @@ checked = 2026-10-30
 url = "https://developer.apple.com/documentation/metal/mtlfence"
 section = "Apple Developer Documentation, Metal, MTLFence, Overview"
 quote = '''Apple family GPUs can update and respond to fences on a per-stage basis. This means a GPU can delay running the commands for specific stages that need to wait for another pass while it runs other stages from the same pass. For example, a GPU can run the vertex stage of a pass while the fragment stage waits until another pass updates a fence.'''
+checked = 2026-10-30
+
+["haar-aaltonen-benchmark"]
+url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=54"
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 51, Benchmark, p. 53, and Benchmark Results, p. 54"
+quote = '''Depth pyramid generated from HTILE min/max buffer [...] O(1) occlusion test (gather4)'''
+cost = '''Benchmark Results Xbox One, 1080p GPU time: 1st phase: 2nd phase Object culling + LOD: 0.28 ms: 0.26 ms Cluster culling: 0.09 ms: 0.04 ms Draw (G-buffer): 1.60 ms: < 0.01 ms Pyramid generation: 0.06 ms Total: 2.3 ms'''
+checked = 2026-10-30
+
+["wihlidal-2016-depth-tile-reduction"]
+url = "https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=66"
+section = "Wihlidal, Optimizing the Graphics Pipeline with Compute, GDC 2016, Depth Tile Culling (NDC), pp. 65-66, slides and speaker notes"
+quote = '''Perform an LDS optimized parallel reduction [9], storing out the conservative depth value for each tile'''
+cost = '''~41us on XB1 @ 1080p [...] Here is a variant of parallel depth reduction which uses GCN lane swizzling to share data, bypassing LDS storage. With a 16 bit ESRAM depth buffer already decompressed, this computation runs in approximately 41 microseconds on the XB1 @ 1080p, and is completely bandwidth bound.'''
+checked = 2026-10-30
+
+["drobot-2017-cluster-rasterizer"]
+url = "https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf#page=57"
+section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering, Cluster Rasterizer, pp. 54-57"
+quote = '''Conservatively mark lightBit in clusters within light mesh volume'''
+cost = '''Cluster Rasterizer Performance 256 lights in Zombies opening scene - 60x40x32 - (PS4) Algorithm: Culling time Atomic Raster: 0.90 ms (100%) Atomic Raster + 4xMSAA: 0.51 ms (55%) Atomic Raster + Compaction: 0.66 ms (73%) Atomic Raster + Compaction + 4xMSAA: 0.32 ms (35%)'''
+checked = 2026-10-30
+
+["boksansky-2019-rt-hard-shadows"]
+url = "https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.9.pdf#page=207"
+section = "Boksansky, Wimmer and Bittner, Ray Traced Shadows: Maintaining Real-Time Frame Rates, Ray Tracing Gems (2019, doi:10.1007/978-1-4842-4427-2_13), §13.5.4 and §13.6, Table 13-1, pp. 174-176 (PDF pages 205-207 of the v1.9 copy)"
+quote = '''We use the depth-buffer values to reconstruct the world-space positions of visible pixels using inverse projection. [...] From these positions, we shoot shadow rays toward light sources to evaluate their visibility using our adaptive sampling algorithm.'''
+cost = '''The screen resolution for all tests was 1920 × 1080. [...] Table 13-1. Overview of the measured results. The table shows the shadow-computation GPU times (in ms) for the tested methods when using one and four light sources. The measurements were performed on a GeForce RTX 2080 Ti GPU. [...] Pub: 281k triangles: 1 light: 4 lights [...] RT hard: 1.4: 4.8 [...] Resort: 376k triangles [...] RT hard: 1.3: 3.4 [...] Breakfast: 1.4M triangles [...] RT hard: 1.6: 3.7'''
+checked = 2026-10-30
+
+["drobot-2017-forward-plus-opaque"]
+url = "https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf#page=40"
+section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering, F+ Renderer : Optimization Performance, p. 40, and Cluster Rasterizer Performance, p. 57"
+quote = '''F+ Renderer : Optimization Performance [...] Structure ( 256 bit array ): PS Opaque pass time: PS Opaque pass average occupancy'''
+cost = '''Zombies opening scene (PS4 1080p) [...] Base Tile: 5.7 ms ( 100% ): ~3 Based Tile + ZBin: 5.2 ms ( 91%): ~3 Scalarized Tile: 5.1 ms ( 88% ): ~4.3 Scalarized Tile + ZBin: 4.6 ms ( 80% ): ~4.3 [...] Cluster Rasterizer Performance 256 lights in Zombies opening scene'''
 checked = 2026-10-30

@@ -7,24 +7,24 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 188.125,
-    "p95": 315.791
+    "median": 250.292,
+    "p95": 537.75
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.041,
-    "p95": 0.08399999999999999
+    "median": 0.083,
+    "p95": 0.5
   },
   "gpu_frame_microseconds": {
-    "median": 7092.5830000000005,
-    "p95": 7160.917
+    "median": 7149.166,
+    "p95": 7420.3330000000005
   },
   "gate_microseconds": {
-    "median": 1234.958,
-    "p95": 1251.0
+    "median": 1232.167,
+    "p95": 1252.5
   },
   "shadow_ray_microseconds": {
-    "median": 5535.0419999999995,
-    "p95": 5600.8330000000005
+    "median": 5595.124,
+    "p95": 5860.292
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 72.41600000000001,
-      "p95": 76.667
+      "median": 75.667,
+      "p95": 77.042
     },
     "culling_phase_two": {
-      "median": 20.542,
-      "p95": 23.75
+      "median": 20.667,
+      "p95": 23.333
     },
     "depth_prepass": {
-      "median": 237.5,
-      "p95": 239.917
+      "median": 237.0,
+      "p95": 239.292
     },
     "depth_pyramid_pass": {
-      "median": 240.166,
-      "p95": 248.334
+      "median": 236.334,
+      "p95": 240.584
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 6.625,
-      "p95": 7.1659999999999995
+      "median": 6.792000000000001,
+      "p95": 7.25
     },
     "lit_pass": {
-      "median": 6114.2080000000005,
-      "p95": 6157.875
+      "median": 808.042,
+      "p95": 816.75
     },
     "phase_two_depth_pass": {
-      "median": 12.0,
-      "p95": 12.583
+      "median": 12.167,
+      "p95": 12.625
     },
     "shadow_mask_pass": {
-      "median": 5393.75,
-      "p95": 5421.792
+      "median": 5407.625,
+      "p95": 5666.833
     },
     "tonemapping_pass": {
-      "median": 6306.75,
-      "p95": 6353.375
+      "median": 1055.5,
+      "p95": 1063.667
     }
   },
   "draw_calls": 4,
@@ -98,6 +98,6 @@
     "arena_bytes_in_use": 844804,
     "heap_allocations": 350
   },
-  "aliasing_rmse": 13849,
-  "aliasing_p99": 41413
+  "aliasing_rmse": 13848,
+  "aliasing_p99": 41328
 }
