@@ -59,25 +59,25 @@ type LightQuery<Light> = QueryState<(
 /// The Renderables whose Mesh the GPU bends.
 type BendQuery = QueryState<(&'static MeshRef, &'static Bend)>;
 
-/// A Renderable, with what blends a moving one and the changes that write
-/// its Instance.
-type Renderable = (
+/// What a Renderable's Instance holds, and what blends a moving one.
+type RenderableData = (
     Entity,
-    Ref<'static, WorldTransform>,
+    &'static WorldTransform,
     Option<&'static PreviousWorldTransform>,
-    Ref<'static, MeshRef>,
-    Option<Ref<'static, MaterialRef>>,
+    &'static MeshRef,
+    Option<&'static MaterialRef>,
 );
 
 /// One Renderable a `RenderableQuery` found.
-type RenderableItem<'world> = bevy_ecs::query::QueryItem<'world, 'world, Renderable>;
+type RenderableItem<'world> = bevy_ecs::query::QueryItem<'world, 'world, RenderableData>;
 
 /// The Renderables.
-type RenderableQuery<Filter = ()> = QueryState<Renderable, Filter>;
+type RenderableQuery<Filter = ()> = QueryState<RenderableData, Filter>;
 
 /// The Renderables whose World transform, Mesh or Material changed since the
 /// last `prepare`, new ones included, and the blended ones, which move every
-/// frame: of those prepare has written, the only ones it writes again.
+/// frame. Of those prepare has written, only these and those that lost their
+/// Material Handle or previous World transform are written again.
 type ChangedRenderableQuery = RenderableQuery<
     Or<(
         Changed<WorldTransform>,
@@ -151,11 +151,11 @@ struct InstanceSlots {
 }
 
 impl InstanceSlots {
-    /// `entity`'s slot, taking one if it has none, and whether it is new; None
-    /// when none is left, warned about the first time `entity` is refused.
-    fn get_or_take(&mut self, entity: Entity) -> Option<(u32, bool)> {
+    /// `entity`'s slot, taking one if it has none; None when none is left,
+    /// warned about the first time `entity` is refused.
+    fn get_or_take(&mut self, entity: Entity) -> Option<u32> {
         if let Some(&slot) = self.by_entity.get(&entity) {
-            return Some((slot, false));
+            return Some(slot);
         }
         let fresh = (self.end < INSTANCE_CAPACITY).then_some(self.end);
         let Some(slot) = self.free.pop().or(fresh) else {
@@ -171,7 +171,7 @@ impl InstanceSlots {
         self.end = self.end.max(slot + 1);
         self.by_entity.insert(entity, slot);
         self.refused.remove(&entity);
-        Some((slot, true))
+        Some(slot)
     }
 
     fn free(&mut self, entity: Entity) {
@@ -373,39 +373,29 @@ impl FramePreparer {
                 unwritten.insert(entity);
                 return;
             }
-            let Some((slot, is_new)) = instance_slots.get_or_take(entity) else {
+            let Some(slot) = instance_slots.get_or_take(entity) else {
                 *renderables_refused += 1;
                 unwritten.insert(entity);
                 return;
             };
-            // A blended Renderable moves every frame, between Ticks too.
-            if *rewrite_every_instance
-                || is_new
-                || current.is_changed()
-                || previous.is_some()
-                || mesh_ref.is_changed()
-                || material_ref
-                    .as_ref()
-                    .is_some_and(|material_ref| material_ref.is_changed())
-                || lost_material_handle_or_previous_transform.contains(&entity)
-            {
-                let transform = current.drawn(previous, blend_weight);
-                let rotation_scale = transform.0.matrix3.as_mat3();
-                let (anchor, offset) = anchor_and_offset(transform.translation());
-                frame.write_instance(
-                    slot,
-                    InstanceData {
-                        rotation_scale: padded_columns(rotation_scale),
-                        normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
-                        anchor,
-                        material_id: material_ref
-                            .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
-                        offset,
-                        mesh: mesh_ref.0.0,
-                    },
-                    previous.is_some(),
-                );
-            }
+            // Each Renderable visited is new, changed, blended, retried or lost
+            // a component, or every Instance is written again.
+            let transform = current.drawn(previous, blend_weight);
+            let rotation_scale = transform.0.matrix3.as_mat3();
+            let (anchor, offset) = anchor_and_offset(transform.translation());
+            frame.write_instance(
+                slot,
+                InstanceData {
+                    rotation_scale: padded_columns(rotation_scale),
+                    normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+                    anchor,
+                    material_id: material_ref
+                        .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
+                    offset,
+                    mesh: mesh_ref.0.0,
+                },
+                previous.is_some(),
+            );
         };
         if *rewrite_every_instance {
             renderables.iter().for_each(&mut visit);

@@ -7,11 +7,13 @@ its top three offenders and the tickets that take them.
 ## `town`'s CPU frame: prepare walked every Renderable, and wgpu-core's TLAS bookkeeping is the rest (2026-10-30, #405)
 
 **Verdict.** Quiet, `town`'s CPU frame read 5.0 to 5.8 ms at the median
-and 5.4 to 6.3 ms at p95 on `main`, and prepare was 1.3 ms of it: it
+and 5.4 to 6.3 ms at p95 on `main`, past the 6 ms ceiling at p95 in one
+of four runs, and prepare was 1.3 ms of it: it
 visited all 254,256 Renderables every frame, a pool lookup and a hash
 lookup each, to find the 10,000 birds that move. Prepare now visits
 only the Renderables whose World transform, Mesh or Material changed,
-the blended ones, and those it skipped or refused the frame before; it
+the blended ones, those that lost their Material Handle or previous
+World transform, and those it skipped or refused the frame before; it
 reads 340 µs, and the CPU frame 4.0 to 4.5 ms at the median and 4.3 to
 4.8 ms at p95. The dynamic TLAS's CPU read 934 to 987 µs over the same
 four runs, under its 1.1 ms ceiling on both builds: the M3 exit read
@@ -26,11 +28,11 @@ TLAS 619 to 665 µs, with the GPU lines unchanged. That patch is an
 option for the owner, on the issue.
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
-`main` at a5280dce and of this change, each with a measurement patch,
+`main` at a5280dce and of this change at 74673923, each with a measurement patch,
 not committed, that logged each CPU stage's median and p95 over the
 measured frames (`FrameStats::cpu_times`, the systems summed per frame).
 `praxis bench <dir> --skip-aliasing town` at 2560×1440 with 4x MSAA,
-1,800 measured frames, the builds interleaved, nothing else on the GPU,
+1,800 measured frames, the builds interleaved, no other praxis process,
 load average 1.8 to 2.7. CPU frame and dynamic TLAS from the bench's
 JSON, stages from the patch's log; µs. Systems is the sum of the
 systems' medians, the Ticks' propagation most of it.
@@ -65,12 +67,13 @@ change:
   allocation and release [ref:wgpu-hal-30-metal-tlas-instance-bytes].
   Filling the 10,000 entries in `DynamicTlas::record` is about 110.
 - **`dynamic_tlas_submit`**: its own walk of the 10,000 dependencies,
-  for the build and for each of the two markers that bind it.
+  for the build and, when the build is timed, for each of the two
+  markers that bind it [ref:wgpu-30-use-tlas-per-flush].
 
 None of these is ours to cut short of the TLAS holding fewer Instances.
 
-**Upstream's dedup.** wgpu-core 30.0.1 with gfx-rs/wgpu#9835's 49-line
-change applied by a `[patch.crates-io]` entry, so each build records one
+**Upstream's dedup.** wgpu-core 30.0.1 with gfx-rs/wgpu#9835's change
+(+12/−3) applied by a `[patch.crates-io]` entry, so each build records one
 dependency per distinct BLAS. Runs interleaved with the change alone,
 load average 2.7 to 4.5:
 
