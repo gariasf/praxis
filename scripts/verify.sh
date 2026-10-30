@@ -53,10 +53,26 @@ bench() {
     target/release/praxis compare "$results" --ci
 }
 
+# The Goldens test takes about half the step, so it runs beside every other
+# test once both are built; its log is printed when it fails.
+tests() {
+  local goldens=reference_scenes_match_their_goldens
+  cargo test --no-run || return
+  PRAXIS_REQUIRE_GOLDENS=1 cargo test --test goldens "$goldens" >"$logs/goldens.log" 2>&1 &
+  local goldens_job=$!
+  cargo test -- --skip "$goldens"
+  local others=$?
+  wait "$goldens_job" || {
+    cat "$logs/goldens.log"
+    return 1
+  }
+  return "$others"
+}
+
 step fmt cargo fmt --all -- --check
 step clippy cargo clippy --all-targets -- -D warnings
 step build cargo build --release
-step test env PRAXIS_REQUIRE_GOLDENS=1 cargo test
+step test tests
 step bench bench
 [ -z "$skip_aliasing" ] || printf 'ok    bench   aliasing skipped: no change under src/render, src/cook or assets\n'
 printf 'ok    verify  %4ss\n' "$SECONDS"
