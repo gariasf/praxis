@@ -7,12 +7,12 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 5796.125,
-    "p95": 6209.4580000000005
+    "median": 4589.5,
+    "p95": 4940.958
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 1096.542,
-    "p95": 1244.916
+    "median": 1033.708,
+    "p95": 1149.625
   },
   "gpu_frame_microseconds": {
     "median": 18808.208,
