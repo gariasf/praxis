@@ -4,6 +4,125 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## A render pass's line counted the passes it started beside (2026-10-30, #399)
+
+**Verdict.** The light scenes' lit and tonemapping lines switched
+between two modes because a render pass's start timestamp is written
+when its vertex stage starts, and on the M4 Pro that stage runs beside
+the passes recorded before it while the fragment stage waits for them
+[ref:apple-metal-fence-per-stage]. In some frames the lit pass starts
+beside the shadow mask pass, and its line then reads the rest of the
+mask's time as its own: 2.6–2.8 ms against 480 µs. The tonemapping pass
+starts about 12 µs after the lit pass in every frame, so its line always
+read most of the lit pass. The share of frames whose lit pass starts
+early changes from run to run, 0 to 34% here, so the median falls on
+either mode once it nears half. Frame stats now count a render pass from
+the latest end of the passes before it, when that is later than its
+start. Compute passes keep their own begin-to-end times, as the Froxel
+pass runs beside culling phase one and reads none of its output. Five
+runs then give the light scenes' pass lines within 2.8% of each other,
+inside `compare`'s 5% warning, and the GPU frame and gate do not move,
+because both are spans of the raw timestamps. texture-wall's pass lines
+still move between two levels for another reason, below, and its
+options are #409.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
+`99fdb38e` with a measurement patch, not committed, that wrote each
+frame's raw timestamps to a CSV file. `praxis bench <dir> --skip-aliasing
+<scene>` at 2560×1440 with 4x MSAA, 248 warm-up and 1,800 measured
+frames, rays on, with Chrome and WindowServer loading the GPU 12–27%.
+The pass times below come from those timestamps: each line's median and
+p95 in µs, first as Frame stats read them on `main` (end less start),
+then counted from the latest end of the passes before the pass.
+
+| Run | Scene | Lit pass starts inside the shadow mask pass | Lit, own | Lit, counted | Tonemapping, own | Tonemapping, counted |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | pbr-sweep | 0 of 1,800 | 479 / 498 | 479 / 498 | 785 / 810 | 319 / 322 |
+| 2 | pbr-sweep | 212 (11.8%) | 481 / 2,663 | 477 / 497 | 788 / 2,973 | 319 / 322 |
+| 1 | normal-tangent | 453 (25.2%) | 490 / 2,735 | 485 / 499 | 796 / 3,041 | 319 / 322 |
+| 2 | normal-tangent | 606 (33.7%) | 491 / 2,839 | 486 / 498 | 797 / 3,205 | 319 / 323 |
+
+- **One timestamp names the mode.** In each run, the frames whose lit
+  pass starts before the shadow mask pass ends are exactly the frames
+  whose lit pass reads over 1.5 ms. The Froxel pass starts after culling
+  phase one ends in those frames and beside it in the others, in 1,790
+  to 1,800 of each run's 1,800: Metal schedules the whole frame
+  differently, and why is the driver's.
+- **The shadow mask pass and the GPU frame** stay within 16 µs of their
+  Baselines in every run.
+- **`town`**, from #382's timestamps of `main` with two frames in
+  flight, counted the same way: the lit pass reads 3,753 / 4,095 µs
+  against 16,032 / 16,529, and tonemapping 324 / 370 against
+  6,512 / 6,923. Every other pass is unchanged. So the lit and
+  tonemapping figures of earlier sections, #211's comparison with their
+  sources among them, are pre-#399 figures that include time beside
+  the shadow mask pass.
+- **Why not every pass.** A rule that also counted a compute pass from
+  the end of the passes before it whenever it outlasts them would cut
+  `town`'s Froxel line from about 590 to about 70 µs in the 13–15% of
+  frames whose Froxel pass ends after culling phase one, the same flip
+  in another pass.
+
+Five runs of `praxis bench <dir> --skip-aliasing pbr-sweep
+normal-tangent texture-wall` after the change, same machine and load.
+Run 3 as `praxis report` prints it, against the re-recorded Baselines:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| pbr-sweep GPU frame | 3,863.5 | 4,282.7 | 3,840.4 | 4,035.7 | +23.0 | 1.006 | 12,000.0 |
+| pbr-sweep `lit_pass` | 480.2 | 523.8 | 473.8 | 493.0 | +6.4 | 1.013 | — |
+| pbr-sweep `tonemapping_pass` | 318.8 | 325.0 | 321.2 | 322.1 | -2.4 | 0.993 | — |
+| normal-tangent GPU frame | 3,520.0 | 3,761.2 | 3,518.3 | 3,747.0 | +1.7 | 1.000 | 12,000.0 |
+| normal-tangent `lit_pass` | 488.2 | 509.5 | 489.0 | 504.9 | -0.8 | 0.998 | — |
+| normal-tangent `tonemapping_pass` | 318.8 | 321.7 | 319.0 | 323.2 | -0.2 | 0.999 | — |
+
+Across the five runs, each pass line of pbr-sweep and normal-tangent
+stays within 1.028 times its lowest median (the depth pyramid on
+normal-tangent is the widest); `lit_pass` within 1.004 and 1.013,
+`tonemapping_pass` within 1.001. `praxis compare` fails no pass row in
+any run. It fails texture-wall's shadow-ray time in every run, as it did
+before the change (159 and 177 µs against 42.5), and CPU lines under
+the machine's load; neither depends on pass attribution.
+
+### texture-wall: two levels of every pass
+
+texture-wall's passes read one of two levels, about 1.8 times apart,
+while its GPU frame reads 15.0–15.6 ms in both. Five runs on `main`,
+then five after the change, `depth_prepass` medians in µs:
+
+| Build | Runs |
+|---|---|
+| `main` | 725.8, 726.0, 398.6, 725.6, 398.7 |
+| #399 | 725.8, 398.8, 725.5, 725.5, 725.6 |
+
+- **Every pass scales together**: culling 1.66–1.68 times, the depth
+  pre-pass, depth pyramid, shadow mask and tonemapping 1.79–1.83, the lit
+  pass 1.69, compute and render alike, as a lower GPU clock would make them. Metal exposes
+  no GPU clock and `powermetrics` needs root, so the clock was not read.
+- **The level also changes within a run.** In a fast run, the 82 frames
+  whose lit pass reads over 1.5 ms read the slow level for every pass. With rays
+  off, the depth pyramid reads the slow level while the depth pre-pass
+  reads the fast one.
+- **An untimed stretch paces the frame.** In every frame, rays on or
+  off, the lit pass starts 12.2–13.5 ms after culling phase one. With
+  rays off, nothing timed runs between culling phase two's end (1.4 ms)
+  and the lit pass's start. That stretch belongs to its 10,000 Textures
+  (#183), and the passes' level barely moves the frame.
+- **The Baseline holds the slow level**, so a run on either level passes
+  `compare`, and a regression of up to 1.8 times in one of its passes
+  goes unflagged. How to judge its pass rows is #409.
+
+### Baselines
+
+The M4 Pro Baselines' four render-pass lines (`depth_prepass`,
+`phase_two_depth_pass`, `lit_pass`, `tonemapping_pass`) are re-recorded
+from one `praxis bench` run of every scene on this branch. Every other
+line stays as #211 recorded it on a quiet machine: the change moves no
+other line, and this machine's load moved CPU lines by up to 22% run to
+run. `tonemapping_pass` now reads 319–321 µs on every scene but
+texture-wall (1,478), and `lit_pass` 3,769 µs on `town` against 15,997,
+343 on the orrery against 2,110 and 735 on the helmet against 808.
+
 ## M3 exit (2026-10-30, #211)
 
 **Verdict.** `town` breaches three Budgets: its GPU frame is 20.1 ms
