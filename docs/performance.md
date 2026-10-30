@@ -6,15 +6,26 @@ its top three offenders and the tickets that take them.
 
 ## M3 exit (2026-10-30, #211)
 
+**Verdict.** `town` breaches three Budgets: its GPU frame is 20.1 ms
+against 12, 11.0 ms of it shadow rays; its CPU frame is over 6 ms at
+p95; and ADR 0019's gate is 8.6 ms against 6, as accepted on #297.
+texture-wall's gate, 13.6 ms, is the largest breach of any scene. The
+owner kept every Budget, so the top three offenders are ticketed: #183,
+#404 and #405. The depth pyramid and culling cost over twice their
+sources' published times (#406).
+
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
 `515c33be`. `praxis bench <dir>` at 2560×1440 with 4x MSAA, 248 warm-up
 and 1,800 measured frames per scene, each scene with shadow rays on and
-then off. Four runs back to back, 16:48 to 17:03, at load average 3.8
-to 4.2 after the first run's 23.8 (a verify had just finished), from
-the browser and the window server, with no other session benching. GPU
+then off. Four runs back to back, 16:48 to 17:03. Load average fell
+from 23.8 at the first run's start (a verify had just finished) to 2.7
+to 4.2 over runs 2 to 4, and 3.2 to 4.2 over run 4, from the browser and
+the window server. No other session benched; a peer session ran a
+two-second CPU test at 16:52:21, during run 2. GPU
 medians agree within 1.2% across runs 1, 3 and 4 for every scene but
 texture-wall (4.1%); run 2 reads 11.6% higher on `shadows`, 5.2% on
-`town` and 4.5% on the crowd. The Baselines are run 4, the quietest; the llvmpipe Baselines are CI's
+`town` and 4.5% on the crowd. The Baselines are run 4, the quietest;
+the llvmpipe Baselines are CI's
 `bench-results` artifact from [run
 41084281627](https://github.com/gariasf/praxis/actions/runs/41084281627)
 (throwaway PR #402), every counter identical to the ones before.
@@ -40,7 +51,7 @@ on every run), against the Baselines recorded before this exit:
 
 Every Baseline before but `town`'s was recorded at #394, before #397
 sized the shadow rays' offset and #381 made the bench spin-wait. Against
-them, run 4's CPU frames read −2 to +33%, and its GPU frames within 2.5%
+them, run 4's CPU frames read −5 to +33%, and its GPU frames within 2.5%
 but minification's: 2.96 ms against 4.98, its shadow mask pass 1.6 ms
 against 3.6, a change from #397 or later whose cause is not measured
 here. `town`'s run 4 in full:
@@ -120,28 +131,42 @@ reads 0 at the median. The refit stays over the GPU Budget, as at #209.
 
 Each timed pass on `town` (run 4) beside its source's published cost,
 from the `cost` quotes in `docs/references.toml`. Costs that scale with
-pixels are scaled from 1920×1080 to 2560×1440 (×1.78); culling scales
-with Instances and the Froxel lists with Froxels times lights, which
-match their sources' counts, so those are compared unscaled. No source
-measured on an Apple GPU was found.
+pixels are scaled from 1920×1080 to 2560×1440 (×1.78). Culling scales
+with Instances, 250,000 objects in the source against `town`'s 254,256,
+and the Froxel lists with Froxels times lights, 19.7 million against
+18.9 million, so those two are compared unscaled. No source measured on
+an Apple GPU was found.
 
 | Pass | `town` µs | Source, hardware | Source µs, scaled | Ratio |
 |---|---:|---|---:|---:|
-| Depth pyramid | 260.5 | Haar and Aaltonen 2015, Xbox One, from 8×8 HTILE tiles [ref:haar-aaltonen-benchmark] | 107 | 2.4 |
-| Depth pyramid | 260.5 | Wihlidal 2016, Xbox One, level 0 of 16-bit depth [ref:wihlidal-2016-depth-tile-reduction] | 73 | 3.6 |
-| Culling, both phases | 1,328.1 | Haar and Aaltonen 2015, Xbox One, 250,000 objects [ref:haar-aaltonen-benchmark] | 670 | 2.0 |
+| Depth pyramid | 260.5 | Haar and Aaltonen 2015, Xbox One, from the HTILE min/max buffer [ref:haar-aaltonen-benchmark] | 107 | 2.4 |
+| Depth pyramid | 260.5 | Wihlidal 2016, Xbox One, 16×16 depth tiles from 16-bit depth [ref:wihlidal-2016-depth-tile-reduction] | 73 | 3.6 |
+| Culling, both phases | 1,328.1 | Haar and Aaltonen 2015, Xbox One, 250,000 objects, with cluster culling [ref:haar-aaltonen-benchmark] | 670 | 2.0 |
+| Culling, both phases | 1,328.1 | the same, object culling and LOD alone | 540 | 2.5 |
 | Froxel lists | 586.7 | Drobot 2017, PS4, 256 lights in 76,800 clusters [ref:drobot-2017-cluster-rasterizer] | 320 to 900 | 0.7 to 1.8 |
-| Shadow mask | 12,114.1 | Boksansky et al. 2019, RTX 2080 Ti, four lights [ref:boksansky-2019-rt-hard-shadows] | 6,040 to 8,530 | 1.4 to 2.0 |
+| Shadow mask | 12,114.1 | Boksansky et al. 2019, RTX 2080 Ti, four lights [ref:boksansky-2019-rt-hard-shadows] | 6,040 to 8,530 | 1.4 to 2.004 |
 | Lit pass | 15,997.0 | Drobot 2017, PS4, forward+ opaque, 256 lights [ref:drobot-2017-forward-plus-opaque] | 8,180 to 10,130 | 1.6 to 2.0 |
 | Tonemapping | 6,498.2 | none found with a stated resolution | — | — |
+| Depth pre-pass | 2,124.4 | none cited | — | — |
+| Phase two's depth pass | 55.4 | none cited | — | — |
+| Dynamic TLAS build | 0.0 | none cited; its ceiling is 1.0 ms | — | — |
+| Bend pass, BLAS refit | 0.0 | do not run on `town`; the crowd's are under Crowd | — | — |
 
-- **The depth pyramid is over twice its source**, by either figure, and
-  is an offender whatever its Budget (#406). It reads 195 to 264 µs on
-  every scene, so the cost is the pass's, not `town`'s.
-- **Culling sits at twice its source**, 1.98 times; it is not over.
-- **The shadow mask** on `town` traces a ray for each light whose range
-  reaches the pixel, up to the mask's 59 (#260), against the source's
-  four, so the ratio there is an upper bound. On
+- **The depth pyramid is over twice its source** by either figure, so
+  it is an offender whatever its Budget (#406). Wihlidal's figure is one
+  reduction to 16×16 tiles, not a whole pyramid, so 3.6 overstates the
+  gap. It reads 195 to 264 µs on every scene but texture-wall (791 µs,
+  #399): the cost is the pass's, not `town`'s.
+- **Culling is at or over twice its source**: 1.98 times the figure with
+  Haar's cluster culling, 2.46 times their object culling alone. `town`'s
+  phases write each drawn Meshlet's records and indices but cull no
+  cluster (#347), so it lies between the two; it is counted as an
+  offender with the depth pyramid (#406).
+- **The shadow mask is over twice its source by one figure**: 2.004
+  times the Resort scene's four lights. `town` traces a ray for each
+  light whose range reaches the pixel, up to the mask's 59 (#260),
+  against the source's four, so the ratio is an upper bound; it is an
+  offender by its Budget share either way (#404). On
   the helmet, the sun and four lights, it reads 5,408 µs (0.6 to 0.9
   times); on the crowd, the sun alone, 1,961 µs against 2,310 to 2,840
   (0.7 to 0.85 times).
@@ -161,42 +186,44 @@ measured on an Apple GPU was found.
   (0.6 ms), the depth pyramid (0.26 ms) and the lit pass. texture-wall's
   gate spans 13.6 ms while its passes from culling to the lit pass time
   2.8 ms between them (#183, #399).
-- **CPU, `town`.** `sample` at 1 ms over one `praxis bench town` run,
-  12,734 main-thread samples: 5,722 (45%) wait in `Device::poll`. Of the
-  per-frame work, `FramePreparer::prepare`, the walk of `town`'s 254,256
-  Instances, is 2,074 samples; `Queue::submit` 1,374, of which wgpu-core's
-  `set_acceleration_structure_dependencies` is 754 (#352); `CommandEncoder::finish`
-  814, half of it the dynamic TLAS's encoder; the fixed schedule 445.
+- **CPU, `town`.** `sample` at 1 ms over one `praxis bench town` run
+  (rays on, then off), 12,734 main-thread samples: 5,808 (46%) wait in
+  `Device::poll`. Of the 6,926 others, `FramePreparer::prepare`, the walk
+  of `town`'s 254,256 Instances, is 2,086; `Queue::submit` 1,535, of which
+  wgpu-core's `set_acceleration_structure_dependencies` is 1,044 (#352);
+  `CommandEncoder::finish` 1,070, 451 of them the dynamic TLAS's encoder;
+  the fixed schedule's Ticks 608.
 - **CPU, the small scenes.** `sample` over helmet and pbr-sweep, 9,425
-  main-thread samples: 5,829 in `Device::poll`; encoding the frame
-  (`CommandEncoder::finish`) leads the per-frame work. The frame's upload
-  copies are 21 samples here and 26 on `town` (#140, closed).
+  main-thread samples: 7,388 in `Device::poll`. Of the 2,037 others,
+  `Renderer::render` is 531, `CommandEncoder::finish` 407 of them. The
+  frame's upload copies are 62 samples here and 70 on `town` (#140,
+  closed).
 - **GPU memory.** `town`'s 764 MB is 9.6% of 8 GB; every other scene
   holds 663 to 684 MB at 2560×1440.
 
 ### Top three offenders
 
-Ranked by their share of a Budget, one per budgeted metric:
+Ranked by their share of the Budget each breaches:
 
-1. **Shadow rays, 11.0 ms of `town`'s GPU frame** (91% of the 12 ms
-   Budget; the frame is 20.1 ms), with a fixed cost of 1.4 to 1.6 ms on
-   the simplest scenes. #404
-2. **`town`'s CPU frame, 6.21 to 6.92 ms at p95** (over 6 ms in every
-   run), with the dynamic TLAS's CPU over its 1.1 ms ceiling in three of
-   four runs: the Instance walk in prepare and wgpu-core's TLAS
+1. **texture-wall's gate, 13.6 ms, and GPU frame, 15.1 ms** (226% and
+   126% of their Budgets), its 10,005 bound Textures. #183
+2. **`town`'s GPU frame, 20.1 ms** (168% of the 12 ms Budget), 11.0 ms
+   of it shadow rays, with a fixed cost of 1.4 to 1.6 ms on the simplest
+   scenes. #404
+3. **`town`'s CPU frame, 6.21 to 6.92 ms at p95** (103 to 115% of 6 ms
+   in every run), with the dynamic TLAS's CPU over its 1.1 ms ceiling in
+   three of four runs: the Instance walk in prepare and wgpu-core's TLAS
    bookkeeping. #405
-3. **texture-wall's GPU frame, 15.1 ms, and gate, 13.6 ms** (126% and
-   226% of their Budgets), its 10,000 bound Textures. #183
 
-Also an offender, by its source: the depth pyramid, 2.4 to 3.6 times its
-source's scaled cost (#406). #140, M1's upload copies, misses the top
-three and is closed. `town`'s gate stays over 6 ms by the owner's
-decision on #297.
+Also offenders, by their sources: the depth pyramid, 2.4 to 3.6 times
+its source's scaled cost, and culling, 1.98 to 2.46 times (#406). #140,
+M1's upload copies, misses the top three and is closed. `town`'s gate,
+143% of 6 ms, stays over by the owner's decision on #297.
 
 ### Also seen
 
 - Run to run, the light scenes' pass lines switch between two modes
-  while the GPU frame holds: texture-wall's passes read 70 to 80% over
+  while the GPU frame holds: texture-wall's passes read 70 to 138% over
   their Baseline in all four runs, minification's shadow mask pass 55%
   under it (#399).
 - The visual audit's gallery found one new defect: dark specks at the

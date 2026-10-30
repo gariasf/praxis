@@ -3852,7 +3852,7 @@ checked = 2026-10-30
 
 ["haar-aaltonen-benchmark"]
 url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=54"
-section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 51, and Benchmark Results, p. 54"
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 51, Benchmark, p. 53, and Benchmark Results, p. 54"
 quote = '''Depth pyramid generated from HTILE min/max buffer [...] O(1) occlusion test (gather4)'''
 cost = '''Benchmark Results Xbox One, 1080p GPU time: 1st phase: 2nd phase Object culling + LOD: 0.28 ms: 0.26 ms Cluster culling: 0.09 ms: 0.04 ms Draw (G-buffer): 1.60 ms: < 0.01 ms Pyramid generation: 0.06 ms Total: 2.3 ms'''
 checked = 2026-10-30
@@ -3880,7 +3880,7 @@ checked = 2026-10-30
 
 ["drobot-2017-forward-plus-opaque"]
 url = "https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf#page=40"
-section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering, F+ Renderer : Z-Bin Performance and Optimization Performance, pp. 39-40, and Cluster Rasterizer Performance, p. 57"
+section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering, F+ Renderer : Optimization Performance, p. 40, and Cluster Rasterizer Performance, p. 57"
 quote = '''F+ Renderer : Optimization Performance [...] Structure ( 256 bit array ): PS Opaque pass time: PS Opaque pass average occupancy'''
-cost = '''Zombies opening scene (PS4 1080p) [...] Base Tile: 5.7 ms ( 100% ): ~3 Based Tile + ZBin: 5.2 ms ( 91%): ~3 Scalarized Tile: 5.1 ms ( 88% ): ~4.3 Scalarized Tile + ZBin: 4.6 ms ( 80% ): ~4.3'''
+cost = '''Zombies opening scene (PS4 1080p) [...] Base Tile: 5.7 ms ( 100% ): ~3 Based Tile + ZBin: 5.2 ms ( 91%): ~3 Scalarized Tile: 5.1 ms ( 88% ): ~4.3 Scalarized Tile + ZBin: 4.6 ms ( 80% ): ~4.3 [...] Cluster Rasterizer Performance 256 lights in Zombies opening scene'''
 checked = 2026-10-30
