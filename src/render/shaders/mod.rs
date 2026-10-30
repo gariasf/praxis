@@ -186,6 +186,17 @@ pub const MODULES: [ShaderModule; 11] = [
     BEND,
 ];
 
+/// Prototype (#364): PRAXIS_SHADOW_EDGES selects off (0), edges (1, the
+/// default), all (2) or detect (3, list edges, trace nothing).
+pub(crate) fn shadow_edge_mode() -> u32 {
+    match std::env::var("PRAXIS_SHADOW_EDGES").as_deref() {
+        Ok("off") => 0,
+        Ok("all") => 2,
+        Ok("detect") => 3,
+        _ => 1,
+    }
+}
+
 impl ShaderModule {
     /// The descriptor that compiles the module, labelled with its name.
     pub fn descriptor(&self) -> wgpu::ShaderModuleDescriptor<'static> {
@@ -242,6 +253,8 @@ impl ShaderModule {
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
              const DITHER_MASK_SIDE: u32 = {DITHER_MASK_SIDE}u;\n\
+             const SHADOW_EDGE_MODE: u32 = {}u;\n\
+             const SHADOW_EDGE_SHOW: bool = {};\n\
              const FROXEL_COLUMNS: u32 = {FROXEL_COLUMNS}u;\n\
              const FROXEL_ROWS: u32 = {FROXEL_ROWS}u;\n\
              const FROXEL_SLICES: u32 = {FROXEL_SLICES}u;\n\
@@ -256,7 +269,9 @@ impl ShaderModule {
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
-            LUMINANCE_COEFFICIENTS[2]
+            LUMINANCE_COEFFICIENTS[2],
+            shadow_edge_mode(),
+            std::env::var_os("PRAXIS_SHADOW_EDGE_SHOW").is_some()
         ));
         let sample_offsets: Vec<String> = SAMPLE_OFFSETS
             .iter()

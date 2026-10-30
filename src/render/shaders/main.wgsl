@@ -125,6 +125,15 @@ fn masked(mask: vec2<u32>, bit: u32) -> bool {
     return bit < SHADOW_MASK_LIGHTS && ((half >> (bit & 31u)) & 1u) == 1u;
 }
 
+// Prototype (#364): the share of a pixel's traced samples that `bit`'s light
+// reaches: the nearest sample's bit, plus 2-bit counts of the extra samples
+// the edge pass traced, as two bit planes in `coverage`.
+fn lit_fraction(mask: vec2<u32>, coverage: vec4<u32>, edge_samples: u32, bit: u32) -> f32 {
+    let hidden = f32(masked(mask, bit)) + f32(masked(coverage.xy, bit))
+        + 2.0 * f32(masked(coverage.zw, bit));
+    return 1.0 - hidden / f32(1u + edge_samples);
+}
+
 // The bit of the point light at `index` of the light buffer in a shadow mask
 // whose bits follow the lights of `froxel`: after the directional lights',
 // at its entry in the Froxel's list, which is in light order, so a binary
@@ -208,13 +217,23 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
     // follow the pixel's lights in the order they are summed here, the
     // directional lights first.
     var mask = vec2<u32>(0u);
+    var edge_samples = 0u;
+    var coverage = vec4<u32>(0u);
     if SHADOW_RAYS {
         let pixel = vec2<u32>(in.clip_position.xy);
         let second_samples = textureLoad(shadow_mask_samples, pixel, 0).r;
         let surface = select(0u, 1u, (covered_samples & second_samples) != 0u);
         mask = textureLoad(shadow_mask, pixel, surface, 0).rg;
+        if SHADOW_EDGE_MODE != 0u && surface == 0u {
+            let index = pixel.y * textureDimensions(shadow_mask).x + pixel.x;
+            edge_samples = shadow_edge_pixels[index].w;
+            if edge_samples > 0u {
+                coverage = shadow_edge_coverage[index];
+            }
+        }
     }
-    let first_illuminance = first.intensity * f32(has_directional_light && !masked(mask, 0u));
+    let first_illuminance = first.intensity * f32(has_directional_light)
+        * lit_fraction(mask, coverage, edge_samples, 0u);
     var outgoing_luminance = reflected_luminance(
         surface,
         normal,
@@ -225,7 +244,7 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
     for (var index = 1u; index < light.directional_light_count; index++) {
         let directional = lights[index];
         let direction = normalize(-directional.offset);
-        let illuminance = directional.intensity * f32(!masked(mask, index));
+        let illuminance = directional.intensity * lit_fraction(mask, coverage, edge_samples, index);
         outgoing_luminance += reflected_luminance(
             surface,
             normal,
@@ -262,7 +281,7 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
         if SHADOW_RAYS && FROXEL_LIGHTS && mask_froxel != froxel {
             bit = froxel_mask_bit(mask_froxel, index);
         }
-        let intensity = point.intensity * f32(!masked(mask, bit));
+        let intensity = point.intensity * lit_fraction(mask, coverage, edge_samples, bit);
         outgoing_luminance += point_light_luminance(
             surface,
             normal,
@@ -277,6 +296,9 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
         + surface.emissive;
     // Pre-exposed in f32 and clamped to fp16's range before the HDR target
     // stores it (ADR 0023), weighted for the resolve.
-    let exposed = min(luminance * camera.exposure, vec3<f32>(LARGEST_HALF));
+    var exposed = min(luminance * camera.exposure, vec3<f32>(LARGEST_HALF));
+    if SHADOW_EDGE_SHOW && edge_samples > 0u {
+        exposed = vec3<f32>(LARGEST_HALF, 0.0, LARGEST_HALF);
+    }
     return vec4<f32>(resolve_weighted(exposed), surface.opacity);
 }

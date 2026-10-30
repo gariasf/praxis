@@ -219,6 +219,14 @@ impl MainPass {
                     "shadow_mask_samples",
                     wgpu::BindingResource::TextureView(render_targets.shadow_mask_samples()),
                 ),
+                (
+                    "shadow_edge_pixels",
+                    render_targets.shadow_edge_pixels().as_entire_binding(),
+                ),
+                (
+                    "shadow_edge_coverage",
+                    render_targets.shadow_edge_coverage().as_entire_binding(),
+                ),
             ],
         )
     }

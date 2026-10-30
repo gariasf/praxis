@@ -257,6 +257,10 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
         storage("shadow_mask_lights_overflowed", "atomic<u32>"),
         storage("second_surfaces", "SecondSurfaces"),
         storage("second_surface_dispatch", "array<atomic<u32>, 3>"),
+        storage("shadow_edge_pixels", "array<vec4<u32>>"),
+        storage("shadow_edge_coverage", "array<vec4<u32>>"),
+        storage("shadow_edges", "SecondSurfaces"),
+        storage("shadow_edge_dispatch", "array<atomic<u32>, 3>"),
     ],
 };
 
@@ -294,6 +298,22 @@ pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
             false,
             wgpu::ShaderStages::FRAGMENT,
         ),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "shadow_edge_pixels",
+                "array<vec4<u32>>",
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "shadow_edge_coverage",
+                "array<vec4<u32>>",
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
     ],
 };
 

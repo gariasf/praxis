@@ -160,8 +160,12 @@ fn with_bit(bits: vec2<u32>, bit: u32) -> vec2<u32> {
 // its `sample` shows, at `depth`, found hidden, with the slice of the
 // Froxel they follow in the second half's top bits; none where `depth` is
 // the background's.
+// Prototype (#364): the lights `surface_word` last traced a ray toward.
+var<private> traced_bits: vec2<u32>;
+
 fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> vec2<u32> {
     var hidden = vec2<u32>(0u);
+    traced_bits = vec2<u32>(0u);
     var slice = 0u;
     // Depth 0 is the far plane, the background, which nothing shadows.
     if depth > 0.0 {
@@ -183,7 +187,11 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> v
             // A light the interpolated normal turns from is hidden by the
             // surface itself, with no ray.
             let direction = normalize(-lights[index].offset);
-            if dot(interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN
+            let faces = dot(interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
+            if faces {
+                traced_bits = with_bit(traced_bits, index);
+            }
+            if !faces
                 || shadowed(position, triangle_normal, interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE) {
                 hidden = with_bit(hidden, index);
             }
@@ -218,7 +226,11 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> v
             // Facing first, so a light at the surface, at no distance, is
             // hidden without dividing by it.
             let distance = sqrt(distance_squared);
-            if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance
+            let faces = dot(interpolated_normal, to_light) > -INTERPOLATED_TURN_MARGIN * distance;
+            if faces {
+                traced_bits = with_bit(traced_bits, bit);
+            }
+            if !faces
                 || shadowed(position, triangle_normal, interpolated_normal, to_light / distance, distance) {
                 hidden = with_bit(hidden, bit);
             }
@@ -322,7 +334,13 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
         }
     }
     textureStore(shadow_mask_samples, pixel, vec4<u32>(second_samples, 0u, 0u, 0u));
-    textureStore(shadow_mask, pixel, 0, vec4<u32>(surface_word(pixel, sample, depth, target_size), 0u, 0u));
+    let word = surface_word(pixel, sample, depth, target_size);
+    textureStore(shadow_mask, pixel, 0, vec4<u32>(word, 0u, 0u));
+    if SHADOW_EDGE_MODE != 0u {
+        let index = invocation.y * u32(size.x) + invocation.x;
+        shadow_edge_pixels[index] = vec4<u32>(word, second_samples, 0u);
+        shadow_edge_coverage[index] = vec4<u32>(traced_bits, 0u, 0u);
+    }
 }
 
 // How many second surfaces the frame lists, read once per workgroup: an
@@ -350,4 +368,127 @@ fn trace_second_surfaces(
     let depth = textureLoad(depth_target, pixel, sample);
     let word = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
     textureStore(shadow_mask, pixel, 1, vec4<u32>(word, 0u, 0u));
+}
+
+// Prototype (#364): the word's light bits, without the Froxel slice.
+const LIGHT_BITS_OF_SECOND_HALF: u32 = (1u << (SHADOW_MASK_LIGHTS - 32u)) - 1u;
+
+// The pixel's bits and the Froxel they follow: its screen rectangle and the
+// word's slice; with FROXEL_LIGHTS off, every pixel's follow the same lights.
+struct EdgeWord {
+    hidden: vec2<u32>,
+    traced: vec2<u32>,
+    froxel: u32,
+}
+
+fn edge_word(pixel: vec2<i32>, width: u32, size: vec2<f32>) -> EdgeWord {
+    let listed = shadow_edge_pixels[u32(pixel.y) * width + u32(pixel.x)];
+    var froxel = 0u;
+    if FROXEL_LIGHTS {
+        let rectangle = clamp(
+            floor(vec2<f32>((f32(pixel.x) + 0.5) / size.x, 1.0 - (f32(pixel.y) + 0.5) / size.y) * FROXEL_GRID_SIZE),
+            vec2<f32>(0.0),
+            FROXEL_GRID_SIZE - 1.0
+        );
+        froxel = froxel_index(vec2<u32>(rectangle), listed.y >> (SHADOW_MASK_LIGHTS - 32u));
+    }
+    let index = u32(pixel.y) * width + u32(pixel.x);
+    return EdgeWord(vec2<u32>(listed.x, listed.y & LIGHT_BITS_OF_SECOND_HALF), shadow_edge_coverage[index].xy, froxel);
+}
+
+// Whether a neighbour's bits for the lights both traced a ray toward differ
+// (a light past its range or behind a surface flips a bit invisibly): one whose
+// Froxel differs follows other lights, and is not compared.
+fn differs(own: EdgeWord, neighbour: EdgeWord) -> bool {
+    let compared = own.traced & neighbour.traced;
+    return neighbour.froxel == own.froxel && any(((neighbour.hidden ^ own.hidden) & compared) != vec2<u32>(0u));
+}
+
+// Prototype (#364): lists the pixels whose nearest surface's bits differ from
+// a 4-neighbour's (every pixel with PRAXIS_SHADOW_EDGES=all), for
+// `trace_shadow_edges`, and clears every pixel's extra sample count.
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE)
+fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let size = vec2<i32>(textureDimensions(depth_target));
+    let pixel = vec2<i32>(invocation.xy);
+    if any(pixel >= size) {
+        return;
+    }
+    let width = u32(size.x);
+    let target_size = vec2<f32>(size);
+    let index = invocation.y * width + invocation.x;
+    var edge = SHADOW_EDGE_MODE == 2u;
+    if !edge {
+        let own = edge_word(pixel, width, target_size);
+        let last = size - 1;
+        edge = differs(own, edge_word(vec2<i32>(max(pixel.x - 1, 0), pixel.y), width, target_size))
+            || differs(own, edge_word(vec2<i32>(min(pixel.x + 1, last.x), pixel.y), width, target_size))
+            || differs(own, edge_word(vec2<i32>(pixel.x, max(pixel.y - 1, 0)), width, target_size))
+            || differs(own, edge_word(vec2<i32>(pixel.x, min(pixel.y + 1, last.y)), width, target_size));
+    }
+    shadow_edge_pixels[index].w = 0u;
+    if edge {
+        let entry = atomicAdd(&shadow_edges.count, 1u);
+        shadow_edges.entries[entry] = invocation.x | (invocation.y << 16u);
+        let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+        if entry % group_size == 0u {
+            let groups = entry / group_size + 1u;
+            atomicMax(&shadow_edge_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+            atomicMax(
+                &shadow_edge_dispatch[1],
+                (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+            );
+            atomicStore(&shadow_edge_dispatch[2], 1u);
+        }
+    }
+}
+
+// Prototype (#364): traces each listed pixel's nearest surface again from its
+// other samples that show it, and keeps, per light, how many of them found it
+// hidden (0 to 3, as two bit planes), and how many it traced.
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE)
+fn trace_shadow_edges(
+    @builtin(workgroup_id) group: vec3<u32>,
+    @builtin(num_workgroups) groups: vec3<u32>,
+    @builtin(local_invocation_index) lane: u32
+) {
+    if lane == 0u {
+        listed_count = atomicLoad(&shadow_edges.count);
+    }
+    let entry = (group.y * groups.x + group.x) * SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE + lane;
+    if entry >= workgroupUniformLoad(&listed_count) || SHADOW_EDGE_MODE == 3u {
+        return;
+    }
+    let listed = shadow_edges.entries[entry];
+    let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, listed >> 16u));
+    let size = textureDimensions(depth_target);
+    let index = u32(pixel.y) * size.x + u32(pixel.x);
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
+    if depth <= 0.0 {
+        return;
+    }
+    let nearest = first_sample_of(depths, depth);
+    let second_samples = shadow_edge_pixels[index].z;
+    var low = vec2<u32>(0u);
+    var high = vec2<u32>(0u);
+    var traced = 0u;
+    for (var sample = 0u; sample < 4u; sample++) {
+        let sample_depth = depths[sample];
+        if sample == nearest || ((second_samples >> sample) & 1u) == 1u || sample_depth <= 0.0 {
+            continue;
+        }
+        let word = surface_word(pixel, sample, sample_depth, vec2<f32>(size));
+        let hidden = vec2<u32>(word.x, word.y & LIGHT_BITS_OF_SECOND_HALF);
+        high |= low & hidden;
+        low ^= hidden;
+        traced++;
+    }
+    shadow_edge_coverage[index] = vec4<u32>(low, high);
+    shadow_edge_pixels[index].w = traced;
 }

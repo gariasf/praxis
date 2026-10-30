@@ -76,6 +76,15 @@ pub struct RenderTargets {
     /// The shadow mask pass's list of the pixels whose samples show a second
     /// surface: a count, then an entry per pixel at most.
     second_surfaces: wgpu::Buffer,
+    /// Prototype (#364): per pixel, the nearest surface's word, its second
+    /// samples and the edge pass's extra sample count.
+    shadow_edge_pixels: wgpu::Buffer,
+    /// Prototype (#364): per pixel, the lights its nearest surface traced a
+    /// ray toward, then, at edges, 2-bit counts of hidden extra samples per
+    /// light as two bit planes.
+    shadow_edge_coverage: wgpu::Buffer,
+    /// Prototype (#364): the edge pixels' list, as `second_surfaces`.
+    shadow_edges: wgpu::Buffer,
     /// Each sample's surface normals, which the depth passes write with
     /// shadow rays on and the shadow mask pass reads.
     surface_normals: wgpu::TextureView,
@@ -181,6 +190,24 @@ impl RenderTargets {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }),
+            shadow_edge_pixels: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Shadow Edge Pixels Buffer"),
+                size: u64::from(width) * u64::from(height) * 16,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
+            shadow_edge_coverage: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Shadow Edge Coverage Buffer"),
+                size: u64::from(width) * u64::from(height) * 16,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
+            shadow_edges: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Shadow Edges Buffer"),
+                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
             surface_normals: target(
                 "Surface Normals",
                 SURFACE_NORMALS_FORMAT,
@@ -246,6 +273,18 @@ impl RenderTargets {
     /// The shadow mask pass's list of second surfaces.
     pub fn second_surfaces(&self) -> &wgpu::Buffer {
         &self.second_surfaces
+    }
+
+    pub fn shadow_edge_pixels(&self) -> &wgpu::Buffer {
+        &self.shadow_edge_pixels
+    }
+
+    pub fn shadow_edge_coverage(&self) -> &wgpu::Buffer {
+        &self.shadow_edge_coverage
+    }
+
+    pub fn shadow_edges(&self) -> &wgpu::Buffer {
+        &self.shadow_edges
     }
 
     /// The depth target as the attachment of the frame's first pass that
@@ -338,6 +377,9 @@ impl RenderTargets {
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))
         .sum::<u64>()
             + self.second_surfaces.size()
+            + self.shadow_edge_pixels.size()
+            + self.shadow_edge_coverage.size()
+            + self.shadow_edges.size()
     }
 }
 
