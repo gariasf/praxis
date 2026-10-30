@@ -293,6 +293,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="shadow-edge-rays.html" aria-label="Read Shadow Edge Rays Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a></h3>
+        <p class="meta">M3 · ticket #381 · PR #400</p>
+        <p class="summary">Follows #381's search for why every CPU stage of <code>town</code> ran 20 to 40% slower once the GPU became the longer half of the frame. With two frames in flight the main thread waits for the oldest frame every frame; timed through a fixed chain of 2,000 dependent multiply-adds, its M4 Pro core ran about 30% slower for the whole frame in most runs that blocked, and not when it spin-waited, on the same performance cluster and at priority 45 too. It covers frames in flight and the two ways to wait, Apple silicon's clusters and clocks, reading a clock without counters, the nine runs, how the kernel can cap the QoS class a process started from a shell asks for, and why <code>praxis bench</code> now spin-waits while the window blocks. With live demos.</p>
+        <a class="read" href="waiting-on-the-gpu.html" aria-label="Read Waiting on the GPU Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
