@@ -496,10 +496,58 @@ fn shadow_edge_lights(pixel: vec2<i32>, own: u32, size: vec2<i32>) -> u32 {
         | differing_lights(own, up) | differing_lights(own, down);
 }
 
+// The directional lights that the nearest surface of the pixel whose word is
+// `own` turns from, hidden with no ray (`surface_word`).
+fn turned_lights(own: u32) -> u32 {
+    return (own >> VERDICT_HIDDEN_SHIFT) & ~(own >> VERDICT_TRACED_SHIFT) & EDGE_LIGHTS;
+}
+
+// The lights the nearest sample of `pixel`, whose word is `own`, turns from
+// that another sample of its nearest surface faces by its own interpolated
+// normal. At a silhouette the nearest triangle is seen nearly edge-on, and
+// the surface behind it can lie within a pixel's width of its plane, so the
+// pixel shows one surface by depth while its other samples face a light the
+// nearest sample turns from.
+fn turned_lights_other_samples_face(pixel: vec2<i32>, own: u32) -> u32 {
+    let turned = turned_lights(own);
+    if turned == 0u {
+        return 0u;
+    }
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    let nearest = first_sample_of(depths, max(max(depths.x, depths.y), max(depths.z, depths.w)));
+    // The background's samples and the second surface's are not the nearest
+    // surface's.
+    let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
+    let other_nearest_samples = (shown.x | shown.y | shown.z | shown.w) & ~(own & ALL_SAMPLES) & ~(1u << nearest);
+    var faced = 0u;
+    for (var sample = 0u; sample < SAMPLE_COUNT; sample++) {
+        if ((other_nearest_samples >> sample) & 1u) == 0u {
+            continue;
+        }
+        let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
+        let interpolated_normal = octahedral_decode(normals.zw);
+        for (var index = 0u; index < SHADOW_EDGE_LIGHTS; index++) {
+            if ((turned >> index) & 1u) == 1u
+                && dot(interpolated_normal, normalize(-lights[index].offset)) > -INTERPOLATED_TURN_MARGIN {
+                faced |= 1u << index;
+            }
+        }
+    }
+    return faced;
+}
+
 // Lists each pixel at a directional light's shadow edge, whose verdict
-// differs from a 4-neighbour's, for `trace_shadow_edges`: as with second
-// surfaces, the extra rays of a few pixels traced in place would hold up
-// their SIMD groups [ref:lauritzen-2010-per-sample-scheduling].
+// differs from a 4-neighbour's or between its samples, for
+// `trace_shadow_edges`: as with second surfaces, the extra rays of a few
+// pixels traced in place would hold up their SIMD groups
+// [ref:lauritzen-2010-per-sample-scheduling]. It holds no ray query, so the
+// samples' normals are read here rather than in `build_shadow_mask`, whose
+// ray queries' registers already bound its occupancy.
 @compute @workgroup_size(SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE)
 fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let size = vec2<i32>(textureDimensions(depth_target));
@@ -508,7 +556,7 @@ fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
         return;
     }
     let own = directional_verdicts[pixel.y * size.x + pixel.x];
-    if shadow_edge_lights(pixel, own, size) == 0u {
+    if shadow_edge_lights(pixel, own, size) == 0u && turned_lights_other_samples_face(pixel, own) == 0u {
         return;
     }
     let entry = atomicAdd(&shadow_edges.count, 1u);
@@ -526,10 +574,11 @@ fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
 }
 
 // Traces each pixel `list_shadow_edges` listed again, toward each
-// directional light whose verdict differs from a neighbour's, from each
-// other sample that shows its nearest surface, and keeps each sample's
-// verdict for the lit pass, which shades a light by the share of its
-// fragment's samples that see it.
+// directional light whose verdict differs from a neighbour's or that its
+// nearest sample turns from, from each other sample that shows its nearest
+// surface, and keeps each sample's verdict for the lit pass, which shades a
+// light by the share of its fragment's samples that see it. A sample that
+// turns from a light too is hidden from it with no ray.
 @compute @workgroup_size(SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE)
 fn trace_shadow_edges(
     @builtin(workgroup_id) group: vec3<u32>,
@@ -547,7 +596,7 @@ fn trace_shadow_edges(
     let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, listed >> 16u));
     let size = vec2<i32>(textureDimensions(depth_target));
     let own = directional_verdicts[pixel.y * size.x + pixel.x];
-    let edge_lights = shadow_edge_lights(pixel, own, size);
+    let edge_lights = shadow_edge_lights(pixel, own, size) | turned_lights(own);
     let second_samples = own & ALL_SAMPLES;
     let depths = vec4<f32>(
         textureLoad(depth_target, pixel, 0),
