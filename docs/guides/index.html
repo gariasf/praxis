@@ -285,6 +285,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="box-leakage.html" aria-label="Read Box Leakage Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="shadow-edge-rays.html">Shadow Edge Rays Explained</a></h3>
+        <p class="meta">M3 · tickets #358, #364 · PR #394</p>
+        <p class="summary">Follows #358's fix for sun shadow edges that stepped by whole pixels beside 4x MSAA geometry, from #364's survey: one ray per pixel is a point sample, and only more samples recover an edge inside one surface. The shadow mask pass now lists each pixel whose verdict for one of the first seven directional lights differs from a 4-neighbour's, traces that light again from its other samples, and keeps four verdict bits per light in the samples texel; the lit pass shades each fragment by the share of its covered samples the light reaches. It covers Whitted's edge-adaptive sampling and what it misses, the two new dispatches, the bit layout, and the cost: 2.86 ms of <code>town</code>'s GPU frame, under a 4 ms ceiling. With live demos.</p>
+        <a class="read" href="shadow-edge-rays.html" aria-label="Read Shadow Edge Rays Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
@@ -299,7 +307,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, and with shadow rays on each sample's surface normals beside it (<a href="instance-culling.html">Instance Culling Explained</a>; the normals since #350).</li>
     <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen (<a href="depth-pyramid.html">Depth Pyramid Explained</a>).</li>
     <li>Phase two of the culling pass, which builds the draw of the other Instances in view that the pyramid does not hide (<a href="instance-culling.html">Instance Culling Explained</a>).</li>
-    <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth and the surface normals, then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>), and, in a second dispatch, those of each edge pixel's second surface into the mask's second layer (<a href="edge-shadows.html">Edge Shadows Explained</a>; since #357), then, in two more, lists the pixels where a directional light's verdict differs from a neighbour's and traces that light again from their other samples (since #358).</li>
+    <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth and the surface normals, then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>), and, in a second dispatch, those of each edge pixel's second surface into the mask's second layer (<a href="edge-shadows.html">Edge Shadows Explained</a>; since #357), then, in two more, lists the pixels where a directional light's verdict differs from a neighbour's and traces that light again from their other samples (<a href="shadow-edge-rays.html">Shadow Edge Rays Explained</a>; since #358).</li>
     <li>The lit pass, which shades both phases' Instances, reading each pixel's point lights from its Froxel's list and its shadows from the shadow mask, and resolves its 4x MSAA colour into the HDR target (<a href="lit-pass.html">Lit Pass Explained</a>).</li>
     <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats (<a href="town.html">Town Explained</a>).</li>
