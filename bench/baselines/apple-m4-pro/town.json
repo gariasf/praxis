@@ -7,24 +7,24 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 8223.833,
-    "p95": 9431.917
+    "median": 6123.8330000000005,
+    "p95": 12183.833999999999
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 1566.125,
-    "p95": 1792.417
+    "median": 1205.375,
+    "p95": 2478.9170000000004
   },
   "gpu_frame_microseconds": {
-    "median": 20489.125,
-    "p95": 21334.375
+    "median": 20198.625,
+    "p95": 21959.415999999997
   },
   "gate_microseconds": {
-    "median": 8686.5,
-    "p95": 8968.375
+    "median": 8676.75,
+    "p95": 9380.958
   },
   "shadow_ray_microseconds": {
-    "median": 11271.75,
-    "p95": 12273.624
+    "median": 10925.167,
+    "p95": 12755.249000000002
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 1148.0,
-      "p95": 1189.8329999999999
+      "median": 1165.208,
+      "p95": 1217.791
     },
     "culling_phase_two": {
-      "median": 171.292,
-      "p95": 184.541
+      "median": 174.25,
+      "p95": 191.459
     },
     "depth_prepass": {
-      "median": 2139.959,
-      "p95": 2230.084
+      "median": 2135.708,
+      "p95": 2224.25
     },
     "depth_pyramid_pass": {
-      "median": 265.0,
-      "p95": 269.5
+      "median": 266.75,
+      "p95": 276.291
     },
     "dynamic_tlas_build": {
       "median": 0.0,
-      "p95": 112.375
+      "p95": 76.958
     },
     "froxel_pass": {
-      "median": 585.4159999999999,
-      "p95": 614.0
+      "median": 602.75,
+      "p95": 633.2090000000001
     },
     "lit_pass": {
-      "median": 16342.459,
-      "p95": 16852.417
+      "median": 16030.417000000001,
+      "p95": 17285.041
     },
     "phase_two_depth_pass": {
-      "median": 52.833,
-      "p95": 105.583
+      "median": 53.291999999999994,
+      "p95": 108.708
     },
     "shadow_mask_pass": {
-      "median": 12460.959,
-      "p95": 13001.375
+      "median": 12142.0,
+      "p95": 13182.792000000001
     },
     "tonemapping_pass": {
-      "median": 6533.583,
-      "p95": 6898.959
+      "median": 6512.915999999999,
+      "p95": 8127.916000000001
     }
   },
   "draw_calls": 4,
@@ -98,6 +98,6 @@
     "arena_bytes_in_use": 85280,
     "heap_allocations": 10501
   },
-  "aliasing_rmse": 5161,
-  "aliasing_p99": 15999
+  "aliasing_rmse": 5142,
+  "aliasing_p99": 15988
 }
