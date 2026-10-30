@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use crate::capture::{capture, render_frames};
+use crate::capture::{FrameWait, capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::{
@@ -416,6 +416,7 @@ pub fn run(
             // ADR 0022 judges Budgets at 60 Hz.
             SIXTY_HERTZ,
             switches,
+            FrameWait::Spin,
         )?;
         anyhow::Ok(frames)
     };

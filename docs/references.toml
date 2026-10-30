@@ -3807,3 +3807,31 @@ url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5
 section = "Vulkan specification, Limits, subPixelPrecisionBits (lines 537-539) and table Required Limits (lines 7003-7004)"
 quote = '''pname:subPixelPrecisionBits is the number of bits of subpixel precision in framebuffer coordinates [eq]#x~f~# and [eq]#y~f~#. [...] pname:subPixelPrecisionBits: -: 4 + 8 ({limit2026}): min'''
 checked = 2026-10-30
+
+["apple-tech-talk-110147-busy-waits"]
+url = "https://developer.apple.com/videos/play/tech-talks/110147/"
+section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2022), transcript, on busy waits"
+quote = '''Avoid busy waits. They potentially lock a P core, instead of doing something useful with it. They also prevents the scheduler from promoting a thread from and E to a P core. You are also wasting energy and producing unnecessary heat, eating away your thermal headroom.'''
+checked = 2026-10-30
+
+["apple-tech-talk-110147-cluster-frequency"]
+url = "https://developer.apple.com/videos/play/tech-talks/110147/"
+section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2022), transcript, on CPU clusters"
+quote = '''Each cluster may be independently activated or have its frequency adjusted by the kernel's scheduler -- depending on the current workload, the current thermal pressure for that cluster, and other factors.'''
+checked = 2026-10-30
+
+["apple-wwdc18-612-render-thread-priority"]
+url = "https://developer.apple.com/videos/play/wwdc2018/612/"
+section = "WWDC18 session 612, Metal Game Performance Optimization, transcript, on thread priorities"
+quote = '''So the best practice here is to configure your render set. We recommend the render set priority to be fixed to 45. [...] Also, we need to opt out of the scheduler's quality of service in order to prevent priority decay which could lower our priority as well.'''
+checked = 2026-10-30
+
+["xnu-task-policy-role-qos-ceiling"]
+url = "https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task_policy.c#L879-L883"
+section = "xnu, osfmk/kern/task_policy.c, the task's effective QoS ceiling by role, lines 879-883 (APSL 2.0; cited, not copied)"
+quote = '''case TASK_UNSPECIFIED:
+		default:
+			/* Apps that don't have an application role get
+			 * USER_INTERACTIVE and USER_INITIATED squashed to LEGACY */
+			next.tep_qos_ceiling = THREAD_QOS_LEGACY;'''
+checked = 2026-10-30
