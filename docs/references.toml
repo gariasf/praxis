@@ -3803,7 +3803,7 @@ quote = '''After Viewport(15.6) scale has been applied (but before Scissor Test)
 checked = 2026-10-30
 
 ["vulkan-subpixel-precision-bits"]
-url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/limits.adoc"
-section = "Vulkan specification, chapter Limits, the subPixelPrecisionBits limit and table Required Limits"
-quote = '''subPixelPrecisionBits is the number of bits of subpixel precision in framebuffer coordinates xf and yf. [...] Required Limits [...] subPixelPrecisionBits: -: 4, 8 (Vulkan Roadmap 2026): min'''
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/limits.adoc#L537-L539"
+section = "Vulkan specification, Limits, subPixelPrecisionBits (lines 537-539) and table Required Limits (lines 7003-7004)"
+quote = '''pname:subPixelPrecisionBits is the number of bits of subpixel precision in framebuffer coordinates [eq]#x~f~# and [eq]#y~f~#. [...] pname:subPixelPrecisionBits: -: 4 + 8 ({limit2026}): min'''
 checked = 2026-10-30
