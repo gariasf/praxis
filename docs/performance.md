@@ -28,7 +28,7 @@ TLAS 619 to 665 µs, with the GPU lines unchanged. That patch is an
 option for the owner, on the issue.
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
-`main` at a5280dce and of this change at 74673923, each with a measurement patch,
+`main` at a5280dce and of this change on it, each with a measurement patch,
 not committed, that logged each CPU stage's median and p95 over the
 measured frames (`FrameStats::cpu_times`, the systems summed per frame).
 `praxis bench <dir> --skip-aliasing town` at 2560×1440 with 4x MSAA,
