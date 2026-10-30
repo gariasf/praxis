@@ -156,7 +156,11 @@ impl StaticTlas {
                     continue;
                 };
                 *entry = match blas {
-                    Some(blas) => Some(tlas_instance(blas, instance, anchor, slot)),
+                    Some(blas) => Some(tlas_instance(
+                        blas,
+                        anchored_transform(instance, anchor),
+                        slot,
+                    )),
                     None if entry.is_none() => continue,
                     None => None,
                 };
@@ -204,13 +208,18 @@ impl StaticTlas {
 
 /// The dynamic TLAS (ADR 0020): the Moving Instances that Frame data lists,
 /// each tagged with its slot, rebuilt each frame in the static TLAS's frame,
-/// so a ray composed once is traced against both. Its build goes in a
-/// command buffer of its own, so its recording and its submit are timed on
-/// their own, between two markers that time it on the GPU.
+/// so a ray composed once is traced against both. Its entries are filled
+/// before the frame's uploads, which carry the box that holds them, and its
+/// build goes in a command buffer of its own, so its recording and its
+/// submit are timed on their own, between two markers that time it on the
+/// GPU.
 pub struct DynamicTlas {
     tlas: wgpu::Tlas,
-    /// Entries its last build filled, from the first.
+    /// Entries its last fill filled, from the first.
     filled: usize,
+    /// The bytes the build of its last fill uploads, until `record` records
+    /// it; none when that fill left nothing to build.
+    unrecorded_upload_bytes: Option<u64>,
     /// Bytes each entry uploads to the GPU per build: the backend's own
     /// instance record, which wgpu-core converts it to and stages
     /// [ref:wgpu-30-tlas-instance-staging].
@@ -275,6 +284,7 @@ impl DynamicTlas {
         Self {
             tlas,
             filled: 0,
+            unrecorded_upload_bytes: None,
             entry_upload_bytes: match backend {
                 // `MTLIndirectAccelerationStructureInstanceDescriptor`
                 // [ref:metal-indirect-instance-descriptor].
@@ -293,19 +303,17 @@ impl DynamicTlas {
 
     /// Fills its entries with `frame`'s Moving Instances, each with its
     /// BLAS from `mesh_pool` and its transform from the corner of `anchor`,
-    /// the static TLAS's, and records its build into a command buffer of
-    /// `device`'s, between markers that write `timestamps`, the end of the
-    /// first and the start of the second. Returns the command buffer and the
-    /// bytes the build uploads; `None` while it holds none and held none in
-    /// the last build, which leaves nothing to build.
-    pub fn record(
+    /// the static TLAS's, for `record` to build. Returns a box in that frame
+    /// that holds every triangle they place, its lowest corner then its
+    /// highest: each one's Mesh bounds, which hold every shape a bend gives
+    /// it, placed by its transform; a point at the origin when they place
+    /// none.
+    pub fn fill(
         &mut self,
-        device: &wgpu::Device,
         frame: &FrameData,
         mesh_pool: &MeshPool,
         anchor: [i32; 3],
-        timestamps: Option<[wgpu::ComputePassTimestampWrites<'_>; 2]>,
-    ) -> Option<(wgpu::CommandBuffer, u64)> {
+    ) -> [[f32; 3]; 2] {
         // Prepare lists no more than its capacity.
         let listed = frame
             .moving_instances
@@ -313,19 +321,43 @@ impl DynamicTlas {
             .take(DYNAMIC_TLAS_CAPACITY as usize);
         let filled = listed.len();
         let previously_filled = std::mem::replace(&mut self.filled, filled);
-        if filled == 0 && previously_filled == 0 {
-            return None;
-        }
         let mut uploaded_entries = 0;
+        let mut bounds: Option<[glam::Vec3; 2]> = None;
         for (index, moving) in listed.enumerate() {
             let instance = &frame.instances[moving.instance];
-            let blas = mesh_pool.blas(MeshHandle(instance.mesh));
-            uploaded_entries += u64::from(blas.is_some());
-            self.tlas[index] = blas.map(|blas| tlas_instance(blas, instance, anchor, moving.slot));
+            let handle = MeshHandle(instance.mesh);
+            let mesh = mesh_pool.blas(handle).zip(mesh_pool.get(handle));
+            self.tlas[index] = mesh.map(|(blas, mesh)| {
+                let transform = anchored_transform(instance, anchor);
+                let [lowest, highest] = placed_bounds(&transform, mesh.bounds);
+                bounds = Some(
+                    bounds.map_or([lowest, highest], |[held_lowest, held_highest]| {
+                        [held_lowest.min(lowest), held_highest.max(highest)]
+                    }),
+                );
+                uploaded_entries += 1;
+                tlas_instance(blas, transform, moving.slot)
+            });
         }
         for index in filled..previously_filled {
             self.tlas[index] = None;
         }
+        self.unrecorded_upload_bytes = (filled > 0 || previously_filled > 0)
+            .then_some(uploaded_entries * self.entry_upload_bytes);
+        bounds.unwrap_or_default().map(<[f32; 3]>::from)
+    }
+
+    /// Records the build of its last fill into a command buffer of
+    /// `device`'s, between markers that write `timestamps`, the end of the
+    /// first and the start of the second. Returns the command buffer and the
+    /// bytes the build uploads; `None` when that fill left nothing to build,
+    /// as it held none and held none in the fill before, or was recorded.
+    pub fn record(
+        &mut self,
+        device: &wgpu::Device,
+        timestamps: Option<[wgpu::ComputePassTimestampWrites<'_>; 2]>,
+    ) -> Option<(wgpu::CommandBuffer, u64)> {
+        let uploaded_bytes = self.unrecorded_upload_bytes.take()?;
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Dynamic TLAS Encoder"),
         });
@@ -333,7 +365,7 @@ impl DynamicTlas {
         self.mark(&mut encoder, before);
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
         self.mark(&mut encoder, after);
-        Some((encoder.finish(), uploaded_entries * self.entry_upload_bytes))
+        Some((encoder.finish(), uploaded_bytes))
     }
 
     /// Records a marker into `encoder`, timed into `timestamp_writes`; none
@@ -378,16 +410,38 @@ impl DynamicTlas {
     }
 }
 
-/// `instance`'s entry in a TLAS: `blas`, placed by its transform from the
-/// corner of `anchor` and tagged with its `slot`.
-fn tlas_instance(
-    blas: &wgpu::Blas,
-    instance: &InstanceData,
-    anchor: [i32; 3],
-    slot: u32,
-) -> wgpu::TlasInstance {
+/// An Instance's entry in a TLAS: `blas`, placed by `transform`
+/// (`anchored_transform`) and tagged with its `slot`.
+fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::TlasInstance {
     // Every ray's cull mask.
-    wgpu::TlasInstance::new(blas, anchored_transform(instance, anchor), slot, 0xff)
+    wgpu::TlasInstance::new(blas, transform, slot, 0xff)
+}
+
+/// The share of a Mesh's largest coordinate its box grows by before it is
+/// placed, for the bend pass's rounding: under Metal's fast math, sine errs
+/// by up to 2^-13 within ±π [ref:msl-4.1-sin-fast-accuracy], and a bent
+/// vertex, built from a few sines and cosines over its height and its
+/// distance from the middle, lands off its exact shape by a few times that
+/// share of its distance from the Mesh's origin, by estimate, as no
+/// specification bounds cosine or angles past ±π, which an azimuth can be.
+/// Every Mesh grows, as which ones bend is not known here.
+const BEND_ROUNDING_SHARE: f32 = 0.00390625; // 2^-8
+
+/// The box that holds `bounds`, a Mesh's box, its lowest corner then its
+/// highest, grown by `BEND_ROUNDING_SHARE` and placed by `transform`, a TLAS
+/// entry's rows: the box's centre placed, and each row's absolute values
+/// over its half-extent either side.
+fn placed_bounds(transform: &[f32; 12], bounds: [[f32; 3]; 2]) -> [glam::Vec3; 2] {
+    let [lowest, highest] = bounds.map(glam::Vec3::from);
+    let centre = 0.5 * (lowest + highest);
+    let largest_coordinate = lowest.abs().max(highest.abs()).max_element();
+    let half_extent = 0.5 * (highest - lowest) + BEND_ROUNDING_SHARE * largest_coordinate;
+    let rows: [[f32; 4]; 3] = bytemuck::cast(*transform);
+    let row = |axis: usize| glam::Vec4::from(rows[axis]).truncate();
+    let placed_centre =
+        glam::Vec3::from_array([0, 1, 2].map(|axis| row(axis).dot(centre) + rows[axis][3]));
+    let reach = glam::Vec3::from_array([0, 1, 2].map(|axis| row(axis).abs().dot(half_extent)));
+    [placed_centre - reach, placed_centre + reach]
 }
 
 /// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
@@ -412,7 +466,7 @@ mod tests {
     use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
     use crate::gpu::GpuContext;
     use crate::render::instance::padded_columns;
-    use crate::render::prepare::InstanceWrite;
+    use crate::render::prepare::{InstanceWrite, MovingInstance};
     use crate::render::{CameraUniform, LoadStaging, NO_MATERIAL, NO_MESH};
 
     /// The camera's Anchor in the first frame: 100 km out, where an
@@ -639,6 +693,69 @@ mod tests {
         assert_eq!(slots, [0, 3]);
         // Freeing a Moving Instance's slot leaves it as it was.
         assert!(!triangle.update(&mut tlas, away, vec![(1, freed(), false)]));
+    }
+
+    /// The dynamic TLAS's fill returns the box that holds each Moving
+    /// Instance's Mesh bounds, grown for the bend pass's rounding, where its
+    /// transform from the static TLAS's Anchor places them, and a point at the origin once it holds none. A
+    /// fill leaves one build to record, but an empty fill after an empty one.
+    #[test]
+    fn the_dynamic_tlas_returns_the_box_that_holds_its_moving_instances_bounds() {
+        let Some(triangle) = Triangle::new() else {
+            return;
+        };
+        let context = &triangle.context;
+        let mut tlas = DynamicTlas::new(&context.device, &context.queue, context.backend());
+        // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
+        let turned_and_doubled = glam::Mat3::from_cols(
+            glam::vec3(0.0, 2.0, 0.0),
+            glam::vec3(-2.0, 0.0, 0.0),
+            glam::vec3(0.0, 0.0, 2.0),
+        );
+        let frame = FrameData {
+            instances: vec![
+                triangle.instance([1563, -1, -3], [0.25, 63.5, 10.0], turned_and_doubled),
+                triangle.instance(LOAD_ANCHOR, [-4.0, 0.0, 0.0], glam::Mat3::IDENTITY),
+            ],
+            moving_instances: vec![
+                MovingInstance {
+                    slot: 0,
+                    instance: 0,
+                },
+                MovingInstance {
+                    slot: 7,
+                    instance: 1,
+                },
+            ],
+            ..FrameData::default()
+        };
+        let [lowest, highest] = tlas.fill(&frame, &triangle.mesh_pool, LOAD_ANCHOR);
+        // The triangle spans 0.6 to 1.0 in X and ±0.2 in Y, and its box
+        // grows by 2^-8 of 1.0 m on every side. The turned one is doubled
+        // and turned about its pivot at (64.25, -0.5, 10.0); the unturned
+        // one sits 4 m below the Anchor's corner in X.
+        let grown = BEND_ROUNDING_SHARE;
+        let expected = [
+            [-3.4 - grown, -0.2 - grown, -grown],
+            [64.65 + 2.0 * grown, 1.5 + 2.0 * grown, 10.0 + 2.0 * grown],
+        ];
+        for (actual, expected) in [lowest, highest].iter().zip(expected) {
+            let distance = glam::Vec3::from(*actual).distance(glam::Vec3::from(expected));
+            assert!(distance < 1e-5, "{actual:?}, expected {expected:?}");
+        }
+        let built =
+            |tlas: &mut DynamicTlas| tlas.record(&context.device, None).map(|(_, bytes)| bytes);
+        assert_eq!(built(&mut tlas), Some(2 * tlas.entry_upload_bytes));
+        assert_eq!(built(&mut tlas), None);
+
+        let empty = FrameData::default();
+        assert_eq!(
+            tlas.fill(&empty, &triangle.mesh_pool, LOAD_ANCHOR),
+            [[0.0; 3]; 2]
+        );
+        assert_eq!(built(&mut tlas), Some(0));
+        tlas.fill(&empty, &triangle.mesh_pool, LOAD_ANCHOR);
+        assert_eq!(built(&mut tlas), None);
     }
 
     #[test]

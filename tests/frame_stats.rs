@@ -47,12 +47,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // draws with one call, and the lit pass with two, phase two's into depth
     // first; then the tonemapping pass's one triangle.
     assert_eq!(last.draw_calls, 4);
-    // Every frame writes the 112-byte camera and 32-byte light uniforms and
+    // Every frame writes the 144-byte camera and 32-byte light uniforms and
     // the sun and four point lights, 48 bytes each; only the first also
     // writes the ten 128-byte Instances and the 4-byte count of Instance
     // slots in use.
-    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 112 + 32 + 5 * 48 + 4);
-    assert_eq!(last.uploaded_bytes, 112 + 32 + 5 * 48);
+    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 144 + 32 + 5 * 48 + 4);
+    assert_eq!(last.uploaded_bytes, 144 + 32 + 5 * 48);
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
     // pole.
     let triangles = 48 * 24 * 2 - 2 * 48;
@@ -100,7 +100,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // count and its two 12-byte dispatches and stand-in, the surface
     // normals' 4
     // bytes at each of 4 samples a pixel, three staging slots of the
-    // first frame's 1668 uploaded bytes rounded up to 2048, the tonemapping
+    // first frame's 1700 uploaded bytes rounded up to 2048, the tonemapping
     // pass's 64×64 R8 dither mask, the Froxel pass's lists,
     // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
     // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
@@ -116,7 +116,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 5 * 16 * MEBIBYTE
             + 65_536 * 40
             + 256 * 80
-            + 112
+            + 144
             + 32
             + 4096 * 48
             + 524_288 * 128
@@ -312,14 +312,14 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             // birds circle.
             ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES, 10_000),
         };
-        // The 112-byte camera and 32-byte light uniforms, the sun and the
+        // The 144-byte camera and 32-byte light uniforms, the sun and the
         // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance
         // and its dynamic TLAS entry, as its backend's instance record.
         let entry_bytes = match context.backend() {
             wgpu::Backend::Metal => 72,
             _ => 64,
         };
-        let town_upload = 112 + 32 + 1025 * 48 + 10_000 * (128 + entry_bytes);
+        let town_upload = 144 + 32 + 1025 * 48 + 10_000 * (128 + entry_bytes);
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
                 panic!("{} frame {frame} read back no GPU stats", scene.name());
@@ -387,13 +387,13 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
     // build that finishes while that frame's passes still run reads 0, as
     // the Baseline's does.
     for (frame, stats) in frames.iter().enumerate() {
-        // The 112-byte camera and 32-byte light uniforms, the sun and four
+        // The 144-byte camera and 32-byte light uniforms, the sun and four
         // point lights, 48 bytes each, the five 128-byte Instances and their
         // entries, and on the first frame the 4-byte Instance slot count.
         let slot_count = if frame == 0 { 4 } else { 0 };
         assert_eq!(
             stats.uploaded_bytes,
-            112 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + slot_count,
+            144 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + slot_count,
             "frame {frame}"
         );
         let timed: Vec<&str> = stats

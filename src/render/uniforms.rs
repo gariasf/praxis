@@ -52,4 +52,11 @@ pub struct CameraUniform {
     pub tlas_anchor: [i32; 3],
     /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
     pub dynamic_tlas_entries: u32,
+    /// A box in the TLAS's frame that holds every triangle of the dynamic
+    /// TLAS's entries, its lowest corner then its highest: shadow rays that
+    /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
+    pub dynamic_tlas_bounds_min: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_min: u32,
+    pub dynamic_tlas_bounds_max: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_max: u32,
 }

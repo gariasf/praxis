@@ -260,9 +260,14 @@ impl FrameRecorder {
         self.started = Instant::now();
     }
 
-    /// Records the CPU time of `stage`, which began at `started`.
+    /// Records the CPU time of `stage`, which began at `started`, added to
+    /// what the frame already recorded of it.
     pub(crate) fn stage(&mut self, stage: &'static str, started: Instant) {
-        self.stages.push((stage, started.elapsed()));
+        let time = started.elapsed();
+        match self.stages.iter_mut().find(|(name, _)| *name == stage) {
+            Some((_, recorded)) => *recorded += time,
+            None => self.stages.push((stage, time)),
+        }
     }
 
     /// Ends the frame `begin` started.

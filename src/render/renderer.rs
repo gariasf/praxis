@@ -489,12 +489,21 @@ impl Renderer {
             .update(frame, &self.mesh_pool, &mut encoder);
         recorder.static_instances_left_out = self.static_tlas.instances_left_out();
         // Shadow rays start in the static TLAS's frame, whose Anchor the
-        // first Frame data's camera set, and the dynamic TLAS shares it.
+        // first Frame data's camera set, and the dynamic TLAS shares it. Its
+        // fill counts as its recording, not as the upload.
         let tlas_anchor = self.static_tlas.anchor();
+        let filling = Instant::now();
+        let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
+            self.dynamic_tlas.fill(frame, &self.mesh_pool, tlas_anchor);
+        let fill_time = filling.elapsed();
+        recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
+        let started = started + fill_time;
         let camera = CameraUniform {
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.
             dynamic_tlas_entries: frame.moving_instances.len() as u32,
+            dynamic_tlas_bounds_min,
+            dynamic_tlas_bounds_max,
             ..frame.camera
         };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
@@ -592,14 +601,13 @@ impl Renderer {
         let bracket = timestamps
             .filter(|_| self.marks_dynamic_tlas_build)
             .map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
-        let tlas_anchor = self.static_tlas.anchor();
-        let dynamic_tlas_commands = self
-            .dynamic_tlas
-            .record(&self.device, frame, &self.mesh_pool, tlas_anchor, bracket)
-            .map(|(commands, uploaded_bytes)| {
-                recorder.uploaded_bytes += uploaded_bytes;
-                commands
-            });
+        let dynamic_tlas_commands =
+            self.dynamic_tlas
+                .record(&self.device, bracket)
+                .map(|(commands, uploaded_bytes)| {
+                    recorder.uploaded_bytes += uploaded_bytes;
+                    commands
+                });
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
         let started = Instant::now() - encoding;
         let culling_bind_groups = [
