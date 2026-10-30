@@ -66,6 +66,178 @@ intersecting. The test is a separating-axis test with no division, cut
 to the box's reach first, so a ray parallel to a face and a directional
 light's unbounded ray need no case of their own; an oracle covers both.
 
+## The depth pyramid and culling against their sources (2026-10-30, #406)
+
+**Verdict.** Neither source figure measures the same work, so the
+"over twice" ratios from the M3 exit do not hold as stated. On `town`,
+culling's Instance work (the scans and the Meshlet records) takes
+372 µs over both phases, 0.56 times Haar and Aaltonen's object and
+cluster culling.
+The rest of phase one is writing about 16.4 million packed indices,
+685 µs, and their benchmark writes no index buffer at all. The depth
+pyramid spends 225 µs of its 262 µs on level 0, which reads all four
+32-bit samples of every pixel, 59 MB. Both sources start from data a
+fraction of that size: Haar and Aaltonen from HTILE, and Wihlidal from
+a decompressed 16-bit depth buffer. A prototype that loads each pixel's samples
+in an invocation of its own brings the pyramid to 224 µs, still 2.1
+times the scaled source; fusing the next levels into its dispatch made
+it slower. The options at the end are the owner's.
+The recommendation is to accept the comparison as not applying, and to
+ticket the per-pixel level 0 as a small exact saving of about 40 µs.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`f84329a5`. `praxis bench <dir> --skip-aliasing <scene>` at 2560×1440
+with 4x MSAA, 248 warm-up and 1,800 measured frames, rays on and then
+off. A probe patch, not committed, recorded each culling stage and the
+pyramid's level 0 in compute passes of their own, each with its own
+timestamps and line. Its variants also repeated a stage N times, read
+level 0 from one sample a pixel, or replaced level 0 with the
+prototypes below. Variants ran interleaved with `main`'s binary. The
+tables give the median of the rounds, from the bench JSON by a script
+kept with the probe outside the repo, in the owner's checkout under
+`pending-artifacts/406/`, as `praxis report` reads one run, not a variant's
+rounds. Three batches ran. Batch 1 and batch 3 (three rounds each) had
+load averages of 3.5 to 6.3 and 2.3 to 6.0, with no other session
+benching. Batch 2 (two rounds) peaked at 27.8 while peer sessions
+built, so only its pass lines are used, never its gate. Records and
+indices a frame come from the probe's read-back of the frame's draw at
+frames 600, 1,200 and 1,800.
+
+### Each stage on its own
+
+Pass lines in µs, the median of batch 3's three rounds. The "one pass"
+rows are `main`'s binary, which records each phase, and the pyramid, as
+a single pass.
+
+| Stage | `town` | helmet | uv-grid |
+|---|---:|---:|---:|
+| Phase one, one pass | 1,146.8 | 75.3 | 28.8 |
+| `offset_slots` (scan, frustum test) | 145.2 | 9.5 | 9.5 |
+| `offset_blocks` | 7.5 | 9.6 | 7.6 |
+| `append_records` | 47.9 | 41.3 | 7.9 |
+| `append_triangles` | 685.1 | 20.2 | 7.8 |
+| Phase two, one pass | 172.7 | 21.3 | 20.1 |
+| `offset_slots` (scan, frustum and Hi-Z test) | 151.6 | 11.0 | 10.8 |
+| `offset_blocks` | 7.7 | 7.0 | 6.8 |
+| `append_records` | 12.4 | 3.0 | 3.0 |
+| `append_triangles` | 10.0 | 3.3 | 3.2 |
+| Depth pyramid, one pass | 261.5 | 236.8 | 222.1 |
+| Level 0 | 225.3 | 200.0 | 186.0 |
+| Levels 1 to 10, one dispatch each | 40.0 | 39.2 | 38.8 |
+
+- **Phase one's line counts more than its stages.** As one pass it
+  reads 1,147 µs; its stages sum to 886 µs. Phase two's stages sum to
+  its line within 9 µs. The Froxel pass runs beside phase one
+  (#399), so phase one's single line likely includes the time the two
+  share; the split did not measure that directly. The split's frame
+  with rays on read 132 to 245 µs shorter on `town` in all six rounds
+  of batches 1 and 3, while its gate with rays off moved −122 to −4 µs.
+  On the light scenes, the four extra passes add 15 to 26 µs to the
+  gate in batch 3.
+- **Repeats agree with the lines.** In batch 2, each extra
+  `append_triangles` dispatch added 682 µs to its line, each extra
+  level 0 added 190 µs to its line, and each extra run of levels 1 to
+  10 added 37 µs.
+
+### Against a bandwidth floor
+
+At the M4 Pro's 273 GB/s [ref:apple-m4-pro-bandwidth], uncompressed:
+
+| Stage | Bytes a frame on `town` | Floor | Measured | Ratio |
+|---|---:|---:|---:|---:|
+| Pyramid level 0 | 59.0 MB of samples read, 3.7 MB written | 230 µs | 225 µs | 0.98 |
+| Phase one `offset_slots` | 254,256 Instances × 128 B = 32.5 MB | 119 µs | 145 µs | 1.2 |
+| Phase one `append_triangles` | 65.6 MB of indices written; 21.9 MB of Meshlet triangles, 17.6 MB of Instances, about 6 MB of records and Meshlets read | 407 µs | 685 µs | 1.7 |
+
+- **Level 0** reads at the floor on `town` and under it on uv-grid
+  (186 µs), whose single plane may compress well. On Apple5 GPUs and later,
+  Metal attempts lossless compression of a texture that is not
+  block-compressed, not backed by a buffer, and whose usage includes
+  none of unknown, shader write or pixel format view
+  [ref:apple-metal-lossless-compression], which wgpu's Depth32Float
+  target meets [ref:wgpu-hal-30-metal-texture-usage],
+  but no Apple source says whether multisampled depth in memory is
+  compressed. Reading one sample a pixel instead of four (batch 2, not
+  conservative) cut level 0 from 231 to 150 µs on `town` and from 187
+  to 93 µs on uv-grid:
+  the loads cost time as well as the bytes.
+- **`append_triangles`** writes one u32 per corner, as `pack_index`
+  holds a record and a Meshlet vertex in 32 bits, so 16-bit indices, as
+  Wihlidal writes [ref:wihlidal-2016-ordered-compaction], are not open
+  to it. Each workgroup also reads its record's Instance, Mesh and slot
+  offsets before writing, a chain of dependent loads for about 210,000
+  workgroups of 79 indices each.
+
+### Against the sources
+
+- **Culling.** Haar and Aaltonen's 0.28 and 0.26 ms of object culling
+  and LOD, and 0.09 and 0.04 ms of cluster culling, cover 250,000
+  objects [ref:haar-aaltonen-benchmark]
+  [ref:haar-aaltonen-benchmark-path]. Their benchmark draws "64 vertex
+  clusters (strips)" with DrawInstancedIndirect and no
+  multi-draw-indirect, whose path is the one that "requires appending
+  index buffer on the fly" [ref:haar-aaltonen-benchmark-path]: it
+  appends no indices. `town`'s comparable stages, the scans,
+  `offset_blocks` and `append_records`, take 201 µs in phase one and
+  172 µs in phase two, 372 µs against their 670. The index writes compare instead with
+  Wihlidal's per-triangle culling and compaction, 0.24 ms for 443,429
+  triangles on Xbox One, 0.54 ns a triangle
+  [ref:wihlidal-2016-triangle-cull-cost]. `town`'s
+  `append_triangles` writes 5.5 million triangles in 685 µs, 0.12 ns
+  a triangle, though it tests none of them.
+- **Depth pyramid.** Haar and Aaltonen generate theirs "from HTILE
+  min/max buffer", tile metadata [ref:haar-aaltonen-benchmark].
+  Wihlidal reduces a 16-bit depth buffer "already decompressed"
+  [ref:wihlidal-2016-depth-tile-reduction]; if it holds one sample a
+  pixel, Praxis's level 0 reads eight times its bytes a pixel. Bevy's MSAA path
+  takes the minimum of every sample of each pixel in its first
+  reduction [ref:bevy-0.20-downsample-depth-msaa], the same work as
+  Praxis's level 0.
+
+### Prototypes of level 0
+
+Pyramid lines, level 0 then the levels after it, in µs: batch 3's
+medians.
+
+| Variant | `town` | helmet | uv-grid |
+|---|---:|---:|---:|
+| Split, level 0 an invocation per texel (as shipped) | 225.3 + 40.0 | 200.0 + 39.2 | 186.0 + 38.8 |
+| Level 0 an invocation per pixel, 16×16 pixels a workgroup, the texels' minima taken from workgroup memory | 184.7 + 39.6 | 180.1 + 39.2 | 178.0 + 38.8 |
+| As above, then levels 1 to 3 in the same dispatch from workgroup memory | 248.7 + 19.4 | 246.8 + 19.8 | 244.2 + 19.8 |
+
+Both match a CPU reduction of every sample, texel for texel, at 64×48;
+the per-pixel variant also does at 37×23, where every texel spans three
+pixels along the odd side. The fused variant needs each of levels 0 to 2
+to halve exactly. The per-pixel level 0 issues four sample loads per
+invocation instead of sixteen. Fusing levels 1 to 3 saves 20 µs of
+dispatches but costs 64 µs more in level 0's dispatch: its later steps
+run on 16, 4 and 1 of the 256 invocations, behind barriers. AMD's
+single-pass downsampler avoids the separate tail with one global
+atomic and a last workgroup that builds the final levels
+[ref:amd-fidelityfx-spd-2.2-single-dispatch]. On WebGPU, a port warns
+that more than six levels a pass "might not be supported on each
+platform due to buffers being not coherent"
+[ref:webgpu-spd-coherence-limit].
+
+### Options for the owner
+
+| Option | Saving on `town` | Correctness | Cost and fit |
+|---|---:|---|---|
+| P1. Level 0 an invocation per pixel | 41 µs measured (helmet 20, uv-grid 8); pyramid 224 µs, 2.1 times the scaled source | exact: matches the CPU reduction | a small change to one entry point |
+| P2. Fuse levels 1 to 3 into level 0's dispatch | none: 2.8 µs slower than the split form, measured | exact where levels halve | rejected |
+| P3. One dispatch for the levels after level 3 or 4, a single workgroup through workgroup memory, or SPD's last workgroup | at most 40 µs, the dispatches' whole line; unmeasured | exact | SPD's last-workgroup step needs storage writes visible across workgroups, which a WebGPU port of it warns not every platform has [ref:webgpu-spd-coherence-limit] |
+| P4. Build level 0 from a minimum depth resolve in the depth pre-pass | level 0 reading one sample a pixel took 150 µs on `town` against 231 in the same batch, before the resolve's own cost; unmeasured | exact: a minimum of the samples | Metal resolves depth to the minimum [ref:apple-metal-depth-resolve-min] from Apple3 [ref:metal-feature-set-tables-depth-resolve], but wgpu 30 has no depth resolve target [ref:wgpu-30-no-depth-resolve-or-reduction]: a wgpu feature, then a version bump |
+| C1. `append_records` writes each record's first packed index, so `append_triangles` reads no Instance, Mesh or slot offsets | unmeasured; the Instances alone are 17.6 MB of its 111 MB | slot order kept | one buffer of a u32 per record, 4 MiB at the draw's capacity |
+| C2. Record each culling stage as its own compute pass | the frame with rays on 132 to 245 µs shorter in six rounds; the gate 4 to 122 µs shorter on `town`, 15 to 26 µs longer on the light scenes | unchanged | cause not measured |
+
+Recommendation: accept that neither source figure compares with these
+passes. The stages the sources also run are within them, every stage
+is within twice its bandwidth floor, and what remains is work the sources do not do (index
+writes) or input they do not read (every MSAA sample). Ticket P1 as a
+small exact saving. Keep P4 for when wgpu exposes a depth resolve, and
+leave P3, C1 and C2 until `town`'s gate work (LOD, #360) needs the
+time.
+
 ## `town`'s CPU frame: prepare walked every Renderable, and wgpu-core's TLAS bookkeeping is the rest (2026-10-30, #405)
 
 **Verdict.** Quiet, `town`'s CPU frame read 5.0 to 5.8 ms at the median
