@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use crate::capture::{capture, render_frames};
+use crate::capture::{FrameWait, capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::{
@@ -404,6 +404,11 @@ pub fn run(
         frame_count >= COUNTER_FRAMES.end,
         "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
     );
+    // A software rasterizer's threads would share the CPU with the spin.
+    let wait = match context.adapter.get_info().device_type {
+        wgpu::DeviceType::Cpu => FrameWait::Block,
+        _ => FrameWait::Spin,
+    };
     let render = |switches| {
         let (_, frames) = render_frames(
             context,
@@ -416,6 +421,7 @@ pub fn run(
             // ADR 0022 judges Budgets at 60 Hz.
             SIXTY_HERTZ,
             switches,
+            wait,
         )?;
         anyhow::Ok(frames)
     };

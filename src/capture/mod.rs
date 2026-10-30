@@ -124,6 +124,7 @@ pub fn capture(
         &[last_frame],
         scene.frame_delta(),
         switches,
+        FrameWait::Block,
     )?;
     Ok((pixels.remove(0), frame_stats))
 }
@@ -165,6 +166,7 @@ pub fn capture_frames(
         frames,
         scene.frame_delta(),
         switches,
+        FrameWait::Block,
     )?;
     Ok(pixels)
 }
@@ -175,7 +177,7 @@ pub fn capture_frames(
 /// `read_back`, which `drawn` holds, with each drawn frame's stats. Up to
 /// `FRAMES_IN_FLIGHT` frames are in flight, as a window's swapchain allows:
 /// the GPU stays busy, and the CPU never runs further ahead than a window
-/// would.
+/// would. The CPU waits for the oldest frame as `wait` says.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn render_frames(
     context: &GpuContext,
@@ -187,6 +189,7 @@ pub(crate) fn render_frames(
     read_back: &[u32],
     frame_delta: Duration,
     switches: RenderSwitches,
+    wait: FrameWait,
 ) -> anyhow::Result<(Vec<Vec<u8>>, Vec<FrameStats>)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
@@ -231,10 +234,20 @@ pub(crate) fn render_frames(
         next_frame = frame + 1;
         if in_flight.len() == FRAMES_IN_FLIGHT {
             let oldest = in_flight.pop_front();
-            context.device.poll(wgpu::PollType::Wait {
-                submission_index: oldest,
-                timeout: None,
-            })?;
+            let timeout = match wait {
+                FrameWait::Block => None,
+                FrameWait::Spin => Some(Duration::ZERO),
+            };
+            loop {
+                match context.device.poll(wgpu::PollType::Wait {
+                    submission_index: oldest.clone(),
+                    timeout,
+                }) {
+                    Ok(_) => break,
+                    Err(wgpu::PollError::Timeout) => std::hint::spin_loop(),
+                    Err(error) => return Err(error.into()),
+                }
+            }
         }
         state.world.insert_resource(scene.camera_at(frame, shift));
         state.update(frame_delta);
@@ -252,6 +265,20 @@ pub(crate) fn render_frames(
     state.flush_gpu_frame_stats()?;
     add_gpu_stats(&mut frame_stats, &state);
     Ok((pixels, frame_stats))
+}
+
+/// How `render_frames` waits for the oldest frame in flight.
+#[derive(Clone, Copy)]
+pub(crate) enum FrameWait {
+    /// Blocks, as a window does in `get_current_texture`.
+    Block,
+    /// Polls until the frame is done. Behind a GPU-bound frame, the M4 Pro
+    /// runs a main thread that blocks about 30% slower for the whole next
+    /// frame, so its CPU times would measure the clock, not the work. Apple
+    /// asks games not to busy-wait, which holds a P-core and spends thermal
+    /// headroom [ref:apple-tech-talk-110147-busy-waits], so only the bench
+    /// spins, on a hardware adapter.
+    Spin,
 }
 
 /// Gives each frame of `frame_stats`, numbered from 0 as `state`'s drawn
