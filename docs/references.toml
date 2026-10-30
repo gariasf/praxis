@@ -3245,6 +3245,14 @@ quote = '''            instance_count += 1;
             dependencies.push(blas.clone());'''
 checked = 2026-10-28
 
+["wgpu-hal-30-metal-tlas-instance-bytes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2159"
+section = "wgpu-hal 30.0.1, metal/device.rs, tlas_instance_to_bytes: each TLAS Instance's Metal record returned in a Vec of its own"
+quote = '''    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+[...]
+        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()'''
+checked = 2026-10-30
+
 ["wgpu-30-use-tlas-per-flush"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174"
 section = "wgpu-core 30.0.1, command/pass.rs, flush_bindings_helper: each bind group flushed records a UseTlas action per TLAS it holds"

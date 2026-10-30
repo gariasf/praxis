@@ -59,15 +59,33 @@ type LightQuery<Light> = QueryState<(
 /// The Renderables whose Mesh the GPU bends.
 type BendQuery = QueryState<(&'static MeshRef, &'static Bend)>;
 
-/// The Renderables, with what blends the moving ones and the changes that
-/// write their Instance.
-type RenderableQuery = QueryState<(
+/// What a Renderable's Instance holds, and what blends a moving one.
+type RenderableData = (
     Entity,
-    Ref<'static, WorldTransform>,
+    &'static WorldTransform,
     Option<&'static PreviousWorldTransform>,
-    Ref<'static, MeshRef>,
-    Option<Ref<'static, MaterialRef>>,
-)>;
+    &'static MeshRef,
+    Option<&'static MaterialRef>,
+);
+
+/// One Renderable a `RenderableQuery` found.
+type RenderableItem<'world> = bevy_ecs::query::QueryItem<'world, 'world, RenderableData>;
+
+/// The Renderables.
+type RenderableQuery<Filter = ()> = QueryState<RenderableData, Filter>;
+
+/// The Renderables whose World transform, Mesh or Material changed since the
+/// last `prepare`, new ones included, and the blended ones, which move every
+/// frame. Of those prepare has written, only these and those that lost their
+/// Material Handle or previous World transform are written again.
+type ChangedRenderableQuery = RenderableQuery<
+    Or<(
+        Changed<WorldTransform>,
+        Changed<MeshRef>,
+        Changed<MaterialRef>,
+        With<PreviousWorldTransform>,
+    )>,
+>;
 
 impl FrameData {
     /// Queues `instance` for `slot`, a Moving Instance or not, in the last
@@ -133,11 +151,11 @@ struct InstanceSlots {
 }
 
 impl InstanceSlots {
-    /// `entity`'s slot, taking one if it has none, and whether it is new; None
-    /// when none is left, warned about the first time `entity` is refused.
-    fn get_or_take(&mut self, entity: Entity) -> Option<(u32, bool)> {
+    /// `entity`'s slot, taking one if it has none; None when none is left,
+    /// warned about the first time `entity` is refused.
+    fn get_or_take(&mut self, entity: Entity) -> Option<u32> {
         if let Some(&slot) = self.by_entity.get(&entity) {
-            return Some((slot, false));
+            return Some(slot);
         }
         let fresh = (self.end < INSTANCE_CAPACITY).then_some(self.end);
         let Some(slot) = self.free.pop().or(fresh) else {
@@ -153,7 +171,7 @@ impl InstanceSlots {
         self.end = self.end.max(slot + 1);
         self.by_entity.insert(entity, slot);
         self.refused.remove(&entity);
-        Some((slot, true))
+        Some(slot)
     }
 
     fn free(&mut self, entity: Entity) {
@@ -175,7 +193,11 @@ pub struct FramePreparer {
     /// when it was set.
     warned_of_overflowed_lights: bool,
     renderable_query: RenderableQuery,
+    changed_renderable_query: ChangedRenderableQuery,
     instance_slots: InstanceSlots,
+    /// Renderables the last `prepare` skipped or refused a slot, so wrote no
+    /// Instance for: visited again, changed or not.
+    unwritten: bevy_ecs::entity::EntityHashSet,
     /// Set by `rewrite_all_instances` until the next `prepare`.
     rewrite_every_instance: bool,
     renderables_refused: u32,
@@ -199,7 +221,9 @@ impl FramePreparer {
             lights_overflowed: 0,
             warned_of_overflowed_lights: false,
             renderable_query: world.query(),
+            changed_renderable_query: world.query_filtered(),
             instance_slots: InstanceSlots::default(),
+            unwritten: bevy_ecs::entity::EntityHashSet::default(),
             rewrite_every_instance: false,
             renderables_refused: 0,
             moving_instances_left_out: 0,
@@ -249,7 +273,9 @@ impl FramePreparer {
             lights_overflowed,
             warned_of_overflowed_lights,
             renderable_query,
+            changed_renderable_query,
             instance_slots,
+            unwritten,
             rewrite_every_instance,
             renderables_refused,
             moving_instances_left_out,
@@ -325,14 +351,18 @@ impl FramePreparer {
             .removed::<MaterialRef>()
             .chain(world.removed::<PreviousWorldTransform>())
             .collect();
-        for (entity, current, previous, mesh_ref, material_ref) in renderables.iter() {
+        let retried = std::mem::take(unwritten);
+        let mut visit = |(entity, current, previous, mesh_ref, material_ref): RenderableItem<
+            '_,
+        >| {
             let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
                 tracing::warn!(
                     handle = mesh_ref.0.0,
                     "MeshHandle not in pool, skipping entity"
                 );
                 instance_slots.free(entity);
-                continue;
+                unwritten.insert(entity);
+                return;
             };
             if material_ref.is_none() && mesh.needs_material_handle {
                 tracing::warn!(
@@ -340,39 +370,50 @@ impl FramePreparer {
                     "Renderable has no Material Handle and a Primitive of its Mesh names no Material, skipping it"
                 );
                 instance_slots.free(entity);
-                continue;
+                unwritten.insert(entity);
+                return;
             }
-            let Some((slot, is_new)) = instance_slots.get_or_take(entity) else {
+            let Some(slot) = instance_slots.get_or_take(entity) else {
                 *renderables_refused += 1;
-                continue;
+                unwritten.insert(entity);
+                return;
             };
-            // A blended Renderable moves every frame, between Ticks too.
-            if *rewrite_every_instance
-                || is_new
-                || current.is_changed()
-                || previous.is_some()
-                || mesh_ref.is_changed()
-                || material_ref
-                    .as_ref()
-                    .is_some_and(|material_ref| material_ref.is_changed())
-                || lost_material_handle_or_previous_transform.contains(&entity)
-            {
-                let transform = current.drawn(previous, blend_weight);
-                let rotation_scale = transform.0.matrix3.as_mat3();
-                let (anchor, offset) = anchor_and_offset(transform.translation());
-                frame.write_instance(
-                    slot,
-                    InstanceData {
-                        rotation_scale: padded_columns(rotation_scale),
-                        normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
-                        anchor,
-                        material_id: material_ref
-                            .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
-                        offset,
-                        mesh: mesh_ref.0.0,
-                    },
-                    previous.is_some(),
-                );
+            // Each Renderable visited is new, changed, blended, retried or lost
+            // a component, or every Instance is written again.
+            let transform = current.drawn(previous, blend_weight);
+            let rotation_scale = transform.0.matrix3.as_mat3();
+            let (anchor, offset) = anchor_and_offset(transform.translation());
+            frame.write_instance(
+                slot,
+                InstanceData {
+                    rotation_scale: padded_columns(rotation_scale),
+                    normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+                    anchor,
+                    material_id: material_ref
+                        .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
+                    offset,
+                    mesh: mesh_ref.0.0,
+                },
+                previous.is_some(),
+            );
+        };
+        if *rewrite_every_instance {
+            renderables.iter().for_each(&mut visit);
+        } else {
+            // An unchanged Renderable keeps its Instance, unless the last
+            // prepare skipped or refused it, or it lost its Material Handle or
+            // previous World transform.
+            let changed_renderables = changed_renderable_query.query(world);
+            changed_renderables.iter().for_each(&mut visit);
+            let lost = lost_material_handle_or_previous_transform
+                .iter()
+                .filter(|entity| !retried.contains(*entity));
+            for &entity in retried.iter().chain(lost) {
+                if !changed_renderables.contains(entity)
+                    && let Ok(renderable) = renderables.get(entity)
+                {
+                    visit(renderable);
+                }
             }
         }
         // A slot freed this frame, or every free slot when every Instance is
@@ -954,6 +995,32 @@ mod tests {
         // slot draws nothing.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
         assert_eq!(written(&mut frames), [(NO_MESH, 0)]);
+    }
+
+    #[test]
+    fn a_renderable_skipped_for_a_mesh_not_in_the_pool_is_written_once_it_loads() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        // The handle the pool's next load returns.
+        let unloaded = MeshHandle(frames.mesh.0 + 1);
+        frames.world.spawn((Transform::IDENTITY, MeshRef(unloaded)));
+        for _ in 0..2 {
+            assert!(frames.prepare().is_empty());
+        }
+        // Unchanged since, it is written as soon as its Mesh is in the pool.
+        let loaded = frames
+            .mesh_pool
+            .load(
+                &mut frames.staging,
+                &mesh(3, vec![0, 1, 2]),
+                &[Some(MESH_MATERIAL)],
+            )
+            .expect("a triangle fits");
+        assert!(loaded == unloaded, "the pool loaded a different handle");
+        assert_eq!(frames.prepare(), [0]);
+        assert_eq!(frames.preparer.frame().instances[0].mesh, unloaded.0);
+        assert!(frames.prepare().is_empty());
     }
 
     /// Loads a Mesh of a triangle over the first three of `vertex_count`

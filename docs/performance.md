@@ -4,6 +4,96 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## `town`'s CPU frame: prepare walked every Renderable, and wgpu-core's TLAS bookkeeping is the rest (2026-10-30, #405)
+
+**Verdict.** Quiet, `town`'s CPU frame read 5.0 to 5.8 ms at the median
+and 5.4 to 6.3 ms at p95 on `main`, past the 6 ms ceiling at p95 in one
+of four runs, and prepare was 1.3 ms of it: it
+visited all 254,256 Renderables every frame, a pool lookup and a hash
+lookup each, to find the 10,000 birds that move. Prepare now visits
+only the Renderables whose World transform, Mesh or Material changed,
+the blended ones, those that lost their Material Handle or previous
+World transform, and those it skipped or refused the frame before; it
+reads 340 µs, and the CPU frame 4.0 to 4.5 ms at the median and 4.3 to
+4.8 ms at p95. The dynamic TLAS's CPU read 934 to 987 µs over the same
+four runs, under its 1.1 ms ceiling on both builds: the M3 exit read
+1.10 to 1.26 ms at load 2.7 to 4.2. Of what is left, 2.1 to 2.6 ms
+is `submit` and most of the dynamic TLAS's line is its build inside
+wgpu-core, both work per TLAS Instance that wgpu-core 30.0.1 does
+[ref:wgpu-30-tlas-dependency-per-instance]
+[ref:wgpu-30-submit-tlas-dependencies]
+[ref:wgpu-30-tlas-instance-staging]. Patched with upstream's dedup
+[ref:wgpu-pr-9835], the CPU frame reads 1.8 to 1.9 ms and the dynamic
+TLAS 619 to 665 µs, with the GPU lines unchanged. That patch is an
+option for the owner, on the issue.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`main` at a5280dce and of this change on it, each with a measurement patch,
+not committed, that logged each CPU stage's median and p95 over the
+measured frames (`FrameStats::cpu_times`, the systems summed per frame).
+`praxis bench <dir> --skip-aliasing town` at 2560×1440 with 4x MSAA,
+1,800 measured frames, the builds interleaved, no other praxis process,
+load average 1.8 to 2.7. CPU frame and dynamic TLAS from the bench's
+JSON, stages from the patch's log; µs. Systems is the sum of the
+systems' medians, the Ticks' propagation most of it.
+
+| Build | Run | CPU frame | CPU frame p95 | Dynamic TLAS, CPU | Its p95 | `prepare_frame` | Systems | `dynamic_tlas` | `dynamic_tlas_submit` | `encode` | `submit` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Main | 1 | 5,554.5 | 5,970.8 | 1,003.8 | 1,139.4 | 1,315.2 | 389.8 | 594.8 | 409.9 | 205.9 | 2,576.4 |
+| Main | 2 | 5,816.3 | 6,345.3 | 1,049.9 | 1,278.3 | 1,393.9 | 402.3 | 625.5 | 419.3 | 206.0 | 2,635.3 |
+| Main | 3 | 5,002.5 | 5,372.6 | 933.7 | 1,030.7 | 1,317.9 | 390.3 | 580.5 | 355.5 | 197.3 | 2,103.5 |
+| Main | 4 | 5,060.6 | 5,396.5 | 944.7 | 1,012.6 | 1,314.3 | 389.4 | 580.9 | 364.0 | 196.2 | 2,162.0 |
+| Change | 1 | 4,001.4 | 4,315.4 | 934.1 | 1,009.9 | 340.8 | 388.9 | 584.5 | 353.3 | 188.1 | 2,094.2 |
+| Change | 2 | 4,081.2 | 4,428.0 | 961.4 | 1,045.4 | 343.1 | 395.7 | 607.1 | 356.8 | 190.6 | 2,136.4 |
+| Change | 3 | 4,451.3 | 4,837.5 | 979.9 | 1,088.6 | 339.6 | 388.8 | 584.0 | 393.2 | 186.7 | 2,506.9 |
+| Change | 4 | 4,476.8 | 4,803.6 | 986.5 | 1,073.1 | 340.0 | 389.3 | 587.3 | 401.5 | 186.6 | 2,517.2 |
+
+`upload` read 30 to 38 µs throughout. `submit` takes one of two levels
+for a whole run, about 2.1 or 2.5 ms, on either build; the CPU frame
+follows it. Counters were identical between the builds: 2,049,344
+uploaded bytes and 10,501 heap allocations a frame.
+
+**Where the rest goes.** `sample` at 1 ms over 20 s of one run of the
+change:
+
+- **`submit`**: 978 of its 1,291 samples are wgpu-core's
+  `set_acceleration_structure_dependencies`, which walks the static
+  TLAS's dependencies, one BLAS per Instance, and wgpu-hal then adds
+  each to a new Metal residency set, 508 samples
+  [ref:wgpu-hal-30-metal-residency-per-submit].
+- **`dynamic_tlas`**: 511 samples are `CommandEncoder::finish` on its
+  encoder, where wgpu-core records the build: per Instance it allocates
+  the backend's record and frees it once staged, 161 samples of
+  allocation and release [ref:wgpu-hal-30-metal-tlas-instance-bytes].
+  Filling the 10,000 entries in `DynamicTlas::record` is about 110.
+- **`dynamic_tlas_submit`**: its own walk of the 10,000 dependencies,
+  for the build and, when the build is timed, for each of the two
+  markers that bind it [ref:wgpu-30-use-tlas-per-flush].
+
+None of these is ours to cut short of the TLAS holding fewer Instances.
+
+**Upstream's dedup.** wgpu-core 30.0.1 with gfx-rs/wgpu#9835's change
+(+12/−3) applied by a `[patch.crates-io]` entry, so each build records one
+dependency per distinct BLAS. Runs interleaved with the change alone,
+load average 2.7 to 4.5:
+
+| Build | Run | CPU frame | CPU frame p95 | Dynamic TLAS, CPU | Its p95 | `prepare_frame` | Systems | `dynamic_tlas` | `dynamic_tlas_submit` | `encode` | `submit` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Change | 1 | 4,650.3 | 5,067.7 | 1,045.8 | 1,186.6 | 342.0 | 394.2 | 631.3 | 418.3 | 230.6 | 2,576.7 |
+| Change | 2 | 4,610.6 | 4,966.5 | 1,030.7 | 1,147.2 | 341.1 | 390.7 | 620.6 | 413.9 | 218.0 | 2,571.6 |
+| Change | 3 | 4,570.7 | 4,950.1 | 1,023.5 | 1,136.2 | 341.3 | 391.2 | 614.2 | 411.4 | 215.2 | 2,542.6 |
+| Change + wgpu#9835 | 1 | 1,858.5 | 2,206.0 | 664.9 | 803.4 | 455.8 | 394.5 | 630.9 | 33.8 | 234.6 | 43.1 |
+| Change + wgpu#9835 | 2 | 1,767.2 | 2,092.2 | 625.8 | 715.7 | 457.4 | 388.2 | 598.0 | 28.2 | 207.7 | 40.0 |
+| Change + wgpu#9835 | 3 | 1,757.9 | 2,094.2 | 618.8 | 708.2 | 455.3 | 388.5 | 591.5 | 27.8 | 205.1 | 40.2 |
+
+The GPU frame read 20,169.7 to 20,193.0 µs patched against 20,178.4 to
+20,247.8, the gate 8,676.6 to 8,681.6 against 8,673.0 to 8,684.8, and the
+patched build allocates 37 fewer times a frame. The build's per-Instance
+records stay, so `dynamic_tlas` does not move. `prepare_frame` rises
+115 µs in the patched build, though its code is the same; this note does
+not find why. Upstream's `v30` branch does not carry the change, and no
+wgpu 31 is released.
+
 ## Where the shadow mask pass's time goes (2026-10-30, #404)
 
 **Verdict.** On `town`, shadow rays cost 11.0 ms: about 9.3 ms is rays
