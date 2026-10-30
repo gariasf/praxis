@@ -330,9 +330,11 @@ impl DynamicTlas {
             self.tlas[index] = mesh.map(|(blas, mesh)| {
                 let transform = anchored_transform(instance, anchor);
                 let [lowest, highest] = placed_bounds(&transform, mesh.bounds);
-                bounds = Some(bounds.map_or([lowest, highest], |[low, high]| {
-                    [low.min(lowest), high.max(highest)]
-                }));
+                bounds = Some(
+                    bounds.map_or([lowest, highest], |[held_lowest, held_highest]| {
+                        [held_lowest.min(lowest), held_highest.max(highest)]
+                    }),
+                );
                 uploaded_entries += 1;
                 tlas_instance(blas, transform, moving.slot)
             });
@@ -415,13 +417,24 @@ fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::Tl
     wgpu::TlasInstance::new(blas, transform, slot, 0xff)
 }
 
+/// The share of a Mesh's largest coordinate its box grows by before it is
+/// placed, for the bend pass's rounding: under Metal's fast math, sine and
+/// cosine err by up to 2^-13 [ref:msl-4.1-sin-fast-accuracy], and a bent
+/// vertex, built from a few of them over its height and its distance from
+/// the middle, lands off its exact shape by a few times that share of its
+/// distance from the Mesh's origin, by estimate. Every Mesh grows, as which
+/// ones bend is not known here.
+const BEND_ROUNDING_SHARE: f32 = 0.00390625; // 2^-8
+
 /// The box that holds `bounds`, a Mesh's box, its lowest corner then its
-/// highest, placed by `transform`, a TLAS entry's rows: the box's centre
-/// placed, and each row's absolute values over its half-extent either side.
+/// highest, grown by `BEND_ROUNDING_SHARE` and placed by `transform`, a TLAS
+/// entry's rows: the box's centre placed, and each row's absolute values
+/// over its half-extent either side.
 fn placed_bounds(transform: &[f32; 12], bounds: [[f32; 3]; 2]) -> [glam::Vec3; 2] {
     let [lowest, highest] = bounds.map(glam::Vec3::from);
     let centre = 0.5 * (lowest + highest);
-    let half_extent = 0.5 * (highest - lowest);
+    let largest_coordinate = lowest.abs().max(highest.abs()).max_element();
+    let half_extent = 0.5 * (highest - lowest) + BEND_ROUNDING_SHARE * largest_coordinate;
     let rows: [[f32; 4]; 3] = bytemuck::cast(*transform);
     let row = |axis: usize| glam::Vec4::from(rows[axis]).truncate();
     let placed_centre =
@@ -682,8 +695,8 @@ mod tests {
     }
 
     /// The dynamic TLAS's fill returns the box that holds each Moving
-    /// Instance's Mesh bounds where its transform from the static TLAS's
-    /// Anchor places them, and a point at the origin once it holds none. A
+    /// Instance's Mesh bounds, grown for the bend pass's rounding, where its
+    /// transform from the static TLAS's Anchor places them, and a point at the origin once it holds none. A
     /// fill leaves one build to record, but an empty fill after an empty one.
     #[test]
     fn the_dynamic_tlas_returns_the_box_that_holds_its_moving_instances_bounds() {
@@ -716,10 +729,15 @@ mod tests {
             ..FrameData::default()
         };
         let [lowest, highest] = tlas.fill(&frame, &triangle.mesh_pool, LOAD_ANCHOR);
-        // The turned triangle spans 0.6 to 1.0 in X and ±0.2 in Y, doubled
+        // The triangle spans 0.6 to 1.0 in X and ±0.2 in Y, and its box
+        // grows by 2^-8 of 1.0 m on every side. The turned one is doubled
         // and turned about its pivot at (64.25, -0.5, 10.0); the unturned
         // one sits 4 m below the Anchor's corner in X.
-        let expected = [[-3.4, -0.2, 0.0], [64.65, 1.5, 10.0]];
+        let grown = BEND_ROUNDING_SHARE;
+        let expected = [
+            [-3.4 - grown, -0.2 - grown, -grown],
+            [64.65 + 2.0 * grown, 1.5 + 2.0 * grown, 10.0 + 2.0 * grown],
+        ];
         for (actual, expected) in [lowest, highest].iter().zip(expected) {
             let distance = glam::Vec3::from(*actual).distance(glam::Vec3::from(expected));
             assert!(distance < 1e-5, "{actual:?}, expected {expected:?}");

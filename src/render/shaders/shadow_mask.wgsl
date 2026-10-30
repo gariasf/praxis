@@ -45,10 +45,13 @@ const SHADOW_RAY_PIXEL_OFFSET: f32 = 0.03125; // 2^-5
 
 // The box that holds the dynamic TLAS's triangles grows, for the test that
 // skips it, by this share of the largest coordinate of its corners and the
-// ray's origin, and of 1 m at least. Placing the box on the CPU, the GPU's
-// traversal and the test each round a coordinate by a few times 2^-24 of
-// the largest of them, well inside the margin's 256, so a ray that meets a
-// triangle of the dynamic TLAS never misses the box.
+// ray's origin, and of 1 m at least, the share a shadow ray's origin
+// leaves its surface by. Placing the box on the CPU, placing a TLAS entry's
+// triangles and intersecting them on the GPU, and the test each round a
+// coordinate by a few times 2^-24 of the largest of them, by estimate, as
+// no specification bounds them: well inside the margin's 256, so a ray that
+// meets a triangle of the dynamic TLAS meets the box. The bend pass's
+// rounding is in the box already (src/render/acceleration_structures.rs).
 const DYNAMIC_TLAS_BOUNDS_MARGIN_SCALE: f32 = 1.52587890625e-5; // 2^-16
 
 // The cosines, of a light's angle from a plane, past which a sample's normals

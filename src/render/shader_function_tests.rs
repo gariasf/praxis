@@ -1764,8 +1764,8 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
 /// through it, short of it, past it and away from it; rays parallel to a
 /// pair of faces, outside, inside and along a face; rays from inside; a ray
 /// that clears a corner although each axis alone overlaps, which only the
-/// cross axes find, and one that cuts it; and directional lights' rays, which run to f32's
-/// largest distance.
+/// cross axes find, and one that cuts it; and directional lights' rays,
+/// which run to f32's largest distance.
 #[test]
 fn a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box() {
     let Some(context) = gpu_context() else {
