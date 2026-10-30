@@ -44,7 +44,7 @@
       "p95": 22.958
     },
     "depth_prepass": {
-      "median": 160.125,
+      "median": 160.291,
       "p95": 163.042
     },
     "depth_pyramid_pass": {
@@ -60,11 +60,11 @@
       "p95": 7.292
     },
     "lit_pass": {
-      "median": 2109.75,
-      "p95": 2273.8329999999996
+      "median": 343.0,
+      "p95": 360.66700000000003
     },
     "phase_two_depth_pass": {
-      "median": 11.958,
+      "median": 11.917,
       "p95": 12.5
     },
     "shadow_mask_pass": {
@@ -72,8 +72,8 @@
       "p95": 1920.5
     },
     "tonemapping_pass": {
-      "median": 2418.125,
-      "p95": 2581.375
+      "median": 318.95799999999997,
+      "p95": 319.5
     }
   },
   "draw_calls": 4,
