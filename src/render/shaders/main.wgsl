@@ -150,7 +150,7 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
 // light reflects, unless the shadow mask hides it, with the ambient term and
 // the emissive.
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
     let albedo = textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv);
     let metallic_roughness =
@@ -198,12 +198,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         normalize(-first.offset),
         has_directional_light
     );
-    // The shadow mask's word for this pixel: none with shadow rays off. Its
-    // bits follow the pixel's lights in the order they are summed here, the
+    // The shadow mask's word for this pixel's surface that this fragment
+    // shades: none with shadow rays off. Its second surface's where the
+    // fragment covers a sample that shows it, as surface-based
+    // antialiasing shades each of a pixel's surfaces once
+    // [ref:salvi-2012-sbaa-surfaces]; the nearest one's otherwise. The
+    // coverage may precede the depth test, so a fragment of the nearest
+    // surface that runs under another at a sample takes that one's. Its bits
+    // follow the pixel's lights in the order they are summed here, the
     // directional lights first.
     var mask = vec2<u32>(0u);
     if SHADOW_RAYS {
-        mask = textureLoad(shadow_mask, vec2<u32>(in.clip_position.xy), 0).rg;
+        let pixel = vec2<u32>(in.clip_position.xy);
+        let second_samples = textureLoad(shadow_mask_samples, pixel, 0).r;
+        let surface = select(0u, 1u, (covered_samples & second_samples) != 0u);
+        mask = textureLoad(shadow_mask, pixel, surface, 0).rg;
     }
     let first_illuminance = first.intensity * f32(has_directional_light && !masked(mask, 0u));
     var outgoing_luminance = reflected_luminance(
@@ -228,9 +237,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // The point lights the pixel's Froxel lists, in light order, or, with
     // FROXEL_LIGHTS off, every point light: brute force. The mask's bits
     // follow the lights of the Froxel at this pixel's rectangle and the
-    // slice its nearest sample shows, which the top bits of the word's
-    // second half hold: this fragment's Froxel but at an edge, or where a
-    // slice ends between the sample and the pixel's centre.
+    // slice that the sample its word was traced from shows, which the top
+    // bits of the word's second half hold: this fragment's Froxel but where
+    // a slice ends between the sample and the pixel's centre, or at an edge
+    // of more than two surfaces.
     var froxel = 0u;
     var mask_froxel = 0u;
     var point_light_count = light.point_light_count;

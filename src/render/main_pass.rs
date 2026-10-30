@@ -199,7 +199,7 @@ impl MainPass {
     }
 
     /// Group 3 of `layout`: `meshlet_records`, and the shadow mask of
-    /// `render_targets`.
+    /// `render_targets` and which samples show its second surface.
     fn inputs_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
@@ -214,6 +214,10 @@ impl MainPass {
                 (
                     "shadow_mask",
                     wgpu::BindingResource::TextureView(render_targets.shadow_mask()),
+                ),
+                (
+                    "shadow_mask_samples",
+                    wgpu::BindingResource::TextureView(render_targets.shadow_mask_samples()),
                 ),
             ],
         )

@@ -93,7 +93,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
     // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
-    // u32s a pixel and its 4-byte overflow count, the surface normals' 4
+    // u32s a pixel for each of two surfaces, a u32 a pixel of the samples
+    // that show the second, the list of second surfaces, a u32 a pixel
+    // after its count, the pass's 4-byte overflow count and its 12-byte
+    // dispatch and stand-in, the surface normals' 4
     // bytes at each of 4 samples a pixel, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the tonemapping
     // pass's 64×64 R8 dither mask, the Froxel pass's lists,
@@ -126,8 +129,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + multisampled_color
             + 160 * 90 * 8
             + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
-            + 160 * 90 * 8
+            + 2 * 160 * 90 * 8
+            + 160 * 90 * 4
+            + (160 * 90 + 1) * 4
             + 4
+            + 12
+            + 12
             + 160 * 90 * 4 * 4
             + 3 * 2048
             + 64 * 64

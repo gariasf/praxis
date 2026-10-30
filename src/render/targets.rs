@@ -21,9 +21,20 @@ pub const DEPTH_PYRAMID_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Fl
 /// The HDR target's format, and the multisampled colour's.
 pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// The shadow mask's format: a word of two halves per pixel, a bit per light
-/// and the Froxel slice the bits follow.
+/// The shadow mask's format: a word of two halves per pixel and surface, a
+/// bit per light and the Froxel slice the bits follow.
 pub const SHADOW_MASK_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
+
+/// The surfaces of a pixel the shadow mask holds a word for, a layer each:
+/// the one its nearest sample shows, and the farthest other one where its
+/// samples show more than one, as surface-based antialiasing stores a
+/// small, fixed number of surfaces per pixel and shades each once
+/// [ref:salvi-2012-sbaa-surfaces].
+pub const SHADOW_MASK_SURFACES: u32 = 2;
+
+/// The format of the shadow mask's samples: a bit per sample of a pixel,
+/// set where the sample shows the surface of the mask's second layer.
+pub const SHADOW_MASK_SAMPLES_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
 /// The surface normals' format: each sample's triangle normal, then the
 /// normal interpolated over the triangle, as octahedral coordinates
@@ -57,9 +68,14 @@ pub struct RenderTargets {
     /// to 1 × 1, the rows and columns of each level sharing the screen
     /// evenly.
     depth_pyramid_levels: Vec<wgpu::TextureView>,
-    /// Which lights the shadow mask pass found hidden at each pixel, which
-    /// the lit pass reads.
+    /// Which lights the shadow mask pass found hidden at each pixel, from
+    /// each of its surfaces, which the lit pass reads.
     shadow_mask: wgpu::TextureView,
+    /// Which samples of each pixel show the shadow mask's second surface.
+    shadow_mask_samples: wgpu::TextureView,
+    /// The shadow mask pass's list of the pixels whose samples show a second
+    /// surface: a count, then an entry per pixel at most.
+    second_surfaces: wgpu::Buffer,
     /// Each sample's surface normals, which the depth passes write with
     /// shadow rays on and the shadow mask pass reads.
     surface_normals: wgpu::TextureView,
@@ -68,13 +84,16 @@ pub struct RenderTargets {
 impl RenderTargets {
     /// Targets `width` × `height`, both non-zero.
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
-        let target = |label, format, sample_count, usage| {
+        // The second surfaces' list holds a pixel's row in 14 bits
+        // (`shadow_mask.wgsl`).
+        assert!(height <= 1 << 14, "targets {height} pixels tall");
+        let layered_target = |label, format, sample_count, layers, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
                     width,
                     height,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: layers,
                 },
                 mip_level_count: 1,
                 sample_count,
@@ -83,7 +102,18 @@ impl RenderTargets {
                 usage,
                 view_formats: &[],
             });
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
+            let dimension = if layers > 1 {
+                wgpu::TextureViewDimension::D2Array
+            } else {
+                wgpu::TextureViewDimension::D2
+            };
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(dimension),
+                ..wgpu::TextureViewDescriptor::default()
+            })
+        };
+        let target = |label, format, sample_count, usage| {
+            layered_target(label, format, sample_count, 1, usage)
         };
         let pyramid_size = wgpu::Extent3d {
             width: (width / 2).max(1),
@@ -132,12 +162,25 @@ impl RenderTargets {
                 })
                 .collect(),
             // Written as storage, then read by the lit pass.
-            shadow_mask: target(
+            shadow_mask: layered_target(
                 "Shadow Mask",
                 SHADOW_MASK_FORMAT,
                 1,
+                SHADOW_MASK_SURFACES,
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
+            shadow_mask_samples: target(
+                "Shadow Mask Samples",
+                SHADOW_MASK_SAMPLES_FORMAT,
+                1,
+                wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            ),
+            second_surfaces: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Second Surfaces Buffer"),
+                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
             surface_normals: target(
                 "Surface Normals",
                 SURFACE_NORMALS_FORMAT,
@@ -190,9 +233,19 @@ impl RenderTargets {
         &self.depth_pyramid_levels
     }
 
-    /// The shadow mask.
+    /// The shadow mask, every layer.
     pub fn shadow_mask(&self) -> &wgpu::TextureView {
         &self.shadow_mask
+    }
+
+    /// The samples of each pixel that show the shadow mask's second surface.
+    pub fn shadow_mask_samples(&self) -> &wgpu::TextureView {
+        &self.shadow_mask_samples
+    }
+
+    /// The shadow mask pass's list of second surfaces.
+    pub fn second_surfaces(&self) -> &wgpu::Buffer {
+        &self.second_surfaces
     }
 
     /// The depth target as the attachment of the frame's first pass that
@@ -270,7 +323,7 @@ impl RenderTargets {
         }
     }
 
-    /// Bytes of the targets' textures.
+    /// Bytes of the targets' textures and buffer.
     pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
         [
             &self.depth,
@@ -278,11 +331,13 @@ impl RenderTargets {
             &self.hdr,
             &self.depth_pyramid_levels[0],
             &self.shadow_mask,
+            &self.shadow_mask_samples,
             &self.surface_normals,
         ]
         .into_iter()
         .map(|view| texture_bytes(view.texture(), transient_saves_memory))
-        .sum()
+        .sum::<u64>()
+            + self.second_surfaces.size()
     }
 }
 
