@@ -3315,3 +3315,186 @@ url = "https://www.intel.com/content/dam/develop/external/us/en/documents/laurit
 section = "Lauritzen, Deferred Rendering for Current and Future Rendering Pipelines, SIGGRAPH 2010 course Beyond Programmable Shading, slides 23-24, Per-Sample Scheduling and MSAA with Tile-Based Methods"
 quote = '''Lack of spatial locality causes hardware scheduling inefficiency [...] Handle per-pixel and per-sample in one pass [...] Can use branching, but incurs scheduling problems [...] Instead, reschedule per-sample pixels [...] Shade sample 0 for the whole tile [...] Pack a list of pixels that require per-sample shading [...] Redistribute threads to process additional samples [...] Scatter per-sample shaded results'''
 checked = 2026-10-29
+
+["aila-2004-alias-free-shadow-maps-multisample"]
+url = "https://users.aalto.fi/~laines9/publications/aila2004egsr_paper.pdf"
+section = "Timo Aila and Samuli Laine, Alias-Free Shadow Maps, Eurographics Symposium on Rendering 2004 (doi:10.2312/EGWR/EGSR04/161-166), Section 3, Projection of Sampling Points; Figure 1 caption"
+quote = '''When supersampling or multisampling is used for antialiasing, the shadow term needs to be determined separately for each sample. This is accomplished by transforming all visible samples to the image plane of the light source. [...] In total there are 2.9M triangles, and the rendering took 12.6 seconds with a software prototype running on a 1.6GHz Mobile Pentium 4 at 1536 × 1088 resolution.'''
+checked = 2026-10-30
+
+["amd-2021-shadow-denoiser-spatial"]
+url = "https://github.com/GPUOpen-Effects/FidelityFX-Denoiser/blob/d7dfecbabe7b9523b14e7b067216e06b86e8d189/docs/FFX_Denoiser_Shadows_Technology.pdf"
+section = "AMD, FidelityFX Shadow Denoiser technology document (2021), pp. 4-6, ffx_denoiser_shadows_tileclassification (Reprojection) and ffx_denoiser_shadows_filter"
+quote = '''Increasing the variance value will mean a more aggressive spatial blur for those pixels that have little to no temporal history; this is cooled off and disabled as the history grows longer. [...] The final pass of the FidelityFX Shadow Denoiser is responsible for performing the spatial filtering and is run three times. [...] It implements the Edge-Avoiding À-Trous Wavelet (EAW) filtering technique, where blurs are performed repeatedly with increasing radius values over multiple passes'''
+checked = 2026-10-30
+
+["boksansky-2019-sparse-ray-divergence"]
+url = "https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_13.pdf"
+section = "Jakub Boksansky, Michael Wimmer, Jiri Bittner, Ray Traced Shadows: Maintaining Real-Time Frame Rates, Ray Tracing Gems ch. 13, 2019 (doi:10.1007/978-1-4842-4427-2_13), p. 168, section 13.4.4 Sampling Mask"
+quote = '''We enforce sampling of individual blocks of pixels on the screen as performance tests have shown that shooting a single ray for one pixel out of four in a close neighborhood yields similar performance as shooting rays for each of these pixels (probably due to warp dependencies). Therefore, we enforce sampling of a block of nb × nb pixels on the screen (we get the best performance increase for nb = 8).'''
+checked = 2026-10-30
+
+["crassin-2015-agaa-shadowing"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2015-02_Aggregate-G-Buffer-Anti-Aliasing/AGAA_I3D2015_authors.pdf"
+section = "C. Crassin, M. McGuire, K. Fatahalian, A. Lefohn, Aggregate G-Buffer Anti-Aliasing, I3D 2015 (doi:10.1145/2699276.2699285), authors' version p. 5, section 3.5.2 Shadowing"
+quote = '''Among local shading terms, shadowing also needs to be filtered in order to account for differences of light visibility within a given aggregate. [...] The idea is to sample the visibility within the shadow-map inside the shape of the aggregate, which we statistically defined by the mean and variance of the depth value. In practice, we reconstruct the world-space 3D position and variance vector, and project them inside the shadowmap to sample within this footprint using a fixed number of samples (usually 3-4 taps, or using hardware anisotropic filtering). [...] In case of strong correlation between shadowing and other parameters, it is also possible to evaluate the shadowing per-sample, during the G-buffer generation pass, and pre-multiply the per-sample albedo and specular coefficients by the shadowing term before aggregating them. However, such an approach makes the shadowing cost scaling with the number of samples, which is not desirable, especially when many lights need to be evaluated.'''
+checked = 2026-10-30
+
+["dammertz-2010-atrous-sharp-shadow"]
+url = "https://jo.dreggn.org/home/2010_atrous.pdf#page=4"
+section = "Dammertz, Sewtz, Hanika, Lensch, Edge-Avoiding À-Trous Wavelet Transform, HPG 2010 (doi:10.2312/EGGH/HPG10/067-075), author preprint pp. 4-5, §3.1 and Figure 5"
+quote = '''Figure 5 shows a sharp shadow of a pole being preserved correctly while smoothing the other parts. [...] Figure 5: From left to right: Close up of the rt-input of a pole shadow in the sponza scene. Result with our presented weighting approach. Result without rt buffer: the shadow is blurred.'''
+checked = 2026-10-30
+
+["epic-ue58-hwrt-forward-unsupported"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/hardware-ray-tracing-in-unreal-engine#supported-ray-tracing-features"
+section = "Epic Games, Hardware Ray Tracing in Unreal Engine, Unreal Engine 5.8 Documentation, Supported Ray Tracing Features (table, Rendering Path rows)"
+quote = '''The following list of features is intended to give you an idea of what is supported by our core hardware ray tracing features in Unreal Engine. [...] Feature Supported (Y/N/Partially) Additional Notes Rendering Path Deferred Y Forward N'''
+checked = 2026-10-30
+
+["gruen-2019-sottr-adaptive-rays"]
+url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9984-shadows-of-the-tomb-raider-ray-tracing-deep-dive.pdf"
+section = "Holger Gruen, Jon Story (NVIDIA), Michiel Roza (Nixxes), \"Shadows\" of the Tomb Raider – A Ray Tracing Deep Dive, GTC 2019 (S9984), slides 40-41 DXR Shaders: Adaptive raytracing"
+quote = '''• Adaptive raytracing is only used for ultra DXR quality • In this mode we cast more than 1 ray for some pixels [...] Phase 1 – Cast 1 ray per pixel Phase 2 – Cast up to 2 more rays ‚where necessary‘ Visibility: • Black => can’t see the light • White => can see the light [...] hitT: • Distance to blocker along ray'''
+checked = 2026-10-30
+
+["gruen-2019-sottr-point-sampling"]
+url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9984-shadows-of-the-tomb-raider-ray-tracing-deep-dive.pdf"
+section = "Holger Gruen, Jon Story (NVIDIA), Michiel Roza (Nixxes), \"Shadows\" of the Tomb Raider – A Ray Tracing Deep Dive, GTC 2019 (S9984), slide 60 DXR Shaders: TAA + Jittering"
+quote = '''• We typically shoot only one ray per pixel • Which is equivalent to ‘point sampling‘ of the visibility signal'''
+checked = 2026-10-30
+
+["jimenez-2012-smaa-1x-subpixel"]
+url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=6"
+section = "Jimenez, Echevarria, Sousa, Gutierrez, SMAA, Eurographics 2012 (doi:10.1111/j.1467-8659.2012.03014.x), p. 6 §4.3 Subpixel rendering and p. 8 §5 Results"
+quote = '''MLAA algorithms work with a single sample per pixel. This translates into subsampling, which makes it impossible to recover real subpixel features [...] Post-processing techniques using 1x (final display resolution) color inputs are unable to reconstruct accurate subpixel features (which accounts for all selected techniques with the exception of SSAA), producing artifacts like spurious pixels, gaps in surfaces and distracting effects due to subsampling.'''
+checked = 2026-10-30
+
+["jimenez-2012-smaa-cost"]
+url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=8"
+section = "Jimenez, Echevarria, Sousa, Gutierrez, SMAA: Enhanced Subpixel Morphological Antialiasing, Eurographics 2012, CGF 31(2) (doi:10.1111/j.1467-8659.2012.03014.x), p. 8, §5 Results"
+quote = '''Performance metrics are measured on a NVIDIA GeForce GTX 470 using 1080p images. Typical execution times for our technique are of 1.02 ms for SMAA 1x, 1.32 ms for SMAA T2x, 2.04 ms for SMAA S2x and 2.34 ms for SMAA 4x.'''
+checked = 2026-10-30
+
+["kerzner-2014-streaming-gbuffer-resolve"]
+url = "https://diglib.eg.org/server/api/core/bitstreams/6e9a1dd4-8a28-4322-baa6-38c6a52d2a3f/content"
+section = "E. Kerzner, M. Salvi, Streaming G-Buffer Compression for Multi-Sample Anti-Aliasing, High Performance Graphics 2014 (doi:10.2312/hpg.20141088), p. 4, section 3.3 Resolve"
+quote = '''The resolve pass computes final pixel color by accumulating each surface’s color contribution. For each pixel we compute the surface weights by counting each surface’s unoccluded samples. Next, we shade surfaces with non-zero weights. Finally, we output the weighted average of surface colors.'''
+checked = 2026-10-30
+
+["lecocq-2014-sub-pixel-shadow-mapping"]
+url = "https://jmarvie.com/publication/2014_03_i3d/i3d_2014_SubPixelShadowMapping.pdf"
+section = "Pascal Lecocq, Jean-Eudes Marvie, Gaël Sourimant, Pascal Gautron, Sub-Pixel Shadow Mapping, I3D 2014 (doi:10.1145/2556700.2556709), author preprint, Section 5, Anti-aliasing; Figure 11"
+quote = '''We propose an inexpensive alternative similar to MSAA that operates multi-sampling only at shadow boundaries, with minimal overhead. We simply reuse the piecewise linear function calculated at once and perform multiple shadow evaluation according to multisampling locations in the SPSM. This test is performed only for uncertain pixels, hence reducing the multi-sample shadow operations to a small portion of pixels in the image with a minimal cost (see Figure 11). [...] (a) SPSM without AA - 9.0 ms (b) SPSM with our AA - 9.3 ms'''
+checked = 2026-10-30
+
+["marrs-2019-ataa-compaction"]
+url = "https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_22.pdf"
+section = "Adam Marrs, Josef Spjut, Holger Gruen, Rahul Sathe, Morgan McGuire, Improving Temporal Antialiasing with Adaptive Ray Tracing, Ray Tracing Gems ch. 22, 2019 (doi:10.1007/978-1-4842-4427-2_22), pp. 364-365 section 22.4.2 Performance (Tables 22-1, 22-2)"
+quote = '''ATAA renders images at 1080p resolution, and the number of rays cast for antialiasing varies per frame according to the segmentation mask. [...] the segmentation mask identifies 103,838 pixels for ray [...] traced supersampling. These pixels represent just 5% of the total image resolution [...] One such algorithmic optimization of ATAA is to create a compact one-dimensional buffer that contains the location of pixels identified for ray traced supersampling, instead of a screen-space buffer that aligns with the segmentation mask, and only dispatch DXR Ray Generation shader threads for elements of the compacted buffer. [...] Compaction yields a 13% to 29% performance improvement over the original ATAA implementation'''
+checked = 2026-10-30
+
+["marrs-2019-ataa-subpixel-miss"]
+url = "https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_22.pdf"
+section = "Adam Marrs, Josef Spjut, Holger Gruen, Rahul Sathe, Morgan McGuire, Improving Temporal Antialiasing with Adaptive Ray Tracing, Ray Tracing Gems ch. 22, 2019 (doi:10.1007/978-1-4842-4427-2_22), p. 366 section 22.5 Limitations"
+quote = '''the segmentation mask is limited to discovering geometry with a single temporally jittered sample per pixel. As a result, subpixel geometry may be missed. This creates a spatial alternation between geometry appearing and not appearing in the segmentation mask, which therefore causes shifts between high-quality ray traced supersampling and entirely missed geometry. While rendering approaches to solve this problem almost exclusively include increasing the base sample rate'''
+checked = 2026-10-30
+
+["nvidia-nrd-sigma-penumbra"]
+url = "https://github.com/NVIDIA-RTX/NRD/blob/1ce73572445bc2ce0a322b94796b7e2b72048600/Shaders/NRD.hlsli#L985-L991"
+section = "NVIDIA, NRD, Shaders/NRD.hlsli, SIGMA_FrontEnd_PackPenumbra (commit 1ce7357; NVIDIA RTX SDKs licence)"
+quote = '''float SIGMA_FrontEnd_PackPenumbra( float distanceToOccluder, float tanOfLightAngularRadius )
+{
+    float penumbraSize = distanceToOccluder * tanOfLightAngularRadius;
+    float penumbraRadius = penumbraSize * 0.5;'''
+checked = 2026-10-30
+
+["reeves-1987-percentage-closer-filtering"]
+url = "https://my.eng.utah.edu/~cs5610/handouts/reeves87.pdf#page=2"
+section = "Reeves, Salesin, Cook, Rendering Antialiased Shadows with Depth Maps, SIGGRAPH 1987, Computer Graphics 21(4) (doi:10.1145/37402.37435), p. 284, §2 Percentage Closer Filtering"
+quote = '''Our solution reverses the order of the filtering and comparison steps. The z values of the depth map across the entire region are first compared against the depth of the surface being rendered. This sample transformation converts the depth map under the region into a binary image, which is then filtered to give the proportion of the region in shadow. The resulting shadows have soft, antialiased edges.'''
+checked = 2026-10-30
+
+["reshetov-2009-mlaa-hard-shadows"]
+url = "https://www.intel.cn/content/dam/develop/external/us/en/documents/z-shape-arm-785403.pdf#page=2"
+section = "Reshetov, Morphological Antialiasing, HPG 2009 (doi:10.1145/1572769.1572787), pp. 110-111, §2.1 Blending Hard Shadows"
+quote = '''The practical application for black-and-white implementation of MLAA is antialiasing of hard shadows. [...] At the first step of the algorithm, we search for all lines separating black pixels on one side and white pixels on another, keeping the longest ones. [...] Applied to hard shadows, black-and-white version of MLAA infers piecewise-linear approximation of a shadow silhouette from an image data.'''
+checked = 2026-10-30
+
+["reshetov-2009-mlaa-nyquist"]
+url = "https://www.intel.cn/content/dam/develop/external/us/en/documents/z-shape-arm-785403.pdf#page=2"
+section = "Reshetov, Morphological Antialiasing, HPG 2009 (doi:10.1145/1572769.1572787), p. 110, §1 Introduction"
+quote = '''Among the chief shortcomings of the proposed algorithm is its inability to handle features smaller than the Nyquist limit. This is similar to all other techniques that rely on a single sample per pixel to find features inside an image.'''
+checked = 2026-10-30
+
+["story-2015-hybrid-shadows-aa"]
+url = "https://developer.download.nvidia.com/assets/events/GDC15/hybrid_ray_traced_GDC_2015.pdf"
+section = "Jon Story (NVIDIA), Hybrid Ray-Traced Shadows, GDC 2015, slide 26 Anti-Aliasing"
+quote = '''Anti-Aliasing ● Shoot additional rays to achieve this? ● This is very expensive! ● Simple trick – apply a screen space AA technique (FXAA, MLAA, etc.)'''
+checked = 2026-10-30
+
+["story-2016-hfts-blog"]
+url = "https://developer.nvidia.com/hybrid-frustum-traced-shadows-0"
+section = "Jon Story (NVIDIA), Hybrid Frustum Traced Shadows, NVIDIA Developer blog (GDC 2016 write-up), section Anti-Aliasing"
+quote = '''It is of course possible to shoot additional rays to achieve an anti-aliased result, but not only is getting this correct quite tricky, it is also rather expensive. A simple trick is to make good use of a screen space AA technique such as FXAA. [...] In The Division the game engine already had an SMAA implementation in place, so this AA step came for free.'''
+checked = 2026-10-30
+
+["story-2016-hfts-division"]
+url = "http://cwyman.org/abstracts/sig2016_hfts.pdf"
+section = "Jon Story and Chris Wyman, HFTS: Hybrid Frustum-Traced Shadows in “The Division”, SIGGRAPH 2016 Talks (doi:10.1145/2897839.2927424), Section 2, Hybrid Frustum-Traced Shadows; Section 3, Results and its table"
+quote = '''Our hybrid thus transitions between IZB shadows and PCSS shadows depending on distance to the occluder; near contacts we use IZB shadows, further away we use PCSS. [...] Our hybrid shadows have been integrated into NVIDIA’s ShadowWorks library and shipped in Ubisoft’s Tom Clancy’s The Division. Below are some performance comparisons at 1920 × 1080 on a GeForce 980 GTX of a couple representative views. [...] Shadow cost per frame HFTS PCSS PCF All at 1920×1080 Bikes 8.1 ms 5.7 ms 2.9 ms Sitting worker 7.9 ms 4.6 ms 2.8 ms Truck 9.7 ms 5.5 ms 3.4 ms'''
+checked = 2026-10-30
+
+["story-2016-hfts-gdc"]
+url = "https://developer.download.nvidia.com/gameworks/events/GDC2016/jstory_hfts.pdf"
+section = "Jon Story, Advanced Geometrically Correct Shadows for Modern Game Engines, GDC 2016 (NVIDIA), slides 31 (Anti-Aliasing?) and 37 (Lerp factor)"
+quote = '''Anti-Aliasing? •Perform sub-pixel accurate frustum tests? • Perfectly possible to achieve • Yields really stable results • But comes at an additional cost •Simple trick – apply a screen space AA technique • FXAA • Great results • Very cheap • Possibly free – if you already use screen space AA [...] HFTS = lerp( FT, PCSS, L ) HFTS: Hybrid Shadow FT: Frustum Traced Hard Shadow (0 or 1)'''
+checked = 2026-10-30
+
+["unity-hdrp17-ray-tracing-msaa-incompatible"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/ray-tracing-introduction.html"
+section = "Unity Technologies, Introduction to ray tracing, High Definition Render Pipeline 17.0.4 manual, Ray tracing limitations: Feature compatibility, Rendering techniques"
+quote = '''Feature compatibility Ray tracing in HDRP isn't compatible with the following features. Rendering techniques [...] Multi-sample anti-aliasing (MSAA).'''
+checked = 2026-10-30
+
+["unity-urp-screen-space-shadows-texture"]
+url = "https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.universal/Runtime/RendererFeatures/ScreenSpaceShadows.cs#L172-L181"
+section = "Unity Technologies, Graphics repository at commit 0efc28ea, com.unity.render-pipelines.universal Runtime/RendererFeatures/ScreenSpaceShadows.cs, lines 108-113 and 173-181 (Unity Companion License)"
+quote = '''/// This pass reconstructs world positions from the depth prepass (cameraDepthTexture), [...] var desc = cameraData.cameraTargetDescriptor; desc.depthStencilFormat = GraphicsFormat.None; desc.msaaSamples = 1; [...] desc.graphicsFormat = SystemInfo.IsFormatSupported(GraphicsFormat.R8_UNorm, GraphicsFormatUsage.Blend) ? GraphicsFormat.R8_UNorm : GraphicsFormat.B8G8R8A8_UNorm;'''
+checked = 2026-10-30
+
+["wang-2015-dcaa-resolve-and-cost"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2015-08_Decoupled-Coverage-Anti-Aliasing/hpg15_DCAA.pdf"
+section = "Y. Wang, C. Wyman, Y. He, P. Sen, Decoupled Coverage Anti-Aliasing, High-Performance Graphics 2015 (doi:10.1145/2790060.2790068), p. 5, section 3 (resolve equation), section 5 Evaluation and Table 1"
+quote = '''The final pixel color C is a weighted average of surface colors: C = ∑ᵢ₌₁ˢ (nᵢ/N) cᵢ where S is the number of aggregate surfaces (S = 4 in our implementation), nᵢ is the number of sub-pixel coverage samples for the ith surface still visible after depth resolve and cᵢ is the shaded color of that surface, and N is the total number of samples (bits) in the coverage mask. [...] All results were rendered on a GeForce GTX 980 at 1920 × 1080, using extended OpenGL 4.5. [...] Scene Z-prepass Merge Resolve & Render Total [...] CITADEL 1.3 ms 23.2 ms 6.4 ms 30.9 ms'''
+checked = 2026-10-30
+
+["whitted-1980-adaptive-supersampling"]
+url = "https://doi.org/10.1145/358876.358882"
+section = "Turner Whitted, An Improved Illumination Model for Shaded Display, Communications of the ACM 23(6), 1980 (doi:10.1145/358876.358882), p. 346, section 3 (visible surface algorithm, anti-aliasing paragraphs)"
+quote = '''Aliasing in computer generated images is most apparent to the viewer in three cases: (1) at regions of abrupt change in intensity such as the silhouette of a surface, (2) at locations where small objects fall between sampling points and disappear, and (3) whenever a sampled function (such as texture) is mapped onto the surface. The visible surface algorithm looks for these cases and performs the filtering function only in these regions. [...] If the intensity values are not nearly equal (Figure 5(b)), the algorithm subdivides the sample square and starts over again.'''
+checked = 2026-10-30
+
+["whitted-1980-small-object-radius"]
+url = "https://doi.org/10.1145/358876.358882"
+section = "Turner Whitted, An Improved Illumination Model for Shaded Display, Communications of the ACM 23(6), 1980 (doi:10.1145/358876.358882), pp. 346 and 349, section 3 (visible surface algorithm)"
+quote = '''To ensure that small objects are not lost, a minimum radius (based on distance from the viewer) is allowed for bounding spheres of objects. This minimum is chosen so [...] that no matter how small the object, its bounding sphere will always be intersected by at least one ray. If a ray passes within a minimum radius of a bounding sphere but does not intersect the object, the algorithm will know to subdivide each of the four sample squares that share the ray until the missing object is found. Although [...] adequate for rays that reach the viewer directly, this scheme will not always work for rays being reflected from curved surfaces.'''
+checked = 2026-10-30
+
+["wyman-2015-frustum-traced-shadows"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2015-02_Frustum-Traced-Raster-Shadows/ftizb_cameraReady.pdf"
+section = "Chris Wyman, Rama Hoetzlein, Aaron Lefohn, Frustum-Traced Raster Shadows: Revisiting Irregular Z-Buffers, I3D 2015 (doi:10.1145/2699276.2699280), Abstract; Section 4, Antialiasing via Frustum-Triangle Tests"
+quote = '''We present a real-time system that renders antialiased hard shadows using irregular z-buffers (IZBs). For subpixel accuracy, we use 32 samples per pixel at roughly twice the cost of a single sample. [...] Like ray tracing, IZB shadows provide pixel accurate shadows. Naive extensions achieve subpixel accuracy via multiple sampling (e.g., shooting additional rays or using multiple IZB samples per pixel), but increase cost linearly with sample count.'''
+checked = 2026-10-30
+
+["wyman-2016-frustum-traced-izb"]
+url = "http://cwyman.org/papers/tvcg16_ftizbExtended.pdf"
+section = "Chris Wyman, Rama Hoetzlein, Aaron Lefohn, Frustum-Traced Irregular Z-Buffers: Fast, Sub-pixel Accurate Hard Shadows, IEEE TVCG 2016 (doi:10.1109/TVCG.2016.2572689), Section 4.1, Visibility Computation; Section 6.6, Final Render; Section 8, Alpha Mapped Textures in IZBs"
+quote = '''With the µQuad and shadow planes, we could compute perpixel shadow occlusion analytically. To allow easy accumulation between subsequent triangles, we instead discretize visibility as binary samples distributed over the µQuad. The number and distribution of samples are developer specified. We use 32 samples from a 2D Halton sampling. [...] We use this 10-bit lookup to index into a precomputed table, returning 32 binary visibility samples (with ones representing occlusion). We can bitwise AND the results from the lookups together to obtain a µQuad’s visibility from the triangle. [...] Our final render pass loads from the G-buffer (Section 6.1) and this mask and performs Phong shading modulated by the shadow mask. [...] The results of our per pixel shadow tests are stored in a visibility mask buffer (see Figure 5), but to enable efficient memory writes in this buffer we always store multiples of 32 bits for each pixel.'''
+checked = 2026-10-30
+
+["wyman-2016-frustum-traced-izb-timings"]
+url = "http://cwyman.org/papers/tvcg16_ftizbExtended.pdf"
+section = "Chris Wyman, Rama Hoetzlein, Aaron Lefohn, Frustum-Traced Irregular Z-Buffers: Fast, Sub-pixel Accurate Hard Shadows, IEEE TVCG 2016 (doi:10.1109/TVCG.2016.2572689), Section 9, Results and Discussion; Table 1 (columns: Chalmers Villa 89k, Bungie Building 255k, Epic Citadel 374k, Chalmers Citadel 613k, Bungie Terrain 1.5M, Hairball 2.9M, Tentacles 3.8M, GeeBee Plane 11.7M, Powerplant 12.3M)"
+quote = '''Unless otherwise specified, we report times on a GeForce Titan X at 1920×1080 and [...] rely on three NVIDIA-specific extensions for performance [...] (1st row) Performance breakdown for individual algorithmic steps for 32 spp (and 1 spp) IZB hard shadows. To allow comparison all scenes use identical, rather than optimal, settings: 1920 × 1080 resolution, 2 cascades each containing 2048² lists of IZB nodes, and using all optimizations. [...] Raster tris over IZB 1.5 (0.5) 3.7 (1.7) 3.7 (1.4) 5.7 (2.4) 6.6 (3.1) 12.4 (4.4) 7.9 (4.7) 38.6 (19.3) 26.1 (14.4) [...] Total Time (msec) 3.8 (2.2) 6.4 (3.7) 6.0 (3.2) 8.1 (4.3) 9.7 (5.5) 15.8 (7.0) 10.9 (7.2) 46.0 (26.0) 32.6 (20.1)'''
+checked = 2026-10-30
