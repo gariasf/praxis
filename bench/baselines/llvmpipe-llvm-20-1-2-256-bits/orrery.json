@@ -7,24 +7,24 @@
   "height": 360,
   "measured_frames": 256,
   "cpu_frame_microseconds": {
-    "median": 96775.616,
-    "p95": 108539.56300000001
+    "median": 76682.435,
+    "p95": 87373.94499999999
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 94173.244,
-    "p95": 105961.953
+    "median": 74210.824,
+    "p95": 84874.569
   },
   "gpu_frame_microseconds": {
-    "median": 96497.698,
-    "p95": 108227.038
+    "median": 76420.461,
+    "p95": 87108.683
   },
   "gate_microseconds": {
-    "median": 66925.913,
-    "p95": 76411.325
+    "median": 51358.843,
+    "p95": 60543.353
   },
   "shadow_ray_microseconds": {
-    "median": 22770.55900000001,
-    "p95": 31196.743000000002
+    "median": 18726.539000000004,
+    "p95": 25853.28300000001
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 890.615,
-      "p95": 1040.9060000000002
+      "median": 852.288,
+      "p95": 999.43
     },
     "culling_phase_two": {
-      "median": 284.059,
-      "p95": 318.25
+      "median": 281.268,
+      "p95": 319.63599999999997
     },
     "depth_prepass": {
-      "median": 2335.575,
-      "p95": 2755.7749999999996
+      "median": 1993.754,
+      "p95": 2336.069
     },
     "depth_pyramid_pass": {
-      "median": 1522.245,
-      "p95": 1764.673
+      "median": 1353.129,
+      "p95": 1794.864
     },
     "dynamic_tlas_build": {
-      "median": 2237.738,
-      "p95": 2300.533
+      "median": 2144.33,
+      "p95": 2232.3030000000003
     },
     "froxel_pass": {
-      "median": 402.416,
-      "p95": 510.541
+      "median": 256.087,
+      "p95": 386.41499999999996
     },
     "lit_pass": {
-      "median": 61696.422,
-      "p95": 71614.644
+      "median": 48751.682,
+      "p95": 56243.423
     },
     "phase_two_depth_pass": {
-      "median": 108.649,
-      "p95": 135.04899999999998
+      "median": 95.24000000000001,
+      "p95": 117.94800000000001
     },
     "shadow_mask_pass": {
-      "median": 21807.79,
-      "p95": 26859.07
+      "median": 16693.12,
+      "p95": 21367.27
     },
     "tonemapping_pass": {
-      "median": 3828.409,
-      "p95": 4041.05
+      "median": 3347.351,
+      "p95": 3609.8089999999997
     }
   },
   "draw_calls": 4,

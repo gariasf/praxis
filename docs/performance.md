@@ -4,6 +4,204 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## M3 exit (2026-10-30, #211)
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
+`515c33be`. `praxis bench <dir>` at 2560×1440 with 4x MSAA, 248 warm-up
+and 1,800 measured frames per scene, each scene with shadow rays on and
+then off. Four runs back to back, 16:48 to 17:03, at load average 3.8
+to 4.2 after the first run's 23.8 (a verify had just finished), from
+the browser and the window server, with no other session benching. GPU
+medians agree within 1.2% across runs 1, 3 and 4 for every scene but
+texture-wall (4.1%); run 2 reads 11.6% higher on `shadows`, 5.2% on
+`town` and 4.5% on the crowd. The Baselines are run 4, the quietest; the llvmpipe Baselines are CI's
+`bench-results` artifact from [run
+41084281627](https://github.com/gariasf/praxis/actions/runs/41084281627)
+(throwaway PR #402), every counter identical to the ones before.
+
+### Measurements
+
+Four runs of `praxis report <dir>` (medians and p95s; counters identical
+on every run), against the Baselines recorded before this exit:
+
+| Scene | CPU median µs | CPU p95 µs | GPU frame median µs | Gate median µs | Shadow-ray time median µs | CPU / GPU Baseline before, µs |
+|---|---|---|---|---|---|---|
+| crowd | 870.9 / 945.3 / 846.5 / 835.6 | 1,240.7 / 1,321.5 / 1,186.9 / 1,228.5 | 3,796.2 / 3,962.3 / 3,795.1 / 3,793.1 | 1,311.8 / 1,320.6 / 1,307.5 / 1,316.0 | 2,156.9 / 2,293.9 / 2,162.7 / 2,155.1 | 758.0 / 3,784.1 |
+| far-coplanar | 247.4 / 245.9 / 227.2 / 226.0 | 490.8 / 495.9 / 480.1 / 484.9 | 2,618.1 / 2,617.8 / 2,606.8 / 2,608.1 | 722.8 / 719.5 / 719.7 / 716.2 | 1,568.3 / 1,574.5 / 1,564.4 / 1,568.8 | 197.2 / 2,634.0 |
+| helmet | 284.0 / 360.6 / 267.9 / 250.3 | 516.3 / 568.5 / 537.4 / 537.8 | 7,181.0 / 7,164.8 / 7,156.1 / 7,149.2 | 1,235.0 / 1,238.2 / 1,233.7 / 1,232.2 | 5,619.6 / 5,603.5 / 5,600.3 / 5,595.1 | 188.1 / 7,092.6 |
+| minification | 316.4 / 251.3 / 234.4 / 206.5 | 586.5 / 501.7 / 488.0 / 429.9 | 2,979.1 / 2,969.2 / 2,966.0 / 2,961.9 | 887.0 / 886.1 / 884.7 / 882.5 | 1,768.0 / 1,759.3 / 1,758.0 / 1,755.8 | 202.0 / 4,976.1 |
+| normal-tangent | 259.9 / 234.2 / 222.6 / 216.7 | 484.1 / 477.7 / 451.0 / 455.2 | 3,528.5 / 3,522.7 / 3,517.8 / 3,518.3 | 811.7 / 814.4 / 812.1 / 810.8 | 2,393.8 / 2,384.8 / 2,382.3 / 2,384.1 | 221.5 / 3,505.3 |
+| orrery | 491.1 / 402.2 / 392.4 / 363.7 | 747.0 / 731.7 / 680.7 / 590.1 | 2,896.1 / 2,880.8 / 2,872.7 / 2,861.5 | 647.2 / 640.6 / 637.6 / 634.4 | 1,910.0 / 1,911.5 / 1,905.5 / 1,901.8 | 367.1 / 2,900.9 |
+| pbr-sweep | 233.6 / 246.1 / 225.2 / 214.4 | 500.4 / 496.0 / 459.1 / 445.0 | 3,861.4 / 3,849.3 / 3,831.8 / 3,840.4 | 796.0 / 784.9 / 778.5 / 776.9 | 2,721.2 / 2,722.8 / 2,715.9 / 2,723.5 | 184.1 / 3,817.0 |
+| shadows | 352.0 / 365.9 / 338.0 / 322.6 | 624.9 / 626.2 / 594.8 / 652.4 | 4,064.5 / 4,532.0 / 4,060.9 / 4,063.4 | 902.7 / 943.5 / 901.3 / 901.8 | 2,839.5 / 3,260.1 / 2,837.3 / 2,838.4 | 264.8 / 4,009.5 |
+| texture-wall | 2,389.3 / 2,360.0 / 2,293.1 / 2,097.3 | 3,074.5 / 3,031.9 / 2,836.1 / 2,363.5 | 15,689.5 / 15,581.8 / 15,449.9 / 15,078.0 | 13,843.3 / 13,887.9 / 13,698.2 / 13,551.7 | 349.4 / 223.7 / 289.3 / 42.5 | 2,201.2 / 15,471.6 |
+| town | 6,215.1 / 6,392.0 / 6,016.1 / 5,796.1 | 6,919.5 / 6,878.8 / 6,508.5 / 6,209.5 | 20,351.8 / 21,172.9 / 20,197.4 / 20,123.3 | 8,731.5 / 8,840.4 / 8,656.8 / 8,606.2 | 11,122.3 / 11,845.2 / 11,087.5 / 10,973.5 | 5,597.8 / 20,153.0 |
+| uv-grid | 241.7 / 238.2 / 212.8 / 209.6 | 433.6 / 496.3 / 446.0 / 427.4 | 2,806.8 / 2,803.8 / 2,797.6 / 2,797.0 | 780.5 / 779.6 / 775.1 / 775.3 | 1,702.7 / 1,701.7 / 1,698.8 / 1,698.9 | 187.4 / 2,789.7 |
+
+Every Baseline before but `town`'s was recorded at #394, before #397
+sized the shadow rays' offset and #381 made the bench spin-wait. Against
+them, run 4's CPU frames read −2 to +33%, and its GPU frames within 2.5%
+but minification's: 2.96 ms against 4.98, its shadow mask pass 1.6 ms
+against 3.6, a change from #397 or later whose cause is not measured
+here. `town`'s run 4 in full:
+
+**town** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 5,796.1 | 6,209.5 | 5,597.8 | 6,149.2 | +198.4 | 1.035 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,096.5 | 1,244.9 | 1,018.9 | 1,210.1 | +77.6 | 1.076 | 1,100.0 |
+| GPU frame | 20,123.3 | 20,372.5 | 20,153.0 | 20,775.0 | -29.7 | 0.999 | 12,000.0 |
+| Gate, rays off | 8,606.2 | 8,909.7 | 8,689.8 | 9,006.1 | -83.5 | 0.990 | 6,000.0 |
+| Shadow-ray time | 10,973.5 | 11,587.8 | 10,988.5 | 11,643.7 | -15.0 | 0.999 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,152.6 | 1,206.1 | 1,152.5 | 1,196.5 | +0.2 | 1.000 | — |
+| `culling_phase_two` | 175.5 | 190.9 | 171.8 | 185.1 | +3.8 | 1.022 | — |
+| `depth_prepass` | 2,124.4 | 2,215.3 | 2,134.6 | 2,225.6 | -10.2 | 0.995 | — |
+| `depth_pyramid_pass` | 260.5 | 268.7 | 260.0 | 270.4 | +0.5 | 1.002 | — |
+| `dynamic_tlas_build` | 0.0 | 82.1 | 0.0 | 99.1 | +0.0 | — | 1,000.0 |
+| `froxel_pass` | 586.7 | 627.7 | 589.2 | 617.7 | -2.5 | 0.996 | — |
+| `lit_pass` | 15,997.0 | 16,318.5 | 16,024.0 | 16,388.9 | -27.0 | 0.998 | — |
+| `phase_two_depth_pass` | 55.4 | 106.1 | 56.0 | 107.7 | -0.6 | 0.990 | — |
+| `shadow_mask_pass` | 12,114.1 | 12,604.1 | 12,161.0 | 12,627.1 | -46.9 | 0.996 | — |
+| `tonemapping_pass` | 6,498.2 | 6,741.5 | 6,517.2 | 6,783.2 | -19.0 | 0.997 | — |
+
+| Counter | Value | Baseline | Δ | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|
+| `draw_calls` | 4 | 4 | +0 | 1.000 | — |
+| `instances_drawn` | 137,730 | 137,730 | +0 | 1.000 | — |
+| `triangles_drawn` | 5,552,214 | 5,552,214 | +0 | 1.000 | — |
+| `instances_overflowed` | 0 | 0 | +0 | — | — |
+| `uploaded_bytes` | 2,049,344 | 2,049,344 | +0 | 1.000 | — |
+| `gpu_memory_bytes` | 764,009,588 | 764,009,588 | +0 | 1.000 | 8,000,000,000 |
+| `arena_bytes_in_use` | 85,280 | 85,280 | +0 | 1.000 | — |
+| `heap_allocations` | 10,501 | 10,501 | +0 | 1.000 | — |
+| `aliasing_rmse` | 5,142 | 5,142 | +0 | 1.000 | — |
+| `aliasing_p99` | 15,988 | 15,988 | +0 | 1.000 | — |
+
+Against ADR 0013's Budgets, which the owner kept at this exit
+([decision](https://github.com/gariasf/praxis/issues/211#issuecomment-6528039522)):
+
+- **GPU frame, 12 ms**: `town` 20.1 to 21.2 ms (168 to 176%) and
+  texture-wall 15.1 to 15.7 ms (126 to 131%) are over; the helmet's
+  7.2 ms is the next, every other scene at most 4.5 ms.
+- **ADR 0019's gate, 6 ms**: `town` 8.6 to 8.8 ms, over as accepted
+  until LOD ([#297](https://github.com/gariasf/praxis/issues/297));
+  texture-wall 13.6 to 13.9 ms, over; every other scene at most 1.3 ms.
+- **CPU frame, 6 ms**: `town` 5.80 to 6.39 ms at the median and 6.21 to
+  6.92 ms at p95, over at p95 in every run; texture-wall 2.1 to 2.4 ms;
+  every other scene at most 0.95 ms.
+- **Dynamic TLAS, 1.1 ms CPU and 1.0 ms GPU**: `town`'s CPU reads 1.10
+  to 1.26 ms, over in three of the four runs; its build reads 0 at the
+  median (hidden behind the previous frame, #207).
+- **GPU memory, 8 GB**: `town` 764,009,588 B (9.6%), every other scene
+  663 to 684 MB.
+
+### The crowd's two forms
+
+`praxis bench <dir> --crowd-form <form> crowd`, three rounds alternating
+the forms, update CPU and GPU as #209 defined them:
+
+| Form, round | Update CPU µs, median (p95) | Refit GPU µs, median (p95) | Build GPU µs, median (p95) | Update GPU µs, medians |
+|---|---|---|---|---|
+| Proxies 1 | 308.1 (457.1) | — | 0.0 (0.0) | 0.0 |
+| Proxies 2 | 297.9 (342.8) | — | 0.0 (0.0) | 0.0 |
+| Proxies 3 | 300.0 (328.0) | — | 0.0 (0.0) | 0.0 |
+| Refit 1 | 407.9 (574.0) | 1,099.2 (1,142.0) | 255.2 (292.3) | 1,354.5 |
+| Refit 2 | 404.3 (568.5) | 1,101.7 (1,153.3) | 254.9 (296.0) | 1,356.5 |
+| Refit 3 | 383.4 (440.3) | 1,102.0 (1,153.0) | 259.4 (302.5) | 1,361.5 |
+
+The proxies, the form the owner picked for M7, stay within 0.5 ms of CPU
+and 1.0 ms of GPU: their build now runs beside the previous frame and
+reads 0 at the median. The refit stays over the GPU Budget, as at #209.
+
+### Passes against their sources
+
+Each timed pass on `town` (run 4) beside its source's published cost,
+from the `cost` quotes in `docs/references.toml`. Costs that scale with
+pixels are scaled from 1920×1080 to 2560×1440 (×1.78); culling scales
+with Instances and the Froxel lists with Froxels times lights, which
+match their sources' counts, so those are compared unscaled. No source
+measured on an Apple GPU was found.
+
+| Pass | `town` µs | Source, hardware | Source µs, scaled | Ratio |
+|---|---:|---|---:|---:|
+| Depth pyramid | 260.5 | Haar and Aaltonen 2015, Xbox One, from 8×8 HTILE tiles [ref:haar-aaltonen-benchmark] | 107 | 2.4 |
+| Depth pyramid | 260.5 | Wihlidal 2016, Xbox One, level 0 of 16-bit depth [ref:wihlidal-2016-depth-tile-reduction] | 73 | 3.6 |
+| Culling, both phases | 1,328.1 | Haar and Aaltonen 2015, Xbox One, 250,000 objects [ref:haar-aaltonen-benchmark] | 670 | 2.0 |
+| Froxel lists | 586.7 | Drobot 2017, PS4, 256 lights in 76,800 clusters [ref:drobot-2017-cluster-rasterizer] | 320 to 900 | 0.7 to 1.8 |
+| Shadow mask | 12,114.1 | Boksansky et al. 2019, RTX 2080 Ti, four lights [ref:boksansky-2019-rt-hard-shadows] | 6,040 to 8,530 | 1.4 to 2.0 |
+| Lit pass | 15,997.0 | Drobot 2017, PS4, forward+ opaque, 256 lights [ref:drobot-2017-forward-plus-opaque] | 8,180 to 10,130 | 1.6 to 2.0 |
+| Tonemapping | 6,498.2 | none found with a stated resolution | — | — |
+
+- **The depth pyramid is over twice its source**, by either figure, and
+  is an offender whatever its Budget (#406). It reads 195 to 264 µs on
+  every scene, so the cost is the pass's, not `town`'s.
+- **Culling sits at twice its source**, 1.98 times; it is not over.
+- **The shadow mask** on `town` traces a ray for each light whose range
+  reaches the pixel, up to the mask's 59 (#260), against the source's
+  four, so the ratio there is an upper bound. On
+  the helmet, the sun and four lights, it reads 5,408 µs (0.6 to 0.9
+  times); on the crowd, the sun alone, 1,961 µs against 2,310 to 2,840
+  (0.7 to 0.85 times).
+- **The lit and tonemapping passes' timestamps** include time beside the
+  shadow mask pass: tonemapping's own cost is about 0.3 ms (#352), and
+  the lit pass read 5.15 ms with rays off at #207.
+
+### Where the cost goes
+
+- **GPU.** Shadow rays: on `town` the frame with rays on takes 11.0 ms
+  more than with them off, 91% of the 12 ms Budget; the shadow mask pass
+  reads 12.1 ms. It also has a fixed cost: 1.56 ms on uv-grid, two
+  triangles. On the helmet it read 2.5 ms when the mask landed (#260)
+  and 5.4 ms now, after the two-surface mask (#357) and the sun's
+  per-sample edge rays (#358). With rays off, `town`'s gate is the depth
+  pre-pass (2.1 ms), the culling phases (1.3 ms), the Froxel lists
+  (0.6 ms), the depth pyramid (0.26 ms) and the lit pass. texture-wall's
+  gate spans 13.6 ms while its passes from culling to the lit pass time
+  2.8 ms between them (#183, #399).
+- **CPU, `town`.** `sample` at 1 ms over one `praxis bench town` run,
+  12,734 main-thread samples: 5,722 (45%) wait in `Device::poll`. Of the
+  per-frame work, `FramePreparer::prepare`, the walk of `town`'s 254,256
+  Instances, is 2,074 samples; `Queue::submit` 1,374, of which wgpu-core's
+  `set_acceleration_structure_dependencies` is 754 (#352); `CommandEncoder::finish`
+  814, half of it the dynamic TLAS's encoder; the fixed schedule 445.
+- **CPU, the small scenes.** `sample` over helmet and pbr-sweep, 9,425
+  main-thread samples: 5,829 in `Device::poll`; encoding the frame
+  (`CommandEncoder::finish`) leads the per-frame work. The frame's upload
+  copies are 21 samples here and 26 on `town` (#140, closed).
+- **GPU memory.** `town`'s 764 MB is 9.6% of 8 GB; every other scene
+  holds 663 to 684 MB at 2560×1440.
+
+### Top three offenders
+
+Ranked by their share of a Budget, one per budgeted metric:
+
+1. **Shadow rays, 11.0 ms of `town`'s GPU frame** (91% of the 12 ms
+   Budget; the frame is 20.1 ms), with a fixed cost of 1.4 to 1.6 ms on
+   the simplest scenes. #404
+2. **`town`'s CPU frame, 6.21 to 6.92 ms at p95** (over 6 ms in every
+   run), with the dynamic TLAS's CPU over its 1.1 ms ceiling in three of
+   four runs: the Instance walk in prepare and wgpu-core's TLAS
+   bookkeeping. #405
+3. **texture-wall's GPU frame, 15.1 ms, and gate, 13.6 ms** (126% and
+   226% of their Budgets), its 10,000 bound Textures. #183
+
+Also an offender, by its source: the depth pyramid, 2.4 to 3.6 times its
+source's scaled cost (#406). #140, M1's upload copies, misses the top
+three and is closed. `town`'s gate stays over 6 ms by the owner's
+decision on #297.
+
+### Also seen
+
+- Run to run, the light scenes' pass lines switch between two modes
+  while the GPU frame holds: texture-wall's passes read 70 to 80% over
+  their Baseline in all four runs, minification's shadow mask pass 55%
+  under it (#399).
+- The visual audit's gallery found one new defect: dark specks at the
+  crowd's sunlit silhouettes, eleven pixels in both forms (#407).
+
 ## Queued `town` frames keep their pass overlap since the shadow mask pass dispatched indirectly (2026-10-30, #382)
 
 **Verdict.** The overlap #378 saw queued frames lose is back on `main`,
