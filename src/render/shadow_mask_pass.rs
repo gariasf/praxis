@@ -74,9 +74,9 @@ pub struct ShadowMaskPass {
     /// Traces the listed second surfaces.
     second_surfaces_pipeline: wgpu::ComputePipeline,
     /// Lists the pixels at a directional light's shadow edge.
-    shadow_edges_pipeline: wgpu::ComputePipeline,
+    list_shadow_edges_pipeline: wgpu::ComputePipeline,
     /// Traces the listed shadow edges again from each sample.
-    sample_verdicts_pipeline: wgpu::ComputePipeline,
+    trace_shadow_edges_pipeline: wgpu::ComputePipeline,
     shadow_ray_scene: wgpu::BindGroup,
     layout: wgpu::BindGroupLayout,
     /// The camera, the lights' counts, the lights and the Froxel lists.
@@ -199,8 +199,8 @@ impl ShadowMaskPass {
         ShadowMaskPass {
             nearest_surfaces_pipeline: pipeline("build_shadow_mask"),
             second_surfaces_pipeline: pipeline("trace_second_surfaces"),
-            shadow_edges_pipeline: pipeline("list_shadow_edges"),
-            sample_verdicts_pipeline: pipeline("trace_shadow_edges"),
+            list_shadow_edges_pipeline: pipeline("list_shadow_edges"),
+            trace_shadow_edges_pipeline: pipeline("trace_shadow_edges"),
             shadow_ray_scene,
             layout,
             buffers,
@@ -365,7 +365,7 @@ impl ShadowMaskPass {
             &[],
         );
         pass.dispatch_workgroups_indirect(&self.second_surface_dispatch, 0);
-        pass.set_pipeline(&self.shadow_edges_pipeline);
+        pass.set_pipeline(&self.list_shadow_edges_pipeline);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
             &self.nearest_surfaces_bind_group,
@@ -376,7 +376,7 @@ impl ShadowMaskPass {
             height.div_ceil(SHADOW_MASK_TILE_SIZE),
             1,
         );
-        pass.set_pipeline(&self.sample_verdicts_pipeline);
+        pass.set_pipeline(&self.trace_shadow_edges_pipeline);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
             &self.sample_verdicts_bind_group,

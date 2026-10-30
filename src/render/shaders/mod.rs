@@ -29,6 +29,9 @@ use crate::render::shadow_mask_pass::{
 use crate::render::targets::{LUMINANCE_COEFFICIENTS, SAMPLE_COUNT};
 use crate::render::tonemapping_pass::DITHER_MASK_SIDE;
 
+/// Every sample of a pixel, a bit each, as WGSL declares `ALL_SAMPLES`.
+const ALL_SAMPLES: u32 = (1 << SAMPLE_COUNT) - 1;
+
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
 
@@ -255,7 +258,8 @@ impl ShaderModule {
              const SHADOW_MASK_TILE_SIZE: u32 = {SHADOW_MASK_TILE_SIZE}u;\n\
              const SHADOW_MASK_LIGHTS: u32 = {SHADOW_MASK_LIGHTS}u;\n\
              const SHADOW_EDGE_LIGHTS: u32 = {SHADOW_EDGE_LIGHTS}u;\n\
-             const SAMPLE_COUNT: u32 = {SAMPLE_COUNT}u;\n",
+             const SAMPLE_COUNT: u32 = {SAMPLE_COUNT}u;\n\
+             const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

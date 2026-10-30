@@ -125,9 +125,6 @@ fn masked(mask: vec2<u32>, bit: u32) -> bool {
     return bit < SHADOW_MASK_LIGHTS && ((half >> (bit & 31u)) & 1u) == 1u;
 }
 
-// Every sample of a pixel, a bit each.
-const ALL_SAMPLES: u32 = (1u << SAMPLE_COUNT) - 1u;
-
 // The share of the samples a fragment covers, `covered_samples`, from which
 // the directional light at `index` of the light buffer is hidden: where the
 // fragment shades the pixel's nearest surface, from `sample_verdicts`, the

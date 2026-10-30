@@ -174,15 +174,22 @@ fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) ->
     );
 }
 
-// Whether the directional light at `index` of the light buffer is hidden
-// from `surface`, and whether a ray found it so: a light the interpolated
-// normal turns from is hidden by the surface itself, with no ray.
-fn directional_verdict(surface: SampleSurface, index: u32) -> vec2<bool> {
+// Whether a directional light is hidden from a surface, and whether a ray
+// found it so: a light the interpolated normal turns from is hidden by the
+// surface itself, with no ray.
+struct Verdict {
+    hidden: bool,
+    traced: bool,
+}
+
+// The directional light at `index` of the light buffer's verdict at
+// `surface`.
+fn directional_verdict(surface: SampleSurface, index: u32) -> Verdict {
     let direction = normalize(-lights[index].offset);
     let traced = dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
     let hidden = !traced
         || shadowed(surface.position, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
-    return vec2<bool>(hidden, traced);
+    return Verdict(hidden, traced);
 }
 
 // The bits for the pixel's lights whose rays a surface found hidden, with
@@ -213,10 +220,10 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
                 continue;
             }
             let verdict = directional_verdict(surface, index);
-            if verdict.x {
+            if verdict.hidden {
                 hidden = with_bit(hidden, index);
             }
-            if verdict.y && index < SHADOW_EDGE_LIGHTS {
+            if verdict.traced && index < SHADOW_EDGE_LIGHTS {
                 traced |= 1u << index;
             }
         }
@@ -358,9 +365,9 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
     // The first SHADOW_EDGE_LIGHTS directional lights' bits, each the
     // verdict at every sample of the nearest surface until
     // `trace_shadow_edges` traces it again from the others.
-    let edge_lights = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
-    let hidden = nearest.word.x & ((1u << edge_lights) - 1u);
-    let sample_verdicts = at_every_sample(hidden, edge_lights);
+    let edge_light_count = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
+    let hidden = nearest.word.x & ((1u << edge_light_count) - 1u);
+    let sample_verdicts = at_every_sample(hidden, edge_light_count);
     textureStore(
         shadow_mask_samples,
         pixel,
@@ -397,9 +404,6 @@ fn trace_second_surfaces(
     let surface = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
     textureStore(shadow_mask, pixel, 1, vec4<u32>(surface.word, 0u, 0u));
 }
-
-// Every sample of a pixel, a bit each.
-const ALL_SAMPLES: u32 = (1u << SAMPLE_COUNT) - 1u;
 
 // The first `light_count` lights' bits of `hidden`, each repeated at every
 // sample, SAMPLE_COUNT bits per light, as the lit pass reads them from the
@@ -512,8 +516,8 @@ fn trace_shadow_edges(
     let nearest = first_sample_of(depths, max(max(depths.x, depths.y), max(depths.z, depths.w)));
     // Each light's verdict at the nearest sample, at every sample, until
     // traced again.
-    let lights_traced = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
-    var sample_verdicts = at_every_sample((own >> VERDICT_HIDDEN_SHIFT) & EDGE_LIGHTS, lights_traced);
+    let edge_light_count = min(light.directional_light_count, SHADOW_EDGE_LIGHTS);
+    var sample_verdicts = at_every_sample((own >> VERDICT_HIDDEN_SHIFT) & EDGE_LIGHTS, edge_light_count);
     for (var sample = 0u; sample < SAMPLE_COUNT; sample++) {
         let depth = depths[sample];
         // The nearest sample's verdict stands; another surface's samples
@@ -522,12 +526,12 @@ fn trace_shadow_edges(
             continue;
         }
         let surface = sample_surface(pixel, sample, depth, vec2<f32>(size));
-        for (var index = 0u; index < lights_traced; index++) {
+        for (var index = 0u; index < edge_light_count; index++) {
             if ((edge_lights >> index) & 1u) == 0u {
                 continue;
             }
             let bit = 1u << (SAMPLE_COUNT * index + sample);
-            sample_verdicts = select(sample_verdicts & ~bit, sample_verdicts | bit, directional_verdict(surface, index).x);
+            sample_verdicts = select(sample_verdicts & ~bit, sample_verdicts | bit, directional_verdict(surface, index).hidden);
         }
     }
     textureStore(

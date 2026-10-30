@@ -139,7 +139,8 @@ src/
                                  pass that traces each pixel's shadow
                                  rays from the depth target into the
                                  shadow mask the lit pass reads, and
-                                 sun shadow edges again per sample;
+                                 directional lights' shadow edges again
+                                 per sample;
                                  depth_pyramid_pass: the compute pass
                                  that reduces the pre-pass's depth into
                                  the depth pyramid, ADR 0019's Hi-Z
