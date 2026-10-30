@@ -4,6 +4,111 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## minification's far moiré is in the box-filtered reference (2026-10-30, #359)
+
+**Verdict.** The arcs and diagonal stripes in `minification`'s far
+checker band at 2560×1440 are in the supersampled reference too, so no
+step of the texture path aliases them: they are what a box over each
+pixel lets through. A reference that integrates the checker exactly over
+each of 3×3 subpixels, box-filtered in linear light, shows the same arcs
+at the same places and strength, and the capture lies 1.68 8-bit steps
+RMSE from it in the band's sides. The Apple sampler, the cooker's box
+mips and their BC encoding each move the band by less than a step, the
+16x clamp by 1.3 steps, about as much as the 1x and 3x references
+differ, and none of them makes or removes the arcs. A Gaussian
+reconstruction of the same exact subpixels instead of a box removes most
+of the arcs, at the cost of blurring the resolved checks; that is a
+choice of filter, a technique decision, not a defect to fix here.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
+`7442717a`, and of `7442717a` with a measurement patch, not committed,
+that replaces the lit pass's albedo sample with a variant chosen by an
+environment variable and reads the colour sampler's anisotropy from
+another. Its control, today's sample at 16x, matches `7442717a`'s
+capture pixel for pixel. Every image is `praxis capture minification` at
+the Golden's frame, 59, at 2560×1440 or at 7680×4320 reduced to
+2560×1440 with a box in linear light (`magick -colorspace RGB -filter box
+-resize`). The far band is rows 495 to 599, the floor from about 60 m to
+15 m out along the centre, where a pixel's footprint along the floor is
+14 to 0.9 periods of the checker's 1/8 m; it is scored on its outer 800
+pixels each side, where the moiré is strongest and the light's
+reflection, which specular antialiasing widens more at 1x than at 3x,
+does not reach. The checker's period across the view stays about 4 to
+14 pixels there, so the checks stay resolved across and unresolved along.
+
+The variants, each an albedo for the same lighting:
+
+- **Exact.** The checker's mean over the pixel's footprint, the
+  parallelogram `uv ± dpdx(uv)/2 ± dpdy(uv)/2`: exact along its longer
+  side, stepping cell to cell, at 32 lines across the shorter. A 16×16
+  grid of point samples of the checker agrees with it within 1.32 steps
+  at 3x, so the reference has converged.
+- **Software filter, Vulkan rule.** N bilinear taps of the cooked mips,
+  spaced evenly over the pixel along its longer screen derivative, at the
+  level and count the Vulkan specification gives, `log2(major / N)` with
+  N = `ceil(major / minor)`, clamped at 16 or not
+  [ref:vulkan-anisotropy-lod].
+- **Mip 0.** A 16×16 grid of bilinear samples of the cooked mip 0, BC
+  included, at 3x.
+- **Anisotropy 8x and 1x.** Today's sample with the sampler's anisotropy
+  clamped lower.
+
+Far band, in 8-bit steps: the moiré's strength as the standard deviation
+of the band's grey minus its Gaussian blur of σ 6 px, and RMSE against the
+two exact references:
+
+| Image | Moiré | RMSE against exact, 3x box | RMSE against exact, 1x |
+|---|---:|---:|---:|
+| Capture, `7442717a` | 6.21 | 1.68 | 1.44 |
+| Exact, 3x box (the reference) | 6.01 | 0 | 1.17 |
+| Exact, 1x | 6.35 | 1.17 | 0 |
+| Hardware sample, 3x box (the ticket's reference) | 6.00 | 0.48 | 1.24 |
+| Software filter, 16 taps at most | 6.20 | 1.67 | 1.43 |
+| Software filter, unclamped | 6.27 | 1.13 | 0.49 |
+| Mip 0, 3x box | 5.99 | 0.91 | 1.45 |
+| Anisotropy 8x | 5.63 | 2.99 | 3.14 |
+| Anisotropy 1x | 0.38 | 10.52 | 11.02 |
+| Exact, 3x, Gaussian of σ 0.75 px (`magick -filter gaussian`) | 1.48 | 9.05 | 9.59 |
+
+- **The reference has it.** Both 3x references, exact and hardware,
+  carry the moiré at the capture's strength, and their crops show the
+  same arcs in the same places. A box's mean of detail finer than itself
+  never settles to zero: it leaves a residue that shrinks only slowly as
+  the footprint grows and changes sign as the footprint gains or loses
+  part of a period, and one sample per pixel of that residue beats into
+  the arcs.
+- **The adapter's anisotropic approximation.** The capture lies 0.23
+  steps from the software filter at 16 taps, so on this floor the M4
+  Pro's sampler filters as one built from the Vulkan rule does; the
+  specification leaves the scheme to the implementation.
+- **The LOD the clamp picks.** Past 16 the clamp reads a coarser mip and
+  blurs across the view, as the ticket expected, but along the view its
+  16 taps still cover the footprint, which is where the moiré lives:
+  unclamped, the software filter comes within 0.49 steps of the exact 1x
+  mean, and keeps the moiré. Clamped and unclamped differ by 1.30
+  steps.
+- **The cooker's mips and BC.** The unclamped software filter reads the
+  cooked mips and comes within 0.49 steps of the exact mean; mip 0, BC encoded,
+  within 0.91 of the exact reference.
+- **What would remove it.** A filter wider than the pixel, here a
+  Gaussian over the 3x subpixels, takes the moiré from 6.0 to 1.5 and
+  blurs the checks that the box resolves, 9 steps from the box reference.
+  Choosing a pixel filter, or a texture filter wider than the pixel, is a
+  technique decision (`docs/agents/workflow.md`, Tickets), proposed as
+  #388; ADR 0008 rules out the temporal kind.
+
+Images, on the `pr-images` branch at `47f4fe3`: the
+[capture](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/capture.png),
+the [exact reference](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/reference-exact.png),
+the [hardware reference](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/reference-hardware.png),
+the capture's [difference](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/difference-capture-vs-reference-exact.png)
+from the exact reference, mostly the light's reflection, and the far
+band's sides doubled, the capture above the references and the Gaussian
+([left](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/far-band-left-2x.png),
+[right](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/far-band-right-2x.png))
+and the software filters beside the exact 1x mean
+([left](https://raw.githubusercontent.com/gariasf/praxis/47f4fe3ee0354fc0c574c3f81ea81cd680be9704/359/far-band-left-2x-filters.png)).
+
 ## Option D, a visibility buffer, prototyped on `town`: the gate stays past 6 ms (2026-10-28, #297)
 
 **Verdict.** Option D does not reach ADR 0019's gate on `town` and does
