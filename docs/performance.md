@@ -57,8 +57,9 @@ warning; its refit form's does not move.
 bounds, which hold every shape the bend pass gives a bent Mesh, placed
 by the entry's transform, inside the loop that fills the TLAS's entries.
 Each Mesh's box grows first by 2^-8 of its largest coordinate, for the
-bend pass's fast-math sine and cosine, which err by up to 2^-13
-[ref:msl-4.1-sin-fast-accuracy]; the shader grows the whole box by 2^-16
+bend pass's fast-math sine, which errs by up to 2^-13 within ±π
+[ref:msl-4.1-sin-fast-accuracy], and its cosine, which no specification
+bounds, by estimate; the shader grows the whole box by 2^-16
 of the largest coordinate of its corners and the ray's origin, the share
 a shadow ray's origin leaves its surface by, for rounding in placing and
 intersecting. The test is a separating-axis test with no division, cut

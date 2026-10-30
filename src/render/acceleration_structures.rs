@@ -418,12 +418,13 @@ fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::Tl
 }
 
 /// The share of a Mesh's largest coordinate its box grows by before it is
-/// placed, for the bend pass's rounding: under Metal's fast math, sine and
-/// cosine err by up to 2^-13 [ref:msl-4.1-sin-fast-accuracy], and a bent
-/// vertex, built from a few of them over its height and its distance from
-/// the middle, lands off its exact shape by a few times that share of its
-/// distance from the Mesh's origin, by estimate. Every Mesh grows, as which
-/// ones bend is not known here.
+/// placed, for the bend pass's rounding: under Metal's fast math, sine errs
+/// by up to 2^-13 within ±π [ref:msl-4.1-sin-fast-accuracy], and a bent
+/// vertex, built from a few sines and cosines over its height and its
+/// distance from the middle, lands off its exact shape by a few times that
+/// share of its distance from the Mesh's origin, by estimate, as no
+/// specification bounds cosine or angles past ±π, which an azimuth can be.
+/// Every Mesh grows, as which ones bend is not known here.
 const BEND_ROUNDING_SHARE: f32 = 0.00390625; // 2^-8
 
 /// The box that holds `bounds`, a Mesh's box, its lowest corner then its
