@@ -390,6 +390,12 @@ section = "Vulkan specification, Multisampling, table Standard Sample Locations"
 quote = '''If the pname:standardSampleLocations member of slink:VkPhysicalDeviceLimits is ename:VK_TRUE, then the sample counts [...] have sample locations as listed in the following table [...] Locations are defined relative to an origin in the upper left corner of the fragment. [...] ename:VK_SAMPLE_COUNT_1_BIT: (0.5,0.5) [...] ename:VK_SAMPLE_COUNT_2_BIT: (0.75,0.75) (0.25,0.25) [...] ename:VK_SAMPLE_COUNT_4_BIT: (0.375, 0.125) (0.875, 0.375) (0.125, 0.625) (0.625, 0.875)'''
 checked = 2026-10-28
 
+["vulkan-anisotropy-lod"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/textures.adoc?plain=1#L1645-L1694"
+section = "Vulkan specification 1.4.367, Textures, Scale Factor Operation and LOD Operation"
+quote = '''The ratio of anisotropy is determined by: η = min(ρmax/ρmin, maxAniso) [...] The sampling rate (N) is derived as: N = ⌈η⌉ [...] An implementation may use the value of N as an approximation of η. [...] The LOD parameter λ is computed as follows: [...] λbase(x,y) = [...] log₂(ρmax/η) otherwise'''
+checked = 2026-10-30
+
 ["vulkan-acceleration-structure-instance"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml#L6713-L6725"
 section = "Vulkan registry, structs VkTransformMatrixKHR and VkAccelerationStructureInstanceKHR: 48 + 4 + 4 + 8 = 64 bytes"
