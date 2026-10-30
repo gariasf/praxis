@@ -8,10 +8,11 @@ its top three offenders and the tickets that take them.
 
 **Verdict.** When `town` is GPU-bound, the main thread blocks for the
 oldest frame in flight in every frame, and in most runs its P-core then
-runs about 30% slower for the whole frame. A fixed chain of 2,000
+runs about 30% slower for the whole frame. The clock is read through
+work, not a counter (`powermetrics` needs root): a fixed chain of 2,000
 dependent multiply-adds, timed on the main thread at three points of
-each frame, takes 2.54–2.75 µs in those runs against 1.92–2.04 µs
-otherwise, and `prepare_frame` slows by the same ratio, 1,812 against
+each frame, takes 2.67–3.17 µs in those runs against 1.92–2.04 µs
+spin-waiting, and `prepare_frame` slows by the same ratio, 1,812 against
 1,307 µs. The thread never runs on an efficiency core and stays on one
 P-core cluster across the wait, so neither migration nor a cold L2
 explains it; its priority does not move it either. Spin-waiting for the
@@ -32,11 +33,14 @@ same chain on each), logged each CPU stage's median, and switched by
 environment variable the frames in flight, a spin-wait (`device.poll`
 with a zero timeout, in a loop) and a fixed priority of 45 set with
 `pthread_setschedparam`. `praxis bench <dir> --skip-aliasing town` at
-2560×1440 with 4x MSAA, 1,800 measured frames, no other GPU work.
+2560×1440 with 4x MSAA, 1,800 measured frames, no other GPU work; the
+patch's core counts span every frame after the first 100, 1,948 a run.
 
-Medians in µs; the chain's medians with rays on, at the frame's start,
-after `update` and after `render`. Runs in the order they ran; the
-default's first run was the only one with a fast clock.
+Medians in µs, from the patch's log rather than `praxis report`, whose
+tables hold neither stages nor the chain; the chain's medians with rays
+on, at the frame's start, after `update` and after `render`. Runs in the
+order they ran; the default's first run was the only one with a fast
+clock.
 
 | Run | CPU frame | Dynamic TLAS, CPU | GPU frame | `prepare_frame` | `propagate_world_transforms` | `encode` | `submit` | Chain: start, update, render |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
@@ -76,15 +80,21 @@ What the measurements say about the cause:
   beside the GPU and stays slow throughout.
 - **Not priority or QoS.** The main thread of a process started from a
   shell reports `QOS_CLASS_USER_INTERACTIVE` (`0x21`), but the kernel
-  holds it at priority 31, the default class's: a process without an
-  application role has the interactive and initiated classes lowered to
-  the legacy one [ref:xnu-task-policy-role-qos-ceiling], so a QoS call
-  changes nothing. A fixed priority of 45,
+  holds it at priority 31, the default class's, whichever class a QoS
+  call asks for. The kernel lowers the interactive and initiated classes
+  to the legacy one for an app-type task without an application role
+  [ref:xnu-task-policy-role-qos-ceiling], which fits what was measured.
+  A fixed priority of 45,
   what Apple recommends for a game's render thread
   [ref:apple-wwdc18-612-render-thread-priority], took effect and left the
   stages as slow as the default.
 - **Not migration.** No frame ran on an efficiency core and the
   performance cluster held across the wait, so the L2 stays warm.
+- **Not all of it.** The first default run kept a fast clock, yet its
+  `encode` and `submit` read 283 and 2,710 µs against spin-waiting's
+  201–205 and 2,067–2,073, and its CPU frame 5,986. Blocking costs
+  about 1 ms there that the clock does not explain; this note does not
+  find what.
 
 The ticket's stages from #378 do not all reproduce: `prepare_frame` now
 reads 1,812 µs blocked and 1,307 spin-waiting. #358's sun shadow edge
@@ -129,14 +139,43 @@ previous Baseline:
 | Gate, rays off | 8,689.8 | 9,006.1 | 8,686.5 | 8,968.4 | +3.2 | 1.000 | 6,000.0 |
 | Shadow-ray time | 10,988.5 | 11,643.7 | 11,271.8 | 12,273.6 | -283.2 | 0.975 | — |
 
-The dynamic TLAS's CPU line is under its 1.1 ms ceiling at the median;
-the CPU frame is under 6 ms at the median but not at the p95. An
-interleaved pair from one build, switched between the two waits, read
-8,180.0 and 4,977.2 µs for the CPU frame, 1,567.8 and 943.5 µs for the
-dynamic TLAS, and 20,473.1 and 20,759.1 µs for the GPU frame. That pair's
-GPU frame is 1.4% longer spin-waiting, where the earlier runs' were
-within 40 µs; a busy P-core may take power the GPU would otherwise have,
-and judging GPU lines needs that in mind.
+The dynamic TLAS's CPU line is under its 1.1 ms ceiling at the median,
+not at the p95; the CPU frame is under 6 ms at the median but not at the
+p95. Two full runs read 5,529–5,598 µs for the CPU frame, against
+4,977–5,127 in the `--skip-aliasing` pair below, so the Baseline is the
+looser of the two forms.
+
+Against the runs with one frame in flight, the GPU idle at each frame's
+start, spin-waiting's stages read `prepare_frame` 1,307 against
+1,260–1,286 µs, within 4%, but `propagate_world_transforms` up to 14%
+over and `encode` 21–24% over, so the ticket's 5% holds for the largest
+stage only. CI's lavapipe keeps the blocking wait: its rasterizer runs
+on the CPU, where a spinning main thread would take a core from it. The
+RTX 2070 SUPER's Baselines were recorded blocking. An
+interleaved pair from one build, switched between the two waits by a
+patch, `--skip-aliasing`, each against the previous Baseline; blocking:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 8,180.0 | 9,032.9 | 8,223.8 | 9,431.9 | -43.8 | 0.995 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,567.8 | 1,752.5 | 1,566.1 | 1,792.4 | +1.7 | 1.001 | 1,100.0 |
+| GPU frame | 20,473.1 | 21,132.3 | 20,489.1 | 21,334.4 | -16.0 | 0.999 | 12,000.0 |
+| Gate, rays off | 8,798.4 | 9,263.1 | 8,686.5 | 8,968.4 | +111.9 | 1.013 | 6,000.0 |
+| Shadow-ray time | 11,167.7 | 12,096.2 | 11,271.8 | 12,273.6 | -104.1 | 0.991 | — |
+
+Spin-waiting:
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 4,977.2 | 5,392.8 | 8,223.8 | 9,431.9 | -3,246.6 | 0.605 | 6,000.0 |
+| Dynamic TLAS, CPU | 943.5 | 1,057.5 | 1,566.1 | 1,792.4 | -622.6 | 0.602 | 1,100.0 |
+| GPU frame | 20,759.1 | 21,608.2 | 20,489.1 | 21,334.4 | +270.0 | 1.013 | 12,000.0 |
+| Gate, rays off | 8,911.1 | 9,474.8 | 8,686.5 | 8,968.4 | +224.6 | 1.026 | 6,000.0 |
+| Shadow-ray time | 11,287.0 | 12,390.2 | 11,271.8 | 12,273.6 | +15.2 | 1.001 | — |
+
+That pair's GPU frame is 1.4% longer spin-waiting, where the earlier
+runs' were within 40 µs; a busy P-core may take power the GPU would
+otherwise have, and judging GPU lines needs that in mind.
 
 On the light scenes, `pbr-sweep` and `normal-tangent`, `lit_pass` and
 `tonemapping_pass` read about 490 and 795 µs in some runs and 3,000 and

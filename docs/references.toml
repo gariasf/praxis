@@ -3828,7 +3828,7 @@ checked = 2026-10-30
 
 ["xnu-task-policy-role-qos-ceiling"]
 url = "https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task_policy.c#L879-L883"
-section = "xnu, osfmk/kern/task_policy.c, the task's effective QoS ceiling by role, lines 879-883 (APSL 2.0; cited, not copied)"
+section = "xnu, osfmk/kern/task_policy.c, the effective QoS ceiling of an app-type task (TASK_APPTYPE_APP_DEFAULT or APP_NONUI, lines 832-833) by role, lines 879-883 (APSL 2.0; cited, not copied)"
 quote = '''case TASK_UNSPECIFIED:
 		default:
 			/* Apps that don't have an application role get

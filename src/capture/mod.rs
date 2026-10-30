@@ -234,23 +234,19 @@ pub(crate) fn render_frames(
         next_frame = frame + 1;
         if in_flight.len() == FRAMES_IN_FLIGHT {
             let oldest = in_flight.pop_front();
-            match wait {
-                FrameWait::Block => {
-                    context.device.poll(wgpu::PollType::Wait {
-                        submission_index: oldest,
-                        timeout: None,
-                    })?;
+            let timeout = match wait {
+                FrameWait::Block => None,
+                FrameWait::Spin => Some(Duration::ZERO),
+            };
+            loop {
+                match context.device.poll(wgpu::PollType::Wait {
+                    submission_index: oldest.clone(),
+                    timeout,
+                }) {
+                    Ok(_) => break,
+                    Err(wgpu::PollError::Timeout) => std::hint::spin_loop(),
+                    Err(error) => return Err(error.into()),
                 }
-                FrameWait::Spin => loop {
-                    match context.device.poll(wgpu::PollType::Wait {
-                        submission_index: oldest.clone(),
-                        timeout: Some(Duration::ZERO),
-                    }) {
-                        Ok(_) => break,
-                        Err(wgpu::PollError::Timeout) => std::hint::spin_loop(),
-                        Err(error) => return Err(error.into()),
-                    }
-                },
             }
         }
         state.world.insert_resource(scene.camera_at(frame, shift));
@@ -272,15 +268,16 @@ pub(crate) fn render_frames(
 }
 
 /// How `render_frames` waits for the oldest frame in flight.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) enum FrameWait {
     /// Blocks, as a window does in `get_current_texture`.
     Block,
     /// Polls until the frame is done. Behind a GPU-bound frame, the M4 Pro
     /// runs a main thread that blocks about 30% slower for the whole next
-    /// frame, so its CPU times would measure the clock, not the work. Apple asks games not to busy-wait, which holds a P-core
-    /// and spends thermal headroom [ref:apple-tech-talk-110147-busy-waits],
-    /// so only the bench spins.
+    /// frame, so its CPU times would measure the clock, not the work. Apple
+    /// asks games not to busy-wait, which holds a P-core and spends thermal
+    /// headroom [ref:apple-tech-talk-110147-busy-waits], so only the bench
+    /// spins, on a hardware adapter.
     Spin,
 }
 
