@@ -6,6 +6,9 @@ pub struct Mesh {
     pub needs_material_handle: bool,
     /// Its range of the vertex Arena, which a bend writes.
     pub vertices: std::ops::Range<u32>,
+    /// The box that holds its vertices, and every shape a bend gives them,
+    /// its lowest corner then its highest, as the Mesh table holds it.
+    pub bounds: [[f32; 3]; 2],
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

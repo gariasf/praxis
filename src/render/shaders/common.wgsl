@@ -7,7 +7,9 @@
 // World position arrives as the anchor of its grid cell plus an offset, its
 // exposure as the scale the lit pass applies to luminance (ADR 0023), the
 // static TLAS's frame as the Anchor whose corner is its origin, which rays
-// start from (ADR 0020), and how many entries the dynamic TLAS holds.
+// start from (ADR 0020), how many entries the dynamic TLAS holds, and a box
+// in that frame, its lowest corner then its highest, that holds every
+// triangle of theirs.
 struct CameraUniform {
     view_proj: mat4x4<f32>,
     anchor: vec3<i32>,
@@ -15,6 +17,8 @@ struct CameraUniform {
     offset: vec3<f32>,
     tlas_anchor: vec3<i32>,
     dynamic_tlas_entries: u32,
+    dynamic_tlas_bounds_min: vec3<f32>,
+    dynamic_tlas_bounds_max: vec3<f32>,
 }
 
 // ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from
@@ -49,6 +53,47 @@ fn position_at(view_proj: mat4x4<f32>, point: vec2<f32>, depth: f32, size: vec2<
     let right = rows[0].xyz / dot(rows[0].xyz, rows[0].xyz);
     let up = rows[1].xyz / dot(rows[1].xyz, rows[1].xyz);
     return view_depth * (rows[3].xyz + device.x * right + device.y * up);
+}
+
+// Whether the segment from `start_distance` to `end_distance` along the ray
+// from `origin` along `direction`, a unit vector, meets the box from
+// `box_min` to `box_max`, its faces included. No axis may separate them:
+// neither the box's three, on which the segment's half-length reach and the
+// box's half-extent must cover the distance between their centres, nor the
+// three crossings of those with the segment, on which the segment has no
+// reach. It divides by nothing, so a ray parallel to a pair of faces needs
+// no case of its own. No point of the box lies farther along the ray than
+// the origin's distance from the box's centre plus its half-diagonal, so the
+// segment is cut there first, which keeps a directional light's, which runs
+// to f32's largest distance, and the products below finite.
+fn segment_meets_box(
+    origin: vec3<f32>,
+    direction: vec3<f32>,
+    start_distance: f32,
+    end_distance: f32,
+    box_min: vec3<f32>,
+    box_max: vec3<f32>
+) -> bool {
+    let centre = 0.5 * (box_min + box_max);
+    let half_extent = 0.5 * (box_max - box_min);
+    let from_centre = origin - centre;
+    let cut_end_distance = min(end_distance, length(from_centre) + length(half_extent));
+    if cut_end_distance < start_distance {
+        return false;
+    }
+    let half_length = 0.5 * (cut_end_distance - start_distance);
+    let midpoint = from_centre + direction * (start_distance + half_length);
+    let half_segment = direction * half_length;
+    let reach = abs(half_segment);
+    if any(abs(midpoint) > half_extent + reach) {
+        return false;
+    }
+    let crossed_reach = vec3<f32>(
+        half_extent.y * reach.z + half_extent.z * reach.y,
+        half_extent.x * reach.z + half_extent.z * reach.x,
+        half_extent.x * reach.y + half_extent.y * reach.x
+    );
+    return !any(abs(cross(midpoint, half_segment)) > crossed_reach);
 }
 
 // A Froxel's list: how many lights it holds, at most FROXEL_LIGHT_CAPACITY,

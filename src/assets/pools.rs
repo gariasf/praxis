@@ -298,6 +298,7 @@ impl MeshPool {
         self.meshes.push(Mesh {
             needs_material_handle: mesh_use.drawn() && materials.contains(&None),
             vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
+            bounds: mesh.bounds,
         });
         if !mesh_use.traced() {
             self.blases.push(None);
@@ -773,9 +774,10 @@ pub(crate) mod tests {
     }
 
     /// A one-Primitive Mesh of a triangle about (0.8, 0) in mesh space, at
-    /// z 0.
+    /// z 0, with the bounds that hold it.
     pub(crate) fn triangle_about_x() -> CookedMesh {
         let mut triangle = mesh(3, vec![0, 1, 2]);
+        triangle.bounds = [[0.6, -0.2, 0.0], [1.0, 0.2, 0.0]];
         triangle.vertices = [[0.6, -0.2], [1.0, -0.2], [0.8, 0.2]]
             .map(|[x, y]| CookedVertex {
                 position: [x, y, 0.0],

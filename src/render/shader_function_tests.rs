@@ -1758,6 +1758,201 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     );
 }
 
+/// A segment of a ray meets a box where some point of it lies in the box,
+/// its faces included. The cases, each against the box from -1 to 1 on
+/// every axis unless it names another, hold their answer as a literal: rays
+/// through it, short of it, past it and away from it; rays parallel to a
+/// pair of faces, outside, inside and along a face; rays from inside; a ray
+/// that clears a corner although each axis alone overlaps, which only the
+/// cross axes find, and one that cuts it; and directional lights' rays, which run to f32's
+/// largest distance.
+#[test]
+fn a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let unit_box = ([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]);
+    let diagonal = glam::Vec3::ONE.normalize().to_array();
+    let rising = glam::Vec3::new(1.0, 1.0, 0.0).normalize().to_array();
+    let unbounded = f32::MAX;
+    // Origin, direction, start and end distances, box, and the answer.
+    type Case = ([f32; 3], [f32; 3], f32, f32, ([f32; 3], [f32; 3]), bool);
+    let cases: [(&str, Case); 19] = [
+        (
+            "through",
+            ([-5.0, 0.0, 0.0], [1.0, 0.0, 0.0], 0.0, 10.0, unit_box, true),
+        ),
+        (
+            "ends short",
+            ([-5.0, 0.0, 0.0], [1.0, 0.0, 0.0], 0.0, 3.0, unit_box, false),
+        ),
+        (
+            "ends on the face",
+            ([-5.0, 0.0, 0.0], [1.0, 0.0, 0.0], 0.0, 4.0, unit_box, true),
+        ),
+        (
+            "starts past",
+            (
+                [-5.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                7.0,
+                10.0,
+                unit_box,
+                false,
+            ),
+        ),
+        (
+            "box behind",
+            ([5.0, 0.0, 0.0], [1.0, 0.0, 0.0], 0.0, 10.0, unit_box, false),
+        ),
+        (
+            "box behind, unbounded",
+            (
+                [5.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                0.0,
+                unbounded,
+                unit_box,
+                false,
+            ),
+        ),
+        (
+            "towards, unbounded",
+            (
+                [-1000.0, 0.5, 0.0],
+                [1.0, 0.0, 0.0],
+                0.0,
+                unbounded,
+                unit_box,
+                true,
+            ),
+        ),
+        (
+            "parallel outside",
+            (
+                [-5.0, 2.0, 0.0],
+                [1.0, 0.0, 0.0],
+                0.0,
+                10.0,
+                unit_box,
+                false,
+            ),
+        ),
+        (
+            "parallel outside, unbounded",
+            (
+                [-5.0, 0.0, 1.5],
+                [1.0, 0.0, 0.0],
+                0.0,
+                unbounded,
+                unit_box,
+                false,
+            ),
+        ),
+        (
+            "parallel inside",
+            (
+                [-5.0, 0.5, -0.5],
+                [1.0, 0.0, 0.0],
+                0.0,
+                10.0,
+                unit_box,
+                true,
+            ),
+        ),
+        (
+            "along a face",
+            ([-5.0, 1.0, 0.0], [1.0, 0.0, 0.0], 0.0, 10.0, unit_box, true),
+        ),
+        (
+            "from inside",
+            (
+                [0.25, -0.5, 0.75],
+                [0.0, 1.0, 0.0],
+                0.0,
+                0.1,
+                unit_box,
+                true,
+            ),
+        ),
+        (
+            "from inside, unbounded",
+            ([0.0, 0.0, 0.0], diagonal, 0.0, unbounded, unit_box, true),
+        ),
+        (
+            "diagonal through",
+            ([-5.0, -5.0, -5.0], diagonal, 0.0, 20.0, unit_box, true),
+        ),
+        (
+            "clears a corner",
+            ([-5.0, -2.5, 0.0], rising, 0.0, 20.0, unit_box, false),
+        ),
+        (
+            "cuts a corner",
+            ([-5.0, -3.5, 0.0], rising, 0.0, 20.0, unit_box, true),
+        ),
+        (
+            "flat box",
+            (
+                [2.0, 3.0, 0.0],
+                [0.0, -1.0, 0.0],
+                0.0,
+                5.0,
+                ([1.0, 0.0, -1.0], [3.0, 0.0, 1.0]),
+                true,
+            ),
+        ),
+        (
+            "far box",
+            (
+                [1990.0, 30.0, -1500.0],
+                [0.0, 1.0, 0.0],
+                0.5,
+                40.0,
+                ([1980.0, 26.0, -1510.0], [2000.0, 59.0, -1490.0]),
+                true,
+            ),
+        ),
+        (
+            "far box, ends short",
+            (
+                [1990.0, 5.0, -1500.0],
+                [0.0, 1.0, 0.0],
+                0.5,
+                20.0,
+                ([1980.0, 26.0, -1510.0], [2000.0, 59.0, -1490.0]),
+                false,
+            ),
+        ),
+    ];
+
+    let inputs: Vec<[[f32; 4]; 4]> = cases
+        .iter()
+        .map(
+            |(_, (origin, direction, start, end, (box_min, box_max), _))| {
+                let vector = |xyz: [f32; 3], w: f32| [xyz[0], xyz[1], xyz[2], w];
+                [
+                    vector(*origin, *start),
+                    vector(*direction, *end),
+                    vector(*box_min, 0.0),
+                    vector(*box_max, 0.0),
+                ]
+            },
+        )
+        .collect();
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(select(0.0, 1.0, segment_meets_box(inputs[0].xyz, inputs[1].xyz, \
+         inputs[0].w, inputs[1].w, inputs[2].xyz, inputs[3].xyz)), 0.0, 0.0, 0.0)",
+        &inputs,
+        &[],
+    );
+
+    for ((name, (.., expected)), result) in cases.iter().zip(results) {
+        assert_eq!(result[0] == 1.0, *expected, "{name}");
+    }
+}
+
 /// A point at `camera + camera_relative`, drawn at `local_position` from its
 /// Instance's pivot, both placed as the renderer places them.
 #[derive(Debug)]
