@@ -15,16 +15,16 @@
     "p95": 552.207
   },
   "gpu_frame_microseconds": {
-    "median": 3793.125,
-    "p95": 3845.208
+    "median": 3756.083,
+    "p95": 3878.584
   },
   "gate_microseconds": {
     "median": 1316.041,
     "p95": 1369.3329999999999
   },
   "shadow_ray_microseconds": {
-    "median": 2155.084,
-    "p95": 2204.417
+    "median": 2125.209,
+    "p95": 2251.626
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -68,8 +68,8 @@
       "p95": 12.75
     },
     "shadow_mask_pass": {
-      "median": 1960.583,
-      "p95": 1991.375
+      "median": 1915.0,
+      "p95": 1945.625
     },
     "tonemapping_pass": {
       "median": 319.91700000000003,
