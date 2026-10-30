@@ -62,48 +62,32 @@ const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
 // over it agree, as on a flat surface or a flat-shaded mesh: 3°.
 const NORMALS_AGREE: f32 = 0.9986295347545738;
 
-// Whether either TLAS holds geometry from `start_distance` to `end_distance`
-// (the ray's tmin and tmax) along the ray from `origin`, in the TLAS's
-// frame, along `direction`, a unit vector:
-// traced against the static TLAS, then, where that finds nothing, against
-// the dynamic TLAS unless it is empty: a query of an empty TLAS still costs.
-fn hit_any(origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> bool {
-    // Opaque, so one rayQueryProceed completes a traversal, and any hit
-    // shadows the point.
-    let ray = RayDesc(
-        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_TERMINATE_ON_FIRST_HIT,
-        0xffu,
-        start_distance,
-        end_distance,
-        origin,
-        direction
-    );
+// The first triangle either TLAS holds from `start_distance` to
+// `end_distance` (the ray's tmin and tmax) along the ray from `origin`, in
+// the TLAS's frame, along `direction`, a unit vector: with
+// RAY_FLAG_TERMINATE_ON_FIRST_HIT in `flags`, any one, and otherwise the
+// nearest. Its kind is RAY_QUERY_INTERSECTION_NONE where there is none.
+// It traces the static TLAS, then the dynamic TLAS unless it is empty, as a
+// query of an empty TLAS still costs, or a first hit has already been found.
+// A shader's live ray queries hold registers that lower its occupancy
+// [ref:nvidia-2022-rtx-best-practices-shadow-rays], so every ray of a
+// surface goes through this one call. Its flags are then a value known
+// only at run time, which costs a scene of few, short rays a little more
+// than constant flags would, and saves scenes of many rays more
+// (docs/performance.md).
+fn trace(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
+    // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, ray);
-    rayQueryProceed(&query);
-    let hidden = rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
-    if hidden || camera.dynamic_tlas_entries == 0u {
-        return hidden;
-    }
-    rayQueryInitialize(&query, dynamic_tlas, ray);
-    rayQueryProceed(&query);
-    return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
-}
-
-// The nearest triangle either TLAS holds within `end_distance` along the ray from
-// `origin`, in the TLAS's frame, along `direction`, a unit vector; its kind
-// is RAY_QUERY_INTERSECTION_NONE where there is none.
-fn nearest_hit(origin: vec3<f32>, direction: vec3<f32>, end_distance: f32) -> RayIntersection {
-    var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, end_distance, origin, direction));
+    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, end_distance, origin, direction));
     rayQueryProceed(&query);
     let static_hit = rayQueryGetCommittedIntersection(&query);
-    if camera.dynamic_tlas_entries == 0u {
+    let found = static_hit.kind != RAY_QUERY_INTERSECTION_NONE;
+    if camera.dynamic_tlas_entries == 0u || (found && (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u) {
         return static_hit;
     }
     // Only a dynamic triangle nearer than the static one can replace it.
-    let dynamic_end_distance = select(end_distance, static_hit.t, static_hit.kind != RAY_QUERY_INTERSECTION_NONE);
-    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE, 0xffu, 0.0, dynamic_end_distance, origin, direction));
+    let dynamic_end_distance = select(end_distance, static_hit.t, found);
+    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, dynamic_end_distance, origin, direction));
     rayQueryProceed(&query);
     let dynamic_hit = rayQueryGetCommittedIntersection(&query);
     if dynamic_hit.kind == RAY_QUERY_INTERSECTION_NONE {
@@ -147,20 +131,28 @@ fn shadowed(
         SHADOW_RAY_PIXEL_OFFSET * pixel_width
     );
     let facing = dot(triangle_normal, direction);
-    if facing >= TRIANGLE_TURN_MARGIN
+    let leaves_surface = facing >= TRIANGLE_TURN_MARGIN
         || (facing >= AGREEING_TRIANGLE_TURN_MARGIN
-            && dot(triangle_normal, interpolated_normal) >= NORMALS_AGREE) {
-        return hit_any(tlas_position + triangle_normal * offset, direction, 0.0, distance);
+            && dot(triangle_normal, interpolated_normal) >= NORMALS_AGREE);
+    let origin = tlas_position + triangle_normal * select(-offset, offset, leaves_surface);
+    // Any hit shadows a ray that leaves the surface. One that starts inside
+    // first finds where it leaves the mesh, then traces on from there: two
+    // turns at most, through the one call.
+    var flags = select(0u, RAY_FLAG_TERMINATE_ON_FIRST_HIT, leaves_surface);
+    var start_distance = 0.0;
+    var hidden = false;
+    loop {
+        let hit = trace(flags, origin, direction, start_distance, distance);
+        let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
+        let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
+        if any_hit || !found || hit.front_face || hit.t + offset >= distance {
+            hidden = found && (any_hit || hit.front_face);
+            break;
+        }
+        flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+        start_distance = hit.t + offset;
     }
-    let origin = tlas_position - triangle_normal * offset;
-    let exit = nearest_hit(origin, direction, distance);
-    if exit.kind == RAY_QUERY_INTERSECTION_NONE {
-        return false;
-    }
-    if exit.front_face || exit.t + offset >= distance {
-        return exit.front_face;
-    }
-    return hit_any(origin, direction, exit.t + offset, distance);
+    return hidden;
 }
 
 // Where `sample` of a pixel lies, from the pixel's top left corner, in
@@ -202,22 +194,13 @@ fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) ->
     );
 }
 
-// Whether a directional light is hidden from a surface, and whether a ray
-// found it so: a light the interpolated normal turns from is hidden by the
-// surface itself, with no ray.
-struct Verdict {
-    hidden: bool,
-    traced: bool,
-}
-
-// The directional light at `index` of the light buffer's verdict at
-// `surface`.
-fn directional_verdict(surface: SampleSurface, index: u32) -> Verdict {
+// Whether the directional light at `index` of the light buffer is hidden
+// from `surface`: a light the interpolated normal turns from is hidden by
+// the surface itself, with no ray.
+fn directional_hidden(surface: SampleSurface, index: u32) -> bool {
     let direction = normalize(-lights[index].offset);
-    let traced = dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
-    let hidden = !traced
+    return dot(surface.interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN
         || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
-    return Verdict(hidden, traced);
 }
 
 // The bits for the pixel's lights whose rays a surface found hidden, with
@@ -242,19 +225,6 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
         let triangle_normal = surface.triangle_normal;
         let interpolated_normal = surface.interpolated_normal;
         var overflowed = 0u;
-        for (var index = 0u; index < light.directional_light_count; index++) {
-            if index >= SHADOW_MASK_LIGHTS {
-                overflowed++;
-                continue;
-            }
-            let verdict = directional_verdict(surface, index);
-            if verdict.hidden {
-                hidden = with_bit(hidden, index);
-            }
-            if verdict.traced && index < SHADOW_EDGE_LIGHTS {
-                traced |= 1u << index;
-            }
-        }
         // The point lights the pixel's Froxel lists, in light order, or, with
         // FROXEL_LIGHTS off, every point light, as the lit pass sums them:
         // those within range of the surface.
@@ -266,28 +236,55 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
             slice = froxel % FROXEL_SLICES;
             point_light_count = froxel_lists[froxel].light_count;
         }
-        for (var entry = 0u; entry < point_light_count; entry++) {
-            var index = light.directional_light_count + entry;
-            if FROXEL_LIGHTS {
-                index = froxel_lists[froxel].lights[entry];
+        // The directional lights, then the point lights, in one loop with
+        // one call that traces, so the shader holds one ray query's state
+        // (`trace`). Each light's bit is its entry.
+        let light_count = light.directional_light_count + point_light_count;
+        for (var entry = 0u; entry < light_count; entry++) {
+            var direction: vec3<f32>;
+            var distance: f32;
+            if entry < light.directional_light_count {
+                if entry >= SHADOW_MASK_LIGHTS {
+                    overflowed++;
+                    continue;
+                }
+                // A light the interpolated normal turns from is hidden by the
+                // surface itself, with no ray.
+                direction = normalize(-lights[entry].offset);
+                distance = UNBOUNDED_RAY_DISTANCE;
+                if dot(interpolated_normal, direction) <= -INTERPOLATED_TURN_MARGIN {
+                    hidden = with_bit(hidden, entry);
+                    continue;
+                }
+                if entry < SHADOW_EDGE_LIGHTS {
+                    traced |= 1u << entry;
+                }
+            } else {
+                var index = entry;
+                if FROXEL_LIGHTS {
+                    index = froxel_lists[froxel].lights[entry - light.directional_light_count];
+                }
+                let point = lights[index];
+                let to_light = point_light_position(point, camera.anchor, camera.offset) - position;
+                let distance_squared = dot(to_light, to_light);
+                if distance_squared >= point.range * point.range {
+                    continue;
+                }
+                if entry >= SHADOW_MASK_LIGHTS {
+                    overflowed++;
+                    continue;
+                }
+                // Facing first, so a light at the surface, at no distance, is
+                // hidden without dividing by it.
+                distance = sqrt(distance_squared);
+                if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance {
+                    hidden = with_bit(hidden, entry);
+                    continue;
+                }
+                direction = to_light / distance;
             }
-            let point = lights[index];
-            let to_light = point_light_position(point, camera.anchor, camera.offset) - position;
-            let distance_squared = dot(to_light, to_light);
-            if distance_squared >= point.range * point.range {
-                continue;
-            }
-            let bit = light.directional_light_count + entry;
-            if bit >= SHADOW_MASK_LIGHTS {
-                overflowed++;
-                continue;
-            }
-            // Facing first, so a light at the surface, at no distance, is
-            // hidden without dividing by it.
-            let distance = sqrt(distance_squared);
-            if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance
-                || shadowed(position, surface.pixel_width, triangle_normal, interpolated_normal, to_light / distance, distance) {
-                hidden = with_bit(hidden, bit);
+            if shadowed(position, surface.pixel_width, triangle_normal, interpolated_normal, direction, distance) {
+                hidden = with_bit(hidden, entry);
             }
         }
         if overflowed > 0u {
@@ -555,7 +552,7 @@ fn trace_shadow_edges(
                 continue;
             }
             let bit = 1u << (SAMPLE_COUNT * index + sample);
-            sample_verdicts = select(sample_verdicts & ~bit, sample_verdicts | bit, directional_verdict(surface, index).hidden);
+            sample_verdicts = select(sample_verdicts & ~bit, sample_verdicts | bit, directional_hidden(surface, index));
         }
     }
     textureStore(

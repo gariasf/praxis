@@ -3884,3 +3884,72 @@ section = "Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 
 quote = '''F+ Renderer : Optimization Performance [...] Structure ( 256 bit array ): PS Opaque pass time: PS Opaque pass average occupancy'''
 cost = '''Zombies opening scene (PS4 1080p) [...] Base Tile: 5.7 ms ( 100% ): ~3 Based Tile + ZBin: 5.2 ms ( 91%): ~3 Scalarized Tile: 5.1 ms ( 88% ): ~4.3 Scalarized Tile + ZBin: 4.6 ms ( 80% ): ~4.3 [...] Cluster Rasterizer Performance 256 lights in Zombies opening scene'''
 checked = 2026-10-30
+
+
+["nvidia-2022-rtx-best-practices-shadow-rays"]
+url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
+section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures and Ray tracing: General tips, Inline ray tracing"
+quote = '''Consider merging BLASes when instance world-space AABBs overlap significantly. When world-space AABBs of instances overlap, each ray going through that region must process separately all the overlapping BLAS instances to find potential intersections. Traversing through one merged BLAS would be more efficient. [...] Terminate rays on the first hit when possible. When resolving the correct closest hit is not required (as for shadow rays), flagging rays with RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH or gl_RayFlagsTerminateOnFirstHitEXT is a simple and efficient optimization. [...] Monitor the register consumption of the query objects. After initialization, the query objects must hold state for the ray traversal when the shader is executing code that may continue the traversal. This consumes registers and complex user code may limit occupancy sooner than usual. [...] Variables initialized before using the query object and used after that may consume additional registers.'''
+checked = 2026-10-30
+
+["amd-rdna-guide-ray-tracing"]
+url = "https://gpuopen.com/learn/rdna-performance-guide/"
+section = "AMD GPUOpen, RDNA Performance Guide, Ray tracing and DirectX 12 DXR 1.1 sections"
+quote = '''Trace as few rays as possible to achieve the desired level of quality. Investigate scene classification and load balancing systems to let you fire rays just where you need them. [...] Use an 8×4 threadgroup size to optimally use the RDNA WGP. Traversal efficiency Explicitly guide the traversal system: Stop traversing after first hit for opaque shadows. Skip procedural and non-opaque primitives when you can with explicit ray flags. [...] Always have just 1 active RayQuery object in scope'''
+checked = 2026-10-30
+
+["dxr-spec-inline-shadow-fast-path"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/5593bd3c208e00a2fab0f287d7598fb998adb8a2/d3d/Raytracing.md#inline-raytracing"
+section = "Microsoft, DirectX Raytracing (DXR) Functional Spec, d3d/Raytracing.md at 5593bd3, Inline raytracing; RayQuery"
+quote = '''One simple scenario for inline raytracing is tracing rays with the `RayQuery` object initialized with template flags: `RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH`, using an acceleration structure with only triangle based geometry.  In this case the system can see that it is only being asked to find either a hit or a miss in one step, which it could potentially fast-path. [...] Shaders can have any number of live `RayQuery` objects during shader execution, but at the cost of an unknown (and relatively high) amount of hardware register storage, which can limit how many shaders can run in parallel.'''
+checked = 2026-10-30
+
+["apple-techtalk-111375-intersection-query-cost"]
+url = "https://developer.apple.com/videos/play/tech-talks/111375/"
+section = "Apple, Explore GPU advancements in M3 and A17 Pro, Tech Talk 111375 (2023), transcript, hardware-accelerated ray tracing best practices"
+quote = '''Our first suggestion is to use the intersector object API whenever possible. Metal also allows ray tracing to be performed using the intersection query API, but this API increases the amount of ray trace scratch memory that must be read and written, as well as disables the reorder stage. [...] It is also important to try to minimize the size of the ray payload structure that has passed to and return from the intersector object. This will decrease your shader's latency and potentially increase its thread occupancy.'''
+checked = 2026-10-30
+
+["apple-wwdc22-10105-instance-overhead"]
+url = "https://developer.apple.com/videos/play/wwdc2022/10105/"
+section = "Apple, Maximize your Metal ray tracing performance, WWDC22 session 10105, transcript, acceleration structure optimization (merging instances)"
+quote = '''Focusing on the instance acceleration structure, there is an overhead for each instance that your rays hit. There is a cost for transforming the ray and then switching from the instance to the primitive acceleration structure. This occurs more often with overlapping instances. To reduce the instance count, you can generate a single primitive acceleration structure that contains both the boxes and the sphere. [...] This primitive acceleration structure will take less time to build than separate acceleration structures and will be faster to intersect.'''
+checked = 2026-10-30
+
+["apple-wwdc23-10128-static-dynamic-split"]
+url = "https://developer.apple.com/videos/play/wwdc2023/10128/"
+section = "Apple, Your guide to Metal ray tracing, WWDC23 session 10128, transcript, multi-level instancing"
+quote = '''You can split the world into static and dynamic acceleration structures to limit acceleration structure updates to only the content that changes. This means only rebuilding the dynamic content, which is typically much less than the static content. When applying this split of static and dynamic content, it is important to balance the depth of the hierarchy with the additional cost of ray traversal. In a frame with acceleration structure building and ray tracing, using 3 levels of instancing allows you to reduce build time with only minor impact on trace time, overall reducing the frame time.'''
+checked = 2026-10-30
+
+["amd-rra-instance-overlap"]
+url = "https://gpuopen.com/learn/improving-rt-perf-with-rra/"
+section = "AMD GPUOpen, Improving raytracing performance with the Radeon Raytracing Analyzer (RRA), Split terrain into chunks; Avoid instance overlap"
+quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap.'''
+checked = 2026-10-30
+
+["boksansky-2019-distance-light-culling"]
+url = "https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.9.pdf#page=203"
+section = "Boksansky, Wimmer and Bittner, Ray Traced Shadows: Maintaining Real-Time Frame Rates, Ray Tracing Gems (2019, doi:10.1007/978-1-4842-4427-2_13), §13.5.2 Distance-Based Light Culling, p. 172 (PDF page 203 of the v1.9 copy)"
+quote = '''Even before casting the shadow rays, we can cull distant and low-intensity lights to increase performance. To do this, we calculate the range of each light—this is the distance where the intensity of a light becomes negligible due to its attenuation function. Before evaluating visibility, we compare the distance of the light to its range and simply store zero for non-contributing lights. Typical attenuation functions (inverse of squared distance) never reach zero, and thus it is practical to modify this function so that it reaches zero eventually, e.g., by implementing a linear drop-off below a certain threshold. This will decrease light ranges, making the culling more efficient'''
+checked = 2026-10-30
+
+["ward-1991-adaptive-shadow-testing"]
+url = "https://floyd.lbl.gov/radiance/papers/erw91/erw91.html"
+section = "Gregory J. Ward, Adaptive Shadow Testing for Ray Tracing, Second Eurographics Workshop on Rendering, 1991 (LBL-30647), §2 Concept and §4 Results"
+quote = '''This observation leads to a simple optimization: we can perform shadow testing on the sources with the highest potential contributions first, and quit testing when the remainder of the contributions is below some threshold (see Figure 1). By itself, this approach can guarantee an absolute error below a given threshold.'''
+cost = '''The algorithm has been tested on many different models and has been found to be robust and reliable, offering speed increases between 20% and 80% in most environments. [...] Figure 5b shows the same scene rendered with adaptive shadow testing using a tolerance of 20% and a certainty of 50%. This resulted in an 80% reduction in shadow testing with an average pixel error of less than 5%.'''
+checked = 2026-10-30
+
+["walter-2005-lightcuts-error-bound"]
+url = "https://www.cs.cornell.edu/~kb/publications/SIG05lightcuts.pdf#page=2"
+section = "Bruce Walter, Sebastian Fernandez, Adam Arbree, Kavita Bala, Michael Donikian, Donald P. Greenberg, Lightcuts: A Scalable Approach to Illumination, ACM TOG 24(3), SIGGRAPH 2005 (doi:10.1145/1073204.1073318), §3 Lightcuts, pp. 2-3, and §4.1 Bounding Cluster Error, p. 4"
+quote = '''To prevent this, we only use clusters when we can guarantee that the approximation error introduced by the cluster will be below a perceptual visibility threshold. Weber’s law [Blackwell 1972] is a standard, well-known perceptual result that says the minimum perceptible change in a visual signal is roughly equal to a fixed percentage of the base signal. [...] In our experience, an error ratio of 2% results in no visible artifacts across a wide variety of scenes and was used for all our results. [...] Conservatively bounding visibility in arbitrary scenes is a hard problem, so we will use the trivial upper bound of one for the visibility term (i.e. all lights are potentially visible).'''
+cost = '''Lightcuts can compute the illumination from many thousands of lights using only a few hundred shadow rays.'''
+checked = 2026-10-30
+
+["amd-fidelityfx-shadow-classifier"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/c6efa6bf7f2027b3ec94f28578bb5965eabb9e55/docs/techniques/classifier.md"
+section = "AMD, FidelityFX Classifier 1.3, AMD FidelityFX Shadow Classifier, FidelityFX SDK v1.1.4 docs/techniques/classifier.md"
+quote = '''The FidelityFX Shadow Classifier is designed to help accelerate the generation of raytraced shadows. It works by analyzing the scene and dividing the screen into 8x4 tiles that represent pixel-level requirements for ray tracing. The returned list of tiles represents all the tiles which contain at least one pixel that needs ray tracing applied. [...] Used to reject pixels that don’t face the sun. [...] Cascade shadow maps - Used to reject pixels that don’t need raytracing. [...] Each tile has a mask of which pixels in the tile need raytracing. - Each tile also has min and max ray length.'''
+checked = 2026-10-30
