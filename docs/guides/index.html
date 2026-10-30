@@ -269,6 +269,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="visibility-buffer.html" aria-label="Read Visibility Buffer Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="edge-shadows.html">Edge Shadows Explained</a></h3>
+        <p class="meta">M3 · ticket #357 · PR #387</p>
+        <p class="summary">Follows #357's fix of the one-pixel outline that shadowed silhouettes wore. The shadow mask pass finds the pixels whose samples show a second surface, by each sample's distance from the nearest sample's triangle plane, traces that surface too from a packed list in an indirect dispatch, and keeps its bits in a second layer; each fragment of the lit pass reads the layer of the surface its coverage shows. It covers surfaces against triangles, why tracing a minority of pixels in place costs a whole pass, and how to read Metal's overlapping pass times. With live demos.</p>
+        <a class="read" href="edge-shadows.html" aria-label="Read Edge Shadows Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
@@ -283,7 +291,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, and with shadow rays on each sample's surface normals beside it (<a href="instance-culling.html">Instance Culling Explained</a>; the normals since #350).</li>
     <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen (<a href="depth-pyramid.html">Depth Pyramid Explained</a>).</li>
     <li>Phase two of the culling pass, which builds the draw of the other Instances in view that the pyramid does not hide (<a href="instance-culling.html">Instance Culling Explained</a>).</li>
-    <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth and the surface normals, then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>).</li>
+    <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth and the surface normals, then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask (<a href="shadow-rays.html">Shadow Rays Explained</a>), and, in a second dispatch, those of each edge pixel's second surface into the mask's second layer (<a href="edge-shadows.html">Edge Shadows Explained</a>; since #357).</li>
     <li>The lit pass, which shades both phases' Instances, reading each pixel's point lights from its Froxel's list and its shadows from the shadow mask, and resolves its 4x MSAA colour into the HDR target (<a href="lit-pass.html">Lit Pass Explained</a>).</li>
     <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats (<a href="town.html">Town Explained</a>).</li>

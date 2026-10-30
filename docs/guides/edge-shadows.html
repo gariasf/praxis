@@ -1,0 +1,1114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Edge Shadows Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 24 of the series, after Visibility Buffer Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* The series parts this volume shares with Visibility Buffer Explained. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.ring { background: transparent; border-color: var(--bad); }
+.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-canvas { width: 100%; }
+.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
+
+/* This volume's own parts: the patch's surface colours, the crops, the schedule's strip. */
+:root { --o-ground: #e6e8eb; --o-shadow: #8d939c; --o-sphere: #e38c57; --o-sphere-dark: #7a4129; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --o-ground: #5d6470; --o-shadow: #262b32; --o-sphere: #cf7c48; --o-sphere-dark: #552d1d; }
+}
+:root[data-theme="dark"] { --o-ground: #5d6470; --o-shadow: #262b32; --o-sphere: #cf7c48; --o-sphere-dark: #552d1d; }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+.mk-centre { fill: none; stroke: var(--ink); stroke-width: 2; }
+.mk-second { fill: none; stroke: var(--warm); stroke-width: 2.5; }
+.mk-ring { fill: none; stroke: var(--bad); stroke-width: 2; }
+.mask-frame { max-width: 760px; margin: 0 auto; }
+.crop img { display: block; width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--rule); }
+.crop + .crop { margin-top: 14px; }
+.crop-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.colour-chip { display: inline-block; width: 14px; height: 14px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #357 &middot; PR #387</div>
+  <h1>Edge Shadows Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Under 4x MSAA an edge pixel's samples can show two surfaces, but the shadow mask held one word per pixel, traced from the nearest sample, so the farther surface took the nearer one's shadow and every shadowed silhouette got a one-pixel outline. Praxis now traces a second word from the samples off the nearest sample's plane, and each fragment picks its word by the samples it covers. The idea to keep: a per-pixel screen-space term belongs to a surface, not to a pixel.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why a per-pixel term read by every fragment of an MSAA pixel outlines silhouettes</li>
+      <li>Why a pixel needs a word per surface, not per triangle or per sample</li>
+      <li>How a sample's distance from the nearest sample's plane finds a second surface</li>
+      <li>How a fragment's sample mask picks its word</li>
+      <li>Why a minority of extra rays is traced from a packed, frame-wide list, and how to read its cost on Metal</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="shadow-rays.html#shadow-mask">Shadow Rays Explained</a>, for the shadow mask and the fringe it predicted; optionally <a href="shadow-terminator.html#normals">Shadow Terminator Explained</a>, for the surface normals the test reads, and <a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>, for samples and fragments</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 7442717a (PR #387, merged 2026-10-30). <b>Since then:</b> nothing, as of 2026-10-30.</p>
+  </aside>
+  <p class="lede">Praxis traces its shadow rays in a compute pass before the lit pass, one invocation per pixel, and keeps a bit per light in the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span>. The lit pass reads those bits instead of tracing rays itself. That was cheap, and it had a known cost: one word per pixel cannot be right for two surfaces at once. This guide follows the fix. It covers the fringe the word drew, how published antialiasing work thinks in surfaces rather than triangles, how the pass finds a pixel's second surface, how each fragment picks its word, why the extra rays are traced from a packed list, and how to read what it all costs. Two live demos show an edge pixel patch under each scheme, and how SIMD groups pay for a minority of extra work.</p>
+  <p class="status"><b>Provenance.</b> The code is main at 7442717a, PR #387, which closes ticket #357. Measurements are the PR's, taken on an Apple M4 Pro with wgpu on Metal at 2560&times;1440, and the edge colours are the ticket's. Where the guide brings in published work, it names the source.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#fringe">1 &middot; The fringe</a>
+    <a href="#one-word">2 &middot; One word per pixel</a>
+    <a href="#surfaces">3 &middot; Surfaces, not triangles</a>
+    <a href="#second">4 &middot; Finding the second surface</a>
+    <a href="#which-word">5 &middot; Which word a fragment reads</a>
+    <a href="#minority">6 &middot; Tracing a minority</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#limits">8 &middot; Limits</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="fringe">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ticket #357</div>
+    <h2>The fringe</h2>
+    <p class="key-idea"><b>Key idea.</b> Before PR #387, every shadowed silhouette carried an outline one pixel wide, darker or lighter than both surfaces it separated, because each edge pixel's farther surface was shaded with the nearer surface's shadow.</p>
+    <p>Ticket #353's visual audit captured every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> at 2560&times;1440 on the M4 Pro and looked at them frame by frame. Along silhouettes it found pixels that were not a blend of the two surfaces they covered. Ticket #357 measured three, in 8-bit sRGB after tonemapping:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Where</th><th>One side</th><th>Edge pixel</th><th>Other side</th></tr></thead>
+      <tbody>
+        <tr><td><code>crowd</code>, a figure over its own cast shadow</td><td><span class="colour-chip" style="background: rgb(25,25,25)"></span>shadow (25, 25, 25)</td><td><span class="colour-chip" style="background: rgb(86,91,101)"></span><b>(86, 91, 101)</b></td><td><span class="colour-chip" style="background: rgb(46,64,94)"></span>figure (46, 64, 94)</td></tr>
+        <tr><td><code>crowd</code>, a figure over lit ground</td><td><span class="colour-chip" style="background: rgb(16,26,42)"></span>figure (16, 26, 42)</td><td><span class="colour-chip" style="background: rgb(21,23,26)"></span><b>(21, 23, 26)</b></td><td><span class="colour-chip" style="background: rgb(117,117,117)"></span>ground (117, 117, 117)</td></tr>
+        <tr><td><code>shadows</code>, the sphere's right limb at y 520</td><td><span class="colour-chip" style="background: rgb(183,109,69)"></span>sphere (183, 109, 69)</td><td><span class="colour-chip" style="background: rgb(113,87,77)"></span><b>(113, 87, 77)</b></td><td><span class="colour-chip" style="background: rgb(150,150,150)"></span>ground (150, 150, 150)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">From ticket #357. The ticket puts a correct blend of the second row at about (65, 70, 77). After PR #387 the <code>shadows</code> edge pixel reads (158, 140, 134), between its neighbours.</p>
+    <p>The first row's edge pixel is brighter, in every channel, than the figure and the shadow on either side of it. The third is darker overall than both its neighbours. The second is as dark as the figure, darker in green and blue, where a blend with the lit ground would sit near (65, 70, 77). A blend of two colours lies between them, so these pixels were not blends: some of their samples carried the wrong shadow.</p>
+    <p>None of this was a surprise. When the shadow mask replaced the lit pass's own rays, <a href="shadow-rays.html#shadow-mask">Shadow Rays Explained</a> wrote down what an edge pixel gives up: "a fringe one pixel wide at most, as strong as those fragments' share of the pixel's samples", and showed it in a live demo. This guide is the fix for that fringe.</p>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>shadows</code>, the sphere's limb, 8x</span><span>after</span></p>
+      <img src="img/edge-shadows/crop-shadows-limb-8x-before-left-after-right.png" width="968" height="480" loading="lazy" alt="The orange sphere's right limb over grey ground, magnified 8 times. Left, before: a dark brown pixel outline runs down the limb. Right, after: the limb blends into the ground.">
+    </div>
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>crowd</code>, a figure, 8x</span><span>after</span></p>
+      <img src="img/edge-shadows/crop-crowd-refit-8x-before-left-after-right.png" width="968" height="480" loading="lazy" alt="A dark blue figure over grey ground and its own black cast shadow, magnified 8 times. Left, before: the figure's outline is a hard stair of pixels against the ground. Right, after: the edge pixels take intermediate shades.">
+    </div>
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>town</code>, frame 900, 4x</span><span>after</span></p>
+      <img src="img/edge-shadows/crop-town-900-4x-before-left-after-right.png" width="968" height="480" loading="lazy" alt="Rooftops, trees and parked cars in the town scene, magnified 4 times. Left, before: rooftop clutter, tree tiers and cars carry dark rims. Right, after: the rims fade to intermediate shades.">
+    </div>
+    <figcaption><b>Before and after</b>, crops from PR #387's gallery at 2560&times;1440, main at 14e3446e on the left and the PR's branch on the right of each magenta line. In the PR's difference images, pixels changed: <code>shadows</code> 771, <code>crowd</code> 6,428 with proxies and 6,293 refitted, <code>town</code> 12,836 at frame 59 and 175,633 at frame 900, <code>helmet</code> 6,622, <code>pbr-sweep</code> 40, <code>normal-tangent</code> 38, <code>orrery</code> 3, and none in the other four scenes. The PR found every changed pixel on a silhouette or a self-shadowed edge.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="one-word">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>shadow_mask.wgsl</code> &middot; <code>main.wgsl</code> at 14e3446e</div>
+    <h2>One word per pixel</h2>
+    <p class="key-idea"><b>Key idea.</b> MSAA stores colour per sample but shades once per pixel for each triangle, so anything the fragment shader reads per pixel has to know which surface it describes. The old shadow mask described only the nearest sample's.</p>
+    <p class="plain">With 4x MSAA, a pixel has four samples. The rasteriser decides per sample which triangle covers it, but runs the fragment shader once per pixel for each triangle that covers any of its samples, and writes that one colour into the samples the triangle covers. The resolve then averages the four.</p>
+    <p>That is the economy of MSAA (<a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>): a pixel inside a triangle shades once, and a pixel on an edge shades once per triangle, with each sample keeping its own triangle's colour. Edges come out antialiased because each surface's colour lands only in its own samples.</p>
+    <p>The shadow mask broke that bargain. Its compute pass ran one invocation per pixel, picked the pixel's nearest sample, the one with the greatest depth under reverse-Z (ADR 0015), traced every light's ray from the surface that sample shows, and wrote one word:</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at 14e3446e, build_shadow_mask: one surface per pixel.</span>
+<span class="comment">// The nearest sample has the greatest depth (ADR 0015); the first such.</span>
+let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
+
+<span class="comment">// main.wgsl at 14e3446e, fs_main: the same word for every fragment.</span>
+mask = textureLoad(shadow_mask, vec2&lt;u32&gt;(in.clip_position.xy), 0).rg;</code></pre>
+    <p style="margin-top: 16px">Inside a surface, nothing is lost. At a silhouette, the pixel's samples show two surfaces, and the lit pass runs a fragment for each. Both read the word traced from the nearest surface. The farther surface's fragment then lights its samples with the nearer surface's verdict: where the sphere is lit and the ground behind it lies in shadow, the ground's samples there come out lit, and the other way round. The resolve averages right samples with wrong ones, and the pixel lands outside the range of its neighbours, as strongly as the farther surface's share of its samples.</p>
+    <h3>The expensive cure</h3>
+    <p>The textbook answer is per-sample shading: run the lit pass's fragment shader once per sample, so each sample can read a value of its own. Ticket #357 ruled it out on cost: ADR 0019's lit pass shades per pixel, and a forward pass shading per sample runs its fragment shader per sample at every pixel, edge or not, to fix about one pixel in seven on <code>town</code>. The fix had to keep one fragment per surface per pixel, and give each one the right word.</p>
+  </div>
+</section>
+
+<section class="chapter" id="surfaces">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>targets.rs</code></div>
+    <h2>Surfaces, not triangles</h2>
+    <p class="key-idea"><b>Key idea.</b> A pixel crossed by several triangles usually shows only one or two surfaces, so a small, fixed number of shadow words per pixel is enough. Praxis stores two.</p>
+    <p>The insight is Salvi and Vidim&#x10D;e's, from their 2012 paper on surface-based antialiasing: "even when a pixel is covered by multiple primitives it is generally only covered by a very small number of distinct surfaces." Two triangles of one mesh that meet inside a pixel continue the same surface, and their shading barely differs there. So, they write, "we can further reduce the per-pixel shading rate by computing only one color sample per surface", and "store only a small and fixed (e.g. 2 or 3) number of surfaces per pixel".</p>
+    <p>A shadow follows the same logic. Two triangles of a wall that meet inside a pixel see the same lights, and one ray from either answers for both. Only a discontinuity, such as a figure's outline over the ground behind it, puts two surfaces in one pixel that can answer differently. So the mask became a two-layer array, a word per surface:</p>
+<pre class="code"><code><span class="comment">// targets.rs at 7442717a.</span>
+<span class="comment">/// The surfaces of a pixel the shadow mask holds a word for, a layer each:</span>
+<span class="comment">/// the one its nearest sample shows, and the farthest other one where its</span>
+<span class="comment">/// samples show more than one, as surface-based antialiasing stores a</span>
+<span class="comment">/// small, fixed number of surfaces per pixel and shades each once</span>
+<span class="comment">/// [ref:salvi-2012-sbaa-surfaces].</span>
+pub const SHADOW_MASK_SURFACES: u32 = 2;</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>Layer 0</b> holds the nearest sample's surface, as the single layer did before. Every pixel writes it.</li>
+      <li><b>Layer 1</b> holds a second surface's word, written only at pixels that have one. Each word is still an <code>Rg32Uint</code> pair: 59 light bits and, in the second half's top bits, the slice of the <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span> whose lights the bits follow (<a href="froxel-lights.html">Froxel Lights Explained</a>).</li>
+      <li><b><code>shadow_mask_samples</code></b>, an <code>R32Uint</code> target, holds four bits per pixel: which samples show the second surface.</li>
+    </ul>
+    <p>All three live in <code>RenderTargets</code> with the list of chapter 6, so they are rebuilt on resize together with the bind groups that read them.</p>
+  </div>
+</section>
+
+<section class="chapter" id="second">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>build_shadow_mask</code></div>
+    <h2>Finding the second surface</h2>
+    <p class="key-idea"><b>Key idea.</b> A sample shows another surface when it lies off the nearest sample's triangle plane by more than one pixel's width at that distance. Measuring from the plane rather than comparing raw depths keeps a slanted floor one surface.</p>
+    <p>Deferred renderers with MSAA met this question first: which pixels need more than one shading sample? Lauritzen's 2010 SIGGRAPH course slides give the recipe: "Store G-buffer at sample frequency [&hellip;] Only apply per-sample shading where necessary [&hellip;] Want to find surface discontinuities [&hellip;] Compare sample depths to depth derivatives". A depth derivative says how depth changes across the screen on the surface; extrapolated to another sample, it says what depth that sample would have if it showed the same surface. Praxis does the same with the nearest sample's triangle plane, which is what the derivative extrapolates:</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at 7442717a, build_shadow_mask.</span>
+if depth &gt; 0.0 {
+    let point = vec2&lt;f32&gt;(pixel) + sample_offset(sample);
+    let position = position_at(camera.view_proj, point, depth, target_size);
+    let pixel_width = distance(
+        position,
+        position_at(camera.view_proj, point + vec2&lt;f32&gt;(1.0, 0.0), depth, target_size)
+    );
+    let plane_normal = octahedral_decode(textureLoad(surface_normals, pixel, sample).xy * 2.0 - 1.0);
+    let off_plane = vec4&lt;f32&gt;(
+        dot(position_at(camera.view_proj, vec2&lt;f32&gt;(pixel) + SAMPLE_OFFSETS[0], depths.x, target_size) - position, plane_normal),
+        <span class="comment">// &hellip; and samples 1 to 3 the same way</span>
+    );
+    let second = abs(off_plane) &gt; vec4&lt;f32&gt;(pixel_width) &amp; depths &gt; vec4&lt;f32&gt;(0.0);
+    let bits = select(vec4&lt;u32&gt;(0u), vec4&lt;u32&gt;(1u, 2u, 4u, 8u), second);
+    second_samples = bits.x | bits.y | bits.z | bits.w;</code></pre>
+    <h3>Why a plane, and why the triangle's</h3>
+    <p>A floor seen at a grazing angle changes depth quickly from one sample to the next, though every sample shows the same floor. A test on raw depth differences would call those pixels edges and trace them twice for nothing; the demo in chapter 5 has that test as a switch, and on its sloping ground it lists 91 of its 112 pixels. Measuring each sample's distance from the nearest sample's plane cancels the slope: a sample on the same flat surface lies on the plane, whatever its depth.</p>
+    <p>The plane is the triangle's own. The depth passes write two normals per sample into the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">Surface normals</span> (<a href="shadow-terminator.html#normals">Shadow Terminator Explained</a>): the triangle's, and the one interpolated over it for shading. The depths lie on the triangle, so the test takes the first pair, <code>.xy</code>. The interpolated normal bends to smooth the shading and would tilt the plane away from where the samples really are.</p>
+    <h3>Why one pixel's width</h3>
+    <p>A fixed distance in metres would suit one view distance only: a millimetre is huge for a pixel near the camera and nothing for a pixel on the horizon. The threshold is instead the world distance between the nearest sample and the point one pixel to its right at the same depth, the width of a pixel where the surface is. A sample off the plane by less than that is the same surface bending, or a neighbouring triangle of it; a sample farther off is something else.</p>
+    <h3>The background, and which sample speaks for the second surface</h3>
+    <p>A sample at depth 0, the far plane under reverse-Z, shows the background, which nothing shadows and whose word has no bits, so it is never a second surface. Where several samples are off the plane, the pass traces from the farthest of them, the least depth. It makes the other samples' depths 2, past the near plane's 1, so they never win the minimum:</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at 7442717a.</span>
+<span class="comment">// Depth 2 lies past the near plane's 1, so no other is less.</span>
+let candidates = select(vec4&lt;f32&gt;(2.0), depths, second);
+let second_depth = min(min(candidates.x, candidates.y), min(candidates.z, candidates.w));
+let second_sample = first_sample_of(candidates, second_depth);</code></pre>
+    <p style="margin-top: 16px">Choosing the farthest is a rule for the rare pixel with three surfaces or more (chapter 8). With two, every off-plane sample shows the same surface, and any of them would do.</p>
+  </div>
+</section>
+
+<section class="chapter" id="which-word">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>fs_main</code></div>
+    <h2>Which word a fragment reads</h2>
+    <p class="key-idea"><b>Key idea.</b> Each fragment knows which of the pixel's samples it covers. If any of them is marked as the second surface's, it reads layer 1; otherwise layer 0.</p>
+    <p>A fragment shader can read its coverage: WGSL's <code>sample_mask</code> built-in input holds a bit for each sample of the pixel that the fragment's triangle covers. The pass wrote the second surface's samples as the same kind of bits, so one <code>&amp;</code> decides:</p>
+<pre class="code"><code><span class="comment">// main.wgsl at 7442717a, fs_main.</span>
+fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -&gt; @location(0) vec4&lt;f32&gt; {
+    <span class="comment">// &hellip;</span>
+    var mask = vec2&lt;u32&gt;(0u);
+    if SHADOW_RAYS {
+        let pixel = vec2&lt;u32&gt;(in.clip_position.xy);
+        let second_samples = textureLoad(shadow_mask_samples, pixel, 0).r;
+        let surface = select(0u, 1u, (covered_samples &amp; second_samples) != 0u);
+        mask = textureLoad(shadow_mask, pixel, surface, 0).rg;
+    }</code></pre>
+    <p style="margin-top: 16px">The nearer surface's fragment covers the nearest sample and its neighbours on the same plane, none of them marked, so it reads layer 0. The farther surface's fragment covers the marked samples, so it reads layer 1. Each colours its own samples with its own surface's shadow, and the resolve blends two right answers.</p>
+    <p>The word also carries its Froxel slice, the one at the sample it was traced from. The lit pass compares it with the slice at its own fragment and, where they differ, looks each light up in that Froxel's list. After the fix that happens, in the shader's words, only "where a slice ends between the sample and the pixel's centre, or at an edge of more than two surfaces".</p>
+    <h3>The test at the seam</h3>
+    <p><code>an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one</code>, in <code>src/render/renderer.rs</code>, renders a panel whose edge crosses the middle of one pixel, so that the pixel's two left samples show the panel and its two right ones the floor behind. A square behind the camera casts the sun's shadow on the panel only, then on the floor only. In both cases the edge pixel's red channel must lie between its two neighbours', more than 16 steps from each, far past the tonemapper's dither. With the lit pass forced back to layer 0, the old behaviour, it fails: "the edge pixel 38 is not between the panel 38 and the floor 158".</p>
+  </div>
+  <figure class="wide" id="demo-edge">
+    <div class="canvas-frame mask-frame"><canvas id="e-canvas" role="img" aria-label="A patch of pixels where the sphere's outline crosses the ground, with each pixel's four samples."></canvas></div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--o-sphere)"></span>sphere, lit</span>
+      <span><span class="swatch" style="background: var(--o-sphere-dark)"></span>sphere, in shadow</span>
+      <span><span class="swatch" style="background: var(--o-ground)"></span>ground, lit</span>
+      <span><span class="swatch" style="background: var(--o-shadow)"></span>ground, in shadow</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="6" class="mk-centre"/></svg>the pixel's nearest sample</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><rect x="-5.5" y="-5.5" width="11" height="11" class="mk-second"/></svg>a second-surface sample</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><rect x="-6.5" y="-6.5" width="13" height="13" class="mk-ring"/></svg>differs from the reference</span>
+    </div>
+    <div class="control-rows">
+      <div>
+        <span class="control-label">Shadows from</span>
+        <div class="seg" role="group" aria-label="Shadows from" id="e-mode">
+          <button type="button" data-mode="reference" aria-pressed="false">each fragment's ray (reference)</button>
+          <button type="button" data-mode="before" aria-pressed="true">one word per pixel</button>
+          <button type="button" data-mode="after" aria-pressed="false">two words, PR #387</button>
+        </div>
+      </div>
+      <div>
+        <span class="control-label">Sphere</span>
+        <div class="seg" role="group" aria-label="Sphere" id="e-sphere">
+          <button type="button" data-sphere="lit" aria-pressed="true">lit</button>
+          <button type="button" data-sphere="shadowed" aria-pressed="false">in shadow</button>
+        </div>
+      </div>
+      <div>
+        <span class="control-label">Second-surface test</span>
+        <div class="seg" role="group" aria-label="Second-surface test" id="e-test">
+          <button type="button" data-test="plane" aria-pressed="true">off the nearest sample's plane</button>
+          <button type="button" data-test="raw" aria-pressed="false">raw depth difference</button>
+        </div>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="e-edge" class="control-label">Ground's shadow edge <output id="e-edge-out" for="e-edge"></output></label>
+      <input type="range" id="e-edge" min="1" max="13" step="0.05" value="8">
+    </div>
+    <dl class="figures">
+      <div><dt>Pixels both surfaces cover</dt><dd id="e-two"></dd></div>
+      <div><dt>Pixels listed for a second trace</dt><dd id="e-listed"></dd></div>
+      <div><dt>Pixels whose colour differs from the reference</dt><dd id="e-differ"></dd></div>
+      <div><dt>Of those, pixels both surfaces cover</dt><dd id="e-differ-edge"></dd></div>
+    </dl>
+    <p class="readout" id="e-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> A patch of 14 &times; 8 pixels where the sphere stands in front of the ground, each pixel's four samples at the standard 4x offsets, each sample in the colour of the answer it takes and each pixel in the mean of its samples. <b>Reference</b>: each surface covering some of a pixel's samples runs a fragment whose ray starts at the centroid of the samples it covers, as Praxis's lit pass traced inline before the mask. <b>One word per pixel</b>: the pass traces from the nearest sample, ringed, and every fragment reads it. <b>Two words</b>: samples off the nearest sample's plane are marked, the farthest of them is traced into layer 1, and each fragment reads layer 1 where it covers a marked sample. The slider moves a shadow's edge across the ground. Simplified: an orthographic view, so a pixel is one unit wide at every distance; one light; the sphere lit or in shadow as a whole; the sphere's true curved surface standing in for a mesh's flat triangles; and each pixel's colour the mean of its samples' displayed colours, where Praxis's resolve averages exposed colour weighted by 1/(1 + luminance). Where the ground's shadow edge crosses a pixel, any mask can differ from the reference by up to a pixel, because its ray starts at a sample rather than at a centroid.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="minority">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; <code>trace_second_surfaces</code> &middot; <code>shadow_mask_pass.rs</code></div>
+    <h2>Tracing a minority</h2>
+    <p class="key-idea"><b>Key idea.</b> Second surfaces lie thinly along edges, so tracing them where they lie makes whole SIMD groups wait for a few lanes. Packing them into one frame-wide list, traced by an indirect dispatch the GPU sizes itself, costs roughly the lanes that need it.</p>
+    <p>On <code>town</code>, 13.7% of pixels have a second surface. The obvious code traces it in <code>build_shadow_mask</code>, behind an <code>if</code>. That cost <code>town</code> 4.1 ms.</p>
+    <h3>Why a branch costs the whole group</h3>
+    <p>A GPU runs invocations in lockstep groups that share one instruction stream: <span class="concept" data-term="SIMD group" data-tip="A group of invocations that a GPU core runs in lockstep, one instruction for all of them at once, with lanes masked off where a branch does not apply to them.">SIMD groups</span>. Dougall Johnson's reverse-engineered reference to the G13, the M1's GPU, puts it plainly: "The G13 architecture has 32 threads per SIMD-group", and inactive threads are tracked in "a 32-bit execution mask". Praxis already sizes one workgroup for that width; <code>culling.wgsl</code> calls 32 invocations "a SIMD-group on Apple GPUs". When some lanes of a group take a branch, the whole group steps through it, the others masked off and waiting. Edges are thin lines, so they cross most groups: a group of 32 pixels with even one edge pixel among them runs a full second trace.</p>
+    <p>Lauritzen's notes describe the same trap for per-sample shading: "Lack of spatial locality causes hardware scheduling inefficiency [&hellip;] Can use branching, but incurs scheduling problems [&hellip;] Instead, reschedule per-sample pixels". Their tile-based recipe shades sample 0 of the whole tile, then packs "a list of pixels that require per-sample shading" and redistributes threads over it. Packing within each 8&times;8 or 16&times;16 workgroup did not help Praxis: PR #387 records 10.85 and 12.9 ms against 10.70. So the list is frame-wide.</p>
+    <h3>The list</h3>
+    <p>Each edge pixel claims an entry with one atomic add and writes its pixel and sample into it, packed into a <code>u32</code>: the column in the low 16 bits, the row in the next 14, the sample in the top 2. That is why <code>RenderTargets::new</code> asserts the target is at most 2<sup>14</sup>, 16,384, pixels tall. One atomic per pixel beat one per workgroup with barriers by 0.1 ms, and is simpler.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at 7442717a, build_shadow_mask.</span>
+let entry = atomicAdd(&amp;second_surfaces.count, 1u);
+second_surfaces.entries[entry] = invocation.x | (invocation.y &lt;&lt; 16u) | (second_sample &lt;&lt; 30u);
+<span class="comment">// The entry that opens a workgroup's run of the second dispatch</span>
+<span class="comment">// adds that workgroup, in rows of MAX_WORKGROUPS_PER_DIMENSION.</span>
+let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+if entry % group_size == 0u {
+    let groups = entry / group_size + 1u;
+    atomicMax(&amp;second_surface_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+    atomicMax(
+        &amp;second_surface_dispatch[1],
+        (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+    );
+    atomicStore(&amp;second_surface_dispatch[2], 1u);
+}</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>The GPU sizes the second dispatch.</b> The CPU cannot know how many pixels will be listed, so the second dispatch is indirect: it reads its workgroup counts from a buffer the first dispatch writes. The entry that opens each run of 64 adds a workgroup with <code>atomicMax</code>, so the counts end at the number of workgroups the list needs.</li>
+      <li><b>Rows of 65,535.</b> A dispatch may have at most 65,535 workgroups along each dimension, <code>MAX_WORKGROUPS_PER_DIMENSION</code>. At 64 entries a workgroup, a list past 65,535 &times; 64, about 4.2 million pixels, would overflow x, and a target of more pixels than that, such as 3840&times;2160's 8.3 million, can list that many. A review fix folds the count into rows: x is at most 65,535, y the rows needed, and each invocation works out its entry from both.</li>
+      <li><b>One read of the count per workgroup.</b> Every invocation of <code>trace_second_surfaces</code> must check its entry against the count. Lane 0 loads it and <code>workgroupUniformLoad</code> shares it, because, as the shader says, "an atomic every invocation loads from one address serialises them".</li>
+      <li><b>One pass, cleared first.</b> Both dispatches run in one compute pass. Before it, the encoder clears the dispatch buffer and the list's count, its first 4 bytes.</li>
+      <li><b>A stand-in buffer.</b> wgpu checks the buffers a dispatch uses as one set, and an indirect dispatch may not read its arguments from a buffer that a bound group can write. The first dispatch's group binds the dispatch buffer read-write, so the second binds a 12-byte stand-in in that slot, same layout; one function builds both groups.</li>
+    </ul>
+<pre class="code" style="margin-top: 16px"><code><span class="comment">// shadow_mask.wgsl at 7442717a.</span>
+@compute @workgroup_size(SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE)
+fn trace_second_surfaces(
+    @builtin(workgroup_id) group: vec3&lt;u32&gt;,
+    @builtin(num_workgroups) groups: vec3&lt;u32&gt;,
+    @builtin(local_invocation_index) lane: u32
+) {
+    if lane == 0u {
+        listed_count = atomicLoad(&amp;second_surfaces.count);
+    }
+    let entry = (group.y * groups.x + group.x) * SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE + lane;
+    if entry &gt;= workgroupUniformLoad(&amp;listed_count) {
+        return;
+    }
+    <span class="comment">// &hellip; decode the pixel and sample, load its depth, trace into layer 1</span>
+}</code></pre>
+    <p style="margin-top: 16px">The result: tracing the list cost <code>town</code> 1.08 ms of GPU frame, against 4.1 ms in place.</p>
+  </div>
+  <figure class="wide" id="demo-schedule">
+    <div class="canvas-frame"><canvas id="s-canvas" class="demo-canvas" role="img" aria-label="A field of pixels with edge pixels along outlines, and the SIMD groups that pay a second trace."></canvas></div>
+    <div class="sliders">
+      <label for="s-share" class="control-label">Pixels with a second surface <output id="s-share-out" for="s-share"></output></label>
+      <input type="range" id="s-share" min="0" max="0.4" step="0.001" value="0.137">
+    </div>
+    <div class="controls">
+      <span class="control-label">Show</span>
+      <div class="seg" role="group" aria-label="Scheduling" id="s-mode">
+        <button type="button" data-mode="inPlace" aria-pressed="true">in place</button>
+        <button type="button" data-mode="perTile" aria-pressed="false">packed per 8&times;8 tile</button>
+        <button type="button" data-mode="frameWide" aria-pressed="false">frame-wide list</button>
+      </div>
+    </div>
+    <div class="meter" id="s-meter" style="margin-top: 16px"></div>
+    <p class="readout" id="s-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo, a model.</b> A field of 96 &times; 48 pixels in 8&times;8 workgroups, each two SIMD groups of 32 lanes, its top and bottom four rows; 32 lanes is the G13's width, assumed here for the M4 Pro, and the split of a workgroup into groups is an assumption too. Edge pixels, in orange, are laid along outlines one pixel wide, as silhouettes are. One full pass costs one trace per group; the bars add the groups that run a second trace. <b>In place</b>: every group with an edge lane, shaded. <b>Per tile</b>: each workgroup packs its edge pixels into its first lanes, so it runs one extra group for every 32 of them, rounded up. <b>Frame-wide</b>: one list, 32 entries a group, drawn as the strip below. The model counts traces only. It cannot see the barriers per-tile packing needs, or a workgroup's other group waiting for the one tracing, and it gives per-tile packing a gain that PR #387 did not measure. The measured costs on <code>town</code> are the PR's: in place 4.1 ms, per tile no better, frame-wide 1.08 ms of GPU frame.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; PR #387's metrics</div>
+    <h2>What it costs</h2>
+    <p class="key-idea"><b>Key idea.</b> Judge the fix by the GPU frame, 1.08 ms more on <code>town</code>, not by the lit pass's timestamp, which rose 7.9 ms only because Metal now runs it alongside the shadow mask pass's second dispatch.</p>
+    <p><code>town</code> on the M4 Pro at 2560&times;1440 against main's <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, from <code>praxis report</code>, in &micro;s:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Time</th><th class="n">Median</th><th class="n">Baseline</th><th class="n">&Delta;</th><th class="n">Ratio</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>GPU frame</td><td class="n">17,569.2</td><td class="n">16,488.2</td><td class="n">+1,081.0</td><td class="n">1.066</td></tr>
+        <tr><td>Gate, rays off</td><td class="n">8,672.6</td><td class="n">8,691.8</td><td class="n">&minus;19.2</td><td class="n">0.998</td></tr>
+        <tr><td>Shadow-ray time</td><td class="n">8,481.7</td><td class="n">7,393.7</td><td class="n">+1,088.0</td><td class="n">1.147</td></tr>
+        <tr><td><code>lit_pass</code></td><td class="n">13,455.5</td><td class="n">5,586.4</td><td class="n">+7,869.0</td><td class="n">2.409</td></tr>
+        <tr><td><code>shadow_mask_pass</code></td><td class="n">9,579.0</td><td class="n">6,544.8</td><td class="n">+3,034.2</td><td class="n">1.464</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">From PR #387's Metrics, rows trimmed as the PR trims them, its p95 and Budget columns left out. <code>town</code>'s GPU frame Budget is 12,000 &micro;s, which its Baseline already exceeded.</p>
+    <h3>Why the lit pass did not get 7.9 ms slower</h3>
+    <p>On Metal, passes can overlap, so a pass's own timestamps can include time spent waiting on the pass before (<a href="frame-timing.html#frame">Frame Timing Explained</a>). Metal now overlaps the lit pass's start with the shadow mask pass's indirect dispatch, so the lit pass's span takes in that wait. A run without the second dispatch read the lit pass at 5.85 ms. So neither pass's own delta is the fix's cost. Only spans count shared time once: the GPU frame rose 1.08 ms, and the shadow-ray time, the rays-on frame minus the rays-off frame, rose by nearly the same, 1.09 ms. ADR 0019's amendment quotes 1.15 ms from another run; about 1.1 ms either way.</p>
+    <p>The gate, which ADR 0019 times with shadow rays off, moved 19 &micro;s, within noise: with rays off, the shadow mask pass does not run.</p>
+    <h3>Memory, allocations, aliasing</h3>
+    <ul class="keypoints">
+      <li><b>16 bytes per pixel.</b> Layer 1, 8 bytes; <code>shadow_mask_samples</code>, 4; a list entry, 4, since every pixel could be listed. With the list's 4-byte count, that is 58,982,404 bytes at 2560&times;1440, as ADR 0019 records. The bench's <code>gpu_memory_bytes</code> rose by 58,982,428, the two 12-byte dispatch buffers included.</li>
+      <li><b>Heap allocations</b>: the bench's <code>heap_allocations</code> rose by 9, from wgpu's validation of the indirect dispatch.</li>
+      <li><b>Aliasing RMSE &minus;13%.</b> The bench compares the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>'s frame with the same frame rendered at three times the size and box-filtered in linear light. <code>aliasing_rmse</code> fell from 6,413 to 5,579, a ratio of 0.870, and <code>aliasing_p99</code> from 20,967 to 18,210. The fringe was aliasing, and the counter saw it go.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="limits">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 &middot; ADR 0019's amendment</div>
+    <h2>Limits</h2>
+    <p class="key-idea"><b>Key idea.</b> Two words per pixel cover a silhouette over one background. Three surfaces in a pixel, coverage taken before the depth test, and the jagged edges of shadows themselves remain.</p>
+    <ul class="keypoints">
+      <li><b>Three surfaces or more.</b> Where a pixel's samples show three surfaces, every off-plane sample is marked and the farthest is traced, so the middle surface's fragment takes the farthest one's word. ADR 0019 records it. SBAA suggests storing 2 or 3 surfaces per pixel; Praxis stores 2.</li>
+      <li><b>Coverage before the depth test.</b> <code>sample_mask</code> may include samples where the fragment then fails the depth test. A fragment of the nearest surface whose triangle runs under a nearer surface at another sample then counts that sample as covered, and reads the second word. PR #387 deferred it: revive it if a visual audit finds a fringe at steep interpenetrating geometry, or if wgpu exposes coverage after the depth test.</li>
+      <li><b>The shadow's own edge.</b> The mask is still one ray per light per surface per pixel, so the boundary between shadow and light across a surface aliases at one sample per pixel while geometry gets 4x MSAA. That is ticket #358, waiting on a literature study, #364. Keeping the mask per surface means #358 can read it per surface.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>A floor seen at a grazing angle has samples whose depths differ by more than a pixel's width. Why is it not listed for a second trace?</summary><p>The test does not compare depths. It measures each sample's distance from the plane of the nearest sample's triangle, along that triangle's normal. Every sample of a flat floor lies on that plane, at distance zero, whatever its depth. Only a sample off the plane by more than one pixel's world width at the nearest sample's distance counts as another surface.</p></details>
+    <details class="check"><summary>At an edge pixel, <code>shadow_mask_samples</code> holds <code>0b1100</code>. A fragment's <code>sample_mask</code> is <code>0b1000</code>. Which word does it read, and which did it read before PR #387?</summary><p><code>0b1000 &amp; 0b1100</code> is not zero, so it covers a second-surface sample and reads layer 1, traced from the farthest of samples 2 and 3. Before, every fragment read the one word, traced from the nearest sample, which is on the other surface: the fragment shaded its samples with the other surface's shadow.</p></details>
+    <details class="check"><summary>Only 13.7% of <code>town</code>'s pixels need a second trace. Why did tracing them in place cost 4.1 ms, and why does the lit pass's +7.9 ms not mean the fix costs 7.9 ms?</summary><p>Edge pixels lie along thin lines that cross most 32-lane SIMD groups, and a group with one lane in the branch runs the whole trace, so in place most groups traced twice. A frame-wide list packs them into as few groups as they fill: 1.08 ms of GPU frame. The lit pass's timestamp grew because Metal overlaps its start with the second dispatch, so its span includes that work; a run without the dispatch read it at 5.85 ms. The GPU frame, a span, counts the overlap once.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Code links are pinned to 7442717a.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/357">Ticket #357</a> and <a href="https://github.com/gariasf/praxis/pull/387">PR #387</a> <span>the fringe's measurements, the fix, its review, metrics and gallery</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/191df12abde23709d067f013946ffaf495a0338c/357">The PR's images</a> <span>before, after and difference for every Reference scene, and the crops above</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a> <span>the amendment of 2026-10-29: the rule, its limits, its memory and cost</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/353">Ticket #353</a> <span>the visual audit that found the fringe</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/358">Ticket #358</a> <span>the shadow edges themselves, next</span></li>
+      </ul>
+      <h4>The code, at 7442717a</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/src/render/shaders/shadow_mask.wgsl"><code>shadow_mask.wgsl</code></a> <span><code>build_shadow_mask</code>, <code>surface_word</code>, <code>trace_second_surfaces</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/src/render/shaders/main.wgsl"><code>main.wgsl</code></a> <span><code>fs_main</code>'s choice of word</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/src/render/shadow_mask_pass.rs"><code>shadow_mask_pass.rs</code></a> <span>the two dispatches, the clears and the stand-in buffer</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/src/render/targets.rs"><code>targets.rs</code></a> <span>the two-layer mask, its samples and the list</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/7442717a2799c3bdcf07236ebe2454034ba43a68/src/render/renderer.rs"><code>renderer.rs</code></a> <span>the seam test, <code>an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one</code></span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="shadow-rays.html">Shadow Rays Explained</a> <span>the shadow mask, and the fringe it predicted</span></li>
+        <li><a href="shadow-terminator.html">Shadow Terminator Explained</a> <span>the surface normals the plane test reads</span></li>
+        <li><a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> <span>samples, fragments and coverage</span></li>
+        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>spans, overlap and shadow-ray time</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and references</h3>
+      <ul>
+        <li>Lauritzen, <a href="https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf">&ldquo;Deferred Rendering for Current and Future Rendering Pipelines&rdquo;</a>, SIGGRAPH 2010 course Beyond Programmable Shading, slides 19&ndash;20 and 23&ndash;24 (<a href="https://web.archive.org/web/20250614051825/https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf">archived copy</a>) <span>finding surface discontinuities from depth derivatives, and packing per-sample pixels into a list</span></li>
+        <li>Salvi and Vidim&#x10D;e, <a href="https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf">&ldquo;Surface Based Anti-Aliasing&rdquo;</a>, I3D 2012, pp. 159&ndash;164, &sect;3.1, <a href="https://doi.org/10.1145/2159616.2159643">doi:10.1145/2159616.2159643</a> <span>few surfaces per pixel, one shading sample each</span></li>
+        <li>Dougall Johnson, <a href="https://dougallj.github.io/applegpu/docs.html">&ldquo;Apple G13 GPU Architecture Reference&rdquo;</a> <span>32 threads per SIMD-group and the execution mask, reverse-engineered on the M1</span></li>
+        <li>W3C, WGSL: <a href="https://www.w3.org/TR/WGSL/#sample-mask-builtin-value"><code>sample_mask</code></a>, <a href="https://www.w3.org/TR/WGSL/#workgroupUniformLoad-builtin"><code>workgroupUniformLoad</code></a> <span>the coverage input and the uniform load chapters 5 and 6 use</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman et al., <i>Real-Time Rendering</i>, 4th ed., &sect;5.4 Aliasing and Antialiasing, pp. 130&ndash;147, &sect;20.1 Deferred Shading, pp. 883&ndash;888, and &sect;20.3 Tiled Shading, pp. 892&ndash;897 <span>MSAA's coverage and shading rates, and deferred and tiled shading, where the book cites Lauritzen's course (pp. 888, 893, 895 and 896). Sections and pages from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">contents, bibliography and index</a>.</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Shadow mask, Surface normals and Froxel are <code>CONTEXT.md</code>'s definitions, the first two shortened; so are the tooltips for Golden, Baseline and Reference scene. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades.</dd></div>
+    <div><dt>Edge pixel</dt><dd>A pixel whose samples show more than one surface, such as one a silhouette crosses.</dd></div>
+    <div><dt>Second surface</dt><dd>At an edge pixel, the surface of the farthest sample that lies off the nearest sample's triangle plane by more than a pixel's width; the mask's layer 1 holds its word.</dd></div>
+    <div><dt>Surface discontinuity</dt><dd>A place where neighbouring samples show different surfaces rather than one surface continuing, found by comparing each sample with the plane its neighbour's surface predicts.</dd></div>
+    <div><dt>Sample mask</dt><dd>A fragment-stage input: a bit for each of the pixel's samples that the fragment's triangle covers.</dd></div>
+    <div><dt>SIMD group</dt><dd>Invocations a GPU core runs in lockstep, one instruction for all; 32 on Apple's GPUs, as reverse-engineered on the M1.</dd></div>
+    <div><dt>Indirect dispatch</dt><dd>A compute dispatch whose workgroup counts come from a GPU buffer, so earlier GPU work can size it.</dd></div>
+    <div><dt>Surface normals</dt><dd>Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads.</dd></div>
+    <div><dt>Froxel</dt><dd>A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/357">#357</a>, PR <a href="https://github.com/gariasf/praxis/pull/387">#387</a> at 7442717a, ADR 0019, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is the PR's or the ticket's own, on one Apple M4 Pro. Both demos are this page's illustrative models.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="visibility-buffer.html">Previous: Visibility Buffer Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  // ---- Demo 1's model: an edge pixel patch, after build_shadow_mask and fs_main.
+  const COLUMNS = 14, ROWS = 8;
+  // The standard 4x sample offsets from a pixel's top left corner (SAMPLE_OFFSETS).
+  const SAMPLE_OFFSETS = [[0.375, 0.125], [0.875, 0.375], [0.125, 0.625], [0.625, 0.875]];
+  // An orthographic view, one world unit per pixel, so a pixel's width is 1 at
+  // every distance. The sphere stands 12 units ahead; the ground slopes, 400
+  // units ahead less 2 per row, so it comes nearer toward the bottom.
+  const SPHERE_CENTRE = [6.5, 3.9, 12], SPHERE_RADIUS = 3.15;
+  const GROUND_NORMAL = (() => { const length = Math.hypot(0, 2, 1); return [0, 2 / length, 1 / length]; })();
+  const PIXEL_WIDTH = 1;
+  const EDGE_NORMAL = [Math.SQRT1_2, Math.SQRT1_2];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const minus3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  // What the view shows at screen point (x, y): the surface, its position, its plane's normal.
+  function surfaceAt(x, y) {
+    const across = Math.hypot(x - SPHERE_CENTRE[0], y - SPHERE_CENTRE[1]);
+    if (across < SPHERE_RADIUS) {
+      const position = [x, y, SPHERE_CENTRE[2] - Math.sqrt(SPHERE_RADIUS * SPHERE_RADIUS - across * across)];
+      return { surface: "sphere", position: position, normal: minus3(position, SPHERE_CENTRE).map((value) => value / SPHERE_RADIUS) };
+    }
+    return { surface: "ground", position: [x, y, 400 - 2 * y], normal: GROUND_NORMAL };
+  }
+  // Whether the light is hidden from screen point `point` on `surface`: the
+  // sphere lit or not as a whole, the ground beyond the shadow's edge, which
+  // crosses the patch's middle row `edge` pixels from its left side.
+  function hidden(surface, point, setting) {
+    if (surface === "sphere") return !setting.sphereLit;
+    return (point[0] - setting.edge) * EDGE_NORMAL[0] + (point[1] - ROWS / 2) * EDGE_NORMAL[1] > 0;
+  }
+  // One pixel: each sample's answer under the three modes, and what the fix marks.
+  function edgePixel(column, row, setting) {
+    const samples = SAMPLE_OFFSETS.map(([across, down]) => surfaceAt(column + across, row + down));
+    // The nearest sample, the least distance (reverse-Z's greatest depth); the first such.
+    let nearest = 0;
+    samples.forEach((sample, index) => { if (sample.position[2] < samples[nearest].position[2]) nearest = index; });
+    const near = samples[nearest];
+    // Reference: a fragment per surface, its ray from the centroid of the samples it covers.
+    const centroid = (surface) => {
+      const covered = samples.filter((sample) => sample.surface === surface);
+      return [0, 1].map((axis) => covered.reduce((sum, sample) => sum + sample.position[axis], 0) / covered.length);
+    };
+    const reference = samples.map((sample) => hidden(sample.surface, centroid(sample.surface), setting));
+    // Before: one word, from the nearest sample, for every fragment.
+    const firstWord = hidden(near.surface, near.position, setting);
+    const before = samples.map(() => firstWord);
+    // After: the samples off the nearest sample's plane by more than a pixel's
+    // width, or, with the raw test, whose distance differs by more than it.
+    const second = samples.map((sample) => setting.test === "raw"
+      ? Math.abs(sample.position[2] - near.position[2]) > PIXEL_WIDTH
+      : Math.abs(dot3(minus3(sample.position, near.position), near.normal)) > PIXEL_WIDTH);
+    const secondSamples = second.reduce((bits, isSecond, index) => bits | (isSecond ? 1 << index : 0), 0);
+    let secondSample = -1;
+    samples.forEach((sample, index) => {
+      if (second[index] && (secondSample < 0 || sample.position[2] > samples[secondSample].position[2])) secondSample = index;
+    });
+    const secondWord = secondSample < 0 ? false : hidden(samples[secondSample].surface, samples[secondSample].position, setting);
+    // Each fragment covers its surface's samples; it reads layer 1 where they meet the second samples.
+    const coverage = (surface) => samples.reduce((bits, sample, index) => bits | (sample.surface === surface ? 1 << index : 0), 0);
+    const after = samples.map((sample) => (coverage(sample.surface) & secondSamples) !== 0 ? secondWord : firstWord);
+    return {
+      column: column, row: row, samples: samples, nearest: nearest, second: second, secondSample: secondSample,
+      reference: reference, before: before, after: after,
+      surfaces: new Set(samples.map((sample) => sample.surface)).size,
+      listed: secondSamples !== 0,
+    };
+  }
+  function edgePatch(setting) {
+    const pixels = [];
+    for (let row = 0; row < ROWS; row++) for (let column = 0; column < COLUMNS; column++) pixels.push(edgePixel(column, row, setting));
+    const differs = (pixel) => pixel[setting.mode].some((answer, index) => answer !== pixel.reference[index]);
+    return {
+      pixels: pixels,
+      differs: differs,
+      twoSurfaces: pixels.filter((pixel) => pixel.surfaces === 2).length,
+      listed: pixels.filter((pixel) => pixel.listed).length,
+      different: pixels.filter(differs).length,
+      differentAtEdges: pixels.filter((pixel) => pixel.surfaces === 2 && differs(pixel)).length,
+    };
+  }
+
+  // ---- Demo 2's model: scheduling a minority of second traces.
+  const FIELD_WIDTH = 96, FIELD_HEIGHT = 48, TILE = 8, LANES = 32;
+  // Pixels along silhouettes, in the order outlines are laid down: ellipses
+  // and strokes from a fixed seed, one pixel wide, so a share of the field is
+  // always whole outlines, never scattered pixels.
+  const EDGE_ORDER = (() => {
+    let seed = 357;
+    const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const order = [], seen = new Set();
+    const plot = (x, y) => {
+      const px = Math.round(x), py = Math.round(y);
+      if (px < 0 || py < 0 || px >= FIELD_WIDTH || py >= FIELD_HEIGHT) return;
+      const key = py * FIELD_WIDTH + px;
+      if (!seen.has(key)) { seen.add(key); order.push(key); }
+    };
+    while (order.length < FIELD_WIDTH * FIELD_HEIGHT * 0.45) {
+      const x = random() * FIELD_WIDTH, y = random() * FIELD_HEIGHT;
+      if (random() < 0.6) {
+        const radiusX = 3 + random() * 12, radiusY = 3 + random() * 9;
+        const steps = Math.ceil(2 * Math.PI * Math.max(radiusX, radiusY) * 2);
+        for (let step = 0; step < steps; step++) {
+          const turn = (step / steps) * 2 * Math.PI;
+          plot(x + radiusX * Math.cos(turn), y + radiusY * Math.sin(turn));
+        }
+      } else {
+        const angle = random() * Math.PI, length = 10 + random() * 30;
+        for (let step = 0; step <= length * 2; step++) plot(x + Math.cos(angle) * step / 2, y + Math.sin(angle) * step / 2);
+      }
+    }
+    return order;
+  })();
+  // The SIMD group of pixel `key`: half an 8x8 workgroup, its top or bottom four rows (an assumption).
+  const groupOf = (key) => {
+    const x = key % FIELD_WIDTH, y = Math.floor(key / FIELD_WIDTH);
+    return ((Math.floor(y / TILE) * (FIELD_WIDTH / TILE) + Math.floor(x / TILE)) * 2) + Math.floor((y % TILE) / (TILE / 2));
+  };
+  const tileOf = (key) => groupOf(key) >> 1;
+  function schedule(share) {
+    const pixels = FIELD_WIDTH * FIELD_HEIGHT;
+    const count = Math.min(EDGE_ORDER.length, Math.round(share * pixels));
+    const edges = EDGE_ORDER.slice(0, count);
+    const groups = pixels / LANES;
+    const perTile = new Map();
+    edges.forEach((key) => perTile.set(tileOf(key), (perTile.get(tileOf(key)) || 0) + 1));
+    const extra = {
+      // Any group with an edge lane runs the second trace, all its lanes waiting.
+      inPlace: new Set(edges.map(groupOf)).size,
+      // Each workgroup packs its edge pixels into its first lanes.
+      perTile: Array.from(perTile.values()).reduce((sum, listed) => sum + Math.ceil(listed / LANES), 0),
+      // One frame-wide list, 32 entries to a group.
+      frameWide: Math.ceil(count / LANES),
+    };
+    return {
+      edges: edges, count: count, pixels: pixels, groups: groups, extra: extra, perTile: perTile,
+      relative: { inPlace: 1 + extra.inPlace / groups, perTile: 1 + extra.perTile / groups, frameWide: 1 + extra.frameWide / groups },
+    };
+  }
+
+  if (typeof module !== "undefined") {
+    module.exports = { edgePatch, schedule, EDGE_ORDER, FIELD_WIDTH, FIELD_HEIGHT };
+    return;
+  }
+
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // A canvas `width` CSS pixels wide, its height `aspect` of that, at the device's resolution.
+  function sizeCanvas(canvas, aspect) {
+    const width = Math.max(240, Math.floor(canvas.parentElement.clientWidth));
+    const height = Math.round(width * aspect);
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.height = height + "px";
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+  // An "rgb(...)" or "#rrggbb" token as three numbers.
+  function rgbOf(colour) {
+    if (colour.startsWith("#")) return [1, 3, 5].map((start) => parseInt(colour.slice(start, start + 2), 16));
+    return (colour.match(/[\d.]+/g) || ["0", "0", "0"]).slice(0, 3).map(Number);
+  }
+  const grouped = (value) => value.toLocaleString("en-GB");
+  const scheme = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function onResize(element, draw) {
+    if (window.ResizeObserver) {
+      let last = 0;
+      new ResizeObserver(() => {
+        const width = element.clientWidth;
+        if (width !== last) { last = width; draw(); }
+      }).observe(element);
+    } else {
+      window.addEventListener("resize", draw);
+    }
+    if (scheme && scheme.addEventListener) scheme.addEventListener("change", draw);
+  }
+
+  // ---- Demo 1: an edge pixel patch.
+  (function () {
+    const canvas = document.getElementById("e-canvas");
+    if (!canvas) return;
+    const slider = document.getElementById("e-edge");
+    const setting = { mode: "before", sphereLit: true, test: "plane", edge: Number(slider.value) };
+    const pixelsWord = (count) => grouped(count) + (count === 1 ? " pixel" : " pixels");
+    function describe(patch) {
+      if (setting.mode === "reference") {
+        return "Reference: at each of the " + patch.twoSurfaces + " pixels both surfaces cover, the sphere and the ground each run a fragment whose ray starts at the centroid of its samples, so every sample takes its own surface's answer.";
+      }
+      if (setting.mode === "before") {
+        return "One word per pixel: every fragment reads the answer traced from the nearest sample, ringed, which along the outline is always the sphere's. " +
+          (patch.differentAtEdges === 0
+            ? "Here the ground's own rays would answer the same, so no pixel along the outline changes."
+            : pixelsWord(patch.differentAtEdges) + " along the outline take the sphere's answer on the ground's samples: a " +
+              (setting.sphereLit ? "lighter" : "darker") + " fringe, one pixel wide.");
+      }
+      const listed = setting.test === "raw"
+        ? "The raw depth test lists " + pixelsWord(patch.listed) + ": the sloping ground's samples differ in depth by more than a pixel's width, so most pixels are traced twice, and a sphere sample near the limb can be taken for another surface."
+        : "The plane test lists " + pixelsWord(patch.listed) + ", the pixels the outline crosses.";
+      return "Two words: the samples off the nearest sample's plane, squared, are traced from the farthest of them into layer 1, and the ground's fragment reads it. " + listed +
+        (patch.differentAtEdges === 0
+          ? " No pixel along the outline differs from the reference."
+          : " " + pixelsWord(patch.differentAtEdges) + " along the outline still " + (patch.differentAtEdges === 1 ? "differs" : "differ") + (setting.test === "raw" ? "." : ", where the ground's shadow edge crosses " + (patch.differentAtEdges === 1 ? "it." : "them.")));
+    }
+    function draw() {
+      const patch = edgePatch(setting);
+      const view = sizeCanvas(canvas, (ROWS + 1) / (COLUMNS + 1));
+      const context = view.context;
+      context.fillStyle = css("--panel");
+      context.fillRect(0, 0, view.width, view.height);
+      const size = Math.min(view.width / (COLUMNS + 1), view.height / (ROWS + 1));
+      const left = (view.width - COLUMNS * size) / 2, top = (view.height - ROWS * size) / 2;
+      const screen = (point) => [left + point[0] * size, top + point[1] * size];
+      const palette = {
+        sphere: [rgbOf(css("--o-sphere")), rgbOf(css("--o-sphere-dark"))],
+        ground: [rgbOf(css("--o-ground")), rgbOf(css("--o-shadow"))],
+      };
+      const fill = (rgb) => "rgb(" + rgb.map((channel) => Math.round(channel)).join(", ") + ")";
+      const ink = css("--ink"), soft = css("--ink-soft"), warm = css("--warm"), bad = css("--bad");
+      for (const pixel of patch.pixels) {
+        const answers = pixel[setting.mode];
+        const resolved = [0, 1, 2].map((channel) =>
+          pixel.samples.reduce((sum, sample, index) => sum + palette[sample.surface][answers[index] ? 1 : 0][channel], 0) / 4);
+        context.fillStyle = fill(resolved);
+        context.fillRect(left + pixel.column * size, top + pixel.row * size, size, size);
+      }
+      context.strokeStyle = css("--rule");
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let column = 0; column <= COLUMNS; column++) { context.moveTo(left + column * size, top); context.lineTo(left + column * size, top + ROWS * size); }
+      for (let row = 0; row <= ROWS; row++) { context.moveTo(left, top + row * size); context.lineTo(left + COLUMNS * size, top + row * size); }
+      context.stroke();
+      // The ground's shadow edge, dashed, kept off the sphere.
+      const [centreX, centreY] = screen(SPHERE_CENTRE);
+      context.save();
+      context.beginPath();
+      context.rect(left, top, COLUMNS * size, ROWS * size);
+      context.arc(centreX, centreY, SPHERE_RADIUS * size, 0, 2 * Math.PI);
+      context.clip("evenodd");
+      context.setLineDash([6, 4]);
+      context.strokeStyle = ink;
+      context.lineWidth = 1.5;
+      const reach = COLUMNS + ROWS;
+      const [fromX, fromY] = screen([setting.edge - EDGE_NORMAL[1] * reach, ROWS / 2 + EDGE_NORMAL[0] * reach]);
+      const [toX, toY] = screen([setting.edge + EDGE_NORMAL[1] * reach, ROWS / 2 - EDGE_NORMAL[0] * reach]);
+      context.beginPath(); context.moveTo(fromX, fromY); context.lineTo(toX, toY); context.stroke();
+      context.restore();
+      context.strokeStyle = ink;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(centreX, centreY, SPHERE_RADIUS * size, 0, 2 * Math.PI);
+      context.stroke();
+      // Each sample in the colour of its answer; the nearest ringed; second-surface samples squared.
+      const radius = Math.min(Math.max(size * 0.085, 2), 5.5);
+      for (const pixel of patch.pixels) {
+        const answers = pixel[setting.mode];
+        pixel.samples.forEach((sample, index) => {
+          const [x, y] = screen(sample.position);
+          context.beginPath();
+          context.arc(x, y, radius, 0, 2 * Math.PI);
+          context.fillStyle = fill(palette[sample.surface][answers[index] ? 1 : 0]);
+          context.fill();
+          context.strokeStyle = soft;
+          context.lineWidth = 1;
+          context.stroke();
+          if (setting.mode === "after" && pixel.second[index]) {
+            context.strokeStyle = warm;
+            context.lineWidth = 2;
+            context.strokeRect(x - radius - 2, y - radius - 2, 2 * radius + 4, 2 * radius + 4);
+          }
+          if (setting.mode !== "reference" && index === pixel.nearest) {
+            context.beginPath();
+            context.arc(x, y, radius + 2.5, 0, 2 * Math.PI);
+            context.strokeStyle = ink;
+            context.lineWidth = 1.5;
+            context.stroke();
+          }
+        });
+      }
+      context.strokeStyle = bad;
+      context.lineWidth = 2;
+      for (const pixel of patch.pixels) {
+        if (patch.differs(pixel)) context.strokeRect(left + pixel.column * size + 2, top + pixel.row * size + 2, size - 4, size - 4);
+      }
+      context.font = "600 13px " + css("--mono");
+      context.fillStyle = ink;
+      context.textAlign = "center";
+      context.fillText("sphere", centreX, centreY + 4);
+      context.textAlign = "left";
+      context.fillText("ground", left + 6, top + size / 2 + 4);
+      const note = describe(patch);
+      document.getElementById("e-note").textContent = note;
+      document.getElementById("e-two").textContent = grouped(patch.twoSurfaces);
+      document.getElementById("e-listed").textContent = setting.mode === "after" ? grouped(patch.listed) : "none";
+      document.getElementById("e-differ").textContent = grouped(patch.different);
+      document.getElementById("e-differ-edge").textContent = grouped(patch.differentAtEdges);
+      document.getElementById("e-edge-out").textContent = setting.edge.toFixed(1) + " px";
+      canvas.setAttribute("aria-label", "A patch of " + COLUMNS + " by " + ROWS + " pixels where the sphere's outline crosses the ground, each pixel's four samples coloured by the answer they take. " + note);
+    }
+    slider.addEventListener("input", () => { setting.edge = Number(slider.value); draw(); });
+    segmented(document.getElementById("e-mode"), "mode", (value) => { setting.mode = value; draw(); });
+    segmented(document.getElementById("e-sphere"), "sphere", (value) => { setting.sphereLit = value === "lit"; draw(); });
+    segmented(document.getElementById("e-test"), "test", (value) => { setting.test = value; draw(); });
+    onResize(canvas.parentElement, draw);
+    draw();
+  })();
+
+  // ---- Demo 2: SIMD groups paying for a minority of second traces.
+  (function () {
+    const canvas = document.getElementById("s-canvas");
+    if (!canvas) return;
+    const slider = document.getElementById("s-share");
+    const NAMES = { inPlace: "In place", perTile: "Packed per 8×8 tile", frameWide: "Frame-wide list" };
+    let mode = "inPlace";
+    function draw() {
+      const share = Number(slider.value);
+      const result = schedule(share);
+      const view = sizeCanvas(canvas, (FIELD_HEIGHT + 7) / FIELD_WIDTH);
+      const context = view.context;
+      const cell = view.width / FIELD_WIDTH;
+      context.fillStyle = css("--panel");
+      context.fillRect(0, 0, view.width, view.height);
+      const edges = new Set(result.edges);
+      const accentWash = css("--accent-wash"), accent = css("--accent"), warm = css("--warm"), rule = css("--rule"), soft = css("--ink-soft");
+      // The groups this mode runs a second trace in.
+      const paying = new Set();
+      if (mode === "inPlace") result.edges.forEach((key) => paying.add(groupOf(key)));
+      if (mode === "perTile") result.perTile.forEach((listed, tile) => { for (let extra = 0; extra < Math.ceil(listed / LANES); extra++) paying.add(tile * 2 + extra); });
+      const groupsAcross = FIELD_WIDTH / TILE;
+      paying.forEach((group) => {
+        const tile = group >> 1, half = group & 1;
+        const x = (tile % groupsAcross) * TILE, y = Math.floor(tile / groupsAcross) * TILE + half * TILE / 2;
+        context.fillStyle = accentWash;
+        context.fillRect(x * cell, y * cell, TILE * cell, TILE / 2 * cell);
+      });
+      context.fillStyle = warm;
+      edges.forEach((key) => {
+        context.fillRect((key % FIELD_WIDTH) * cell, Math.floor(key / FIELD_WIDTH) * cell, Math.ceil(cell), Math.ceil(cell));
+      });
+      // SIMD groups thin, workgroups thick.
+      context.strokeStyle = rule;
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let y = 0; y <= FIELD_HEIGHT; y += TILE / 2) { context.moveTo(0, y * cell); context.lineTo(view.width, y * cell); }
+      context.stroke();
+      context.strokeStyle = soft;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      for (let x = 0; x <= FIELD_WIDTH; x += TILE) { context.moveTo(x * cell, 0); context.lineTo(x * cell, FIELD_HEIGHT * cell); }
+      for (let y = 0; y <= FIELD_HEIGHT; y += TILE) { context.moveTo(0, y * cell); context.lineTo(view.width, y * cell); }
+      context.stroke();
+      // The strip, frame-wide only: the list's groups of 32 entries, the last one part full.
+      const stripTop = (FIELD_HEIGHT + 1.5) * cell;
+      context.font = "12px " + css("--mono");
+      context.fillStyle = soft;
+      if (mode === "frameWide") {
+        const block = 2 * cell, gap = 2;
+        const perRow = Math.floor(view.width / (block + gap));
+        for (let index = 0; index < result.extra.frameWide; index++) {
+          const x = (index % perRow) * (block + gap), y = stripTop + Math.floor(index / perRow) * (block + gap);
+          context.fillStyle = warm;
+          context.globalAlpha = 0.25 + 0.75 * Math.min(1, (result.count - index * LANES) / LANES);
+          context.fillRect(x, y, block, block);
+        }
+        context.globalAlpha = 1;
+      } else {
+        context.fillText("Shaded: the groups that run a second trace.", 0, stripTop + 12);
+      }
+      // The meters: each mode's traces relative to one full pass.
+      const maximum = 2;
+      document.getElementById("s-meter").innerHTML = ["inPlace", "perTile", "frameWide"].map((name) => {
+        const relative = result.relative[name];
+        return "<div class=\"meter-row\"><div class=\"meter-label\"><span>" + NAMES[name] + (name === mode ? " (shown)" : "") + "</span><b>" + relative.toFixed(2) + "&times; one pass, +" +
+          grouped(result.extra[name]) + " of " + grouped(result.groups) + " groups</b></div><div class=\"meter-track\"><div class=\"meter-fill\" style=\"width:" +
+          (100 * relative / maximum).toFixed(1) + "%\"></div><div class=\"meter-budget\" style=\"left:50%\"></div></div></div>";
+      }).join("");
+      document.getElementById("s-share-out").textContent = (100 * share).toFixed(1) + "%";
+      const note = grouped(result.count) + " of " + grouped(result.pixels) + " pixels need a second trace. " +
+        (mode === "inPlace" ? "In place, " + grouped(result.extra.inPlace) + " of the " + grouped(result.groups) + " SIMD groups hold an edge lane, shaded, and each runs a whole second trace."
+          : mode === "perTile" ? "Packed per tile, each workgroup with edge pixels runs " + "one extra group per 32 of them, shaded: " + grouped(result.extra.perTile) + " in all."
+            : "Frame-wide, the list fills " + grouped(result.extra.frameWide) + " groups of 32, the strip below the field.") +
+        " The dashed line on each bar is one full pass.";
+      document.getElementById("s-note").textContent = note;
+      canvas.setAttribute("aria-label", "A field of " + FIELD_WIDTH + " by " + FIELD_HEIGHT + " pixels in 8 by 8 workgroups. " + note);
+    }
+    slider.addEventListener("input", draw);
+    segmented(document.getElementById("s-mode"), "mode", (value) => { mode = value; draw(); });
+    onResize(canvas.parentElement, draw);
+    draw();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
