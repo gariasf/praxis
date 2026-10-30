@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Box Leakage Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 25 of the series, after Edge Shadows Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --bad: #c43a31;
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --bad: #f07067; --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; min-width: 0; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); margin-top: 10px; }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+canvas.chart { width: 100%; background: var(--panel); border: 1px solid var(--rule); }
+canvas.plane { width: 100%; max-width: 960px; margin: 0 auto; image-rendering: pixelated; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.warm { border-top-color: var(--warm); }
+.legend i.dotted { border-top: 2px dotted var(--ink-soft); }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+.crop img { display: block; width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--rule); }
+.crop + .crop { margin-top: 14px; }
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .formula { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; tickets #359, #388 &middot; PR #389</div>
+  <h1>Box Leakage Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>Far along the <code>minification</code> floor the checker breaks into arcs, and #359 found the same arcs in a reference that averages the checker exactly over each pixel: a pixel's box passes detail finer than Nyquist as a small residue that flips sign and falls only as p/(&pi;w), and one sample per pixel of that residue beats into arcs. Praxis has not chosen a fix: #388 measured the candidates, among them Gaussian-weighted probes along the footprint, and its research note ends in options for the owner. The idea to keep: averaging over a box is a filter with sidelobes, not a clean cut at Nyquist.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>What Nyquist allows one sample per pixel to hold, and what folds back</li>
+      <li>Why a box of width w scales a sinusoid of period p by sinc(w/p), and why that never settles to zero</li>
+      <li>How that residue, sampled once per pixel, beats into arcs</li>
+      <li>Why hardware anisotropic filtering is a box along the major axis, and why LOD bias barely helps</li>
+      <li>What a Gaussian does instead, what it blurs, and what #388 measured</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="distant-textures.html#textures">Distant Textures Explained</a>, for texels, mips, moiré and the <code>minification</code> scene; <a href="anisotropy.html#rule">Anisotropy Explained</a>, for the probe rule; optionally <a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>, for samples and the per-pixel shading chapter 9 relies on.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 81b7e022 (main, 2026-10-30), with #388's measurements from a patch never merged. No fix is chosen yet. <b>Since then:</b> nothing, as of 2026-10-30.</p>
+  </aside>
+  <p class="lede">A pixel that averages what it covers sounds like the right answer to <span class="concept" data-term="Minification" data-tip="When a surface is so far away or so tilted that one screen pixel covers many texels.">minification</span>, and on most of the floor it is. This guide follows the case where it is not: a checker seen at a grazing angle, where each pixel's <span class="concept" data-term="Footprint" data-tip="The patch of a surface, measured in texels, that one screen pixel covers. Seen at a grazing angle it is long and thin.">footprint</span> spans many periods along the floor. It builds up the sampling theory needed to see why the exact average still shows <span class="concept" data-term="Moiré" data-tip="False rings or stripes that appear when a fine, regular pattern is read with too few samples. It is one kind of aliasing.">moiré</span>, shows that the GPU's sampler does the same thing, and reports what #388 measured for the filters that do better. Three live demos let you move the footprint and watch the residue.</p>
+  <p class="status"><b>Provenance.</b> The code is main at 81b7e022. The defect and its exact reference are #359's (PR #389, <code>docs/performance.md</code>); the measurements are #388's, on an Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, from a release build of 81b7e022 plus a measurement patch never merged. Where the guide brings in published work, it names the source.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#arcs">1 &middot; The arcs</a>
+    <a href="#nyquist">2 &middot; Sampling and Nyquist</a>
+    <a href="#box">3 &middot; The pixel as a box</a>
+    <a href="#sidelobes">4 &middot; Sidelobes</a>
+    <a href="#beats">5 &middot; From residue to arcs</a>
+    <a href="#hardware">6 &middot; The sampler is a box too</a>
+    <a href="#gaussian">7 &middot; A Gaussian instead</a>
+    <a href="#bias">8 &middot; Why LOD bias barely helps</a>
+    <a href="#measured">9 &middot; What #388 measured</a>
+    <a href="#options">10 &middot; Options</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="arcs">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; tickets #359, #388</div>
+    <h2>The arcs</h2>
+    <p class="key-idea"><b>Key idea.</b> The arcs on <code>minification</code>'s far floor are in a reference that averages the checker exactly over each pixel, so no step of the texture path makes them. Averaging over the pixel's footprint lets them through.</p>
+    <p>The <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> <code>minification</code> is a checker floor stretching to the horizon, with a checker period of 1/8 m. Captured at 2560&times;1440 at its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>'s frame, 59, its far band, rows 495 to 599, where the floor runs from about 60 m to 15 m out, shows arcs and diagonal stripes.</p>
+    <p>Ticket #359 asked where they come from. It built an exact reference: the checker averaged exactly over each pixel's footprint, the parallelogram <code>uv &plusmn; dpdx(uv)/2 &plusmn; dpdy(uv)/2</code>, over 3&times;3 subpixels, box-filtered in <span class="concept" data-term="Linear light" data-tip="Brightness as physical light, before the sRGB storage curve. Averages are only physically right when done in it.">linear light</span>. The arcs are there too, at the same places. The capture lies 1.68 8-bit steps <span class="concept" data-term="RMSE" data-tip="Root-mean-square error: the square root of the mean of the squared differences, here in 8-bit steps.">RMSE</span> from it in the band's sides. The sampler, the 16x anisotropy clamp, the cooker's box mips and their BC encoding each move the band by about a step or less, and none of them makes or removes the arcs.</p>
+    <p>So the question is not which part of the GPU gets the average wrong. It is why an exact average shows moiré at all.</p>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <img src="https://raw.githubusercontent.com/gariasf/praxis/85f2ee3915d3babd843ca382856c82855970cab2/388/far-band-references-2x.png" width="800" height="696" loading="lazy" alt="Three crops of the far band, magnified twice. Top, the capture: grey with arcs and diagonal stripes. Middle, the exact box reference: the same arcs. Bottom, the exact Gaussian reference: an even grey with faint stripes only near the bottom.">
+    </div>
+    <figcaption><b>The far band, left side, 2x.</b> Top: the capture, with the sampler's 16x anisotropic filtering. Middle: #359's exact box reference. Bottom: the same exact subpixels resized with a Gaussian of &sigma; 0.75 px instead of a box. The capture and the box reference share their arcs; the Gaussian removes them, and also greys out the stripes still resolved at the bottom of the band. Images from #388.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="nyquist">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; sampling theory</div>
+    <h2>Sampling and Nyquist</h2>
+    <p class="key-idea"><b>Key idea.</b> Samples one pixel apart can hold only patterns whose period is longer than two pixels. Finer detail does not vanish: it folds back and shows up as a coarser pattern that was never in the texture.</p>
+    <p class="plain">Sampling at spacing T can represent frequencies below the <span class="concept" data-term="Nyquist frequency" data-tip="Half the sampling rate. Samples one pixel apart can represent patterns whose period is longer than two pixels; finer ones alias.">Nyquist frequency</span>, 1/(2T). With one sample per pixel, T is one pixel, and the limit is half a cycle per pixel: a period of two pixels.</p>
+    <p>Energy above that limit folds back to a lower frequency. A sinusoid of f cycles per pixel, read at whole pixels, gives the same values as one of f &minus; n cycles for any whole number n, so it shows up at its distance from the nearest whole number. A period of 0.9 px, 1.11 cycles per pixel, reads as 0.11 cycles per pixel: a slow wave with a period of about 9 pixels. That is <span class="concept" data-term="Aliasing" data-tip="False patterns, shimmer or noise that appear when detail finer than a pixel is read with too few samples.">aliasing</span>. Mitchell and Netravali (1988) name the checkerboard as the typical source of conspicuous moiré from postaliasing, the aliasing a reconstruction filter adds when it lets high frequencies leak into the result.</p>
+    <p>On the far band, the floor is two different problems at once. Across the view, the checker's period stays about 4 to 14 pixels, well inside the limit, so the checks are resolved across. Along the floor, one pixel's footprint spans 14 to 0.9 periods, so the period along is between 1/14 and 1/0.9 of a pixel: everything there is past Nyquist. The checks are unresolved along.</p>
+    <p>The textbook cure is to remove the detail before sampling, with a <span class="concept" data-term="Prefilter" data-tip="A filter applied to a signal before it is sampled, to remove what the samples cannot hold.">prefilter</span>. Averaging each pixel's footprint is exactly that, and the next chapter shows which filter it is.</p>
+  </div>
+</section>
+
+<section class="chapter" id="box">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; the footprint's average</div>
+    <h2>The pixel as a box</h2>
+    <p class="key-idea"><b>Key idea.</b> Averaging a pixel's footprint is a box filter as wide as the footprint, followed by one sample per pixel. A box of width w keeps a sinusoid of period p's shape and scales its amplitude by sinc(w/p).</p>
+    <p>A pixel that averages its footprint weighs every point of it equally and ignores everything outside. Along the floor, that is a <span class="concept" data-term="Box filter" data-tip="A filter that averages everything inside a window with equal weights and ignores everything outside it.">box filter</span> of width w, the footprint's length, centred on the pixel's centre c. Its effect on one sinusoid takes one integral:</p>
+    <div class="formula">average of cos(2&pi;x/p) over [c &minus; w/2, c + w/2]
+  = (p / (&pi;w)) &middot; sin(&pi;w/p) &middot; cos(2&pi;c/p)
+  = sinc(w/p) &middot; cos(2&pi;c/p)      where sinc(x) = sin(&pi;x) / (&pi;x)</div>
+    <p>The box hands back the same sinusoid, read at the pixel's centre, scaled by <span class="concept" data-term="sinc" data-tip="sinc(x) = sin(&pi;x)/(&pi;x): 1 at x = 0, zero at every other whole number, alternating in sign between them. It is how much a box of width w keeps of a sinusoid of period p, with x = w/p.">sinc</span>(w/p). That factor is the box's frequency response. A checker is a sum of such sinusoids, so each of them is scaled by its own factor.</p>
+    <p>For a footprint much shorter than a period, w/p near 0, sinc is near 1 and the detail passes: that is the near floor, where the checks should stay sharp. A filter that cut cleanly at Nyquist would pass everything with a period over two pixels and nothing below. The box does not do that, and the way it fails is the subject of this guide.</p>
+  </div>
+</section>
+
+<section class="chapter" id="sidelobes">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; the box's response</div>
+    <h2>Sidelobes: a residue that never settles</h2>
+    <p class="key-idea"><b>Key idea.</b> sinc(w/p) is zero only when the footprint holds a whole number of periods. Between those it flips sign, and its envelope falls only as p/(&pi;w), so a box over 14 periods still passes about 2% of the checker's contrast.</p>
+    <p>The whole periods inside the box average to zero. What is left is the part of a period that does not fit, divided by the whole width. The integral of a cosine over any stretch is at most p/&pi;, the area of half a period's hump, so the residue is at most p/(&pi;w) of the original: an envelope that falls as one over the width, not faster.</p>
+    <ul class="keypoints">
+      <li>It is zero only when w is an exact multiple of p.</li>
+      <li>It changes sign between multiples: a footprint that gains or loses part of a period flips the residue from lighter to darker.</li>
+      <li>The first <span class="concept" data-term="Sidelobe" data-tip="A hump of a filter's frequency response beyond its main lobe, where it passes frequencies it should block, here with alternating sign.">sidelobe</span> peaks at w &asymp; 1.43 p, at about 0.217 of the original, &minus;13 dB.</li>
+      <li>At w = 14 p, the envelope is 1/(14&pi;) &asymp; 0.023: up to about 2% of the contrast, with either sign.</li>
+    </ul>
+    <p>Pharr, Jakob and Humphreys call the box "just about the worst filter possible" in <i>Physically Based Rendering</i>, 4th edition, &sect;8.8.3, because its frequency response lets high frequencies leak into the result. The demo below plots that response against the footprint's length, beside a Gaussian of &sigma; = 0.75 w, the width chapter 7 uses.</p>
+  </div>
+  <figure class="wide">
+    <canvas id="response-canvas" class="chart" width="900" height="420" aria-label="Top: a sinusoid with a box window and a Gaussian window over it. Bottom: the fraction of the sinusoid's contrast each window leaves, against the footprint's length in periods."></canvas>
+    <div class="legend"><span><i></i>box, sinc(w/p)</span><span><i class="warm"></i>Gaussian, &sigma; = 0.75 w</span><span><i class="dotted"></i>envelope &plusmn;p/(&pi;w)</span></div>
+    <div class="controls">
+      <label for="footprint-periods">Footprint w, in periods</label>
+      <input type="range" id="footprint-periods" min="0.1" max="16" step="0.01" value="3.5">
+      <div class="seg" role="group" aria-label="Vertical scale">
+        <button type="button" id="scale-full" aria-pressed="true">Full scale</button>
+        <button type="button" id="scale-tail" aria-pressed="false">Zoom on the tail</button>
+      </div>
+    </div>
+    <p class="readout" id="response-readout" aria-live="polite"></p>
+    <figcaption><b>Live demo.</b> Top: one sinusoid of period p, the box of width w (shaded) and the Gaussian (dashed) that average it. Bottom: how much of its contrast each leaves, signed. Zoom on the tail to see the box's residue past 10 periods: small, never gone, and alternating. The Gaussian is below a thousandth of the contrast from w &asymp; 0.8 p on.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="beats">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; one sample per pixel of the residue</div>
+    <h2>From residue to arcs</h2>
+    <p class="key-idea"><b>Key idea.</b> Neighbouring footprints tile the floor, so from one pixel to the next the residue's phase steps by w/p periods, which folds back to its distance from the nearest whole number. As w changes smoothly across the screen, that slow beat draws smooth bands: arcs.</p>
+    <p>A residue of 2% would be harmless if it were the same in every pixel: a slightly lighter or darker grey. It is not. Each pixel samples <code>sinc(w/p) &middot; cos(2&pi;c/p)</code> at its own centre c, and footprints that tile the floor put neighbouring centres w apart. Along a run of pixels with about the same w, pixel k reads:</p>
+    <div class="formula">residue(k) = sinc(w/p) &middot; cos(2&pi; k &middot; w/p + phase)</div>
+    <p>That is a sinusoid of w/p cycles per pixel, sampled once per pixel, and chapter 2's folding applies: it shows up at w/p's distance from the nearest whole number. Where the footprint holds nearly a whole number of periods, the beat is slow and wide but faint, since sinc is near zero there. Near a whole number and a half, the beat is at Nyquist, alternating from pixel to pixel, and the residue is at a sidelobe's peak.</p>
+    <p>Across the screen, the footprint's length changes smoothly with distance and with the angle across the view, and so do the beat's size, sign and frequency. The result is smooth bands of lighter and darker grey that follow how the footprint's length changes over the floor. On <code>minification</code> they curve into the arcs of chapter 1.</p>
+  </div>
+  <figure class="wide">
+    <canvas id="beat-canvas" class="chart" width="900" height="270" aria-label="A row of 96 pixels whose footprints grow by 30% from left to right. Top strip: the box's residue per pixel as grey. Middle: the residues plotted. Bottom strip: the Gaussian's."></canvas>
+    <div class="controls">
+      <label for="beat-start">Footprint at the left end, in periods</label>
+      <input type="range" id="beat-start" min="0.5" max="14" step="0.01" value="2.6">
+      <div class="seg" role="group" aria-label="Grey scale">
+        <button type="button" id="gain-one" aria-pressed="true">Greys &times;1</button>
+        <button type="button" id="gain-eight" aria-pressed="false">Greys &times;8</button>
+      </div>
+    </div>
+    <p class="readout" id="beat-readout" aria-live="polite"></p>
+    <figcaption><b>Live demo.</b> One row of 96 pixels on a sinusoid of period p, each pixel averaging its own footprint, the footprints tiling the row and growing by 30% from left to right, as they do along a floor that recedes. Top strip: what a box leaves in each pixel, as grey around the mean. Middle: the same values plotted, box in blue, Gaussian (&sigma; = 0.75 w) in orange. Bottom strip: the Gaussian's. Nothing in the texture varies slowly, yet the box row shows slow waves. "Greys &times;8" multiplies the residue before drawing, to make a 2% residue visible.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="hardware">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; the sampler</div>
+    <h2>The sampler is a box too</h2>
+    <p class="key-idea"><b>Key idea.</b> Hardware anisotropic filtering averages N equal-weight probes along the footprint's major axis. Equal weights along a line make a box, with the same sidelobes.</p>
+    <p>The capture's 1.68-step distance from the exact box reference is no coincidence. The Vulkan specification's example of <span class="concept" data-term="Anisotropic filtering" data-tip="Taking several probes along a pixel's long, thin footprint, from a mip that matches its width, and averaging them. Praxis's samplers allow up to 16.">anisotropic filtering</span>, which it leaves implementation-dependent, takes N isotropic <span class="concept" data-term="Probe" data-tip="One trilinear read along a pixel's footprint. Anisotropic filtering averages N of them.">probes</span> along the footprint's major axis, each weighted equally:</p>
+    <div class="formula">N      = &lceil;major / minor&rceil;        the probes, up to the sampler's limit
+weight = 1 / N                      each probe's share
+LOD    = log2(major / N)            the mip they read</div>
+    <p>Each probe reads a mip about as wide as the footprint is across, and the probes sit along its length. Spread evenly with equal weights, they make a box as long as the major axis, smoothed a little by each probe's own width. Along the floor, that is chapter 3's box again. McCormack and colleagues' Feline paper (1999) says of equal-weight probes that they give "poor high-frequency rejection along the major axis".</p>
+    <p>Ticket #359 checked this on Praxis's hardware: the M4 Pro's sampler matched a software filter built from that rule to 0.23 steps on this floor. <a href="anisotropy.html#rule">Anisotropy Explained</a> covers the rule and why Praxis's colour textures allow 16 probes.</p>
+  </div>
+</section>
+
+<section class="chapter" id="gaussian">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; a different filter</div>
+    <h2>A Gaussian instead</h2>
+    <p class="key-idea"><b>Key idea.</b> A Gaussian of standard deviation &sigma; keeps exp(&minus;2&pi;&sup2;&sigma;&sup2;/p&sup2;) of a sinusoid of period p. That has no sidelobes and no sign flips and falls far faster than the box. Its price is blur: it also dims detail the box keeps.</p>
+    <p>Average the same sinusoid with Gaussian weights instead of equal ones and the integral gives:</p>
+    <div class="formula">Gaussian of &sigma;:  exp(&minus;2&pi;&sup2; &sigma;&sup2; / p&sup2;) &middot; cos(2&pi;c/p)
+box of w:        sinc(w/p)          &middot; cos(2&pi;c/p)</div>
+    <p>The factor is always positive and only falls, so a pixel can never show a residue of the wrong sign, and once it is small it stays small. That removes both halves of chapter 5's mechanism.</p>
+    <p>The cost shows on detail that is resolved. At &sigma; = 0.75 px, a sinusoid with a period of 4 px keeps exp(&minus;2&pi;&sup2; &middot; 0.5625/16) &asymp; 0.50 of its contrast, against the box's sinc(1/4) &asymp; 0.90. The Gaussian halves checks that the box keeps nearly whole. That is the trade #388 measures: the far band's moiré against the near band's sharpness.</p>
+    <p>The demo renders a checker floor in software, the way #359's reference does: each of 4&times;4 subpixels averages the checker exactly over its own footprint, in linear light, and the pixel combines its subpixels with a box, or with a Gaussian over its neighbours' subpixels too. One sample at the pixel's centre is there for comparison.</p>
+  </div>
+  <figure class="wide">
+    <canvas id="plane-canvas" class="plane" width="480" height="240" aria-label="A software render of a checker floor stretching to the horizon, with box, Gaussian or one-sample pixels."></canvas>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Pixel filter">
+        <button type="button" id="plane-point" aria-pressed="false">One sample</button>
+        <button type="button" id="plane-box" aria-pressed="true">Box</button>
+        <button type="button" id="plane-gaussian" aria-pressed="false">Gaussian</button>
+      </div>
+      <label for="plane-sigma">&sigma;, px</label>
+      <input type="range" id="plane-sigma" min="0.3" max="1" step="0.05" value="0.75" style="width: min(200px, 100%)">
+      <label><input type="checkbox" id="plane-amplify"> residue &times;4</label>
+    </div>
+    <p class="readout" id="plane-readout" aria-live="polite"></p>
+    <figcaption><b>Live demo.</b> A checker of period 1/8 m seen from 1.2 m up, 480&times;240 pixels drawn at up to twice their size. Box shows faint arcs where a pixel spans more than a period along the floor; Gaussian removes them and greys the near checks; One sample shows the full aliasing a prefilter prevents. "Residue &times;4" scales each pixel's distance from the checker's mean grey by 4 before drawing. The &sigma; slider applies to Gaussian. The canvas's numbers differ from the scene's 2560&times;1440; the readout gives its rows.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="bias">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 8 &middot; the cheap knob</div>
+    <h2>Why LOD bias barely helps</h2>
+    <p class="key-idea"><b>Key idea.</b> A LOD bias reads a coarser mip for every probe, which widens each probe across the footprint. The N equal-weight probes still span the footprint's length as a box, so the sidelobes along it stay.</p>
+    <p>A <span class="concept" data-term="LOD bias" data-tip="A constant added to the mip level a sampler computes, so it reads a coarser (positive) or finer (negative) mip.">LOD bias</span> is the first knob most engines reach for against distant shimmer: add 1 to the mip level and every read comes from a mip with texels twice as wide. On a footprint seen face on, that blurs in every direction and does remove aliasing.</p>
+    <p>Here the aliasing is along the major axis, and chapter 6's rule fixes the probes' count and spacing from the footprint's length, not from the mip. A bias changes the width of each probe, which is the footprint's width, across. The box along stays as long as it was, with the same sinc. On this floor, bias +1 moves #388's moiré score from 5.31 to 5.00, and the image from 9.23 to 8.67 steps away from the exact Gaussian reference: the arcs stay, as the last crop of chapter 9's second figure shows.</p>
+  </div>
+</section>
+
+<section class="chapter" id="measured">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 9 &middot; #388's measurements</div>
+    <h2>What #388 measured</h2>
+    <p class="key-idea"><b>Key idea.</b> Weighting the probes along the major axis by a Gaussian came within 1.11 steps of the exact Gaussian reference, for about 0.28 ms on <code>minification</code>. Stretching the hardware footprint or blurring the finished image cut the moiré too, but strayed farther from that reference, and making a wide resolve see inside the pixel costs about 10 ms on <code>town</code>.</p>
+    <p>Ticket #388 tried each kind of change on the M4 Pro and scored the far band's outer 800 pixels on each side, in 8-bit steps, three ways:</p>
+    <ul class="keypoints">
+      <li><b>Moiré:</b> the standard deviation of the band's grey minus its own Gaussian blur of &sigma; 6 px, so it measures structure finer than that blur.</li>
+      <li><b>RMSE against the exact box</b> reference, #359's.</li>
+      <li><b>RMSE against the exact Gaussian</b> reference: the same 3&times; subpixels resized with a Gaussian of &sigma; 0.75 px (<code>magick -filter gaussian -define filter:sigma=0.75</code>).</li>
+    </ul>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Image</th><th class="n">Moiré</th><th class="n">RMSE vs exact box</th><th class="n">RMSE vs exact Gaussian</th></tr></thead>
+      <tbody>
+        <tr><td>Capture (hardware 16x anisotropic)</td><td class="n">5.31</td><td class="n">1.68</td><td class="n">9.23</td></tr>
+        <tr><td>Exact, box (reference)</td><td class="n">5.25</td><td class="n">0</td><td class="n">9.05</td></tr>
+        <tr><td>Exact, Gaussian &sigma; 0.75 px</td><td class="n">1.18</td><td class="n">9.05</td><td class="n">0</td></tr>
+        <tr class="focus"><td>Gaussian-weighted probes along the major axis, &sigma; 0.75 px (software, in the lit pass)</td><td class="n">1.27</td><td class="n">9.13</td><td class="n">1.11</td></tr>
+        <tr><td>Same, &sigma; 0.5 px</td><td class="n">2.96</td><td class="n">6.09</td><td class="n">4.13</td></tr>
+        <tr><td>Hardware footprint doubled (<code>textureSampleGrad</code>, 2x derivatives)</td><td class="n">2.05</td><td class="n">10.25</td><td class="n">3.00</td></tr>
+        <tr><td>LOD bias +1</td><td class="n">5.00</td><td class="n">2.14</td><td class="n">8.67</td></tr>
+        <tr><td>Gaussian blur &sigma; 0.75 px of the 1x capture (what a wide MSAA resolve does when shading runs once per pixel)</td><td class="n">1.40</td><td class="n">8.37</td><td class="n">1.90</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p style="margin-top: 16px">The highlighted row is the filter of chapter 7 applied where the texture is read. In the <span class="concept" data-term="Lit pass" data-tip="The pass that shades each pixel, at depth equal after the depth passes, into a 4x MSAA HDR attachment. It reads each light's shadow from the shadow mask.">lit pass</span>, a software filter takes probes along the major axis and weights them by a Gaussian instead of equally, the approach Feline and, on GPU hardware, Mavridis and Papaioannou (2011) take. At &sigma; 0.75 px it lands 1.11 steps from the exact Gaussian reference. At &sigma; 0.5 px it keeps more of the box's residue and sits between the two references.</p>
+    <p>Doubling the derivatives makes the hardware box twice as long, which halves its envelope, and twice as wide: the moiré falls to 2.05, but the image lies farther from the box reference than any other row, 10.25, and 3.00 from the Gaussian one, against the Gaussian probes' 1.11, because it blurs across as well as along.</p>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <img src="https://raw.githubusercontent.com/gariasf/praxis/85f2ee3915d3babd843ca382856c82855970cab2/388/far-band-texture-filters-2x.png" width="800" height="928" loading="lazy" alt="Four crops of the far band, magnified twice. Gaussian-weighted probes at sigma 0.75: even grey, stripes only near the bottom. At sigma 0.5: faint ripples. Doubled footprint: arcs weaker but present, with a dotted row near the top. LOD bias +1: arcs as strong as the capture's.">
+    </div>
+    <figcaption><b>Texture filters, far band, left side, 2x.</b> From top: Gaussian-weighted probes at &sigma; 0.75 px, at &sigma; 0.5 px, the hardware footprint doubled, and LOD bias +1. Images from #388.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>Filtering after shading</h3>
+    <p>The last row asks whether the MSAA resolve could do the Gaussian's work instead. Praxis's lit pass shades once per pixel, so the four samples of a pixel inside a surface hold the same texture colour (<a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>). A resolve wider than the pixel can then only blend pixels that are already sampled, which is a blur of the 1x image. That cuts the moiré score to 1.40, since the metric measures fine structure, and lands 1.90 steps from the Gaussian reference. For a wide resolve to see texture detail inside a pixel, shading has to run per sample first.</p>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <img src="https://raw.githubusercontent.com/gariasf/praxis/85f2ee3915d3babd843ca382856c82855970cab2/388/far-band-resolves-2x.png" width="800" height="696" loading="lazy" alt="Three crops of the far band, magnified twice. Wide blur of the 1x capture: the arcs softened but visible. Per-sample shading with a box resolve: arcs and stripes. Exact Gaussian: even grey.">
+    </div>
+    <figcaption><b>Resolves, far band, left side, 2x.</b> From top: a Gaussian blur of &sigma; 0.75 px of the 1x capture, what a wide resolve does with per-pixel shading; per-sample shading with the usual box resolve, which scores 3.58 for moiré, 5.60 from the exact box and 5.46 from the exact Gaussian, since each sample still filters a whole pixel's footprint; and the exact Gaussian reference. Images from #388.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>What they cost</h3>
+    <p>Costs come from interleaved bench medians on the M4 Pro, with the GPU under other load, so they are indicative. The software Gaussian probes at &sigma; 0.75 add about 0.28 ms to <code>minification</code>'s <span class="concept" data-term="ADR 0019's gate" data-tip="From the start of culling phase one to the latest end of the passes up to the lit pass, with shadow rays off: the median over a Reference scene's camera path, judged against 6 ms. Past it, options B and D are prototyped on that scene.">gate</span> (rays off) and about 0.6 to 0.7 ms on <code>town</code>. Per-sample shading, which a wide resolve needs before it can see texture detail inside the pixel, adds about 1.0 ms on <code>minification</code> and 10 to 12 ms to <code>town</code>'s gate.</p>
+  </div>
+</section>
+
+<section class="chapter" id="options">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 10 &middot; the owner's decision</div>
+    <h2>Options, no choice made</h2>
+    <p class="key-idea"><b>Key idea.</b> Which filter a pixel applies is a technique decision, not a defect to fix, so it goes to the owner. #388's research note sets out the options; ADR 0008 has already ruled out any that need temporal accumulation.</p>
+    <p>Everything above says what each kind of filter buys and costs; none of it picks one. The research note <a href="https://github.com/gariasf/praxis/blob/main/docs/research/minification-filtering.md"><code>docs/research/minification-filtering.md</code></a>, written for #388, ends in five options with their sources, measurements and costs:</p>
+    <ul class="keypoints">
+      <li><b>A.</b> Keep the box: hardware anisotropic filtering as today, arcs included.</li>
+      <li><b>B.</b> Gaussian-weighted probes along the major axis at &sigma; 0.75 px, in software in the lit pass, for the colour textures.</li>
+      <li><b>C.</b> The same at &sigma; 0.5 px, keeping more detail and more residue.</li>
+      <li><b>D.</b> A hardware footprint widened 1.5 to 2 times through <code>textureSampleGrad</code>, cheaper and blurrier for more residue.</li>
+      <li><b>E.</b> Per-sample shading with a wide custom resolve, at per-sample shading's cost.</li>
+    </ul>
+    <p>One family is out before the choice. ADR 0008 keeps every frame stable on its own, with no temporal accumulation, so stochastic texture filtering, which relies on DLSS-style temporal integration to average its noise away, does not apply.</p>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>One pixel's footprint spans exactly 3 periods of the checker along the floor; its neighbour's spans 3.5. How much of the contrast does each pass, and why does the difference matter?</summary><p>sinc(3) = 0: whole periods average to nothing, so the first pixel shows the mean grey. sinc(3.5) = sin(3.5&pi;)/(3.5&pi;) = &minus;1/(3.5&pi;) &asymp; &minus;0.091: the second passes about 9% of the contrast with its sign flipped. Neighbours that differ in the amount and sign of their residue, as the footprint grows smoothly, are what one sample per pixel turns into bands.</p></details>
+    <details class="check"><summary>Why does LOD bias +1 leave the arcs, when it makes every texture read blurrier?</summary><p>A bias picks a coarser mip for each probe, so each probe is wider: that is the footprint's width, across. The probes' count and spacing come from the footprint's length, and they still weigh the major axis equally, as a box of the same length with the same sinc. #388 measured the moiré going from 5.31 to 5.00 only.</p></details>
+    <details class="check"><summary>A Gaussian of &sigma; 0.75 px removes the arcs. What does it cost a sinusoid with a period of 4 px, and why can't Praxis get the result from a wider MSAA resolve for free?</summary><p>It keeps exp(&minus;2&pi;&sup2; &middot; 0.5625/16) &asymp; 0.50 of the contrast, against the box's sinc(1/4) &asymp; 0.90: resolved detail blurs. Praxis shades once per pixel, so the samples inside a pixel hold the same texture colour, and a wider resolve can only blur pixels already sampled (1.90 steps from the Gaussian reference, 8.37 from the box). To see texture detail inside the pixel, shading must run per sample, about 1.0 ms more on <code>minification</code> and 10 to 12 ms on <code>town</code>'s gate.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>These tickets</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/359">Ticket #359</a> and <a href="https://github.com/gariasf/praxis/pull/389">PR #389</a> <span>the exact box reference, and the finding that the arcs are in it</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/81b7e022e255d845b95b620ec6bc2c08c100732c/docs/performance.md"><code>docs/performance.md</code></a> <span>section "minification's far moiré is in the box-filtered reference"</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/388">Ticket #388</a> and <a href="https://github.com/gariasf/praxis/blob/main/docs/research/minification-filtering.md">its research note</a> <span>the measurements above and the options for the owner</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/85f2ee3915d3babd843ca382856c82855970cab2/388">#388's images</a> <span>the three crops shown here</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/81b7e022e255d845b95b620ec6bc2c08c100732c/docs/adr/0008-stable-image-without-temporal-tricks.md">ADR 0008</a> <span>why no option may rely on temporal accumulation</span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="distant-textures.html">Distant Textures Explained</a> <span>texels, mips, moiré, and the <code>minification</code> scene</span></li>
+        <li><a href="anisotropy.html">Anisotropy Explained</a> <span>the probe rule, and why colour textures allow 16 probes</span></li>
+        <li><a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> <span>samples, fragments, and shading once per pixel</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and references</h3>
+      <ul>
+        <li>Pharr, Jakob and Humphreys, <a href="https://pbr-book.org/4ed/Sampling_and_Reconstruction"><i>Physically Based Rendering</i>, 4th ed., chapter 8</a>, &sect;8.1 Sampling Theory and &sect;8.8.3 Filters <span>Nyquist, aliasing, and the box as "just about the worst filter possible"</span></li>
+        <li>Mitchell and Netravali, &ldquo;Reconstruction Filters in Computer Graphics&rdquo;, SIGGRAPH 1988, <a href="https://doi.org/10.1145/54852.378514">doi:10.1145/54852.378514</a> <span>prealiasing and postaliasing, and the checkerboard's moiré</span></li>
+        <li>Heckbert, <a href="https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf">&ldquo;Fundamentals of Texture Mapping and Image Warping&rdquo;</a>, UCB/CSD 89/516, 1989 <span>texture filtering as resampling, the box's side lobes, and elliptical Gaussian filters</span></li>
+        <li>McCormack, Perry, Farkas and Jouppi, <a href="https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf">&ldquo;Feline: Fast Elliptical Lines for Anisotropic Texture Mapping&rdquo;</a>, SIGGRAPH 1999 <span>Gaussian-weighted probes along the major axis, and what equal weights lose</span></li>
+        <li>Mavridis and Papaioannou, <a href="https://graphics.cs.aueb.gr/graphics/docs/papers/I3D11_EllipticalFiltering_draft.pdf">&ldquo;High Quality Elliptical Texture Filtering on GPU&rdquo;</a>, I3D 2011 <span>Gaussian-weighted hardware probes approximating an elliptical filter</span></li>
+        <li>Khronos, Vulkan specification v1.4.367, <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/textures.adoc#L2769-L2826">Texel Anisotropic Filtering</a> <span>the implementation-dependent example: N equal-weight probes along the major axis</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Reference scene and Golden are <code>CONTEXT.md</code>'s definitions; the rest are this guide's own or the series'.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Nyquist frequency</dt><dd>Half the sampling rate. One sample per pixel holds periods longer than two pixels; finer detail folds back.</dd></div>
+    <div><dt>Aliasing, moiré</dt><dd>Detail past Nyquist showing up as a coarser false pattern; moiré is its banded form.</dd></div>
+    <div><dt>Prefilter</dt><dd>A filter applied before sampling, to remove what the samples cannot hold.</dd></div>
+    <div><dt>Footprint</dt><dd>The patch of a surface one pixel covers; at a grazing angle, long along the view and narrow across it.</dd></div>
+    <div><dt>Box filter</dt><dd>An equal-weight average over a window; it scales a sinusoid of period p by sinc(w/p).</dd></div>
+    <div><dt>Sidelobe</dt><dd>A hump of a filter's response past its main lobe, passing frequencies it should block, here with alternating sign.</dd></div>
+    <div><dt>Residue</dt><dd>What a filter leaves of detail it should remove; for a box, up to p/(&pi;w) of the contrast.</dd></div>
+    <div><dt>Gaussian filter</dt><dd>A bell-weighted average; it scales a sinusoid by exp(&minus;2&pi;&sup2;&sigma;&sup2;/p&sup2;), with no sidelobes.</dd></div>
+    <div><dt>Probe</dt><dd>One trilinear read along a pixel's footprint; anisotropic filtering averages N of them.</dd></div>
+    <div><dt>LOD bias</dt><dd>A constant added to the mip level the sampler computes.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames.</dd></div>
+    <div><dt>Golden</dt><dd>A committed image that a Reference scene must reproduce within tolerance.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from tickets <a href="https://github.com/gariasf/praxis/issues/359">#359</a> and <a href="https://github.com/gariasf/praxis/issues/388">#388</a>, PR <a href="https://github.com/gariasf/praxis/pull/389">#389</a>, main at 81b7e022, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is #359's or #388's own, on one Apple M4 Pro. The three demos are this page's illustrative models.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="edge-shadows.html">Previous: Edge Shadows Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const sinc = (x) => (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+  // What a Gaussian of standard deviation sigma keeps of a sinusoid of period 1.
+  const gaussianResponse = (sigma) => Math.exp(-2 * Math.PI * Math.PI * sigma * sigma);
+  const srgbToLinear = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const linearToSrgb = (v) => { const e = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(Math.max(0, Math.min(1, e)) * 255); };
+  const percent = (value, signed) => {
+    const size = Math.abs(value) * 100;
+    if (size < 0.01) return size === 0 ? "0%" : "&lt;0.01%";
+    const sign = signed ? (value < 0 ? "&minus;" : "+") : "";
+    return sign + size.toFixed(size < 1 ? 2 : 1) + "%";
+  };
+  function setup(canvas) {
+    if (!canvas.dataset.w) {
+      const ratio = window.devicePixelRatio || 1;
+      canvas.dataset.w = canvas.width; canvas.dataset.h = canvas.height; canvas.dataset.ratio = ratio;
+      canvas.width = canvas.width * ratio; canvas.height = canvas.height * ratio;
+    }
+    const context = canvas.getContext("2d");
+    const ratio = Number(canvas.dataset.ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { context, width: Number(canvas.dataset.w), height: Number(canvas.dataset.h) };
+  }
+  function segmented(buttons, onChange) {
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button);
+    }));
+  }
+  const redrawOnTheme = [];
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => redrawOnTheme.forEach((draw) => draw()));
+  new MutationObserver(() => redrawOnTheme.forEach((draw) => draw())).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // Chapter 4: the box's and the Gaussian's response, against the footprint's length in periods.
+  (function responseDemo() {
+    const canvas = document.getElementById("response-canvas");
+    const slider = document.getElementById("footprint-periods");
+    const readout = document.getElementById("response-readout");
+    const full = document.getElementById("scale-full"), tail = document.getElementById("scale-tail");
+    let zoom = false;
+    const maxPeriods = 16;
+    function draw() {
+      const footprint = Number(slider.value);
+      const { context: c, width, height } = setup(canvas);
+      const ink = css("--ink"), soft = css("--ink-soft"), rule = css("--rule"), accent = css("--accent"), warm = css("--warm");
+      c.clearRect(0, 0, width, height);
+      c.font = "12px " + css("--mono");
+
+      // Top: the sinusoid, the box and the Gaussian over it.
+      const left = 54, right = width - 16, middle = 82, amplitude = 38;
+      const span = Math.max(3, footprint * 1.5 + 1);
+      const xTop = (x) => left + (x + span / 2) / span * (right - left);
+      c.fillStyle = soft;
+      c.fillText("a sinusoid of period p under a box of width w = " + footprint.toFixed(2) + " p and a Gaussian of σ = 0.75 w", left, 18);
+      const boxLeft = xTop(-footprint / 2), boxRight = xTop(footprint / 2);
+      c.fillStyle = css("--accent-wash");
+      c.fillRect(boxLeft, middle - amplitude - 8, boxRight - boxLeft, 2 * amplitude + 16);
+      c.strokeStyle = accent; c.lineWidth = 1.5;
+      c.strokeRect(boxLeft, middle - amplitude - 8, boxRight - boxLeft, 2 * amplitude + 16);
+      c.strokeStyle = ink; c.lineWidth = 1.2; c.beginPath();
+      for (let i = 0; i <= 800; i++) {
+        const x = -span / 2 + span * i / 800, y = middle - amplitude * Math.cos(2 * Math.PI * x);
+        if (i === 0) c.moveTo(xTop(x), y); else c.lineTo(xTop(x), y);
+      }
+      c.stroke();
+      const sigma = 0.75 * footprint;
+      c.strokeStyle = warm; c.lineWidth = 2; c.setLineDash([6, 4]); c.beginPath();
+      for (let i = 0; i <= 400; i++) {
+        const x = -span / 2 + span * i / 400, y = middle + amplitude + 8 - (2 * amplitude + 16) * Math.exp(-x * x / (2 * sigma * sigma));
+        if (i === 0) c.moveTo(xTop(x), y); else c.lineTo(xTop(x), y);
+      }
+      c.stroke(); c.setLineDash([]);
+
+      // Bottom: the fraction of the contrast each leaves.
+      const top = 160, bottom = height - 36;
+      const yMin = zoom ? -0.06 : -0.3, yMax = zoom ? 0.06 : 1;
+      const xAt = (x) => left + x / maxPeriods * (right - left);
+      const yAt = (v) => bottom - (v - yMin) / (yMax - yMin) * (bottom - top);
+      c.strokeStyle = rule; c.lineWidth = 1;
+      c.strokeRect(left, top, right - left, bottom - top);
+      c.beginPath(); c.moveTo(left, yAt(0)); c.lineTo(right, yAt(0)); c.stroke();
+      c.fillStyle = soft;
+      for (let x = 0; x <= maxPeriods; x += 2) c.fillText(String(x), xAt(x) - 4, bottom + 16);
+      c.fillText("footprint w, in periods p", right - 190, bottom + 30);
+      (zoom ? [-0.05, -0.025, 0, 0.025, 0.05] : [-0.2, 0, 0.217, 0.5, 1]).forEach((v) => c.fillText(String(v), 4, yAt(v) + 4));
+      c.save(); c.beginPath(); c.rect(left, top, right - left, bottom - top); c.clip();
+      function curve(response, colour, lineWidth, dash, from) {
+        c.strokeStyle = colour; c.lineWidth = lineWidth; c.setLineDash(dash); c.beginPath();
+        for (let i = 0; i <= 1600; i++) {
+          const x = from + (maxPeriods - from) * i / 1600, y = yAt(response(x));
+          if (i === 0) c.moveTo(xAt(x), y); else c.lineTo(xAt(x), y);
+        }
+        c.stroke(); c.setLineDash([]);
+      }
+      curve((x) => 1 / (Math.PI * x), soft, 1.5, [2, 4], 0.3);
+      curve((x) => -1 / (Math.PI * x), soft, 1.5, [2, 4], 0.3);
+      curve(sinc, accent, 2.5, [], 0);
+      curve((x) => gaussianResponse(0.75 * x), warm, 2.5, [], 0);
+      c.strokeStyle = ink; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(xAt(footprint), top); c.lineTo(xAt(footprint), bottom); c.stroke();
+      [[sinc(footprint), accent], [gaussianResponse(0.75 * footprint), warm]].forEach(([v, colour]) => {
+        c.fillStyle = colour; c.beginPath(); c.arc(xAt(footprint), yAt(v), 5, 0, 2 * Math.PI); c.fill();
+      });
+      c.restore();
+      const box = sinc(footprint);
+      readout.innerHTML = "box passes <b>" + percent(box, true) + "</b> of the contrast (envelope " + percent(1 / (Math.PI * footprint), false) +
+        ") &middot; Gaussian passes <b>" + percent(gaussianResponse(0.75 * footprint), false) + "</b>";
+    }
+    slider.addEventListener("input", draw);
+    segmented([full, tail], (button) => { zoom = button === tail; draw(); });
+    redrawOnTheme.push(draw);
+    draw();
+  })();
+
+  // Chapter 5: one sample per pixel of the residue, along a row whose footprints grow.
+  (function beatDemo() {
+    const canvas = document.getElementById("beat-canvas");
+    const slider = document.getElementById("beat-start");
+    const readout = document.getElementById("beat-readout");
+    const one = document.getElementById("gain-one"), eight = document.getElementById("gain-eight");
+    let gain = 1;
+    const pixels = 96, growth = 0.3;
+    const folded = (cyclesPerPixel) => Math.abs(cyclesPerPixel - Math.round(cyclesPerPixel));
+    function draw() {
+      const start = Number(slider.value);
+      const widths = [], box = [], gaussian = [];
+      let centre = 0;
+      for (let k = 0; k < pixels; k++) {
+        const width = start * (1 + growth * k / (pixels - 1));
+        if (k > 0) centre += (widths[k - 1] + width) / 2;
+        widths.push(width);
+        const phase = Math.cos(2 * Math.PI * centre);
+        box.push(sinc(width) * phase);
+        gaussian.push(gaussianResponse(0.75 * width) * phase);
+      }
+      const { context: c, width, height } = setup(canvas);
+      const soft = css("--ink-soft"), rule = css("--rule"), accent = css("--accent"), warm = css("--warm");
+      c.clearRect(0, 0, width, height);
+      c.font = "12px " + css("--mono");
+      const left = 92, right = width - 12, cell = (right - left) / pixels;
+      function strip(values, y, label) {
+        c.fillStyle = soft; c.fillText(label, 8, y + 26);
+        values.forEach((v, k) => {
+          const grey = Math.round(255 * Math.max(0, Math.min(1, 0.5 + 0.5 * gain * v)));
+          c.fillStyle = "rgb(" + grey + "," + grey + "," + grey + ")";
+          c.fillRect(left + k * cell, y, Math.ceil(cell), 40);
+        });
+        c.strokeStyle = rule; c.lineWidth = 1; c.strokeRect(left, y, right - left, 40);
+      }
+      strip(box, 14, "box");
+      strip(gaussian, height - 54, "Gaussian");
+      const top = 70, bottom = height - 70, zero = (top + bottom) / 2;
+      const scale = Math.max(0.01, ...box.map(Math.abs)) * 1.15;
+      const yAt = (v) => zero - v / scale * (bottom - top) / 2;
+      c.strokeStyle = rule; c.beginPath(); c.moveTo(left, zero); c.lineTo(right, zero); c.stroke();
+      c.fillStyle = soft;
+      c.fillText("±" + percent(scale, false).replace("&lt;", "<"), 8, top + 10);
+      [[box, accent], [gaussian, warm]].forEach(([values, colour]) => {
+        c.strokeStyle = colour; c.lineWidth = 1.5; c.beginPath();
+        values.forEach((v, k) => { const x = left + (k + 0.5) * cell; if (k === 0) c.moveTo(x, yAt(v)); else c.lineTo(x, yAt(v)); });
+        c.stroke();
+        c.fillStyle = colour;
+        values.forEach((v, k) => { c.beginPath(); c.arc(left + (k + 0.5) * cell, yAt(v), 2, 0, 2 * Math.PI); c.fill(); });
+      });
+      const end = widths[pixels - 1];
+      const beat = (w) => { const d = folded(w); return d < 0.01 ? "&gt;100 px" : (1 / d).toFixed(1) + " px"; };
+      readout.innerHTML = "footprints <b>" + start.toFixed(2) + "</b> to <b>" + end.toFixed(2) + "</b> periods &middot; box residue up to <b>" +
+        percent(Math.max(...box.map(Math.abs)), false) + "</b> &middot; beat period at the left end <b>" + beat(start) + "</b>, at the right end <b>" + beat(end) + "</b>";
+    }
+    slider.addEventListener("input", draw);
+    segmented([one, eight], (button) => { gain = button === eight ? 8 : 1; draw(); });
+    redrawOnTheme.push(draw);
+    draw();
+  })();
+
+  // Chapter 7: a checker floor, each pixel a box or a Gaussian over exactly box-filtered subpixels.
+  (function planeDemo() {
+    const canvas = document.getElementById("plane-canvas");
+    const context = canvas.getContext("2d");
+    const buttons = ["plane-point", "plane-box", "plane-gaussian"].map((id) => document.getElementById(id));
+    const sigmaSlider = document.getElementById("plane-sigma");
+    const amplify = document.getElementById("plane-amplify");
+    const readout = document.getElementById("plane-readout");
+    const width = canvas.width, height = canvas.height;
+    const horizon = 12, focal = 960, cameraHeight = 1.2, period = 0.125, subpixels = 4;
+    const dark = srgbToLinear(40), light = srgbToLinear(200), mean = (dark + light) / 2, half = (light - dark) / 2;
+    const sky = [46, 72, 96];
+    // The integral of a square wave of period 1 (+1 then -1) from 0 to t.
+    const squareIntegral = (t) => 0.5 - Math.abs(t - Math.floor(t) - 0.5);
+    const squareAverage = (centre, halfWidth) => halfWidth < 1e-9
+      ? ((centre - Math.floor(centre)) < 0.5 ? 1 : -1)
+      : (squareIntegral(centre + halfWidth) - squareIntegral(centre - halfWidth)) / (2 * halfWidth);
+    // The checker averaged exactly over the box a footprint of size `size` pixels around (x, y) spans in uv.
+    function checker(x, y, size) {
+      const below = y - horizon;
+      if (below <= 0) return mean;
+      const distance = cameraHeight * focal / below;
+      const across = (x - width / 2) * distance / focal;
+      const distancePerPixel = distance / below;
+      const halfAcross = (distance / focal + Math.abs(x - width / 2) / focal * distancePerPixel) * size / 2 / period;
+      const halfAlong = distancePerPixel * size / 2 / period;
+      return mean + half * squareAverage(across / period, halfAcross) * squareAverage(distance / period, halfAlong);
+    }
+    const subWidth = width * subpixels, subHeight = height * subpixels;
+    const sub = new Float32Array(subWidth * subHeight);
+    for (let j = 0; j < subHeight; j++) for (let i = 0; i < subWidth; i++)
+      sub[j * subWidth + i] = checker((i + 0.5) / subpixels, (j + 0.5) / subpixels, 1 / subpixels);
+    const point = new Float32Array(width * height), box = new Float32Array(width * height);
+    for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
+      point[py * width + px] = checker(px + 0.5, py + 0.5, 0);
+      let sum = 0;
+      for (let j = 0; j < subpixels; j++) for (let i = 0; i < subpixels; i++)
+        sum += sub[(py * subpixels + j) * subWidth + px * subpixels + i];
+      box[py * width + px] = sum / (subpixels * subpixels);
+    }
+    function gaussian(sigma) {
+      const radius = Math.ceil(3 * sigma * subpixels);
+      const weight = (offset) => Math.exp(-offset * offset / (2 * sigma * sigma));
+      // In subpixel units, pixel p's centre lies at (p + 0.5) * subpixels - 0.5.
+      const horizontal = new Float32Array(subHeight * width);
+      for (let j = 0; j < subHeight; j++) for (let px = 0; px < width; px++) {
+        const centre = (px + 0.5) * subpixels - 0.5;
+        let sum = 0, total = 0;
+        for (let i = Math.max(0, Math.ceil(centre - radius)); i <= Math.min(subWidth - 1, Math.floor(centre + radius)); i++) {
+          const w = weight((i - centre) / subpixels); sum += w * sub[j * subWidth + i]; total += w;
+        }
+        horizontal[j * width + px] = sum / total;
+      }
+      const result = new Float32Array(width * height);
+      for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
+        const centre = (py + 0.5) * subpixels - 0.5;
+        let sum = 0, total = 0;
+        for (let j = Math.max(0, Math.ceil(centre - radius)); j <= Math.min(subHeight - 1, Math.floor(centre + radius)); j++) {
+          const w = weight((j - centre) / subpixels); sum += w * horizontal[j * width + px]; total += w;
+        }
+        result[py * width + px] = sum / total;
+      }
+      return result;
+    }
+    let mode = "box";
+    function render() {
+      const values = mode === "point" ? point : mode === "box" ? box : gaussian(Number(sigmaSlider.value));
+      const gain = amplify.checked ? 4 : 1;
+      const image = context.createImageData(width, height);
+      for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
+        const offset = (py * width + px) * 4;
+        if (py < horizon) { image.data[offset] = sky[0]; image.data[offset + 1] = sky[1]; image.data[offset + 2] = sky[2]; }
+        else {
+          const grey = linearToSrgb(mean + gain * (values[py * width + px] - mean));
+          image.data[offset] = image.data[offset + 1] = image.data[offset + 2] = grey;
+        }
+        image.data[offset + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+      // A footprint spans cameraHeight * focal / (rows below the horizon)^2 / period periods along the floor.
+      const rowFor = (periods) => Math.sqrt(cameraHeight * focal / period / periods);
+      const far = rowFor(14), near = rowFor(0.9);
+      readout.innerHTML = "rows <b>" + Math.round(far) + "</b> to <b>" + Math.round(near) + "</b> below the horizon: footprints of 14 to 0.9 periods along, checks " +
+        (far * period / cameraHeight).toFixed(1) + " to " + (near * period / cameraHeight).toFixed(1) + " px across" +
+        (mode === "gaussian" ? " &middot; &sigma; <b>" + Number(sigmaSlider.value).toFixed(2) + " px</b>" : "");
+    }
+    segmented(buttons, (button) => { mode = button.id.replace("plane-", ""); render(); });
+    sigmaSlider.addEventListener("input", () => { if (mode === "gaussian") render(); });
+    amplify.addEventListener("change", render);
+    render();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>

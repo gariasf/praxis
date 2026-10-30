@@ -3498,3 +3498,294 @@ url = "http://cwyman.org/papers/tvcg16_ftizbExtended.pdf"
 section = "Chris Wyman, Rama Hoetzlein, Aaron Lefohn, Frustum-Traced Irregular Z-Buffers: Fast, Sub-pixel Accurate Hard Shadows, IEEE TVCG 2016 (doi:10.1109/TVCG.2016.2572689), Section 9, Results and Discussion; Table 1 (columns: Chalmers Villa 89k, Bungie Building 255k, Epic Citadel 374k, Chalmers Citadel 613k, Bungie Terrain 1.5M, Hairball 2.9M, Tentacles 3.8M, GeeBee Plane 11.7M, Powerplant 12.3M)"
 quote = '''Unless otherwise specified, we report times on a GeForce Titan X at 1920×1080 and [...] rely on three NVIDIA-specific extensions for performance [...] (1st row) Performance breakdown for individual algorithmic steps for 32 spp (and 1 spp) IZB hard shadows. To allow comparison all scenes use identical, rather than optimal, settings: 1920 × 1080 resolution, 2 cascades each containing 2048² lists of IZB nodes, and using all optimizations. [...] Raster tris over IZB 1.5 (0.5) 3.7 (1.7) 3.7 (1.4) 5.7 (2.4) 6.6 (3.1) 12.4 (4.4) 7.9 (4.7) 38.6 (19.3) 26.1 (14.4) [...] Total Time (msec) 3.8 (2.2) 6.4 (3.7) 6.0 (3.2) 8.1 (4.3) 9.7 (5.5) 15.8 (7.0) 10.9 (7.2) 46.0 (26.0) 32.6 (20.1)'''
 checked = 2026-10-30
+
+["pharr-2023-pbrt-box-spectrum"]
+url = "https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sampling_Theory.html#IdealSamplingandReconstruction"
+section = "Pharr, Jakob, Humphreys, Physically Based Rendering: From Theory to Implementation, 4th ed., MIT Press 2023, section 8.1.2 Ideal Sampling and Reconstruction"
+quote = '''A commonly used alternative in graphics is to use the box function for reconstruction, effectively averaging all the sample values within some region around x. This is a poor choice, as can be seen by considering the box filter’s behavior in the frequency domain: This technique attempts to isolate the central copy of the function’s spectrum by multiplying by a sinc, which not only does a bad job of selecting the central copy of the function’s spectrum but includes high-frequency contributions from the infinite series of other copies of it as well.'''
+checked = 2026-10-30
+
+["pharr-2023-pbrt-box-filter"]
+url = "https://pbr-book.org/4ed/Sampling_and_Reconstruction/Image_Reconstruction.html#BoxFilter"
+section = "Pharr, Jakob, Humphreys, Physically Based Rendering 4th ed., MIT Press 2023, section 8.8.3 Box Filter"
+quote = '''The box filter equally weights all samples within a square region of the image. Although computationally efficient, it is just about the worst filter possible. Recall from the discussion in Section 8.1.2 that the box filter allows high-frequency sample data to leak into the reconstructed values. This causes postaliasing—even if the original sample values were at a high enough frequency to avoid aliasing, errors are introduced by poor filtering. [...] it also does an extremely poor job of reconstruction as the function’s frequency approaches and passes the Nyquist limit.'''
+checked = 2026-10-30
+
+["pharr-2023-pbrt-gaussian"]
+url = "https://pbr-book.org/4ed/Sampling_and_Reconstruction/Image_Reconstruction.html#GaussianFilter"
+section = "Pharr, Jakob, Humphreys, Physically Based Rendering 4th ed., MIT Press 2023, section 8.8.5 Gaussian Filter"
+quote = '''Unlike the box and triangle filters, the Gaussian filter gives a reasonably good result in practice. [...] The Gaussian does tend to cause slight blurring of the final image compared to some of the other filters, but this blurring can help mask any remaining aliasing. This filter is the default one used in pbrt. [...] Larger values of σ cause a slower falloff, which leads to a blurrier image when the Gaussian is used as a filter.'''
+checked = 2026-10-30
+
+["pharr-2023-pbrt-mitchell"]
+url = "https://pbr-book.org/4ed/Sampling_and_Reconstruction/Image_Reconstruction.html#sec:Mitchell-filter"
+section = "Pharr, Jakob, Humphreys, Physically Based Rendering 4th ed., MIT Press 2023, section 8.8.6 Mitchell Filter"
+quote = '''they developed a filter that tends to do a good job of trading off between ringing (phantom edges next to actual edges in the image) and blurring (excessively blurred results)—two common artifacts from poor reconstruction filters. [...] In practice these negative regions improve the sharpness of edges, giving crisper images (reduced blurring). If they become too large, however, ringing tends to start to enter the image. Furthermore, because the final pixel values can become negative, they will eventually need to be clamped to a legal output range.'''
+checked = 2026-10-30
+
+["pharr-2023-pbrt-windowed-sinc"]
+url = "https://pbr-book.org/4ed/Sampling_and_Reconstruction/Image_Reconstruction.html#sec:windowed-sinc"
+section = "Pharr, Jakob, Humphreys, Physically Based Rendering 4th ed., MIT Press 2023, section 8.8.7 Windowed Sinc Filter, Figure 8.56"
+quote = '''Thanks to the windowing, the reconstructed step function exhibits far less ringing than the reconstruction using the infinite-extent sinc function (compare to Figure 8.11). The windowed sinc filter also does extremely well at reconstructing the sinusoidal function until prealiasing begins.'''
+checked = 2026-10-30
+
+["mitchell-1988-postaliasing-moire"]
+url = "https://www.cs.utexas.edu/~fussell/courses/cs384g-fall2013/lectures/mitchell/Mitchell.pdf#page=4"
+section = "Mitchell, Netravali, Reconstruction Filters in Computer Graphics, SIGGRAPH 1988 (doi:10.1145/54852.378514), section 5 Postaliasing Revisited, p. 224; section 2, p. 222"
+quote = '''Postaliasing is usually not strong enough to cause visible "jaggies" on edges unless a very poor filter is used (e.g., a box filter); however, an image with periodic patterns can have conspicuous postalias Moire' effects unless careful precautions are taken. Synthetic images that contain brick walls, ocean waves, or the ubiquitous checkerboard pattern are examples of images that might have this difficulty. [...] Power in the spectrum very near the Nyquist frequency is thus the cause of the most difficult type of aliasing to remove from an image.'''
+checked = 2026-10-30
+
+["mitchell-1988-blur-ringing"]
+url = "https://www.cs.utexas.edu/~fussell/courses/cs384g-fall2013/lectures/mitchell/Mitchell.pdf#page=3"
+section = "Mitchell, Netravali, Reconstruction Filters in Computer Graphics, SIGGRAPH 1988 (doi:10.1145/54852.378514), section 4, pp. 223-224, Figure 13"
+quote = '''In viewing many reconstructions with filters in this family, ringing, anisotropy, and blurring are the dominant behaviors [...] good subjective behavior is found with a simple trade-off between blurring and ringing. [...] The filter (1/3, 1/3) used to generate Figure 12 is recommended by the authors, but other observers may prefer more or less ringing.'''
+checked = 2026-10-30
+
+["mitchell-1988-notch"]
+url = "https://www.cs.utexas.edu/~fussell/courses/cs384g-fall2013/lectures/mitchell/Mitchell.pdf#page=5"
+section = "Mitchell, Netravali, Reconstruction Filters in Computer Graphics, SIGGRAPH 1988 (doi:10.1145/54852.378514), sections 5-6, p. 225, Figure 16"
+quote = '''The (1/3, 1/3) filter yields excellent image quality, and the notch filter (3/2, -1/4) strongly suppresses postaliasing patterns. [...] the postaliasing artifact is almost completely eliminated. Unfortunately, this filter is quite blurry as was seen in Figure 11.'''
+checked = 2026-10-30
+
+["pettineo-2012-msaa-resolve-filters"]
+url = "https://therealmjp.github.io/posts/msaa-resolve-filters/"
+section = "Pettineo, Experimenting with Reconstruction Filters for MSAA Resolve, blog post 2012-10-29, introduction, Implementation and Results"
+quote = '''Every GPU that I’ve run my code on will perform worse with a custom resolve, even when using a simple box filter with results that exactly match a standard resolve. [...] On top of that, there’s additional costs for the increased texture samples required for wider filter kernels. [...] For the most part, wider filter kernels tend to reduce aliasing while smaller filters preserve more high-frequency detail. Personally I find  that the cubic spline filters with no negative lobes (smoothstep and B-Spline) will produce the best results, with the best balance between aliasing and blurring occurring around the 2.0-3.0 range. [...] For this reason I think that Mitchell is a better option over Catmull-Rom, since Mitchell’s negative lobes are bit less pronounced. The sinc filter is almost totally unappealing for an MSAA resolve, since the ringing artifacts that it produces are very prominent.'''
+checked = 2026-10-30
+
+["pettineo-2015-order-resolve"]
+url = "https://advances.realtimerendering.com/s2015/rad_siggraph_advances_2015.pptx"
+section = "Pettineo, Rendering the Alternate History of The Order: 1886, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 21 MSAA Custom Resolve and its speaker notes; slide 34 notes"
+quote = '''Compute shader instead of HW resolve [...] 2-pixel-wide cubic filter [Mitchell88] [...] No negative lobes – too much ringing with HDR [...] For The Order I went with a cubic filter, since a cubic is pretty smooth and you can make it hit zero at a specified distance. In our case the filter was exactly two pixels wide [...] Using a wider, softer filter is going to remove some of your high frequencies and the image that you get out of it definitely won’t have defined pixel edges.'''
+checked = 2026-10-30
+
+["pettineo-2015-order-aa-timings"]
+url = "https://advances.realtimerendering.com/s2015/rad_siggraph_advances_2015.pptx"
+section = "Pettineo, Rendering the Alternate History of The Order: 1886, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 38 AA Performance in The Order (PS4 GPU timings, 1920x800 targets per slide 39 notes) and its speaker notes"
+quote = '''Color Fragments: Coverage Samples: Resolve Type: Temporal AA Enabled: Main Pass (ms): Transparents (ms): Resolve (ms): Total (ms) [...] 1: 1: HW: N/A: 7.35: 0.62: N/A: 15.7 [...] 2: 4: HW: N/A: 8.40: 0.72: 0.50: 17.7 [...] 2: 4: Custom: False: 8.40: 0.72: 0.61: 17.8 [...] 2: 4: Custom: True: 8.40: 0.72: 1.02: 18.2 [...] 4: 4: HW: N/A: 8.55: 0.72: 0.56: 19.0 [...] 4: 4: Custom: False: 8.55: 0.72: 0.63: 19.1 [...] here’s a table of GPU timings from the PS4. (click) The row circled in red is what we shipped with. If you do the math, it ended up costing about 2.5ms for this particular scene.'''
+checked = 2026-10-30
+
+["pettineo-2015-msaafilter-licence"]
+url = "https://github.com/TheRealMJP/MSAAFilter/blob/cfc1c19411e24dc07f74272c17f423330ac96941/License.txt"
+section = "Pettineo, MSAAFilter sample (code for the SIGGRAPH 2015 The Order: 1886 talk), License.txt"
+quote = '''The MIT License (MIT)
+
+Copyright (c) 2015 Matt Pettineo'''
+checked = 2026-10-30
+
+["pettineo-2021-dx11samples-licence"]
+url = "https://github.com/TheRealMJP/DX11Samples/blob/900422d42ca173af31e96436e26df1f87ad5a89d/LICENSE"
+section = "Pettineo, DX11Samples (the 2012 blog samples, formerly on CodePlex; release v1.1), LICENSE"
+quote = '''MIT License
+
+Copyright (c) 2021 MJP'''
+checked = 2026-10-30
+
+["webgpu-2026-per-sample-shading"]
+url = "https://www.w3.org/TR/2026/CRD-webgpu-20260915/#per-sample-shading"
+section = "W3C, WebGPU, Candidate Recommendation Draft 2026-09-15, section 23.2.10 Per-Sample Shading"
+quote = '''When rendering into multisampled render attachments, fragment shaders can be run once per-pixel or once per-sample. Fragment shaders must run once per-sample if either the sample_index builtin or sample interpolation sampling is used and contributes to the shader output. Otherwise fragment shaders may run once per-pixel with the result broadcast out to each of the samples included in the final sample mask.'''
+checked = 2026-10-30
+
+["wgsl-2026-sample-index"]
+url = "https://www.w3.org/TR/2026/CRD-WGSL-20261026/#sample-index-builtin-value"
+section = "W3C, WebGPU Shading Language, Candidate Recommendation Draft 2026-10-26, section 13.3.1.1.12 sample_index"
+quote = '''When this attribute is applied, if the effects of the fragment shader would vary based on the value of sample_index, the fragment shader will be invoked once per sample.'''
+checked = 2026-10-30
+
+["wgsl-2026-interpolation-sampling"]
+url = "https://www.w3.org/TR/2026/CRD-WGSL-20261026/#interpolation-sampling"
+section = "W3C, WebGPU Shading Language, Candidate Recommendation Draft 2026-10-26, §13.3.1.4 Interpolation"
+quote = '''center Interpolation is performed at the center of the pixel. [...] sample Interpolation is performed per sample. The fragment shader is invoked once per sample when this attribute is applied. [...] If the interpolation attribute is not specified, then @interpolate(perspective, center) is assumed.'''
+checked = 2026-10-30
+
+["greene-1986-square-filters-alias-or-blur"]
+url = "https://www.cs.cmu.edu/~ph/omni.ps.gz"
+section = "Ned Greene, Paul S. Heckbert, Creating Raster Omnimax Images from Multiple Perspective Views Using the Elliptical Weighted Average Filter, IEEE Computer Graphics and Applications, June 1986, pp. 21-27; author's PostScript (missing figures), §4 Filtering"
+quote = '''The fastest filters such as those by Dungan-Stenger-Sutty, Williams, Crow, and Perlin have constant cost per screen pixel, but they are limited to orthogonally oriented squares, rectangles, or ellipses, so they cannot filter elongated diagonal areas accurately. This limited shape control causes either aliasing or blurring of the texture.'''
+checked = 2026-10-30
+
+["greene-1986-ewa-kernel-and-cost"]
+url = "https://www.cs.cmu.edu/~ph/omni.ps.gz"
+section = "Greene, Heckbert, Creating Raster Omnimax Images [...] Using the Elliptical Weighted Average Filter, IEEE CG&A June 1986; author's PostScript, §5 Elliptical Weighted Average Filter (EWA) and §6 Areas for Future Work"
+quote = '''To avoid this cost EWA distorts the circular screen space kernel into an ellipse in texture space so that texture weighting can be done more directly. [...] Like other high quality filters, EWA's cost is proportional to the texture space area [...] A good kernel to use is the gaussian f(r)=e^(−αr²) [...] The gaussian is preferred to the theoretically optimal sinc kernel because it decays much more quickly. [...] Since the computational cost of EWA filtering is proportional to texture space area, texture mapping with EWA is very slow compared with constant cost filtering when large texture areas map to small screen areas.'''
+checked = 2026-10-30
+
+["heckbert-1989-box-side-lobes"]
+url = "https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf#page=45"
+section = "Paul S. Heckbert, Fundamentals of Texture Mapping and Image Warping, Master's thesis, UC Berkeley tech report UCB/CSD 89/516, 1989, p. 39, B-Spline Filter"
+quote = '''We start with an unweighted average or first order box: [...] Its frequency response is a sinc, as shown at right. This filter, when sampled, is trivial to implement, (involving several additions and one multiplication), but its frequency response is far from ideal, with high side lobes.'''
+checked = 2026-10-30
+
+["heckbert-1989-elliptical-gaussian-resampling"]
+url = "https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf#page=62"
+section = "Heckbert, Fundamentals of Texture Mapping and Image Warping, UCB/CSD 89/516, 1989, p. 56, §3.5.8 Elliptical Gaussian Filters, Elliptical Gaussian Resampling"
+quote = '''If we use elliptical Gaussian filters as the reconstruction filter and prefilter, and employ the local affine approximation to the mapping, then the resampling filter will be an elliptical Gaussian. [...] This unified scheme for reconstruction and prefiltering guarantees that the resampling filter is always wider than both the reconstruction and prefilters, so there is no danger that the filter will fall between samples.'''
+checked = 2026-10-30
+
+["heckbert-1989-ewa-jacobian-cost"]
+url = "https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf#page=63"
+section = "Heckbert, Fundamentals of Texture Mapping and Image Warping, UCB/CSD 89/516, 1989, p. 57, §3.5.9 An Implementation of Elliptical Gaussian Filters"
+quote = '''As mentioned earlier, the preimage through a projective mapping of a circular region in screen space is (usually) an elliptical region in texture space, and the preimage of a circle through an affine mapping is an ellipse. [...] The EWA filter is a direct convolution method, so its cost is proportional to the area of the texture region, like other high quality texture filters [Heckbert86b], but its coefficient of proportionality is lower than most.'''
+checked = 2026-10-30
+
+["heckbert-1989-pyramid-cost-eccentricity-clamp"]
+url = "https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf#page=66"
+section = "Heckbert, Fundamentals of Texture Mapping and Image Warping, UCB/CSD 89/516, 1989, pp. 60 and 62 (PDF pages 66 and 68), §3.5.9, Optimized Elliptical Weighted Average"
+quote = '''Using the level selection rule above, we can filter any circle with a minimum of 9 and a maximum of 25 pixel accesses, independent of the size of the circle in the original texture image. [...] Since eccentricities are unbounded for arbitrary mappings, this area is unbounded, so the cost of EWA filtering of ellipses is unbounded. [...] Fattening the ellipse (increasing its minor axis) will cause lateral blurring, and shortening the ellipse (decreasing its major axis) will cause longitudinal aliasing. It is probably best to opt for blurring. Tests show that a threshold of eₘₐₓ = 20 or 30 produces very good results. Note that clamping the eccentricity of the EWA filter bounds the computation required for one filtering operation, thereby making EWA a constant cost filter.'''
+checked = 2026-10-30
+
+["mccormack-1999-feline-probes"]
+url = "https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf"
+section = "Joel McCormack, Ronald Perry, Keith I. Farkas, Norman P. Jouppi, Feline: Fast Elliptical Lines for Anisotropic Texture Mapping, SIGGRAPH 99 (copy of the proceedings paper), Abstract and §3.1 The Desired Computations"
+quote = '''But trilinear filtering represents the projection of a pixel filter footprint from screen space into texture space as a square, when in reality the footprint may be long and narrow. Consequently, trilinear filtering severely blurs images on surfaces angled obliquely away from the viewer. [...] Feline’s visual quality compares well against Elliptical Weighted Average, the best software anisotropic texture filtering algorithm known to date, but Feline requires much less setup computation and far fewer cycles for texel fetches. [...] The combination of multiple isotropic probes should closely match the shape of the EWA filter. Thus, the probe points should occur along the major axis of the ellipse, the probes should be Gaussian weighted, and the probe filter width should be equal to the minor axis of the ellipse. [...] we clamp the radii to a minimum of one texel: [...] fProbes = 2*(majorRadius/minorRadius) – 1; iProbes = floor(fProbes + 0.5); if (iProbes > maxProbes) iProbes = maxProbes; To guarantee that texturing a pixel occurs in a bounded time, we clamp iProbes to a programmable value maxProbes.'''
+checked = 2026-10-30
+
+["mccormack-1999-ewa-blur-and-setup"]
+url = "https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf"
+section = "McCormack, Perry, Farkas, Jouppi, Feline, SIGGRAPH 99, §2.1 Elliptical Weighted Average"
+quote = '''These setup computations, plus logic to visit only texels in or near the ellipse and compute d², have thus far precluded hardware implementation of EWA. The only complaint that can be leveled against EWA’s visual quality is its choice of a Gaussian filter. Other filters produce sharper images without introducing more aliasing artifacts (see Wolberg [13] for an excellent discussion). However, these filters have a radius of two or three pixels, which increases the work required to compute a textured pixel by a factor of four or nine.'''
+checked = 2026-10-30
+
+["mccormack-1999-equal-weight-probes"]
+url = "https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf"
+section = "McCormack, Perry, Farkas, Jouppi, Feline, SIGGRAPH 99, §2.3 Texram"
+quote = '''Texram has other problems that manifest themselves as aliasing artifacts. Its sampling line is usually much shorter than the ellipse, and the trilinear probes can be spaced too far apart. Texram always uses 2ⁿ equally weighted probes, which causes poor high-frequency rejection along the major axis. These problems make Texram’s visual quality noticeably inferior to EWA.'''
+checked = 2026-10-30
+
+["mccormack-1999-feline-conclusions"]
+url = "https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf"
+section = "McCormack, Perry, Farkas, Jouppi, Feline, SIGGRAPH 99, §5 Conclusions (cost otherwise only as Figure 23, cycles/pixel chart)"
+quote = '''Feline provides nearly the visual quality of EWA, but with much simpler setup and texel visiting logic, and many fewer cycles per textured pixel. [...] Feline can be built on top of an existing trilinear filter implementation; for better results, the trilinear filter can be converted to a mip-mapped Gaussian at little cost. Since several aspects of Feline are parameterized, Feline can gracefully degrade image quality in order to keep frame rates high during movement. This degradation might accentuate aliasing for irregular textures, in order to preserve image sharpness, and accentuate blurring for repeated regular textures, in order to avoid Moiré artifacts.'''
+checked = 2026-10-30
+
+["mavridis-2011-ellipse-approximation"]
+url = "https://graphics.cs.aueb.gr/graphics/docs/papers/I3D11_EllipticalFiltering_draft.pdf"
+section = "Pavlos Mavridis, Georgios Papaioannou, High Quality Elliptical Texture Filtering on GPU, I3D 2011 (doi:10.1145/1944745.1944749), authors' draft, §4.3 Ellipse Approximation"
+quote = '''Instead of using simple trilinear probes like the aforementioned algorithms, we propose the usage of the anisotropic probes provided by the graphics hardware. We place the probes on a line along the major axis of the ellipse [...] To better match the shape of the EWA filter, the probes are weighted proportionally to their distance from the center of the footprint, according to a gaussian function. [...] We don’t have any strong guarantees about the quality or the shape of those probes, since the OpenGL specification [Segal and Akeley 2006] does not explicitly enforce any particular method for anisotropic filtering. [...] In our tests, using 5 probes eliminated all the visible artifacts, on the NVIDIA hardware.'''
+checked = 2026-10-30
+
+["mavridis-2011-table1-cost"]
+url = "https://graphics.cs.aueb.gr/graphics/docs/papers/I3D11_EllipticalFiltering_draft.pdf"
+section = "Mavridis, Papaioannou, High Quality Elliptical Texture Filtering on GPU, I3D 2011, Table 1 and §5 Results (GTX 460, 900² pixels, ray-traced infinite tunnel)"
+quote = '''reference: linear: bilinear: approximate: spatial: temporal: hardware 16x
+MTexels/sec: 93: 127: 149: 658: 774: 1012: 1701
+Relative Perf.: 5.5%: 7.4%: 8.8%: 38.7%: 45.5%: 59.5%: 100%
+TEX lookup: adaptive: adaptive: adaptive: 5: 1 or 5: 3: 1
+[...]
+Mean Sq. Error: 0: 0.007: 6.4: 30.0: 55.2: -: 126.3
+Table 1: Comparison between the proposed methods and the hardware 16x anisotropic filtering, using the highest possible quality settings on a NVIDIA GTX460. [...] Performance was measured on the ray-traced tunnel scene of Figure 1 on a GTX 460 with a resolution of 900². [...] In particular, the n anisotropic samples (probes) of Equation 5 are distributed in two successive frames.'''
+checked = 2026-10-30
+
+["mavridis-2011-results-window-blur"]
+url = "https://graphics.cs.aueb.gr/graphics/docs/papers/I3D11_EllipticalFiltering_draft.pdf"
+section = "Mavridis, Papaioannou, High Quality Elliptical Texture Filtering on GPU, I3D 2011, §5 Results and §5.2 Discussion"
+quote = '''The ellipse approximation method has some aliasing artifacts and the details on the left are blurred out, but still provides a tremendous improvement over the hardware filtering. [...] We observe that even the reference EWA implementation exhibits some aliasing artifacts. The elliptical region of the EWA filter is defined by a contour of the gaussian kernel, but since a true gaussian (or sinc) has infinite extend, direct EWA only uses a windowed filter, resulting in some aliasing artifacts. Extending the window size and the standard deviation of the filter will reduce the aliasing by introducing some blur.'''
+checked = 2026-10-30
+
+["mavridis-2011-code-mit"]
+url = "http://web.archive.org/web/20200216143853/http://www.pmavridis.com:80/ewa.html"
+section = "Pavlos Mavridis, High Quality Elliptical Texture Filtering on GPU, author's project page (archived 2020-02-16), OpenGL Demo"
+quote = '''Most of the images in the paper were produced with this demo. [...] The source code is released under the MIT license.'''
+checked = 2026-10-30
+
+["vulkan-anisotropic-filtering-implementation-dependent"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/textures.adoc#L2769-L2826"
+section = "Vulkan specification v1.4.367, Textures, Texel Anisotropic Filtering"
+quote = '''The particular scheme for anisotropic texture filtering is implementation-dependent. [...] The following describes one particular approach to implementing anisotropic filtering for the 2D Image case; implementations may: choose other methods: [...] Instead of a single isotropic sample, N isotropic samples are sampled within the image footprint of the image level [eq]#d# to approximate an anisotropic filter. [...] τ₂Daniso = (1/N) Σᵢ₌₁ᴺ τ₂D(u(x − ½ + i/(N+1), y), v(x − ½ + i/(N+1), y)), when ρₓ > ρᵧ'''
+checked = 2026-10-30
+
+["vulkan-lod-bias"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/textures.adoc#L1688-L1717"
+section = "Vulkan specification v1.4.367, Textures, LOD Operation (λ_base, λ′ and sampler.bias)"
+quote = '''λ_base(x,y) = shaderOp.Lod (from optional SPIR-V operand); log₂(ρ_max/η) otherwise
+λ′(x,y) = λ_base + clamp(sampler.bias + shaderOp.bias, −maxSamplerLodBias, maxSamplerLodBias) [...]
+sampler.bias = mipLodBias (from sampler descriptor)
+shaderOp.bias = Bias (from optional SPIR-V operand); 0 otherwise'''
+checked = 2026-10-30
+
+["wgsl-texture-sample-bias-grad"]
+url = "https://www.w3.org/TR/2026/CRD-WGSL-20261026/#texturesamplebias"
+section = "WGSL, §17.7.9 textureSampleBias and §17.7.12 textureSampleGrad (#texturesamplegrad)"
+quote = '''Samples a texture with a bias to the mip level. Must only be used in a fragment shader stage. [...] bias The bias to apply to the mip level before sampling. This value will be clamped in the range [-16.0, 15.99]. [...] Samples a texture using explicit gradients. [...] ddx The x direction derivative vector used to compute the sampling locations. ddy The y direction derivative vector used to compute the sampling locations.'''
+checked = 2026-10-30
+
+["wgpu-types-30-sampler-descriptor-no-bias"]
+url = "https://github.com/gfx-rs/wgpu/blob/40f4a34ebaf56f9a046231f54125ad046239d3f3/wgpu-types/src/texture.rs#L658-L683"
+section = "wgpu-types 30.0.1, struct SamplerDescriptor (no LOD-bias field)"
+quote = '''pub lod_min_clamp: f32, [...] pub lod_max_clamp: f32, [...] pub compare: Option<crate::CompareFunction>, [...] /// Must be at least 1. If this is not 1, all filter modes must be linear. pub anisotropy_clamp: u16, [...] pub border_color: Option<SamplerBorderColor>,'''
+checked = 2026-10-30
+
+["pharr-2024-stf-noise"]
+url = "https://arxiv.org/pdf/2407.06107v1"
+section = "Pharr, Wronski, Salvi, Fajardo, Filtering After Shading With Stochastic Texture Filtering, Proc. ACM Comput. Graph. Interact. Tech. 7(1) Article 1, I3D 2024 (doi:10.1145/3651293), abstract"
+quote = '''We demonstrate applications in both real-time and offline rendering and show that the additional error from stochastic filtering is minimal. We find that this error is handled well by either spatiotemporal denoising or moderate pixel sampling rates.'''
+checked = 2026-10-30
+
+["pharr-2024-stf-minification-dlss"]
+url = "https://arxiv.org/pdf/2407.06107v1"
+section = "Pharr, Wronski, Salvi, Fajardo, Filtering After Shading With Stochastic Texture Filtering, PACMCGIT 7(1) 2024 (doi:10.1145/3651293), Section 5 Results, 'Anisotropic filtering and minification' and setup paragraphs"
+quote = '''All performance measurements were taken on an NVIDIA RTX 4090 GPU. We evaluate stochastic texture filtering in a real-time renderer, using DLSS [Liu 2022] as a robust temporal integrator. [...] All real-time images and performance measurements were taken at 4K (3840 × 2160) resolution. [...] Lowpass filtering is more difficult to resolve than reconstruction filtering, as it needs to average significantly more samples. We verify that the commonly used temporal filter, DLSS, can resolve it in Figure 12. We use a plane textured with a challenging, high-contrast checkerboard pattern. The image reconstructed by DLSS is temporally stable, with occasional flickering in regions containing very high-frequency details.'''
+checked = 2026-10-30
+
+["pharr-2024-stf-anisotropy"]
+url = "https://arxiv.org/pdf/2407.06107v1"
+section = "Pharr, Wronski, Salvi, Fajardo, Filtering After Shading With Stochastic Texture Filtering, PACMCGIT 7(1) 2024 (doi:10.1145/3651293), Section 4.2.1 Screen-Space Anisotropic Minification"
+quote = '''To save computational cost, similarly to Lee et al. [Lee et al. 2017] we do not sample the ellipse in the shader but rely on screen-space jittering within the pixel to approximately sample the same extent. [...] Unlike current GPU hardware filtering, which has a maximum anisotropy ratio of 16, our method allows any anisotropy. We limit the ratio to 64 to avoid GPU texture cache thrashing, rescaling the minor axis if necessary. [...] Therefore, the technique as described is no longer filtering after shading, but a hybrid between filtering before and after shading. The choice of MIP map defines the degree to which the textures are prefiltered and the resulting error. This error can be reduced by using finer levels of the MIP chain, which can be achieved by applying a negative LOD bias or by increasing the maximum amount of anisotropy.'''
+checked = 2026-10-30
+
+["pharr-2024-stf-filter-cost"]
+url = "https://arxiv.org/pdf/2407.06107v1"
+section = "Pharr, Wronski, Salvi, Fajardo, Filtering After Shading With Stochastic Texture Filtering, PACMCGIT 7(1) 2024 (doi:10.1145/3651293), Section 4.3, Section 5 (Magnification, Filter Reservoir Sampling), Figure 10 and Figure 14 captions"
+quote = '''Unlike FRS, the cost of filter importance sampling is constant and does not depend on the filter size, including filters with infinite spatial support. [...] the Mitchell filter has negative weights and so we apply positivization (Section 2.2), which doubles the cost of stochastic filtering. [...] The Gaussian filter is isotropic and although it tends to blur textures, it gives the best results for reconstruction of diagonal lines. [...] Stochastic filtering reduces rendering time from 1.66 ms to 0.57 ms.'''
+checked = 2026-10-30
+
+["pharr-2024-stf-discussion"]
+url = "https://arxiv.org/pdf/2407.06107v1"
+section = "Pharr, Wronski, Salvi, Fajardo, Filtering After Shading With Stochastic Texture Filtering, PACMCGIT 7(1) 2024 (doi:10.1145/3651293), Section 6 Recommendations and Section 7 Discussion"
+quote = '''Filtering after shading and STF work especially well for minification and reduce aliasing. [...] We demonstrated that the minor noise introduced by stochastic texture filtering can be effectively managed using temporal filtering algorithms like DLSS. While the overall reconstruction quality is satisfactory, minor flickering and ghosting artifacts remain, especially in high-contrast areas and patterns like a checkerboard.'''
+checked = 2026-10-30
+
+["nvidia-rtxtf-readme"]
+url = "https://github.com/NVIDIA-RTX/RTXTF/blob/992678902cbe95ef520e84153d60ad97eb124e54/README.md"
+section = "NVIDIA, RTX Texture Filtering (RTXTF) SDK, README.md and LICENSE.txt at commit 99267890"
+quote = '''RTXTF requires DLSS to resolve the noise that RTXTF generates.  Any RTXTF methods performed after DLSS will be noisy. [...] ## License
+
+[NVIDIA RTX SDKs LICENSE](LICENSE.txt)'''
+checked = 2026-10-30
+
+["wronski-2025-stf-reuse"]
+url = "https://arxiv.org/pdf/2504.05562v1"
+section = "Wronski, Pharr, Akenine-Möller, Improved Stochastic Texture Filtering Through Sample Reuse, Proc. ACM Comput. Graph. Interact. Tech. 8(1) Article 14, I3D 2025 (doi:10.1145/3728292), abstract and Section 1"
+quote = '''When textures are magnified, nearby pixels filter similar sets of texels and we introduce techniques for sharing texel values among pixels with only a small increase in cost (0.04–0.14 ms per frame). [...] Under high magnification, our method has >10 dB higher PSNR than single-sample STF. Our results show greatly improved image quality both with and without spatiotemporal denoising. [...] In this work, we address these limitations and improve the quality of stochastic texture magnification without increasing the cost beyond a single texture lookup and without affecting the favorable properties of FAS for minification.'''
+checked = 2026-10-30
+
+["akenine-moller-2021-ray-cones"]
+url = "https://jcgt.org/published/0010/01/01/paper.pdf"
+section = "Akenine-Möller, Crassin, Boksansky, Belcour, Panteleev, Wright, Improved Shader and Texture Level of Detail Using Ray Cones, JCGT 10(1) 2021, abstract and Section 5 (anisotropic lookups)"
+quote = '''In this paper, we present several improvements to the ray-cones algorithm that improve image quality and performance and make it easier to adopt in game engines. We show that the total time per frame can decrease by around 10% in a GPU-based path tracer, and we provide a public-domain implementation. [...] Our goal is to find gradients of texture coordinates along the ellipse axes in texture space, in order to take an advantage of hardware-supported anisotropic filtering'''
+checked = 2026-10-30
+
+["golus-2019-rgss"]
+url = "https://web.archive.org/web/20241214090822/https://bgolus.medium.com/sharper-mipmapping-using-shader-based-supersampling-ed7aadb47bec"
+section = "Ben Golus, Sharper Mipmapping using Shader Based Supersampling, Medium blog 2019-08-10 (archived 2024-12-14), sections on Supersampling, Performance and Limitations, and 'MORE SAMPLES'"
+quote = '''This article is Unity and MSAA / no-FSAA focused. If you’re intending to use some form of post transparency TAA, this article may not be for you. [...] For a similar scene as the above with the ground mirrored as a ceiling, running at 1920x1080 on an Nvidia GTX 970, it increases the overall frame time by about 0.15 ms to 0.5~0.6 ms per frame compared to anisotropic filtering alone. [...] Performance wise, the difference isn’t even measurable comparing OGSS and RGSS. [...] Not exactly the same, but extremely close. Certainly far better than Anisotropic filtering alone. The ground plane is also now slightly higher quality than even 16x Anisotropic filtering when only using 8x due to the addition of Supersampling. [...] The 2x2 RGSS can certainly exhibit some degree of moire on high details that a higher sample count would reduce. I’ve tested an 8 sample Halton sequence that has clear advantages to the 2x2 RGSS in extreme cases, but the extra samples come with a significantly higher performance penalty. Going from 4 to 8 samples increases the cost over Anisotropic from the 0.15ms to 1ms per frame!'''
+checked = 2026-10-30
+
+["golus-2019-kaiser-mips"]
+url = "https://web.archive.org/web/20241214090822/https://bgolus.medium.com/sharper-mipmapping-using-shader-based-supersampling-ed7aadb47bec"
+section = "Ben Golus, Sharper Mipmapping using Shader Based Supersampling, Medium blog 2019-08-10 (archived 2024-12-14), section 'Kaiser-filtered Mipmaps'"
+quote = '''Another common technique for improving the sharpness of mip mapping is to use a Lanczos, Kaiser, or some similar wider sinc based kernel & sharpening when generating the mipmaps themselves. [...] One thing Kaiser is better at than the usual bilinear mipmaps is shape preservation. [...] On the other hand they can cause weird dots or lines to appear in the mipmaps that don’t exist in the original image at all. And thin lines can end up brighter than thicker lines with Kaiser! [...] Note Nvidia’s Kaiser filtering actually makes the lines blurrier overall! Especially in the Anisotropic example. But this texture is an extreme case. A texture with less initial contrast should end up clearer overall. Also note that with RGSS the differences are much less noticeable, though Nvidia’s Kaiser mipmaps are slightly smoother.'''
+checked = 2026-10-30
+
+["wronski-2021-box-downsample"]
+url = "https://bartwronski.com/2021/02/15/bilinear-down-upsampling-pixel-grids-and-that-half-pixel-offset/"
+section = "Bart Wronski, Bilinear down/upsampling, aligning pixel grids, and that infamous GPU half pixel offset, blog 2021-02-15, section 'Bilinear downsampling take one – even bilinear filter' and following"
+quote = '''First antialiasing filter we’d want to analyze would be our old friend “linear in box disguise”, [0.5, 0.5] filter. It is definitely imperfect, and we can see both blurring, and some leftover aliasing: [...] To get better results -> you’ll need more samples, some of them with negative lobes. And you can design an even filter with more samples too, for example even Lanczos:'''
+checked = 2026-10-30
+
+["manson-2013-cardinality"]
+url = "https://people.engr.tamu.edu/schaefer/research/cardinality.pdf"
+section = "Manson, Schaefer, Cardinality-Constrained Texture Filtering, ACM TOG 32(4) SIGGRAPH 2013 (doi:10.1145/2461912.2461963), abstract and Section 4 Results (Figures 11, 12)"
+quote = '''Our method also has a fixed cost regardless of the filter we approximate, which makes it feasible to approximate higher-quality filters such as a Lánczos 2 filter in real-time rendering. [...] When using four or more texels per sample, our image quality exceeds that of trilinear interpolation. [...] In Figure 11 we show a checkerboard pattern on an infinite plane using a tent filter when fetching four, six, and eight texels to demonstrate aliasing. [...] By replacing trilinear interpolation with our approximation of the isotropic Gaussians, we generate higher-quality anisotropic filters while using the same texture bandwidth.'''
+checked = 2026-10-30
