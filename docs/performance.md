@@ -98,7 +98,7 @@ oldest frame in flight in every frame, and in most runs its P-core then
 runs about 30% slower for the whole frame. The clock is read through
 work, not a counter (`powermetrics` needs root): a fixed chain of 2,000
 dependent multiply-adds, timed on the main thread at three points of
-each frame, takes 2.67–3.17 µs in those runs against 1.92–2.04 µs
+each frame, takes 2.58–3.04 µs in those runs against 1.92–2.04 µs
 spin-waiting, and `prepare_frame` slows by the same ratio, 1,812 against
 1,307 µs. The thread never runs on an efficiency core and stays on one
 P-core cluster across the wait, so neither migration nor a cold L2
@@ -118,8 +118,8 @@ number from `TPIDR_EL0`'s low bits (cores 0–3 are the efficiency
 cluster, 4–7 and 8–11 the two performance clusters, mapped by timing the
 same chain on each), logged each CPU stage's median, and switched by
 environment variable the frames in flight, a spin-wait (`device.poll`
-with a zero timeout, in a loop) and a fixed priority of 45 set with
-`pthread_setschedparam`. `praxis bench <dir> --skip-aliasing town` at
+with a zero timeout, in a loop) and a priority of 45 set with
+`pthread_setschedparam` under the default time-sharing policy. `praxis bench <dir> --skip-aliasing town` at
 2560×1440 with 4x MSAA, 1,800 measured frames, no other GPU work; the
 patch's core counts span every frame after the first 100, 1,948 a run.
 
@@ -170,11 +170,13 @@ What the measurements say about the cause:
   holds it at priority 31, the default class's, whichever class a QoS
   call asks for. The kernel lowers the interactive and initiated classes
   to the legacy one for an app-type task without an application role
-  [ref:xnu-task-policy-role-qos-ceiling], which fits what was measured.
-  A fixed priority of 45,
+  [ref:xnu-task-policy-role-qos-ceiling], which fits what was measured;
+  the patch did not read the process's app type or role. Priority 45,
   what Apple recommends for a game's render thread
-  [ref:apple-wwdc18-612-render-thread-priority], took effect and left the
-  stages as slow as the default.
+  [ref:apple-wwdc18-612-render-thread-priority], took effect under the
+  default time-sharing policy and left the stages as slow as the
+  default; the round-robin policy, whose priority does not decay, was
+  not tried.
 - **Not migration.** No frame ran on an efficiency core and the
   performance cluster held across the wait, so the L2 stays warm.
 - **Not all of it.** The first default run kept a fast clock, yet its
@@ -235,8 +237,9 @@ looser of the two forms.
 Against the runs with one frame in flight, the GPU idle at each frame's
 start, spin-waiting's stages read `prepare_frame` 1,307 against
 1,260–1,286 µs, within 4%, but `propagate_world_transforms` up to 14%
-over and `encode` 21–24% over, so the ticket's 5% holds for the largest
-stage only. CI's lavapipe keeps the blocking wait: its rasterizer runs
+over and `encode` 21–24% over; `submit`, 2,067–2,073 against
+2,129–2,569, is under. The ticket's 5% holds for `prepare_frame` and
+`submit`, not for `propagate_world_transforms` or `encode`. CI's lavapipe keeps the blocking wait: its rasterizer runs
 on the CPU, where a spinning main thread would take a core from it. The
 RTX 2070 SUPER's Baselines were recorded blocking. An
 interleaved pair from one build, switched between the two waits by a
