@@ -3789,3 +3789,21 @@ url = "https://people.engr.tamu.edu/schaefer/research/cardinality.pdf"
 section = "Manson, Schaefer, Cardinality-Constrained Texture Filtering, ACM TOG 32(4) SIGGRAPH 2013 (doi:10.1145/2461912.2461963), abstract and Section 4 Results (Figures 11, 12)"
 quote = '''Our method also has a fixed cost regardless of the filter we approximate, which makes it feasible to approximate higher-quality filters such as a Lánczos 2 filter in real-time rendering. [...] When using four or more texels per sample, our image quality exceeds that of trilinear interpolation. [...] In Figure 11 we show a checkerboard pattern on an infinite plane using a tent filter when fetching four, six, and eight texels to demonstrate aliasing. [...] By replacing trilinear interpolation with our approximation of the isotropic Gaussians, we generate higher-quality anisotropic filters while using the same texture bandwidth.'''
 checked = 2026-10-30
+
+["wachter-binder-2019-offset-error"]
+url = "https://doi.org/10.1007/978-1-4842-4427-2_6"
+section = "Wächter, Binder, A Fast and Robust Method for Avoiding Self-Intersection, Ray Tracing Gems (Apress, 2019), ch. 6, §6.2.2.4, p. 82"
+quote = '''Using any offset of fixed length ε is not scale invariant, and thus not parameter free, and will also not work for intersections at varying magnitudes of distance. Therefore, analyzing the error of the floating-point calculations to compute the intersection point using barycentric coordinates reveals that the distance of the intersection to the plane of the surface is proportional to the distance from the origin (0,0,0). At the same time the size of the surface also influences the error and even becomes dominant for triangles very close to the origin (0,0,0).'''
+checked = 2026-10-30
+
+["d3d11.3-rasterizer-precision"]
+url = "https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm"
+section = "Direct3D 11.3 Functional Specification, §15.16 Rasterizer Precision"
+quote = '''After Viewport(15.6) scale has been applied (but before Scissor Test), positions are converted to fixed-point, to evenly distribute precision across the RenderTarget range and to enable face culling. The Rasterizer(15) must support 16.8 (integer.fraction) fixed point precision for x and y. Particularly for the fractional part, the requirement is EXACTLY 8 bits. This conversion is also subject to the rules specified in float-to-fixed(3.2.4.1), including round-to-nearest.'''
+checked = 2026-10-30
+
+["vulkan-subpixel-precision-bits"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/limits.adoc#L537-L539"
+section = "Vulkan specification, Limits, subPixelPrecisionBits (lines 537-539) and table Required Limits (lines 7003-7004)"
+quote = '''pname:subPixelPrecisionBits is the number of bits of subpixel precision in framebuffer coordinates [eq]#x~f~# and [eq]#y~f~#. [...] pname:subPixelPrecisionBits: -: 4 + 8 ({limit2026}): min'''
+checked = 2026-10-30

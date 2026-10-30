@@ -18,24 +18,44 @@
 // anything a TLAS holds.
 const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;
 
-// A shadow ray's origin leaves its surface along the normal by this share
-// of the point's largest coordinate, relative to the camera or in the TLAS's
-// frame, and of 1 m at least. Rebuilding the point from its depth, composing
-// it into the TLAS's frame and intersecting the TLAS each round a coordinate
-// by a few times 2^-24 of its size at most, well inside the offset's 256.
+// A shadow ray's origin leaves its surface along the normal by the larger of
+// two distances. The first is this share of the point's largest coordinate,
+// relative to the camera or in the TLAS's frame, as a ray's hit point is
+// offset in proportion to its distance from the origin
+// [ref:wachter-binder-2019-offset-error], and of 1 m at least: rebuilding
+// the point from its depth, composing it into the TLAS's frame and
+// intersecting the TLAS each round a coordinate by a few times 2^-24 of its
+// size at most, well inside the offset's 256.
 const SHADOW_RAY_OFFSET_SCALE: f32 = 1.52587890625e-5; // 2^-16
 
+// The second is this share of a pixel's width at the point. The depth the
+// point is rebuilt from lies on the triangle as rasterised, from vertices
+// snapped to a grid of 1/256 of a pixel on D3D11
+// [ref:d3d11.3-rasterizer-precision] and as coarse as 1/16 under Vulkan
+// [ref:vulkan-subpixel-precision-bits], so the rebuilt point can lie off the
+// TLAS's triangle by a share of a pixel's width at it: about half a step of
+// that grid, by estimate, as no specification bounds it. Measured on the
+// M4 Pro, whose grid Metal does not document, every Reference scene's
+// points lie within 0.0031 of a pixel's width of their triangles, from
+// 320x180 to 2560x1440, while the first distance spans as little as 0.0033
+// of a pixel's width at 320x180 through the camera's 45° field of view, and
+// less through a wider one. This share is ten times the measured error and
+// half a step of a 1/16 grid.
+const SHADOW_RAY_PIXEL_OFFSET: f32 = 0.03125; // 2^-5
+
 // The cosines, of a light's angle from a plane, past which a sample's normals
-// face the light or turn from it: sin 2°, 5° and 10°. The surface normals'
+// face the light or turn from it: sin 2° for the first two, the stored
+// normals' error, and sin 10° for the third. The surface normals'
 // 8-bit octahedral coordinates hold each within 0.95° where the store rounds
 // to the nearest step, as Metal's does, and about twice that where it may
 // round to either (`octahedral_decode`). Within the first, the stored
 // interpolated normal may turn from a light the lit pass's still faces; a
 // triangle faces a light its ray then clears by the second where its
-// normals agree, and by the third where the interpolated normal bends from
+// normals agree, as the ray, starting above the triangle's plane, cannot
+// meet it again; and by the third where the interpolated normal bends from
 // it; short of them, its ray starts inside the surface.
 const INTERPOLATED_TURN_MARGIN: f32 = 0.03489949670250097;
-const AGREEING_TRIANGLE_TURN_MARGIN: f32 = 0.08715574274765817;
+const AGREEING_TRIANGLE_TURN_MARGIN: f32 = 0.03489949670250097;
 const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
 
 // The cosine within which a triangle's normal and the normal interpolated
@@ -103,9 +123,10 @@ fn nearest_hit(origin: vec3<f32>, direction: vec3<f32>, end_distance: f32) -> Ra
 // own triangles: there it starts inside the surface, and passes the back of
 // the first triangle it meets, where it leaves the mesh. A ray that enters
 // a closed mesh meets a front face first, so whatever stands beyond still
-// shadows the point.
+// shadows the point. `pixel_width` is a pixel's width at `position`.
 fn shadowed(
     position: vec3<f32>,
+    pixel_width: f32,
     triangle_normal: vec3<f32>,
     interpolated_normal: vec3<f32>,
     direction: vec3<f32>,
@@ -121,7 +142,10 @@ fn shadowed(
         position
     );
     let extent = max(abs(tlas_position), abs(position));
-    let offset = SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
+    let offset = max(
+        SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0)),
+        SHADOW_RAY_PIXEL_OFFSET * pixel_width
+    );
     let facing = dot(triangle_normal, direction);
     if facing >= TRIANGLE_TURN_MARGIN
         || (facing >= AGREEING_TRIANGLE_TURN_MARGIN
@@ -157,18 +181,22 @@ fn with_bit(bits: vec2<u32>, bit: u32) -> vec2<u32> {
 }
 
 // The surface that `sample` of `pixel` shows, at `depth`: where it lies,
-// relative to the camera, its triangle's normal and the normal interpolated
-// over it.
+// relative to the camera, a pixel's width there, its triangle's normal and
+// the normal interpolated over it.
 struct SampleSurface {
     position: vec3<f32>,
+    pixel_width: f32,
     triangle_normal: vec3<f32>,
     interpolated_normal: vec3<f32>,
 }
 
 fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> SampleSurface {
+    let point = vec2<f32>(pixel) + sample_offset(sample);
+    let position = position_at(camera.view_proj, point, depth, size);
     let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
     return SampleSurface(
-        position_at(camera.view_proj, vec2<f32>(pixel) + sample_offset(sample), depth, size),
+        position,
+        distance(position, position_at(camera.view_proj, point + vec2<f32>(1.0, 0.0), depth, size)),
         octahedral_decode(normals.xy),
         octahedral_decode(normals.zw)
     );
@@ -188,7 +216,7 @@ fn directional_verdict(surface: SampleSurface, index: u32) -> Verdict {
     let direction = normalize(-lights[index].offset);
     let traced = dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN;
     let hidden = !traced
-        || shadowed(surface.position, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
+        || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
     return Verdict(hidden, traced);
 }
 
@@ -258,7 +286,7 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
             // hidden without dividing by it.
             let distance = sqrt(distance_squared);
             if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance
-                || shadowed(position, triangle_normal, interpolated_normal, to_light / distance, distance) {
+                || shadowed(position, surface.pixel_width, triangle_normal, interpolated_normal, to_light / distance, distance) {
                 hidden = with_bit(hidden, bit);
             }
         }
@@ -321,20 +349,16 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
     // its distance, other than the background's.
     var second_samples = 0u;
     if depth > 0.0 {
-        let point = vec2<f32>(pixel) + sample_offset(sample);
-        let position = position_at(camera.view_proj, point, depth, target_size);
-        let pixel_width = distance(
-            position,
-            position_at(camera.view_proj, point + vec2<f32>(1.0, 0.0), depth, target_size)
-        );
-        let plane_normal = octahedral_decode(textureLoad(surface_normals, pixel, sample).xy * 2.0 - 1.0);
+        let surface = sample_surface(pixel, sample, depth, target_size);
+        let position = surface.position;
+        let plane_normal = surface.triangle_normal;
         let off_plane = vec4<f32>(
             dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[0], depths.x, target_size) - position, plane_normal),
             dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[1], depths.y, target_size) - position, plane_normal),
             dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[2], depths.z, target_size) - position, plane_normal),
             dot(position_at(camera.view_proj, vec2<f32>(pixel) + SAMPLE_OFFSETS[3], depths.w, target_size) - position, plane_normal)
         );
-        let second = abs(off_plane) > vec4<f32>(pixel_width) & depths > vec4<f32>(0.0);
+        let second = abs(off_plane) > vec4<f32>(surface.pixel_width) & depths > vec4<f32>(0.0);
         let bits = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), second);
         second_samples = bits.x | bits.y | bits.z | bits.w;
         // The farthest of them, the least depth, gives the second surface's
