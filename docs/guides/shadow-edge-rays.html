@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Shadow Edge Rays Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 26 of the series, after Box Leakage Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* The series parts this volume shares with Edge Shadows Explained. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.ring { background: transparent; border-color: var(--bad); }
+.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-canvas { width: 100%; }
+.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
+
+/* This volume's own parts: the patch's surface colours, the crops, the texel's bits. */
+:root { --o-ground: #e6e8eb; --o-shadow: #8d939c; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --o-ground: #5d6470; --o-shadow: #262b32; }
+}
+:root[data-theme="dark"] { --o-ground: #5d6470; --o-shadow: #262b32; }
+.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.legend svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; }
+.mk-traced { fill: var(--ink-soft); stroke: var(--ink); stroke-width: 1.5; }
+.mk-copied { fill: none; stroke: var(--ink-soft); stroke-width: 1.5; }
+.mk-listed { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.mk-wrong { fill: none; stroke: var(--bad); stroke-width: 2; stroke-dasharray: 3 2; }
+.patch-frame { max-width: 820px; margin: 0 auto; }
+.crop img { display: block; width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--rule); }
+.crop + .crop { margin-top: 14px; }
+.crop-label { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.bits { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; font-family: var(--mono); font-size: 12px; margin-top: 6px; }
+.bits span { display: block; text-align: center; padding: 4px 0; border-radius: 2px; background: var(--panel); border: 1px solid var(--rule); color: var(--ink-soft); min-width: 0; }
+.bits span.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.bits span.second { border-color: var(--warm); }
+.bits span.sun { border-color: var(--accent); }
+.bit-groups { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+.bit-groups span { text-align: center; border-top: 2px solid var(--rule); padding-top: 2px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+.bit-groups span.second { border-top-color: var(--warm); color: var(--warm); }
+.bit-groups span.sun { border-top-color: var(--accent); color: var(--accent); }
+.sample-table { border-collapse: collapse; font-family: var(--mono); font-size: 13.5px; width: 100%; }
+.sample-table th, .sample-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.sample-table th { font-weight: 600; color: var(--ink-soft); font-size: 12.5px; }
+.sample-table .seg button { padding: 5px 9px; font-size: 13px; }
+.resolve-lines { font-family: var(--mono); font-size: 13.5px; line-height: 1.6; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; margin-top: 12px; overflow-x: auto; white-space: pre-wrap; }
+.meter-track .meter-fill.prototype { background: var(--ink-soft); }
+.sample-table .seg { flex-wrap: nowrap; }
+@media (max-width: 640px) {
+  .bits span { font-size: 0; height: 16px; padding: 0; }
+  .bit-groups { font-size: 10px; }
+  .sample-table th, .sample-table td { padding: 5px 3px; }
+  .sample-table .seg button { padding: 5px 7px; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; M3 &middot; tickets #358, #364 &middot; PR #394</div>
+  <h1>Shadow Edge Rays Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>One shadow ray per pixel is a point sample, so a sun shadow's edge across a surface stepped by whole pixels while 4x MSAA smoothed the geometry beside it. Praxis now lists the pixels whose sun verdict differs from a 4-neighbour's, traces the sun again from their other samples, and shades each fragment by the share of its samples that see the light. The idea to keep: spend extra rays where neighbouring rays disagree, and expect what no ray saw to stay unseen.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why one ray per pixel steps a shadow edge that MSAA would smooth</li>
+      <li>How comparing a pixel's verdict with its 4-neighbours' picks the pixels worth more rays, and which edges it misses</li>
+      <li>How the extra rays are listed, dispatched and stored in four bits a light</li>
+      <li>Why the lit pass resolves a fragment over the samples it covers</li>
+      <li>How to read the cost: 2.86 ms of GPU frame on <code>town</code>, under a 4 ms ceiling</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="edge-shadows.html#minority">Edge Shadows Explained</a>, for second surfaces, the frame-wide list and the indirect dispatch this pass reuses; <a href="shadow-rays.html#shadow-mask">Shadow Rays Explained</a>, for the shadow mask; optionally <a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>, for samples, fragments and coverage.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at d32b3d37 (PR #394, 2026-10-30). <b>Since then:</b> nothing, as of 2026-10-30.</p>
+  </aside>
+  <p class="lede">Praxis traces its shadow rays in a compute pass and keeps, for each pixel, a bit per light in the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where a directional light's bit at the nearest surface differs from a 4-neighbour's, a shadow edge, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span>. Volume 24 gave that mask a second word for the far side of a silhouette. This volume follows the next fix: the edge of a shadow itself, where light turns to shadow across one surface. It covers why one ray per pixel cannot antialias it, the survey that priced the options, the rule that picks which pixels get more rays, the two extra dispatches that trace them, the bits that carry the answer to the lit pass, and what it costs and still misses. Two live demos show a patch of pixels under each scheme, and one pixel's bits as the lit pass reads them.</p>
+  <p class="status"><b>Provenance.</b> The code is main at d32b3d37, PR #394, which closes ticket #358. The survey is <code>docs/research/shadow-edge-antialiasing.md</code>, from ticket #364 and PR #391. Measurements are those documents' own, taken on an Apple M4 Pro with wgpu on Metal at 2560&times;1440. Where the guide brings in published work, it names the source.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#stairs">1 &middot; Stairs beside smooth edges</a>
+    <a href="#point-sample">2 &middot; A ray is a point sample</a>
+    <a href="#where">3 &middot; Rays where verdicts differ</a>
+    <a href="#dispatches">4 &middot; Two more dispatches</a>
+    <a href="#bits">5 &middot; Four bits a light</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#limits">7 &middot; What stays aliased</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="stairs">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; ticket #358</div>
+    <h2>Stairs beside smooth edges</h2>
+    <p class="key-idea"><b>Key idea.</b> Before PR #394, geometry edges resolved from four samples per pixel but shadow edges from one, so a shadow stepped by whole pixels right beside the smooth outline of the object casting it.</p>
+    <p>Ticket #353's visual audit looked at every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> at 2560&times;1440 on the M4 Pro. Ticket #358 wrote down what it found in the shadows. On <code>town</code>, a tree's outline is smooth beside the stair-stepped edge of the shadow it casts. Thin shadows, such as a curb's sliver or a wire's, break into saw-teeth and dashes. In the overhead frames, 500 and 700, the shadows of roof props and railings become scattered single black pixels that would shimmer as the camera moves. <code>crowd</code>'s shadow outlines on the ground show the same one-pixel stairs.</p>
+    <p>The shadows are meant to be hard: ADR 0020 traces hard shadows, with no penumbra. They were not meant to be aliased, which is not the image MSAA gives everything else. The ticket ruled two easy answers out from the start: accumulating over frames, since ADR 0008 keeps screen-space history out of the frame, and four rays at every pixel, about four times the pass's cost, without first measuring it.</p>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>crowd</code>, figures' shadows on the ground, 6x</span><span>after</span></p>
+      <img src="img/shadow-edge-rays/crop-crowd-proxies-6x-before-left-after-right.png" width="960" height="360" loading="lazy" alt="Two dark blue figures beside black bars of shadow on grey ground, magnified 6 times. Left, before: the shadow bars' edges are hard stairs of whole pixels. Right, after: the stairs take intermediate grey steps.">
+    </div>
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>shadows</code>, ground and contact edge, 8x</span><span>after</span></p>
+      <img src="img/shadow-edge-rays/crop-shadows-8x-before-left-after-right.png" width="1280" height="480" loading="lazy" alt="Grey ground where a light region, a mid-grey shadow and a black contact shadow meet, magnified 8 times. Left, before: each boundary steps by whole pixels. Right, after: the boundaries carry intermediate shades.">
+    </div>
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>town</code>, frame 300, a wire's shadow, 6x</span><span>after</span></p>
+      <img src="img/shadow-edge-rays/crop-town-300-6x-before-left-after-right.png" width="960" height="360" loading="lazy" alt="A thin dark diagonal line across a pale wall beside a dark block, magnified 6 times. Left, before: the line is a chain of hard pixel steps. Right, after: the steps soften into intermediate shades.">
+    </div>
+    <figcaption><b>Before and after</b>, crops from PR #394's gallery at 2560&times;1440: main at ec7e6e9b on the left of each crop, the PR's branch on the right. In the PR's difference images, pixels changed: <code>shadows</code> 766, <code>crowd</code> 8,895 with shadow proxies and 9,168 refitted, <code>town</code> 12,139 at frame 300 and 134,843 at frame 700, <code>helmet</code> 9,349, <code>pbr-sweep</code> 641, <code>normal-tangent</code> 1,731, and none in the five scenes that cast no sun shadow edge. The PR found no new artifacts: no dark rims, no lit seams, and nothing new where only a point light's shadow falls.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="point-sample">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>docs/research/shadow-edge-antialiasing.md</code></div>
+    <h2>A ray is a point sample</h2>
+    <p class="key-idea"><b>Key idea.</b> Only more visibility samples recover an edge inside one surface. Filtering a one-sample answer can blur or straighten it, but cannot restore what no sample saw.</p>
+    <p class="plain">The shadow mask pass traces one ray toward each light from the surface a pixel's nearest sample shows. That ray answers yes or no for one point. Every other point of the pixel takes the same answer.</p>
+    <p>Shadow of the Tomb Raider's authors put it in one line at GTC 2019: "We typically shoot only one ray per pixel", "Which is equivalent to 'point sampling' of the visibility signal". A shadow edge that crosses a pixel therefore lands on whichever side of the edge the ray's start point lies. Along the edge, the answer flips from one pixel to the next in whole steps: a staircase.</p>
+    <p>4x MSAA smooths geometry edges because the rasteriser tests coverage at four sample points per pixel, and the resolve averages them (<a href="msaa-fragment-merging.html#samples">MSAA Fragment Merging Explained</a>). Volume 24 kept that for silhouettes by giving each surface of a pixel its own shadow word (<a href="edge-shadows.html#which-word">Edge Shadows Explained</a>). Inside one surface, though, there is one word, from one ray. Aila and Laine wrote the rule for shadow maps in 2004, and it holds for rays: "When supersampling or multisampling is used for antialiasing, the shadow term needs to be determined separately for each sample."</p>
+    <h3>The survey's options</h3>
+    <p>Ticket #364 surveyed the published ways to antialias hard ray-traced shadows and prototyped the ray-based ones on <code>town</code>. It found coverage-aware storage, like volume 24's, fixes only silhouettes; edge-stopping filters blur or keep the stairs; morphological filters such as MLAA and SMAA rebuild a line along long edges but, as the SMAA paper says of any one-sample input, cannot recover subpixel features. More samples were the only way to get the edge's true coverage. The question was where to spend them.</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Option</th><th>At a shadow edge on one surface</th><th class="n">GPU frame on <code>town</code></th></tr></thead>
+      <tbody>
+        <tr><td>A. One ray per pixel, as before</td><td>Steps by whole pixels; thin shadows break into dashes</td><td class="n">no cost</td></tr>
+        <tr class="focus"><td>B. Edge-adaptive rays, directional lights</td><td>Four levels where a sun verdict differs from a neighbour's; point-light edges keep their steps</td><td class="n">+6.1 ms</td></tr>
+        <tr><td>C. Edge-adaptive rays, every light</td><td>Four levels at every edge some pixel's ray saw</td><td class="n">+11.2 ms</td></tr>
+        <tr><td>D. A ray per sample at every pixel</td><td>Four levels everywhere; a thin shadow seen wherever any sample meets it</td><td class="n">+26.3 ms</td></tr>
+        <tr><td>E. Morphological filter of the mask</td><td>A rebuilt line along long, straight edges; thin shadows stay</td><td class="n">not measured</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">From the survey's Options, its prototype's medians on <code>town</code>'s 1,800-frame path at 2560&times;1440, against interleaved runs without it. The prototype, on branch <code>prototype/364-shadow-edge-aa</code>, was never merged.</p>
+    <p>The owner chose B on 2026-10-30, with a ceiling: the build may add at most 4 ms to <code>town</code>'s GPU frame median against its <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span>, or fall back to A. B refines the sun's edges, the survey's examples being the crowd's figures, trees and the street, for about half of C's cost. The prototype's +6.1 ms was over the ceiling, but 2.6 to 3.0 ms of it went to detecting edges, which a leaner layout was expected to cut. ADR 0020's sentence "one hard shadow ray per pixel per light" gained a clause, word for word from the decision: "and, where a directional light's verdict differs from a neighbour's, one from each other sample that shows the same surface."</p>
+  </div>
+</section>
+
+<section class="chapter" id="where">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>list_shadow_edges</code> &middot; <code>differing_lights</code></div>
+    <h2>Rays where verdicts differ</h2>
+    <p class="key-idea"><b>Key idea.</b> A shadow edge runs between pixels whose rays disagree, so comparing each pixel's verdict with its four neighbours' finds almost every edge some ray saw, at the cost of a few reads per pixel.</p>
+    <p>The idea is old. Turner Whitted's 1980 ray tracer looked for the places aliasing shows, "regions of abrupt change in intensity" and "locations where small objects fall between sampling points and disappear", and filtered only there: "If the intensity values are not nearly equal [&hellip;], the algorithm subdivides the sample square and starts over again." Shadow of the Tomb Raider shipped the same split for ray-traced shadows in its ultra DXR mode: "Phase 1 &ndash; Cast 1 ray per pixel Phase 2 &ndash; Cast up to 2 more rays 'where necessary'". Its slides give neither the exact rule nor a cost.</p>
+    <h3>Praxis's rule</h3>
+    <p>A pixel is a shadow edge for a directional light when its verdict for that light differs from the verdict of its left, right, upper or lower neighbour. Three details shape it:</p>
+    <ul class="keypoints">
+      <li><b>Only lights both pixels traced.</b> A surface whose interpolated normal turns from a light is hidden from it with no ray at all. Its verdict flips at the terminator with nothing to antialias, since, as the shader says, "its shading already fades the light out at its terminator". So the comparison masks out any light either pixel did not trace a ray toward.</li>
+      <li><b>No Froxel check.</b> The decision said to compare only within one <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span>, because the prototype compared every light and a point light's bit position follows its Froxel's list. A directional light's bit sits at the same index at every pixel, so the build compares directional lights across Froxel borders, where a check would only have left the edges stepped.</li>
+      <li><b>The first seven directional lights.</b> Their extra verdicts must fit the bits chapter 5 describes. A directional light past the seventh keeps one ray per pixel. Every Reference scene has one sun.</li>
+    </ul>
+    <p>A listed pixel then traces each light that differs again, from each of its other samples that shows the nearest surface: at most three more rays per light. The nearest sample's own verdict stands.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at d32b3d37.</span>
+<span class="comment">// The lights of `own`'s verdicts that differ from `neighbour`'s, among those</span>
+<span class="comment">// both traced a ray toward [&hellip;]</span>
+fn differing_lights(own: u32, neighbour: u32) -&gt; u32 {
+    return ((own ^ neighbour) &gt;&gt; VERDICT_HIDDEN_SHIFT)
+        &amp; (own &gt;&gt; VERDICT_TRACED_SHIFT)
+        &amp; (neighbour &gt;&gt; VERDICT_TRACED_SHIFT)
+        &amp; EDGE_LIGHTS;
+}</code></pre>
+    <h3 style="margin-top: 24px">What the rule cannot see</h3>
+    <p>The rule compares the rays it has. A shadow that none of them hit leaves no disagreement to find. Whitted named this miss in his own paper: small objects fall between samples, and his fix, a minimum radius for bounding spheres, "will not always work for rays being reflected from curved surfaces". The demo below shows the two ways it happens on one surface. A thin shadow, narrower than the spacing of the rays, is refined where it crosses some pixel's ray and stays a gap between. A shadow's corner can clip one pixel's samples while that pixel's ray and its four neighbours' rays all stay lit; only the diagonal neighbour is shadowed, and the rule does not look diagonally. PR #394's review names a case of it, an edge through a pixel's corner with all four neighbours on one side, and leaves it as the miss the survey cites from Whitted.</p>
+  </div>
+  <figure class="wide" id="demo-patch">
+    <div class="canvas-frame patch-frame"><canvas id="p-canvas" class="demo demo-canvas" role="img" aria-label="A patch of 16 by 10 pixels of ground under the sun, with each pixel's four samples and a shadow you can drag."></canvas></div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--o-ground)"></span>lit</span>
+      <span><span class="swatch" style="background: var(--o-shadow)"></span>in shadow</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="4.5" class="mk-traced"/></svg>a sample a ray was traced from</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="4.5" class="mk-copied"/></svg>a sample that copies the nearest sample's verdict</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><rect x="-6.5" y="-6.5" width="13" height="13" class="mk-listed"/></svg>a listed pixel</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><rect x="-6.5" y="-6.5" width="13" height="13" class="mk-wrong"/></svg>differs from the reference</span>
+      <span><svg viewBox="-8 -8 16 16" aria-hidden="true"><circle r="5" fill="none" stroke="var(--warm)" stroke-width="2"/></svg>drag handle</span>
+    </div>
+    <div class="control-rows">
+      <div>
+        <span class="control-label">Rays</span>
+        <div class="seg" role="group" aria-label="Rays" id="p-mode">
+          <button type="button" data-mode="before" aria-pressed="false">one per pixel (before)</button>
+          <button type="button" data-mode="adaptive" aria-pressed="true">edge-adaptive (PR #394)</button>
+          <button type="button" data-mode="reference" aria-pressed="false">one per sample (reference)</button>
+        </div>
+      </div>
+      <div>
+        <span class="control-label">Shadow</span>
+        <div class="seg" role="group" aria-label="Shadow" id="p-shape">
+          <button type="button" data-shape="edge" aria-pressed="true">an edge</button>
+          <button type="button" data-shape="thin" aria-pressed="false">a thin shadow</button>
+          <button type="button" data-shape="corner" aria-pressed="false">a corner</button>
+        </div>
+      </div>
+    </div>
+    <div class="sliders">
+      <label for="p-angle" class="control-label">Angle <output id="p-angle-out" for="p-angle"></output></label>
+      <input type="range" id="p-angle" min="0" max="180" step="1" value="30">
+      <label for="p-across" class="control-label">Across <output id="p-across-out" for="p-across"></output></label>
+      <input type="range" id="p-across" min="2" max="14" step="0.05" value="8.3">
+      <label for="p-down" class="control-label">Down <output id="p-down-out" for="p-down"></output></label>
+      <input type="range" id="p-down" min="1" max="9" step="0.05" value="5.1">
+    </div>
+    <div class="controls"><button type="button" class="btn" id="p-miss">Place it where the rule misses</button></div>
+    <dl class="figures">
+      <div><dt>Rays traced</dt><dd id="p-rays"></dd></div>
+      <div><dt>Pixels listed</dt><dd id="p-listed"></dd></div>
+      <div><dt>Pixels that differ from the reference</dt><dd id="p-wrong"></dd></div>
+      <div><dt>Samples' verdicts off, summed</dt><dd id="p-error"></dd></div>
+    </dl>
+    <p class="readout" id="p-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> A patch of 16 &times; 10 pixels of flat ground under one sun, each pixel's four samples at the standard 4x offsets that <code>SAMPLE_OFFSETS</code> holds. Drag on the patch, or use the sliders, to move the shadow. Each pixel shows the share of its samples in shadow. <b>One per pixel</b>: a ray from each pixel's nearest sample, whose answer every sample copies. <b>Edge-adaptive</b>: the same, then each pixel whose ray disagrees with a 4-neighbour's is listed and traced again from its other three samples. <b>One per sample</b>: option D, the reference. Simplified: the ground comes nearer toward the bottom of the view, so each pixel's nearest sample is its lowest, sample 3, and every ray starts there; the ground faces the sun, so every pixel traces it; one light, one surface. Run in Node over the sliders' range at 5&deg; and 0.25 px steps, 59,829 placements of each shape: a straight edge never left a partly shadowed pixel unlisted, since with the same nearest sample in every pixel a line that cuts a pixel's samples also separates its ray from a 4-neighbour's; a corner did in 3,648 placements, 6.1%.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="dispatches">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>shadow_mask.wgsl</code> &middot; <code>shadow_mask_pass.rs</code></div>
+    <h2>Two more dispatches</h2>
+    <p class="key-idea"><b>Key idea.</b> The pass gains two dispatches: one compares each pixel's verdicts with its neighbours' and lists the edges, one traces the list. Both read the 4-byte word per pixel that the first dispatch writes, the pixel's own and its four neighbours'.</p>
+    <p>The shadow mask pass was one compute pass of two dispatches: <code>build_shadow_mask</code>, an invocation per pixel, and <code>trace_second_surfaces</code>, an indirect dispatch over the pixels with a second surface (<a href="edge-shadows.html#minority">Edge Shadows Explained</a>). PR #394 adds two more to the same pass:</p>
+<pre class="code"><code>shadow mask pass, one compute pass
+  build_shadow_mask       per pixel: rays from the nearest surface, as before,
+                          and a word of directional verdicts per pixel
+  trace_second_surfaces   indirect, per listed second surface, as before
+  list_shadow_edges       per pixel: does a light both traced differ from a
+                          4-neighbour's verdict? append the pixel
+  trace_shadow_edges      indirect, per listed pixel: trace those lights again
+                          from each other sample of the nearest surface</code></pre>
+    <h3 style="margin-top: 24px">A word per pixel to compare</h3>
+    <p><code>build_shadow_mask</code> already knew each directional light's verdict. It now also writes them to <code>directional_verdicts</code>, a storage buffer of one <code>u32</code> per pixel: the second surface's samples in bits 0 to 3, a hidden bit per light from bit 8, and a traced bit per light from bit 16, for the first seven lights.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at d32b3d37, build_shadow_mask.</span>
+directional_verdicts[invocation.y * u32(size.x) + invocation.x] = second_samples
+    | (hidden &lt;&lt; VERDICT_HIDDEN_SHIFT)
+    | (nearest.traced_directional_lights &lt;&lt; VERDICT_TRACED_SHIFT);</code></pre>
+    <p style="margin-top: 16px">The prototype's detection read 24 bytes for each of five pixels and cost 2.6 to 3.0 ms of GPU frame. The build reads five 4-byte words instead. The PR gives no separate figure for its detection, only the whole change's.</p>
+    <p>The comparison cannot run in <code>build_shadow_mask</code> itself. A pixel's neighbour across a workgroup's border belongs to another workgroup, and WGSL's synchronization functions, its only barriers, have "a Workgroup execution scope": nothing inside one dispatch waits for another workgroup's writes. A later dispatch does see an earlier one's writes, which the pass already relies on when <code>trace_second_surfaces</code> reads the list <code>build_shadow_mask</code> wrote, so <code>list_shadow_edges</code>, a dispatch of its own, sees every neighbour's word.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at d32b3d37.</span>
+fn shadow_edge_lights(pixel: vec2&lt;i32&gt;, own: u32, size: vec2&lt;i32&gt;) -&gt; u32 {
+    if (own &gt;&gt; VERDICT_TRACED_SHIFT) == 0u {
+        return 0u;
+    }
+    let last = size - 1;
+    let width = size.x;
+    let left = directional_verdicts[pixel.y * width + max(pixel.x - 1, 0)];
+    let right = directional_verdicts[pixel.y * width + min(pixel.x + 1, last.x)];
+    let up = directional_verdicts[max(pixel.y - 1, 0) * width + pixel.x];
+    let down = directional_verdicts[min(pixel.y + 1, last.y) * width + pixel.x];
+    return differing_lights(own, left) | differing_lights(own, right)
+        | differing_lights(own, up) | differing_lights(own, down);
+}</code></pre>
+    <p style="margin-top: 16px">At the target's sides the index clamps, so the pixel stands in for the neighbour past it and no edge is found there.</p>
+    <h3>A list, not a branch</h3>
+    <p>Edge pixels are a minority laid along thin lines. Tracing their extra rays where they lie, behind an <code>if</code>, would make each <span class="concept" data-term="SIMD group" data-tip="A group of invocations that a GPU core runs in lockstep, one instruction for all of them at once, with lanes masked off where a branch does not apply to them.">SIMD group</span> that holds one of them wait for it. Volume 24 measured that trap: tracing second surfaces in place cost <code>town</code> 4.1 ms, against 1.08 ms from a list. Boksansky and colleagues found the same for sparse shadow rays: "shooting a single ray for one pixel out of four in a close neighborhood yields similar performance as shooting rays for each of these pixels". Lauritzen's 2010 course gives the cure within each tile: "Pack a list of pixels that require per-sample shading". Volume 24 found that packing within each workgroup did not help on <code>town</code>, so the pass, as there, packs one list for the whole frame. Marrs and colleagues, compacting the pixels that their adaptive antialiasing traces into a one-dimensional buffer, report that "Compaction yields a 13% to 29% performance improvement", a vendor's figure on GeForce RTX 2080 and 2070 GPUs at 1080p.</p>
+    <p>So <code>list_shadow_edges</code> appends each edge pixel to <code>shadow_edges</code> with one atomic add, and the entry that opens each run of 64 grows the indirect dispatch's workgroup counts, exactly as the second-surface list does. The two lists share one WGSL struct, renamed from <code>SecondSurfaces</code> to <code>PixelList</code>: a count, then an entry per listed pixel, its column in the low 16 bits and its row above.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at d32b3d37, list_shadow_edges.</span>
+let own = directional_verdicts[pixel.y * size.x + pixel.x];
+if shadow_edge_lights(pixel, own, size) == 0u {
+    return;
+}
+let entry = atomicAdd(&amp;shadow_edges.count, 1u);
+shadow_edges.entries[entry] = invocation.x | (invocation.y &lt;&lt; 16u);</code></pre>
+    <h3 style="margin-top: 24px">Tracing the list</h3>
+    <p><code>trace_shadow_edges</code> runs an invocation per entry. It works out the lights that differ again from the five words, loads the pixel's four depths, and, for each sample other than the nearest that is neither a second-surface sample nor background, rebuilds the surface that sample shows, from its own offset, depth and <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">surface normals</span>, and takes each differing light's verdict there with the same function the first dispatch uses.</p>
+<pre class="code"><code><span class="comment">// shadow_mask.wgsl at d32b3d37, trace_shadow_edges.</span>
+for (var sample = 0u; sample &lt; SAMPLE_COUNT; sample++) {
+    let depth = depths[sample];
+    <span class="comment">// The nearest sample's verdict stands; another surface's samples</span>
+    <span class="comment">// and the background's keep theirs.</span>
+    if sample == nearest || ((second_samples &gt;&gt; sample) &amp; 1u) == 1u || depth &lt;= 0.0 {
+        continue;
+    }
+    let surface = sample_surface(pixel, sample, depth, vec2&lt;f32&gt;(size));
+    for (var index = 0u; index &lt; edge_light_count; index++) {
+        if ((edge_lights &gt;&gt; index) &amp; 1u) == 0u {
+            continue;
+        }
+        let bit = 1u &lt;&lt; (SAMPLE_COUNT * index + sample);
+        sample_verdicts = select(sample_verdicts &amp; ~bit, sample_verdicts | bit, directional_verdict(surface, index).hidden);
+    }
+}</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>Cleared first.</b> Before the pass, the encoder clears the new dispatch buffer and the new list's count, beside the second-surface ones.</li>
+      <li><b>A stand-in per indirect dispatch.</b> An indirect dispatch may not read its workgroup counts from a buffer a bound group can write, so each indirect dispatch binds the 12-byte stand-in buffer in its own dispatch buffer's slot. The pass now builds three bind groups from one function: the per-pixel dispatches' group, and one for each indirect dispatch.</li>
+      <li><b>No new binding in the lit pass.</b> The per-sample verdicts go where the lit pass already looks, which chapter 5 describes.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="bits">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; <code>targets.rs</code> &middot; <code>main.wgsl</code></div>
+    <h2>Four bits a light</h2>
+    <p class="key-idea"><b>Key idea.</b> The per-sample verdicts ride in the spare bits of a texel the lit pass already loads, and each fragment shades a light by the share of its own covered samples that the light reaches.</p>
+    <p>Since volume 24, <code>shadow_mask_samples</code>, an <code>R32Uint</code> texture with a texel per pixel, marked which of the pixel's four samples show the second surface. That used 4 of its 32 bits. PR #394 fills the other 28: four bits per directional light, one per sample, for seven lights.</p>
+    <div class="formula">bit 0-3          the samples that show the second surface
+bit 4 + 4&middot;l + s   light l's verdict at sample s, for l = 0..6
+                 4 + 7 &times; 4 = 32 bits, asserted in Rust</div>
+    <p><code>build_shadow_mask</code> writes each light's nearest verdict into all four of its bits, so a pixel that is never listed reads the same as before: all hidden or all lit. <code>trace_shadow_edges</code> overwrites the bits of the samples it traced. The texel holds, at every pixel, the verdicts the lit pass should use.</p>
+    <h3>The share of covered samples</h3>
+    <p>A fragment knows which samples its triangle covers: WGSL's <code>sample_mask</code> input. The lit pass decides from it which surface the fragment shades, as volume 24 did, and, for the nearest surface, counts how many of its covered samples the light is hidden from, with <code>countOneBits</code>, WGSL's population count:</p>
+<pre class="code"><code><span class="comment">// main.wgsl at d32b3d37.</span>
+fn directional_hidden_share(
+    mask: vec2&lt;u32&gt;,
+    sample_verdicts: u32,
+    nearest_surface: bool,
+    covered_samples: u32,
+    index: u32
+) -&gt; f32 {
+    let hidden = (sample_verdicts &gt;&gt; (SAMPLE_COUNT * index)) &amp; covered_samples;
+    let share = f32(countOneBits(hidden)) / f32(max(countOneBits(covered_samples), 1u));
+    return select(f32(masked(mask, index)), share, nearest_surface &amp;&amp; index &lt; SHADOW_EDGE_LIGHTS);
+}
+
+<span class="comment">// fs_main: the light's illuminance, scaled by the share that sees it.</span>
+let first_illuminance = first.intensity * f32(has_directional_light)
+    * (1.0 - directional_hidden_share(mask, sample_verdicts, nearest_surface, covered, 0u));</code></pre>
+    <p style="margin-top: 16px">Why over the covered samples, and not all four? When two triangles split a pixel, the lit pass runs a fragment for each, and each writes its colour only into the samples it covers. If each scaled its light by the whole pixel's share, a triangle lying wholly in light would darken its own samples by the shadow on the other triangle's. Counting its own samples gives each fragment the answer MSAA would give: the resolve then averages samples that are each right. The demo below lets you compare the two.</p>
+    <p>A fragment of the second surface still reads that surface's word from the mask's second layer, one bit per light, so its shadow edges stay one ray per pixel. A directional light past the seventh, and every point light, read their single bit as before.</p>
+    <h3>The test at the seam</h3>
+    <p><code>a_pixel_split_by_a_suns_shadow_edge_resolves_between_shadow_and_light</code>, in <code>src/render/renderer.rs</code>, places a rectangle behind the camera so the right edge of the sun's shadow on the floor crosses one pixel's middle. Its two left samples, 0 and 2, lie in the shadow, and its two right ones, 1 and 3, in light. The pixel's red channel must lie between its shadowed left neighbour's and its lit right neighbour's, more than 16 steps from each. On main before the PR it failed: "the edge pixel 38 is not between the shadowed 38 and the lit 158". With the change it passes.</p>
+  </div>
+  <figure class="wide" id="demo-texel">
+    <div class="demo-grid">
+      <div>
+        <div class="canvas-frame"><canvas id="t-canvas" class="demo-canvas" role="img" aria-label="One pixel with its four samples, which fragment covers each, and whether the sun reaches it."></canvas></div>
+        <div class="controls">
+          <span class="control-label">Pixel</span>
+          <div class="seg" role="group" aria-label="Listed" id="t-listed">
+            <button type="button" data-listed="yes" aria-pressed="true">listed, traced again</button>
+            <button type="button" data-listed="no" aria-pressed="false">not listed</button>
+          </div>
+        </div>
+        <div class="controls">
+          <span class="control-label">Share over</span>
+          <div class="seg" role="group" aria-label="Share over" id="t-over">
+            <button type="button" data-over="covered" aria-pressed="true">covered samples (PR #394)</button>
+            <button type="button" data-over="all" aria-pressed="false">all four</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <table class="sample-table">
+          <thead><tr><th>Sample</th><th>Shows</th><th>Sun</th></tr></thead>
+          <tbody id="t-samples"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="control-label" style="margin: 16px 0 0; font-family: var(--mono); font-size: 13px;">The pixel's <code>shadow_mask_samples</code> texel, bit 31 on the left: <output id="t-hex"></output></p>
+    <div class="bits" id="t-bits" aria-hidden="true"></div>
+    <div class="bit-groups" id="t-groups" aria-hidden="true"></div>
+    <div class="resolve-lines" id="t-lines" aria-live="polite"></div>
+    <figcaption><b>Live demo.</b> One pixel's four samples at the standard 4x offsets. Each sample shows triangle A or B of the nearest surface, or C, a farther surface behind a silhouette, which makes it a second-surface sample. A's shading lets through 0.9 of the sun, B's 0.45 and C's 0.6, as three different triangles would. Set each sample's true verdict with its Sun toggle; the reference shades every sample by its own. <b>Listed</b>: the texel holds each nearest-surface sample's own verdict, as after <code>trace_shadow_edges</code>. <b>Not listed</b>: every bit copies the nearest sample's, here sample 3, as after <code>build_shadow_mask</code> alone. Simplified: sample 3 is always the nearest, so it cannot show C; C's word in layer 1 is traced from its lowest-numbered sample, where the pass picks its farthest; only the first light's four bits are live, and the other six lights' stay clear.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="cost">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 6 &middot; PR #394's metrics</div>
+    <h2>What it costs</h2>
+    <p class="key-idea"><b>Key idea.</b> <code>town</code>'s GPU frame rose 2.86 ms, inside the 4 ms ceiling and less than half the prototype's 6.1 ms, for 29.5 MB at 2560&times;1440 and a 7.5% fall in measured aliasing.</p>
+  </div>
+  <figure class="prose" aria-label="GPU frame cost against the ceiling">
+    <div class="meter">
+      <div class="meter-row">
+        <div class="meter-label"><span>Prototype, <code>sun-edges</code> mode</span><b>+6.1 ms</b></div>
+        <div class="meter-track"><div class="meter-fill prototype" style="width: 76.25%"></div><div class="meter-budget" style="left: 50%"></div></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><span>PR #394, three interleaved A/B pairs</span><b>+2.65 to +3.07 ms</b></div>
+        <div class="meter-track"><div class="meter-range" style="left: 33.125%; width: 5.25%"></div><div class="meter-budget" style="left: 50%"></div></div>
+      </div>
+      <div class="meter-row">
+        <div class="meter-label"><span>PR #394, against the Baseline</span><b>+2.86 ms</b></div>
+        <div class="meter-track"><div class="meter-fill" style="width: 35.75%"></div><div class="meter-budget" style="left: 50%"></div></div>
+      </div>
+      <div class="meter-axis"><span class="first" style="left: 0">0 ms</span><span style="left: 25%">2</span><span style="left: 75%">6</span><span class="last" style="left: 100%">8 ms</span><span class="budget" style="left: 50%">4 ms ceiling</span></div>
+    </div>
+    <figcaption><b>Added GPU frame on <code>town</code></b>, M4 Pro, 2560&times;1440, 1,800 frames. The A/B pairs alternated base and branch binaries three times: base 17.61, 17.67 and 17.88 ms, branch 20.53, 20.74 and 20.53 ms. ADR 0020's amendment records 2.7 to 3.1 ms.</figcaption>
+  </figure>
+  <div class="prose">
+    <p><code>town</code> on the M4 Pro at 2560&times;1440 against main's Baselines, from <code>praxis report</code>, in &micro;s:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>Time</th><th class="n">Median</th><th class="n">Baseline</th><th class="n">&Delta;</th><th class="n">Ratio</th></tr></thead>
+      <tbody>
+        <tr class="focus"><td>GPU frame</td><td class="n">20,489.1</td><td class="n">17,633.8</td><td class="n">+2,855.4</td><td class="n">1.162</td></tr>
+        <tr><td>Gate, rays off</td><td class="n">8,686.5</td><td class="n">8,678.6</td><td class="n">+7.9</td><td class="n">1.001</td></tr>
+        <tr><td>Shadow-ray time</td><td class="n">11,271.8</td><td class="n">8,556.4</td><td class="n">+2,715.3</td><td class="n">1.317</td></tr>
+        <tr><td><code>shadow_mask_pass</code></td><td class="n">12,461.0</td><td class="n">9,601.5</td><td class="n">+2,859.4</td><td class="n">1.298</td></tr>
+        <tr><td><code>lit_pass</code></td><td class="n">16,342.5</td><td class="n">13,487.8</td><td class="n">+2,854.7</td><td class="n">1.212</td></tr>
+        <tr><td><code>tonemapping_pass</code></td><td class="n">6,533.6</td><td class="n">4,059.3</td><td class="n">+2,474.2</td><td class="n">1.610</td></tr>
+        <tr><td>CPU frame</td><td class="n">8,223.8</td><td class="n">6,304.7</td><td class="n">+1,919.2</td><td class="n">1.304</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note">From PR #394's Metrics, rows trimmed, p95 and Budget columns left out. <code>town</code>'s GPU frame Budget is 12,000 &micro;s, which its Baseline already exceeded.</p>
+    <h3>Reading the rows</h3>
+    <ul class="keypoints">
+      <li><b>The GPU frame is the cost.</b> The lit pass gained no load or binding, only a few bit counts per directional light, and the tonemapping pass nothing, but Metal overlaps their starts with the shadow mask pass, so their timestamps take in its growth (<a href="frame-timing.html#frame">Frame Timing Explained</a>; volume 24 met the same overlap). The GPU frame, a span, counts it once.</li>
+      <li><b>The gate did not move.</b> ADR 0019's gate is timed with shadow rays off, when the shadow mask pass does not run: +7.9 &micro;s is noise.</li>
+      <li><b>The CPU frame rose though the CPU does little more.</b> The change adds two dispatches and two buffer clears to the CPU's recording. The PR attributes the rise to ticket #381: every CPU stage slows by 20 to 40% once the main thread waits on the GPU. The interleaved runs agree: base 6.96, 6.97 and 7.69 ms, branch 8.15, 7.89 and 8.50 ms.</li>
+    </ul>
+    <h3>Memory and counters</h3>
+    <ul class="keypoints">
+      <li><b>29,491,216 bytes at 2560&times;1440.</b> The directional verdicts, 4 bytes per pixel, 14,745,600; the shadow edge list, a count plus 4 bytes per pixel, since every pixel could be listed, 14,745,604; and a 12-byte dispatch buffer. The bench's <code>gpu_memory_bytes</code> rose by exactly that sum. The texel's verdict bits cost nothing: they fill bits that were already allocated.</li>
+      <li><b>Heap allocations</b>: +13, 10,501 against 10,488.</li>
+      <li><b>Aliasing RMSE &minus;7.5%.</b> The bench compares the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>'s frame, at the Goldens' 640&times;360, with the same frame rendered at three times the size and box-filtered in linear light. <code>aliasing_rmse</code> fell from 5,579 to 5,161, a ratio of 0.925, and <code>aliasing_p99</code> from 18,210 to 15,999, 0.879.</li>
+    </ul>
+    <p>How many pixels get listed depends on the view. The prototype counted the sun's alone in captures of <code>town</code>: 33,818 at frame 300, at street level, about 0.9% of the frame; 359,015 at frame 700, overhead among roof props, about 9.7%. The build's rule drops the prototype's Froxel check, and the PR does not report its counts.</p>
+  </div>
+</section>
+
+<section class="chapter" id="limits">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 7 &middot; PR #394 &middot; the survey</div>
+    <h2>What stays aliased</h2>
+    <p class="key-idea"><b>Key idea.</b> The pass refines edges that some pixel's ray saw, on the nearest surface, for the first seven directional lights. Everything outside that keeps one ray per pixel.</p>
+    <ul class="keypoints">
+      <li><b>Shadows no pixel's ray hit.</b> A shadow narrower than the spacing of the rays is refined where it crosses one, and missing between. The roof-prop speckle at <code>town</code>'s frame 700 stays as it was, as the survey predicted. Against a ray per sample at every pixel, the prototype's mode that traced every light again at each listed pixel still differed at 106,242 pixels of frame 700, 2.9%, the thin shadows of roof props and railings, and at 6,771 of frame 300.</li>
+      <li><b>A corner with all four neighbours on one side.</b> The miss chapter 3's demo places: a shadow's corner clips a pixel's samples, but its ray and its four neighbours' rays agree. PR #394's review names the case, an edge through a pixel's corner with all four neighbours on one side, and leaves it as the miss the survey cites from Whitted.</li>
+      <li><b>Point lights.</b> Their edges keep one ray per pixel. Option C would refine them, at +11.2 ms in the prototype.</li>
+      <li><b>Directional lights past the seventh.</b> The texel has no bits left for them. Every Reference scene has one sun.</li>
+      <li><b>The second surface.</b> A fragment of the farther surface at a silhouette reads its one bit per light from the mask's second layer, and is never traced again.</li>
+      <li><b>No look at surfaces.</b> The comparison reads only verdict words, not whether the neighbour shows the same surface. Where a silhouette separates a lit surface from a shadowed one, the pixel is listed and its samples on the nearest surface are traced again, which costs rays but gives the right answer.</li>
+    </ul>
+  </div>
+  <figure class="wide">
+    <div class="crop">
+      <p class="crop-label"><span>before</span><span><code>town</code>, frame 700, roofs, 4x</span><span>after</span></p>
+      <img src="img/shadow-edge-rays/crop-town-700-4x-before-left-after-right.png" width="1280" height="400" loading="lazy" alt="Rooftops crowded with props under a blue sky, magnified 4 times. Left, before, and right, after: the props' tiny shadows appear as scattered dark pixels in both, nearly unchanged.">
+    </div>
+    <figcaption><b>The miss</b>, from PR #394's gallery: main at ec7e6e9b on the left, the PR's branch on the right. The shadows of the roof props are narrower than a pixel. Where no pixel's ray hit one, no neighbour disagrees, nothing is listed, and the speckle stays.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>A pixel's ray toward the sun is lit, and so are the rays of its left, right, upper and lower neighbours, yet two of its samples lie in shadow. Is it listed, and what does it shade?</summary><p>No. <code>list_shadow_edges</code> compares the pixel's verdict only with its 4-neighbours', and all five agree, so nothing differs. Its texel keeps the nearest sample's verdict at all four samples, and every fragment shades the sun as fully lit. This happens where a shadow's corner clips the pixel and only the diagonal neighbour lies in shadow, or where a thin shadow passes between the rays: what no ray saw stays unseen.</p></details>
+    <details class="check"><summary>A listed pixel's texel is <code>0x00000050</code>, and two triangles of one surface split it, A covering samples 0 and 2, B covering 1 and 3. What sun share does each fragment shade, and why would dividing by all four samples be wrong?</summary><p>Bits 0 to 3 are clear, so no sample shows a second surface and both fragments shade the nearest. The sun's four bits, 4 to 7, are <code>0b0101</code>: samples 0 and 2 hidden. A's share is popcount(0101 &amp; 0101) / popcount(0101) = 2/2, fully hidden; B's is popcount(0101 &amp; 1010) / 2 = 0, fully lit. Over all four, each would take 2/4, and A would light its shadowed samples by half while B darkened its lit ones; with A's and B's shading different, the resolve would land off the true value.</p></details>
+    <details class="check"><summary>The shadow mask pass grew by 2.86 ms and so did the lit pass. Is the change's cost 5.7 ms?</summary><p>No. The lit pass gains almost no work: it already loaded the texel that carries the verdicts, and adds only a few bit counts per directional light. Metal overlaps the lit pass's start with the shadow mask pass, so the lit pass's own timestamps take in the time it waits. The GPU frame is a span that counts that time once, and it rose 2.86 ms, which the interleaved A/B runs bracket at 2.65 to 3.07 ms.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Code links are pinned to d32b3d37.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This ticket</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/issues/358">Ticket #358</a> and <a href="https://github.com/gariasf/praxis/pull/394">PR #394</a> <span>the stairs and dashes, the owner's decision and ceiling, the build, its review, metrics and gallery</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/1440e7882896ba3e74d8df09035253c0130ad310/358">The PR's images</a> <span>before, after and difference for every Reference scene, and the crops above</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/docs/research/shadow-edge-antialiasing.md"><code>docs/research/shadow-edge-antialiasing.md</code></a>, from <a href="https://github.com/gariasf/praxis/issues/364">ticket #364</a> and <a href="https://github.com/gariasf/praxis/pull/391">PR #391</a> <span>the survey: seven techniques, the prototype's costs, options A to E</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a> <span>hard ray-traced shadows, and the amendment of 2026-10-30</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/353">Ticket #353</a> <span>the visual audit that found the stairs</span></li>
+      </ul>
+      <h4>The code, at d32b3d37</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/src/render/shaders/shadow_mask.wgsl"><code>shadow_mask.wgsl</code></a> <span><code>build_shadow_mask</code>, <code>differing_lights</code>, <code>shadow_edge_lights</code>, <code>list_shadow_edges</code>, <code>trace_shadow_edges</code>, <code>PixelList</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/src/render/shaders/main.wgsl"><code>main.wgsl</code></a> <span><code>directional_hidden_share</code> and <code>fs_main</code>'s resolve over covered samples</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/src/render/shadow_mask_pass.rs"><code>shadow_mask_pass.rs</code></a> <span>the four dispatches, the clears, the stand-in, <code>SHADOW_EDGE_LIGHTS</code> and <code>SAMPLE_OFFSETS</code></span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/src/render/targets.rs"><code>targets.rs</code></a> <span>the directional verdicts, the shadow edge list, the <code>R32Uint</code> samples texel</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/d32b3d37c237cbc104dde8dcc8af99ab327e3039/src/render/renderer.rs"><code>renderer.rs</code></a> <span>the seam test, <code>a_pixel_split_by_a_suns_shadow_edge_resolves_between_shadow_and_light</code></span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="edge-shadows.html">Edge Shadows Explained</a> <span>second surfaces, the frame-wide list and indirect dispatch reused here</span></li>
+        <li><a href="shadow-rays.html">Shadow Rays Explained</a> <span>the shadow mask and its one ray per pixel</span></li>
+        <li><a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> <span>samples, fragments and coverage</span></li>
+        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>spans, overlap and shadow-ray time</span></li>
+        <li><a href="box-leakage.html">Box Leakage Explained</a> <span>the previous volume: why one sample per pixel of a box-filtered signal still aliases</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Papers and references</h3>
+      <ul>
+        <li>Turner Whitted, <a href="https://doi.org/10.1145/358876.358882">&ldquo;An Improved Illumination Model for Shaded Display&rdquo;</a>, Communications of the ACM 23(6), 1980, pp. 346 and 349 <span>adaptive supersampling where neighbouring samples differ, and the small objects it misses</span></li>
+        <li>Gruen, Story and Roza, <a href="https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9984-shadows-of-the-tomb-raider-ray-tracing-deep-dive.pdf">&ldquo;Shadows of the Tomb Raider &ndash; A Ray Tracing Deep Dive&rdquo;</a>, GTC 2019, slides 40&ndash;41 and 60 <span>one ray per pixel as point sampling, and the shipped adaptive phase</span></li>
+        <li>Aila and Laine, <a href="https://users.aalto.fi/~laines9/publications/aila2004egsr_paper.pdf">&ldquo;Alias-Free Shadow Maps&rdquo;</a>, EGSR 2004, &sect;3 <span>a shadow term per sample under MSAA</span></li>
+        <li>Boksansky, Wimmer and Bittner, <a href="https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_13.pdf">&ldquo;Ray Traced Shadows: Maintaining Real-Time Frame Rates&rdquo;</a>, Ray Tracing Gems ch. 13, 2019, p. 168 <span>why a sparse ray costs about as much as its neighbours' rays</span></li>
+        <li>Marrs, Spjut, Gruen, Sathe and McGuire, <a href="https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_22.pdf">&ldquo;Improving Temporal Antialiasing with Adaptive Ray Tracing&rdquo;</a>, Ray Tracing Gems ch. 22, 2019, pp. 364&ndash;366 <span>compacting the pixels to trace into a list, and the subpixel geometry such a mask misses</span></li>
+        <li>Lauritzen, <a href="https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf">&ldquo;Deferred Rendering for Current and Future Rendering Pipelines&rdquo;</a>, SIGGRAPH 2010 course Beyond Programmable Shading, slides 23&ndash;24 (<a href="https://web.archive.org/web/20250614051825/https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf">archived copy</a>) <span>packing, within each tile, a list of the pixels that need more work</span></li>
+        <li>W3C, WGSL: <a href="https://www.w3.org/TR/WGSL/#countOneBits-builtin"><code>countOneBits</code></a>, <a href="https://www.w3.org/TR/WGSL/#sample-mask-builtin-value"><code>sample_mask</code></a>, <a href="https://www.w3.org/TR/WGSL/#sync-builtin-functions">synchronization built-in functions</a> <span>the population count, the coverage input, and why neighbours need a second dispatch</span></li>
+      </ul>
+      <h3 style="margin-top: 18px">Books</h3>
+      <ul>
+        <li>Akenine-M&ouml;ller, Haines, Hoffman et al., <i>Real-Time Rendering</i>, 4th ed., &sect;5.4 Aliasing and Antialiasing, pp. 130&ndash;147 <span>sampling, supersampling and MSAA's coverage and shading rates. Section and pages from the book's <a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">contents</a>.</span></li>
+        <li>The same book, chapter 7, Shadows <span>hard and soft shadows, and the shadow-map families ADR 0020 set aside</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Shadow mask, Surface normals and Froxel are <code>CONTEXT.md</code>'s definitions, the first shortened; so are the tooltips for Golden, Baseline and Reference scene. The rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Shadow mask</dt><dd>A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows. Where a directional light's bit at the nearest surface differs from a 4-neighbour's, a shadow edge, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it.</dd></div>
+    <div><dt>Verdict</dt><dd>Whether a light is hidden from a surface, and whether a ray found it so; a surface turned from the light is hidden with no ray.</dd></div>
+    <div><dt>Shadow edge</dt><dd>A pixel whose verdict for one of the first seven directional lights, among the lights both traced, differs from a 4-neighbour's.</dd></div>
+    <div><dt>Point sample</dt><dd>One answer taken at one point and used for the whole pixel, as one shadow ray per pixel is.</dd></div>
+    <div><dt>Edge-adaptive sampling</dt><dd>Tracing more samples only where neighbouring samples disagree, as Whitted did in 1980.</dd></div>
+    <div><dt>Hidden share</dt><dd>The fraction of a fragment's covered samples from which a light is hidden; the lit pass scales the light by one minus it.</dd></div>
+    <div><dt>Sample mask</dt><dd>A fragment-stage input: a bit for each of the pixel's samples that the fragment's triangle covers.</dd></div>
+    <div><dt>SIMD group</dt><dd>Invocations a GPU core runs in lockstep, one instruction for all; 32 on Apple's GPUs, as reverse-engineered on the M1 and assumed for the M4 Pro.</dd></div>
+    <div><dt>Indirect dispatch</dt><dd>A compute dispatch whose workgroup counts come from a GPU buffer, so earlier GPU work can size it.</dd></div>
+    <div><dt>Surface normals</dt><dd>Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.</dd></div>
+    <div><dt>Froxel</dt><dd>A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from tickets <a href="https://github.com/gariasf/praxis/issues/358">#358</a> and <a href="https://github.com/gariasf/praxis/issues/364">#364</a>, PR <a href="https://github.com/gariasf/praxis/pull/394">#394</a> at d32b3d37, the survey, ADR 0020, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is the PR's or the survey's own, on one Apple M4 Pro. Both demos are this page's illustrative models.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="box-leakage.html">Previous: Box Leakage Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  // ---- Demo 1's model: a patch of one flat surface under the sun, after the shadow mask pass.
+  const COLUMNS = 16, ROWS = 10;
+  // The standard 4x sample offsets from a pixel's top left corner (SAMPLE_OFFSETS).
+  const SAMPLE_OFFSETS = [[0.375, 0.125], [0.875, 0.375], [0.125, 0.625], [0.625, 0.875]];
+  // The ground comes nearer toward the bottom of the view, so each pixel's
+  // nearest sample, the one build_shadow_mask traces, is its lowest: sample 3.
+  const NEAREST_SAMPLE = 3;
+  // A thin shadow's width, in pixels: a wire's, narrower than a pixel.
+  const THIN_WIDTH = 0.35;
+  // Whether the sun is hidden at screen point (x, y) under `shape`: the side
+  // of an edge, a strip, or a shadow's corner, about its anchor and turned by
+  // its angle.
+  function hiddenAt(x, y, shape) {
+    const angle = shape.angleDegrees * Math.PI / 180;
+    const across = (x - shape.x) * Math.cos(angle) + (y - shape.y) * Math.sin(angle);
+    const along = -(x - shape.x) * Math.sin(angle) + (y - shape.y) * Math.cos(angle);
+    if (shape.kind === "thin") return Math.abs(across) < THIN_WIDTH / 2;
+    if (shape.kind === "corner") return across < 0 && along < 0;
+    return across < 0;
+  }
+  function edgePatch(shape) {
+    const truth = [];
+    for (let row = 0; row < ROWS; row++) {
+      for (let column = 0; column < COLUMNS; column++) {
+        truth.push(SAMPLE_OFFSETS.map(([right, down]) => hiddenAt(column + right, row + down, shape)));
+      }
+    }
+    // build_shadow_mask: one ray per pixel, from the nearest sample.
+    const nearest = truth.map((samples) => samples[NEAREST_SAMPLE]);
+    // A neighbour's verdict, from its nearest sample, past the patch's sides too.
+    const at = (column, row) => hiddenAt(column + SAMPLE_OFFSETS[NEAREST_SAMPLE][0], row + SAMPLE_OFFSETS[NEAREST_SAMPLE][1], shape);
+    const pixels = [];
+    for (let row = 0; row < ROWS; row++) {
+      for (let column = 0; column < COLUMNS; column++) {
+        const index = row * COLUMNS + column;
+        const own = nearest[index];
+        // list_shadow_edges: a 4-neighbour's verdict differs.
+        const listed = [at(column - 1, row), at(column + 1, row), at(column, row - 1), at(column, row + 1)]
+          .some((neighbour) => neighbour !== own);
+        const before = [own, own, own, own];
+        const reference = truth[index];
+        // trace_shadow_edges: a listed pixel's other samples traced; the nearest's verdict stands.
+        const adaptive = listed ? reference.slice() : before;
+        const hiddenCount = (verdicts) => verdicts.filter(Boolean).length;
+        pixels.push({
+          column: column, row: row, listed: listed,
+          before: before, adaptive: adaptive, reference: reference,
+          hidden: { before: hiddenCount(before), adaptive: hiddenCount(adaptive), reference: hiddenCount(reference) },
+        });
+      }
+    }
+    const listed = pixels.filter((pixel) => pixel.listed).length;
+    const count = pixels.length;
+    const summary = (mode) => {
+      const wrong = pixels.filter((pixel) => pixel.hidden[mode] !== pixel.hidden.reference);
+      return {
+        wrong: wrong.length,
+        sampleError: wrong.reduce((sum, pixel) => sum + Math.abs(pixel.hidden[mode] - pixel.hidden.reference), 0),
+      };
+    };
+    return {
+      pixels: pixels, listed: listed, count: count,
+      rays: { before: count, adaptive: count + 3 * listed, reference: 4 * count },
+      before: summary("before"), adaptive: summary("adaptive"), reference: summary("reference"),
+      // Pixels the reference shows in part shadow that the pass did not list.
+      missed: pixels.filter((pixel) => !pixel.listed && pixel.hidden.reference !== pixel.hidden.before),
+    };
+  }
+  // A shape that shows a miss: a shadow's corner clipping one pixel's top
+  // left, above and left of every neighbour's nearest sample, or a thin
+  // shadow at a shallow angle, missed where it runs between nearest samples.
+  const MISS_SHAPES = {
+    edge: { kind: "edge", x: 8.3, y: 5.1, angleDegrees: 30 },
+    thin: { kind: "thin", x: 8, y: 5.45, angleDegrees: 98 },
+    corner: { kind: "corner", x: 8.4, y: 4.7, angleDegrees: 0 },
+  };
+
+  // ---- Demo 2's model: one pixel's shadow mask samples texel and the lit pass's resolve.
+  // Each sample shows triangle A or B of the nearest surface, or C, a farther
+  // surface behind its edge: the second surface. Bits 0 to 3 mark C's
+  // samples; then, for each of the first seven directional lights, its
+  // verdict at each sample, 4 bits a light (SHADOW_EDGE_LIGHTS, SAMPLE_COUNT).
+  const SAMPLE_COUNT = 4, EDGE_LIGHTS = 7;
+  const FRAGMENTS = ["A", "B", "C"];
+  function texelOf(pixel) {
+    const second = pixel.samples.reduce((bits, sample, index) => bits | (sample.fragment === "C" ? 1 << index : 0), 0);
+    const nearestHidden = pixel.samples[NEAREST_SAMPLE].hidden;
+    // build_shadow_mask writes the nearest sample's verdict at every sample;
+    // trace_shadow_edges, at a listed pixel, each other sample's own, but the
+    // second surface's samples keep the nearest's.
+    const sunVerdicts = pixel.samples.reduce((bits, sample, index) => {
+      const hidden = pixel.listed && sample.fragment !== "C" ? sample.hidden : nearestHidden;
+      return bits | (hidden ? 1 << index : 0);
+    }, 0);
+    return (second | (sunVerdicts << SAMPLE_COUNT)) >>> 0;
+  }
+  const countOneBits = (bits) => { let count = 0; for (let rest = bits >>> 0; rest; rest >>>= 1) count += rest & 1; return count; };
+  // fs_main for each fragment that covers a sample: its coverage, whether it
+  // shades the nearest surface, and its hidden share of the sun, as
+  // directional_hidden_share computes it.
+  function resolve(pixel) {
+    const texel = texelOf(pixel);
+    const second = texel & 0xf;
+    const sunVerdicts = (texel >>> SAMPLE_COUNT) & 0xf;
+    // The second surface's word in layer 1, traced from one of its samples:
+    // here the first (the pass takes the farthest).
+    const firstSecond = pixel.samples.findIndex((sample) => sample.fragment === "C");
+    const layerOneHidden = firstSecond >= 0 && pixel.samples[firstSecond].hidden;
+    const fragments = FRAGMENTS.map((name) => {
+      const covered = pixel.samples.reduce((bits, sample, index) => bits | (sample.fragment === name ? 1 << index : 0), 0);
+      const nearestSurface = (covered & second) === 0;
+      const base = pixel.resolveOver === "all" ? 0xf : covered;
+      const hiddenBits = sunVerdicts & base;
+      const share = nearestSurface ? countOneBits(hiddenBits) / Math.max(countOneBits(base), 1) : (layerOneHidden ? 1 : 0);
+      return { name: name, covered: covered, nearestSurface: nearestSurface, hiddenBits: hiddenBits, base: base, share: share, shading: pixel.shading[name] };
+    }).filter((fragment) => fragment.covered !== 0);
+    const byName = {};
+    fragments.forEach((fragment) => { byName[fragment.name] = fragment; });
+    // The resolve: each sample keeps the colour of the fragment covering it.
+    const resolved = pixel.samples.reduce((sum, sample) => sum + byName[sample.fragment].shading * (1 - byName[sample.fragment].share), 0) / SAMPLE_COUNT;
+    // The reference: a ray from every sample, each shaded by its own verdict.
+    const reference = pixel.samples.reduce((sum, sample) => sum + pixel.shading[sample.fragment] * (sample.hidden ? 0 : 1), 0) / SAMPLE_COUNT;
+    return { texel: texel, second: second, sunVerdicts: sunVerdicts, fragments: fragments, resolved: resolved, reference: reference };
+  }
+
+  if (typeof module !== "undefined") {
+    module.exports = { edgePatch, hiddenAt, MISS_SHAPES, texelOf, resolve, countOneBits, COLUMNS, ROWS };
+    return;
+  }
+
+  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // A canvas as wide as its frame, its height `aspect` of that, at the device's resolution.
+  function sizeCanvas(canvas, aspect) {
+    const width = Math.max(240, Math.floor(canvas.parentElement.clientWidth));
+    const height = Math.round(width * aspect);
+    const scale = ratio();
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.height = height + "px";
+    const context = canvas.getContext("2d");
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    return { context: context, width: width, height: height };
+  }
+  function segmented(group, attribute, onChange) {
+    const buttons = Array.from(group.querySelectorAll("button"));
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
+      onChange(button.dataset[attribute]);
+    }));
+  }
+  function press(group, attribute, value) {
+    group.querySelectorAll("button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset[attribute] === value)));
+  }
+  // An "rgb(...)" or "#rrggbb" token as three numbers.
+  function rgbOf(colour) {
+    if (colour.startsWith("#")) return [1, 3, 5].map((start) => parseInt(colour.slice(start, start + 2), 16));
+    return (colour.match(/[\d.]+/g) || ["0", "0", "0"]).slice(0, 3).map(Number);
+  }
+  const mix = (from, to, amount) => "rgb(" + from.map((channel, index) => Math.round(channel + (to[index] - channel) * amount)).join(", ") + ")";
+  const grouped = (value) => value.toLocaleString("en-GB");
+  const scheme = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function onResize(element, draw) {
+    if (window.ResizeObserver) {
+      let last = 0;
+      new ResizeObserver(() => {
+        const width = element.clientWidth;
+        if (width !== last) { last = width; draw(); }
+      }).observe(element);
+    } else {
+      window.addEventListener("resize", draw);
+    }
+    if (scheme && scheme.addEventListener) scheme.addEventListener("change", draw);
+  }
+
+  // ---- Demo 1: the edge patch.
+  (function () {
+    const canvas = document.getElementById("p-canvas");
+    if (!canvas) return;
+    const sliders = { angle: document.getElementById("p-angle"), across: document.getElementById("p-across"), down: document.getElementById("p-down") };
+    const shapeGroup = document.getElementById("p-shape");
+    let mode = "adaptive";
+    const shape = { kind: "edge", x: Number(sliders.across.value), y: Number(sliders.down.value), angleDegrees: Number(sliders.angle.value) };
+    let layout = null;
+    const pixelsWord = (count) => grouped(count) + (count === 1 ? " pixel" : " pixels");
+    function describe(patch) {
+      const missed = patch.missed.length;
+      if (mode === "before") {
+        return "One ray per pixel, from its nearest sample: " + pixelsWord(patch.before.wrong) + " the shadow crosses take all-or-nothing answers, so the edge steps by whole pixels.";
+      }
+      if (mode === "reference") {
+        return "A ray from every sample, " + grouped(patch.rays.reference) + " rays: four levels at every pixel the shadow crosses. This is what the other two modes approximate.";
+      }
+      const base = pixelsWord(patch.listed) + " listed, because a 4-neighbour's ray disagrees, cost " + grouped(patch.rays.adaptive - patch.rays.before) + " more rays. ";
+      if (missed === 0) return base + "Every pixel the shadow crosses matches the reference.";
+      const cause = shape.kind === "thin"
+        ? "where the thin shadow runs between the nearest samples, no ray hit it, so no neighbour disagrees."
+        : shape.kind === "corner"
+          ? "the corner clips samples of a pixel whose ray and four neighbours' rays all agree; only the diagonal neighbour is in shadow."
+          : "the edge runs exactly through samples, so no ray tells the pixels apart.";
+      return base + pixelsWord(missed) + " still " + (missed === 1 ? "differs" : "differ") + ": " + cause;
+    }
+    function syncOutputs() {
+      document.getElementById("p-angle-out").textContent = shape.angleDegrees + "°";
+      document.getElementById("p-across-out").textContent = shape.x.toFixed(2) + " px";
+      document.getElementById("p-down-out").textContent = shape.y.toFixed(2) + " px";
+      sliders.angle.value = shape.angleDegrees;
+      sliders.across.value = shape.x;
+      sliders.down.value = shape.y;
+    }
+    function draw() {
+      syncOutputs();
+      const patch = edgePatch(shape);
+      const view = sizeCanvas(canvas, (ROWS + 1) / (COLUMNS + 1));
+      const context = view.context;
+      context.fillStyle = css("--panel");
+      context.fillRect(0, 0, view.width, view.height);
+      const size = Math.min(view.width / (COLUMNS + 1), view.height / (ROWS + 1));
+      const left = (view.width - COLUMNS * size) / 2, top = (view.height - ROWS * size) / 2;
+      layout = { left: left, top: top, size: size };
+      const screen = (x, y) => [left + x * size, top + y * size];
+      const lit = rgbOf(css("--o-ground")), shadowed = rgbOf(css("--o-shadow"));
+      const ink = css("--ink"), soft = css("--ink-soft"), accent = css("--accent"), bad = css("--bad");
+      for (const pixel of patch.pixels) {
+        context.fillStyle = mix(lit, shadowed, pixel.hidden[mode] / 4);
+        context.fillRect(left + pixel.column * size, top + pixel.row * size, size, size);
+      }
+      context.strokeStyle = css("--rule");
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let column = 0; column <= COLUMNS; column++) { context.moveTo(left + column * size, top); context.lineTo(left + column * size, top + ROWS * size); }
+      for (let row = 0; row <= ROWS; row++) { context.moveTo(left, top + row * size); context.lineTo(left + COLUMNS * size, top + row * size); }
+      context.stroke();
+      // The shadow's true outline, dashed.
+      const angle = shape.angleDegrees * Math.PI / 180;
+      const acrossAxis = [Math.cos(angle), Math.sin(angle)], alongAxis = [-Math.sin(angle), Math.cos(angle)];
+      const point = (across, along) => screen(shape.x + across * acrossAxis[0] + along * alongAxis[0], shape.y + across * acrossAxis[1] + along * alongAxis[1]);
+      const reach = COLUMNS + ROWS;
+      const segment = (from, to) => { context.moveTo(from[0], from[1]); context.lineTo(to[0], to[1]); };
+      context.save();
+      context.beginPath();
+      context.rect(left, top, COLUMNS * size, ROWS * size);
+      context.clip();
+      context.setLineDash([6, 4]);
+      context.strokeStyle = ink;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      if (shape.kind === "thin") {
+        segment(point(-THIN_WIDTH / 2, -reach), point(-THIN_WIDTH / 2, reach));
+        segment(point(THIN_WIDTH / 2, -reach), point(THIN_WIDTH / 2, reach));
+      } else if (shape.kind === "corner") {
+        segment(point(0, -reach), point(0, 0));
+        segment(point(0, 0), point(-reach, 0));
+      } else {
+        segment(point(0, -reach), point(0, reach));
+      }
+      context.stroke();
+      context.restore();
+      // Each sample in the colour of the verdict it takes: filled where a ray was traced from it.
+      const radius = Math.min(Math.max(size * 0.09, 2.2), 5.5);
+      for (const pixel of patch.pixels) {
+        const verdicts = pixel[mode];
+        SAMPLE_OFFSETS.forEach(([right, down], index) => {
+          const traced = mode === "reference" || index === NEAREST_SAMPLE || (mode === "adaptive" && pixel.listed);
+          const [x, y] = screen(pixel.column + right, pixel.row + down);
+          context.beginPath();
+          context.arc(x, y, radius, 0, 2 * Math.PI);
+          context.lineWidth = 1.25;
+          if (traced) {
+            context.fillStyle = verdicts[index] ? mix(shadowed, [0, 0, 0], 0.25) : mix(lit, [255, 255, 255], 0.4);
+            context.fill();
+            context.strokeStyle = ink;
+          } else {
+            context.strokeStyle = verdicts[index] ? ink : soft;
+          }
+          context.stroke();
+        });
+      }
+      if (mode === "adaptive") {
+        context.strokeStyle = accent;
+        context.lineWidth = 2.5;
+        for (const pixel of patch.pixels) {
+          if (pixel.listed) context.strokeRect(left + pixel.column * size + 1.5, top + pixel.row * size + 1.5, size - 3, size - 3);
+        }
+      }
+      context.strokeStyle = bad;
+      context.lineWidth = 2;
+      context.setLineDash([4, 3]);
+      for (const pixel of patch.pixels) {
+        if (pixel.hidden[mode] !== pixel.hidden.reference) context.strokeRect(left + pixel.column * size + 4.5, top + pixel.row * size + 4.5, size - 9, size - 9);
+      }
+      context.setLineDash([]);
+      // The handle to drag the shadow by.
+      const [handleX, handleY] = screen(shape.x, shape.y);
+      context.beginPath();
+      context.arc(handleX, handleY, 9, 0, 2 * Math.PI);
+      context.moveTo(handleX - 13, handleY); context.lineTo(handleX - 5, handleY);
+      context.moveTo(handleX + 5, handleY); context.lineTo(handleX + 13, handleY);
+      context.moveTo(handleX, handleY - 13); context.lineTo(handleX, handleY - 5);
+      context.moveTo(handleX, handleY + 5); context.lineTo(handleX, handleY + 13);
+      context.strokeStyle = css("--warm");
+      context.lineWidth = 2;
+      context.stroke();
+      document.getElementById("p-rays").textContent = grouped(patch.rays[mode]) + " for " + grouped(patch.count) + " pixels";
+      document.getElementById("p-listed").textContent = mode === "adaptive" ? grouped(patch.listed) : "none (mode lists nothing)";
+      document.getElementById("p-wrong").textContent = grouped(patch[mode].wrong);
+      document.getElementById("p-error").textContent = grouped(patch[mode].sampleError) + (patch[mode].sampleError === 1 ? " sample" : " samples");
+      document.getElementById("p-note").textContent = describe(patch);
+    }
+    // Dragging moves the shadow's anchor, kept inside the patch.
+    let dragging = false;
+    function moveTo(event) {
+      if (!layout) return;
+      const box = canvas.getBoundingClientRect();
+      const x = (event.clientX - box.left - layout.left) / layout.size;
+      const y = (event.clientY - box.top - layout.top) / layout.size;
+      shape.x = Math.round(Math.min(Math.max(x, Number(sliders.across.min)), Number(sliders.across.max)) * 20) / 20;
+      shape.y = Math.round(Math.min(Math.max(y, Number(sliders.down.min)), Number(sliders.down.max)) * 20) / 20;
+      draw();
+    }
+    canvas.addEventListener("pointerdown", (event) => { dragging = true; canvas.setPointerCapture(event.pointerId); moveTo(event); });
+    canvas.addEventListener("pointermove", (event) => { if (dragging) moveTo(event); });
+    canvas.addEventListener("pointerup", () => { dragging = false; });
+    canvas.addEventListener("pointercancel", () => { dragging = false; });
+    sliders.angle.addEventListener("input", () => { shape.angleDegrees = Number(sliders.angle.value); draw(); });
+    sliders.across.addEventListener("input", () => { shape.x = Number(sliders.across.value); draw(); });
+    sliders.down.addEventListener("input", () => { shape.y = Number(sliders.down.value); draw(); });
+    segmented(document.getElementById("p-mode"), "mode", (value) => { mode = value; draw(); });
+    segmented(shapeGroup, "shape", (value) => { shape.kind = value; draw(); });
+    document.getElementById("p-miss").addEventListener("click", () => {
+      const miss = MISS_SHAPES[shape.kind === "edge" ? "corner" : shape.kind];
+      Object.assign(shape, miss);
+      press(shapeGroup, "shape", shape.kind);
+      mode = "adaptive";
+      press(document.getElementById("p-mode"), "mode", mode);
+      draw();
+    });
+    onResize(canvas.parentElement, draw);
+    draw();
+  })();
+
+  // ---- Demo 2: the texel's bits and the resolve.
+  (function () {
+    const canvas = document.getElementById("t-canvas");
+    if (!canvas) return;
+    const pixel = {
+      listed: true,
+      resolveOver: "covered",
+      shading: { A: 0.9, B: 0.45, C: 0.6 },
+      samples: [
+        { fragment: "A", hidden: true },
+        { fragment: "B", hidden: false },
+        { fragment: "A", hidden: true },
+        { fragment: "B", hidden: false },
+      ],
+    };
+    const rows = document.getElementById("t-samples");
+    const bitsBox = document.getElementById("t-bits");
+    const groupsBox = document.getElementById("t-groups");
+    // The table: a row per sample, what it shows and whether the sun reaches it.
+    pixel.samples.forEach((sample, index) => {
+      const row = document.createElement("tr");
+      const label = document.createElement("td");
+      label.textContent = String(index) + (index === NEAREST_SAMPLE ? ", nearest" : "");
+      const shows = document.createElement("td");
+      const showsGroup = document.createElement("div");
+      showsGroup.className = "seg";
+      showsGroup.setAttribute("role", "group");
+      showsGroup.setAttribute("aria-label", "Sample " + index + " shows");
+      FRAGMENTS.forEach((name) => {
+        if (index === NEAREST_SAMPLE && name === "C") return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.fragment = name;
+        button.textContent = name;
+        button.setAttribute("aria-pressed", String(sample.fragment === name));
+        showsGroup.append(button);
+      });
+      segmented(showsGroup, "fragment", (value) => { sample.fragment = value; draw(); });
+      shows.append(showsGroup);
+      const sun = document.createElement("td");
+      const sunGroup = document.createElement("div");
+      sunGroup.className = "seg";
+      sunGroup.setAttribute("role", "group");
+      sunGroup.setAttribute("aria-label", "Sample " + index + " sun");
+      [["lit", false], ["hidden", true]].forEach(([text, hidden]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.hidden = String(hidden);
+        button.textContent = text;
+        button.setAttribute("aria-pressed", String(sample.hidden === hidden));
+        sunGroup.append(button);
+      });
+      segmented(sunGroup, "hidden", (value) => { sample.hidden = value === "true"; draw(); });
+      sun.append(sunGroup);
+      row.append(label, shows, sun);
+      rows.append(row);
+    });
+    // The 32 cells, bit 31 first, and the labels of their groups.
+    const cells = [];
+    for (let bit = 31; bit >= 0; bit--) {
+      const cell = document.createElement("span");
+      cell.className = bit < SAMPLE_COUNT ? "second" : bit < 2 * SAMPLE_COUNT ? "sun" : "";
+      bitsBox.append(cell);
+      cells[bit] = cell;
+    }
+    for (let light = EDGE_LIGHTS - 1; light >= -1; light--) {
+      const label = document.createElement("span");
+      label.style.gridColumn = "span " + SAMPLE_COUNT;
+      label.textContent = light < 0 ? "2nd" : light === 0 ? "sun" : "L" + light;
+      label.className = light < 0 ? "second" : light === 0 ? "sun" : "";
+      label.title = light < 0 ? "the samples that show the second surface" : "directional light " + light + "'s verdict at samples 3, 2, 1, 0";
+      groupsBox.append(label);
+    }
+    const binary = (bits) => "0b" + (bits >>> 0).toString(2).padStart(SAMPLE_COUNT, "0");
+    const fraction = (value) => value.toFixed(3);
+    function draw() {
+      const result = resolve(pixel);
+      for (let bit = 0; bit < 32; bit++) {
+        const on = ((result.texel >>> bit) & 1) === 1;
+        cells[bit].textContent = on ? "1" : "0";
+        cells[bit].classList.toggle("on", on);
+      }
+      document.getElementById("t-hex").textContent = "0x" + result.texel.toString(16).padStart(8, "0");
+      const lines = result.fragments.map((fragment) => {
+        const samplesText = fragment.name + " covers " + binary(fragment.covered);
+        if (!fragment.nearestSurface) {
+          return samplesText + ", a second-surface sample among them: layer 1's bit, share " + fraction(fragment.share);
+        }
+        return samplesText + ": popcount(" + binary(result.sunVerdicts) + " & " + binary(fragment.base) + ") / " +
+          (fragment.base >>> 0).toString(2).split("").filter((digit) => digit === "1").length + " = " + fraction(fragment.share) + " hidden";
+      });
+      lines.push("resolved sunlight " + fraction(result.resolved) + ", reference " + fraction(result.reference) +
+        (Math.abs(result.resolved - result.reference) < 1e-9 ? ", equal" : ", off by " + fraction(Math.abs(result.resolved - result.reference))));
+      document.getElementById("t-lines").textContent = lines.join("\n");
+      // The pixel: its four samples, ringed by what they show, filled by the verdict the lit pass uses.
+      const view = sizeCanvas(canvas, 0.78);
+      const context = view.context;
+      context.fillStyle = css("--panel");
+      context.fillRect(0, 0, view.width, view.height);
+      const side = Math.min(view.width, view.height) - 40;
+      const left = (view.width - side) / 2, top = 20;
+      const lit = rgbOf(css("--o-ground")), shadowed = rgbOf(css("--o-shadow"));
+      const byName = {};
+      result.fragments.forEach((fragment) => { byName[fragment.name] = fragment; });
+      const colours = { A: css("--accent"), B: css("--warm"), C: css("--ink-soft") };
+      context.fillStyle = css("--figure-bg");
+      context.fillRect(left, top, side, side);
+      context.strokeStyle = css("--ink");
+      context.lineWidth = 1.5;
+      context.strokeRect(left, top, side, side);
+      const radius = Math.max(side * 0.075, 8);
+      context.font = "600 13px " + css("--mono");
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      pixel.samples.forEach((sample, index) => {
+        const [right, down] = SAMPLE_OFFSETS[index];
+        const x = left + right * side, y = top + down * side;
+        const fragment = byName[sample.fragment];
+        const used = fragment.nearestSurface ? ((result.sunVerdicts >>> index) & 1) === 1 : fragment.share === 1;
+        context.beginPath();
+        context.arc(x, y, radius, 0, 2 * Math.PI);
+        context.fillStyle = used ? mix(shadowed, [0, 0, 0], 0.3) : mix(lit, [255, 255, 255], 0.5);
+        context.fill();
+        context.lineWidth = 3;
+        context.strokeStyle = colours[sample.fragment];
+        context.stroke();
+        context.fillStyle = used ? "#ffffff" : "#111111";
+        context.fillText(sample.fragment + index, x, y);
+      });
+    }
+    segmented(document.getElementById("t-listed"), "listed", (value) => { pixel.listed = value === "yes"; draw(); });
+    segmented(document.getElementById("t-over"), "over", (value) => { pixel.resolveOver = value; draw(); });
+    onResize(canvas.parentElement, draw);
+    draw();
+  })();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
