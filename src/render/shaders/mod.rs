@@ -23,9 +23,14 @@ use crate::render::froxel_pass::{
 use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
 use crate::render::renderer::RenderSwitches;
-use crate::render::shadow_mask_pass::{SAMPLE_OFFSETS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE};
-use crate::render::targets::LUMINANCE_COEFFICIENTS;
+use crate::render::shadow_mask_pass::{
+    SAMPLE_OFFSETS, SHADOW_EDGE_LIGHTS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE,
+};
+use crate::render::targets::{LUMINANCE_COEFFICIENTS, SAMPLE_COUNT};
 use crate::render::tonemapping_pass::DITHER_MASK_SIDE;
+
+/// Every sample of a pixel, a bit each, as WGSL declares `ALL_SAMPLES`.
+const ALL_SAMPLES: u32 = (1 << SAMPLE_COUNT) - 1;
 
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
@@ -251,7 +256,10 @@ impl ShaderModule {
              const BEND_WORKGROUP_SIZE: u32 = {BEND_WORKGROUP_SIZE}u;\n\
              const QTANGENT_SMALLEST_W: f32 = {QTANGENT_SMALLEST_W:?};\n\
              const SHADOW_MASK_TILE_SIZE: u32 = {SHADOW_MASK_TILE_SIZE}u;\n\
-             const SHADOW_MASK_LIGHTS: u32 = {SHADOW_MASK_LIGHTS}u;\n",
+             const SHADOW_MASK_LIGHTS: u32 = {SHADOW_MASK_LIGHTS}u;\n\
+             const SHADOW_EDGE_LIGHTS: u32 = {SHADOW_EDGE_LIGHTS}u;\n\
+             const SAMPLE_COUNT: u32 = {SAMPLE_COUNT}u;\n\
+             const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

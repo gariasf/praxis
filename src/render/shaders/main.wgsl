@@ -125,6 +125,24 @@ fn masked(mask: vec2<u32>, bit: u32) -> bool {
     return bit < SHADOW_MASK_LIGHTS && ((half >> (bit & 31u)) & 1u) == 1u;
 }
 
+// The share of the samples a fragment covers, `covered_samples`, from which
+// the directional light at `index` of the light buffer is hidden: where the
+// fragment shades the pixel's nearest surface, from `sample_verdicts`, the
+// shadow mask samples' verdicts at each sample for the first
+// SHADOW_EDGE_LIGHTS directional lights, SAMPLE_COUNT bits a light, as
+// MSAA resolves an edge from its samples; otherwise the mask's bit, 0 or 1.
+fn directional_hidden_share(
+    mask: vec2<u32>,
+    sample_verdicts: u32,
+    nearest_surface: bool,
+    covered_samples: u32,
+    index: u32
+) -> f32 {
+    let hidden = (sample_verdicts >> (SAMPLE_COUNT * index)) & covered_samples;
+    let share = f32(countOneBits(hidden)) / f32(max(countOneBits(covered_samples), 1u));
+    return select(f32(masked(mask, index)), share, nearest_surface && index < SHADOW_EDGE_LIGHTS);
+}
+
 // The bit of the point light at `index` of the light buffer in a shadow mask
 // whose bits follow the lights of `froxel`: after the directional lights',
 // at its entry in the Froxel's list, which is in light order, so a binary
@@ -206,15 +224,21 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
     // coverage may precede the depth test, so a fragment of the nearest
     // surface that runs under another at a sample takes that one's. Its bits
     // follow the pixel's lights in the order they are summed here, the
-    // directional lights first.
+    // directional lights first. At the nearest surface, the first
+    // directional lights' verdicts at each sample stand in for their bits.
     var mask = vec2<u32>(0u);
+    var sample_verdicts = 0u;
+    var nearest_surface = false;
+    let covered = covered_samples & ALL_SAMPLES;
     if SHADOW_RAYS {
         let pixel = vec2<u32>(in.clip_position.xy);
-        let second_samples = textureLoad(shadow_mask_samples, pixel, 0).r;
-        let surface = select(0u, 1u, (covered_samples & second_samples) != 0u);
-        mask = textureLoad(shadow_mask, pixel, surface, 0).rg;
+        let samples = textureLoad(shadow_mask_samples, pixel, 0).r;
+        nearest_surface = (covered & samples) == 0u;
+        mask = textureLoad(shadow_mask, pixel, select(1u, 0u, nearest_surface), 0).rg;
+        sample_verdicts = samples >> SAMPLE_COUNT;
     }
-    let first_illuminance = first.intensity * f32(has_directional_light && !masked(mask, 0u));
+    let first_illuminance = first.intensity * f32(has_directional_light)
+        * (1.0 - directional_hidden_share(mask, sample_verdicts, nearest_surface, covered, 0u));
     var outgoing_luminance = reflected_luminance(
         surface,
         normal,
@@ -225,7 +249,8 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
     for (var index = 1u; index < light.directional_light_count; index++) {
         let directional = lights[index];
         let direction = normalize(-directional.offset);
-        let illuminance = directional.intensity * f32(!masked(mask, index));
+        let illuminance = directional.intensity
+            * (1.0 - directional_hidden_share(mask, sample_verdicts, nearest_surface, covered, index));
         outgoing_luminance += reflected_luminance(
             surface,
             normal,

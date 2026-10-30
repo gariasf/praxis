@@ -255,8 +255,11 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
             writer: Writer::Gpu,
         },
         storage("shadow_mask_lights_overflowed", "atomic<u32>"),
-        storage("second_surfaces", "SecondSurfaces"),
+        storage("second_surfaces", "PixelList"),
         storage("second_surface_dispatch", "array<atomic<u32>, 3>"),
+        storage("directional_verdicts", "array<u32>"),
+        storage("shadow_edges", "PixelList"),
+        storage("shadow_edge_dispatch", "array<atomic<u32>, 3>"),
     ],
 };
 

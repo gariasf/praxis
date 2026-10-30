@@ -95,8 +95,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
     // u32s a pixel for each of two surfaces, a u32 a pixel of the samples
     // that show the second, the list of second surfaces, a u32 a pixel
-    // after its count, the pass's 4-byte overflow count and its 12-byte
-    // dispatch and stand-in, the surface normals' 4
+    // after its count, the directional verdicts, a u32 a pixel, the list of
+    // shadow edges, as the second surfaces', the pass's 4-byte overflow
+    // count and its two 12-byte dispatches and stand-in, the surface
+    // normals' 4
     // bytes at each of 4 samples a pixel, three staging slots of the
     // first frame's 1668 uploaded bytes rounded up to 2048, the tonemapping
     // pass's 64×64 R8 dither mask, the Froxel pass's lists,
@@ -132,7 +134,10 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             + 2 * 160 * 90 * 8
             + 160 * 90 * 4
             + (160 * 90 + 1) * 4
+            + 160 * 90 * 4
+            + (160 * 90 + 1) * 4
             + 4
+            + 12
             + 12
             + 12
             + 160 * 90 * 4 * 4
