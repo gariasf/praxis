@@ -40,10 +40,10 @@ default = ["cook"]
 # off and links no source decoder or encoder (ADR 0018).
 cook = ["dep:bevy_mikktspace", "dep:gltf", "dep:image", "dep:intel_tex_2"]
 
-# Tests render every Reference scene on the CPU's side in a debug build:
-# town's ticks, ECS queries, command encoding and submission. Optimising
-# every crate keeps the verify command in its budget; debug assertions and
-# overflow checks stay on.
+# Tests run each Reference scene's CPU work in a debug build (town's ticks,
+# ECS queries, command encoding and submission) and cook, decode and hash
+# megabytes of texels. Optimising every crate keeps the verify command in
+# its budget; debug assertions and overflow checks stay on.
 [profile.dev]
 opt-level = 1
 
