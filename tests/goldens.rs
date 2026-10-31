@@ -100,6 +100,8 @@ fn reference_scenes_match_their_goldens() {
     };
     let key = praxis::golden_key(context.backend(), context.device_type());
     let software = context.device_type() == wgpu::DeviceType::Cpu;
+    // Each capture takes a device of its own (`fresh_context`).
+    drop(context);
     let unculled_pixels_allowed = if software {
         SOFTWARE_UNCULLED_PIXELS
     } else {
@@ -110,7 +112,7 @@ fn reference_scenes_match_their_goldens() {
         .join(&key);
 
     if variable_is_set(UPDATE_GOLDENS_VARIABLE) {
-        update_goldens(&context, &golden_directory);
+        update_goldens(&golden_directory);
         return;
     }
     if !golden_directory.exists() {
@@ -135,9 +137,8 @@ fn reference_scenes_match_their_goldens() {
     for scene in SCENES.into_iter().chain(helmet) {
         let golden_path = golden_path(&golden_directory, scene);
         let frames = equivalence_frames(scene);
-        let culled = capture_frames(&context, scene, frames, RenderSwitches::default());
+        let culled = capture_frames(scene, frames, RenderSwitches::default());
         let unculled = capture_frames(
-            &context,
             scene,
             frames,
             RenderSwitches {
@@ -150,9 +151,8 @@ fn reference_scenes_match_their_goldens() {
             shadow_rays: false,
             ..RenderSwitches::default()
         };
-        let froxel_lit = capture_frames(&context, scene, frames, unshadowed);
+        let froxel_lit = capture_frames(scene, frames, unshadowed);
         let brute_force = capture_frames(
-            &context,
             scene,
             frames,
             RenderSwitches {
@@ -213,7 +213,7 @@ fn reference_scenes_match_their_goldens() {
             &difference_directory,
         ));
 
-        let shifted = capture(&context, scene, FAR_SHIFT, RenderSwitches::default());
+        let shifted = capture(scene, FAR_SHIFT, RenderSwitches::default());
         failures.extend(mismatch(
             &golden,
             &shifted,
@@ -263,16 +263,29 @@ fn mismatch(
     ))
 }
 
+/// A device of its own for one capture, so every capture starts from the
+/// same device history. On the RTX 2070 SUPER under Vulkan, a device that
+/// has run several earlier States sometimes traces a shadow ray that grazes
+/// an edge to the other verdict for a whole State: `town`'s pixel (564, 215)
+/// at frame 1500 then turns from shadowed to lit. None of 368 captures on
+/// fresh devices did; 2 of 24 on one device did, the 10th and 15th States,
+/// and more with other devices busy. Which State hit it would decide whether
+/// the comparisons between captures pass, though neither culling nor the
+/// Froxel lists differ.
+fn fresh_context() -> GpuContext {
+    pollster::block_on(GpuContext::headless()).expect("headless GPU context failed")
+}
+
 /// The last frame `praxis::capture` renders of `scene`, moved by `shift`, at
-/// the Goldens' size, as `switches` set.
+/// the Goldens' size, as `switches` set, on a device of its own.
 fn capture(
-    context: &GpuContext,
     scene: ReferenceScene,
     shift: glam::DVec3,
     switches: RenderSwitches,
 ) -> image::RgbaImage {
+    let context = fresh_context();
     let (pixels, _) =
-        praxis::capture(context, scene, shift, WIDTH, HEIGHT, switches).expect("capture failed");
+        praxis::capture(&context, scene, shift, WIDTH, HEIGHT, switches).expect("capture failed");
     image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
 }
 
@@ -294,15 +307,14 @@ fn equivalence_frames(scene: ReferenceScene) -> &'static [u32] {
 }
 
 /// The pixels `praxis::capture_frames` renders of `scene` at `frames`, at
-/// the Goldens' size, as `switches` set.
+/// the Goldens' size, as `switches` set, on a device of its own.
 fn capture_frames(
-    context: &GpuContext,
     scene: ReferenceScene,
     frames: &[u32],
     switches: RenderSwitches,
 ) -> Vec<image::RgbaImage> {
     praxis::capture_frames(
-        context,
+        &fresh_context(),
         scene,
         glam::DVec3::ZERO,
         WIDTH,
@@ -413,11 +425,11 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
 
 /// Writes each scene's capture as its Golden and prints the scenes whose
 /// pixels changed, or that had no Golden.
-fn update_goldens(context: &GpuContext, directory: &Path) {
+fn update_goldens(directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
         let path = golden_path(directory, scene);
-        let actual = capture(context, scene, glam::DVec3::ZERO, RenderSwitches::default());
+        let actual = capture(scene, glam::DVec3::ZERO, RenderSwitches::default());
         let unchanged =
             image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
         if unchanged {
