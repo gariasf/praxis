@@ -234,7 +234,11 @@ pub fn source_hash(repository: &Path, revision: &str) -> anyhow::Result<String> 
 
 /// The trimmed output of git with `arguments` in `repository`, given
 /// `input` on its standard input.
-fn git(repository: &Path, arguments: &[&str], input: Option<&str>) -> anyhow::Result<String> {
+pub(super) fn git(
+    repository: &Path,
+    arguments: &[&str],
+    input: Option<&str>,
+) -> anyhow::Result<String> {
     run(git_command(repository), arguments, input)
 }
 

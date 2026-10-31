@@ -1,6 +1,8 @@
+mod history;
 mod provenance;
 mod report;
 
+pub use history::{Publication, publish};
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
 
@@ -105,14 +107,20 @@ pub fn baseline_directory(adapter: &str, backend: &str) -> PathBuf {
     let default_backend = [wgpu::Backend::Vulkan, wgpu::Backend::Metal]
         .iter()
         .any(|default| default.to_str() == backend);
-    let key = adapter
+    PathBuf::from(BASELINE_DIRECTORY)
+        .join(adapter_key(adapter, (!default_backend).then_some(backend)))
+}
+
+/// `adapter`'s name in lowercase, each run of other characters a hyphen,
+/// then `backend` when given.
+fn adapter_key(adapter: &str, backend: Option<&str>) -> String {
+    adapter
         .to_lowercase()
         .split(|character: char| !character.is_ascii_alphanumeric())
-        .chain((!default_backend).then_some(backend))
+        .chain(backend)
         .filter(|word| !word.is_empty())
         .collect::<Vec<_>>()
-        .join("-");
-    PathBuf::from(BASELINE_DIRECTORY).join(key)
+        .join("-")
 }
 
 /// A time warns above this ratio to its Baseline and fails above
@@ -884,7 +892,7 @@ mod tests {
         heap_allocations: 100,
     };
 
-    fn baseline() -> Measurements {
+    pub(super) fn baseline() -> Measurements {
         Measurements {
             scene: "pbr-sweep".to_owned(),
             adapter: "Apple M4 Pro".to_owned(),
@@ -930,6 +938,23 @@ mod tests {
         }
     }
 
+    /// The Provenance of a run of `checkout` on an otherwise idle machine
+    /// whose GPU frames spread `p95_over_median`, quiet below 1.06.
+    pub(super) fn provenance(checkout: Checkout, p95_over_median: f64) -> Provenance {
+        Provenance {
+            checkout,
+            driver: String::new(),
+            driver_info: String::new(),
+            harness_version: 1,
+            scene_content_hash: "e3b0c442".to_owned(),
+            gpu_load_percent: Some(3),
+            other_processes: Some(Vec::new()),
+            gpu_frame_p95_over_median: Some(p95_over_median),
+            quiet: p95_over_median < 1.06,
+            started_unix_seconds: 1_793_448_000,
+        }
+    }
+
     const BUDGETS: Budgets = Budgets {
         cpu_frame_microseconds: 6000.0,
         gpu_frame_microseconds: 12000.0,
@@ -959,23 +984,15 @@ mod tests {
     #[test]
     fn a_result_with_provenance_round_trips_and_compares_clean_with_a_baseline_without() {
         let current = Measurements {
-            provenance: Some(Provenance {
-                checkout: Checkout {
+            provenance: Some(provenance(
+                Checkout {
                     source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
                     commit: "bea8706b".to_owned(),
                     dirty: false,
                     branch: "main".to_owned(),
                 },
-                driver: String::new(),
-                driver_info: String::new(),
-                harness_version: 1,
-                scene_content_hash: "e3b0c442".to_owned(),
-                gpu_load_percent: Some(3),
-                other_processes: Some(Vec::new()),
-                gpu_frame_p95_over_median: Some(1.01),
-                quiet: true,
-                started_unix_seconds: 1_793_448_000,
-            }),
+                1.01,
+            )),
             ..baseline()
         };
         let json = serde_json::to_vec(&current).expect("serializable");

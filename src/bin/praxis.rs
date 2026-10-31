@@ -64,6 +64,10 @@ enum Command {
         configuration: Configuration,
         scenes: Vec<String>,
         crowd_form: CrowdForm,
+        publish: bool,
+    },
+    Publish {
+        results: String,
     },
     Compare {
         results: String,
@@ -108,7 +112,9 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             configuration,
             scenes,
             crowd_form,
-        } => bench(&output, configuration, &scenes, crowd_form),
+            publish,
+        } => bench(&output, configuration, &scenes, crowd_form, publish),
+        Command::Publish { results } => publish(&results),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -132,10 +138,15 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         })
         .transpose()?;
     let skip_aliasing = take_flag(&mut arguments, "--skip-aliasing");
+    let no_publish = take_flag(&mut arguments, "--no-publish");
     let command = arguments.first().map(String::as_str);
     anyhow::ensure!(
         !skip_aliasing || command == Some("bench"),
         "only `bench` takes --skip-aliasing"
+    );
+    anyhow::ensure!(
+        !no_publish || command == Some("bench"),
+        "only `bench` takes --no-publish"
     );
     anyhow::ensure!(
         crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
@@ -154,6 +165,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         },
         scenes: scenes.to_vec(),
         crowd_form,
+        publish: !no_publish,
     };
     Ok(match arguments.as_slice() {
         [] => Command::Window(ReferenceScene::Helmet),
@@ -203,6 +215,9 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, output, scenes @ ..] if command == "bench" => {
             bench(output, Configuration::REFERENCE, scenes)
         }
+        [command, results] if command == "publish" => Command::Publish {
+            results: results.clone(),
+        },
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -222,8 +237,8 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [<scene>...]`, \
-             `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish] [<scene>...]`, \
+             `publish <bench directory>`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -318,12 +333,14 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 /// Benches the named Reference scenes, or with none every scene whose assets
 /// are present, prints one line per scene, and writes `<scene>.json` into
 /// `output`. A crowd form other than the default benches `crowd` alone,
-/// written as `crowd-<form>.json`.
+/// written as `crowd-<form>.json`. With `publish`, the results then join
+/// the Bench history; a publish that fails warns and fails no bench.
 fn bench(
     output: &str,
     configuration: Configuration,
     scene_names: &[String],
     crowd_form: CrowdForm,
+    publish: bool,
 ) -> anyhow::Result<()> {
     let crowd = ReferenceScene::Crowd.name();
     let other_form = crowd_form != CrowdForm::default();
@@ -352,6 +369,7 @@ fn bench(
     std::fs::create_dir_all(output)?;
     let start = BenchStart::read();
     let context = pollster::block_on(GpuContext::headless())?;
+    let mut results = Vec::new();
     for scene in scenes {
         let switches = RenderSwitches {
             crowd_form,
@@ -364,7 +382,29 @@ fn bench(
         let path = Path::new(output).join(format!("{}.json", result.scene));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
         writeln!(std::io::stdout(), "{result}")?;
+        results.push(result);
     }
+    if publish {
+        match praxis::bench::publish(Path::new("."), &results) {
+            Ok(publication) => writeln!(std::io::stdout(), "{publication}")?,
+            Err(error) => tracing::warn!(
+                error = format!("{error:#}"),
+                "bench results not published; `praxis publish {output}` retries"
+            ),
+        }
+    }
+    Ok(())
+}
+
+/// Publishes every `<scene>.json` in `results` as Bench records on the
+/// `bench-history` branch, and prints what it did.
+fn publish(results: &str) -> anyhow::Result<()> {
+    let measurements = result_paths(results)?
+        .iter()
+        .map(|path| read_json(path))
+        .collect::<anyhow::Result<Vec<Measurements>>>()?;
+    let publication = praxis::bench::publish(Path::new("."), &measurements)?;
+    writeln!(std::io::stdout(), "{publication}")?;
     Ok(())
 }
 
@@ -665,6 +705,7 @@ mod tests {
             configuration,
             scenes,
             crowd_form,
+            publish,
         } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
         else {
             panic!("bench parsed as another command");
@@ -673,6 +714,30 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+        assert!(publish);
+    }
+
+    #[test]
+    fn bench_publishes_unless_told_not_to_and_publish_parses_its_results() {
+        let publish = |arguments: &[&str]| match parse(arguments).unwrap() {
+            Command::Bench { publish, .. } => publish,
+            _ => panic!("bench parsed as another command"),
+        };
+        assert!(!publish(&[
+            "bench",
+            "out",
+            "--counters",
+            "--no-publish",
+            "town"
+        ]));
+        let error = parse(&["compare", "out", "--no-publish"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("only `bench` takes --no-publish"), "{error}");
+        let Command::Publish { results } = parse(&["publish", "out"]).unwrap() else {
+            panic!("publish parsed as another command");
+        };
+        assert_eq!(results, "out");
     }
 
     #[test]

@@ -49,7 +49,7 @@ bench() {
   for scene in $(printf '%s\n' bench/baselines/*/*.json | sed 's|.*/||; s|\.json$||' | sort -u); do
     scenes+=("$scene")
   done
-  target/release/praxis bench "$results" --counters $skip_aliasing ${scenes[@]+"${scenes[@]}"} &&
+  target/release/praxis bench "$results" --counters --no-publish $skip_aliasing ${scenes[@]+"${scenes[@]}"} &&
     target/release/praxis compare "$results" --ci
 }
 

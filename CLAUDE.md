@@ -96,7 +96,8 @@ src/
   preflight/                   # `praxis preflight`: a session's starting
                                  state, a line per check
   bench/                       # Reference scene medians, compared with
-                                 Baselines and Budgets
+                                 Baselines and Budgets, published as
+                                 Bench records on `bench-history`
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
