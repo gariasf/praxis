@@ -235,7 +235,8 @@ struct SurfaceWord {
 
 // The word of the surface that the pixel's `sample` shows, at `depth`;
 // none where `depth` is the background's. `other_samples` are the pixel's
-// other samples that show the surface, a bit each.
+// other samples that show the surface, a bit each: none for a second
+// surface, whose other samples may each show another.
 fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, other_samples: u32) -> SurfaceWord {
     var hidden = vec2<u32>(0u);
     var traced = 0u;
@@ -299,23 +300,24 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
                     continue;
                 }
                 // Facing first, so a light at the surface, at no distance, is
-                // hidden without dividing by it.
+                // tested without dividing by it.
                 distance = sqrt(distance_squared);
                 if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance {
                     // The surface's one bit for a point light shades every
-                    // fragment of it, and a fragment whose normal turns from
-                    // the light reflects none of it whatever the bit. So
+                    // fragment of it, and a fragment whose shading normal
+                    // turns from the light reflects none of it whatever the
+                    // bit. So
                     // where another sample of the surface faces the light,
                     // as at a silhouette, where the surface behind the
                     // nearest triangle lies within a pixel's width of its
                     // plane, or along a smooth surface's terminator, the bit
                     // is the verdict of a ray from the first such sample.
                     var facing = false;
-                    for (var other = 0u; other < SAMPLE_COUNT; other++) {
-                        if facing || ((other_samples >> other) & 1u) == 0u {
+                    for (var other_sample = 0u; other_sample < SAMPLE_COUNT; other_sample++) {
+                        if facing || ((other_samples >> other_sample) & 1u) == 0u {
                             continue;
                         }
-                        let other_surface = sample_surface(pixel, other, textureLoad(depth_target, pixel, other), size);
+                        let other_surface = sample_surface(pixel, other_sample, textureLoad(depth_target, pixel, other_sample), size);
                         let other_to_light = light_position - other_surface.position;
                         let other_distance = length(other_to_light);
                         if dot(other_surface.interpolated_normal, other_to_light) > -INTERPOLATED_TURN_MARGIN * other_distance {
@@ -352,6 +354,15 @@ fn first_sample_of(values: vec4<f32>, value: f32) -> u32 {
         0u,
         values.x == value
     );
+}
+
+// The samples of a pixel whose samples' depths are `depths` that show its
+// nearest surface, other than its nearest sample, `nearest`, a bit each:
+// the background's samples and the second surface's, `second_samples`, are
+// not the nearest surface's.
+fn other_nearest_samples(depths: vec4<f32>, nearest: u32, second_samples: u32) -> u32 {
+    let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
+    return (shown.x | shown.y | shown.z | shown.w) & ~second_samples & ~(1u << nearest);
 }
 
 // Pixels listed for a later dispatch to trace: how many, then each one's
@@ -431,11 +442,13 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             }
         }
     }
-    // The samples that show the nearest surface, other than the nearest:
-    // not the second surface's or the background's.
-    let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
-    let other_nearest_samples = (shown.x | shown.y | shown.z | shown.w) & ~second_samples & ~(1u << sample);
-    let nearest = surface_word(pixel, sample, depth, target_size, other_nearest_samples);
+    let nearest = surface_word(
+        pixel,
+        sample,
+        depth,
+        target_size,
+        other_nearest_samples(depths, sample, second_samples)
+    );
     textureStore(shadow_mask, pixel, 0, vec4<u32>(nearest.word, 0u, 0u));
     // The first SHADOW_EDGE_LIGHTS directional lights' bits, each the
     // verdict at every sample of the nearest surface until
@@ -553,13 +566,10 @@ fn turned_lights_other_samples_face(pixel: vec2<i32>, own: u32) -> u32 {
         textureLoad(depth_target, pixel, 3)
     );
     let nearest = first_sample_of(depths, max(max(depths.x, depths.y), max(depths.z, depths.w)));
-    // The background's samples and the second surface's are not the nearest
-    // surface's.
-    let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
-    let other_nearest_samples = (shown.x | shown.y | shown.z | shown.w) & ~(own & ALL_SAMPLES) & ~(1u << nearest);
+    let other_samples = other_nearest_samples(depths, nearest, own & ALL_SAMPLES);
     var faced = 0u;
     for (var sample = 0u; sample < SAMPLE_COUNT; sample++) {
-        if ((other_nearest_samples >> sample) & 1u) == 0u {
+        if ((other_samples >> sample) & 1u) == 0u {
             continue;
         }
         let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
