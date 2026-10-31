@@ -440,6 +440,11 @@ impl Renderer {
         }
     }
 
+    /// PROBE (#417).
+    pub(crate) fn probe_counts(&self) -> &wgpu::Buffer {
+        self.shadow_mask_pass.shadow_mask_lights_overflowed()
+    }
+
     /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after

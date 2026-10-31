@@ -156,7 +156,7 @@ impl ShadowMaskPass {
         let buffers = buffers.map(|(name, buffer)| (name, buffer.clone()));
         let shadow_mask_lights_overflowed = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shadow Mask Overflow Buffer"),
-            size: size_of::<u32>() as u64,
+            size: 8 * size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,

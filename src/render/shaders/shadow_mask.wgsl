@@ -235,7 +235,12 @@ struct SurfaceWord {
 
 // The word of the surface that the pixel's `sample` shows, at `depth`;
 // none where `depth` is the background's.
-fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> SurfaceWord {
+// PROBE (#417): with PROBE_SHADE_OWN, a point light the nearest sample turns
+// from takes the ray verdict of the first of `others`, the other samples of
+// the nearest surface, that faces it by its own interpolated normal.
+const PROBE_SHADE_OWN: bool = false;
+
+fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, others: u32) -> SurfaceWord {
     var hidden = vec2<u32>(0u);
     var traced = 0u;
     var slice = 0u;
@@ -264,6 +269,7 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
         for (var entry = 0u; entry < light_count; entry++) {
             var direction: vec3<f32>;
             var distance: f32;
+            var traced_surface = surface;
             if entry < light.directional_light_count {
                 if entry >= SHADOW_MASK_LIGHTS {
                     overflowed++;
@@ -298,18 +304,38 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) -> S
                 // Facing first, so a light at the surface, at no distance, is
                 // hidden without dividing by it.
                 distance = sqrt(distance_squared);
-                if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance {
-                    hidden = with_bit(hidden, entry);
-                    continue;
-                }
                 direction = to_light / distance;
+                if dot(interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance {
+                    var facing_found = false;
+                    if PROBE_SHADE_OWN {
+                        let light_position = point_light_position(point, camera.anchor, camera.offset);
+                        for (var other_sample = 0u; other_sample < SAMPLE_COUNT; other_sample++) {
+                            if facing_found || ((others >> other_sample) & 1u) == 0u {
+                                continue;
+                            }
+                            let other = sample_surface(pixel, other_sample, textureLoad(depth_target, pixel, other_sample), size);
+                            let other_to_light = light_position - other.position;
+                            let other_distance = length(other_to_light);
+                            if dot(other.interpolated_normal, other_to_light) > -INTERPOLATED_TURN_MARGIN * other_distance {
+                                facing_found = true;
+                                traced_surface = other;
+                                distance = other_distance;
+                                direction = other_to_light / other_distance;
+                            }
+                        }
+                    }
+                    if !facing_found {
+                        hidden = with_bit(hidden, entry);
+                        continue;
+                    }
+                }
             }
-            if shadowed(position, surface.pixel_width, triangle_normal, interpolated_normal, direction, distance) {
+            if shadowed(traced_surface.position, traced_surface.pixel_width, traced_surface.triangle_normal, traced_surface.interpolated_normal, direction, distance) {
                 hidden = with_bit(hidden, entry);
             }
         }
         if overflowed > 0u {
-            atomicAdd(&shadow_mask_lights_overflowed, overflowed);
+            atomicAdd(&shadow_mask_lights_overflowed[0], overflowed);
         }
     }
     let slice_shift = SHADOW_MASK_LIGHTS - 32u;
@@ -402,7 +428,12 @@ fn build_shadow_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
             }
         }
     }
-    let nearest = surface_word(pixel, sample, depth, target_size);
+    var probe_others = 0u;
+    if PROBE_SHADE_OWN {
+        let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
+        probe_others = (shown.x | shown.y | shown.z | shown.w) & ~second_samples & ~(1u << sample);
+    }
+    let nearest = surface_word(pixel, sample, depth, target_size, probe_others);
     textureStore(shadow_mask, pixel, 0, vec4<u32>(nearest.word, 0u, 0u));
     // The first SHADOW_EDGE_LIGHTS directional lights' bits, each the
     // verdict at every sample of the nearest surface until
@@ -443,7 +474,7 @@ fn trace_second_surfaces(
     let pixel = vec2<i32>(vec2<u32>(listed & 0xffffu, (listed >> 16u) & 0x3fffu));
     let sample = listed >> 30u;
     let depth = textureLoad(depth_target, pixel, sample);
-    let surface = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)));
+    let surface = surface_word(pixel, sample, depth, vec2<f32>(textureDimensions(depth_target)), 0u);
     textureStore(shadow_mask, pixel, 1, vec4<u32>(surface.word, 0u, 0u));
 }
 
@@ -556,7 +587,9 @@ fn list_shadow_edges(@builtin(global_invocation_id) invocation: vec3<u32>) {
         return;
     }
     let own = directional_verdicts[pixel.y * size.x + pixel.x];
-    if shadow_edge_lights(pixel, own, size) == 0u && turned_lights_other_samples_face(pixel, own) == 0u {
+    let listed = shadow_edge_lights(pixel, own, size) != 0u || turned_lights_other_samples_face(pixel, own) != 0u;
+    probe_point_light_spread(pixel, own, listed);
+    if !listed {
         return;
     }
     let entry = atomicAdd(&shadow_edges.count, 1u);
@@ -630,4 +663,86 @@ fn trace_shadow_edges(
         pixel,
         vec4<u32>(second_samples | (sample_verdicts << SAMPLE_COUNT), 0u, 0u, 0u)
     );
+}
+
+// PROBE (#417): counts, into shadow_mask_lights_overflowed[1..], the pixels
+// whose nearest sample turns from a point light (in range, with a mask bit)
+// that another sample of the nearest surface faces by its own interpolated
+// normal at its own position, with surface_word's margin.
+// [1] such pixels, [2] such pixel-light pairs, [3] pixels with a second
+// surface or listed as shadow edges, [4] such pixels also in [3],
+// [5] pixels whose nearest sample turns from any point light it has a bit for.
+fn probe_point_light_spread(pixel: vec2<i32>, own: u32, listed: bool) {
+    let size = vec2<f32>(textureDimensions(depth_target));
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
+    let second_or_listed = (own & ALL_SAMPLES) != 0u || listed;
+    if second_or_listed {
+        atomicAdd(&shadow_mask_lights_overflowed[3], 1u);
+    }
+    if depth <= 0.0 {
+        return;
+    }
+    let nearest = first_sample_of(depths, depth);
+    let shown = select(vec4<u32>(0u), vec4<u32>(1u, 2u, 4u, 8u), depths > vec4<f32>(0.0));
+    let others = (shown.x | shown.y | shown.z | shown.w) & ~(own & ALL_SAMPLES) & ~(1u << nearest);
+    let surface = sample_surface(pixel, nearest, depth, size);
+    var froxel = 0u;
+    var point_light_count = light.point_light_count;
+    if FROXEL_LIGHTS {
+        let view_depth = camera.view_proj[3].z / depth;
+        froxel = froxel_at(vec2<f32>(pixel) + 0.5, size, view_depth);
+        point_light_count = froxel_lists[froxel].light_count;
+    }
+    var any_turned = false;
+    var pairs = 0u;
+    for (var entry = 0u; entry < point_light_count; entry++) {
+        let bit = light.directional_light_count + entry;
+        if bit >= SHADOW_MASK_LIGHTS {
+            break;
+        }
+        var index = bit;
+        if FROXEL_LIGHTS {
+            index = froxel_lists[froxel].lights[entry];
+        }
+        let point = lights[index];
+        let light_position = point_light_position(point, camera.anchor, camera.offset);
+        let to_light = light_position - surface.position;
+        let distance_squared = dot(to_light, to_light);
+        if distance_squared >= point.range * point.range {
+            continue;
+        }
+        let distance = sqrt(distance_squared);
+        if !(dot(surface.interpolated_normal, to_light) <= -INTERPOLATED_TURN_MARGIN * distance) {
+            continue;
+        }
+        any_turned = true;
+        for (var sample = 0u; sample < SAMPLE_COUNT; sample++) {
+            if ((others >> sample) & 1u) == 0u {
+                continue;
+            }
+            let other = sample_surface(pixel, sample, depths[sample], size);
+            let other_to_light = light_position - other.position;
+            let other_distance = length(other_to_light);
+            if dot(other.interpolated_normal, other_to_light) > -INTERPOLATED_TURN_MARGIN * other_distance {
+                pairs++;
+                break;
+            }
+        }
+    }
+    if any_turned {
+        atomicAdd(&shadow_mask_lights_overflowed[5], 1u);
+    }
+    if pairs > 0u {
+        atomicAdd(&shadow_mask_lights_overflowed[1], 1u);
+        atomicAdd(&shadow_mask_lights_overflowed[2], pairs);
+        if second_or_listed {
+            atomicAdd(&shadow_mask_lights_overflowed[4], 1u);
+        }
+    }
 }

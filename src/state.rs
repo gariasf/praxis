@@ -47,6 +47,11 @@ pub struct State {
 }
 
 impl State {
+    /// PROBE (#417).
+    pub(crate) fn probe_counts(&self) -> &wgpu::Buffer {
+        self.renderer.probe_counts()
+    }
+
     /// A State that renders `scene`, moved with its camera by `shift` metres,
     /// into `width` × `height` views of `target_format` textures, both
     /// non-zero, seen from the scene's camera at frame 0, as `switches` set.

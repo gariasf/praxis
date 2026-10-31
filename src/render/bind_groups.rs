@@ -254,7 +254,7 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
             count: None,
             writer: Writer::Gpu,
         },
-        storage("shadow_mask_lights_overflowed", "atomic<u32>"),
+        storage("shadow_mask_lights_overflowed", "array<atomic<u32>, 8>"),
         storage("second_surfaces", "PixelList"),
         storage("second_surface_dispatch", "array<atomic<u32>, 3>"),
         storage("directional_verdicts", "array<u32>"),

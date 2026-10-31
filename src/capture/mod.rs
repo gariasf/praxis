@@ -255,6 +255,42 @@ pub(crate) fn render_frames(
         frame_stats.push(state.frame_stats());
         add_gpu_stats(&mut frame_stats, &state);
         if read_back.contains(&frame) {
+            if std::env::var_os("PRAXIS_PROBE_417").is_some() {
+                context
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .ok();
+                let readback = context.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("Probe 417"),
+                    size: 32,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                let mut encoder = context.device.create_command_encoder(&Default::default());
+                encoder.copy_buffer_to_buffer(state.probe_counts(), 0, &readback, 0, 32);
+                context.queue.submit([encoder.finish()]);
+                readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+                context
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .ok();
+                let counts: Vec<u32> = readback
+                    .slice(..)
+                    .get_mapped_range()
+                    .unwrap()
+                    .chunks(4)
+                    .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+                    .collect();
+                tracing::info!(
+                    frame,
+                    spread_pixels = counts[1],
+                    spread_pairs = counts[2],
+                    second_or_listed = counts[3],
+                    spread_in_second_or_listed = counts[4],
+                    turned_pixels = counts[5],
+                    "probe 417"
+                );
+            }
             pixels.push(self::read_back(context, &target)?);
         }
     }
