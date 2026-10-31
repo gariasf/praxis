@@ -356,7 +356,7 @@ impl GpuStatsReadback {
                             &view[SHADOW_MASK_OVERFLOW_OFFSET as usize..][..size_of::<u32>()],
                         );
                         let shadow_mask_overflowed = shadow_mask_lights_overflowed > 0;
-                        if shadow_mask_overflowed && !self.warned_of_shadow_mask_overflow {
+                        if shadow_mask_overflowed && (!self.warned_of_shadow_mask_overflow || std::env::var_os("PRAXIS_COUNT_440").is_some()) {
                             tracing::warn!(
                                 frame,
                                 shadow_mask_lights_overflowed,

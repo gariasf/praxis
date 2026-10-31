@@ -79,7 +79,8 @@ pub struct RenderTargets {
     /// pixel's nearest surface.
     shadow_mask_samples: wgpu::TextureView,
     /// The shadow mask pass's list of the pixels whose samples show a second
-    /// surface: a count, then an entry per pixel at most.
+    /// surface, and of those whose nearest surface it traces again: a
+    /// count, then two entries per pixel at most.
     second_surfaces: wgpu::Buffer,
     /// The shadow mask pass's word per pixel of the first directional
     /// lights' verdicts at its nearest surface, which it compares with the
@@ -96,9 +97,9 @@ pub struct RenderTargets {
 impl RenderTargets {
     /// Targets `width` × `height`, both non-zero.
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
-        // The second surfaces' list holds a pixel's row in 14 bits
+        // The second surfaces' list holds a pixel's row in 13 bits
         // (`shadow_mask.wgsl`).
-        assert!(height <= 1 << 14, "targets {height} pixels tall");
+        assert!(height <= 1 << 13, "targets {height} pixels tall");
         let layered_target = |label, format, sample_count, layers, usage| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
@@ -127,11 +128,12 @@ impl RenderTargets {
         let target = |label, format, sample_count, usage| {
             layered_target(label, format, sample_count, 1, usage)
         };
-        // A count, then an entry per pixel at most.
-        let pixel_list = |label| {
+        // A count, then `entries_per_pixel` entries per pixel at most.
+        let pixel_list = |label, entries_per_pixel: u64| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
-                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                size: (u64::from(width) * u64::from(height) * entries_per_pixel + 1)
+                    * size_of::<u32>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             })
@@ -196,14 +198,16 @@ impl RenderTargets {
                 1,
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
-            second_surfaces: pixel_list("Second Surfaces Buffer"),
+            // A pixel's second surface, and its nearest surface traced
+            // again.
+            second_surfaces: pixel_list("Second Surfaces Buffer", 2),
             directional_verdicts: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Directional Verdicts Buffer"),
                 size: u64::from(width) * u64::from(height) * size_of::<u32>() as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
-            shadow_edges: pixel_list("Shadow Edges Buffer"),
+            shadow_edges: pixel_list("Shadow Edges Buffer", 1),
             surface_normals: target(
                 "Surface Normals",
                 SURFACE_NORMALS_FORMAT,

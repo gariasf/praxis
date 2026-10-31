@@ -139,7 +139,9 @@ impl ShadowMaskPass {
                 (&SHADOW_MASK_BUILD, &layout),
             ],
         );
-        let constants = switches.constants();
+        let probe = std::env::var("PRAXIS_PROBE_440").ok().and_then(|value| value.parse::<u32>().ok()).unwrap_or(0);
+        let mut constants = switches.constants().to_vec();
+        constants.push(("PROBE", f64::from(probe)));
         let pipeline = |entry_point| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some(entry_point),
@@ -341,47 +343,40 @@ impl ShadowMaskPass {
         encoder.clear_buffer(&self.second_surfaces, 0, Some(size_of::<u32>() as u64));
         encoder.clear_buffer(&self.shadow_edge_dispatch, 0, None);
         encoder.clear_buffer(&self.shadow_edges, 0, Some(size_of::<u32>() as u64));
+        let (width, height) = self.size;
+        let split = std::env::var_os("PRAXIS_SPLIT_440").is_some();
+        let mut timestamp_writes = timestamp_writes;
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(SHADOW_MASK_PASS),
-            timestamp_writes,
+            timestamp_writes: timestamp_writes.take(),
         });
         pass.set_pipeline(&self.nearest_surfaces_pipeline);
         pass.set_bind_group(SHADOW_RAY_SCENE.index, &self.shadow_ray_scene, &[]);
-        pass.set_bind_group(
-            SHADOW_MASK_BUILD.index,
-            &self.nearest_surfaces_bind_group,
-            &[],
-        );
-        let (width, height) = self.size;
-        pass.dispatch_workgroups(
-            width.div_ceil(SHADOW_MASK_TILE_SIZE),
-            height.div_ceil(SHADOW_MASK_TILE_SIZE),
-            1,
-        );
-        pass.set_pipeline(&self.second_surfaces_pipeline);
-        pass.set_bind_group(
-            SHADOW_MASK_BUILD.index,
-            &self.second_surfaces_bind_group,
-            &[],
-        );
-        pass.dispatch_workgroups_indirect(&self.second_surface_dispatch, 0);
+        pass.set_bind_group(SHADOW_MASK_BUILD.index, &self.nearest_surfaces_bind_group, &[]);
+        pass.dispatch_workgroups(width.div_ceil(SHADOW_MASK_TILE_SIZE), height.div_ceil(SHADOW_MASK_TILE_SIZE), 1);
+        if split {
+            drop(pass);
+            pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("list_shadow_edges_pipeline"), timestamp_writes: None });
+        }
         pass.set_pipeline(&self.list_shadow_edges_pipeline);
-        pass.set_bind_group(
-            SHADOW_MASK_BUILD.index,
-            &self.nearest_surfaces_bind_group,
-            &[],
-        );
-        pass.dispatch_workgroups(
-            width.div_ceil(SHADOW_MASK_TILE_SIZE),
-            height.div_ceil(SHADOW_MASK_TILE_SIZE),
-            1,
-        );
+        pass.set_bind_group(SHADOW_RAY_SCENE.index, &self.shadow_ray_scene, &[]);
+        pass.set_bind_group(SHADOW_MASK_BUILD.index, &self.nearest_surfaces_bind_group, &[]);
+        pass.dispatch_workgroups(width.div_ceil(SHADOW_MASK_TILE_SIZE), height.div_ceil(SHADOW_MASK_TILE_SIZE), 1);
+        if split {
+            drop(pass);
+            pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("second_surfaces_pipeline"), timestamp_writes: None });
+        }
+        pass.set_pipeline(&self.second_surfaces_pipeline);
+        pass.set_bind_group(SHADOW_RAY_SCENE.index, &self.shadow_ray_scene, &[]);
+        pass.set_bind_group(SHADOW_MASK_BUILD.index, &self.second_surfaces_bind_group, &[]);
+        pass.dispatch_workgroups_indirect(&self.second_surface_dispatch, 0);
+        if split {
+            drop(pass);
+            pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("trace_shadow_edges_pipeline"), timestamp_writes: None });
+        }
         pass.set_pipeline(&self.trace_shadow_edges_pipeline);
-        pass.set_bind_group(
-            SHADOW_MASK_BUILD.index,
-            &self.sample_verdicts_bind_group,
-            &[],
-        );
+        pass.set_bind_group(SHADOW_RAY_SCENE.index, &self.shadow_ray_scene, &[]);
+        pass.set_bind_group(SHADOW_MASK_BUILD.index, &self.sample_verdicts_bind_group, &[]);
         pass.dispatch_workgroups_indirect(&self.shadow_edge_dispatch, 0);
     }
 
