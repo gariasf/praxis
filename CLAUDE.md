@@ -202,6 +202,11 @@ scripts/cycles-reference/      # the Cycles reference, Blender 5.2's Python:
                                  ports the display transform and compares;
                                  DIFFERENCES.md, what praxis differs in
                                  on purpose or not yet
+scripts/sweep.sh               # the nightly sweep: benches main's scenes
+                                 lacking a record on a Series here, on a
+                                 quiet machine; beside it its launchd
+                                 (sweep.plist) and Task Scheduler
+                                 (sweep-task.xml) definitions
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets

@@ -101,6 +101,8 @@ impl fmt::Display for Check {
 /// Every check, run from the repository root.
 pub fn run() -> Vec<Check> {
     let mut checks = vec![gpu_load(), other_processes()];
+    checks.extend(power());
+    checks.extend(display());
     match pollster::block_on(crate::gpu::adapter_info()) {
         Ok(info) => {
             let machine = Machine::classify(&info.name, info.backend, info.device_type);
@@ -340,6 +342,87 @@ fn parse_ioreg_utilization(report: &str) -> Option<u32> {
             value[..digits].parse().ok()
         })
         .max()
+}
+
+/// The power and display checks that warn: what spoils a bench's times on
+/// this machine besides GPU load and other praxis processes.
+pub(crate) fn machine_warnings() -> Vec<String> {
+    power()
+        .into_iter()
+        .chain(display())
+        .filter(|check| check.verdict == Verdict::Warn)
+        .map(|check| format!("{}: {}", check.name, check.detail))
+        .collect()
+}
+
+/// On a Mac, whether it runs on its battery, which slows the GPU and spoils
+/// a bench's times.
+fn power() -> Option<Check> {
+    cfg!(target_os = "macos").then(|| power_check(output("pmset", &["-g", "batt"]).as_deref()))
+}
+
+/// The power check from `pmset -g batt`, whose first line names the source
+/// it draws from: `Now drawing from 'Battery Power'` or `'AC Power'`.
+fn power_check(report: Option<&str>) -> Check {
+    let source = report.and_then(|report| {
+        let (_, rest) = report.split_once("drawing from '")?;
+        Some(rest.split_once('\'')?.0)
+    });
+    match source {
+        Some("Battery Power") => Check::new(
+            "power",
+            Verdict::Warn,
+            "on battery: bench only on the charger",
+        ),
+        Some(source) => Check::new("power", Verdict::Ok, source),
+        None => Check::new("power", Verdict::Note, "unknown: no pmset reading"),
+    }
+}
+
+/// On Windows, whether a full-screen application, such as a game, holds the
+/// display, which may load the GPU between readings.
+fn display() -> Option<Check> {
+    // SHQueryUserNotificationState through PowerShell, which needs neither a
+    // dependency nor unsafe code. The argument holds no double quote, which
+    // Windows' argument quoting would escape, so the C# string literal's
+    // quotes are `[char]34`; a failed call prints nothing.
+    const NOTIFICATION_STATE_QUERY: &str = "$quote = [char]34; \
+         $signature = '[DllImport(' + $quote + 'shell32.dll' + $quote + ')] public static extern int SHQueryUserNotificationState(out int state);'; \
+         Add-Type -Namespace Praxis -Name Shell -MemberDefinition $signature; \
+         $state = 0; if ([Praxis.Shell]::SHQueryUserNotificationState([ref]$state) -eq 0) { $state }";
+    cfg!(windows).then(|| {
+        display_check(
+            output(
+                "powershell",
+                &[
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    NOTIFICATION_STATE_QUERY,
+                ],
+            )
+            .as_deref(),
+        )
+    })
+}
+
+/// The display check from a `QUERY_USER_NOTIFICATION_STATE` value: 2 is a
+/// full-screen application and 3 an exclusive full-screen Direct3D one
+/// [ref:microsoft-query-user-notification-state].
+fn display_check(state: Option<&str>) -> Check {
+    match state.and_then(|state| state.trim().parse::<u32>().ok()) {
+        Some(2 | 3) => Check::new(
+            "display",
+            Verdict::Warn,
+            "a full-screen application or presentation settings hold it: bench only once they end",
+        ),
+        Some(1..=7) => Check::new("display", Verdict::Ok, "no full-screen application"),
+        _ => Check::new(
+            "display",
+            Verdict::Note,
+            "unknown: no notification state reading",
+        ),
+    }
 }
 
 /// Each other process running a praxis binary, as `name id`, when the
@@ -635,6 +718,25 @@ mod tests {
         let ioreg = r#"| "PerformanceStatistics" = {"In use system memory"=123,"Device Utilization %"=27,"Renderer Utilization %"=25}"#;
         assert_eq!(parse_ioreg_utilization(ioreg), Some(27));
         assert_eq!(parse_ioreg_utilization("no statistics"), None);
+    }
+
+    #[test]
+    fn a_mac_on_battery_and_a_full_screen_application_warn() {
+        let battery = "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=23199843)\t82%; discharging; 11:13 remaining present: true\n";
+        let charger = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23199843)\t100%; charged; 0:00 remaining present: true\n";
+        assert_eq!(power_check(Some(battery)).verdict, Verdict::Warn);
+        assert_eq!(power_check(Some(charger)).verdict, Verdict::Ok);
+        assert_eq!(power_check(Some("no source")).verdict, Verdict::Note);
+        assert_eq!(power_check(None).verdict, Verdict::Note);
+        // QUERY_USER_NOTIFICATION_STATE: 2 a full-screen application, 3 an
+        // exclusive full-screen Direct3D one, 1 a locked machine, 5 none.
+        assert_eq!(display_check(Some("2\r\n")).verdict, Verdict::Warn);
+        assert_eq!(display_check(Some("3\r\n")).verdict, Verdict::Warn);
+        assert_eq!(display_check(Some("1\r\n")).verdict, Verdict::Ok);
+        assert_eq!(display_check(Some("5\r\n")).verdict, Verdict::Ok);
+        assert_eq!(display_check(Some("")).verdict, Verdict::Note);
+        assert_eq!(display_check(Some("0\r\n")).verdict, Verdict::Note);
+        assert_eq!(display_check(None).verdict, Verdict::Note);
     }
 
     #[test]

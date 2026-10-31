@@ -4113,3 +4113,15 @@ quote = '''    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::Compu
         self.work_group_memory_sizes
             .extend_from_slice(&other.work_group_memory_sizes);'''
 checked = 2026-10-31
+
+["apple-launchd-start-calendar-interval-sleep"]
+url = "https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html"
+section = "Apple, Daemons and Services Programming Guide, Scheduling Timed Jobs, Effects of Sleeping and Powering Off"
+quote = '''If you schedule a launchd job by setting the StartCalendarInterval key and the computer is asleep when the job should have run, your job will run when the computer wakes up. However, if the machine is off when the job should have run, the job does not execute until the next designated time occurs.'''
+checked = 2026-10-31
+
+["microsoft-query-user-notification-state"]
+url = "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ne-shellapi-query_user_notification_state"
+section = "Microsoft Learn, Win32 API, shellapi.h, QUERY_USER_NOTIFICATION_STATE enumeration, Constants"
+quote = '''QUNS_NOT_PRESENT Value: 1 A screen saver is displayed, the machine is locked, or a nonactive Fast User Switching session is in progress. QUNS_BUSY Value: 2 A full-screen application is running or Presentation Settings are applied. [...] QUNS_RUNNING_D3D_FULL_SCREEN Value: 3 A full-screen (exclusive mode) Direct3D application is running. [...] QUNS_ACCEPTS_NOTIFICATIONS Value: 5 None of the other states are found, notifications can be freely sent.'''
+checked = 2026-10-31

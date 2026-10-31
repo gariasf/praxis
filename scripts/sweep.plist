@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The nightly sweep on the M4 Pro, installed as scripts/sweep.sh says. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.github.gariasf.praxis.sweep</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@SWEEP@/scripts/sweep.sh</string>
+  </array>
+  <!-- Unset, launchd throttles a job's CPU and I/O as a background one,
+       and the sweep's CPU times would not compare with a session's. -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>4</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@SWEEP@/target/sweep/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>@SWEEP@/target/sweep/launchd.log</string>
+</dict>
+</plist>

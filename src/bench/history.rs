@@ -263,6 +263,37 @@ pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Pu
     push(repository, &message, |worktree| worktree.apply(&records))
 }
 
+/// Which of `scenes` have no record on a Series for the source of the
+/// remote's `main` on `adapter` with `backend`: the scenes a sweep of the
+/// checkout holding `repository` benches.
+pub fn unrecorded_scenes<'scene>(
+    repository: &Path,
+    adapter: &str,
+    backend: &str,
+    scenes: &[&'scene str],
+) -> anyhow::Result<Vec<&'scene str>> {
+    let main = fetch_main(repository)?;
+    let main_source_hash = source_hash(repository, &main)?;
+    // Git names paths with `/` on every platform.
+    let directory = format!("{ON_SERIES}/{}", adapter_key(adapter, Some(backend)));
+    let recorded = match remote_tip(repository)? {
+        Some(tip) => git(
+            repository,
+            &["ls-tree", "-r", "--name-only", &tip, "--", &directory],
+            None,
+        )?,
+        None => String::new(),
+    };
+    let recorded: BTreeSet<&str> = recorded.lines().collect();
+    Ok(scenes
+        .iter()
+        .copied()
+        .filter(|scene| {
+            !recorded.contains(format!("{directory}/{scene}/{main_source_hash}.json").as_str())
+        })
+        .collect())
+}
+
 /// Fetches the remote's `main`, and returns its remote-tracking ref.
 fn fetch_main(repository: &Path) -> anyhow::Result<String> {
     let main = format!("{REMOTE}/main");
@@ -899,6 +930,43 @@ mod tests {
         std::fs::rename(&fixture.remote, fixture.directory.join("moved.git")).unwrap();
         assert!(publish(&fixture.checkout, &results).is_err());
     }
+
+    #[test]
+    fn a_scene_is_unrecorded_until_mains_source_has_a_record_on_its_series() {
+        let fixture = Fixture::new("unrecorded");
+        let scenes = ["pbr-sweep", "town"];
+        let unrecorded =
+            || unrecorded_scenes(&fixture.checkout, "Apple M4 Pro", "metal", &scenes).unwrap();
+        assert_eq!(unrecorded(), scenes, "no branch yet");
+        publish(
+            &fixture.checkout,
+            &[result(&fixture.checkout, "Apple M4 Pro", 1.10)],
+        )
+        .unwrap();
+        assert_eq!(unrecorded(), scenes, "a tagged record is no record");
+        publish(
+            &fixture.checkout,
+            &[result(&fixture.checkout, "Apple M4 Pro", 1.02)],
+        )
+        .unwrap();
+        assert_eq!(unrecorded(), ["town"]);
+        assert_eq!(
+            unrecorded_scenes(&fixture.checkout, "Apple M4 Pro", "vulkan", &scenes).unwrap(),
+            scenes,
+            "another backend is another machine"
+        );
+        // Another session pushes to main: a docs change keeps the source,
+        // a source change does not.
+        let peer = fixture.directory.join("peer");
+        fixture.clone_into(&peer);
+        commit(&peer, "docs/notes.md", "notes");
+        git(&peer, &["push", "--quiet", "origin", "main"], None).unwrap();
+        assert_eq!(unrecorded(), ["town"]);
+        commit(&peer, "src/lib.rs", "fn main() { loop {} }");
+        git(&peer, &["push", "--quiet", "origin", "main"], None).unwrap();
+        assert_eq!(unrecorded(), scenes);
+    }
+
     #[test]
     fn a_record_on_a_series_holds_its_key_against_a_tagged_one() {
         let fixture = Fixture::new("held");
