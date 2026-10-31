@@ -1,5 +1,7 @@
+mod provenance;
 mod report;
 
+pub use provenance::{BenchStart, Provenance};
 pub use report::report;
 
 use std::collections::BTreeMap;
@@ -165,6 +167,10 @@ pub struct Measurements {
     /// Measured unless the run skipped it.
     #[serde(flatten)]
     pub aliasing: Option<Aliasing>,
+    /// Absent from Baselines recorded before results carried it, and from
+    /// a run outside a git checkout. `compare` reads none of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Provenance>,
 }
 
 impl Measurements {
@@ -398,7 +404,9 @@ pub fn run(
     scene: ReferenceScene,
     configuration: Configuration,
     switches: RenderSwitches,
+    start: &BenchStart,
 ) -> anyhow::Result<Measurements> {
+    let started = std::time::SystemTime::now();
     let frame_count = configuration.warm_up_frames + configuration.measured_frames;
     anyhow::ensure!(
         frame_count >= COUNTER_FRAMES.end,
@@ -410,7 +418,7 @@ pub fn run(
         _ => FrameWait::Spin,
     };
     let render = |switches| {
-        let (_, frames) = render_frames(
+        let (_, frames, scene_content_hash) = render_frames(
             context,
             scene,
             glam::DVec3::ZERO,
@@ -423,17 +431,17 @@ pub fn run(
             switches,
             wait,
         )?;
-        anyhow::Ok(frames)
+        anyhow::Ok((frames, scene_content_hash))
     };
-    let frames = render(switches)?;
-    let frames_without_rays = render(RenderSwitches {
+    let (frames, scene_content_hash) = render(switches)?;
+    let (frames_without_rays, _) = render(RenderSwitches {
         shadow_rays: false,
         ..switches
     })?;
     let adapter = context.adapter.get_info();
     let measurements = measure(
         scene,
-        adapter.name,
+        adapter.name.clone(),
         adapter.backend,
         configuration,
         &frames,
@@ -443,8 +451,15 @@ pub fn run(
         .aliasing
         .then(|| measure_aliasing(context, scene, switches))
         .transpose()?;
+    let provenance = start.provenance(
+        &adapter,
+        scene_content_hash,
+        measurements.gpu_frame_microseconds,
+        started,
+    );
     Ok(Measurements {
         aliasing,
+        provenance,
         ..measurements
     })
 }
@@ -548,6 +563,7 @@ fn measure(
             ),
         },
         aliasing: None,
+        provenance: None,
     })
 }
 
@@ -910,6 +926,7 @@ mod tests {
                 counters: COUNTERS,
             },
             aliasing: None,
+            provenance: None,
         }
     }
 
@@ -937,6 +954,34 @@ mod tests {
     #[test]
     fn the_baseline_compares_clean() {
         assert_eq!(verdicts(&baseline(), &baseline(), CompareMode::Local), []);
+    }
+
+    #[test]
+    fn a_result_with_provenance_round_trips_and_compares_clean_with_a_baseline_without() {
+        let current = Measurements {
+            provenance: Some(Provenance {
+                source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
+                commit: "bea8706b".to_owned(),
+                dirty: false,
+                branch: "main".to_owned(),
+                driver: String::new(),
+                driver_info: String::new(),
+                harness_version: 1,
+                scene_content_hash: "e3b0c442".to_owned(),
+                gpu_load_percent: Some(3),
+                other_processes: Some(Vec::new()),
+                gpu_frame_p95_over_median: Some(1.01),
+                quiet: true,
+                started_unix_seconds: 1_793_448_000,
+            }),
+            ..baseline()
+        };
+        let json = serde_json::to_vec(&current).expect("serializable");
+        let parsed = Measurements::from_baseline_json(&json).expect("the current form");
+        assert_eq!(parsed, current);
+        let without = serde_json::to_string(&baseline()).expect("serializable");
+        assert!(!without.contains("provenance"), "{without}");
+        assert_eq!(verdicts(&current, &baseline(), CompareMode::Local), []);
     }
 
     #[test]

@@ -114,7 +114,7 @@ pub fn capture(
     switches: RenderSwitches,
 ) -> anyhow::Result<(Vec<u8>, Vec<FrameStats>)> {
     let last_frame = FRAME_COUNT - 1;
-    let (mut pixels, frame_stats) = render_frames(
+    let (mut pixels, frame_stats, _) = render_frames(
         context,
         scene,
         shift,
@@ -156,7 +156,7 @@ pub fn capture_frames(
         )
         .collect();
     drawn.dedup();
-    let (pixels, _) = render_frames(
+    let (pixels, _, _) = render_frames(
         context,
         scene,
         shift,
@@ -174,7 +174,8 @@ pub fn capture_frames(
 /// Renders `scene` as `capture` does, drawing each of `drawn`, in ascending
 /// order, after the World runs undrawn through the frames before it, each
 /// frame advancing by `frame_delta`. Returns the pixels of each of
-/// `read_back`, which `drawn` holds, with each drawn frame's stats. Up to
+/// `read_back`, which `drawn` holds, with each drawn frame's stats and the
+/// scene's content hash, from the Blobs it loaded. Up to
 /// `FRAMES_IN_FLIGHT` frames are in flight, as a window's swapchain allows:
 /// the GPU stays busy, and the CPU never runs further ahead than a window
 /// would. The CPU waits for the oldest frame as `wait` says.
@@ -190,7 +191,7 @@ pub(crate) fn render_frames(
     frame_delta: Duration,
     switches: RenderSwitches,
     wait: FrameWait,
-) -> anyhow::Result<(Vec<Vec<u8>>, Vec<FrameStats>)> {
+) -> anyhow::Result<(Vec<Vec<u8>>, Vec<FrameStats>, String)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
         (1..=max_dimension).contains(&width) && (1..=max_dimension).contains(&height),
@@ -270,7 +271,7 @@ pub(crate) fn render_frames(
     );
     state.flush_gpu_frame_stats()?;
     add_gpu_stats(&mut frame_stats, &state);
-    Ok((pixels, frame_stats))
+    Ok((pixels, frame_stats, state.scene_content_hash))
 }
 
 /// How `render_frames` waits for the oldest frame in flight.

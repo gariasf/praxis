@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::Context;
-use praxis::bench::{Budgets, CompareMode, Configuration, Measurements, Verdict};
+use praxis::bench::{BenchStart, Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
 use praxis::{CrowdForm, ReferenceScene, RenderSwitches};
 
@@ -350,13 +350,14 @@ fn bench(
             .collect::<anyhow::Result<Vec<_>>>()?
     };
     std::fs::create_dir_all(output)?;
+    let start = BenchStart::read();
     let context = pollster::block_on(GpuContext::headless())?;
     for scene in scenes {
         let switches = RenderSwitches {
             crowd_form,
             ..RenderSwitches::default()
         };
-        let mut result = praxis::bench::run(&context, scene, configuration, switches)?;
+        let mut result = praxis::bench::run(&context, scene, configuration, switches, &start)?;
         if other_form {
             result.scene = format!("{crowd}-{}", crowd_form.name());
         }
