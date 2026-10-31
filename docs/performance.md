@@ -4,6 +4,110 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The turned point lights' search out of `build_shadow_mask`: no faster (2026-10-31, #440)
+
+**Verdict.** Moving #425's facing-sample search out of the kernel that
+runs at every pixel wins nothing back. The form tried hides a turned
+point light in `build_shadow_mask` as before #425. `list_shadow_edges`,
+which holds no ray query, then lists the pixels where another sample
+faces that light, and `trace_second_surfaces` traces their nearest
+surface again. It lists exactly #425's pixels, but `town`'s
+`shadow_mask_pass` reads 12,186–12,231 µs against main's 11,945–12,046.
+The re-trace is the cost. It moves about 36,000 pixels' rays out of a
+dispatch of 3.7 million pixels, where their latency hides behind other
+pixels' work, into a dispatch of a few thousand workgroups, where it does
+not. That costs about as much as the occupancy it saves. Two smaller
+findings: on main, #425's search costs `town` about 0.7 ms, not 0.87,
+and main without it still reads 0.15 to 0.26 ms over a9c640b3. No Metal tool here
+reports a kernel's register count. The code and its probes stay on
+`prototype/440-retrace-in-second-dispatch`; nothing merged changes.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, on AC power with no
+other praxis process, load average 1.6 to 4.9 except one run at 7.5.
+`praxis bench <dir> --skip-aliasing town` at 2560×1440 with 4x MSAA,
+1,800 measured frames, release builds interleaved two rounds at a time.
+The builds are a9c640b3 (#425's parent), main at 572875c6, main with
+`build_shadow_mask` passing no other samples to `surface_word` (pre-#425
+behaviour on main), and the prototype. The prototype carries a pipeline
+override, `PROBE`, read from an environment variable; each bit compiles
+one part out or turns one off at run time, as #404's ablation did. Each
+cell gives the rounds' medians, lowest to highest, from the bench JSON;
+µs.
+
+| Build | `shadow_mask_pass` | GPU frame |
+|---|---:|---:|
+| a9c640b3, before #425 | 11,067–11,117 | 19,067–19,120 |
+| main | 11,945–12,046 | 19,941–19,977 |
+| main, no other samples searched | 11,264–11,327 | 19,256–19,287 |
+| Prototype | 12,186–12,231 | 20,165–20,225 |
+
+Where the prototype's cost goes, each variant beside the one it differs
+from:
+
+| Variant | `shadow_mask_pass` | Against |
+|---|---:|---|
+| Everything new compiled out but the 2x list and the dispatch order | 11,258–11,259 | main with no search: the same |
+| The facing code held in `trace_second_surfaces` | 11,361–11,386 | +105 |
+| The flag that a point light turned, a `bool` live across the light loop | 11,416–11,463 | +50 to +80 |
+| The same flag as bit 31 of the traced lights' word | 11,383–11,390 | +20 to +30 |
+| The flag from the word's hidden bits after the loop | 11,383–11,385 | 0 to +20 |
+| Listing on, the re-trace compiled out | 11,569–11,632 | +180 to +270: the search and the list |
+| Everything on (the prototype) | 12,186–12,231 | +550 to +660: the re-trace |
+| The re-trace tracing only the turned lights (wrong bits, cost only) | 12,069–12,195 | −95 to −155 |
+| The list walked from its end, so the re-traced pixels start first | 12,148–12,153 | −40 to −80 |
+
+A re-traced pixel costs about five times what a pixel costs in
+`build_shadow_mask`. The re-traced pixels number about 36,000 a frame
+(below) and cost about 0.55 ms, about 15 ns each. The whole pass takes
+about 11 ms over `town`'s 3.7 million pixels, about 3 ns each.
+Tracing only the turned lights saves a fifth of it, and starting the
+re-traced pixels first saves less. So the cost is not the number of
+rays or the dispatch's tail but the latency a dispatch of few
+workgroups cannot hide. wgpu-hal 30's Metal backend records the pass's
+dispatches into one compute encoder in the default serial order, so a
+small dispatch cannot overlap a large one. Within `build_shadow_mask`
+the same rays cost little work but hold registers. Out of it they cost
+latency.
+
+- **Listed pixels.** `PRAXIS_COUNT_440` logs the overflow counter each
+  frame, and the probe's bit 16 adds one for each pixel listed. `praxis
+  capture` renders three frames, and the third frame's counts at each
+  `town` Golden frame are these. The listed counts equal #425's hit
+  pixels exactly, so the search lists the same set. The flagged pixels
+  are those whose nearest sample turns from a point light it has a bit
+  for, with or without another sample facing it.
+
+  | Frame | 59 | 300 | 500 | 700 | 900 | 1200 | 1500 | 1800 |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | Listed | 3,418 | 5,595 | 6,642 | 35,408 | 40,265 | 38,722 | 36,699 | 35,642 |
+  | Flagged | 213,836 | 579,373 | 122,009 | 351,068 | 376,868 | 364,033 | 363,460 | 355,729 |
+
+- **Registers.** naga's MSL, compiled by the Metal framework without
+  its `max_total_threads_per_threadgroup` attribute, gives every
+  shadow-mask kernel a `maxTotalThreadsPerThreadgroup` of 1,024, so on
+  the M4 Pro that limit says nothing of registers. Instruments' Metal
+  System Trace records `graphics-compiler-spill-events`: the shadow mask
+  pass spills 16 bytes per event, the same on a9c640b3 and on main, so
+  #425 adds no spills. `xctrace` from the command line records only the
+  "RT Unit Active" GPU counter, with no occupancy. The register count is
+  therefore unknown, and the ablation above stands in for it.
+- **Images.** Against main, the prototype changes 10 pixels of `town` at
+  frame 900 (the three frames `praxis capture` renders there), by up to
+  56, some lighter and some darker. They are lone pixels, as a ray's
+  verdict flipped by rounding leaves. They were not traced further, as
+  the form does not ship.
+- **Main against a9c640b3.** With the search off, main reads 0.2 ms over
+  a9c640b3 on `town`. The only other shader change between them is
+  #441's per-light range subtraction. This was not measured apart.
+
+What would win it back is a way to trace those rays where their latency
+hides without holding their code in `build_shadow_mask`. Each one is a
+decision for the owner: a dispatch that may overlap the others (wgpu's
+Metal backend, upstream), or reading the first layer's word back so a
+re-trace traces only the turned lights (a read-write storage format, a
+capability question under ADR 0021, worth at most the fifth measured
+above).
+
 ## The depth pre-pass read 0 ns where it ended beside the Froxel pass (2026-10-31, #414)
 
 **Verdict.** `capture_reports_the_pbr_sweep_frame_stats` failed now and
