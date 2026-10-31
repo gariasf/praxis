@@ -21,6 +21,7 @@
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
   --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
   --series-other: #9aa3b0;
+  --better: #008300; --worse: #c22f2e;
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Serif 4", Georgia, "Times New Roman", serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -33,6 +34,7 @@
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --series-other: #5d6878;
+    --better: #4fb84f; --worse: #ef7b7b;
   }
 }
 :root[data-theme="dark"] {
@@ -42,6 +44,7 @@
   --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
   --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   --series-other: #5d6878;
+  --better: #4fb84f; --worse: #ef7b7b;
 }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
@@ -71,7 +74,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 6px; max-width: 100%; }
 .controls nav { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; }
 .status { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); margin: 0; }
-.status.error { color: var(--series-8); }
+.status.error { color: var(--worse); }
 .chart { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 12px 8px; min-width: 0; }
 .chart h3 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 6px; }
 .chart svg { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
@@ -86,6 +89,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .gridline { stroke: var(--rule); stroke-width: 1; }
 .budget { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .harness-break { stroke: var(--warm); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tagged-line { stroke-width: 1.5; stroke-dasharray: 5 4; }
 .milestone { stroke: var(--ink-soft); stroke-width: 1; opacity: 0.6; }
 .crosshair { stroke: var(--ink-soft); stroke-width: 1; }
 .tooltip {
@@ -111,8 +115,8 @@ td button { font: inherit; color: var(--accent); background: none; border: 1px s
 .detail dt { color: var(--ink-soft); }
 .detail dd { margin: 0; overflow-wrap: anywhere; }
 .detail pre { font-family: var(--mono); font-size: 12px; overflow-x: auto; max-height: 420px; background: var(--paper); padding: 10px; border-radius: 4px; margin: 8px 0 0; }
-.up { color: var(--series-8); }
-.down { color: var(--series-6); }
+.up { color: var(--worse); }
+.down { color: var(--better); }
 footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 15px; }
 @media (max-width: 640px) {
   body { font-size: 16px; }
@@ -142,6 +146,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <span><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg> Baseline record</span>
   <span><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg> tagged record</span>
   <span><svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg> tagged record off the Series' scale</span>
+  <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg> a machine with tagged records only</span>
   <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="harness-break"></line></svg> Harness version or scene content changed: the line breaks</span>
   <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg> Budget</span>
   <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="milestone"></line></svg> milestone closed</span>
@@ -192,10 +197,10 @@ const HISTORY_URL = `https://raw.githubusercontent.com/${REPOSITORY}/bench-histo
 const BUDGETS_URL = `https://raw.githubusercontent.com/${REPOSITORY}/main/bench/budgets.json`;
 const API_URL = `https://api.github.com/repos/${REPOSITORY}/`;
 const SECONDS_PER_DAY = 86400;
-const PASS_COLOURS = 7;
+const NAMED_PASS_COUNT = 7;
 const HIT_RADIUS_PIXELS = 24;
 // Series row fields that are neither a timing nor a counter.
-const ROW_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "tags"]);
+const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "tags"]);
 const TIMINGS = ["cpu_frame_microseconds", "gpu_frame_microseconds", "gate_microseconds", "shadow_ray_microseconds", "dynamic_tlas_cpu_microseconds"];
 
 const state = {
@@ -210,6 +215,7 @@ const state = {
   machine: null,
   showTagged: false,
   selected: null,
+  listingTruncated: false,
 };
 const pullRequests = new Map();
 const rawRecords = new Map();
@@ -218,9 +224,9 @@ async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
     const remaining = response.headers.get("x-ratelimit-remaining");
-    const reset = response.headers.get("x-ratelimit-reset");
-    if (remaining === "0" && reset) {
-      const until = new Date(Number(reset) * 1000).toLocaleTimeString();
+    const resetUnixSeconds = response.headers.get("x-ratelimit-reset");
+    if (remaining === "0" && resetUnixSeconds) {
+      const until = new Date(Number(resetUnixSeconds) * 1000).toLocaleTimeString();
       throw new Error(`GitHub's API allows no more requests from this address until ${until}`);
     }
     throw new Error(`${url} answered ${response.status}`);
@@ -256,6 +262,10 @@ function sameDefinition(earlier, later) {
   return earlier.scene_content_hash === null || later.scene_content_hash === null || earlier.scene_content_hash === later.scene_content_hash;
 }
 
+function breakLabelOf(earlier, later) {
+  return earlier.harness_version !== later.harness_version ? `harness ${later.harness_version}` : "scene content";
+}
+
 /** Points for rows in source order: each knows its line segment, the point before it, and what broke the line at it. */
 function pointsOf(rows, machine, scene, directory) {
   const sorted = [...rows].sort((first, second) => first.committed_unix_seconds - second.committed_unix_seconds || first.commit.localeCompare(second.commit));
@@ -266,7 +276,7 @@ function pointsOf(rows, machine, scene, directory) {
     let breakLabel = null;
     if (previous && !sameDefinition(previous.row, row)) {
       segment += 1;
-      breakLabel = previous.row.harness_version !== row.harness_version ? `harness ${row.harness_version}` : "scene content";
+      breakLabel = breakLabelOf(previous.row, row);
     }
     points.push({ machine, scene, row, directory, tagged: directory === "tagged", segment, previous, breakLabel,
       path: `${directory}/${machine}/${scene}/${row.source_hash}.json` });
@@ -292,6 +302,14 @@ async function loadTagged(machine, scene) {
   const records = await Promise.all(files.map((path) => fetchJson(HISTORY_URL + path)));
   records.forEach((record, index) => rawRecords.set(files[index], record));
   const points = pointsOf(records.map(rowOf), machine, scene, "tagged");
+  // Where the machine has a Series, a tagged record's change is from the Series record before it.
+  const series = state.points.get(`records/${machine}/${scene}`) ?? [];
+  if (series.length > 0) {
+    for (const point of points) {
+      point.previous = series.findLast((candidate) => candidate.row.committed_unix_seconds <= point.row.committed_unix_seconds) ?? null;
+      point.breakLabel = point.previous && !sameDefinition(point.previous.row, point.row) ? breakLabelOf(point.previous.row, point.row) : null;
+    }
+  }
   state.points.set(name, points);
   return points;
 }
@@ -344,13 +362,18 @@ function machineName(machine) {
   return `${adapter} · ${backend}`;
 }
 function machineColour(machine) {
-  const slot = state.machines.indexOf(machine);
-  return slot < 8 ? `var(--series-${slot + 1})` : "var(--series-other)";
+  const paletteSlot = state.machines.indexOf(machine);
+  return paletteSlot < 8 ? `var(--series-${paletteSlot + 1})` : "var(--series-other)";
 }
 function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
 }
 function isBaseline(row) { return row.source === "baseline-commit"; }
+/** "tagged", "Baseline" or "Series": what a point's mark and labels say it is. */
+function kindOf(point) { return point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"; }
+function shortCommit(row) { return escapeHtml(row.commit.slice(0, 8)); }
+function passName(pass) { return pass.replaceAll("_", " "); }
+function commitLink(row, text) { return `<a href="https://github.com/${REPOSITORY}/commit/${encodeURIComponent(row.commit)}">${text}</a>`; }
 
 /* Scales */
 
@@ -360,9 +383,9 @@ function niceScale(minimum, maximum, tickCount) {
     minimum -= half;
     maximum += half;
   }
-  const rough = (maximum - minimum) / tickCount;
-  const magnitude = 10 ** Math.floor(Math.log10(rough));
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= rough);
+  const roughStep = (maximum - minimum) / tickCount;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= roughStep);
   const low = Math.floor(minimum / step) * step;
   const high = Math.ceil(maximum / step) * step;
   const ticks = [];
@@ -370,11 +393,11 @@ function niceScale(minimum, maximum, tickCount) {
   return { low, high, ticks, step };
 }
 
-function timeTicks(start, end, plotWidth) {
-  const span = Math.max(end - start, SECONDS_PER_DAY);
-  const dayStep = [1, 2, 3, 7, 14, 28, 56].find((days) => (days * SECONDS_PER_DAY / span) * plotWidth >= 64) ?? 112;
+function timeTicks(startSeconds, endSeconds, plotWidth) {
+  const spanSeconds = Math.max(endSeconds - startSeconds, SECONDS_PER_DAY);
+  const dayStep = [1, 2, 3, 7, 14, 28, 56].find((days) => (days * SECONDS_PER_DAY / spanSeconds) * plotWidth >= 64) ?? 112;
   const ticks = [];
-  for (let day = Math.ceil(start / SECONDS_PER_DAY); day * SECONDS_PER_DAY <= end; day += dayStep) ticks.push(day * SECONDS_PER_DAY);
+  for (let day = Math.ceil(startSeconds / SECONDS_PER_DAY); day * SECONDS_PER_DAY <= endSeconds; day += dayStep) ticks.push(day * SECONDS_PER_DAY);
   return ticks;
 }
 
@@ -382,9 +405,9 @@ function timeTicks(start, end, plotWidth) {
 function frameOf(container, values, budget, height) {
   const width = Math.max(container.clientWidth - 24, 240);
   const margin = { left: 52, right: 14, top: 22, bottom: 26 };
-  const known = values.filter((value) => value !== null && value !== undefined);
-  let minimum = Math.min(...known);
-  let maximum = Math.max(...known);
+  const knownValues = values.filter((value) => value !== null && value !== undefined);
+  let minimum = Math.min(...knownValues);
+  let maximum = Math.max(...knownValues);
   const budgetShown = budget !== null && budget !== undefined && budget <= maximum * 1.5 && budget >= minimum / 1.5;
   if (budgetShown) { minimum = Math.min(minimum, budget); maximum = Math.max(maximum, budget); }
   const scale = niceScale(minimum, maximum, height < 180 ? 3 : 4);
@@ -412,9 +435,8 @@ function yAxisSvg(frame, metric) {
 }
 
 function budgetSvg(frame, metric, budget) {
-  if (budget === null || budget === undefined) return "";
-  const { margin, width } = frame;
   if (!frame.budgetShown) return "";
+  const { margin, width } = frame;
   const y = frame.y(budget);
   return `<line class="budget" x1="${margin.left}" x2="${width - margin.right}" y1="${y}" y2="${y}"></line>`
     + `<text class="mark-label" x="${margin.left + 4}" y="${y - 4}">Budget ${formatValue(metric, budget)}</text>`;
@@ -434,13 +456,13 @@ function verticalMarksSvg(frame, xOf, timeRange, breaks) {
   const rowRights = [-Infinity, -Infinity];
   for (const mark of marks.sort((first, second) => first.x - second.x)) {
     svg += `<line class="${mark.kind}" x1="${mark.x}" x2="${mark.x}" y1="${margin.top - 6}" y2="${bottom}"></line>`;
-    const labelWidth = mark.label.length * 7;
-    const left = mark.x + 3 + labelWidth <= frame.width ? mark.x + 3 : mark.x - 3 - labelWidth;
+    const labelWidthPixels = mark.label.length * 7;
+    const left = mark.x + 3 + labelWidthPixels <= frame.width ? mark.x + 3 : mark.x - 3 - labelWidthPixels;
     const row = rowRights.findIndex((right) => left > right);
     if (labelled.has(mark.label) || row === -1) continue;
     labelled.add(mark.label);
     svg += `<text class="mark-label" x="${left}" y="${row === 0 ? margin.top - 8 : margin.top + 10}">${escapeHtml(mark.label)}</text>`;
-    rowRights[row] = left + labelWidth + 6;
+    rowRights[row] = left + labelWidthPixels + 6;
   }
   return svg;
 }
@@ -449,41 +471,53 @@ function verticalMarksSvg(frame, xOf, timeRange, breaks) {
 function markerSvg(x, y, point, colour, selected, outside) {
   const ring = selected ? `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="var(--ink)" stroke-width="2"></circle>` : "";
   if (outside) {
-    const tip = outside === "above" ? -5 : 5;
-    return `${ring}<path d="M${x - 5},${y - tip}L${x + 5},${y - tip}L${x},${y + tip}Z" fill="${point.tagged ? "var(--panel)" : colour}" stroke="${colour}" stroke-width="1.5"></path>`;
+    const tipOffset = outside === "above" ? -5 : 5;
+    return `${ring}<path d="M${x - 5},${y - tipOffset}L${x + 5},${y - tipOffset}L${x},${y + tipOffset}Z" fill="${point.tagged ? "var(--panel)" : colour}" stroke="${colour}" stroke-width="1.5"></path>`;
   }
-  if (point.tagged) return `${ring}<circle cx="${x}" cy="${y}" r="4" fill="var(--panel)" stroke="${colour}" stroke-width="2"></circle>`;
-  if (isBaseline(point.row)) return `${ring}<rect x="${x - 4}" y="${y - 4}" width="8" height="8" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></rect>`;
-  return `${ring}<circle cx="${x}" cy="${y}" r="4.5" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></circle>`;
+  const marks = {
+    tagged: `<circle cx="${x}" cy="${y}" r="4" fill="var(--panel)" stroke="${colour}" stroke-width="2"></circle>`,
+    Baseline: `<rect x="${x - 4}" y="${y - 4}" width="8" height="8" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></rect>`,
+    Series: `<circle cx="${x}" cy="${y}" r="4.5" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></circle>`,
+  };
+  return ring + marks[kindOf(point)];
 }
 
 /* Charts */
+
+function emptyChart(container, title, message) {
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3><p class="empty">${escapeHtml(message)}</p>`;
+  container.hitPoints = [];
+}
+
+function chartHtml(title, legendHtml, frame, svg) {
+  const crosshair = `<line class="crosshair" visibility="hidden" y1="${frame.margin.top}" y2="${frame.height - frame.margin.bottom}"></line>`;
+  return `<h3>${escapeHtml(title)}</h3>${legendHtml}<svg viewBox="0 0 ${frame.width} ${frame.height}" height="${frame.height}" role="img" aria-label="${escapeHtml(title)}">${svg}${crosshair}</svg>`;
+}
 
 /**
  * A line chart over commit time. `lines` holds one entry per machine: its Series points and its tagged
  * points, each read through `valueOf`. Registers its points on `container` for hover and click.
  */
 function drawLineChart(container, { title, metric, lines, valueOf, budget, height = 220, legend = true }) {
-  const all = lines.flatMap((line) => [...line.series, ...line.tagged]).filter((point) => valueOf(point.row) !== null);
-  const drawn = lines.filter((line) => all.some((point) => point.machine === line.machine));
-  const legendHtml = legend && drawn.length > 1
-    ? `<ul class="legend">${drawn.map((line) => `<li><span class="chip" style="background:${machineColour(line.machine)}"></span>${escapeHtml(machineName(line.machine))}</li>`).join("")}</ul>`
+  const drawnPoints = lines.flatMap((line) => [...line.series, ...line.tagged]).filter((point) => valueOf(point.row) !== null);
+  const drawnLines = lines.filter((line) => drawnPoints.some((point) => point.machine === line.machine));
+  const legendHtml = legend && drawnLines.length > 1
+    ? `<ul class="legend">${drawnLines.map((line) => `<li><span class="chip" style="background:${machineColour(line.machine)}"></span>${escapeHtml(machineName(line.machine))}</li>`).join("")}</ul>`
     : "";
-  if (all.length === 0) {
-    container.innerHTML = `<h3>${escapeHtml(title)}</h3><p class="empty">No record of this scene measures it${state.showTagged ? "" : " on a Series; tagged records may"}.</p>`;
-    container.hitPoints = [];
+  if (drawnPoints.length === 0) {
+    emptyChart(container, title, `No record of this scene measures it${state.showTagged ? "" : " on a Series; tagged records may"}.`);
     return;
   }
-  const seriesValues = all.filter((point) => !point.tagged).map((point) => valueOf(point.row));
-  const frame = frameOf(container, seriesValues.length > 0 ? seriesValues : all.map((point) => valueOf(point.row)), budget, height);
+  const seriesValues = drawnPoints.filter((point) => !point.tagged).map((point) => valueOf(point.row));
+  const frame = frameOf(container, seriesValues.length > 0 ? seriesValues : drawnPoints.map((point) => valueOf(point.row)), budget, height);
   const plotTop = frame.margin.top;
   const plotBottom = frame.height - frame.margin.bottom;
   const yOf = (value) => Math.min(Math.max(frame.y(value), plotTop), plotBottom);
   if (budget !== null && budget !== undefined && !frame.budgetShown) title += ` · Budget ${formatValue(metric, budget)}, off the chart`;
-  const times = all.map((point) => point.row.committed_unix_seconds);
+  const times = drawnPoints.map((point) => point.row.committed_unix_seconds);
   const timeRange = [Math.min(...times), Math.max(...times)];
-  const pad = Math.max((timeRange[1] - timeRange[0]) * 0.02, 3600);
-  const domain = [timeRange[0] - pad, timeRange[1] + pad];
+  const paddingSeconds = Math.max((timeRange[1] - timeRange[0]) * 0.02, 3600);
+  const domain = [timeRange[0] - paddingSeconds, timeRange[1] + paddingSeconds];
   const xOf = (time) => frame.margin.left + frame.plotWidth * (time - domain[0]) / (domain[1] - domain[0]);
 
   let svg = yAxisSvg(frame, metric);
@@ -495,18 +529,22 @@ function drawLineChart(container, { title, metric, lines, valueOf, budget, heigh
   const hitPoints = [];
   for (const line of lines) {
     const colour = machineColour(line.machine);
+    const taggedOnly = line.series.length === 0;
     let path = "";
     let previous = null;
-    for (const point of line.series) {
+    let pendingBreak = null;
+    for (const point of taggedOnly ? line.tagged : line.series) {
+      pendingBreak = point.breakLabel ?? pendingBreak;
       const value = valueOf(point.row);
-      if (value === null) { previous = null; continue; }
+      if (value === null || frame.outside(value)) { previous = null; continue; }
       const x = xOf(point.row.committed_unix_seconds);
       const y = frame.y(value);
-      if (point.breakLabel) breaks.push({ x, label: point.breakLabel });
+      if (pendingBreak) breaks.push({ x, label: pendingBreak });
+      pendingBreak = null;
       path += `${previous && previous.segment === point.segment ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
       previous = point;
     }
-    if (path) paths += `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round"></path>`;
+    if (path) paths += `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round"${taggedOnly ? ' class="tagged-line"' : ""}></path>`;
     for (const point of [...line.series, ...line.tagged]) {
       const value = valueOf(point.row);
       if (value === null) continue;
@@ -518,17 +556,16 @@ function drawLineChart(container, { title, metric, lines, valueOf, budget, heigh
   }
   svg += budgetSvg(frame, metric, budget);
   svg += verticalMarksSvg(frame, xOf, domain, breaks);
-  svg += paths + markers + `<line class="crosshair" visibility="hidden" y1="${frame.margin.top}" y2="${frame.height - frame.margin.bottom}"></line>`;
-  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${legendHtml}<svg viewBox="0 0 ${frame.width} ${frame.height}" height="${frame.height}" role="img" aria-label="${escapeHtml(title)}">${svg}</svg>`;
+  container.innerHTML = chartHtml(title, legendHtml, frame, svg + paths + markers);
   container.hitPoints = hitPoints;
   container.tooltipOf = (hit) => {
     const row = hit.point.row;
     const spread = row[metric];
     const p95 = spread && typeof spread === "object" ? `<div class="row"><span>p95</span><span>${formatValue(metric, spread.p95)}</span></div>` : "";
     return `<div class="row"><span class="chip" style="background:${hit.colour}"></span><span>${escapeHtml(machineName(hit.point.machine))}</span></div>`
-      + `<div>${dateOf(row.committed_unix_seconds)} · ${row.commit.slice(0, 8)}</div>`
+      + `<div>${dateOf(row.committed_unix_seconds)} · ${shortCommit(row)}</div>`
       + `<div class="row"><span>${escapeHtml(metricName(metric))}</span><span>${formatValue(metric, hit.value)}</span></div>${p95}`
-      + `<div>harness ${row.harness_version}${isBaseline(row) ? " · Baseline" : ""}${hit.point.tagged ? ` · tagged: ${escapeHtml(row.tags.join("; "))}` : ""}</div>`;
+      + `<div>harness ${escapeHtml(row.harness_version)} · ${kindOf(hit.point)}${hit.point.tagged ? `: ${escapeHtml(row.tags.join("; "))}` : ""}</div>`;
   };
 }
 
@@ -537,8 +574,7 @@ function drawPassesChart(container, points) {
   const title = `GPU passes · ${machineName(state.machine)} · ${state.scene}`;
   const rows = points.filter((point) => Object.keys(point.row.gpu_pass_median_microseconds).length > 0);
   if (rows.length === 0) {
-    container.innerHTML = `<h3>${escapeHtml(title)}</h3><p class="empty">No record of this scene on this machine's Series times its passes.</p>`;
-    container.hitPoints = [];
+    emptyChart(container, title, "No record of this scene on this machine's Series times its passes.");
     return;
   }
   const totals = new Map();
@@ -546,20 +582,20 @@ function drawPassesChart(container, points) {
     for (const [pass, median] of Object.entries(point.row.gpu_pass_median_microseconds)) totals.set(pass, (totals.get(pass) ?? 0) + median);
   }
   const ranked = [...totals.entries()].filter(([, total]) => total > 0).sort((first, second) => second[1] - first[1]).map(([pass]) => pass);
-  const named = ranked.slice(0, PASS_COLOURS);
-  const layers = ranked.length > PASS_COLOURS ? [...named, "other"] : named;
-  const colourOf = (layer) => layer === "other" ? "var(--series-other)" : `var(--series-${named.indexOf(layer) + 1})`;
+  const namedPasses = ranked.slice(0, NAMED_PASS_COUNT);
+  const layers = ranked.length > NAMED_PASS_COUNT ? [...namedPasses, "other"] : namedPasses;
+  const colourOf = (layer) => layer === "other" ? "var(--series-other)" : `var(--series-${namedPasses.indexOf(layer) + 1})`;
   const stackOf = (row) => layers.map((layer) => layer === "other"
-    ? ranked.slice(PASS_COLOURS).reduce((sum, pass) => sum + (row.gpu_pass_median_microseconds[pass] ?? 0), 0)
+    ? ranked.slice(NAMED_PASS_COUNT).reduce((sum, pass) => sum + (row.gpu_pass_median_microseconds[pass] ?? 0), 0)
     : row.gpu_pass_median_microseconds[layer] ?? 0);
   const sums = rows.map((point) => stackOf(point.row).reduce((sum, value) => sum + value, 0));
   const frame = frameOf(container, [0, ...sums], null, 260);
-  const slot = frame.plotWidth / rows.length;
-  const barWidth = Math.max(Math.min(slot * 0.72, 28), 2);
-  const xOf = (index) => frame.margin.left + slot * (index + 0.5);
+  const slotPixels = frame.plotWidth / rows.length;
+  const barWidthPixels = Math.max(Math.min(slotPixels * 0.72, 28), 2);
+  const xOf = (index) => frame.margin.left + slotPixels * (index + 0.5);
 
   let svg = yAxisSvg(frame, "pass:total");
-  const labelEvery = Math.ceil(70 / slot);
+  const labelEvery = Math.ceil(70 / slotPixels);
   svg += `<g class="axis">${rows.map((point, index) => index % labelEvery === 0
     ? `<text x="${xOf(index)}" y="${frame.height - 6}" text-anchor="middle">${shortDate(point.row.committed_unix_seconds)}</text>` : "").join("")}</g>`;
   const breaks = [];
@@ -568,17 +604,17 @@ function drawPassesChart(container, points) {
   rows.forEach((point, index) => {
     const x = xOf(index);
     if (index > 0 && point.segment !== rows[index - 1].segment) {
-      breaks.push({ x: x - slot / 2, label: point.breakLabel ?? `harness ${point.row.harness_version}` });
+      breaks.push({ x: x - slotPixels / 2, label: point.breakLabel ?? `harness ${point.row.harness_version}` });
     }
     let base = 0;
     stackOf(point.row).forEach((value, layer) => {
       if (value <= 0) return;
       const top = frame.y(base + value);
-      bars += `<rect x="${x - barWidth / 2}" y="${top}" width="${barWidth}" height="${Math.max(frame.y(base) - top, 0)}" fill="${colourOf(layers[layer])}" stroke="var(--panel)" stroke-width="${barWidth > 6 ? 1 : 0}"></rect>`;
+      bars += `<rect x="${x - barWidthPixels / 2}" y="${top}" width="${barWidthPixels}" height="${Math.max(frame.y(base) - top, 0)}" fill="${colourOf(layers[layer])}" stroke="var(--panel)" stroke-width="${barWidthPixels > 6 ? 1 : 0}"></rect>`;
       base += value;
     });
     if (point.path === state.selected?.path) {
-      bars += `<rect x="${x - barWidth / 2 - 3}" y="${frame.y(base) - 3}" width="${barWidth + 6}" height="${frame.y(0) - frame.y(base) + 6}" fill="none" stroke="var(--ink)" stroke-width="2"></rect>`;
+      bars += `<rect x="${x - barWidthPixels / 2 - 3}" y="${frame.y(base) - 3}" width="${barWidthPixels + 6}" height="${frame.y(0) - frame.y(base) + 6}" fill="none" stroke="var(--ink)" stroke-width="2"></rect>`;
     }
     if (isBaseline(point.row)) bars += `<rect x="${x - 3}" y="${frame.y(base) - 10}" width="6" height="6" fill="var(--ink-soft)"></rect>`;
     hitPoints.push({ x, y: frame.y(base), point, total: base, column: true });
@@ -587,19 +623,18 @@ function drawPassesChart(container, points) {
   const times = rows.map((point) => point.row.committed_unix_seconds);
   const xOfTime = (time) => {
     const after = times.findIndex((recorded) => recorded > time);
-    return after === -1 ? xOf(rows.length - 1) + slot / 2 : xOf(after) - slot / 2;
+    return after === -1 ? xOf(rows.length - 1) + slotPixels / 2 : xOf(after) - slotPixels / 2;
   };
   svg += verticalMarksSvg(frame, xOfTime, [times[0], times.at(-1)], breaks);
-  svg += bars + `<line class="crosshair" visibility="hidden" y1="${frame.margin.top}" y2="${frame.height - frame.margin.bottom}"></line>`;
-  const legend = `<ul class="legend">${layers.map((layer) => `<li><span class="chip" style="background:${colourOf(layer)}"></span>${escapeHtml(layer.replaceAll("_", " "))}</li>`).join("")}</ul>`;
-  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${legend}<svg viewBox="0 0 ${frame.width} ${frame.height}" height="${frame.height}" role="img" aria-label="${escapeHtml(title)}">${svg}</svg>`;
+  const legend = `<ul class="legend">${layers.map((layer) => `<li><span class="chip" style="background:${colourOf(layer)}"></span>${escapeHtml(passName(layer))}</li>`).join("")}</ul>`;
+  container.innerHTML = chartHtml(title, legend, frame, svg + bars);
   container.hitPoints = hitPoints;
   container.tooltipOf = (hit) => {
     const row = hit.point.row;
     const values = stackOf(row);
-    return `<div>${dateOf(row.committed_unix_seconds)} · ${row.commit.slice(0, 8)}${isBaseline(row) ? " · Baseline" : ""}</div>`
+    return `<div>${dateOf(row.committed_unix_seconds)} · ${shortCommit(row)} · ${kindOf(hit.point)}</div>`
       + layers.map((layer, index) => [layer, values[index]]).reverse().map(([layer, value]) =>
-        `<div class="row"><span class="chip" style="background:${colourOf(layer)}"></span><span>${escapeHtml(layer.replaceAll("_", " "))}</span><span>${formatValue("pass:", value)}</span></div>`).join("")
+        `<div class="row"><span class="chip" style="background:${colourOf(layer)}"></span><span>${escapeHtml(passName(layer))}</span><span>${formatValue("pass:", value)}</span></div>`).join("")
       + `<div class="row"><span>sum</span><span>${formatValue("pass:", hit.total)}</span></div>`;
   };
 }
@@ -613,13 +648,13 @@ function nearestHit(container, event) {
   const scale = svg.viewBox.baseVal.width / bounds.width;
   const x = (event.clientX - bounds.left) * scale;
   const y = (event.clientY - bounds.top) * scale;
-  let best = null;
-  let bestDistance = Infinity;
+  let nearest = null;
+  let nearestDistance = Infinity;
   for (const hit of container.hitPoints) {
     const distance = hit.column ? Math.abs(hit.x - x) : Math.hypot(hit.x - x, hit.y - y);
-    if (distance < bestDistance) { best = hit; bestDistance = distance; }
+    if (distance < nearestDistance) { nearest = hit; nearestDistance = distance; }
   }
-  return bestDistance <= HIT_RADIUS_PIXELS * (best?.column ? 2 : 1) ? best : null;
+  return nearestDistance <= HIT_RADIUS_PIXELS * (nearest?.column ? 2 : 1) ? nearest : null;
 }
 
 const tooltip = document.getElementById("tooltip");
@@ -653,7 +688,7 @@ function attachHover(container) {
 
 async function pullRequestOf(commit) {
   if (!pullRequests.has(commit)) {
-    pullRequests.set(commit, fetchJson(`${API_URL}commits/${commit}/pulls`).then((pulls) => pulls.find((pull) => pull.merged_at) ?? pulls[0] ?? null));
+    pullRequests.set(commit, fetchJson(`${API_URL}commits/${commit}/pulls`).then((candidates) => candidates.find((candidate) => candidate.merged_at) ?? candidates[0] ?? null));
   }
   return pullRequests.get(commit);
 }
@@ -668,7 +703,7 @@ function metricsOf(row) {
   for (const timing of TIMINGS) metrics.push([timing, row[timing]?.median ?? null]);
   for (const [pass, median] of Object.entries(row.gpu_pass_median_microseconds)) metrics.push([`pass:${pass}`, median]);
   for (const [field, value] of Object.entries(row)) {
-    if (!ROW_FIELDS.has(field) && !TIMINGS.includes(field) && typeof value === "number") metrics.push([field, value]);
+    if (!NON_METRIC_FIELDS.has(field) && !TIMINGS.includes(field) && typeof value === "number") metrics.push([field, value]);
   }
   return metrics;
 }
@@ -699,37 +734,37 @@ async function select(point, scroll) {
   const detail = document.getElementById("record-detail");
   const previous = point.previous;
   const previousText = previous
-    ? `${dateOf(previous.row.committed_unix_seconds)} · <a href="https://github.com/${REPOSITORY}/commit/${previous.row.commit}">${previous.row.commit.slice(0, 8)}</a>${point.breakLabel ? ` · across a break: ${escapeHtml(point.breakLabel)}` : ""}`
+    ? `${dateOf(previous.row.committed_unix_seconds)} · ${commitLink(previous.row, shortCommit(previous.row))} · ${kindOf(previous)}${point.breakLabel ? ` · across a break: ${escapeHtml(point.breakLabel)}` : ""}`
     : "none: the first record";
   detail.innerHTML = `<h3>${escapeHtml(machineName(point.machine))} · ${escapeHtml(point.scene)} · ${dateOf(row.committed_unix_seconds)}</h3>
     <dl>
-      <dt>commit</dt><dd><a href="https://github.com/${REPOSITORY}/commit/${row.commit}">${row.commit}</a></dd>
+      <dt>commit</dt><dd>${commitLink(row, escapeHtml(row.commit))}</dd>
       <dt>pull request</dt><dd id="record-pull">looking it up…</dd>
-      <dt>source hash</dt><dd>${row.source_hash}</dd>
-      <dt>harness</dt><dd>version ${row.harness_version}</dd>
-      <dt>scene content</dt><dd>${row.scene_content_hash ?? "not recorded"}</dd>
+      <dt>source hash</dt><dd>${escapeHtml(row.source_hash)}</dd>
+      <dt>harness</dt><dd>version ${escapeHtml(row.harness_version)}</dd>
+      <dt>scene content</dt><dd>${escapeHtml(row.scene_content_hash ?? "not recorded")}</dd>
       <dt>kind</dt><dd>${point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : "on the Series"}${isBaseline(row) ? ", a Baseline imported from main's history" : ""}</dd>
       <dt>previous</dt><dd>${previousText}</dd>
     </dl>
     ${deltaTable(point)}
     <details id="record-raw"><summary>Raw record <span class="mono">${escapeHtml(point.path)}</span></summary><pre>Loading…</pre></details>`;
   if (scroll) document.getElementById("record").scrollIntoView({ behavior: "smooth", block: "start" });
-  const pullCell = document.getElementById("record-pull");
-  pullRequestOf(row.commit).then((pull) => {
+  const pullRequestCell = document.getElementById("record-pull");
+  pullRequestOf(row.commit).then((pullRequest) => {
     if (state.selected !== point) return;
-    pullCell.innerHTML = pull
-      ? `<a href="${pull.html_url}">#${pull.number}</a> ${escapeHtml(pull.title)}`
+    pullRequestCell.innerHTML = pullRequest
+      ? `<a href="https://github.com/${REPOSITORY}/pull/${Number(pullRequest.number)}">#${Number(pullRequest.number)}</a> ${escapeHtml(pullRequest.title)}`
       : "none found; the commit's page lists any";
   }, (error) => {
-    if (state.selected === point) pullCell.textContent = `${error.message}; the commit's page lists it`;
+    if (state.selected === point) pullRequestCell.textContent = `${error.message}; the commit's page lists it`;
   });
   document.getElementById("record-raw").addEventListener("toggle", async (event) => {
     if (!event.target.open) return;
-    const pre = event.target.querySelector("pre");
+    const rawText = event.target.querySelector("pre");
     try {
-      pre.textContent = JSON.stringify(await rawRecordOf(point.path), null, 2);
+      rawText.textContent = JSON.stringify(await rawRecordOf(point.path), null, 2);
     } catch (error) {
-      pre.textContent = error.message;
+      rawText.textContent = error.message;
     }
   }, { once: true });
 }
@@ -741,17 +776,17 @@ function overviewTable(lines) {
     .sort((first, second) => second.row.committed_unix_seconds - first.row.committed_unix_seconds);
   const container = document.getElementById("overview-table");
   container.innerHTML = `<table><thead><tr><th>machine</th><th class="text">date</th><th class="text">commit</th><th>harness</th><th>CPU frame</th><th>GPU frame</th><th class="text">kind</th><th></th></tr></thead><tbody>${points.map((point, index) => `<tr>
-    <td>${escapeHtml(machineName(point.machine))}</td><td class="text">${dateOf(point.row.committed_unix_seconds)}</td><td class="text">${point.row.commit.slice(0, 8)}</td><td>${point.row.harness_version}</td>
+    <td>${escapeHtml(machineName(point.machine))}</td><td class="text">${dateOf(point.row.committed_unix_seconds)}</td><td class="text">${shortCommit(point.row)}</td><td>${escapeHtml(point.row.harness_version)}</td>
     <td>${formatValue("cpu_frame_microseconds", point.row.cpu_frame_microseconds?.median)}</td><td>${formatValue("gpu_frame_microseconds", point.row.gpu_frame_microseconds?.median)}</td>
-    <td class="text">${point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"}</td><td><button type="button" data-index="${index}">Show</button></td></tr>`).join("")}</tbody></table>`;
+    <td class="text">${kindOf(point)}</td><td><button type="button" data-index="${index}">Show</button></td></tr>`).join("")}</tbody></table>`;
   container.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => select(points[Number(button.dataset.index)], true)));
 }
 
 let renderedLines = [];
 function render() {
-  const median = (metric) => (row) => row[metric]?.median ?? null;
-  drawLineChart(document.getElementById("cpu-chart"), { title: `CPU frame median · ${state.scene}`, metric: "cpu_frame_microseconds", lines: renderedLines, valueOf: median("cpu_frame_microseconds"), budget: state.budgets.cpu_frame_microseconds });
-  drawLineChart(document.getElementById("gpu-chart"), { title: `GPU frame median · ${state.scene}`, metric: "gpu_frame_microseconds", lines: renderedLines, valueOf: median("gpu_frame_microseconds"), budget: state.budgets.gpu_frame_microseconds });
+  const medianOf = (metric) => (row) => row[metric]?.median ?? null;
+  drawLineChart(document.getElementById("cpu-chart"), { title: `CPU frame medianOf · ${state.scene}`, metric: "cpu_frame_microseconds", lines: renderedLines, valueOf: medianOf("cpu_frame_microseconds"), budget: state.budgets.cpu_frame_microseconds });
+  drawLineChart(document.getElementById("gpu-chart"), { title: `GPU frame medianOf · ${state.scene}`, metric: "gpu_frame_microseconds", lines: renderedLines, valueOf: medianOf("gpu_frame_microseconds"), budget: state.budgets.gpu_frame_microseconds });
   const machineLine = renderedLines.find((line) => line.machine === state.machine) ?? { machine: state.machine, series: [], tagged: [] };
   drawPassesChart(document.getElementById("passes-chart"), machineLine.series);
 
@@ -763,7 +798,7 @@ function render() {
   if (counters.length === 0) {
     counterContainer.innerHTML = `<p class="note">No record of ${escapeHtml(state.scene)} on ${escapeHtml(machineName(state.machine))} counts anything${state.showTagged ? "" : " on a Series; tagged records may"}.</p>`;
   } else {
-    counterContainer.innerHTML = counters.map((metric) => `<div class="chart" data-counter="${metric}"></div>`).join("");
+    counterContainer.innerHTML = counters.map((metric) => `<div class="chart" data-counter="${escapeHtml(metric)}"></div>`).join("");
     for (const element of counterContainer.querySelectorAll(".chart")) {
       const metric = element.dataset.counter;
       attachHover(element);
@@ -772,20 +807,25 @@ function render() {
   }
 }
 
+let refreshCount = 0;
 async function refresh() {
+  const request = ++refreshCount;
   const status = document.getElementById("status");
   const parameters = new URLSearchParams({ scene: state.scene, machine: state.machine });
   history.replaceState(null, "", `?${parameters}${location.hash}`);
   status.textContent = `Loading ${state.scene}…`;
   try {
-    renderedLines = await scenePoints(state.scene);
+    const lines = await scenePoints(state.scene);
+    if (request !== refreshCount) return;
+    renderedLines = lines;
     const pointCount = renderedLines.reduce((sum, line) => sum + line.series.length + line.tagged.length, 0);
-    status.textContent = `${state.scene}: ${pointCount} records on ${renderedLines.filter((line) => line.series.length + line.tagged.length > 0).length} machines.`;
+    status.textContent = `${state.scene}: ${pointCount} records on ${renderedLines.filter((line) => line.series.length + line.tagged.length > 0).length} machines.${state.listingTruncated ? " GitHub cut the branch's listing short, so some records are missing." : ""}`;
     status.classList.remove("error");
     if (state.selected && state.selected.scene !== state.scene) state.selected = null;
     render();
     overviewTable(renderedLines);
   } catch (error) {
+    if (request !== refreshCount) return;
     status.textContent = `Could not load ${state.scene}: ${error.message}.`;
     status.classList.add("error");
   }
@@ -797,8 +837,9 @@ async function start() {
     const [tree, budgets, milestones] = await Promise.all([
       fetchJson(`${API_URL}git/trees/bench-history?recursive=1`),
       fetchJson(BUDGETS_URL),
-      fetchJson(`${API_URL}milestones?state=closed`).catch(() => []),
+      fetchJson(`${API_URL}milestones?state=closed&per_page=100`).catch(() => []),
     ]);
+    state.listingTruncated = tree.truncated;
     state.paths = tree.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path);
     state.budgets = budgets;
     state.milestones = milestones.filter((milestone) => milestone.closed_at)
