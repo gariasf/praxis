@@ -143,20 +143,17 @@ struct MaterialData {
     extra: vec4<u32>,
 };
 
-// The light buffer's counts, its directional lights first, then its point
-// lights that cast a shadow, then those that cast none, and the scene's
+// The light buffer's counts, its directional lights first, and the scene's
 // ambient illuminance.
 struct LightUniform {
     // rgb: the scene's ambient illuminance.
     ambient_illuminance: vec4<f32>,
     directional_light_count: u32,
     point_light_count: u32,
-    // How many of the point lights, the last ones, cast no shadow.
-    unshadowed_point_light_count: u32,
 }
 
-// A light as the light buffer holds it, directional lights first, then point
-// lights. A point light's position arrives as an Anchor plus an offset
+// A light as the light buffer holds it, directional lights first, then the
+// point lights that cast a shadow, then those that cast none. A point light's position arrives as an Anchor plus an offset
 // (ADR 0014), with its range; a directional light has no position, and its
 // offset holds the direction it shines along. Its intensity is its colour
 // times its candela, or a directional light's times its lux (ADR 0023).
@@ -164,6 +161,9 @@ struct LightData {
     anchor: vec3<i32>,
     range: f32,
     offset: vec3<f32>,
+    // How much of a point light's range casts no shadow: all of it for one
+    // that casts none, 0 otherwise.
+    unshadowed_range: f32,
     intensity: vec3<f32>,
 }
 

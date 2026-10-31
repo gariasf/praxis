@@ -306,7 +306,7 @@ impl FramePreparer {
             a: 1.0,
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
-        let light_counts = prepare_lights(
+        let directional_light_count = prepare_lights(
             world,
             directional_light_query,
             point_light_query,
@@ -316,9 +316,8 @@ impl FramePreparer {
         );
         frame.light = LightUniform {
             ambient_illuminance: environment.ambient_illuminance.extend(0.0).to_array(),
-            directional_light_count: light_counts.directional,
-            point_light_count: light_counts.point,
-            unshadowed_point_light_count: light_counts.unshadowed_point,
+            directional_light_count,
+            point_light_count: frame.lights.len() as u32 - directional_light_count,
             ..LightUniform::default()
         };
         if *lights_overflowed > 0 && !*warned_of_overflowed_lights {
@@ -515,8 +514,8 @@ impl FramePreparer {
 /// forward axis, then every point light that casts a shadow, then every one
 /// that casts none, at its World position as an Anchor plus an offset (ADR
 /// 0014), each blended between its two newest Ticks, up to `LIGHT_CAPACITY`.
-/// Returns how many of each kind it holds, and sets `overflowed` to how many
-/// the light buffer had no room for.
+/// Returns how many are directional, and sets `overflowed` to how many the
+/// light buffer had no room for.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
@@ -524,7 +523,7 @@ fn prepare_lights(
     blend_weight: f32,
     lights: &mut Vec<LightData>,
     overflowed: &mut u32,
-) -> LightCounts {
+) -> u32 {
     let mut directional_lights =
         directional_light_query
             .iter(world)
@@ -548,7 +547,7 @@ fn prepare_lights(
     // The point lights that cast a shadow, then those that cast none, so
     // the shadow mask's bits, which follow the lights in buffer order, go
     // to the first.
-    let [shadowed_end, _] = [true, false].map(|casts_shadow| {
+    for casts_shadow in [true, false] {
         let mut point_lights = point_light_query
             .iter(world)
             .filter(|(.., light)| light.casts_shadow == casts_shadow)
@@ -559,26 +558,15 @@ fn prepare_lights(
                     anchor,
                     range: light.range,
                     offset,
+                    unshadowed_range: if casts_shadow { 0.0 } else { light.range },
                     intensity: (light.color * light.intensity).to_array(),
                     ..LightData::default()
                 }
             });
         lights.extend(point_lights.by_ref().take(capacity - lights.len()));
         *overflowed += point_lights.count() as u32;
-        lights.len()
-    });
-    LightCounts {
-        directional: directional_light_count,
-        point: (lights.len() as u32) - directional_light_count,
-        unshadowed_point: (lights.len() - shadowed_end) as u32,
     }
-}
-
-/// How many lights of each kind the light buffer holds.
-struct LightCounts {
-    directional: u32,
-    point: u32,
-    unshadowed_point: u32,
+    directional_light_count
 }
 
 /// Fills `bends` with a bend per Renderable with a `Bend` whose Mesh and
@@ -1243,7 +1231,8 @@ mod tests {
 
     /// Point lights spawned casting a shadow and casting none in turn: the
     /// light buffer holds those that cast one first, then the others, each
-    /// kind in the order it was spawned, and counts the others.
+    /// kind in the order it was spawned, the others with all of their range
+    /// unshadowed.
     #[test]
     fn point_lights_that_cast_no_shadow_follow_those_that_cast_one() {
         let Some(mut frames) = Frames::new() else {
@@ -1260,17 +1249,12 @@ mod tests {
         }
         frames.prepare();
         let frame = frames.preparer.frame();
-        let counts = (
-            frame.light.point_light_count,
-            frame.light.unshadowed_point_light_count,
-        );
-        assert_eq!(counts, (4, 2));
-        let intensities: Vec<f32> = frame
+        let lights: Vec<(f32, f32)> = frame
             .lights
             .iter()
-            .map(|light| light.intensity[0])
+            .map(|light| (light.intensity[0], light.unshadowed_range))
             .collect();
-        assert_eq!(intensities, [1.0, 3.0, 2.0, 4.0]);
+        assert_eq!(lights, [(1.0, 0.0), (3.0, 0.0), (2.0, 1.0), (4.0, 1.0)]);
     }
 
     /// One directional light and one point light more than the light buffer

@@ -1427,16 +1427,14 @@ pub(crate) mod tests {
         lights: &[LightData],
         rectangles: &[([f32; 3], [f32; 2], f32)],
     ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
-        floor_drawn_with(context, RenderSwitches::default(), lights, 0, rectangles)
+        floor_drawn_with(context, RenderSwitches::default(), lights, rectangles)
     }
 
-    /// `shadowed_floor` drawn with `switches`, its last
-    /// `unshadowed_point_light_count` lights casting no shadow.
+    /// `shadowed_floor` drawn with `switches`.
     fn floor_drawn_with(
         context: &GpuContext,
         switches: RenderSwitches,
         lights: &[LightData],
-        unshadowed_point_light_count: u32,
         rectangles: &[([f32; 3], [f32; 2], f32)],
     ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
         let mut renderer = Renderer::new(context, TARGET_FORMAT, SIZE, SIZE, switches);
@@ -1484,7 +1482,6 @@ pub(crate) mod tests {
                 ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
                 directional_light_count: directional_light_count as u32,
                 point_light_count: (lights.len() - directional_light_count) as u32,
-                unshadowed_point_light_count,
                 ..LightUniform::default()
             },
             lights: lights.to_vec(),
@@ -1505,7 +1502,7 @@ pub(crate) mod tests {
         anchor: [0; 3],
         range: 0.0,
         offset: [0.0, 0.0, -1.0],
-        _pad_offset: 0,
+        unshadowed_range: 0.0,
         intensity: [1.0; 3],
         _pad_intensity: 0,
     };
@@ -1749,26 +1746,30 @@ pub(crate) mod tests {
             intensity: [0.0; 3],
             ..point
         };
+        // Casting no shadow: all of the range unshadowed.
+        let unshadowed = |light: LightData| LightData {
+            unshadowed_range: light.range,
+            ..light
+        };
         for froxel_lights in [true, false] {
             let switches = RenderSwitches {
                 froxel_lights,
                 ..RenderSwitches::default()
             };
-            let (_, lit, ..) = floor_drawn_with(&context, switches, &[point], 0, &[]);
-            let (_, unshadowed, gpu, _) =
-                floor_drawn_with(&context, switches, &[point], 1, &[square]);
+            let (_, lit, ..) = floor_drawn_with(&context, switches, &[point], &[]);
+            let (_, unshadowed_lit, gpu, _) =
+                floor_drawn_with(&context, switches, &[unshadowed(point)], &[square]);
             assert!(
-                unshadowed == lit,
+                unshadowed_lit == lit,
                 "a point light that casts no shadow shadowed the floor"
             );
             assert_eq!(gpu.shadow_mask_lights_overflowed, 0);
 
             let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize - 1];
             lights.extend([point, unlit]);
-            lights.extend([unlit; 10]);
-            let (_, unoccluded, ..) = floor_drawn_with(&context, switches, &lights, 10, &[]);
-            let (_, shadowed, gpu, log) =
-                floor_drawn_with(&context, switches, &lights, 10, &[square]);
+            lights.extend([unshadowed(unlit); 10]);
+            let (_, unoccluded, ..) = floor_drawn_with(&context, switches, &lights, &[]);
+            let (_, shadowed, gpu, log) = floor_drawn_with(&context, switches, &lights, &[square]);
             let middle = |image: &image::RgbaImage| image.get_pixel(SIZE / 2, SIZE / 2).0;
             assert!(
                 middle(&shadowed)[0].saturating_add(32) < middle(&unoccluded)[0],
