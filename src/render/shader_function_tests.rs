@@ -1081,6 +1081,101 @@ fn dither_noise_is_the_triangular_inverse_cdf_of_each_mask_level() {
     assert!((variance - 1.0 / 6.0).abs() <= 1e-4, "variance {variance}");
 }
 
+/// The display transform, `srgb_encode(tonemap(exposed))`, on a ramp of
+/// exposed colours from 0 to 16 times past the paper white, greys and
+/// saturated colours alike, agrees with the values in
+/// `scripts/cycles-reference/display-ramp.txt`, which the Cycles reference's
+/// port of it is checked against: the GPU's own values, so the port follows
+/// the shader. `PRAXIS_UPDATE_GOLDENS=1` rewrites the file from this GPU.
+#[test]
+fn the_display_ramp_holds_the_display_transforms_values() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let colours = [
+        [1.0, 1.0, 1.0],
+        [1.0, 0.6, 0.1],
+        [0.05, 0.3, 0.9],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+    // 0, then 2⁻¹⁰ to 2⁴ in quarter stops.
+    let scales =
+        std::iter::once(0.0).chain((-40..=16).map(|quarter| 2f32.powf(quarter as f32 / 4.0)));
+    let inputs: Vec<[f32; 4]> = colours
+        .iter()
+        .flat_map(|colour| {
+            scales
+                .clone()
+                .map(move |scale| colour.map(|value| value * scale))
+        })
+        .map(|[red, green, blue]| [red, green, blue, 0.0])
+        .collect();
+    let results = evaluate(
+        &context,
+        "vec4<f32>(srgb_encode(tonemap(input.xyz)), 0.0)",
+        &inputs,
+    );
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("scripts/cycles-reference/display-ramp.txt");
+    if std::env::var_os("PRAXIS_UPDATE_GOLDENS").is_some() {
+        let mut text = String::from(
+            "# Exposed red green blue, then the display transform's sRGB-encoded red\n\
+             # green blue on the GPU, undithered (src/render/shader_function_tests.rs).\n",
+        );
+        for (input, result) in inputs.iter().zip(&results) {
+            text += &format!(
+                "{} {} {} {:.7} {:.7} {:.7}\n",
+                input[0], input[1], input[2], result[0], result[1], result[2]
+            );
+        }
+        std::fs::write(&path, text).expect("writing the display ramp");
+    }
+    let text = std::fs::read_to_string(&path).expect("reading the display ramp");
+    let rows: Vec<Vec<f64>> = text
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            line.split(' ')
+                .map(|value| value.parse().unwrap())
+                .collect()
+        })
+        .collect();
+    assert_eq!(rows.len(), inputs.len(), "rows of {}", path.display());
+    for ((input, result), row) in inputs.iter().zip(&results).zip(&rows) {
+        for channel in 0..3 {
+            // Written as the shortest decimal that reads back as the f32.
+            assert_eq!(input[channel], row[channel] as f32, "input of row {row:?}");
+            // Compared display-linear, where GT7_TOLERANCE bounds each
+            // GPU: sRGB's slope of 12.92 near black would multiply it.
+            let error = (srgb_decode(result[channel].into()) - srgb_decode(row[3 + channel])).abs();
+            assert!(
+                error <= DISPLAY_RAMP_TOLERANCE,
+                "channel {channel} of the display of {input:?} is {}, expected {}",
+                result[channel],
+                row[3 + channel]
+            );
+        }
+    }
+}
+
+/// Largest display-linear difference allowed between one GPU's display
+/// values and the ramp's, recorded on another: each lands within
+/// GT7_TOLERANCE of the sample implementation.
+const DISPLAY_RAMP_TOLERANCE: f64 = 2.0 * GT7_TOLERANCE;
+
+/// The inverse of IEC 61966-2-1's sRGB encoding [ref:khronos-dfs-srgb], in
+/// f64.
+fn srgb_decode(encoded: f64) -> f64 {
+    if encoded <= 0.04045 {
+        encoded / 12.92
+    } else {
+        ((encoded + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 /// Linear sRGB reflectance of gold at normal incidence, F0 (Hoffman 2013,
 /// Table 1 [ref:hoffman-2013-f0]), as the pbr-sweep scene uses it: each
 /// channel a different base colour.

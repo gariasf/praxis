@@ -189,7 +189,16 @@ scripts/pr-lint.sh             # CI's PR form check: body, commits and a
                                  scripts/pr-lint-test.sh
 scripts/gallery.sh             # the visual audit's capture gallery: each
                                  Reference scene at 2560x1440, with
-                                 difference images against an earlier one
+                                 difference images against an earlier one,
+                                 and with PRAXIS_BLENDER each scene's Cycles
+                                 render beside it
+scripts/cycles-reference/      # the Cycles reference, Blender 5.2's Python:
+                                 calibrate.py checks its light units,
+                                 render.py builds and renders what
+                                 `praxis export-scene` writes, compare.py
+                                 ports the display transform and compares;
+                                 DIFFERENCES.md, what praxis differs in
+                                 on purpose or not yet
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets
