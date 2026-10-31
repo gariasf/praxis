@@ -9,8 +9,8 @@ values in display-ramp.txt, within one 8-bit step.
 
 `compare` writes the Cycles render through the display transform and the
 difference: praxis's capture dimmed to a quarter, under red where praxis
-is brighter and blue where Cycles is, at four times the mean of the
-channels' differences. `crop` writes praxis | Cycles | difference of a
+is brighter and blue where Cycles is, at four times the channel that
+differs most, so a change of hue shows too. `crop` writes praxis | Cycles | difference of a
 region, each pixel doubled.
 """
 import os
@@ -173,7 +173,9 @@ def save(rgb, path):
 
 
 def difference(praxis, cycles):
-    signed = (praxis - cycles).mean(-1)
+    channels = praxis - cycles
+    largest = np.abs(channels).argmax(-1)[..., None]
+    signed = np.take_along_axis(channels, largest, -1)[..., 0]
     shown = 0.25 * praxis.mean(-1, keepdims=True).repeat(3, -1)
     shown[..., 0] += np.clip(4.0 * signed, 0.0, 1.0)
     shown[..., 2] += np.clip(-4.0 * signed, 0.0, 1.0)

@@ -13,7 +13,8 @@
 # <scene>-frame-<n>-cycles.png beside each image of a scene that
 # `praxis export-scene` exports, rendered by scripts/cycles-reference/, and
 # <scene>-frame-<n>-cycles-difference.png: the capture dimmed, red where
-# praxis is brighter than Cycles and blue where it is darker.
+# praxis is brighter than Cycles and blue where it is darker, by the
+# channel that differs most.
 #
 # Usage: [PRAXIS_BLENDER=<blender>] scripts/gallery.sh [<earlier gallery directory>]
 set -euo pipefail
@@ -52,6 +53,12 @@ blender() {
 
 if [[ -n "${PRAXIS_BLENDER:-}" ]]; then
   blender "$logs/calibrate.log" calibrate.py
+  # The check itself: point lights built in the wrong unit must fail it.
+  if "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 --python     scripts/cycles-reference/calibrate.py -- --wrong-unit >>"$logs/calibrate.log" 2>&1; then
+    printf 'FAIL  calibrate.py  passed point lights in the wrong unit: %s
+' "$logs/calibrate.log"
+    exit 1
+  fi
   blender "$logs/calibrate.log" compare.py ramp
   printf 'ok    %-34s light units and display transform\n' cycles-reference
 fi

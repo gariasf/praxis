@@ -7,7 +7,7 @@ defect. Anything else a Cycles difference image shows is a finding.
 Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
 `PRAXIS_BLENDER` set, at 2x. The difference is praxis's capture dimmed to a
 quarter, red where praxis is brighter and blue where Cycles is, at four
-times the mean of the channels' differences. A difference of an 8-bit step
+times the channel that differs most. A difference of an 8-bit step
 or so everywhere is praxis's dither, which the Cycles image does not carry,
 and fine speckle in Cycles' brightest highlights is its sampling noise.
 
@@ -27,6 +27,18 @@ object itself or its neighbours (`helmet`'s and `pbr-sweep`'s metals,
 ![Town's shaded street: praxis brighter where the walls hide the sky](differences/ambient-street.png)
 
 ![A smooth white metal helmet: Cycles' reflections of itself black](differences/ambient-reflections.png)
+
+## Ambient light as an ideal diffuse response
+
+praxis's ambient reflects E/π times the base colour from every surface, an
+ideal Lambertian surface's response, standing for the whole BRDF's. Cycles
+integrates the BSDF itself over its white world, and single-scatter GGX
+loses light to masking that grows with roughness and towards grazing, while
+Fresnel moves light between the diffuse and specular lobes. Shows as praxis
+a few 8-bit steps brighter wherever only the ambient lights a surface, most
+on rough metals and towards rims (`pbr-sweep`, `orrery`, `shadows`).
+
+![A metal of roughness 0.9: praxis brighter where only the ambient reaches it](differences/ambient-response.png)
 
 ## Highlights widened by specular antialiasing and Toksvig
 

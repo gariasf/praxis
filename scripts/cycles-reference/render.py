@@ -13,6 +13,7 @@ calibrate.py checks the light units these builders assume.
 import json
 import math
 import os
+import re
 import struct
 import sys
 
@@ -32,10 +33,11 @@ UNBOUNDED_RANGE = 1e9
 # glTF's +Y up to Blender's +Z up, (x, y, z) to (x, −z, y): a quarter turn
 # about +X.
 GLTF_TO_BLENDER = Matrix.Rotation(math.pi / 2.0, 4, "X")
-GLTF_TO_BLENDER_QUATERNION = np.array([math.cos(math.pi / 4.0), math.sin(math.pi / 4.0), 0.0, 0.0])
 DEFAULT_SAMPLES = 512
-# praxis's roughness floor, shading.wgsl's MINIMUM_ROUGHNESS.
-MINIMUM_ROUGHNESS = 0.04
+# praxis's roughness floor, read from the shader that holds it.
+SHADING_WGSL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../src/render/shaders/shading.wgsl")
+with open(SHADING_WGSL) as shading:
+    MINIMUM_ROUGHNESS = float(re.search(r"const MINIMUM_ROUGHNESS: f32 = ([0-9.]+);", shading.read()).group(1))
 
 
 def require_blender():
@@ -65,6 +67,7 @@ def new_scene(width, height, samples):
                 device.use = device.type == backend
             scene.cycles.device = "GPU"
             break
+    print(f"render device: {scene.cycles.device} {preferences.compute_device_type if scene.cycles.device == 'GPU' else ''}")
     cycles = scene.cycles
     cycles.samples = samples
     cycles.use_adaptive_sampling = False
@@ -194,7 +197,8 @@ class Gltf:
             (stride or component.itemsize * width, component.itemsize),
         ).astype(np.float64 if component.kind == "f" or accessor.get("normalized") else np.int64)
         if accessor.get("normalized"):
-            values /= np.iinfo(component).max
+            # glTF's normalized integers: c / max, signed ones held to −1.
+            values = np.maximum(values / np.iinfo(component).max, -1.0)
         return values
 
     def image_bytes(self, index):
@@ -216,7 +220,7 @@ def blender_mesh(name, gltf, index, materials):
             vertex_starts[key] = vertex_count
             position = gltf.accessor(key[0])
             positions.append(position)
-            normals.append(gltf.accessor(key[1]) if key[1] is not None else np.zeros_like(position))
+            normals.append(gltf.accessor(key[1]) if key[1] is not None else None)
             uvs.append(gltf.accessor(key[2]) if key[2] is not None else np.zeros((len(position), 2)))
             vertex_count += len(position)
         if "indices" in primitive:
@@ -225,7 +229,9 @@ def blender_mesh(name, gltf, index, materials):
             primitive_corners = np.arange(gltf.document["accessors"][key[0]]["count"])
         corners.append(primitive_corners + vertex_starts[key])
         slots.append(np.full(len(primitive_corners) // 3, slot))
-    corners, normals, uvs = np.concatenate(corners), np.concatenate(normals), np.concatenate(uvs)
+    # Blender's own normals stand unless every Primitive gives its own.
+    normals = None if any(normal is None for normal in normals) else np.concatenate(normals)
+    corners, uvs = np.concatenate(corners), np.concatenate(uvs)
     mesh = bpy.data.meshes.new(name)
     mesh.vertices.add(vertex_count)
     mesh.vertices.foreach_set("co", np.concatenate(positions).ravel())
@@ -239,7 +245,7 @@ def blender_mesh(name, gltf, index, materials):
     corner_uvs = uvs[corners] * (1.0, -1.0) + (0.0, 1.0)
     mesh.uv_layers.new(name="UV").data.foreach_set("uv", corner_uvs.ravel())
     mesh.update(calc_edges=True)
-    if np.any(normals):
+    if normals is not None:
         mesh.normals_split_custom_set_from_vertices(normals)
     for material in materials:
         mesh.materials.append(material)
@@ -312,11 +318,27 @@ class MaterialBuilder:
         scaled(floor.inputs[0], entry["roughness"], roughness)
         links.new(floor.outputs[0], bsdf.inputs["Roughness"])
         if "normal" in textures:
+            # glTF scales the tangent-space normal's x and y,
+            # (texel · 2 − 1) ⊙ (scale, scale, 1); Blender's Strength blends
+            # towards the surface normal instead, so the scale is applied
+            # here and the result encoded back for the Normal Map node.
+            scale = entry["normal_scale"]
+            scaled_normal = nodes.new("ShaderNodeVectorMath")
+            scaled_normal.operation = "MULTIPLY_ADD"
+            scaled_normal.inputs[1].default_value = (2.0 * scale, 2.0 * scale, 2.0)
+            scaled_normal.inputs[2].default_value = (-scale, -scale, -1.0)
+            encoded = nodes.new("ShaderNodeVectorMath")
+            encoded.operation = "MULTIPLY_ADD"
+            encoded.inputs[1].default_value = (0.5, 0.5, 0.5)
+            encoded.inputs[2].default_value = (0.5, 0.5, 0.5)
             normal_map = nodes.new("ShaderNodeNormalMap")
             normal_map.uv_map = "UV"
-            normal_map.inputs["Strength"].default_value = entry["normal_scale"]
-            links.new(sampled("normal", "Non-Color"), normal_map.inputs["Color"])
+            links.new(sampled("normal", "Non-Color"), scaled_normal.inputs[0])
+            links.new(scaled_normal.outputs[0], encoded.inputs[0])
+            links.new(encoded.outputs[0], normal_map.inputs["Color"])
             links.new(normal_map.outputs[0], bsdf.inputs["Normal"])
+        # The occlusion texture goes unused: Cycles' rays find what hides the
+        # ambient, which the texture approximates.
         emissive = sampled("emissive", "sRGB") if "emissive" in textures else None
         scaled(bsdf.inputs["Emission Color"], entry["emissive"], emissive)
         bsdf.inputs["Emission Strength"].default_value = self.exposure
@@ -405,7 +427,7 @@ def build(directory, width, height, samples):
         # [x, y, z, w] to Blender's (w, x, y, z), then turned into Blender's
         # axes: the axis change's quaternion times each.
         rotations = np.array([entry["rotation"] for entry in renderables])[:, [3, 0, 1, 2]]
-        cosine, sine = GLTF_TO_BLENDER_QUATERNION[:2]
+        cosine, sine = GLTF_TO_BLENDER.to_quaternion()[:2]
         w, x, y, z = rotations.T
         rotations = np.stack([cosine * w - sine * x, cosine * x + sine * w, cosine * y - sine * z, cosine * z + sine * y], 1)
         points = bpy.data.meshes.new(f"{mesh_name} {material_name} points")
