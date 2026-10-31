@@ -52,7 +52,7 @@ fn pixel_minimum_within(pixel: vec2<u32>, depth_size: vec2<u32>) -> f32 {
     return pixel_minimum(pixel);
 }
 
-// The minimum of the four pixel minima from `corner` of the workgroup's.
+// The minimum of the four pixel minima from `corner` of the workgroup's tile.
 fn shared_block_minimum(corner: vec2<u32>) -> f32 {
     return min(
         min(pixel_minima[corner.y][corner.x], pixel_minima[corner.y][corner.x + 1u]),
@@ -62,10 +62,11 @@ fn shared_block_minimum(corner: vec2<u32>) -> f32 {
 
 // Level 0: an invocation per pixel of a tile, which shares the minimum of
 // its samples, then a texel per invocation of the tile's first quarter, the
-// minimum of the shared minima of the pixels it overlaps: as the later
-// levels' overlapped_texels counts them, from twice its index, two along a
-// side of the depth target that is even and three along one that is odd,
-// none of them past the edge, which 1 leaves out.
+// minimum of the shared minima of the pixels it overlaps. As level 0 is half
+// the depth target rounded down, at least 1 (RenderTargets), those are, as
+// overlapped_texels would count them, from twice its index, two along a side
+// of the depth target that is even and three along one that is odd, none of
+// them past the edge, which 1 leaves out.
 @compute @workgroup_size(DEPTH_PYRAMID_PIXEL_TILE_SIZE, DEPTH_PYRAMID_PIXEL_TILE_SIZE)
 fn reduce_depth(
     @builtin(global_invocation_id) pixel: vec3<u32>,
@@ -73,18 +74,18 @@ fn reduce_depth(
     @builtin(workgroup_id) workgroup: vec3<u32>,
 ) {
     let depth_size = textureDimensions(depth);
-    let odd = depth_size % 2u == vec2<u32>(1u);
+    let odd_sides = depth_size % 2u == vec2<u32>(1u);
     pixel_minima[local.y][local.x] = pixel_minimum_within(pixel.xy, depth_size);
     let past_tile = (workgroup.xy + 1u) * DEPTH_PYRAMID_PIXEL_TILE_SIZE;
-    if odd.x && local.x == 0u {
+    if odd_sides.x && local.x == 0u {
         pixel_minima[local.y][DEPTH_PYRAMID_PIXEL_TILE_SIZE] =
             pixel_minimum_within(vec2<u32>(past_tile.x, pixel.y), depth_size);
     }
-    if odd.y && local.y == 0u {
+    if odd_sides.y && local.y == 0u {
         pixel_minima[DEPTH_PYRAMID_PIXEL_TILE_SIZE][local.x] =
             pixel_minimum_within(vec2<u32>(pixel.x, past_tile.y), depth_size);
     }
-    if all(odd) && all(local.xy == vec2<u32>(0u)) {
+    if all(odd_sides) && all(local.xy == vec2<u32>(0u)) {
         pixel_minima[DEPTH_PYRAMID_PIXEL_TILE_SIZE][DEPTH_PYRAMID_PIXEL_TILE_SIZE] =
             pixel_minimum_within(past_tile, depth_size);
     }
@@ -97,13 +98,13 @@ fn reduce_depth(
     let first = 2u * local.xy;
     let last = first + 2u;
     var minimum = shared_block_minimum(first);
-    if odd.x {
+    if odd_sides.x {
         minimum = min(minimum, min(pixel_minima[first.y][last.x], pixel_minima[first.y + 1u][last.x]));
     }
-    if odd.y {
+    if odd_sides.y {
         minimum = min(minimum, min(pixel_minima[last.y][first.x], pixel_minima[last.y][first.x + 1u]));
     }
-    if all(odd) {
+    if all(odd_sides) {
         minimum = min(minimum, pixel_minima[last.y][last.x]);
     }
     textureStore(level, texel, vec4<f32>(minimum));
