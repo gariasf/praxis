@@ -344,6 +344,17 @@ fn parse_ioreg_utilization(report: &str) -> Option<u32> {
         .max()
 }
 
+/// The power and display checks that warn: what spoils a bench's times on
+/// this machine besides GPU load and other praxis processes.
+pub(crate) fn machine_warnings() -> Vec<String> {
+    power()
+        .into_iter()
+        .chain(display())
+        .filter(|check| check.verdict == Verdict::Warn)
+        .map(|check| format!("{}: {}", check.name, check.detail))
+        .collect()
+}
+
 /// On a Mac, whether it runs on its battery, which slows the GPU and spoils
 /// a bench's times.
 fn power() -> Option<Check> {
@@ -372,16 +383,23 @@ fn power_check(report: Option<&str>) -> Check {
 /// display, which may load the GPU between readings.
 fn display() -> Option<Check> {
     // SHQueryUserNotificationState through PowerShell, which needs neither a
-    // dependency nor unsafe code; single quotes only, which reach PowerShell
-    // as they are.
-    const QUERY: &str = "$signature = '[DllImport(''shell32.dll'')] public static extern int SHQueryUserNotificationState(out int state);'; \
+    // dependency nor unsafe code. The argument holds no double quote, which
+    // Windows' argument quoting would escape, so the C# string literal's
+    // quotes are `[char]34`; a failed call prints nothing.
+    const NOTIFICATION_STATE_QUERY: &str = "$quote = [char]34; \
+         $signature = '[DllImport(' + $quote + 'shell32.dll' + $quote + ')] public static extern int SHQueryUserNotificationState(out int state);'; \
          Add-Type -Namespace Praxis -Name Shell -MemberDefinition $signature; \
-         $state = 0; [void][Praxis.Shell]::SHQueryUserNotificationState([ref]$state); $state";
+         $state = 0; if ([Praxis.Shell]::SHQueryUserNotificationState([ref]$state) -eq 0) { $state }";
     cfg!(windows).then(|| {
         display_check(
             output(
                 "powershell",
-                &["-NoProfile", "-NonInteractive", "-Command", QUERY],
+                &[
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    NOTIFICATION_STATE_QUERY,
+                ],
             )
             .as_deref(),
         )
@@ -396,10 +414,10 @@ fn display_check(state: Option<&str>) -> Check {
         Some(2 | 3) => Check::new(
             "display",
             Verdict::Warn,
-            "a full-screen application runs: bench only once it ends",
+            "a full-screen application or presentation settings hold it: bench only once they end",
         ),
-        Some(_) => Check::new("display", Verdict::Ok, "no full-screen application"),
-        None => Check::new(
+        Some(1..=7) => Check::new("display", Verdict::Ok, "no full-screen application"),
+        _ => Check::new(
             "display",
             Verdict::Note,
             "unknown: no notification state reading",
@@ -717,6 +735,7 @@ mod tests {
         assert_eq!(display_check(Some("1\r\n")).verdict, Verdict::Ok);
         assert_eq!(display_check(Some("5\r\n")).verdict, Verdict::Ok);
         assert_eq!(display_check(Some("")).verdict, Verdict::Note);
+        assert_eq!(display_check(Some("0\r\n")).verdict, Verdict::Note);
         assert_eq!(display_check(None).verdict, Verdict::Note);
     }
 

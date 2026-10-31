@@ -10,7 +10,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 
 use super::Spread;
-use crate::preflight::{BUSY_GPU_PERCENT, gpu_load_percent, other_praxis_processes};
+use crate::preflight::{
+    BUSY_GPU_PERCENT, gpu_load_percent, machine_warnings, other_praxis_processes,
+};
 
 /// Names what the bench's metrics mean: raised by any change to how a
 /// metric is measured, so that two Bench records compare only when they
@@ -61,6 +63,8 @@ pub struct BenchStart {
     pub checkout: Option<Checkout>,
     pub gpu_load_percent: Option<u32>,
     pub other_processes: Option<Vec<String>>,
+    /// Preflight's power and display warnings, such as a Mac on battery.
+    pub machine_warnings: Vec<String>,
 }
 
 impl BenchStart {
@@ -80,6 +84,7 @@ impl BenchStart {
             checkout,
             gpu_load_percent: gpu_load_percent(),
             other_processes: other_praxis_processes(),
+            machine_warnings: machine_warnings(),
         }
     }
 
@@ -108,6 +113,7 @@ impl BenchStart {
             quiet: is_quiet(
                 self.gpu_load_percent,
                 self.other_processes.as_deref(),
+                &self.machine_warnings,
                 gpu_frame_p95_over_median,
             ),
             started_unix_seconds: started
@@ -118,16 +124,18 @@ impl BenchStart {
 }
 
 /// Whether a run was quiet: preflight would have warned of neither the GPU
-/// load nor other praxis processes at its start, and its GPU frames spread
+/// load, other praxis processes, nor the power or display at its start, and its GPU frames spread
 /// less than `QUIET_P95_OVER_MEDIAN`. A load or listing that could not be
 /// read is a preflight note, not a warning, so it passes.
 fn is_quiet(
     gpu_load_percent: Option<u32>,
     other_processes: Option<&[String]>,
+    machine_warnings: &[String],
     gpu_frame_p95_over_median: Option<f64>,
 ) -> bool {
     gpu_load_percent.is_none_or(|percent| percent <= BUSY_GPU_PERCENT)
         && other_processes.is_none_or(<[String]>::is_empty)
+        && machine_warnings.is_empty()
         && gpu_frame_p95_over_median.is_some_and(|ratio| ratio < QUIET_P95_OVER_MEDIAN)
 }
 
@@ -284,7 +292,8 @@ mod tests {
 
     /// The top-level paths whose changes cannot change a measurement: the
     /// bench reads none of them.
-    const UNMEASURED_PATHS: [&str; 11] = [
+    const UNMEASURED_PATHS: [&str; 12] = [
+        ".gitattributes",
         ".github",
         ".gitignore",
         "CLAUDE.md",
@@ -417,12 +426,24 @@ mod tests {
         let none: &[String] = &[];
         let other = &["praxis 42".to_owned()][..];
         let steady = Some(1.02);
-        assert!(is_quiet(Some(BUSY_GPU_PERCENT), Some(none), steady));
+        let battery = &["power: on battery".to_owned()][..];
+        assert!(is_quiet(Some(BUSY_GPU_PERCENT), Some(none), none, steady));
         // Unknown load and processes are preflight notes, not warnings.
-        assert!(is_quiet(None, None, steady));
-        assert!(!is_quiet(Some(BUSY_GPU_PERCENT + 1), Some(none), steady));
-        assert!(!is_quiet(Some(0), Some(other), steady));
-        assert!(!is_quiet(Some(0), Some(none), Some(QUIET_P95_OVER_MEDIAN)));
-        assert!(!is_quiet(Some(0), Some(none), None));
+        assert!(is_quiet(None, None, none, steady));
+        assert!(!is_quiet(
+            Some(BUSY_GPU_PERCENT + 1),
+            Some(none),
+            none,
+            steady
+        ));
+        assert!(!is_quiet(Some(0), Some(other), none, steady));
+        assert!(!is_quiet(Some(0), Some(none), battery, steady));
+        assert!(!is_quiet(
+            Some(0),
+            Some(none),
+            none,
+            Some(QUIET_P95_OVER_MEDIAN)
+        ));
+        assert!(!is_quiet(Some(0), Some(none), none, None));
     }
 }

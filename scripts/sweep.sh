@@ -15,10 +15,11 @@
 #   launchctl bootstrap "gui/$(id -u)" \
 #     ~/Library/LaunchAgents/com.github.gariasf.praxis.sweep.plist
 # Install on the RTX 2070 SUPER (Task Scheduler, 04:00 local, waking the
-# PC), in Git Bash:
+# PC if the power plan allows wake timers; it runs only while the owner is
+# logged on, as the bench needs the GPU), in Git Bash:
 #   git worktree add --detach ../praxis-sweep origin/main
 #   sweep=$(cd ../praxis-sweep && pwd -W)
-#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -w "$(command -v bash)")|g" \
+#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -w "$(command -v bash)").exe|g" \
 #     scripts/sweep-task.xml >"$TEMP/praxis-sweep.xml"
 #   powershell -NoProfile -Command "Register-ScheduledTask -TaskName praxis-sweep \
 #     -Xml (Get-Content -Raw '$(cygpath -w "$TEMP/praxis-sweep.xml")')"
@@ -53,7 +54,7 @@
   if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
     git checkout --quiet --detach --force origin/main || fail "git checkout"
     # A newer sweep.sh runs from here on.
-    [ -z "${PRAXIS_SWEEP_UPDATED:-}" ] && PRAXIS_SWEEP_UPDATED=1 exec bash scripts/sweep.sh
+    [ -z "${PRAXIS_SWEEP_UPDATED:-}" ] && PRAXIS_SWEEP_UPDATED=1 exec "$BASH" scripts/sweep.sh
   fi
   log "main at $(git rev-parse --short HEAD)"
 
@@ -66,7 +67,10 @@
   fi
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
 
+  # A FAIL line, such as a scene without a Golden here, spoils no bench, and
+  # one that does, such as no adapter, fails the bench itself.
   preflight=$("$praxis" preflight)
+  [ -n "$preflight" ] || fail "praxis preflight printed nothing"
   warnings=$(printf '%s\n' "$preflight" | grep '^warn' | sed 's/  */ /g')
   if [ -n "$warnings" ]; then
     log "skipped, the machine is not quiet:"

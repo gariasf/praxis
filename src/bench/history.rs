@@ -930,6 +930,7 @@ mod tests {
         std::fs::rename(&fixture.remote, fixture.directory.join("moved.git")).unwrap();
         assert!(publish(&fixture.checkout, &results).is_err());
     }
+
     #[test]
     fn a_scene_is_unrecorded_until_mains_source_has_a_record_on_its_series() {
         let fixture = Fixture::new("unrecorded");
