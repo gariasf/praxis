@@ -1148,21 +1148,33 @@ fn the_display_ramp_holds_the_display_transforms_values() {
         for channel in 0..3 {
             // Written as the shortest decimal that reads back as the f32.
             assert_eq!(input[channel], row[channel] as f32, "input of row {row:?}");
-            let case = format_args!("channel {channel} of the display of {input:?}");
-            assert_close(
+            // Compared display-linear, where GT7_TOLERANCE bounds each
+            // GPU: sRGB's slope of 12.92 near black would multiply it.
+            let error = (srgb_decode(result[channel].into()) - srgb_decode(row[3 + channel])).abs();
+            assert!(
+                error <= DISPLAY_RAMP_TOLERANCE,
+                "channel {channel} of the display of {input:?} is {}, expected {}",
                 result[channel],
-                row[3 + channel],
-                DISPLAY_RAMP_TOLERANCE,
-                case,
+                row[3 + channel]
             );
         }
     }
 }
 
-/// Largest difference allowed between one GPU's display values and the
-/// ramp's, recorded on another: a quarter of an 8-bit step, as GPUs round
-/// GT7's PQ exponents differently.
-const DISPLAY_RAMP_TOLERANCE: f64 = 1e-3;
+/// Largest display-linear difference allowed between one GPU's display
+/// values and the ramp's, recorded on another: each lands within
+/// GT7_TOLERANCE of the sample implementation.
+const DISPLAY_RAMP_TOLERANCE: f64 = 2.0 * GT7_TOLERANCE;
+
+/// The inverse of IEC 61966-2-1's sRGB encoding [ref:khronos-dfs-srgb], in
+/// f64.
+fn srgb_decode(encoded: f64) -> f64 {
+    if encoded <= 0.04045 {
+        encoded / 12.92
+    } else {
+        ((encoded + 0.055) / 1.055).powf(2.4)
+    }
+}
 
 /// Linear sRGB reflectance of gold at normal incidence, F0 (Hoffman 2013,
 /// Table 1 [ref:hoffman-2013-f0]), as the pbr-sweep scene uses it: each
