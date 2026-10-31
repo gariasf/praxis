@@ -1728,10 +1728,9 @@ pub(crate) mod tests {
     /// Point lights that cast no shadow take no bit of the shadow mask, with
     /// the Froxel lists and without: a lit one with a square between it and
     /// the floor lights the floor as it would with no square, and a pixel
-    /// reached by more point lights than the mask has bits, ten of them
-    /// casting no shadow, gives the last of those casting one, bit 58, the
-    /// square's shadow, counting no light past the mask's bits. Were the ten
-    /// to take bits, they would fill the mask.
+    /// reached by 70 point lights, the last ten casting no shadow, gives bit
+    /// 58 the square's shadow and counts only the one light past it that
+    /// casts a shadow. Were the ten to take bits, they would be counted too.
     #[test]
     fn point_lights_that_cast_no_shadow_take_no_bit_of_the_shadow_mask() {
         let Some(context) = gpu_context() else {
@@ -1765,7 +1764,7 @@ pub(crate) mod tests {
             assert_eq!(gpu.shadow_mask_lights_overflowed, 0);
 
             let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize - 1];
-            lights.push(point);
+            lights.extend([point, unlit]);
             lights.extend([unlit; 10]);
             let (_, unoccluded, ..) = floor_drawn_with(&context, switches, &lights, 10, &[]);
             let (_, shadowed, gpu, log) =
@@ -1777,8 +1776,9 @@ pub(crate) mod tests {
                 middle(&shadowed),
                 middle(&unoccluded)
             );
-            assert_eq!(gpu.shadow_mask_lights_overflowed, 0);
-            assert!(!log.contains("The shadow mask is full"), "{log}");
+            // The floor fills the view, and every light reaches all of it.
+            assert_eq!(gpu.shadow_mask_lights_overflowed, SIZE * SIZE);
+            assert!(log.contains("The shadow mask is full"), "{log}");
         }
     }
 

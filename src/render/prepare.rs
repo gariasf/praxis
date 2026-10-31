@@ -548,8 +548,7 @@ fn prepare_lights(
     // The point lights that cast a shadow, then those that cast none, so
     // the shadow mask's bits, which follow the lights in buffer order, go
     // to the first.
-    let mut shadowed_end = lights.len();
-    for casts_shadow in [true, false] {
+    let [shadowed_end, _] = [true, false].map(|casts_shadow| {
         let mut point_lights = point_light_query
             .iter(world)
             .filter(|(.., light)| light.casts_shadow == casts_shadow)
@@ -566,10 +565,8 @@ fn prepare_lights(
             });
         lights.extend(point_lights.by_ref().take(capacity - lights.len()));
         *overflowed += point_lights.count() as u32;
-        if casts_shadow {
-            shadowed_end = lights.len();
-        }
-    }
+        lights.len()
+    });
     LightCounts {
         directional: directional_light_count,
         point: (lights.len() as u32) - directional_light_count,
