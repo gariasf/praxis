@@ -143,13 +143,16 @@ struct MaterialData {
     extra: vec4<u32>,
 };
 
-// The light buffer's counts, its directional lights first, and the scene's
+// The light buffer's counts, its directional lights first, then its point
+// lights that cast a shadow, then those that cast none, and the scene's
 // ambient illuminance.
 struct LightUniform {
     // rgb: the scene's ambient illuminance.
     ambient_illuminance: vec4<f32>,
     directional_light_count: u32,
     point_light_count: u32,
+    // How many of the point lights, the last ones, cast no shadow.
+    unshadowed_point_light_count: u32,
 }
 
 // A light as the light buffer holds it, directional lights first, then point

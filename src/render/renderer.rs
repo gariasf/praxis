@@ -1427,13 +1427,19 @@ pub(crate) mod tests {
         lights: &[LightData],
         rectangles: &[([f32; 3], [f32; 2], f32)],
     ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
-        let mut renderer = Renderer::new(
-            context,
-            TARGET_FORMAT,
-            SIZE,
-            SIZE,
-            RenderSwitches::default(),
-        );
+        floor_drawn_with(context, RenderSwitches::default(), lights, 0, rectangles)
+    }
+
+    /// `shadowed_floor` drawn with `switches`, its last
+    /// `unshadowed_point_light_count` lights casting no shadow.
+    fn floor_drawn_with(
+        context: &GpuContext,
+        switches: RenderSwitches,
+        lights: &[LightData],
+        unshadowed_point_light_count: u32,
+        rectangles: &[([f32; 3], [f32; 2], f32)],
+    ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
+        let mut renderer = Renderer::new(context, TARGET_FORMAT, SIZE, SIZE, switches);
         let white = renderer.material_pool.insert(
             &mut renderer.load_staging,
             MaterialData {
@@ -1478,6 +1484,7 @@ pub(crate) mod tests {
                 ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
                 directional_light_count: directional_light_count as u32,
                 point_light_count: (lights.len() - directional_light_count) as u32,
+                unshadowed_point_light_count,
                 ..LightUniform::default()
             },
             lights: lights.to_vec(),
@@ -1715,6 +1722,63 @@ pub(crate) mod tests {
             // The floor fills the view, and the light reaches all of it.
             assert_eq!(gpu.shadow_mask_lights_overflowed, SIZE * SIZE);
             assert!(log.contains("The shadow mask is full"), "{log}");
+        }
+    }
+
+    /// Point lights that cast no shadow take no bit of the shadow mask, with
+    /// the Froxel lists and without: a lit one with a square between it and
+    /// the floor lights the floor as it would with no square, and a pixel
+    /// reached by more point lights than the mask has bits, ten of them
+    /// casting no shadow, gives the last of those casting one, bit 58, the
+    /// square's shadow, counting no light past the mask's bits. Were the ten
+    /// to take bits, they would fill the mask.
+    #[test]
+    fn point_lights_that_cast_no_shadow_take_no_bit_of_the_shadow_mask() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        // 1 m behind the camera, 3 m from the floor's middle, and a square
+        // 0.2 m across 0.5 m behind the camera, between it and the floor.
+        let point = LightData {
+            range: 10.0,
+            offset: [0.0, 0.0, 1.0],
+            intensity: [9.0; 3],
+            ..LightData::default()
+        };
+        let square = ([0.0, 0.0, 0.5], [0.2; 2], 0.0);
+        let unlit = LightData {
+            intensity: [0.0; 3],
+            ..point
+        };
+        for froxel_lights in [true, false] {
+            let switches = RenderSwitches {
+                froxel_lights,
+                ..RenderSwitches::default()
+            };
+            let (_, lit, ..) = floor_drawn_with(&context, switches, &[point], 0, &[]);
+            let (_, unshadowed, gpu, _) =
+                floor_drawn_with(&context, switches, &[point], 1, &[square]);
+            assert!(
+                unshadowed == lit,
+                "a point light that casts no shadow shadowed the floor"
+            );
+            assert_eq!(gpu.shadow_mask_lights_overflowed, 0);
+
+            let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize - 1];
+            lights.push(point);
+            lights.extend([unlit; 10]);
+            let (_, unoccluded, ..) = floor_drawn_with(&context, switches, &lights, 10, &[]);
+            let (_, shadowed, gpu, log) =
+                floor_drawn_with(&context, switches, &lights, 10, &[square]);
+            let middle = |image: &image::RgbaImage| image.get_pixel(SIZE / 2, SIZE / 2).0;
+            assert!(
+                middle(&shadowed)[0].saturating_add(32) < middle(&unoccluded)[0],
+                "{:?} not darker than {:?}",
+                middle(&shadowed),
+                middle(&unoccluded)
+            );
+            assert_eq!(gpu.shadow_mask_lights_overflowed, 0);
+            assert!(!log.contains("The shadow mask is full"), "{log}");
         }
     }
 

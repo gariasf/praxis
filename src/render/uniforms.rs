@@ -3,7 +3,8 @@
 /// sizes it.
 pub const LIGHT_CAPACITY: u32 = 4096;
 
-/// The light buffer's counts, its directional lights first, and the scene's
+/// The light buffer's counts, its directional lights first, then its point
+/// lights that cast a shadow, then those that cast none, and the scene's
 /// ambient illuminance.
 #[repr(C)]
 #[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -11,7 +12,9 @@ pub struct LightUniform {
     pub ambient_illuminance: [f32; 4], // rgb = the scene's ambient illuminance, w = unused
     pub directional_light_count: u32,
     pub point_light_count: u32,
-    pub _pad: [u32; 2],
+    /// How many of the point lights, the last ones, cast no shadow.
+    pub unshadowed_point_light_count: u32,
+    pub _pad: u32,
 }
 
 /// A light as the light buffer holds it, directional lights first, then point

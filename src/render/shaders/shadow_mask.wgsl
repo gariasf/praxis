@@ -6,10 +6,12 @@
 // into the mask's second layer, and marks which samples show it, so each
 // fragment of an edge pixel reads its own surface's bits. The bits follow
 // the pixel's lights in the order the lit pass sums them: the directional
-// lights, then the point lights its Froxel lists, as many as
-// SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top
+// lights, then the point lights its Froxel lists that cast a shadow, as many
+// as SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top
 // bits hold the Froxel's slice. A light past them casts no shadow there,
-// and is counted. The depth target holds both culling phases' Instances
+// and is counted. A point light that casts no shadow lists after them and
+// takes no bit, so the lit pass, finding it at no bit or a clear one, never
+// hides it. The depth target holds both culling phases' Instances
 // when it runs, and the surface normals what each sample shows; the
 // surface's position is rebuilt from the sample's depth. Its bindings are
 // declared from their bind groups' definitions (src/render/bind_groups.rs).
@@ -263,6 +265,8 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
         // one call that traces, so the shader holds one ray query's state
         // (`first_intersection`). Each light's bit is its entry.
         let light_count = light.directional_light_count + point_light_count;
+        let shadowed_point_lights_end = light.directional_light_count + light.point_light_count
+            - light.unshadowed_point_light_count;
         for (var entry = 0u; entry < light_count; entry++) {
             var direction: vec3<f32>;
             var distance: f32;
@@ -287,6 +291,12 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
                 var index = entry;
                 if FROXEL_LIGHTS {
                     index = froxel_lists[froxel].lights[entry - light.directional_light_count];
+                }
+                // The point lights that cast no shadow follow those that
+                // cast one in the light buffer, and so in each Froxel's list:
+                // from the first, none takes a ray, a bit or a count.
+                if index >= shadowed_point_lights_end {
+                    break;
                 }
                 let point = lights[index];
                 let light_position = point_light_position(point, camera.anchor, camera.offset);
