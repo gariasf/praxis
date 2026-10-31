@@ -3960,3 +3960,93 @@ url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/c6efa6bf7
 section = "AMD, FidelityFX Classifier 1.3, AMD FidelityFX Shadow Classifier, FidelityFX SDK v1.1.4 docs/techniques/classifier.md"
 quote = '''The FidelityFX Shadow Classifier is designed to help accelerate the generation of raytraced shadows. It works by analyzing the scene and dividing the screen into 8x4 tiles that represent pixel-level requirements for ray tracing. The returned list of tiles represents all the tiles which contain at least one pixel that needs ray tracing applied. [...] Used to reject pixels that don’t face the sun. [...] Cascade shadow maps - Used to reject pixels that don’t need raytracing. [...] Each tile has a mask of which pixels in the tile need raytracing. - Each tile also has min and max ray length.'''
 checked = 2026-10-30
+
+["apple-m4-pro-bandwidth"]
+url = "https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/"
+section = "Apple Newsroom, Apple introduces M4 Pro and M4 Max, 30 October 2024"
+quote = '''M4 Pro supports up to 64GB of fast unified memory and 273GB/s of memory bandwidth'''
+checked = 2026-10-30
+
+["apple-metal-lossless-compression"]
+url = "https://developer.apple.com/documentation/metal/optimizing-texture-data#Apply-lossless-compression-to-a-texture-on-Apple-GPUs"
+section = "Apple Metal documentation, Optimizing texture data, Apply lossless compression to a texture on Apple GPUs"
+quote = '''Memory operations with textures that apply lossless compression typically need less memory bandwidth than equivalent memory operations with the same texture without compression. [...] On devices that support MTLGPUFamily.apple5, Metal attempts to apply lossless compression to a texture if it meets the following conditions: The texture’s pixel format doesn’t apply block-compression, such as PVRTC, ASTC, or BC. The texture’s usage options don’t include unknown, shaderWrite, or pixelFormatView. The texture doesn’t use any underlying MTLBuffer instance'''
+checked = 2026-10-30
+
+["wgpu-hal-30-metal-texture-usage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L31-L40"
+section = "wgpu-hal 30.0.1, metal/conv.rs, map_texture_usage, L31-L40; device.rs L561-L583 storage mode Private unless TRANSIENT"
+quote = '''    mtl_usage.set(
+        MTLTextureUsage::ShaderWrite,
+        usage.intersects(Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE),
+    );
+    // needed for combined depth/stencil formats since we might
+    // create a stencil-only view from them
+    mtl_usage.set(
+        MTLTextureUsage::PixelFormatView,
+        format.is_combined_depth_stencil_format(),
+    );'''
+checked = 2026-10-30
+
+["wihlidal-2016-ordered-compaction"]
+url = "https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=42"
+section = "Wihlidal, GDC 2016, Per-Triangle Culling, pp. 42-43, slides and speaker notes"
+quote = '''If ordering across all wavefronts is important, such as with translucent or procedural rendering, then the block of surviving indices can be written out in wavefront creation order using ds_ordered_count. [...] Write out Surviving Indices (16 bit) [...] Since compute cannot write out 16 bit types, I first zero the output buffer [...] and use InterlockedOr against the output location.'''
+cost = '''Maintain vertex reuse across all wavefronts - ds_ordered_count [5][15] [...] +0.1ms for ~3906 work items – use wavefront limits'''
+checked = 2026-10-30
+
+["haar-aaltonen-benchmark-path"]
+url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=53"
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances, p. 10, Mesh Cluster Rendering (ACU), p. 12, and Benchmark, p. 53"
+quote = '''Fixed topology (64 vertex strip) [...] DrawInstancedIndirect • GPU culling outputs cluster list & drawcall args [...] MultiDrawIndexedInstancedIndirect: – One (sub-)drawcall per instance – 64 triangles per cluster – Requires appending index buffer on the fly [...] “Torture” unit test scene – 250,000 separate moving objects – 1 GB of mesh data (10k+ meshes) – 8k2 texture cache atlas • DirectX 11 code path – 64 vertex clusters (strips) – No ExecuteIndirect / MultiDrawIndirect • Only two DrawInstancedIndirect calls'''
+checked = 2026-10-30
+
+["wihlidal-2016-triangle-cull-cost"]
+url = "https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=84"
+section = "Wihlidal, Optimizing the Graphics Pipeline with Compute, GDC 2016, Performance (No Tessellation), p. 84"
+quote = '''Here are the performance figures for this scene, on both consoles, and an AMD Fury X on PC. Even in DRAM, the XB1 culling is slowest, and barely any time at all to process half a million triangles'''
+cost = '''Platform Base Cull Draw Total [...] XB1 (DRAM) 5.47ms 0.24ms 4.54ms 4.78ms [...] PS4 (GDDR5) 4.56ms 0.13ms 3.76ms 3.89ms [...] PC (Fury X) 0.79ms 0.06ms 0.47ms 0.53ms [...] 443,429 triangles @ 1080p 171 unique PSOs No Cluster Culling'''
+checked = 2026-10-30
+
+["bevy-0.20-downsample-depth-msaa"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_core_pipeline/src/mip_generation/experimental/downsample_depth.wesl#L331-L341"
+section = "Bevy 0.20.1 (MIT OR Apache-2.0), downsample_depth.wesl, header L1-L2, TODO L31-L33, load_mip_0 MULTISAMPLE branch L331-L341; depth.rs L685-L698 dispatches 64x64 tiles then one workgroup for mips 6+"
+quote = '''//! Based on FidelityFX SPD v2.1 [...] // TODO: // * Subgroup support // * True single pass downsampling [...] // The top level is multisampled, so we need to loop over all the samples // and reduce them to 1. [...] for (var sample = 1; sample < sample_count; sample += 1) { result = min(result, load_mip_0_single_sample(virtual_st, sample)); }'''
+checked = 2026-10-30
+
+["amd-fidelityfx-spd-2.2-single-dispatch"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/v1.1.4/docs/techniques/single-pass-downsampler.md"
+section = "AMD FidelityFX SDK v1.1.4 (MIT), FidelityFX Single Pass Downsampler 2.2, The technique and Algorithm structure"
+quote = '''A single thread group downsamples a 64x64 tile of the input texture to 1x1. Afterwards, a global atomic counter is incremented. The thread group will then check the global atomic - if it's equal to the number of tiles, it processes the last tile as before, computing the last 6 MIP levels of the input texture. [...] This ensures that there is only one inter thread group synchronization in FidelityFX SPD, instead of having one after each MIP level. [...] A single thread group shares data between its threads by using LDS and optional wave operations. [...] FidelityFX SPD currently only supports a 2x2 kernel and min, max, or mean operations at each MIP level.'''
+checked = 2026-10-30
+
+["webgpu-spd-coherence-limit"]
+url = "https://github.com/JolifantoBambla/webgpu-spd/blob/adc666e3d73aad100e079d69c0f52be15160b868/README.md#limit-the-number-of-mip-levels-and-array-layers-per-pass"
+section = "webgpu-spd (MIT) README at adc666e, introduction and Limit the number of mip levels and array layers per pass"
+quote = '''The maximum number of mip levels that can be generated within a single pass depends on the `maxStorageTexturesPerShaderStage` limit supported by the device used. [...] Generating more than 6 mip levels per pass might not be supported on each platform due to buffers being not coherent by default yet.'''
+checked = 2026-10-30
+
+["apple-metal-depth-resolve-min"]
+url = "https://developer.apple.com/documentation/metal/mtlmultisampledepthresolvefilter/min"
+section = "Apple Metal documentation, MTLMultisampleDepthResolveFilter.min; MTLRenderPassDepthAttachmentDescriptor.depthResolveFilter (default sample0)"
+quote = '''The GPU compares all depth samples in the pixel and selects the sample with the smallest value.'''
+checked = 2026-10-30
+
+["wgpu-30-no-depth-resolve-or-reduction"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/render_pass.rs#L643-L650"
+section = "wgpu 30.0.1, RenderPassDepthStencilAttachment (view, depth_ops, stencil_ops: no resolve target); wgpu-types/src/texture.rs L658-L683 SamplerDescriptor (no reduction field)"
+quote = '''pub struct RenderPassDepthStencilAttachment<'tex> {
+    /// The view to use as an attachment.
+    pub view: &'tex TextureView,
+    /// What operations will be performed on the depth part of the attachment.
+    pub depth_ops: Option<Operations<f32>>,
+    /// What operations will be performed on the stencil part of the attachment.
+    pub stencil_ops: Option<Operations<u32>>,
+}'''
+checked = 2026-10-30
+
+["metal-feature-set-tables-depth-resolve"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3"
+section = "Metal Feature Set Tables (2026-05-21), feature availability, p. 3"
+quote = '''MSAA depth resolve Metal 3 & 4 Apple3 [...] Combined MSAA store and resolve action Metal 3 & 4 Apple3'''
+checked = 2026-10-30
