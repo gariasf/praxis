@@ -31,8 +31,9 @@
 # in .exe. Run once now with
 # `launchctl kickstart gui/$(id -u)/com.github.gariasf.praxis.sweep` or
 # `powershell -NoProfile -Command "Start-ScheduledTask praxis-sweep"`;
-# remove with `launchctl bootout` or `Unregister-ScheduledTask
-# praxis-sweep` (Git Bash turns schtasks's /Run into a path).
+# remove with `launchctl bootout` or `powershell -NoProfile -Command
+# "Unregister-ScheduledTask praxis-sweep -Confirm:\$false"` (Git Bash
+# turns schtasks's /Run into a path).
 # PRAXIS_SWEEP_CAP_SECONDS overrides the time cap, and WGPU_BACKEND the
 # backend benched.
 #
@@ -46,10 +47,11 @@
   mkdir -p target/sweep
   exec >>target/sweep/sweep.log 2>&1
 
-  # Scenes start until this many seconds of benching have passed, the rest
-  # left to the next night: about twice a full pass of the Reference scenes
-  # on the slower machine (219 s on the M4 Pro, 155 s on the RTX 2070
-  # SUPER, both measured 2026-10-31).
+  # Scenes start until this many seconds of benching, and of waiting for
+  # the GPU between scenes, have passed, the rest left to the next night:
+  # about twice a full pass of the Reference scenes on the slower machine
+  # (219 s on the M4 Pro, 155 s on the RTX 2070 SUPER, both measured
+  # 2026-10-31).
   cap_seconds="${PRAXIS_SWEEP_CAP_SECONDS:-450}"
 
   log() { printf '%s sweep: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
@@ -87,11 +89,18 @@
   fi
 
   # Each scene's bench reads the GPU load at its start, and a utilisation
-  # reading lags the work it measures: right after the scene before, it
-  # still counts that scene's frames. So each scene waits for preflight to
-  # see the GPU idle, for up to a minute, after which its records say it
-  # was busy.
-  gpu_busy() { "$praxis" preflight | grep -q '^warn *gpu load'; }
+  # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
+  # to 1 s [ref:nvidia-smi-utilization-sample-period], and on the RTX 2070
+  # SUPER it still read 67% a third of a second after a scene's bench
+  # exited. So each scene waits for preflight to see the GPU idle, and a
+  # GPU still busy after a minute ends the night. Its output is read whole,
+  # as preflight exits nonzero on a FAIL line and grep would stop reading
+  # it; the sweep's first preflight above has already logged its errors.
+  gpu_busy() {
+    local checks
+    checks=$("$praxis" preflight 2>/dev/null)
+    grep -q '^warn *gpu load' <<<"$checks"
+  }
 
   results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
   start=$SECONDS
@@ -100,11 +109,11 @@
       log "time cap of ${cap_seconds}s reached; left for the next night: $scene and after"
       break
     fi
-    waited=$SECONDS
+    wait_start=$SECONDS
     while gpu_busy; do
-      if [ $((SECONDS - waited)) -ge 60 ]; then
-        log "the GPU is still busy after a minute; benching $scene anyway"
-        break
+      if [ $((SECONDS - wait_start)) -ge 60 ]; then
+        log "skipped, the GPU is still busy after a minute; left for the next night: $scene and after"
+        break 2
       fi
       sleep 1
     done
