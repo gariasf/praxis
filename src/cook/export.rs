@@ -932,7 +932,7 @@ mod tests {
             {
                 continue;
             }
-            let directory = scratch(scene.name());
+            let directory = scratch(&format!("whole-{}", scene.name()));
             export_scene(scene, Some(0), &assets(), &directory).unwrap();
             let exported = read_scene(&directory);
             assert_eq!(exported["scene"], scene.name());
