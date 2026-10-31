@@ -7,24 +7,24 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 191.333,
-    "p95": 243.375
+    "median": 181.583,
+    "p95": 221.5
   },
   "dynamic_tlas_cpu_microseconds": {
     "median": 0.083,
-    "p95": 0.20900000000000002
+    "p95": 0.126
   },
   "gpu_frame_microseconds": {
-    "median": 3600.917,
-    "p95": 3697.208
+    "median": 3851.5,
+    "p95": 3967.125
   },
   "gate_microseconds": {
-    "median": 773.792,
-    "p95": 790.625
+    "median": 773.75,
+    "p95": 789.208
   },
   "shadow_ray_microseconds": {
-    "median": 2488.166,
-    "p95": 2604.7079999999996
+    "median": 2751.5829999999996,
+    "p95": 2856.7920000000004
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 34.125,
-      "p95": 35.25
+      "median": 33.75,
+      "p95": 35.125
     },
     "culling_phase_two": {
-      "median": 20.292,
-      "p95": 20.916999999999998
+      "median": 20.334,
+      "p95": 20.959
     },
     "depth_prepass": {
-      "median": 164.125,
-      "p95": 165.208
+      "median": 164.25,
+      "p95": 167.833
     },
     "depth_pyramid_pass": {
-      "median": 204.167,
-      "p95": 207.292
+      "median": 204.292,
+      "p95": 207.042
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 6.958,
-      "p95": 7.375
+      "median": 6.917,
+      "p95": 7.334
     },
     "lit_pass": {
-      "median": 473.041,
-      "p95": 490.208
+      "median": 470.25,
+      "p95": 488.54200000000003
     },
     "phase_two_depth_pass": {
-      "median": 12.125,
-      "p95": 12.5
+      "median": 12.083,
+      "p95": 12.458
     },
     "shadow_mask_pass": {
-      "median": 2327.792,
-      "p95": 2415.083
+      "median": 2606.292,
+      "p95": 2695.583
     },
     "tonemapping_pass": {
-      "median": 320.792,
-      "p95": 321.334
+      "median": 322.083,
+      "p95": 322.66700000000003
     }
   },
   "draw_calls": 4,

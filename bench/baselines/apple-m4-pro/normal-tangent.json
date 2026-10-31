@@ -7,24 +7,24 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 184.834,
-    "p95": 282.708
+    "median": 208.584,
+    "p95": 306.75
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.083,
-    "p95": 0.20800000000000002
+    "median": 0.08399999999999999,
+    "p95": 0.417
   },
   "gpu_frame_microseconds": {
-    "median": 3361.583,
-    "p95": 3373.292
+    "median": 3664.5409999999997,
+    "p95": 3686.333
   },
   "gate_microseconds": {
-    "median": 819.0409999999999,
-    "p95": 823.667
+    "median": 818.208,
+    "p95": 823.125
   },
   "shadow_ray_microseconds": {
-    "median": 2219.708,
-    "p95": 2232.6679999999997
+    "median": 2522.9170000000004,
+    "p95": 2544.875
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
@@ -36,44 +36,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 41.584,
-      "p95": 42.708
+      "median": 37.666000000000004,
+      "p95": 42.166999999999994
     },
     "culling_phase_two": {
-      "median": 20.291,
-      "p95": 20.875
+      "median": 19.791999999999998,
+      "p95": 20.375
     },
     "depth_prepass": {
-      "median": 163.416,
-      "p95": 164.167
+      "median": 165.208,
+      "p95": 167.917
     },
     "depth_pyramid_pass": {
       "median": 204.583,
-      "p95": 207.042
+      "p95": 206.208
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 6.958,
-      "p95": 7.375
+      "median": 6.75,
+      "p95": 7.1659999999999995
     },
     "lit_pass": {
-      "median": 484.91700000000003,
-      "p95": 492.12500000000006
+      "median": 475.83299999999997,
+      "p95": 488.87500000000006
     },
     "phase_two_depth_pass": {
-      "median": 12.166,
-      "p95": 12.542
+      "median": 12.125,
+      "p95": 12.625
     },
     "shadow_mask_pass": {
-      "median": 2086.4159999999997,
-      "p95": 2095.083
+      "median": 2405.958,
+      "p95": 2413.292
     },
     "tonemapping_pass": {
-      "median": 320.792,
-      "p95": 321.41700000000003
+      "median": 319.541,
+      "p95": 320.0
     }
   },
   "draw_calls": 4,
@@ -98,6 +98,6 @@
     "arena_bytes_in_use": 258368,
     "heap_allocations": 349
   },
-  "aliasing_rmse": 18974,
-  "aliasing_p99": 35835
+  "aliasing_rmse": 18973,
+  "aliasing_p99": 35784
 }
