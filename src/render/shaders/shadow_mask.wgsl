@@ -306,10 +306,9 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
                     // The surface's one bit for a point light shades every
                     // fragment of it, and a fragment whose shading normal
                     // turns from the light reflects none of it whatever the
-                    // bit. So
-                    // where another sample of the surface faces the light,
-                    // as at a silhouette, where the surface behind the
-                    // nearest triangle lies within a pixel's width of its
+                    // bit. So where another sample of the surface faces the
+                    // light, as at a silhouette, where the surface behind
+                    // the nearest triangle lies within a pixel's width of its
                     // plane, or along a smooth surface's terminator, the bit
                     // is the verdict of a ray from the first such sample.
                     var facing = false;
