@@ -1,17 +1,22 @@
 use std::fmt;
 
 /// The size of the device memory blocks gpu-allocator sub-allocates from on
-/// Vulkan and DX12, wgpu-hal's floor [ref:wgpu-hal-30-manual-memory-hints].
-/// Metal ignores it. A resource larger than a block gets a block of its own,
-/// destroyed with it [ref:gpu-allocator-0.28-personal-block], as every render
-/// target at the reference size does. wgpu-hal gives no texture the dedicated
-/// memory [ref:wgpu-hal-30-vulkan-texture-allocation] that NVIDIA advises for
-/// colour and depth attachments [ref:nvidia-vulkan-dos-donts-dedicated-memory]:
-/// in the default blocks of 128 to 256 MiB, which targets share with buffers,
-/// each State after a process's first drew pbr-sweep's depth pre-pass in 198
-/// µs instead of 52, and its lit pass in 799 µs instead of 285, on the RTX
-/// 2070 SUPER under Vulkan.
-const DEVICE_MEMORY_BLOCK_BYTES: u64 = 4 << 20;
+/// Vulkan and DX12, in place of the `Performance` hint's 128 to 256 MiB
+/// [ref:wgpu-hal-30-manual-memory-hints]. Metal ignores it. A resource larger
+/// than a block gets a block of its own, destroyed with it
+/// [ref:gpu-allocator-0.28-personal-block], as each of the main pass's
+/// attachments at the reference size does, while a 2048² BC7 Texture with its
+/// mips still shares one, so Textures cost few allocations. In blocks of 128
+/// to 256 MiB, on the RTX 2070 SUPER under Vulkan, a State whose targets
+/// landed in a block an earlier State had filled drew pbr-sweep's depth
+/// pre-pass in 198 µs instead of 52 and its lit pass in 798 µs instead of
+/// 285. wgpu-hal's Vulkan backend puts
+/// no texture it creates in dedicated memory
+/// [ref:wgpu-hal-30-vulkan-texture-allocation], which NVIDIA says may speed
+/// colour and depth attachments, most on pre-Turing GPUs
+/// [ref:nvidia-vulkan-dos-donts-dedicated-memory]; a block of its own is the
+/// nearest the hint comes.
+const DEVICE_MEMORY_BLOCK_BYTES: u64 = 16 << 20;
 
 /// The adapter, device and queue that every GPU path shares. Created for a
 /// window's surface, or headless for offscreen work.
@@ -850,8 +855,8 @@ mod tests {
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
-        let _arena = context.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Memory Test Arena"),
+        let _buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Memory Test Buffer"),
             size: 1 << 20,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -870,19 +875,19 @@ mod tests {
             .ok();
             return;
         };
-        let mut targets = Vec::new();
+        let mut alone = Vec::new();
         for block in &report.blocks {
             let allocations = &report.allocations[block.allocations.clone()];
+            let names: Vec<_> = allocations.iter().map(|other| &other.name).collect();
             for allocation in allocations {
                 if allocation.size > DEVICE_MEMORY_BLOCK_BYTES {
-                    let names: Vec<_> = allocations.iter().map(|other| &other.name).collect();
                     assert_eq!(
                         names,
                         [&allocation.name],
                         "{} shares its block",
                         allocation.name
                     );
-                    targets.push(allocation.name.as_str());
+                    alone.push(allocation.name.as_str());
                 }
             }
         }
@@ -890,8 +895,9 @@ mod tests {
             "Depth Texture",
             "Multisampled Colour Texture",
             "HDR Texture",
+            "Surface Normals",
         ] {
-            assert!(targets.contains(&target), "{target} not among {targets:?}");
+            assert!(alone.contains(&target), "{target} not among {alone:?}");
         }
     }
 }

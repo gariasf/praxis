@@ -4052,9 +4052,13 @@ quote = '''MSAA depth resolve Metal 3 & 4 Apple3 [...] Combined MSAA store and r
 checked = 2026-10-30
 
 ["wgpu-hal-30-manual-memory-hints"]
-url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L457-L473"
-section = "wgpu-hal 30.0.1, lib.rs L457-L473: AllocationSizes::from_memory_hints, the Manual arm"
-quote = '''wgt::MemoryHints::Manual {
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L444-L473"
+section = "wgpu-hal 30.0.1, lib.rs L444-L473: AllocationSizes::from_memory_hints, the Performance and Manual arms, which the Vulkan and DX12 allocators read (vulkan/adapter.rs L2951, dx12/suballocation.rs L78)"
+quote = '''wgt::MemoryHints::Performance => Self {
+min_device_memblock_size: 128 * MB,
+max_device_memblock_size: 256 * MB,
+[...]
+wgt::MemoryHints::Manual {
 suballocated_device_memory_block_size,
 } => {
 [...]
