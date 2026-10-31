@@ -70,6 +70,7 @@ enum Command {
         results: String,
     },
     ImportBaselines,
+    UnrecordedScenes,
     Compare {
         results: String,
         mode: CompareMode,
@@ -117,6 +118,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         } => bench(&output, configuration, &scenes, crowd_form, publish),
         Command::Publish { results } => publish(&results),
         Command::ImportBaselines => import_baselines(),
+        Command::UnrecordedScenes => unrecorded_scenes(),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -223,6 +225,9 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, subcommand] if command == "history" && subcommand == "import" => {
             Command::ImportBaselines
         }
+        [command, subcommand] if command == "history" && subcommand == "unrecorded" => {
+            Command::UnrecordedScenes
+        }
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -243,7 +248,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish] [<scene>...]`, \
-             `publish <bench directory>`, `history import`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `publish <bench directory>`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -418,6 +423,24 @@ fn publish(results: &str) -> anyhow::Result<()> {
 fn import_baselines() -> anyhow::Result<()> {
     let publication = praxis::bench::import_baselines(Path::new("."))?;
     writeln!(std::io::stdout(), "{publication}")?;
+    Ok(())
+}
+
+/// Prints, one per line, the Reference scenes with no Bench record on a
+/// Series for the source of the remote's `main` on this machine's adapter:
+/// the scenes a sweep benches.
+fn unrecorded_scenes() -> anyhow::Result<()> {
+    let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
+    let scenes = ReferenceScene::ALL.map(ReferenceScene::name);
+    let mut stdout = std::io::stdout();
+    for scene in praxis::bench::unrecorded_scenes(
+        Path::new("."),
+        &adapter.name,
+        adapter.backend.to_str(),
+        &scenes,
+    )? {
+        writeln!(stdout, "{scene}")?;
+    }
     Ok(())
 }
 
@@ -754,6 +777,10 @@ mod tests {
         assert!(matches!(
             parse(&["history", "import"]).unwrap(),
             Command::ImportBaselines
+        ));
+        assert!(matches!(
+            parse(&["history", "unrecorded"]).unwrap(),
+            Command::UnrecordedScenes
         ));
         assert!(parse(&["history"]).is_err());
     }
