@@ -22,14 +22,19 @@
 # logged on, as the bench needs the GPU), in Git Bash:
 #   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
 #   sweep=$(cd ~/praxis-sweep && pwd -W)
-#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -w "$(command -v bash)").exe|g" \
+#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -m "$(command -v bash)")|g" \
 #     scripts/sweep-task.xml >"$TEMP/praxis-sweep.xml"
 #   powershell -NoProfile -Command "Register-ScheduledTask -TaskName praxis-sweep \
 #     -Xml (Get-Content -Raw '$(cygpath -w "$TEMP/praxis-sweep.xml")')"
-# Run once now with `launchctl kickstart gui/$(id -u)/com.github.gariasf.praxis.sweep`
-# or `schtasks /Run /TN praxis-sweep`; remove with `launchctl bootout` or
-# `schtasks /Delete /TN praxis-sweep`. PRAXIS_SWEEP_CAP_SECONDS overrides
-# the time cap, and WGPU_BACKEND the backend benched.
+# The command path is cygpath's mixed form: sed would read the backslashes
+# of the Windows form as escapes, and Git Bash's cygpath already ends it
+# in .exe. Run once now with
+# `launchctl kickstart gui/$(id -u)/com.github.gariasf.praxis.sweep` or
+# `powershell -NoProfile -Command "Start-ScheduledTask praxis-sweep"`;
+# remove with `launchctl bootout` or `Unregister-ScheduledTask
+# praxis-sweep` (Git Bash turns schtasks's /Run into a path).
+# PRAXIS_SWEEP_CAP_SECONDS overrides the time cap, and WGPU_BACKEND the
+# backend benched.
 #
 # The body is one block, so bash has read all of it before the checkout
 # below replaces this file.
@@ -81,6 +86,13 @@
     exit 0
   fi
 
+  # Each scene's bench reads the GPU load at its start, and a utilisation
+  # reading lags the work it measures: right after the scene before, it
+  # still counts that scene's frames. So each scene waits for preflight to
+  # see the GPU idle, for up to a minute, after which its records say it
+  # was busy.
+  gpu_busy() { "$praxis" preflight | grep -q '^warn *gpu load'; }
+
   results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
   start=$SECONDS
   for scene in $scenes; do
@@ -88,6 +100,14 @@
       log "time cap of ${cap_seconds}s reached; left for the next night: $scene and after"
       break
     fi
+    waited=$SECONDS
+    while gpu_busy; do
+      if [ $((SECONDS - waited)) -ge 60 ]; then
+        log "the GPU is still busy after a minute; benching $scene anyway"
+        break
+      fi
+      sleep 1
+    done
     "$praxis" bench "$results" --no-publish "$scene" || log "bench of $scene failed"
   done
   if compgen -G "$results/*.json" >/dev/null; then
