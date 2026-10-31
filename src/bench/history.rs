@@ -9,10 +9,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use anyhow::Context;
 
 use super::provenance::{git, source_hash};
-use super::{Aliasing, Counters, Measurements, Spread, adapter_key};
+use super::{Aliasing, Configuration, Counters, Measurements, Spread, adapter_key};
 
 const REMOTE: &str = "origin";
 const BRANCH: &str = "bench-history";
+
+/// The branch's directories of records on a Series and of the rest.
+const ON_SERIES: &str = "records";
+const TAGGED: &str = "tagged";
 
 /// How many times a publish rebuilds its commit on the branch's new tip
 /// after another publish pushed first.
@@ -29,10 +33,11 @@ This branch holds data only and is never merged.
 - `tagged/<adapter>-<backend>/<scene>/<source hash>.json`: every other record,
   its `tags` saying why it is kept off the Series.
 - `series/<adapter>-<backend>/<scene>.json`: one row per record in `records/`,
-  in source order, rebuilt in the commit that changes them.
+  in the order their commits were made, rebuilt in the commit that changes them.
 
-A record whose path exists replaces it only when its GPU frame p95 over its
-median is lower. A bad publish is undone with `git revert`.
+A record in `records/` holds its key against a tagged one. Otherwise a record
+whose path exists replaces it only when its GPU frame p95 over its median is
+lower. A bad publish is undone with `git revert`.
 ";
 
 /// A Bench record as the branch stores it: a bench result, when its commit
@@ -49,29 +54,28 @@ struct BenchRecord {
 }
 
 impl BenchRecord {
-    /// The record's path under `records/` or `tagged/`: its key, but for
-    /// the Harness version it holds.
-    fn path(&self) -> anyhow::Result<PathBuf> {
-        let measurements = &self.measurements;
-        let provenance = measurements
+    /// The record's path under `directory`, `ON_SERIES` or `TAGGED`: its
+    /// key. The Harness version it holds is not in the path, as it is
+    /// defined under `src/`, so a source hash names one.
+    fn path(&self, directory: &str) -> anyhow::Result<PathBuf> {
+        let provenance = self
+            .measurements
             .provenance
             .as_ref()
             .context("a Bench record has provenance")?;
-        Ok(PathBuf::from(if self.tags.is_empty() {
-            "records"
-        } else {
-            "tagged"
-        })
-        .join(adapter_key(
-            &measurements.adapter,
-            Some(&measurements.backend),
-        ))
-        .join(&measurements.scene)
-        .join(format!("{}.json", provenance.checkout.source_hash)))
+        Ok(Path::new(directory)
+            .join(self.adapter_key())
+            .join(&self.measurements.scene)
+            .join(format!("{}.json", provenance.checkout.source_hash)))
+    }
+
+    /// `<adapter>-<backend>`, as the branch's paths name them.
+    fn adapter_key(&self) -> String {
+        adapter_key(&self.measurements.adapter, Some(&self.measurements.backend))
     }
 
     /// The GPU frame p95 over its median: lower is quieter.
-    fn spread(&self) -> f64 {
+    fn p95_over_median(&self) -> f64 {
         self.measurements
             .provenance
             .as_ref()
@@ -138,21 +142,22 @@ impl std::fmt::Display for Publication {
 pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Publication> {
     let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
     let repository = Path::new(&root);
+    let main = format!("{REMOTE}/main");
     git(
         repository,
         &[
             "fetch",
             "--quiet",
             REMOTE,
-            "+refs/heads/main:refs/remotes/origin/main",
+            &format!("+refs/heads/main:refs/remotes/{main}"),
         ],
         None,
     )?;
-    let main_source_hash = source_hash(repository, "origin/main")?;
+    let main_source_hash = source_hash(repository, &main)?;
     let records: Vec<BenchRecord> = results
         .iter()
         .filter_map(|measurements| {
-            record(repository, measurements, &main_source_hash)
+            record(repository, measurements, &main, &main_source_hash)
                 .inspect_err(|error| {
                     tracing::warn!(
                         scene = measurements.scene,
@@ -164,8 +169,8 @@ pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Pu
         })
         .collect();
     let mut attempt = 1;
+    let mut tip = remote_tip(repository)?;
     loop {
-        let tip = remote_tip(repository)?;
         let worktree = Worktree::add(repository, tip.as_deref())?;
         let mut publication = worktree.apply(&records)?;
         publication.commit = worktree.commit(tip.as_deref(), &records)?;
@@ -182,18 +187,20 @@ pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Pu
             ],
             None,
         );
-        match pushed {
-            Ok(_) => return Ok(publication),
-            Err(error) if attempt < PUSH_ATTEMPTS => {
-                tracing::info!(
-                    attempt,
-                    error = format!("{error:#}"),
-                    "bench-history moved; publishing again on its new tip"
-                );
-                attempt += 1;
-            }
-            Err(error) => return Err(error),
+        let Err(error) = pushed else {
+            return Ok(publication);
+        };
+        // Only a tip that moved since the fetch is a race worth another try.
+        let current = remote_tip(repository)?;
+        if current == tip || attempt == PUSH_ATTEMPTS {
+            return Err(error);
         }
+        tracing::info!(
+            attempt,
+            "bench-history moved; publishing again on its new tip"
+        );
+        tip = current;
+        attempt += 1;
     }
 }
 
@@ -202,6 +209,7 @@ pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Pu
 fn record(
     repository: &Path,
     measurements: &Measurements,
+    main: &str,
     main_source_hash: &str,
 ) -> anyhow::Result<BenchRecord> {
     let provenance = measurements
@@ -219,15 +227,11 @@ fn record(
     let mains_source = checkout.source_hash == main_source_hash
         || git(
             repository,
-            &[
-                "merge-base",
-                "--is-ancestor",
-                &checkout.commit,
-                "origin/main",
-            ],
+            &["merge-base", "--is-ancestor", &checkout.commit, main],
             None,
         )
         .is_ok();
+    let reference = Configuration::REFERENCE;
     let tags = [
         (checkout.dirty, "dirty tree".to_owned()),
         (
@@ -236,6 +240,17 @@ fn record(
         ),
         (!provenance.quiet, "machine not quiet".to_owned()),
         (!mains_source, "source not main's".to_owned()),
+        (
+            (
+                measurements.width,
+                measurements.height,
+                measurements.measured_frames,
+            ) != (reference.width, reference.height, reference.measured_frames),
+            format!(
+                "{}x{} over {} frames, not the reference configuration",
+                measurements.width, measurements.height, measurements.measured_frames
+            ),
+        ),
     ]
     .into_iter()
     .filter_map(|(applies, tag)| applies.then_some(tag))
@@ -284,6 +299,10 @@ impl<'repository> Worktree<'repository> {
             WORKTREES.fetch_add(1, Ordering::Relaxed)
         ));
         let path = directory.to_str().context("a UTF-8 temporary directory")?;
+        // A process killed mid-publish leaves its worktree, which a later
+        // process of the same id would collide with.
+        std::fs::remove_dir_all(&directory).ok();
+        git(repository, &["worktree", "prune"], None)?;
         match tip {
             Some(tip) => git(
                 repository,
@@ -313,8 +332,9 @@ impl<'repository> Worktree<'repository> {
         Ok(worktree)
     }
 
-    /// Writes `records` into the worktree, a record whose path exists only
-    /// when it is quieter, and rebuilds the Series files they join.
+    /// Writes `records` into the worktree and rebuilds the Series files
+    /// they join. A record on a Series holds its key against a tagged one;
+    /// otherwise a record replaces one under its key only when quieter.
     fn apply(&self, records: &[BenchRecord]) -> anyhow::Result<Publication> {
         let mut publication = Publication {
             on_series: 0,
@@ -324,32 +344,47 @@ impl<'repository> Worktree<'repository> {
         };
         let mut series = BTreeSet::new();
         for record in records {
-            let relative = record.path()?;
-            let path = self.directory.join(&relative);
+            let on_series = record.tags.is_empty();
+            let series_path = self.directory.join(record.path(ON_SERIES)?);
+            let tagged_path = self.directory.join(record.path(TAGGED)?);
+            let relative_path = record.path(if on_series { ON_SERIES } else { TAGGED })?;
+            if !on_series && series_path.exists() {
+                tracing::info!(
+                    record = %relative_path.display(),
+                    "Bench record dropped: one on a Series holds its key"
+                );
+                publication.dropped += 1;
+                continue;
+            }
+            let path = self.directory.join(&relative_path);
             if let Ok(json) = std::fs::read(&path) {
                 let existing: BenchRecord = serde_json::from_slice(&json)
-                    .with_context(|| format!("parsing {}", relative.display()))?;
-                if record.spread() >= existing.spread() {
+                    .with_context(|| format!("parsing {}", relative_path.display()))?;
+                if record.p95_over_median() >= existing.p95_over_median() {
                     tracing::info!(
-                        record = %relative.display(),
-                        p95_over_median = record.spread(),
-                        kept_p95_over_median = existing.spread(),
+                        record = %relative_path.display(),
+                        p95_over_median = record.p95_over_median(),
+                        kept_p95_over_median = existing.p95_over_median(),
                         "Bench record dropped: the one under its key is as quiet"
                     );
                     publication.dropped += 1;
                     continue;
                 }
             }
-            std::fs::create_dir_all(path.parent().context("a record has a directory")?)?;
+            let directory = relative_path.parent().context("a record has a directory")?;
+            std::fs::create_dir_all(self.directory.join(directory))?;
             std::fs::write(&path, serde_json::to_string_pretty(record)? + "\n")?;
-            if record.tags.is_empty() {
+            if on_series {
+                if tagged_path.exists() {
+                    std::fs::remove_file(&tagged_path)?;
+                }
                 publication.on_series += 1;
-                series.insert(relative.parent().map(Path::to_owned));
+                series.insert(directory.to_owned());
             } else {
                 publication.tagged += 1;
             }
         }
-        for directory in series.into_iter().flatten() {
+        for directory in series {
             self.rebuild_series(&directory)?;
         }
         std::fs::write(self.directory.join("README.md"), README)?;
@@ -357,8 +392,8 @@ impl<'repository> Worktree<'repository> {
     }
 
     /// Rebuilds the Series file of the records in `directory`,
-    /// `records/<adapter>-<backend>/<scene>`, one row per line in source
-    /// order.
+    /// `records/<adapter>-<backend>/<scene>`, one row per line in the
+    /// order their commits were made.
     fn rebuild_series(&self, directory: &Path) -> anyhow::Result<()> {
         let mut records = Vec::new();
         for entry in std::fs::read_dir(self.directory.join(directory))? {
@@ -375,7 +410,7 @@ impl<'repository> Worktree<'repository> {
             .map(serde_json::to_string)
             .collect::<Result<Vec<_>, _>>()?;
         let series = Path::new("series")
-            .join(directory.strip_prefix("records")?)
+            .join(directory.strip_prefix(ON_SERIES)?)
             .with_extension("json");
         let path = self.directory.join(series);
         std::fs::create_dir_all(path.parent().context("a Series has a directory")?)?;
@@ -397,19 +432,11 @@ impl<'repository> Worktree<'repository> {
         {
             return Ok(None);
         }
-        let sources: BTreeSet<_> = records
-            .iter()
-            .map(|record| {
-                adapter_key(
-                    &record.measurements.adapter,
-                    Some(&record.measurements.backend),
-                )
-            })
-            .collect();
+        let adapter_keys: BTreeSet<_> = records.iter().map(BenchRecord::adapter_key).collect();
         let message = format!(
             "Publish {} Bench records from {}",
             records.len(),
-            sources.into_iter().collect::<Vec<_>>().join(", ")
+            adapter_keys.into_iter().collect::<Vec<_>>().join(", ")
         );
         let mut arguments = vec!["commit-tree", &tree, "-m", &message];
         if let Some(tip) = tip {
@@ -571,7 +598,7 @@ mod tests {
     }
 
     /// A result of `checkout` on `adapter` whose GPU frames spread
-    /// `p95_over_median`, quiet below 1.06.
+    /// `p95_over_median`, quiet below `QUIET_P95_OVER_MEDIAN`.
     fn result(checkout: &Path, adapter: &str, p95_over_median: f64) -> Measurements {
         Measurements {
             adapter: adapter.to_owned(),
@@ -623,7 +650,7 @@ mod tests {
                 .find(|path| path.starts_with("records/"))
                 .unwrap();
             let record: BenchRecord = serde_json::from_str(&fixture.read(&path)).unwrap();
-            record.spread()
+            record.p95_over_median()
         };
         for (p95_over_median, (on_series, dropped), kept) in [
             (1.04, (1, 0), 1.04),
@@ -723,5 +750,51 @@ mod tests {
         let results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
         std::fs::rename(&fixture.remote, fixture.directory.join("moved.git")).unwrap();
         assert!(publish(&fixture.checkout, &results).is_err());
+    }
+    #[test]
+    fn a_record_on_a_series_holds_its_key_against_a_tagged_one() {
+        let fixture = Fixture::new("held");
+        let paths = |directory: &str| {
+            fixture
+                .files()
+                .into_iter()
+                .filter(|path| path.starts_with(directory))
+                .count()
+        };
+        let quiet = result(&fixture.checkout, "Apple M4 Pro", 1.02);
+        let noisy = result(&fixture.checkout, "Apple M4 Pro", 1.10);
+        let counters = Measurements {
+            measured_frames: Configuration::COUNTERS.measured_frames,
+            ..result(&fixture.checkout, "Apple M4 Pro", 1.01)
+        };
+        let publication = publish(&fixture.checkout, std::slice::from_ref(&noisy)).unwrap();
+        assert_eq!((publication.on_series, publication.tagged), (0, 1));
+        // A quiet record of the same key replaces the tagged one.
+        publish(&fixture.checkout, &[quiet]).unwrap();
+        assert_eq!((paths("records/"), paths("tagged/")), (1, 0));
+        // And neither a noisy run nor a quieter one of another configuration
+        // displaces it.
+        let publication = publish(&fixture.checkout, &[noisy, counters]).unwrap();
+        assert_eq!(publication.dropped, 2);
+        assert_eq!((paths("records/"), paths("tagged/")), (1, 0));
+    }
+
+    #[test]
+    fn a_run_of_another_configuration_is_tagged_with_it() {
+        let fixture = Fixture::new("configuration");
+        let counters = Measurements {
+            measured_frames: Configuration::COUNTERS.measured_frames,
+            ..result(&fixture.checkout, "Apple M4 Pro", 1.01)
+        };
+        let source_hash = &counters.provenance.as_ref().unwrap().checkout.source_hash;
+        publish(&fixture.checkout, std::slice::from_ref(&counters)).unwrap();
+        let record: BenchRecord = serde_json::from_str(&fixture.read(&format!(
+            "tagged/apple-m4-pro-metal/pbr-sweep/{source_hash}.json"
+        )))
+        .unwrap();
+        assert_eq!(
+            record.tags,
+            ["2560x1440 over 64 frames, not the reference configuration"]
+        );
     }
 }

@@ -24,7 +24,7 @@ const MEASURED_PATHS: [&str; 5] = ["src", "assets", "Cargo.toml", "Cargo.lock", 
 
 /// A scene's GPU frame p95 over its median at or above which its run was
 /// not quiet, whatever preflight saw at its start.
-const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
+pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
 
 /// Where and when a bench result was measured.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

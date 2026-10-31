@@ -939,7 +939,8 @@ mod tests {
     }
 
     /// The Provenance of a run of `checkout` on an otherwise idle machine
-    /// whose GPU frames spread `p95_over_median`, quiet below 1.06.
+    /// whose GPU frames spread `p95_over_median`, quiet below
+    /// `QUIET_P95_OVER_MEDIAN`.
     pub(super) fn provenance(checkout: Checkout, p95_over_median: f64) -> Provenance {
         Provenance {
             checkout,
@@ -950,7 +951,7 @@ mod tests {
             gpu_load_percent: Some(3),
             other_processes: Some(Vec::new()),
             gpu_frame_p95_over_median: Some(p95_over_median),
-            quiet: p95_over_median < 1.06,
+            quiet: p95_over_median < provenance::QUIET_P95_OVER_MEDIAN,
             started_unix_seconds: 1_793_448_000,
         }
     }
