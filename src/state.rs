@@ -41,6 +41,9 @@ pub struct State {
     recorder: FrameRecorder,
     preparer: FramePreparer,
     renderer: Renderer,
+    /// The Cooked cache's `content_hash` once the scene loaded: the Blobs
+    /// it loaded.
+    pub(crate) scene_content_hash: String,
 }
 
 /// A Reference scene's ECS World and the schedules that advance it: what
@@ -189,6 +192,7 @@ impl State {
             recorder,
             preparer,
             renderer,
+            scene_content_hash: cache.content_hash(),
         })
     }
 

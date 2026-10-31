@@ -12,7 +12,7 @@ use crate::capture::{GOLDEN_DIRECTORY, golden_key};
 
 /// GPU utilisation, in percent, above which a bench's times would be
 /// someone else's.
-const BUSY_GPU_PERCENT: u32 = 10;
+pub(crate) const BUSY_GPU_PERCENT: u32 = 10;
 
 /// Names listed per line before the rest are counted.
 const LISTED_NAMES: usize = 4;
@@ -279,8 +279,10 @@ fn output(program: &str, arguments: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn gpu_load() -> Check {
-    let load = if cfg!(target_os = "macos") {
+/// The busiest GPU's utilisation in percent, when `nvidia-smi` or `ioreg`
+/// reports it.
+pub(crate) fn gpu_load_percent() -> Option<u32> {
+    if cfg!(target_os = "macos") {
         output(
             "ioreg",
             &["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
@@ -295,8 +297,11 @@ fn gpu_load() -> Check {
             ],
         )
         .and_then(|report| parse_nvidia_smi_utilization(&report))
-    };
-    match load {
+    }
+}
+
+fn gpu_load() -> Check {
+    match gpu_load_percent() {
         Some(percent) if percent > BUSY_GPU_PERCENT => Check::new(
             "gpu load",
             Verdict::Warn,
@@ -337,28 +342,35 @@ fn parse_ioreg_utilization(report: &str) -> Option<u32> {
         .max()
 }
 
-fn other_processes() -> Check {
+/// Each other process running a praxis binary, as `name id`, when the
+/// process listing runs.
+pub(crate) fn other_praxis_processes() -> Option<Vec<String>> {
     let processes = if cfg!(windows) {
         output("tasklist", &["/FO", "CSV", "/NH"]).map(|listing| parse_tasklist(&listing))
     } else {
         output("ps", &["-A", "-o", "pid=,comm="]).map(|listing| parse_ps(&listing))
-    };
-    let Some(processes) = processes else {
-        return Check::new("processes", Verdict::Note, "unknown: no process listing");
-    };
+    }?;
     let others = praxis_processes(&processes, std::process::id(), &binary_names());
-    if others.is_empty() {
-        return Check::new("processes", Verdict::Ok, "no other praxis process");
-    }
-    let names: Vec<_> = others
-        .iter()
-        .map(|(id, name)| format!("{name} {id}"))
-        .collect();
-    Check::new(
-        "processes",
-        Verdict::Warn,
-        format!("{}: bench only once they end", listed(&names)),
+    Some(
+        others
+            .iter()
+            .map(|(id, name)| format!("{name} {id}"))
+            .collect(),
     )
+}
+
+fn other_processes() -> Check {
+    match other_praxis_processes() {
+        None => Check::new("processes", Verdict::Note, "unknown: no process listing"),
+        Some(names) if names.is_empty() => {
+            Check::new("processes", Verdict::Ok, "no other praxis process")
+        }
+        Some(names) => Check::new(
+            "processes",
+            Verdict::Warn,
+            format!("{}: bench only once they end", listed(&names)),
+        ),
+    }
 }
 
 /// Process IDs and image names from `tasklist /FO CSV /NH`.

@@ -3,9 +3,11 @@
 //! Blob and Cook key, one file per Asset so concurrent cooks never lose an
 //! entry.
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
 
 use anyhow::Context;
 use sha2::{Digest, Sha256};
@@ -654,6 +656,8 @@ pub const COOKED_CACHE_DIRECTORY: &str = "cooked";
 /// `index/<Asset ID>`, which holds the Blob's hash and the Cook key.
 pub struct CookedCache {
     root: PathBuf,
+    /// The hash of each Blob `read` returned, for `content_hash`.
+    blobs_read: Mutex<BTreeSet<String>>,
 }
 
 /// One cook index entry, as lowercase hex.
@@ -666,7 +670,25 @@ pub(crate) struct IndexEntry {
 
 impl CookedCache {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            blobs_read: Mutex::default(),
+        }
+    }
+
+    /// SHA-256 over the hashes of the Blobs read so far, sorted and one per
+    /// line: what a scene loaded, whatever order it loaded it in.
+    pub fn content_hash(&self) -> String {
+        let blobs_read = self
+            .blobs_read
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut hasher = Sha256::new();
+        for blob in blobs_read.iter() {
+            hasher.update(blob.as_bytes());
+            hasher.update(b"\n");
+        }
+        hex(&hasher.finalize())
     }
 
     fn blob_path(&self, blob: &str) -> PathBuf {
@@ -696,7 +718,12 @@ impl CookedCache {
             )
         })?;
         let path = self.blob_path(&entry.blob);
-        fs::read(&path).with_context(|| format!("reading Blob {}", path.display()))
+        let blob = fs::read(&path).with_context(|| format!("reading Blob {}", path.display()))?;
+        self.blobs_read
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(entry.blob);
+        Ok(blob)
     }
 
     pub fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial> {
@@ -728,7 +755,6 @@ impl CookedCache {
     }
 }
 
-#[cfg(feature = "cook")]
 pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -919,5 +945,30 @@ mod tests {
         corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
         let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
         assert!(error.contains("not whole triangles"), "{error}");
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn the_content_hash_names_the_blobs_read_in_any_order_and_moves_with_their_bytes() {
+        let directory =
+            std::env::temp_dir().join(format!("praxis-content-hash-{}", std::process::id()));
+        let content_hash = |blobs: [&[u8]; 2], order: [usize; 2]| {
+            fs::remove_dir_all(&directory).ok();
+            let cache = CookedCache::new(&directory);
+            for (index, blob) in blobs.iter().enumerate() {
+                cache.write(AssetId(index as u128), "key", blob).unwrap();
+            }
+            let empty = cache.content_hash();
+            for index in order {
+                cache.read(AssetId(index as u128)).unwrap();
+            }
+            cache.read(AssetId(order[0] as u128)).unwrap();
+            assert_ne!(cache.content_hash(), empty);
+            cache.content_hash()
+        };
+        let forward = content_hash([b"first", b"second"], [0, 1]);
+        assert_eq!(content_hash([b"first", b"second"], [1, 0]), forward);
+        assert_ne!(content_hash([b"first", b"other"], [0, 1]), forward);
+        fs::remove_dir_all(&directory).ok();
     }
 }
