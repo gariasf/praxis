@@ -2,13 +2,16 @@
 # The nightly sweep (ADR 0024): benches `main` on this machine when its
 # source lacks a record on a Series here, the scenes it lacks, and only on a
 # quiet machine. The records publish to `bench-history`. It runs in a
-# worktree of its own, which it moves to `main` each night, and appends
-# what it did to target/sweep/sweep.log there.
+# clone of its own, which it moves to `main` each night, and appends what
+# it did to target/sweep/sweep.log there. On the Mac the clone sits outside
+# ~/Documents, ~/Desktop and ~/Downloads, which macOS keeps from a launchd
+# job's bash ("Operation not permitted"); a worktree of a checkout there
+# reaches into it, so the sweep has its own clone on both machines.
 #
 # Install on the M4 Pro (launchd, 04:00 local, or on the next wake when
 # asleep then [ref:apple-launchd-start-calendar-interval-sleep]):
-#   git worktree add --detach ../praxis-sweep origin/main
-#   sweep=$(cd ../praxis-sweep && pwd)
+#   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
+#   sweep=$(cd ~/praxis-sweep && pwd)
 #   mkdir -p "$sweep/target/sweep"
 #   sed "s|@SWEEP@|$sweep|g" scripts/sweep.plist \
 #     >~/Library/LaunchAgents/com.github.gariasf.praxis.sweep.plist
@@ -17,8 +20,8 @@
 # Install on the RTX 2070 SUPER (Task Scheduler, 04:00 local, waking the
 # PC if the power plan allows wake timers; it runs only while the owner is
 # logged on, as the bench needs the GPU), in Git Bash:
-#   git worktree add --detach ../praxis-sweep origin/main
-#   sweep=$(cd ../praxis-sweep && pwd -W)
+#   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
+#   sweep=$(cd ~/praxis-sweep && pwd -W)
 #   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -w "$(command -v bash)").exe|g" \
 #     scripts/sweep-task.xml >"$TEMP/praxis-sweep.xml"
 #   powershell -NoProfile -Command "Register-ScheduledTask -TaskName praxis-sweep \
