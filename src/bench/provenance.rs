@@ -29,14 +29,8 @@ const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
 /// Where and when a bench result was measured.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Provenance {
-    /// The git tree of the measured paths, as `source_hash` gives it.
-    pub source_hash: String,
-    pub commit: String,
-    /// Whether a measured path differed from `commit`, untracked files
-    /// included.
-    pub dirty: bool,
-    /// `HEAD` when detached.
-    pub branch: String,
+    #[serde(flatten)]
+    pub checkout: Checkout,
     /// The driver and its version, as wgpu's adapter info reports them;
     /// empty when the backend reports none.
     pub driver: String,
@@ -102,10 +96,7 @@ impl BenchStart {
         let gpu_frame_p95_over_median =
             (gpu_frame.median > 0.0).then(|| gpu_frame.p95 / gpu_frame.median);
         Some(Provenance {
-            source_hash: checkout.source_hash,
-            commit: checkout.commit,
-            dirty: checkout.dirty,
-            branch: checkout.branch,
+            checkout,
             driver: adapter.driver.clone(),
             driver_info: adapter.driver_info.clone(),
             harness_version: HARNESS_VERSION,
@@ -140,19 +131,27 @@ fn is_quiet(
 }
 
 /// The source a checkout holds.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Checkout {
+    /// The git tree of the measured paths, as `source_hash` gives it.
     pub source_hash: String,
     pub commit: String,
+    /// Whether a measured path differed from `commit`, untracked files
+    /// included.
     pub dirty: bool,
+    /// `HEAD` when detached.
     pub branch: String,
 }
 
 impl Checkout {
-    /// The checkout at `repository`: its commit, and the source hash of its
-    /// working tree, which a dirty tree's uncommitted changes to tracked
-    /// files move.
+    /// The checkout holding `repository`: its commit, and the source hash
+    /// of its working tree, which uncommitted changes to the measured
+    /// paths move, untracked files included.
     pub fn read(repository: &Path) -> anyhow::Result<Self> {
+        // Pathspecs are relative to the working directory, so git runs at
+        // the checkout's root.
+        let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+        let repository = Path::new(&root);
         let commit = git(repository, &["rev-parse", "HEAD"], None)?;
         let branch = git(repository, &["rev-parse", "--abbrev-ref", "HEAD"], None)?;
         let status = git(
@@ -165,25 +164,50 @@ impl Checkout {
             None,
         )?;
         let dirty = !status.is_empty();
-        // A commit of the working tree's tracked changes, written to no ref;
-        // empty when there are none.
-        let working_tree = if dirty {
-            git(repository, &["stash", "create"], None)?
+        let revision = if dirty {
+            working_tree(repository)?
         } else {
-            String::new()
-        };
-        let revision = if working_tree.is_empty() {
-            &commit
-        } else {
-            &working_tree
+            commit.clone()
         };
         Ok(Self {
-            source_hash: source_hash(repository, revision)?,
+            source_hash: source_hash(repository, &revision)?,
             commit,
             dirty,
             branch,
         })
     }
+}
+
+/// The git tree of `HEAD` with the measured paths as `git add --all` would
+/// stage them from the working tree, ignored files left out, written
+/// through a temporary index so the checkout's own index stays as it is.
+fn working_tree(repository: &Path) -> anyhow::Result<String> {
+    // A pathspec that matches neither the working tree nor the index fails
+    // the add, so a measured path that is in neither is left out.
+    let in_head = git(
+        repository,
+        &[
+            &["ls-tree", "--name-only", "HEAD", "--"][..],
+            &MEASURED_PATHS[..],
+        ]
+        .concat(),
+        None,
+    )?;
+    let present: Vec<&str> = MEASURED_PATHS
+        .into_iter()
+        .filter(|path| repository.join(path).exists() || in_head.lines().any(|line| line == *path))
+        .collect();
+    let index = std::env::temp_dir().join(format!("praxis-source-index-{}", std::process::id()));
+    let staged = |arguments: &[&str]| {
+        let mut command = git_command(repository);
+        command.env("GIT_INDEX_FILE", &index);
+        run(command, arguments, None)
+    };
+    let tree = staged(&["read-tree", "HEAD"])
+        .and_then(|_| staged(&[&["add", "--all", "--"][..], &present].concat()))
+        .and_then(|_| staged(&["write-tree"]));
+    std::fs::remove_file(&index).ok();
+    tree
 }
 
 /// The source hash of `revision` in `repository`: the git tree holding
@@ -199,15 +223,31 @@ pub fn source_hash(repository: &Path, revision: &str) -> anyhow::Result<String> 
         .concat(),
         None,
     )?;
-    git(repository, &["mktree"], Some(&(listing + "\n")))
+    // An empty tree is no input at all: mktree refuses a blank line.
+    let entries = if listing.is_empty() {
+        listing
+    } else {
+        listing + "\n"
+    };
+    git(repository, &["mktree"], Some(&entries))
 }
 
 /// The trimmed output of git with `arguments` in `repository`, given
 /// `input` on its standard input.
 fn git(repository: &Path, arguments: &[&str], input: Option<&str>) -> anyhow::Result<String> {
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(repository)
+    run(git_command(repository), arguments, input)
+}
+
+fn git_command(repository: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(repository);
+    command
+}
+
+/// The trimmed output of `command` with `arguments`, given `input` on its
+/// standard input.
+fn run(mut command: Command, arguments: &[&str], input: Option<&str>) -> anyhow::Result<String> {
+    let mut child = command
         .args(arguments)
         .stdin(if input.is_some() {
             Stdio::piped()
@@ -282,7 +322,11 @@ mod tests {
         std::fs::remove_dir_all(&directory).ok();
         std::fs::create_dir_all(&directory).unwrap();
         git(&directory, &["init", "--quiet"], None).unwrap();
-        for (key, value) in [("user.name", "Bench"), ("user.email", "bench@example.com")] {
+        for (key, value) in [
+            ("user.name", "Bench"),
+            ("user.email", "bench@example.com"),
+            ("commit.gpgsign", "false"),
+        ] {
             git(&directory, &["config", key, value], None).unwrap();
         }
         directory
@@ -336,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dirty_measured_path_moves_the_source_hash_and_another_path_does_not() {
+    fn a_dirty_or_untracked_measured_path_moves_the_source_hash_and_another_path_does_not() {
         let repository = repository("dirty");
         commit(&repository, "src/lib.rs", "fn main() {}");
         let clean = Checkout::read(&repository).unwrap();
@@ -347,6 +391,19 @@ mod tests {
         assert!(dirty.dirty);
         assert_eq!(dirty.commit, clean.commit);
         assert_ne!(dirty.source_hash, clean.source_hash);
+        std::fs::write(repository.join("src/new.rs"), "untracked, measured").unwrap();
+        let untracked = Checkout::read(&repository).unwrap();
+        assert!(untracked.dirty);
+        assert_ne!(untracked.source_hash, dirty.source_hash);
+        // From a subdirectory, the same checkout.
+        assert_eq!(Checkout::read(&repository.join("src")).unwrap(), untracked);
+        assert_eq!(
+            git(&repository, &["status", "--porcelain"], None)
+                .unwrap()
+                .lines()
+                .count(),
+            3
+        );
         std::fs::remove_dir_all(repository).ok();
     }
 

@@ -1,7 +1,7 @@
 mod provenance;
 mod report;
 
-pub use provenance::{BenchStart, Provenance};
+pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
 
 use std::collections::BTreeMap;
@@ -960,10 +960,12 @@ mod tests {
     fn a_result_with_provenance_round_trips_and_compares_clean_with_a_baseline_without() {
         let current = Measurements {
             provenance: Some(Provenance {
-                source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
-                commit: "bea8706b".to_owned(),
-                dirty: false,
-                branch: "main".to_owned(),
+                checkout: Checkout {
+                    source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
+                    commit: "bea8706b".to_owned(),
+                    dirty: false,
+                    branch: "main".to_owned(),
+                },
                 driver: String::new(),
                 driver_info: String::new(),
                 harness_version: 1,
