@@ -4100,3 +4100,16 @@ section = "NVIDIA Technical Blog, Tips and Tricks: Vulkan Dos and Don'ts (2019-0
 quote = '''Use dedicated memory allocations (VK_KHR_dedicated_allocation, core in VK 1.1) when appropriate.
 Using dedicated memory may improve performance for color and depth attachments, especially on pre-Turing GPUs.'''
 checked = 2026-10-31
+
+["wgpu-hal-30-metal-compute-pipeline-workgroup-memory"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1762-L1765"
+section = "wgpu-hal 30.0.1, metal/command.rs, set_compute_pipeline, L1762-L1765; metal/mod.rs, assign_from, L1195-L1197"
+quote = '''    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
+        let previous_sizes =
+            core::mem::take(&mut self.state.stage_infos.cs.work_group_memory_sizes);
+        self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
+[...]
+        self.work_group_memory_sizes.clear();
+        self.work_group_memory_sizes
+            .extend_from_slice(&other.work_group_memory_sizes);'''
+checked = 2026-10-31

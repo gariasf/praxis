@@ -33,40 +33,81 @@ fn pixel_minimum(pixel: vec2<u32>) -> f32 {
     );
 }
 
-// The minimum depth of the depth target's samples at the four pixels of
-// `columns` and `rows`.
-fn block_minimum(columns: vec2<u32>, rows: vec2<u32>) -> f32 {
+// The pixels along each side of the tile level 0's workgroups reduce: twice
+// its texels, which each overlap the two pixels from twice their index, and a
+// third, the next texel's first, where the depth target's side is odd.
+const DEPTH_PYRAMID_PIXEL_TILE_SIZE = 2u * DEPTH_PYRAMID_TILE_SIZE;
+
+// The minimum depth of each pixel of a workgroup's tile and, where a side of
+// the depth target is odd, of the column or row past it, which the tile's
+// last texel along that side overlaps.
+var<workgroup> pixel_minima: array<array<f32, DEPTH_PYRAMID_PIXEL_TILE_SIZE + 1u>, DEPTH_PYRAMID_PIXEL_TILE_SIZE + 1u>;
+
+// The minimum depth of `pixel`'s samples, or 1, the nearest, which leaves a
+// minimum as it is, past the depth target's edge.
+fn pixel_minimum_within(pixel: vec2<u32>, depth_size: vec2<u32>) -> f32 {
+    if any(pixel >= depth_size) {
+        return 1.0;
+    }
+    return pixel_minimum(pixel);
+}
+
+// The minimum of the four pixel minima from `corner` of the workgroup's tile.
+fn shared_block_minimum(corner: vec2<u32>) -> f32 {
     return min(
-        min(pixel_minimum(vec2<u32>(columns.x, rows.x)), pixel_minimum(vec2<u32>(columns.y, rows.x))),
-        min(pixel_minimum(vec2<u32>(columns.x, rows.y)), pixel_minimum(vec2<u32>(columns.y, rows.y)))
+        min(pixel_minima[corner.y][corner.x], pixel_minima[corner.y][corner.x + 1u]),
+        min(pixel_minima[corner.y + 1u][corner.x], pixel_minima[corner.y + 1u][corner.x + 1u])
     );
 }
 
-// Level 0: a texel per invocation, the minimum of every sample of the depth
-// target's pixels it overlaps: its first two columns and rows, the second
-// the first again where it overlaps one alone, then a third where the
-// target's side is odd.
-@compute @workgroup_size(DEPTH_PYRAMID_TILE_SIZE, DEPTH_PYRAMID_TILE_SIZE)
-fn reduce_depth(@builtin(global_invocation_id) texel: vec3<u32>) {
+// Level 0: an invocation per pixel of a tile, which shares the minimum of
+// its samples, then a texel per invocation of the tile's first quarter, the
+// minimum of the shared minima of the pixels it overlaps. As level 0 is half
+// the depth target rounded down, at least 1 (RenderTargets), those are, as
+// overlapped_texels would count them, from twice its index, two along a side
+// of the depth target that is even and three along one that is odd, none of
+// them past the edge, which 1 leaves out.
+@compute @workgroup_size(DEPTH_PYRAMID_PIXEL_TILE_SIZE, DEPTH_PYRAMID_PIXEL_TILE_SIZE)
+fn reduce_depth(
+    @builtin(global_invocation_id) pixel: vec3<u32>,
+    @builtin(local_invocation_id) local: vec3<u32>,
+    @builtin(workgroup_id) workgroup: vec3<u32>,
+) {
+    let depth_size = textureDimensions(depth);
+    let odd_sides = depth_size % 2u == vec2<u32>(1u);
+    pixel_minima[local.y][local.x] = pixel_minimum_within(pixel.xy, depth_size);
+    let past_tile = (workgroup.xy + 1u) * DEPTH_PYRAMID_PIXEL_TILE_SIZE;
+    if odd_sides.x && local.x == 0u {
+        pixel_minima[local.y][DEPTH_PYRAMID_PIXEL_TILE_SIZE] =
+            pixel_minimum_within(vec2<u32>(past_tile.x, pixel.y), depth_size);
+    }
+    if odd_sides.y && local.y == 0u {
+        pixel_minima[DEPTH_PYRAMID_PIXEL_TILE_SIZE][local.x] =
+            pixel_minimum_within(vec2<u32>(pixel.x, past_tile.y), depth_size);
+    }
+    if all(odd_sides) && all(local.xy == vec2<u32>(0u)) {
+        pixel_minima[DEPTH_PYRAMID_PIXEL_TILE_SIZE][DEPTH_PYRAMID_PIXEL_TILE_SIZE] =
+            pixel_minimum_within(past_tile, depth_size);
+    }
+    workgroupBarrier();
+    let texel = workgroup.xy * DEPTH_PYRAMID_TILE_SIZE + local.xy;
     let size = textureDimensions(level);
-    if any(texel.xy >= size) {
+    if any(local.xy >= vec2<u32>(DEPTH_PYRAMID_TILE_SIZE)) || any(texel >= size) {
         return;
     }
-    let overlapped = overlapped_texels(texel.xy, size, textureDimensions(depth));
-    let first = overlapped.first;
-    let second = min(first + 1u, overlapped.last);
-    let last = overlapped.last;
-    var minimum = block_minimum(vec2<u32>(first.x, second.x), vec2<u32>(first.y, second.y));
-    if last.x > second.x {
-        minimum = min(minimum, block_minimum(vec2<u32>(last.x), vec2<u32>(first.y, second.y)));
+    let first = 2u * local.xy;
+    let last = first + 2u;
+    var minimum = shared_block_minimum(first);
+    if odd_sides.x {
+        minimum = min(minimum, min(pixel_minima[first.y][last.x], pixel_minima[first.y + 1u][last.x]));
     }
-    if last.y > second.y {
-        minimum = min(minimum, block_minimum(vec2<u32>(first.x, second.x), vec2<u32>(last.y)));
+    if odd_sides.y {
+        minimum = min(minimum, min(pixel_minima[last.y][first.x], pixel_minima[last.y][first.x + 1u]));
     }
-    if all(last > second) {
-        minimum = min(minimum, block_minimum(vec2<u32>(last.x), vec2<u32>(last.y)));
+    if all(odd_sides) {
+        minimum = min(minimum, pixel_minima[last.y][last.x]);
     }
-    textureStore(level, texel.xy, vec4<f32>(minimum));
+    textureStore(level, texel, vec4<f32>(minimum));
 }
 
 // The minimum depth of the level below at the four texels of `columns`
@@ -79,7 +120,9 @@ fn level_block_minimum(columns: vec2<u32>, rows: vec2<u32>) -> f32 {
 }
 
 // Each later level: a texel per invocation, the minimum of the texels of the
-// level below it overlaps, taken as level 0 takes its pixels.
+// level below it overlaps: its first two columns and rows, the second the
+// first again where it overlaps one alone, then a third where the level
+// below is odd.
 @compute @workgroup_size(DEPTH_PYRAMID_TILE_SIZE, DEPTH_PYRAMID_TILE_SIZE)
 fn reduce_level(@builtin(global_invocation_id) texel: vec3<u32>) {
     let size = textureDimensions(level);

@@ -282,6 +282,56 @@ small exact saving. Keep P4 for when wgpu exposes a depth resolve, and
 leave P3, C1 and C2 until `town`'s gate work (LOD, #360) needs the
 time.
 
+### Shipped: P1 (2026-10-31, #419)
+
+Level 0 runs an invocation per pixel of a 16×16 tile, as the prototype
+did: each shares its four samples' minimum in workgroup memory, and the
+tile's first 8×8 invocations take each texel's minimum from there. Along
+an odd side every texel spans its two pixels and the next texel's first,
+so where a side is odd the workgroup also loads the column or row past
+its tile; the prototype loaded those pixels' samples again from the
+depth target instead. Level 0 matches the CPU reduction at 37×23 and
+64×48, and every image of the gallery is identical to the bit.
+
+Release builds of `a00280dc` (`main`) and the branch, `praxis bench
+<dir> --skip-aliasing <scenes>` in three interleaved rounds on the M4
+Pro, `town`, helmet and uv-grid in one batch and the other scenes in a
+second, with load averages of 2.1 to 3.6 and no other session benching.
+Medians of the rounds' medians in µs, from the bench JSON by the same
+script as above:
+
+| Scene | Pyramid, `main` | Per pixel | Change | Gate, `main` | Per pixel | Change | GPU frame change |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `town` | 263.5 | 215.4 | −48.1 | 8,656.1 | 8,597.7 | −58.5 | −62.8 |
+| helmet | 237.3 | 206.5 | −30.7 | 1,232.5 | 1,213.9 | −18.6 | −32.6 |
+| uv-grid | 222.2 | 205.5 | −16.8 | 771.4 | 765.8 | −5.6 | −16.7 |
+| orrery | 193.6 | 202.3 | +8.7 | 626.7 | 637.0 | +10.3 | +5.8 |
+| pbr-sweep | 211.0 | 204.1 | −6.8 | 768.4 | 774.0 | +5.6 | −28.5 |
+| normal-tangent | 204.8 | 205.1 | +0.3 | 808.8 | 819.0 | +10.2 | −17.8 |
+| texture-wall | 440.1 | 490.0 | +49.9 | 14,063.2 | 14,038.8 | −24.5 | +105.9 |
+
+- **The per-pixel pass has a floor.** It reads 202 to 215 µs in every
+  scene at 2560×1440 but texture-wall, while `main`'s ranges from 194
+  to 264 µs with what the depth target holds. It issues four times the
+  invocations, 3.7 million, so it saves time only where `main` reads
+  above that floor: on `town`, helmet and uv-grid, not on orrery,
+  whose depth target is mostly cleared.
+- **texture-wall's pass lines run long in both forms**, its pyramid at
+  twice the other scenes' and its tonemapping pass at 2.5 times, as its
+  texture reads share the GPU with them; there the per-pixel pass reads
+  50 µs longer and the GPU frame 106 µs, while its gate is 24 µs
+  shorter.
+
+No round's pyramid line strayed more than 2.7 µs from its variant's
+median. The prototype's 41 µs on `town` timed level 0 in a pass of its
+own on `f84329a5`; these lines are the whole pass. Every scene
+makes one more heap allocation a frame: setting a compute pipeline in
+wgpu-hal 30.0.1's Metal backend takes its workgroup memory sizes out of
+the encoder's state and copies the new pipeline's into the emptied
+vector [ref:wgpu-hal-30-metal-compute-pipeline-workgroup-memory], which
+allocates for a pipeline with workgroup memory, as level 0's now has,
+so each scene's `heap_allocations` Baseline rises by one.
+
 ## `town`'s CPU frame: prepare walked every Renderable, and wgpu-core's TLAS bookkeeping is the rest (2026-10-30, #405)
 
 **Verdict.** Quiet, `town`'s CPU frame read 5.0 to 5.8 ms at the median
