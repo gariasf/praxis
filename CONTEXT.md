@@ -189,7 +189,7 @@ The recorded measurements of a Reference scene on one adapter and backend: the r
 _Avoid_: Benchmark result
 
 **Bench record**:
-One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against.
+One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.
 _Avoid_: Benchmark result, sample, data point
 
 **Bench history**:
@@ -197,7 +197,7 @@ Every Bench record kept, from sessions, CI and the machines' own runs, including
 _Avoid_: Metrics database, telemetry
 
 **Series**:
-One metric's Bench records for one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine, in source order. What its charts draw and what a Regression is found in.
+One metric's Bench records for one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.
 _Avoid_: Trend, timeline
 
 **Harness version**:

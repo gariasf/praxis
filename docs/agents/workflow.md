@@ -54,7 +54,7 @@ A declined finding class that recurs becomes a line in the `CLAUDE.md` review ch
 - Budgets and Baselines live in the repo beside the benches (`bench/`, since M0). A render or hot-path change reports its delta against its Baselines.
 - Figures quoted from bench results, in a PR or `docs/performance.md`, are pasted from `praxis report <results directory>`, which prints them as markdown tables against their Baselines and the Budgets; none is retyped by hand.
 - A budget moves down freely and moves up only through an ADR or map comment.
-- Every bench run is kept in the Bench history (ADR 0024): `praxis bench` publishes its results as Bench records on the `bench-history` branch unless given `--no-publish`, and `praxis publish <results directory>` publishes them later. A failed publish never fails the bench, and `verify` never publishes. Baselines are still chosen by hand and still gate.
+- Every bench run is kept in the Bench history (ADR 0024): `praxis bench` publishes its results as Bench records on the `bench-history` branch unless given `--no-publish`, and `praxis publish <results directory>` publishes them later. A failed publish never fails the bench, and `verify` never publishes. CI's `publish-bench` job publishes lavapipe's records and the release build's size and wall time on every push to `main`; PR runs publish nothing. Baselines are still chosen by hand and still gate.
 - Measurement is always on; optimisation is evidence-driven: fix what measurement names, in the order it names them.
 
 ## Correctness
