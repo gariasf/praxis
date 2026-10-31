@@ -270,9 +270,8 @@ fn mismatch(
 /// turns from shadowed to lit. It never did in 368 captures on fresh devices;
 /// on one device, 2 of 24 captures did, the 10th and 15th `State`s; under
 /// DX12, none of 96 on shared devices did. The engine still does this on a
-/// long-lived device. Here
-/// it would make two captures differ by which of them it hit, whatever
-/// culling and the Froxel lists do.
+/// long-lived device. Here it would make two captures differ by which of
+/// them it hit, whatever culling and the Froxel lists do.
 fn fresh_context() -> GpuContext {
     pollster::block_on(GpuContext::headless())
         .unwrap_or_else(|error| panic!("headless GPU context failed: {error:#}"))
