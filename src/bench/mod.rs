@@ -2,7 +2,7 @@ mod history;
 mod provenance;
 mod report;
 
-pub use history::{Publication, import_baselines, publish, unrecorded_scenes};
+pub use history::{Publication, ReleaseBuild, import_baselines, publish, unrecorded_scenes};
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
 

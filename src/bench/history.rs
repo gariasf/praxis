@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use anyhow::Context;
 
-use super::provenance::{git, source_hash};
+use super::provenance::{Checkout, git, source_hash};
 use super::{Configuration, Measurements, Spread, adapter_key};
 
 pub use import::import_baselines;
@@ -21,6 +21,13 @@ const BRANCH: &str = "bench-history";
 /// The branch's directories of records on a Series and of the rest.
 const ON_SERIES: &str = "records";
 const TAGGED: &str = "tagged";
+
+/// The directory, in place of a scene's, of the release builds published
+/// beside an adapter's results.
+const RELEASE_BUILD: &str = "release-build";
+
+/// How Mesa's lavapipe, CI's software Vulkan, names its adapter.
+const LAVAPIPE_ADAPTER_PREFIX: &str = "llvmpipe";
 
 /// How many times a publish rebuilds its commit on the branch's new tip
 /// after another publish pushed first.
@@ -36,12 +43,21 @@ This branch holds data only and is never merged.
   Series, clean and release-profile runs of `main`'s source on a quiet machine.
 - `tagged/<adapter>-<backend>/<scene>/<source hash>.json`: every other record,
   its `tags` saying why it is kept off the Series.
+- `records/<adapter>-<backend>/release-build/<source hash>.json`: the release
+  build whose binary ran that source's results, its binary's size and its wall
+  time, published by CI beside lavapipe's records.
 - `series/<adapter>-<backend>/<scene>.json`: one row per record in `records/`,
   in the order their commits were made, rebuilt in the commit that changes them.
 
+lavapipe's Series read no GPU time: its counters and its binary's size, which
+load cannot change, and its build time, which a shared runner's load and cache
+hits move whatever a quiet test says. So its records join them from CI's
+configuration whether or not the runner was quiet.
+
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
-lower. A bad publish is undone with `git revert`.
+lower, and a lavapipe or release build record never does: a source publishes
+there once. A bad publish is undone with `git revert`.
 
 `praxis history import` added the Baselines committed to `main` before the
 history existed: each Baseline file a commit changed is a record of that
@@ -56,22 +72,27 @@ its Series row.
 struct BenchRecord {
     /// `<adapter>-<backend>`, as the branch's paths name them.
     adapter_key: String,
-    scene: String,
+    /// The scene measured, or `RELEASE_BUILD`.
+    subject: String,
     source_hash: String,
     /// Empty for a record on a Series.
     tags: Vec<String>,
     /// The GPU frame p95 over its median; none when not measured.
     p95_over_median: Option<f64>,
+    /// Whether the first record under its key stays: lavapipe's and a
+    /// release build's, whose Series read no time.
+    publishes_once: bool,
     /// The file's JSON object.
     file: serde_json::Map<String, serde_json::Value>,
 }
 
 impl BenchRecord {
-    /// The record of `file`, a bench result's JSON object naming its
-    /// adapter, backend and scene, measured on `source_hash` committed at
+    /// The record of `file`, a JSON object naming its adapter and backend,
+    /// of `subject` measured on `source_hash` committed at
     /// `committed_unix_seconds`.
     fn new(
         mut file: serde_json::Map<String, serde_json::Value>,
+        subject: &str,
         source_hash: &str,
         committed_unix_seconds: u64,
         tags: Vec<String>,
@@ -82,10 +103,9 @@ impl BenchRecord {
                 .and_then(serde_json::Value::as_str)
                 .with_context(|| format!("a bench result names its {name}"))
         };
-        let (adapter_key, scene) = (
-            adapter_key(field("adapter")?, Some(field("backend")?)),
-            field("scene")?.to_owned(),
-        );
+        let adapter = field("adapter")?;
+        let publishes_once = is_lavapipe(adapter) || subject == RELEASE_BUILD;
+        let adapter_key = adapter_key(adapter, Some(field("backend")?));
         file.insert(
             "committed_unix_seconds".to_owned(),
             committed_unix_seconds.into(),
@@ -95,10 +115,11 @@ impl BenchRecord {
         }
         Ok(Self {
             adapter_key,
-            scene,
+            subject: subject.to_owned(),
             source_hash: source_hash.to_owned(),
             tags,
             p95_over_median,
+            publishes_once,
             file,
         })
     }
@@ -109,7 +130,7 @@ impl BenchRecord {
     fn path(&self, directory: &str) -> PathBuf {
         Path::new(directory)
             .join(&self.adapter_key)
-            .join(&self.scene)
+            .join(&self.subject)
             .join(format!("{}.json", self.source_hash))
     }
 
@@ -168,6 +189,82 @@ impl StoredRecord {
         self.provenance
             .gpu_frame_p95_over_median
             .unwrap_or(f64::INFINITY)
+    }
+}
+
+/// Whether `adapter` is lavapipe, whose GPU times mean nothing: its Series
+/// read counters, binary size and build time only.
+fn is_lavapipe(adapter: &str) -> bool {
+    adapter.starts_with(LAVAPIPE_ADAPTER_PREFIX)
+}
+
+/// A release build's cost: its binary's size and its wall time.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ReleaseBuild {
+    pub binary_bytes: u64,
+    pub build_seconds: u64,
+}
+
+/// A release build as a record holds it: under the adapter whose results
+/// its binary measured, from their checkout.
+#[derive(Debug, serde::Serialize)]
+struct ReleaseBuildRecord<'results> {
+    adapter: &'results str,
+    backend: &'results str,
+    checkout: &'results Checkout,
+    #[serde(flatten)]
+    build: ReleaseBuild,
+}
+
+/// A release build's record as the branch stores it.
+#[derive(Debug, serde::Deserialize)]
+struct StoredReleaseBuild {
+    committed_unix_seconds: u64,
+    checkout: Checkout,
+    #[serde(flatten)]
+    build: ReleaseBuild,
+}
+
+/// A release build's Series row.
+#[derive(serde::Serialize)]
+struct ReleaseBuildRow<'record> {
+    commit: &'record str,
+    source_hash: &'record str,
+    committed_unix_seconds: u64,
+    #[serde(flatten)]
+    build: &'record ReleaseBuild,
+}
+
+/// A stored record as a row of its Series.
+trait SeriesRecord: serde::de::DeserializeOwned {
+    /// Where its row sorts: in the order commits were made.
+    fn order(&self) -> (u64, &str);
+
+    fn row(&self) -> impl serde::Serialize + '_;
+}
+
+impl SeriesRecord for StoredRecord {
+    fn order(&self) -> (u64, &str) {
+        (self.committed_unix_seconds, &self.provenance.commit)
+    }
+
+    fn row(&self) -> impl serde::Serialize + '_ {
+        SeriesRow::of(self)
+    }
+}
+
+impl SeriesRecord for StoredReleaseBuild {
+    fn order(&self) -> (u64, &str) {
+        (self.committed_unix_seconds, &self.checkout.commit)
+    }
+
+    fn row(&self) -> impl serde::Serialize + '_ {
+        ReleaseBuildRow {
+            commit: &self.checkout.commit,
+            source_hash: &self.checkout.source_hash,
+            committed_unix_seconds: self.committed_unix_seconds,
+            build: &self.build,
+        }
     }
 }
 
@@ -231,12 +328,20 @@ impl std::fmt::Display for Publication {
 /// Publishes `results`, measured in the checkout holding `repository`, as
 /// Bench records on its remote's `bench-history` branch, which it creates
 /// as an orphan when the remote lacks it. A result without provenance is
-/// skipped with a warning.
-pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Publication> {
+/// skipped with a warning. A `release_build` joins them as the release
+/// build whose binary measured them, all one adapter's from one checkout.
+pub fn publish(
+    repository: &Path,
+    results: &[Measurements],
+    release_build: Option<ReleaseBuild>,
+) -> anyhow::Result<Publication> {
     let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
     let repository = Path::new(&root);
     let main = fetch_main(repository)?;
     let main_source_hash = source_hash(repository, &main)?;
+    let release_build = release_build
+        .map(|build| release_build_record(repository, results, build, &main, &main_source_hash))
+        .transpose()?;
     let records: Vec<BenchRecord> = results
         .iter()
         .filter_map(|measurements| {
@@ -250,6 +355,7 @@ pub fn publish(repository: &Path, results: &[Measurements]) -> anyhow::Result<Pu
                 })
                 .ok()
         })
+        .chain(release_build)
         .collect();
     let adapter_keys: BTreeSet<_> = records
         .iter()
@@ -367,63 +473,150 @@ fn record(
         .as_ref()
         .context("no provenance: it ran outside a git checkout")?;
     let checkout = &provenance.checkout;
-    let mains_source = checkout.source_hash == main_source_hash
-        || git(
-            repository,
-            &["merge-base", "--is-ancestor", &checkout.commit, main],
-            None,
-        )
-        .is_ok();
     let serde_json::Value::Object(file) = serde_json::to_value(measurements)? else {
         anyhow::bail!("a bench result is a JSON object");
     };
     BenchRecord::new(
         file,
+        &measurements.scene,
         &checkout.source_hash,
         committed_unix_seconds(repository, &checkout.commit)?,
         tags(
             checkout.dirty,
-            &measurements.profile,
-            provenance.quiet,
-            mains_source,
-            (
-                measurements.width,
-                measurements.height,
-                measurements.measured_frames,
-            ),
+            mains_source(repository, checkout, main, main_source_hash),
+            Some(Run {
+                adapter: &measurements.adapter,
+                profile: &measurements.profile,
+                quiet: provenance.quiet,
+                width: measurements.width,
+                height: measurements.height,
+                measured_frames: measurements.measured_frames,
+            }),
         ),
         provenance.gpu_frame_p95_over_median,
     )
 }
 
-/// Every reason a run is kept off a Series: a dirty tree, a profile other
-/// than release, a machine that was not quiet, a source other than
-/// `main`'s, and a size and frame count other than the reference
-/// configuration's.
-fn tags(
-    dirty: bool,
-    profile: &str,
-    quiet: bool,
-    mains_source: bool,
-    (width, height, measured_frames): (u32, u32, u32),
-) -> Vec<String> {
-    let reference = Configuration::REFERENCE;
-    [
-        (dirty, "dirty tree".to_owned()),
-        (profile != "release", format!("{profile} profile")),
-        (!quiet, "machine not quiet".to_owned()),
-        (!mains_source, "source not main's".to_owned()),
+/// `build` as a Bench record beside `results`, which must all be one
+/// adapter's on one backend from one checkout.
+fn release_build_record(
+    repository: &Path,
+    results: &[Measurements],
+    build: ReleaseBuild,
+    main: &str,
+    main_source_hash: &str,
+) -> anyhow::Result<BenchRecord> {
+    let mut sources = results.iter().map(|measurements| {
         (
-            (width, height, measured_frames)
-                != (reference.width, reference.height, reference.measured_frames),
-            format!(
-                "{width}x{height} over {measured_frames} frames, not the reference configuration"
-            ),
+            &measurements.adapter,
+            &measurements.backend,
+            measurements
+                .provenance
+                .as_ref()
+                .map(|provenance| &provenance.checkout),
+        )
+    });
+    let first = sources
+        .next()
+        .context("a release build is published beside the results its binary measured")?;
+    anyhow::ensure!(
+        sources.all(|source| source == first),
+        "a release build is published beside one adapter's results from one checkout"
+    );
+    let (adapter, backend, checkout) = first;
+    let checkout = checkout.context("a release build's results have no provenance")?;
+    let serde_json::Value::Object(file) = serde_json::to_value(ReleaseBuildRecord {
+        adapter,
+        backend,
+        checkout,
+        build,
+    })?
+    else {
+        anyhow::bail!("a release build is a JSON object");
+    };
+    BenchRecord::new(
+        file,
+        RELEASE_BUILD,
+        &checkout.source_hash,
+        committed_unix_seconds(repository, &checkout.commit)?,
+        tags(
+            checkout.dirty,
+            mains_source(repository, checkout, main, main_source_hash),
+            None,
         ),
-    ]
-    .into_iter()
-    .filter_map(|(applies, tag)| applies.then_some(tag))
-    .collect()
+        None,
+    )
+}
+
+/// Whether `checkout` holds `main`'s source: the same source hash, or a
+/// commit `main` contains.
+fn mains_source(
+    repository: &Path,
+    checkout: &Checkout,
+    main: &str,
+    main_source_hash: &str,
+) -> bool {
+    checkout.source_hash == main_source_hash
+        || git(
+            repository,
+            &["merge-base", "--is-ancestor", &checkout.commit, main],
+            None,
+        )
+        .is_ok()
+}
+
+/// What a run measured on, as far as its tags tell.
+struct Run<'run> {
+    adapter: &'run str,
+    profile: &'run str,
+    quiet: bool,
+    width: u32,
+    height: u32,
+    measured_frames: u32,
+}
+
+/// Every reason a record is kept off a Series: a dirty tree, a source other
+/// than `main`'s, and for a `run` a profile other than release, a machine
+/// that was not quiet, and a size and frame count other than its Series'
+/// configuration. lavapipe's Series read counters only, which load cannot
+/// change, at the configuration CI benches.
+fn tags(dirty: bool, mains_source: bool, run: Option<Run>) -> Vec<String> {
+    let mut tags = vec![
+        (dirty, "dirty tree".to_owned()),
+        (!mains_source, "source not main's".to_owned()),
+    ];
+    if let Some(Run {
+        adapter,
+        profile,
+        quiet,
+        width,
+        height,
+        measured_frames,
+    }) = run
+    {
+        let lavapipe = is_lavapipe(adapter);
+        let (configuration, configuration_name) = if lavapipe {
+            (Configuration::CI_COUNTERS, "CI's configuration")
+        } else {
+            (Configuration::REFERENCE, "the reference configuration")
+        };
+        tags.extend([
+            (profile != "release", format!("{profile} profile")),
+            (!lavapipe && !quiet, "machine not quiet".to_owned()),
+            (
+                (width, height, measured_frames)
+                    != (
+                        configuration.width,
+                        configuration.height,
+                        configuration.measured_frames,
+                    ),
+                format!("{width}x{height} over {measured_frames} frames, not {configuration_name}"),
+            ),
+        ]);
+    }
+    tags.into_iter()
+        .filter_map(|(applies, tag)| applies.then_some(tag))
+        .collect()
 }
 
 /// When `commit` was committed, in seconds since the Unix epoch.
@@ -535,18 +728,20 @@ impl<'repository> Worktree<'repository> {
             let path = self.directory.join(&relative_path);
             let contents = serde_json::to_string_pretty(&record.file)? + "\n";
             if let Ok(json) = std::fs::read(&path) {
-                let existing: StoredRecord = serde_json::from_slice(&json)
-                    .with_context(|| format!("parsing {}", relative_path.display()))?;
                 // serde_json may parse a float back a bit off what it wrote,
                 // so the same record is found by its contents.
-                if json == contents.as_bytes()
-                    || record.p95_over_median() >= existing.p95_over_median()
-                {
+                let stays = json == contents.as_bytes()
+                    || record.publishes_once
+                    || record.p95_over_median()
+                        >= serde_json::from_slice::<StoredRecord>(&json)
+                            .with_context(|| format!("parsing {}", relative_path.display()))?
+                            .p95_over_median();
+                if stays {
                     tracing::info!(
                         record = %relative_path.display(),
+                        publishes_once = record.publishes_once,
                         p95_over_median = record.p95_over_median(),
-                        kept_p95_over_median = existing.p95_over_median(),
-                        "Bench record dropped: the one under its key is as quiet"
+                        "Bench record dropped: the one under its key stays"
                     );
                     publication.dropped += 1;
                     continue;
@@ -576,20 +771,11 @@ impl<'repository> Worktree<'repository> {
     /// `records/<adapter>-<backend>/<scene>`, one row per line in the
     /// order their commits were made.
     fn rebuild_series(&self, directory: &Path) -> anyhow::Result<()> {
-        let mut records = Vec::new();
-        for entry in std::fs::read_dir(self.directory.join(directory))? {
-            let path = entry?.path();
-            let json = std::fs::read(&path)?;
-            let record: StoredRecord = serde_json::from_slice(&json)
-                .with_context(|| format!("parsing {}", path.display()))?;
-            records.push(record);
-        }
-        let mut rows: Vec<_> = records.iter().map(SeriesRow::of).collect();
-        rows.sort_by_key(|row| (row.committed_unix_seconds, row.commit));
-        let lines = rows
-            .iter()
-            .map(serde_json::to_string)
-            .collect::<Result<Vec<_>, _>>()?;
+        let lines = if directory.ends_with(RELEASE_BUILD) {
+            self.series_lines::<StoredReleaseBuild>(directory)?
+        } else {
+            self.series_lines::<StoredRecord>(directory)?
+        };
         let series = Path::new("series")
             .join(directory.strip_prefix(ON_SERIES)?)
             .with_extension("json");
@@ -597,6 +783,24 @@ impl<'repository> Worktree<'repository> {
         std::fs::create_dir_all(path.parent().context("a Series has a directory")?)?;
         std::fs::write(path, format!("[\n{}\n]\n", lines.join(",\n")))?;
         Ok(())
+    }
+
+    /// The rows of the records in `directory`, each a line of JSON, in the
+    /// order their commits were made.
+    fn series_lines<Record: SeriesRecord>(&self, directory: &Path) -> anyhow::Result<Vec<String>> {
+        let mut records = Vec::new();
+        for entry in std::fs::read_dir(self.directory.join(directory))? {
+            let path = entry?.path();
+            let json = std::fs::read(&path)?;
+            let record: Record = serde_json::from_slice(&json)
+                .with_context(|| format!("parsing {}", path.display()))?;
+            records.push(record);
+        }
+        records.sort_by(|left, right| left.order().cmp(&right.order()));
+        Ok(records
+            .iter()
+            .map(|record| serde_json::to_string(&record.row()))
+            .collect::<Result<_, _>>()?)
     }
 
     /// Commits the worktree's files onto `tip` with `message`, or as an
@@ -793,9 +997,9 @@ mod tests {
     fn publishing_the_same_results_twice_leaves_one_record_and_one_commit() {
         let fixture = Fixture::new("twice");
         let results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
-        let first = publish(&fixture.checkout, &results).unwrap();
+        let first = publish(&fixture.checkout, &results, None).unwrap();
         assert_eq!((first.on_series, first.tagged, first.dropped), (1, 0, 0));
-        let second = publish(&fixture.checkout, &results).unwrap();
+        let second = publish(&fixture.checkout, &results, None).unwrap();
         assert_eq!((second.dropped, second.commit), (1, None));
         assert_eq!(fixture.commits(), 1);
         let source_hash = &results[0].provenance.as_ref().unwrap().checkout.source_hash;
@@ -839,6 +1043,7 @@ mod tests {
             let publication = publish(
                 &fixture.checkout,
                 &[result(&fixture.checkout, "Apple M4 Pro", p95_over_median)],
+                None,
             )
             .unwrap();
             assert_eq!(
@@ -862,7 +1067,8 @@ mod tests {
         .unwrap();
         commit(&fixture.checkout, "src/lib.rs", "fn main() { panic!() }");
         let branch = result(&fixture.checkout, "Apple M4 Pro", 1.10);
-        let publication = publish(&fixture.checkout, &[dirty.clone(), branch.clone()]).unwrap();
+        let publication =
+            publish(&fixture.checkout, &[dirty.clone(), branch.clone()], None).unwrap();
         assert_eq!((publication.on_series, publication.tagged), (0, 2));
         assert!(
             fixture
@@ -874,7 +1080,7 @@ mod tests {
         );
         for (result, tags) in [
             (dirty, &["dirty tree"][..]),
-            (branch, &["machine not quiet", "source not main's"][..]),
+            (branch, &["source not main's", "machine not quiet"][..]),
         ] {
             let source_hash = &result.provenance.unwrap().checkout.source_hash;
             let record: serde_json::Value = serde_json::from_str(&fixture.read(&format!(
@@ -905,7 +1111,7 @@ mod tests {
                             ..result(checkout, adapter, 1.02)
                         };
                         start.wait();
-                        publish(checkout, &[result]).unwrap();
+                        publish(checkout, &[result], None).unwrap();
                     });
                 }
             });
@@ -928,7 +1134,7 @@ mod tests {
         let fixture = Fixture::new("unreachable");
         let results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
         std::fs::rename(&fixture.remote, fixture.directory.join("moved.git")).unwrap();
-        assert!(publish(&fixture.checkout, &results).is_err());
+        assert!(publish(&fixture.checkout, &results, None).is_err());
     }
 
     #[test]
@@ -941,12 +1147,14 @@ mod tests {
         publish(
             &fixture.checkout,
             &[result(&fixture.checkout, "Apple M4 Pro", 1.10)],
+            None,
         )
         .unwrap();
         assert_eq!(unrecorded(), scenes, "a tagged record is no record");
         publish(
             &fixture.checkout,
             &[result(&fixture.checkout, "Apple M4 Pro", 1.02)],
+            None,
         )
         .unwrap();
         assert_eq!(unrecorded(), ["town"]);
@@ -983,14 +1191,14 @@ mod tests {
             measured_frames: Configuration::COUNTERS.measured_frames,
             ..result(&fixture.checkout, "Apple M4 Pro", 1.01)
         };
-        let publication = publish(&fixture.checkout, std::slice::from_ref(&noisy)).unwrap();
+        let publication = publish(&fixture.checkout, std::slice::from_ref(&noisy), None).unwrap();
         assert_eq!((publication.on_series, publication.tagged), (0, 1));
         // A quiet record of the same key replaces the tagged one.
-        publish(&fixture.checkout, &[quiet]).unwrap();
+        publish(&fixture.checkout, &[quiet], None).unwrap();
         assert_eq!((paths("records/"), paths("tagged/")), (1, 0));
         // And neither a noisy run nor a quieter one of another configuration
         // displaces it.
-        let publication = publish(&fixture.checkout, &[noisy, counters]).unwrap();
+        let publication = publish(&fixture.checkout, &[noisy, counters], None).unwrap();
         assert_eq!(publication.dropped, 2);
         assert_eq!((paths("records/"), paths("tagged/")), (1, 0));
     }
@@ -1003,7 +1211,7 @@ mod tests {
             ..result(&fixture.checkout, "Apple M4 Pro", 1.01)
         };
         let source_hash = &counters.provenance.as_ref().unwrap().checkout.source_hash;
-        publish(&fixture.checkout, std::slice::from_ref(&counters)).unwrap();
+        publish(&fixture.checkout, std::slice::from_ref(&counters), None).unwrap();
         let record: serde_json::Value = serde_json::from_str(&fixture.read(&format!(
             "tagged/apple-m4-pro-metal/pbr-sweep/{source_hash}.json"
         )))
@@ -1018,9 +1226,14 @@ mod tests {
     fn an_import_records_each_changed_baseline_once_and_restamps_earlier_records() {
         let fixture = Fixture::new("import");
         let checkout = &fixture.checkout;
-        // A record a bench published at Harness version 1, before the import.
+        // A record a bench published at Harness version 1, before the import,
+        // with its release build, which holds no Harness version to restamp.
         let live = result(checkout, "Apple M4 Pro", 1.02);
-        publish(checkout, std::slice::from_ref(&live)).unwrap();
+        let build = ReleaseBuild {
+            binary_bytes: 1,
+            build_seconds: 1,
+        };
+        publish(checkout, std::slice::from_ref(&live), Some(build)).unwrap();
         let baseline = |adapter: &str, width: u32, median: f64| {
             format!(
                 r#"{{"scene": "pbr-sweep", "adapter": "{adapter}", "profile": "release",
@@ -1097,5 +1310,98 @@ mod tests {
             (3, 0, None)
         );
         assert_eq!(fixture.commits(), commits);
+    }
+
+    /// lavapipe's result of `checkout` in CI's configuration.
+    fn lavapipe_result(checkout: &Path, p95_over_median: f64) -> Measurements {
+        let ci_configuration = Configuration::CI_COUNTERS;
+        Measurements {
+            backend: "vulkan".to_owned(),
+            width: ci_configuration.width,
+            height: ci_configuration.height,
+            measured_frames: ci_configuration.measured_frames,
+            ..result(checkout, LAVAPIPE, p95_over_median)
+        }
+    }
+
+    const LAVAPIPE: &str = "llvmpipe (LLVM 20.1.2, 256 bits)";
+    const LAVAPIPE_KEY: &str = "llvmpipe-llvm-20-1-2-256-bits-vulkan";
+
+    #[test]
+    fn lavapipe_in_ci_configuration_joins_its_series_quiet_or_not_and_publishes_once() {
+        let fixture = Fixture::new("lavapipe");
+        let noisy = lavapipe_result(&fixture.checkout, 1.14);
+        let source_hash = &noisy.provenance.as_ref().unwrap().checkout.source_hash;
+        let first = publish(&fixture.checkout, std::slice::from_ref(&noisy), None).unwrap();
+        assert_eq!((first.on_series, first.tagged), (1, 0));
+        assert!(fixture.files().contains(&format!(
+            "records/{LAVAPIPE_KEY}/pbr-sweep/{source_hash}.json"
+        )));
+        // A quieter run of the same source adds nothing: its counters repeat.
+        let quieter = lavapipe_result(&fixture.checkout, 1.01);
+        let second = publish(&fixture.checkout, &[quieter], None).unwrap();
+        assert_eq!((second.dropped, second.commit), (1, None));
+        assert_eq!(fixture.commits(), 1);
+    }
+
+    #[test]
+    fn lavapipe_in_another_configuration_is_tagged_with_it() {
+        let fixture = Fixture::new("lavapipe-configuration");
+        let reference = Measurements {
+            backend: "vulkan".to_owned(),
+            ..result(&fixture.checkout, LAVAPIPE, 1.01)
+        };
+        let source_hash = &reference.provenance.as_ref().unwrap().checkout.source_hash;
+        publish(&fixture.checkout, std::slice::from_ref(&reference), None).unwrap();
+        let record: serde_json::Value = serde_json::from_str(&fixture.read(&format!(
+            "tagged/{LAVAPIPE_KEY}/pbr-sweep/{source_hash}.json"
+        )))
+        .unwrap();
+        assert_eq!(
+            record["tags"],
+            serde_json::json!(["2560x1440 over 1800 frames, not CI's configuration"])
+        );
+    }
+
+    #[test]
+    fn a_release_build_lands_beside_its_results_with_a_series_and_publishes_once() {
+        let fixture = Fixture::new("release-build");
+        let results = [lavapipe_result(&fixture.checkout, 1.03)];
+        let source_hash = &results[0].provenance.as_ref().unwrap().checkout.source_hash;
+        let build = ReleaseBuild {
+            binary_bytes: 12_293_984,
+            build_seconds: 412,
+        };
+        let first = publish(&fixture.checkout, &results, Some(build.clone())).unwrap();
+        assert_eq!((first.on_series, first.tagged), (2, 0));
+        let record: StoredReleaseBuild = serde_json::from_str(&fixture.read(&format!(
+            "records/{LAVAPIPE_KEY}/release-build/{source_hash}.json"
+        )))
+        .unwrap();
+        assert_eq!(record.build, build);
+        let series = fixture.read(&format!("series/{LAVAPIPE_KEY}/release-build.json"));
+        assert!(
+            series.contains(r#""binary_bytes":12293984,"build_seconds":412"#),
+            "{series}"
+        );
+        let second = publish(&fixture.checkout, &results, Some(build)).unwrap();
+        assert_eq!((second.dropped, second.commit), (2, None));
+        assert_eq!(fixture.commits(), 1);
+    }
+
+    #[test]
+    fn a_release_build_needs_results_of_one_adapter_from_one_checkout() {
+        let fixture = Fixture::new("release-build-adapters");
+        let build = ReleaseBuild {
+            binary_bytes: 1,
+            build_seconds: 1,
+        };
+        let results = [
+            lavapipe_result(&fixture.checkout, 1.03),
+            result(&fixture.checkout, "Apple M4 Pro", 1.02),
+        ];
+        assert!(publish(&fixture.checkout, &results, Some(build.clone())).is_err());
+        assert!(publish(&fixture.checkout, &[], Some(build)).is_err());
+        assert!(git(&fixture.remote, &["rev-parse", "--verify", BRANCH], None).is_err());
     }
 }

@@ -68,6 +68,9 @@ enum Command {
     },
     Publish {
         results: String,
+        /// The wall time of the release build that made this binary, which
+        /// then joins the results as a release build.
+        release_build_seconds: Option<u64>,
     },
     ImportBaselines,
     UnrecordedScenes,
@@ -116,7 +119,10 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             crowd_form,
             publish,
         } => bench(&output, configuration, &scenes, crowd_form, publish),
-        Command::Publish { results } => publish(&results),
+        Command::Publish {
+            results,
+            release_build_seconds,
+        } => publish(&results, release_build_seconds),
         Command::ImportBaselines => import_baselines(),
         Command::UnrecordedScenes => unrecorded_scenes(),
         Command::Compare { results, mode } => compare(&results, mode),
@@ -141,6 +147,13 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 .map_err(|_| anyhow::anyhow!("--frame takes a frame number, not {frame:?}"))
         })
         .transpose()?;
+    let release_build_seconds = take_option(&mut arguments, "--release-build-seconds")?
+        .map(|seconds| {
+            seconds.parse::<u64>().map_err(|_| {
+                anyhow::anyhow!("--release-build-seconds takes whole seconds, not {seconds:?}")
+            })
+        })
+        .transpose()?;
     let skip_aliasing = take_flag(&mut arguments, "--skip-aliasing");
     let no_publish = take_flag(&mut arguments, "--no-publish");
     let command = arguments.first().map(String::as_str);
@@ -151,6 +164,10 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     anyhow::ensure!(
         !no_publish || command == Some("bench"),
         "only `bench` takes --no-publish"
+    );
+    anyhow::ensure!(
+        release_build_seconds.is_none() || command == Some("publish"),
+        "only `publish` takes --release-build-seconds"
     );
     anyhow::ensure!(
         crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
@@ -221,6 +238,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         }
         [command, results] if command == "publish" => Command::Publish {
             results: results.clone(),
+            release_build_seconds,
         },
         [command, subcommand] if command == "history" && subcommand == "import" => {
             Command::ImportBaselines
@@ -248,7 +266,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish] [<scene>...]`, \
-             `publish <bench directory>`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `publish <bench directory> [--release-build-seconds <seconds>]`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -395,7 +413,7 @@ fn bench(
         results.push(result);
     }
     if publish {
-        match praxis::bench::publish(Path::new("."), &results) {
+        match praxis::bench::publish(Path::new("."), &results, None) {
             Ok(publication) => writeln!(std::io::stdout(), "{publication}")?,
             Err(error) => tracing::warn!(
                 error = format!("{error:#}"),
@@ -407,13 +425,27 @@ fn bench(
 }
 
 /// Publishes every `<scene>.json` in `results` as Bench records on the
-/// `bench-history` branch, and prints what it did.
-fn publish(results: &str) -> anyhow::Result<()> {
+/// `bench-history` branch, and prints what it did. With
+/// `release_build_seconds`, this binary's release build joins them: its
+/// size and the build's wall time.
+fn publish(results: &str, release_build_seconds: Option<u64>) -> anyhow::Result<()> {
     let measurements = result_paths(results)?
         .iter()
         .map(|path| read_json(path))
         .collect::<anyhow::Result<Vec<Measurements>>>()?;
-    let publication = praxis::bench::publish(Path::new("."), &measurements)?;
+    let release_build = release_build_seconds
+        .map(|build_seconds| {
+            anyhow::ensure!(
+                !cfg!(debug_assertions),
+                "--release-build-seconds needs a release binary, whose size it records"
+            );
+            Ok(praxis::bench::ReleaseBuild {
+                binary_bytes: std::env::current_exe()?.metadata()?.len(),
+                build_seconds,
+            })
+        })
+        .transpose()?;
+    let publication = praxis::bench::publish(Path::new("."), &measurements, release_build)?;
     writeln!(std::io::stdout(), "{publication}")?;
     Ok(())
 }
@@ -770,10 +802,14 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("only `bench` takes --no-publish"), "{error}");
-        let Command::Publish { results } = parse(&["publish", "out"]).unwrap() else {
+        let Command::Publish {
+            results,
+            release_build_seconds,
+        } = parse(&["publish", "out"]).unwrap()
+        else {
             panic!("publish parsed as another command");
         };
-        assert_eq!(results, "out");
+        assert_eq!((results.as_str(), release_build_seconds), ("out", None));
         assert!(matches!(
             parse(&["history", "import"]).unwrap(),
             Command::ImportBaselines
@@ -783,6 +819,31 @@ mod tests {
             Command::UnrecordedScenes
         ));
         assert!(parse(&["history"]).is_err());
+    }
+
+    #[test]
+    fn publish_takes_a_release_builds_seconds_and_only_publish_does() {
+        let Command::Publish {
+            release_build_seconds,
+            ..
+        } = parse(&["publish", "out", "--release-build-seconds", "412"]).unwrap()
+        else {
+            panic!("publish parsed as another command");
+        };
+        assert_eq!(release_build_seconds, Some(412));
+        for (arguments, expected) in [
+            (
+                &["publish", "out", "--release-build-seconds", "4m"][..],
+                "takes whole seconds",
+            ),
+            (
+                &["bench", "out", "--release-build-seconds", "412"][..],
+                "only `publish` takes --release-build-seconds",
+            ),
+        ] {
+            let error = parse(arguments).unwrap_err().to_string();
+            assert!(error.contains(expected), "{error}");
+        }
     }
 
     #[test]

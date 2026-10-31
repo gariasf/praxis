@@ -8,7 +8,8 @@ use std::path::Path;
 use anyhow::Context;
 
 use super::{
-    BenchRecord, ON_SERIES, Publication, TAGGED, Worktree, committed_unix_seconds, push, tags,
+    BenchRecord, ON_SERIES, Publication, RELEASE_BUILD, Run, TAGGED, Worktree,
+    committed_unix_seconds, push, tags,
 };
 use crate::bench::Spread;
 use crate::bench::provenance::{QUIET_P95_OVER_MEDIAN, git, source_hash};
@@ -224,6 +225,7 @@ fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
 /// What the import reads from every Baseline, whichever bench wrote it.
 #[derive(serde::Deserialize)]
 struct Baseline {
+    scene: String,
     adapter: String,
     /// Absent before Baselines were keyed by backend.
     backend: Option<String>,
@@ -280,14 +282,20 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
     let quiet = p95_over_median.is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
     BenchRecord::new(
         file,
+        &baseline.scene,
         &commit.source_hash,
         commit.committed_unix_seconds,
         tags(
             false,
-            &baseline.profile,
-            quiet,
             true,
-            (baseline.width, baseline.height, baseline.measured_frames),
+            Some(Run {
+                adapter: &baseline.adapter,
+                profile: &baseline.profile,
+                quiet,
+                width: baseline.width,
+                height: baseline.height,
+                measured_frames: baseline.measured_frames,
+            }),
         ),
         p95_over_median,
     )
@@ -309,7 +317,8 @@ impl Worktree<'_> {
     /// Gives every record a bench published at Harness version 1 the
     /// Harness version `version`: before the import numbered the eras before it,
     /// version 1 named the method in force. Rebuilds the Series they are
-    /// on, and returns how many it changed.
+    /// on, and returns how many it changed. A release build's record, which
+    /// no Harness measured, keeps what it holds.
     fn restamp(&self, version: u32) -> anyhow::Result<usize> {
         let listing = git(
             &self.directory,
@@ -319,6 +328,12 @@ impl Worktree<'_> {
         let mut restamped = 0;
         let mut series = BTreeSet::new();
         for relative_path in listing.lines().map(Path::new) {
+            if relative_path
+                .parent()
+                .is_some_and(|directory| directory.ends_with(RELEASE_BUILD))
+            {
+                continue;
+            }
             let path = self.directory.join(relative_path);
             let mut file: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
                 .with_context(|| format!("parsing {}", relative_path.display()))?;
@@ -480,7 +495,7 @@ mod tests {
         assert_eq!(record.adapter_key, "llvmpipe-llvm-20-1-2-256-bits-vulkan");
         assert_eq!(
             record.tags,
-            ["640x360 over 256 frames, not the reference configuration"]
+            ["640x360 over 256 frames, not CI's configuration"]
         );
         let noisy = FIRST_BASELINE.replace(
             "\"draw_calls\"",

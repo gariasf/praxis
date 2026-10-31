@@ -10,9 +10,11 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', '*.md']
 
-# A newer push to a PR or to main cancels the run it supersedes.
+# A newer push to a PR cancels the run it supersedes. Each push to main runs
+# in a group of its own, so none is cancelled and every one publishes its
+# Bench records; publishes that race retry on the branch's new tip.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -143,6 +145,8 @@ jobs:
     name: Bench counters (software Vulkan)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    outputs:
+      benched: ${{ steps.bench.outcome }}
     steps:
       - uses: actions/checkout@v4
 
@@ -156,18 +160,25 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends \
             mesa-vulkan-drivers=$LAVAPIPE_VERSION
 
+      # Timed for the release build's Bench record: the dependencies
+      # rust-cache restored are not rebuilt, so a cache miss reads as a spike.
       - name: Build
-        run: cargo build --release
+        run: |
+          started=$SECONDS
+          cargo build --release
+          echo $((SECONDS - started)) > target/release-build-seconds
 
       # Counters only: draw calls, Instances and triangles drawn, Instances
       # overflowed, uploaded bytes, GPU memory, Arena bytes in use and heap
       # allocations against the Baselines in bench/baselines/<llvmpipe key>.
       # Each scene renders its counter frames alone, which compare with a
       # Baseline of any length at CI's size: lavapipe's times mean nothing.
-      - name: Bench and compare
-        run: |
-          target/release/praxis bench target/bench --ci-counters --no-publish
-          target/release/praxis compare target/bench --ci
+      - name: Bench
+        id: bench
+        run: target/release/praxis bench target/bench --ci-counters --no-publish
+
+      - name: Compare
+        run: target/release/praxis compare target/bench --ci
 
       # A new or changed Baseline is this artifact's file, copied into its
       # adapter's directory.
@@ -178,3 +189,50 @@ jobs:
           name: bench-results
           path: target/bench
           if-no-files-found: ignore
+
+      # What publish-bench publishes: the results, the binary that measured
+      # them, whose size it records, and its build's wall time. Uploaded on
+      # every run that benched, so a PR's can be published to a scratch remote
+      # by hand, and a failed compare on main still publishes the commit that
+      # regressed.
+      - name: Upload what publish-bench publishes
+        if: ${{ !cancelled() && steps.bench.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-publish
+          path: |
+            target/bench/*.json
+            target/release/praxis
+            target/release-build-seconds
+          retention-days: 3
+          if-no-files-found: error
+
+  # Publishes lavapipe's results and the release build beside them as Bench
+  # records on bench-history (ADR 0024). Only a push to main runs it, and
+  # only this job can write: code from a pull request never does. It runs
+  # whenever the bench ran, whether or not its compare passed.
+  publish-bench:
+    name: Publish Bench records
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.software-bench.outputs.benched == 'success' }}
+    needs: software-bench
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-publish
+          path: ${{ runner.temp }}/bench-publish
+
+      - name: Publish
+        env:
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/bench-publish
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          chmod +x "$ARTIFACT_DIRECTORY/release/praxis"
+          "$ARTIFACT_DIRECTORY/release/praxis" publish "$ARTIFACT_DIRECTORY/bench" \
+            --release-build-seconds "$(cat "$ARTIFACT_DIRECTORY/release-build-seconds")"
