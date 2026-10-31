@@ -4,6 +4,50 @@ Profiles of the Reference scenes, one section per milestone exit, and
 measurements that name an offender's cause, newest first. Each exit names
 its top three offenders and the tickets that take them.
 
+## The depth pre-pass read 0 ns where it ended beside the Froxel pass (2026-10-31, #414)
+
+**Verdict.** `capture_reports_the_pbr_sweep_frame_stats` failed now and
+then because a render pass counted from the end of every pass before it,
+the Froxel pass included, and the depth pre-pass, which reads none of
+the Froxel pass's lists, can run beside it on the M4 Pro and end first.
+Its line then read 0 ns. A render pass now counts from the passes it
+waits on: the two depth passes skip the Froxel pass, and the lit pass,
+the first to read its lists, still counts from its end. No Baseline
+moves.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, the test's release
+binary in a loop with a patch, not committed, that printed a frame's
+raw timestamps when a render pass read 0 ns. On `main` at `099b76bc`,
+2 of 460 runs read a pass at 0 ns, both the pre-pass; a third failed on
+its CPU times, a separate flake (#420). One failing frame, in ns
+from culling phase one's start:
+
+| Pass | Start | End |
+|---|---:|---:|
+| `culling_phase_one` | 0 | 22,083 |
+| `depth_prepass` | 152,042 | 175,875 |
+| `froxel_pass` | 162,750 | 176,500 |
+| `depth_pyramid_pass` | 176,292 | 194,958 |
+
+The pre-pass ends 625 ns before the Froxel pass, so its counted start
+fell after its end. The other failure's frame has the same shape, the
+pre-pass ending 625 ns before the Froxel pass too. After the change, 200
+consecutive runs of the dev build and 400 of the release build passed.
+
+- **Baselines.** `praxis bench <dir> --skip-aliasing <scene>` of every
+  Reference scene with the branch and the same patch writing every
+  frame's raw timestamps, both rules then applied to the same 1,800
+  measured frames, so the GPU's other load moves neither. Only `town`'s
+  pre-pass moves, in 229 of its frames, by 69 µs at the median of those
+  and 86 µs at most. Each of those frames reads at most 369 µs after the
+  change, far below the 2,154 µs median, so its median and p95 (2,244 µs)
+  stay the same. Phase two's depth pass moves in no frame of any scene.
+  The rule reproduces the bench's own lines: pbr-sweep's pre-pass reads
+  163.5 µs from both. So no Baseline was re-recorded.
+- **Why not let 0 ns pass in the test.** The test would then also miss
+  a pre-pass that never ran, and the line would still under-read the
+  frames it overlaps.
+
 ## Shadow rays skip the dynamic TLAS outside its Instances' box (2026-10-30, #412)
 
 **Verdict.** Each frame now carries one box, in the TLAS's frame, that
@@ -528,8 +572,11 @@ starts about 12 µs after the lit pass in every frame, so its line always
 read most of the lit pass. The share of frames whose lit pass starts
 early changes from run to run, 0 to 34% here, so the median falls on
 either mode once it nears half. Frame stats now count a render pass from
-the latest end of the passes before it, when that is later than its
-start. Compute passes keep their own begin-to-end times, as the Froxel
+the latest end of the passes before it that it waits on, when that is
+later than its start. Every pass before it counts but the Froxel pass
+for the two depth passes: the lit pass is the first to read its lists,
+and a depth pass that ended beside it read 0 ns (#414, above). Compute
+passes keep their own begin-to-end times, as the Froxel
 pass runs beside culling phase one and reads none of its output. Five
 runs then give the light scenes' pass lines within 2.8% of each other,
 inside `compare`'s 5% warning, and the GPU frame and gate do not move,
