@@ -188,6 +188,26 @@ _Avoid_: Metrics, telemetry
 The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.
 _Avoid_: Benchmark result
 
+**Bench record**:
+One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against.
+_Avoid_: Benchmark result, sample, data point
+
+**Bench history**:
+Every Bench record kept, from sessions, CI and the machines' own runs, including those kept off a Series.
+_Avoid_: Metrics database, telemetry
+
+**Series**:
+One metric's Bench records for one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine, in source order. What its charts draw and what a Regression is found in.
+_Avoid_: Trend, timeline
+
+**Harness version**:
+A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.
+_Avoid_: Schema version, bench version
+
+**Experiment**:
+Bench records taken from a branch under a name, kept beside the Series and compared with them, never part of one.
+_Avoid_: Branch run, trial
+
 **Budget**:
 A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold
