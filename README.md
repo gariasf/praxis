@@ -8,7 +8,8 @@ Open-world RPG engine in Rust and wgpu, written from scratch.
 ray-traced shadows.
 
 **Status:** early. It is a renderer for now: no editor, gameplay, physics,
-audio or scripting yet.
+audio or scripting yet. I build it with coding agents, following
+[the workflow](docs/agents/workflow.md).
 
 [Bench history](https://gariasf.github.io/praxis/bench/) ·
 [Field guides](https://gariasf.github.io/praxis/guides/) ·
