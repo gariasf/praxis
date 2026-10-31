@@ -261,7 +261,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             anchor,
             range,
             offset,
-            _pad_offset,
+            unshadowed_range,
             intensity,
             _pad_intensity,
         }),

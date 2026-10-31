@@ -9,10 +9,14 @@
 // lights, then the point lights its Froxel lists, as many as
 // SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top
 // bits hold the Froxel's slice. A light past them casts no shadow there,
-// and is counted. The depth target holds both culling phases' Instances
-// when it runs, and the surface normals what each sample shows; the
-// surface's position is rebuilt from the sample's depth. Its bindings are
-// declared from their bind groups' definitions (src/render/bind_groups.rs).
+// and is counted. A point light that casts no shadow is passed over as one
+// out of range is: no ray, no bit and no count. Those lights follow the
+// others in the light buffer, and so in each Froxel's list, so the bits go
+// to the lights that cast a shadow. The depth target holds both culling
+// phases' Instances when it runs, and the surface normals what each sample
+// shows; the surface's position is rebuilt from the sample's depth. Its
+// bindings are declared from their bind groups' definitions
+// (src/render/bind_groups.rs).
 
 // A directional light's shadow ray runs to f32's largest distance, past
 // anything a TLAS holds.
@@ -292,7 +296,9 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
                 let light_position = point_light_position(point, camera.anchor, camera.offset);
                 let to_light = light_position - position;
                 let distance_squared = dot(to_light, to_light);
-                if distance_squared >= point.range * point.range {
+                // Within range of the surface, and casting a shadow there.
+                let shadow_range = point.range - point.unshadowed_range;
+                if distance_squared >= shadow_range * shadow_range {
                     continue;
                 }
                 if entry >= SHADOW_MASK_LIGHTS {

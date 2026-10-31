@@ -14,11 +14,11 @@ pub struct LightUniform {
     pub _pad: [u32; 2],
 }
 
-/// A light as the light buffer holds it, directional lights first, then point
-/// lights. A point light's position reaches the GPU as an Anchor plus an f32
-/// offset, which shaders compose relative to the camera (ADR 0014); a
-/// directional light has no position, and its offset holds the direction it
-/// shines along.
+/// A light as the light buffer holds it, directional lights first, then the
+/// point lights that cast a shadow, then those that cast none. A point
+/// light's position reaches the GPU as an Anchor plus an f32 offset, which
+/// shaders compose relative to the camera (ADR 0014); a directional light has
+/// no position, and its offset holds the direction it shines along.
 #[repr(C)]
 #[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightData {
@@ -26,7 +26,11 @@ pub struct LightData {
     /// A point light's range, in metres; 0 for a directional light.
     pub range: f32,
     pub offset: [f32; 3],
-    pub _pad_offset: u32,
+    /// How much of a point light's range casts no shadow: all of it for one
+    /// that casts none, which the shadow mask pass then passes over as it
+    /// does a light out of range; 0 for one that casts a shadow and for a
+    /// directional light.
+    pub unshadowed_range: f32,
     /// Its colour times its intensity: candela for a point light, lux for a
     /// directional light (ADR 0023).
     pub intensity: [f32; 3],

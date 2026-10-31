@@ -511,10 +511,11 @@ impl FramePreparer {
 }
 
 /// Fills `lights` with every directional light, shining along its entity's
-/// forward axis, then every point light, at its World position as an Anchor
-/// plus an offset (ADR 0014), each blended between its two newest Ticks, up
-/// to `LIGHT_CAPACITY`. Returns how many are directional, and sets
-/// `overflowed` to how many the light buffer had no room for.
+/// forward axis, then every point light that casts a shadow, then every one
+/// that casts none, at its World position as an Anchor plus an offset (ADR
+/// 0014), each blended between its two newest Ticks, up to `LIGHT_CAPACITY`.
+/// Returns how many are directional, and sets `overflowed` to how many the
+/// light buffer had no room for.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
@@ -538,25 +539,33 @@ fn prepare_lights(
                     ..LightData::default()
                 })
             });
-    let mut point_lights = point_light_query
-        .iter(world)
-        .map(|(current, previous, light)| {
-            let transform = current.drawn(previous, blend_weight);
-            let (anchor, offset) = anchor_and_offset(transform.translation());
-            LightData {
-                anchor,
-                range: light.range,
-                offset,
-                intensity: (light.color * light.intensity).to_array(),
-                ..LightData::default()
-            }
-        });
     let capacity = LIGHT_CAPACITY as usize;
     lights.clear();
     lights.extend(directional_lights.by_ref().take(capacity));
     let directional_light_count = lights.len() as u32;
-    lights.extend(point_lights.by_ref().take(capacity - lights.len()));
-    *overflowed = (directional_lights.count() + point_lights.count()) as u32;
+    *overflowed = directional_lights.count() as u32;
+    // The point lights that cast a shadow, then those that cast none, so
+    // the shadow mask's bits, which follow the lights in buffer order, go
+    // to the first.
+    for casts_shadow in [true, false] {
+        let mut point_lights = point_light_query
+            .iter(world)
+            .filter(|(.., light)| light.casts_shadow == casts_shadow)
+            .map(|(current, previous, light)| {
+                let transform = current.drawn(previous, blend_weight);
+                let (anchor, offset) = anchor_and_offset(transform.translation());
+                LightData {
+                    anchor,
+                    range: light.range,
+                    offset,
+                    unshadowed_range: if casts_shadow { 0.0 } else { light.range },
+                    intensity: (light.color * light.intensity).to_array(),
+                    ..LightData::default()
+                }
+            });
+        lights.extend(point_lights.by_ref().take(capacity - lights.len()));
+        *overflowed += point_lights.count() as u32;
+    }
     directional_light_count
 }
 
@@ -1188,6 +1197,7 @@ mod tests {
             color: glam::vec3(1.0, 0.5, 0.25),
             intensity: 4.0,
             range: 3.0,
+            casts_shadow: true,
         };
         let position = glam::dvec3(100_000.25, 2.0, -64.5);
         frames
@@ -1219,6 +1229,34 @@ mod tests {
         );
     }
 
+    /// Point lights spawned casting a shadow and casting none in turn: the
+    /// light buffer holds those that cast one first, then the others, each
+    /// kind in the order it was spawned, the others with all of their range
+    /// unshadowed.
+    #[test]
+    fn point_lights_that_cast_no_shadow_follow_those_that_cast_one() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        for (intensity, casts_shadow) in [(1.0, true), (2.0, false), (3.0, true), (4.0, false)] {
+            let point_light = PointLight {
+                color: glam::Vec3::ONE,
+                intensity,
+                range: 1.0,
+                casts_shadow,
+            };
+            frames.world.spawn((Transform::IDENTITY, point_light));
+        }
+        frames.prepare();
+        let frame = frames.preparer.frame();
+        let lights: Vec<(f32, f32)> = frame
+            .lights
+            .iter()
+            .map(|light| (light.intensity[0], light.unshadowed_range))
+            .collect();
+        assert_eq!(lights, [(1.0, 0.0), (3.0, 0.0), (2.0, 1.0), (4.0, 1.0)]);
+    }
+
     /// One directional light and one point light more than the light buffer
     /// holds: the directional light and all but two point lights are drawn,
     /// and the two are counted every frame and warned about once, until
@@ -1237,6 +1275,7 @@ mod tests {
             color: glam::Vec3::ONE,
             intensity: 1.0,
             range: 1.0,
+            casts_shadow: true,
         };
         let point_lights: Vec<Entity> = (0..LIGHT_CAPACITY + 1)
             .map(|index| {

@@ -85,6 +85,10 @@ pub struct PointLight {
     /// Metres from the light past which it adds nothing (KHR_lights_punctual's
     /// `range`, which must be positive and here finite).
     pub range: f32,
+    /// Whether it casts a shadow: one that casts none takes no shadow ray
+    /// and no place in the shadow mask, which then holds more of the lights
+    /// that cast one.
+    pub casts_shadow: bool,
 }
 
 /// A directional light shining along its entity's forward axis: -Z turned by

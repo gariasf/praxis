@@ -396,6 +396,7 @@ impl ReferenceScene {
                     color: glam::Vec3::ONE,
                     intensity: MINIFICATION_LIGHT_INTENSITY,
                     range: MINIFICATION_LIGHT_RANGE,
+                    casts_shadow: true,
                 },
             )],
             // The directional light alone, white, so each quad shows its
@@ -497,6 +498,7 @@ const fn coloured_light(color: glam::Vec3) -> PointLight {
         color,
         intensity: 9.0 * SUN_ILLUMINANCE,
         range: 20.0,
+        casts_shadow: true,
     }
 }
 

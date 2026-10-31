@@ -225,6 +225,7 @@ const LAMP_LIGHT: PointLight = PointLight {
     color: glam::Vec3::new(1.0, 0.85, 0.65),
     intensity: 20.0 * super::SUN_ILLUMINANCE,
     range: 18.0,
+    casts_shadow: true,
 };
 
 /// Flocks of pigeons over the town, `FLOCKS_PER_SIDE` a side on a grid
