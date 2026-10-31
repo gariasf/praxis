@@ -2,6 +2,7 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
+mod export;
 mod fetch;
 pub(crate) mod mesh;
 mod texture;
@@ -13,6 +14,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+pub use export::{SCENE_FORMAT_VERSION, export_scene};
 pub use fetch::{Fetch, absent_fetched, fetch};
 pub use texture::{LoadedImage, TextureSource};
 
@@ -441,18 +443,8 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
             }
             sources.textures.push(source);
         }
-        let pbr = material.pbr_metallic_roughness();
         let id = AssetId::new(asset_source, AssetKind::Material, name);
-        let material = CookedMaterial {
-            base_color: pbr.base_color_factor(),
-            metallic: pbr.metallic_factor(),
-            roughness: pbr.roughness_factor(),
-            emissive: material.emissive_factor(),
-            normal_scale: material
-                .normal_texture()
-                .map_or(1.0, |normal| normal.scale()),
-            textures: texture_ids,
-        };
+        let material = gltf_material(&material, texture_ids);
         let cook_key = material_cook_key(&material.to_blob());
         sources.materials.push((id, cook_key, material));
     }
@@ -467,6 +459,21 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
     absent_images.dedup();
     sources.absent.extend(absent_images);
     Ok(())
+}
+
+/// `material`'s factors, with the Textures `textures` names per Channel.
+fn gltf_material(material: &gltf::Material, textures: [Option<AssetId>; 5]) -> CookedMaterial {
+    let pbr = material.pbr_metallic_roughness();
+    CookedMaterial {
+        base_color: pbr.base_color_factor(),
+        metallic: pbr.metallic_factor(),
+        roughness: pbr.roughness_factor(),
+        emissive: material.emissive_factor(),
+        normal_scale: material
+            .normal_texture()
+            .map_or(1.0, |normal| normal.scale()),
+        textures,
+    }
 }
 
 /// Each item's Asset name: its glTF name, or its index when the name is

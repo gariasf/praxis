@@ -96,7 +96,7 @@ fn channel_delta(expected: &[u8], actual: &[u8]) -> u8 {
 }
 
 /// Frames rendered per capture; the last one is read back.
-const FRAME_COUNT: u32 = 60;
+pub(crate) const FRAME_COUNT: u32 = 60;
 
 /// Renders `scene`, moved with its camera by `shift`, into a `width` ×
 /// `height` offscreen texture for `FRAME_COUNT` frames, as `switches` set,
@@ -228,8 +228,11 @@ pub(crate) fn render_frames(
     let mut next_frame = 0;
     for frame in drawn {
         for undrawn in next_frame..frame {
-            state.world.insert_resource(scene.camera_at(undrawn, shift));
-            state.simulate(frame_delta);
+            state
+                .simulation
+                .world
+                .insert_resource(scene.camera_at(undrawn, shift));
+            state.simulation.simulate(frame_delta);
         }
         next_frame = frame + 1;
         if in_flight.len() == FRAMES_IN_FLIGHT {
@@ -249,7 +252,10 @@ pub(crate) fn render_frames(
                 }
             }
         }
-        state.world.insert_resource(scene.camera_at(frame, shift));
+        state
+            .simulation
+            .world
+            .insert_resource(scene.camera_at(frame, shift));
         state.update(frame_delta);
         in_flight.push_back(state.render(&target_view));
         frame_stats.push(state.frame_stats());

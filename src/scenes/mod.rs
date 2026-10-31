@@ -534,7 +534,10 @@ pub(crate) fn sweep_material_name(metallic: f32, roughness: f32) -> String {
     format!("metallic-{metallic}-roughness-{roughness}")
 }
 
-pub(crate) fn spawn_pbr_sweep(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_pbr_sweep(
+    world: &mut World,
+    loader: &mut dyn AssetLoader,
+) -> anyhow::Result<()> {
     let sphere = loader.mesh(ReferenceScene::PbrSweep.mesh_id("sphere"))?;
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
@@ -560,7 +563,7 @@ pub(crate) fn spawn_pbr_sweep(world: &mut World, loader: &mut AssetLoader) -> an
 const UV_GRID_ROUGHNESS: f32 = 0.8;
 
 /// The plane draws with the grid Material its Primitive names.
-pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let plane = loader.mesh(ReferenceScene::UvGrid.mesh_id("plane"))?;
     world.spawn((Transform::IDENTITY, MeshRef(plane)));
     Ok(())
@@ -572,7 +575,7 @@ const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 /// The Mesh draws with the Material its Primitive names.
 pub(crate) fn spawn_normal_tangent(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     let source = AssetSource::File(NORMAL_TANGENT_TEST);
     let name = AssetName::Name("NormalTangentTest_low");
@@ -596,7 +599,7 @@ const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
 pub(crate) fn spawn_far_coplanar(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     let plane = loader.mesh(ReferenceScene::FarCoplanar.mesh_id("plane"))?;
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
@@ -625,7 +628,7 @@ const ORRERY_ROUGHNESS: f32 = 0.5;
 /// one before, on its parent's +X axis, and all spinning about their own +Y
 /// in the fixed schedule, so each circles its parent. The spheres draw with
 /// the grid Material their Primitive names, which shows each one's spin.
-pub(crate) fn spawn_orrery(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_orrery(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let sphere = loader.mesh(ReferenceScene::Orrery.mesh_id("sphere"))?;
     let body = |radians_per_second| {
         (
@@ -701,7 +704,7 @@ const MINIFICATION_GLOSS_ROUGHNESS: f32 = 0.2;
 /// The floor draws with the Material its Primitive names.
 pub(crate) fn spawn_minification(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     let ground = loader.mesh(ReferenceScene::Minification.mesh_id("ground"))?;
     world.spawn((Transform::IDENTITY, MeshRef(ground)));
@@ -797,7 +800,7 @@ fn wall_material_name(quad: u32) -> String {
 /// column 0 on its left, each with its own Material.
 pub(crate) fn spawn_texture_wall(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     let (scene, channel) = (ReferenceScene::TextureWall, MaterialChannel::Albedo);
     for index in 0..TEXTURE_WALL_TEXTURES {
@@ -867,7 +870,7 @@ const SHADOWS_LIGHTS: [(glam::DVec3, PointLight); 1] = [(
 )];
 
 /// The Mesh draws each of its Primitives with the Material it names.
-pub(crate) fn spawn_shadows(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_shadows(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let mesh = loader.mesh(ReferenceScene::Shadows.mesh_id("sphere-over-plane"))?;
     world.spawn((Transform::IDENTITY, MeshRef(mesh)));
     Ok(())
@@ -956,7 +959,7 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
 /// Spawns the ground, then the figures in rows of `CROWD_COLUMNS` centred
 /// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
 /// its bones' shadow proxies as children (`CrowdForm::Proxies`).
-pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_crowd(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     spawn_crowd_as(world, loader, CrowdForm::Proxies)
 }
 
@@ -965,7 +968,7 @@ pub(crate) fn spawn_crowd(world: &mut World, loader: &mut AssetLoader) -> anyhow
 /// (`CrowdForm::Refit`, `CrowdForm::Rebuild`).
 pub(crate) fn spawn_traced_crowd(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     spawn_crowd_as(world, loader, CrowdForm::Refit)
 }
@@ -974,7 +977,7 @@ pub(crate) fn spawn_traced_crowd(
 /// the figures' own BLASes.
 fn spawn_crowd_as(
     world: &mut World,
-    loader: &mut AssetLoader,
+    loader: &mut dyn AssetLoader,
     form: CrowdForm,
 ) -> anyhow::Result<()> {
     let scene = ReferenceScene::Crowd;

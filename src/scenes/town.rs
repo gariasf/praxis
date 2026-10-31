@@ -753,7 +753,7 @@ fn flocks() -> Vec<Flock> {
 /// places its Instances, its lamps' point lights, and its flocks: each a
 /// spinning centre with its birds as its children, all moved in the fixed
 /// schedule, so each carries its previous World transform (ADR 0022).
-pub(crate) fn spawn_town(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Town;
     let meshes: Vec<MeshHandle> = TownMesh::ALL
         .iter()

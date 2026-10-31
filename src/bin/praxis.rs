@@ -48,6 +48,12 @@ enum Command {
         frame: Option<u32>,
     },
     #[cfg(feature = "cook")]
+    ExportScene {
+        scene: String,
+        directory: String,
+        frame: Option<u32>,
+    },
+    #[cfg(feature = "cook")]
     Difference {
         expected: String,
         actual: String,
@@ -85,6 +91,12 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             crowd_form,
             frame,
         } => capture(&scene, &output, &size, crowd_form, frame),
+        #[cfg(feature = "cook")]
+        Command::ExportScene {
+            scene,
+            directory,
+            frame,
+        } => export_scene(&scene, &directory, frame),
         #[cfg(feature = "cook")]
         Command::Difference {
             expected,
@@ -130,8 +142,8 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         "only `bench` and `capture` take --crowd-form"
     );
     anyhow::ensure!(
-        frame.is_none() || command == Some("capture"),
-        "only `capture` takes --frame"
+        frame.is_none() || matches!(command, Some("capture" | "export-scene")),
+        "only `capture` and `export-scene` take --frame"
     );
     let crowd_form = crowd_form.unwrap_or_default();
     let bench = |output: &String, configuration: Configuration, scenes: &[String]| Command::Bench {
@@ -165,6 +177,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: size.clone(),
             crowd_form,
+            frame,
+        },
+        #[cfg(feature = "cook")]
+        [command, scene, directory] if command == "export-scene" => Command::ExportScene {
+            scene: scene.clone(),
+            directory: directory.clone(),
             frame,
         },
         #[cfg(feature = "cook")]
@@ -202,6 +220,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         _ => anyhow::bail!(
             "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+             `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [<scene>...]`, \
              `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
@@ -550,6 +569,19 @@ fn capture(
     Ok(())
 }
 
+/// Writes what prepare reads of the Reference scene named `scene` at
+/// `frame` of its camera path, or at the frame `capture` writes, into
+/// `directory`, for a reference renderer.
+#[cfg(feature = "cook")]
+fn export_scene(scene: &str, directory: &str, frame: Option<u32>) -> anyhow::Result<()> {
+    praxis::cook::export_scene(
+        parse_scene(scene)?,
+        frame,
+        Path::new(praxis::cook::ASSETS_DIRECTORY),
+        Path::new(directory),
+    )
+}
+
 /// Writes the difference image of two PNGs of equal size to `output`, as the
 /// Goldens test does on a mismatch, and prints how many pixels differ.
 #[cfg(feature = "cook")]
@@ -681,6 +713,29 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "cook")]
+    #[test]
+    fn export_scene_parses_its_scene_directory_and_frame() {
+        for (arguments, expected_frame) in [
+            (&["export-scene", "town", "out"][..], None),
+            (
+                &["export-scene", "--frame", "300", "town", "out"][..],
+                Some(300),
+            ),
+        ] {
+            let Command::ExportScene {
+                scene,
+                directory,
+                frame,
+            } = parse(arguments).unwrap()
+            else {
+                panic!("export-scene parsed as another command");
+            };
+            assert_eq!((scene.as_str(), directory.as_str()), ("town", "out"));
+            assert_eq!(frame, expected_frame);
+        }
+    }
+
     #[test]
     fn a_frame_that_is_no_number_or_not_on_capture_is_refused() {
         let error = parse(&["capture", "town", "out.png", "--frame", "last"])
@@ -694,7 +749,10 @@ mod tests {
         let error = parse(&["bench", "out", "--frame", "3"])
             .unwrap_err()
             .to_string();
-        assert!(error.contains("only `capture` takes --frame"), "{error}");
+        assert!(
+            error.contains("only `capture` and `export-scene` take --frame"),
+            "{error}"
+        );
     }
 
     #[test]
