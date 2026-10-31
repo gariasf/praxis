@@ -153,10 +153,11 @@ struct LightUniform {
 }
 
 // A light as the light buffer holds it, directional lights first, then the
-// point lights that cast a shadow, then those that cast none. A point light's position arrives as an Anchor plus an offset
-// (ADR 0014), with its range; a directional light has no position, and its
-// offset holds the direction it shines along. Its intensity is its colour
-// times its candela, or a directional light's times its lux (ADR 0023).
+// point lights that cast a shadow, then those that cast none. A point light's
+// position arrives as an Anchor plus an offset (ADR 0014), with its range; a
+// directional light has no position, and its offset holds the direction it
+// shines along. Its intensity is its colour times its candela, or a
+// directional light's times its lux (ADR 0023).
 struct LightData {
     anchor: vec3<i32>,
     range: f32,

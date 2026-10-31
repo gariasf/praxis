@@ -92,8 +92,8 @@ pub struct GpuFrameStats {
     /// Lights the Froxel lists had no room for, summed over Froxels: each
     /// lights nothing in a Froxel whose list it is missing from.
     pub froxel_lights_overflowed: u32,
-    /// Lights that reach a pixel past the shadow mask's bits there, summed
-    /// over pixels: each casts no shadow at those pixels.
+    /// Lights that cast a shadow and reach a pixel past the shadow mask's
+    /// bits there, summed over pixels: each casts no shadow at those pixels.
     pub shadow_mask_lights_overflowed: u32,
     /// With the `count_point_lights` Render switch on, the pixels where the
     /// frame drew a surface at the first sample, and the point lights their
