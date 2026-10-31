@@ -2,7 +2,7 @@ mod history;
 mod provenance;
 mod report;
 
-pub use history::{Publication, publish};
+pub use history::{Publication, import_baselines, publish};
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
 

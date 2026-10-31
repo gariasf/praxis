@@ -97,7 +97,10 @@ src/
                                  state, a line per check
   bench/                       # Reference scene medians, compared with
                                  Baselines and Budgets, published as
-                                 Bench records on `bench-history`
+                                 Bench records on `bench-history`;
+                                 history/import.rs, `praxis history
+                                 import`: the Baselines committed before
+                                 it, by Harness version era
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,
