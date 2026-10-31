@@ -1414,8 +1414,9 @@ pub(crate) mod tests {
     }
 
     /// A white floor ahead of the camera, lit by `lights`, directional lights
-    /// first, and white `rectangles` facing the camera, each its centre,
-    /// relative to the camera, and its width and height in metres: behind
+    /// first, and white `rectangles`, each its centre, relative to the
+    /// camera, its width and height in metres, and how far it turns, in
+    /// radians, from facing the camera about the vertical axis: behind
     /// the camera, out of view, a rectangle between the floor's middle and
     /// the light that lights it, as
     /// `shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none` and
@@ -1425,7 +1426,7 @@ pub(crate) mod tests {
     fn shadowed_floor(
         context: &GpuContext,
         lights: &[LightData],
-        rectangles: &[([f32; 3], [f32; 2])],
+        rectangles: &[([f32; 3], [f32; 2], f32)],
     ) -> (Renderer, image::RgbaImage, GpuFrameStats, String) {
         let mut renderer = Renderer::new(
             context,
@@ -1445,19 +1446,25 @@ pub(crate) mod tests {
             },
         );
         let quad = load_quad(&mut renderer);
-        // The quad, facing +Z, toward the camera, which looks down -Z.
-        let rectangle = |centre: [f32; 3], [width, height]: [f32; 2]| InstanceData {
-            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
-                width, height, 1.0,
-            ))),
-            offset: centre,
-            ..instance(quad, white.index(), [0.0, 0.0])
+        // The quad, facing +Z, toward the camera, which looks down -Z, until
+        // turned; its normal turns with it, as scaling it in its own plane
+        // leaves the normal as it is.
+        let rectangle = |centre: [f32; 3], [width, height]: [f32; 2], turn: f32| {
+            let rotation = glam::Mat3::from_rotation_y(turn);
+            InstanceData {
+                rotation_scale: padded_columns(
+                    rotation * glam::Mat3::from_diagonal(glam::vec3(width, height, 1.0)),
+                ),
+                normal_matrix: padded_columns(rotation),
+                offset: centre,
+                ..instance(quad, white.index(), [0.0, 0.0])
+            }
         };
-        let mut instances = vec![rectangle([0.0, 0.0, -FLOOR_DISTANCE], [4.0; 2])];
+        let mut instances = vec![rectangle([0.0, 0.0, -FLOOR_DISTANCE], [4.0; 2], 0.0)];
         instances.extend(
             rectangles
                 .iter()
-                .map(|&(centre, size)| rectangle(centre, size)),
+                .map(|&(centre, size, turn)| rectangle(centre, size, turn)),
         );
         // A directional light has no range.
         let directional_light_count = lights.iter().filter(|light| light.range == 0.0).count();
@@ -1507,7 +1514,7 @@ pub(crate) mod tests {
         let Some(context) = gpu_context() else {
             return;
         };
-        let (renderer, ..) = shadowed_floor(&context, &[SUN], &[([0.0, 0.0, 1.0], [1.0; 2])]);
+        let (renderer, ..) = shadowed_floor(&context, &[SUN], &[([0.0, 0.0, 1.0], [1.0; 2], 0.0)]);
         let halves: Vec<u32> = read_texture(
             &context,
             "@group(0) @binding(0) var source: texture_2d_array<u32>;
@@ -1562,13 +1569,14 @@ pub(crate) mod tests {
         let panel = (
             [(edge - 1.0) / 2.0, 0.0, -panel_distance],
             [1.0 + edge, 1.0],
+            0.0,
         );
         // The square's shadow, the sun shining along the view: from 0.5 m
         // left of the axis to 0.5 m right of it, over the panel's side, or
         // from 0.5 m to 0.8 m right of it, over the floor's.
         for (square, panel_shadowed) in [
-            (([0.0, 0.0, 1.0], [1.0; 2]), true),
-            (([0.65, 0.0, 1.0], [0.3, 1.0]), false),
+            (([0.0, 0.0, 1.0], [1.0; 2], 0.0), true),
+            (([0.65, 0.0, 1.0], [0.3, 1.0], 0.0), false),
         ] {
             let (_, image, ..) = shadowed_floor(&context, &[SUN], &[square, panel]);
 
@@ -1587,6 +1595,50 @@ pub(crate) mod tests {
         }
     }
 
+    /// A panel seen nearly edge-on, as a figure's silhouette is, turned 10°
+    /// past side-on from a sun that shines from the left and lights the
+    /// floor: its far end crosses a pixel's middle 2 m ahead, so the pixel's
+    /// two left samples show the panel and its two right ones the floor
+    /// (`SAMPLE_OFFSETS`). The floor there lies off the panel's plane by
+    /// under a pixel's width, so the pixel shows one surface by depth, whose
+    /// nearest sample turns from the sun. It resolves between the panel,
+    /// which only ambient light reaches, and the lit floor.
+    #[test]
+    fn an_edge_pixel_of_a_panel_seen_edge_on_resolves_between_it_and_the_lit_floor() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let (column, row) = (2, SIZE / 2);
+        let half_view = (std::f32::consts::FRAC_PI_4 / 2.0).tan();
+        let across = ((column as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0) * half_view;
+        // Turned 100° from facing the camera, the panel runs from its far
+        // end, on the pixel's middle 2 m ahead, toward the camera to 1 m
+        // ahead.
+        let turn = 100_f32.to_radians();
+        let along = glam::vec3(turn.cos(), 0.0, -turn.sin());
+        let (far_distance, near_distance) = (2.0, 1.0);
+        let length = (far_distance - near_distance) / turn.sin();
+        let far_end = glam::vec3(across * far_distance, 0.0, -far_distance);
+        let panel = (
+            (far_end - along * length / 2.0).to_array(),
+            [length, 1.0],
+            turn,
+        );
+        let sun = LightData {
+            offset: [1.0, 0.0, -1.0],
+            ..SUN
+        };
+        let (_, image, ..) = shadowed_floor(&context, &[sun], &[panel]);
+
+        let red = |column| image.get_pixel(column, row).0[0];
+        let (panel, edge, floor) = (red(column - 1), red(column), red(column + 1));
+        // Far more than the dither's step from either.
+        assert!(
+            panel.saturating_add(16) < edge && edge.saturating_add(16) < floor,
+            "the edge pixel {edge} is not between the panel {panel} and the floor {floor}"
+        );
+    }
+
     /// The floor under the sun and a rectangle behind the camera whose
     /// shadow's right edge crosses a pixel's middle: the pixel's two left
     /// samples lie in the shadow and its two right ones outside it
@@ -1602,7 +1654,7 @@ pub(crate) mod tests {
         let across = ((column as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0) * half_view;
         let edge = across * FLOOR_DISTANCE;
         // From 1.5 m left of the axis, past the view's side, to the edge.
-        let rectangle = ([(edge - 1.5) / 2.0, 0.0, 1.0], [edge + 1.5, 1.0]);
+        let rectangle = ([(edge - 1.5) / 2.0, 0.0, 1.0], [edge + 1.5, 1.0], 0.0);
         let (_, image, ..) = shadowed_floor(&context, &[SUN], &[rectangle]);
 
         let red = |column| image.get_pixel(column, row).0[0];
@@ -1637,8 +1689,8 @@ pub(crate) mod tests {
         // The sun's square, 1 m across 1 m behind the camera, and the point
         // light's, 0.2 m across 0.5 m behind it, between it and the floor.
         for (light, square) in [
-            (SUN, ([0.0, 0.0, 1.0], [1.0; 2])),
-            (point, ([0.0, 0.0, 0.5], [0.2; 2])),
+            (SUN, ([0.0, 0.0, 1.0], [1.0; 2], 0.0)),
+            (point, ([0.0, 0.0, 0.5], [0.2; 2], 0.0)),
         ] {
             let mut lights = vec![unlit; SHADOW_MASK_LIGHTS as usize];
             lights.push(light);
