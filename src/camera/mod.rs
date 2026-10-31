@@ -83,7 +83,7 @@ impl Camera {
 }
 
 /// Vertical field of view, in radians.
-const FIELD_OF_VIEW: f32 = std::f32::consts::FRAC_PI_4;
+pub(crate) const FIELD_OF_VIEW: f32 = std::f32::consts::FRAC_PI_4;
 /// Distance to the near plane in metres. There is no far plane (ADR 0015).
 const NEAR_PLANE: f32 = 0.1;
 

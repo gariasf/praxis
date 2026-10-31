@@ -118,7 +118,10 @@ src/
                                  in git-ignored `cooked/` (ADR 0018);
                                  `praxis fetch` downloads the manifest's
                                  fetched sources, as a dev launch that
-                                 lacks one does
+                                 lacks one does; `praxis export-scene`
+                                 writes what prepare reads of a Reference
+                                 scene at a frame, from source data, for
+                                 a reference renderer
   render/                      # Renderer (owns the Pools, reads no
                                  ECS World, calls the passes in order),
                                  a module per pass (bend_pass: the

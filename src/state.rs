@@ -4,7 +4,7 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
-use crate::assets::AssetLoader;
+use crate::assets::{AssetLoader, PoolLoader};
 use crate::camera::fly_camera;
 use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::cooked::{
@@ -34,16 +34,94 @@ use crate::transform::{
 /// downloads it, as a dev launch of the helmet does when it is absent.
 pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 
-/// The Scene in its ECS World, the Frame data prepared from it, and the
-/// Renderer that draws that into a target view.
+/// The Scene's Simulation, the Frame data prepared from it, and the Renderer
+/// that draws that into a target view.
 pub struct State {
-    // World is an internal detail, it should not be public. But this will do for now.
-    pub world: World,
-    schedule: Schedule,
-    fixed_schedule: Schedule,
+    pub(crate) simulation: Simulation,
     recorder: FrameRecorder,
     preparer: FramePreparer,
     renderer: Renderer,
+}
+
+/// A Reference scene's ECS World and the schedules that advance it: what
+/// prepare reads, with no Renderer.
+pub(crate) struct Simulation {
+    pub(crate) world: World,
+    schedule: Schedule,
+    fixed_schedule: Schedule,
+}
+
+impl Simulation {
+    /// `scene`'s World at frame 0, moved with its camera by `shift` metres,
+    /// its crowd spawned for `crowd_form` and its Assets loaded through
+    /// `loader`, with its systems timed by `recorder`.
+    pub(crate) fn new(
+        scene: ReferenceScene,
+        shift: glam::DVec3,
+        crowd_form: CrowdForm,
+        loader: &mut dyn AssetLoader,
+        recorder: &FrameRecorder,
+    ) -> anyhow::Result<Self> {
+        let mut world = World::new();
+        world.insert_resource(Input::default());
+        world.insert_resource(Time::default());
+        world.insert_resource(FixedTime::default());
+        world.insert_resource(scene.camera_at(0, shift));
+        world.insert_resource(RuntimeHelmets::default());
+
+        let (schedule, mut fixed_schedule) = simulation_schedules(recorder);
+
+        let spawn: fn(&mut World, &mut dyn AssetLoader) -> anyhow::Result<()> = match scene {
+            ReferenceScene::Helmet => State::spawn_helmet_scene,
+            ReferenceScene::PbrSweep => spawn_pbr_sweep,
+            ReferenceScene::UvGrid => spawn_uv_grid,
+            ReferenceScene::NormalTangent => spawn_normal_tangent,
+            ReferenceScene::FarCoplanar => spawn_far_coplanar,
+            ReferenceScene::Orrery => spawn_orrery,
+            ReferenceScene::Minification => spawn_minification,
+            ReferenceScene::TextureWall => spawn_texture_wall,
+            ReferenceScene::Shadows => spawn_shadows,
+            ReferenceScene::Crowd => match crowd_form {
+                CrowdForm::Proxies => spawn_crowd,
+                CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
+            },
+            ReferenceScene::Town => spawn_town,
+        };
+        spawn(&mut world, loader).with_context(|| format!("loading {}", scene.name()))?;
+        world.insert_resource(scene.environment());
+        world.spawn(scene.sun());
+        for &(position, light) in scene.point_lights() {
+            world.spawn((Transform::from_translation(position), light));
+        }
+        // A child's translation is relative to its parent, so only roots move.
+        let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
+        for mut transform in root_query.iter_mut(&mut world) {
+            transform.translation += shift;
+        }
+        // Ticks propagate World transforms as they end; frames drawn before
+        // the first Tick draw these.
+        world
+            .run_system_once(propagate_world_transforms)
+            .map_err(|error| anyhow::anyhow!("World transform propagation: {error}"))?;
+        fixed_schedule
+            .initialize(&mut world)
+            .context("fixed schedule build")?;
+        Ok(Self {
+            world,
+            schedule,
+            fixed_schedule,
+        })
+    }
+
+    /// Runs the Ticks `frame_delta` completes and moves the camera by it,
+    /// and returns the time past the Ticks' cap it dropped. A State's next
+    /// `prepare` writes every change since its last.
+    pub(crate) fn simulate(&mut self, frame_delta: Duration) -> Duration {
+        let dropped_time = run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
+        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
+        self.schedule.run(&mut self.world);
+        dropped_time
+    }
 }
 
 impl State {
@@ -74,16 +152,7 @@ impl State {
             ..
         } = &mut renderer;
 
-        let mut world = World::new();
-        world.insert_resource(Input::default());
-        world.insert_resource(Time::default());
-        world.insert_resource(FixedTime::default());
-        world.insert_resource(scene.camera_at(0, shift));
-        world.insert_resource(RuntimeHelmets::default());
-
         let recorder = FrameRecorder::new();
-        let (schedule, mut fixed_schedule) = simulation_schedules(&recorder);
-
         let cache = CookedCache::new(COOKED_CACHE_DIRECTORY);
         // A dev launch cooks what the scene loads and has changed (ADR 0018);
         // a load that then fails names the sources it found absent.
@@ -99,59 +168,24 @@ impl State {
         #[cfg(not(feature = "cook"))]
         let absent_sources: Vec<String> = Vec::new();
 
-        let spawn: fn(&mut World, &mut AssetLoader) -> anyhow::Result<()> = match scene {
-            ReferenceScene::Helmet => Self::spawn_helmet_scene,
-            ReferenceScene::PbrSweep => spawn_pbr_sweep,
-            ReferenceScene::UvGrid => spawn_uv_grid,
-            ReferenceScene::NormalTangent => spawn_normal_tangent,
-            ReferenceScene::FarCoplanar => spawn_far_coplanar,
-            ReferenceScene::Orrery => spawn_orrery,
-            ReferenceScene::Minification => spawn_minification,
-            ReferenceScene::TextureWall => spawn_texture_wall,
-            ReferenceScene::Shadows => spawn_shadows,
-            ReferenceScene::Crowd => match switches.crowd_form {
-                CrowdForm::Proxies => spawn_crowd,
-                CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
-            },
-            ReferenceScene::Town => spawn_town,
-        };
-        let mut loader = AssetLoader {
+        let mut loader = PoolLoader {
             device,
             staging: load_staging,
             cache: &cache,
             mesh_pool,
             material_pool,
         };
-        spawn(&mut world, &mut loader)
-            .with_context(|| format!("loading {}", scene.name()))
-            .map_err(|error| match absent_sources.as_slice() {
-                [] => error,
-                absent => error.context(format!("absent sources: {}", absent.join(", "))),
-            })?;
-        world.insert_resource(scene.environment());
-        world.spawn(scene.sun());
-        for &(position, light) in scene.point_lights() {
-            world.spawn((Transform::from_translation(position), light));
-        }
-        // A child's translation is relative to its parent, so only roots move.
-        let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
-        for mut transform in root_query.iter_mut(&mut world) {
-            transform.translation += shift;
-        }
-        // Ticks propagate World transforms as they end; frames drawn before
-        // the first Tick draw these.
-        world
-            .run_system_once(propagate_world_transforms)
-            .map_err(|error| anyhow::anyhow!("World transform propagation: {error}"))?;
-        fixed_schedule
-            .initialize(&mut world)
-            .context("fixed schedule build")?;
-        let preparer = FramePreparer::new(&mut world);
+        let mut simulation =
+            Simulation::new(scene, shift, switches.crowd_form, &mut loader, &recorder).map_err(
+                |error| match absent_sources.as_slice() {
+                    [] => error,
+                    absent => error.context(format!("absent sources: {}", absent.join(", "))),
+                },
+            )?;
+        let preparer = FramePreparer::new(&mut simulation.world);
 
         Ok(Self {
-            world,
-            schedule,
-            fixed_schedule,
+            simulation,
             recorder,
             preparer,
             renderer,
@@ -160,7 +194,7 @@ impl State {
 
     /// Spawns `DEFAULT_MODEL`'s helmet and a factor sweep of helmets around
     /// it, and records the helmet's Mesh for the spawn systems.
-    fn spawn_helmet_scene(world: &mut World, loader: &mut AssetLoader) -> anyhow::Result<()> {
+    fn spawn_helmet_scene(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
         let source = AssetSource::File(SCI_FI_HELMET);
         let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"));
         let mesh_handle = loader.mesh(id).with_context(|| {
@@ -215,7 +249,7 @@ impl State {
     /// and uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
         self.recorder.begin();
-        self.recorder.dropped_time = self.simulate(frame_delta);
+        self.recorder.dropped_time = self.simulation.simulate(frame_delta);
 
         let started = Instant::now();
         // Writes a failed upload lost are written again, with every Instance.
@@ -223,7 +257,7 @@ impl State {
             self.preparer.rewrite_all_instances();
         }
         let frame = self.preparer.prepare(
-            &mut self.world,
+            &mut self.simulation.world,
             &self.renderer.mesh_pool,
             self.renderer.aspect_ratio(),
         );
@@ -234,16 +268,6 @@ impl State {
         self.recorder.lights_overflowed = self.preparer.lights_overflowed();
         self.recorder.moving_instances_left_out = self.preparer.moving_instances_left_out();
         self.recorder.bends_left_out = self.preparer.bends_left_out();
-    }
-
-    /// Runs the Ticks `frame_delta` completes and moves the camera by it,
-    /// preparing no frame, and returns the time past the Ticks' cap it
-    /// dropped. The next `prepare` writes every change since the last.
-    pub(crate) fn simulate(&mut self, frame_delta: Duration) -> Duration {
-        let dropped_time = run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
-        self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
-        self.schedule.run(&mut self.world);
-        dropped_time
     }
 
     /// Draws the frame into `target`, a view in the format and size this

@@ -4,9 +4,37 @@ use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, M
 use crate::cooked::{AssetId, CookedCache, CookedMesh};
 use crate::render::LoadStaging;
 
-/// What a scene load reads Assets with: a Cooked cache, and the Pools they
-/// load into through the load's staging (ADR 0018).
-pub struct AssetLoader<'a> {
+/// What a scene's spawn loads its Assets through, by Asset ID (ADR 0018),
+/// and the Handles its Renderables hold.
+pub trait AssetLoader {
+    /// Loads the Material `id` with the Textures it samples.
+    fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle>;
+
+    /// Loads the Texture `id` into `channel`, as a Material sampling it
+    /// would, and returns its Layer.
+    fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32>;
+
+    /// Loads the Mesh `id` with the Materials its Primitives name, each
+    /// loaded once, which each Primitive draws with.
+    fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
+
+    /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
+    /// (`Bend`): drawn, and traced by no ray, as its BLAS would hold its rest
+    /// shape. Its cooked bounds must hold every shape it bends to.
+    fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
+
+    /// Loads the Mesh `id` as `bent_mesh` does, and traced through a BLAS
+    /// updated each frame from the shape the GPU bends it to.
+    fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
+
+    /// Loads the Mesh `id` as a shadow proxy, which rays trace through its
+    /// BLAS and no pass draws, so it loads no Material.
+    fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
+}
+
+/// Loads Assets from a Cooked cache into the Pools, through the load's
+/// staging.
+pub struct PoolLoader<'a> {
     pub device: &'a wgpu::Device,
     pub staging: &'a mut LoadStaging,
     pub cache: &'a CookedCache,
@@ -14,23 +42,18 @@ pub struct AssetLoader<'a> {
     pub material_pool: &'a mut MaterialPool,
 }
 
-impl AssetLoader<'_> {
-    /// Loads the Material `id` with the Textures it samples.
-    pub fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
+impl AssetLoader for PoolLoader<'_> {
+    fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.material_pool
             .load(self.device, self.staging, self.cache, id)
     }
 
-    /// Loads the Texture `id` into `channel`, as a Material sampling it
-    /// would, and returns its Layer.
-    pub fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
+    fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
         self.material_pool
             .load_texture(self.device, self.staging, self.cache, channel, id)
     }
 
-    /// Loads the Mesh `id` into the Mesh pool with the Materials its
-    /// Primitives name, each loaded once, which each Primitive draws with.
-    pub fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+    fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
         let materials = self.materials(id, &mesh)?;
         self.mesh_pool
@@ -38,35 +61,30 @@ impl AssetLoader<'_> {
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 
-    /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
-    /// (`Bend`): drawn, and traced by no ray, as its BLAS would hold its rest
-    /// shape. Its cooked bounds must hold every shape it bends to.
-    pub fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+    fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh_for(id, MeshUse::Drawn)
     }
 
-    /// Loads the Mesh `id` as `bent_mesh` does, and traced through a BLAS
-    /// updated each frame from the shape the GPU bends it to.
-    pub fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+    fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh_for(id, MeshUse::Refitted)
     }
 
+    fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        let mesh = self.cache.mesh(id)?;
+        let materials = vec![None; mesh.primitives.len()];
+        self.mesh_pool
+            .load_for(self.staging, &mesh, &materials, MeshUse::Traced)
+            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+    }
+}
+
+impl PoolLoader<'_> {
     /// Loads the Mesh `id` as `mesh` does, for `mesh_use`.
     fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
         let mesh = self.cache.mesh(id)?;
         let materials = self.materials(id, &mesh)?;
         self.mesh_pool
             .load_for(self.staging, &mesh, &materials, mesh_use)
-            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
-    }
-
-    /// Loads the Mesh `id` as a shadow proxy, which rays trace through its
-    /// BLAS and no pass draws, so it loads no Material.
-    pub fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
-        let mesh = self.cache.mesh(id)?;
-        let materials = vec![None; mesh.primitives.len()];
-        self.mesh_pool
-            .load_for(self.staging, &mesh, &materials, MeshUse::Traced)
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 
@@ -159,7 +177,7 @@ mod tests {
         let mut staging = LoadStaging::new(context.device.clone());
         let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
         let mut material_pool = MaterialPool::new(&context.device, &mut staging);
-        let mut loader = AssetLoader {
+        let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,
             cache: &cache,

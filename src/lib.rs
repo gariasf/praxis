@@ -93,7 +93,7 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                let mut input = shell.state.world.resource_mut::<Input>();
+                let mut input = shell.state.simulation.world.resource_mut::<Input>();
                 if key_state.is_pressed() {
                     input.pressed.insert(code);
                     if !repeat {
@@ -119,7 +119,7 @@ impl ApplicationHandler for App {
         if let Some(shell) = &mut self.shell
             && let winit::event::DeviceEvent::MouseMotion { delta } = event
         {
-            let mut camera = shell.state.world.resource_mut::<Camera>();
+            let mut camera = shell.state.simulation.world.resource_mut::<Camera>();
             camera.yaw += delta.0 as f32 * camera.sensitivity;
             camera.pitch -= delta.1 as f32 * camera.sensitivity;
             camera.pitch = camera.pitch.clamp(-1.5, 1.5); // ~86 degrees
