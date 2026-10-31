@@ -44,6 +44,8 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
 - `docs/guides/` — the field guides: explainers of the concepts tickets
   introduced, which GitHub Pages serves from `main`. Read when you need
   one of those concepts; `docs/agents/workflow.md` says when to write one.
+- `docs/bench/` — the page that draws the Bench history's Series from
+  `bench-history` in the browser (ADR 0024), on Pages beside the guides.
 - `ROADMAP.md` — long-range vision: target shape, design principles,
   scripting plan. Decisions are ADRs; the order of work is the ladder.
 
