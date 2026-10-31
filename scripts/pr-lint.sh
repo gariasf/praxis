@@ -33,7 +33,10 @@ fi
 while IFS= read -r heading; do
   if ! grep -Fxq "$heading" <<<"$body"; then
     miss "body: \"$heading\" is missing; the description follows the PR template (workflow.md, PRs)"
-  elif ! section "$heading" | grep -q '[^[:space:]]'; then
+  # The section is captured before grep reads it: piped, grep -q's early exit
+  # leaves awk's later writes to a SIGPIPE, and pipefail's failure reads as an
+  # empty section.
+  elif ! grep -q '[^[:space:]]' <<<"$(section "$heading")"; then
     miss "body: \"$heading\" holds only its placeholder; fill it, or write n/a or None as it asks (workflow.md, PRs)"
   fi
 done < <(tr -d '\r' <"$template" | grep '^## ')

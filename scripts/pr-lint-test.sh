@@ -110,6 +110,10 @@ expect_pass "a heading in pasted output" \
   "$(edited_body "s/^(Review: )/$fence\\n## Metrics\\n$fence\\n\\n\$1/m")"
 expect_pass "sources listed below their line" \
   "$(edited_body 's/^Sources checked: None\.$/Sources checked:\n\n- ADR 0015: confirmed./m')"
+# Over 64 KB, past a pipe's buffer as well as awk's, so on any awk and runner a
+# reader that stops at its first match would SIGPIPE the writer.
+expect_pass "a Verification section over 64 KB" \
+  "$(edited_body 's/^(Review: )/("| scene | frame | median | Baseline |\n" x 3000) . "\n$1"/me')"
 expect_pass "a commit body naming the attribution rule" "$body" \
   $'Add the check\n\nCommits carry no co-author or Generated with Claude line.'
 expect_pass "a 72-character subject with non-ASCII letters" "$body" \
