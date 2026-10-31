@@ -265,15 +265,17 @@ fn mismatch(
 
 /// A device of its own for one capture, so every capture starts from the
 /// same device history. On the RTX 2070 SUPER under Vulkan, a device that
-/// has run several earlier States sometimes traces a shadow ray that grazes
-/// an edge to the other verdict for a whole State: `town`'s pixel (564, 215)
-/// at frame 1500 then turns from shadowed to lit. None of 368 captures on
-/// fresh devices did; 2 of 24 on one device did, the 10th and 15th States,
-/// and more with other devices busy. Which State hit it would decide whether
-/// the comparisons between captures pass, though neither culling nor the
-/// Froxel lists differ.
+/// has run several earlier `State`s sometimes gives a pixel's shadow ray the
+/// other verdict for a whole `State`: `town`'s pixel (564, 215) at frame 1500
+/// turns from shadowed to lit. It never did in 368 captures on fresh devices;
+/// on one device, 2 of 24 captures did, the 10th and 15th `State`s; under
+/// DX12, none of 96 on shared devices did. The engine still does this on a
+/// long-lived device. Here
+/// it would make two captures differ by which of them it hit, whatever
+/// culling and the Froxel lists do.
 fn fresh_context() -> GpuContext {
-    pollster::block_on(GpuContext::headless()).expect("headless GPU context failed")
+    pollster::block_on(GpuContext::headless())
+        .unwrap_or_else(|error| panic!("headless GPU context failed: {error:#}"))
 }
 
 /// The last frame `praxis::capture` renders of `scene`, moved by `shift`, at
