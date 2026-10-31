@@ -4050,3 +4050,49 @@ url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/me
 section = "Metal Feature Set Tables (2026-05-21), feature availability, p. 3"
 quote = '''MSAA depth resolve Metal 3 & 4 Apple3 [...] Combined MSAA store and resolve action Metal 3 & 4 Apple3'''
 checked = 2026-10-30
+
+["wgpu-hal-30-manual-memory-hints"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L457-L473"
+section = "wgpu-hal 30.0.1, lib.rs L457-L473: AllocationSizes::from_memory_hints, the Manual arm"
+quote = '''wgt::MemoryHints::Manual {
+suballocated_device_memory_block_size,
+} => {
+[...]
+// gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+// the sizes when detecting high memory pressure and there is no way to query the values otherwise.
+Self {
+min_device_memblock_size: device_size.start.clamp(4 * MB, 256 * MB),
+max_device_memblock_size: device_size.end.clamp(4 * MB, 256 * MB),'''
+checked = 2026-10-31
+
+["wgpu-hal-30-vulkan-texture-allocation"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/device.rs#L1192-L1205"
+section = "wgpu-hal 30.0.1, vulkan/device.rs L1192-L1205: create_texture's allocation"
+quote = '''let allocation = self
+.mem_allocator
+.lock()
+.allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+[...]
+allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+})'''
+checked = 2026-10-31
+
+["gpu-allocator-0.28-personal-block"]
+url = "https://github.com/Traverse-Research/gpu-allocator/blob/0.28.0/src/vulkan/mod.rs#L484-L488"
+section = "Traverse Research, gpu-allocator 0.28.0, src/vulkan/mod.rs L484-L488 (allocate) and L667-L673 (free)"
+quote = '''let dedicated_allocation = desc.allocation_scheme != AllocationScheme::GpuAllocatorManaged;
+let requires_personal_block = size > memblock_size;
+// Create a dedicated block for large memory allocations or allocations that require dedicated memory allocations.
+if dedicated_allocation || requires_personal_block {
+[...]
+// We only want to destroy this now-empty block if it is either a dedicated/personal
+// allocation, or a block supporting sub-allocations that is not the last one (ensuring
+// there's always at least one block/allocator readily available).'''
+checked = 2026-10-31
+
+["nvidia-vulkan-dos-donts-dedicated-memory"]
+url = "https://developer.nvidia.com/blog/vulkan-dos-donts"
+section = "NVIDIA Technical Blog, Tips and Tricks: Vulkan Dos and Don'ts (2019-06-06, updated 2025-01-14), Memory Management, Do"
+quote = '''Use dedicated memory allocations (VK_KHR_dedicated_allocation, core in VK 1.1) when appropriate.
+Using dedicated memory may improve performance for color and depth attachments, especially on pre-Turing GPUs.'''
+checked = 2026-10-31
