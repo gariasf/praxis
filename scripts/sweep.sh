@@ -22,14 +22,20 @@
 # logged on, as the bench needs the GPU), in Git Bash:
 #   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
 #   sweep=$(cd ~/praxis-sweep && pwd -W)
-#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -w "$(command -v bash)").exe|g" \
+#   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -m "$(command -v bash)")|g" \
 #     scripts/sweep-task.xml >"$TEMP/praxis-sweep.xml"
 #   powershell -NoProfile -Command "Register-ScheduledTask -TaskName praxis-sweep \
 #     -Xml (Get-Content -Raw '$(cygpath -w "$TEMP/praxis-sweep.xml")')"
-# Run once now with `launchctl kickstart gui/$(id -u)/com.github.gariasf.praxis.sweep`
-# or `schtasks /Run /TN praxis-sweep`; remove with `launchctl bootout` or
-# `schtasks /Delete /TN praxis-sweep`. PRAXIS_SWEEP_CAP_SECONDS overrides
-# the time cap, and WGPU_BACKEND the backend benched.
+# The command path is cygpath's mixed form: sed would read the backslashes
+# of the Windows form as escapes, and Git Bash's cygpath already ends it
+# in .exe. Run once now with
+# `launchctl kickstart gui/$(id -u)/com.github.gariasf.praxis.sweep` or
+# `powershell -NoProfile -Command "Start-ScheduledTask praxis-sweep"`;
+# remove with `launchctl bootout` or `powershell -NoProfile -Command
+# "Unregister-ScheduledTask praxis-sweep -Confirm:\$false"` (Git Bash
+# turns schtasks's /Run into a path).
+# PRAXIS_SWEEP_CAP_SECONDS overrides the time cap, and WGPU_BACKEND the
+# backend benched.
 #
 # The body is one block, so bash has read all of it before the checkout
 # below replaces this file.
@@ -41,10 +47,11 @@
   mkdir -p target/sweep
   exec >>target/sweep/sweep.log 2>&1
 
-  # Scenes start until this many seconds of benching have passed, the rest
-  # left to the next night: about twice a full pass of the Reference scenes
-  # on the slower machine (219 s on the M4 Pro, 155 s on the RTX 2070
-  # SUPER, both measured 2026-10-31).
+  # Scenes start until this many seconds of benching, and of waiting for
+  # the GPU between scenes, have passed, the rest left to the next night:
+  # about twice a full pass of the Reference scenes on the slower machine
+  # (219 s on the M4 Pro, 155 s on the RTX 2070 SUPER, both measured
+  # 2026-10-31).
   cap_seconds="${PRAXIS_SWEEP_CAP_SECONDS:-450}"
 
   log() { printf '%s sweep: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
@@ -81,6 +88,20 @@
     exit 0
   fi
 
+  # Each scene's bench reads the GPU load at its start, and a utilisation
+  # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
+  # to 1 s [ref:nvidia-smi-utilization-sample-period], and on the RTX 2070
+  # SUPER it still read 67% a third of a second after a scene's bench
+  # exited. So each scene waits for preflight to see the GPU idle, and a
+  # GPU still busy after a minute ends the night. Its output is read whole,
+  # as preflight exits nonzero on a FAIL line and grep would stop reading
+  # it; the sweep's first preflight above has already logged its errors.
+  gpu_busy() {
+    local checks
+    checks=$("$praxis" preflight 2>/dev/null)
+    grep -q '^warn *gpu load' <<<"$checks"
+  }
+
   results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
   start=$SECONDS
   for scene in $scenes; do
@@ -88,6 +109,14 @@
       log "time cap of ${cap_seconds}s reached; left for the next night: $scene and after"
       break
     fi
+    wait_start=$SECONDS
+    while gpu_busy; do
+      if [ $((SECONDS - wait_start)) -ge 60 ]; then
+        log "skipped, the GPU is still busy after a minute; left for the next night: $scene and after"
+        break 2
+      fi
+      sleep 1
+    done
     "$praxis" bench "$results" --no-publish "$scene" || log "bench of $scene failed"
   done
   if compgen -G "$results/*.json" >/dev/null; then

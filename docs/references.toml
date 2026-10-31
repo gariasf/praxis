@@ -4125,3 +4125,9 @@ url = "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ne-shellapi-
 section = "Microsoft Learn, Win32 API, shellapi.h, QUERY_USER_NOTIFICATION_STATE enumeration, Constants"
 quote = '''QUNS_NOT_PRESENT Value: 1 A screen saver is displayed, the machine is locked, or a nonactive Fast User Switching session is in progress. QUNS_BUSY Value: 2 A full-screen application is running or Presentation Settings are applied. [...] QUNS_RUNNING_D3D_FULL_SCREEN Value: 3 A full-screen (exclusive mode) Direct3D application is running. [...] QUNS_ACCEPTS_NOTIFICATIONS Value: 5 None of the other states are found, notifications can be freely sent.'''
 checked = 2026-10-31
+
+["nvidia-smi-utilization-sample-period"]
+url = "https://docs.nvidia.com/deploy/nvidia-smi/index.html"
+section = "NVIDIA, nvidia-smi documentation, GPU Attributes, Utilization, GPU"
+quote = '''Percent of time over the past sample period during which one or more kernels was executing on the GPU. The sample period may be between 1 second and 1/6 second depending on the product.'''
+checked = 2026-10-31
