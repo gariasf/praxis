@@ -69,6 +69,7 @@ enum Command {
     Publish {
         results: String,
     },
+    ImportBaselines,
     Compare {
         results: String,
         mode: CompareMode,
@@ -115,6 +116,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             publish,
         } => bench(&output, configuration, &scenes, crowd_form, publish),
         Command::Publish { results } => publish(&results),
+        Command::ImportBaselines => import_baselines(),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -218,6 +220,9 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, results] if command == "publish" => Command::Publish {
             results: results.clone(),
         },
+        [command, subcommand] if command == "history" && subcommand == "import" => {
+            Command::ImportBaselines
+        }
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -238,7 +243,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish] [<scene>...]`, \
-             `publish <bench directory>`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `publish <bench directory>`, `history import`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -404,6 +409,14 @@ fn publish(results: &str) -> anyhow::Result<()> {
         .map(|path| read_json(path))
         .collect::<anyhow::Result<Vec<Measurements>>>()?;
     let publication = praxis::bench::publish(Path::new("."), &measurements)?;
+    writeln!(std::io::stdout(), "{publication}")?;
+    Ok(())
+}
+
+/// Imports the Baselines committed before the Bench history into it, and
+/// prints what it did.
+fn import_baselines() -> anyhow::Result<()> {
+    let publication = praxis::bench::import_baselines(Path::new("."))?;
     writeln!(std::io::stdout(), "{publication}")?;
     Ok(())
 }
@@ -738,6 +751,11 @@ mod tests {
             panic!("publish parsed as another command");
         };
         assert_eq!(results, "out");
+        assert!(matches!(
+            parse(&["history", "import"]).unwrap(),
+            Command::ImportBaselines
+        ));
+        assert!(parse(&["history"]).is_err());
     }
 
     #[test]
