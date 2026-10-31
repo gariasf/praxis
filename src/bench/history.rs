@@ -488,11 +488,9 @@ fn record(
                 adapter: &measurements.adapter,
                 profile: &measurements.profile,
                 quiet: provenance.quiet,
-                size: (
-                    measurements.width,
-                    measurements.height,
-                    measurements.measured_frames,
-                ),
+                width: measurements.width,
+                height: measurements.height,
+                measured_frames: measurements.measured_frames,
             }),
         ),
         provenance.gpu_frame_p95_over_median,
@@ -572,8 +570,9 @@ struct Run<'run> {
     adapter: &'run str,
     profile: &'run str,
     quiet: bool,
-    /// Its width, height and measured frames.
-    size: (u32, u32, u32),
+    width: u32,
+    height: u32,
+    measured_frames: u32,
 }
 
 /// Every reason a record is kept off a Series: a dirty tree, a source other
@@ -590,7 +589,9 @@ fn tags(dirty: bool, mains_source: bool, run: Option<Run>) -> Vec<String> {
         adapter,
         profile,
         quiet,
-        size: (width, height, measured_frames),
+        width,
+        height,
+        measured_frames,
     }) = run
     {
         let lavapipe = is_lavapipe(adapter);
@@ -738,6 +739,7 @@ impl<'repository> Worktree<'repository> {
                 if stays {
                     tracing::info!(
                         record = %relative_path.display(),
+                        publishes_once = record.publishes_once,
                         p95_over_median = record.p95_over_median(),
                         "Bench record dropped: the one under its key stays"
                     );

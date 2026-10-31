@@ -145,6 +145,8 @@ jobs:
     name: Bench counters (software Vulkan)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    outputs:
+      benched: ${{ steps.bench.outcome }}
     steps:
       - uses: actions/checkout@v4
 
@@ -171,10 +173,12 @@ jobs:
       # allocations against the Baselines in bench/baselines/<llvmpipe key>.
       # Each scene renders its counter frames alone, which compare with a
       # Baseline of any length at CI's size: lavapipe's times mean nothing.
-      - name: Bench and compare
-        run: |
-          target/release/praxis bench target/bench --ci-counters --no-publish
-          target/release/praxis compare target/bench --ci
+      - name: Bench
+        id: bench
+        run: target/release/praxis bench target/bench --ci-counters --no-publish
+
+      - name: Compare
+        run: target/release/praxis compare target/bench --ci
 
       # A new or changed Baseline is this artifact's file, copied into its
       # adapter's directory.
@@ -188,8 +192,11 @@ jobs:
 
       # What publish-bench publishes: the results, the binary that measured
       # them, whose size it records, and its build's wall time. Uploaded on
-      # every run, so a PR's can be published to a scratch remote by hand.
+      # every run that benched, so a PR's can be published to a scratch remote
+      # by hand, and a failed compare on main still publishes the commit that
+      # regressed.
       - name: Upload what publish-bench publishes
+        if: ${{ !cancelled() && steps.bench.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: bench-publish
@@ -202,10 +209,11 @@ jobs:
 
   # Publishes lavapipe's results and the release build beside them as Bench
   # records on bench-history (ADR 0024). Only a push to main runs it, and
-  # only this job can write: code from a pull request never does.
+  # only this job can write: code from a pull request never does. It runs
+  # whenever the bench ran, whether or not its compare passed.
   publish-bench:
     name: Publish Bench records
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.software-bench.outputs.benched == 'success' }}
     needs: software-bench
     runs-on: ubuntu-24.04
     timeout-minutes: 10
