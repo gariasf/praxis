@@ -261,13 +261,15 @@ impl FrameRecorder {
     }
 
     /// Records the CPU time of `stage`, which began at `started`, added to
-    /// what the frame already recorded of it.
-    pub(crate) fn stage(&mut self, stage: &'static str, started: Instant) {
+    /// what the frame already recorded of it, and returns the time this call
+    /// recorded.
+    pub(crate) fn stage(&mut self, stage: &'static str, started: Instant) -> Duration {
         let time = started.elapsed();
         match self.stages.iter_mut().find(|(name, _)| *name == stage) {
             Some((_, recorded)) => *recorded += time,
             None => self.stages.push((stage, time)),
         }
+        time
     }
 
     /// Ends the frame `begin` started.

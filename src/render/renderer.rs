@@ -495,8 +495,7 @@ impl Renderer {
         let filling = Instant::now();
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
             self.dynamic_tlas.fill(frame, &self.mesh_pool, tlas_anchor);
-        let fill_time = filling.elapsed();
-        recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
+        let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
         let started = started + fill_time;
         let camera = CameraUniform {
             tlas_anchor,
