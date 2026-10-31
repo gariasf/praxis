@@ -33,7 +33,7 @@ pub const SCENE_FORMAT_VERSION: u32 = 1;
 /// Writes `scene` at `frame` of its camera path, or with none at the frame
 /// `praxis capture` writes, into `directory`: `scene.json`, and under it
 /// `meshes/` and `textures/` for the generated Meshes and Textures its
-/// Instances use. The World runs as a capture runs it, through the fixed
+/// Renderables use. The World runs as a capture runs it, through the fixed
 /// schedule, and the manifest sources in `assets` are read for their
 /// names; nothing is cooked into the Cooked cache and no GPU is used.
 /// `crowd` is refused: its figures' shapes exist only on the GPU.
@@ -120,14 +120,14 @@ pub fn export_scene(
             casts_shadow: light.casts_shadow,
         })
         .collect();
-    let mut instances = Vec::new();
-    let mut renderables = world.query::<(
+    let mut renderables = Vec::new();
+    let mut renderable_query = world.query::<(
         &WorldTransform,
         Option<&PreviousWorldTransform>,
         &MeshRef,
         Option<&MaterialRef>,
     )>();
-    for (current, previous, mesh_ref, material_ref) in renderables.iter(world) {
+    for (current, previous, mesh_ref, material_ref) in renderable_query.iter(world) {
         let mesh = exported.mesh(recorder.meshes[mesh_ref.0.0 as usize])?;
         let material = match material_ref {
             Some(material_ref) => {
@@ -148,7 +148,7 @@ pub fn export_scene(
             .drawn(previous, blend_weight)
             .0
             .to_scale_rotation_translation();
-        instances.push(InstanceEntry {
+        renderables.push(RenderableEntry {
             translation: translation.to_array(),
             rotation: rotation.as_quat().to_array(),
             scale: scale.as_vec3().to_array(),
@@ -169,7 +169,7 @@ pub fn export_scene(
         point_lights,
         meshes: exported.meshes,
         materials: exported.materials,
-        instances,
+        renderables,
     };
     let path = directory.join("scene.json");
     let file =
@@ -179,7 +179,7 @@ pub fn export_scene(
     tracing::info!(
         scene = scene.name(),
         frame,
-        instances = scene_file.instances.len(),
+        renderables = scene_file.renderables.len(),
         path = %path.display(),
         "scene exported"
     );
@@ -197,11 +197,11 @@ struct SceneFile {
     environment: EnvironmentEntry,
     directional_lights: Vec<DirectionalLightEntry>,
     point_lights: Vec<PointLightEntry>,
-    /// Each Mesh an Instance uses, by name.
+    /// Each Mesh a Renderable uses, by name.
     meshes: BTreeMap<String, MeshEntry>,
-    /// Each Material an Instance or a Mesh's Primitive names, by name.
+    /// Each Material a Renderable or a Mesh's Primitive names, by name.
     materials: BTreeMap<String, MaterialEntry>,
-    instances: Vec<InstanceEntry>,
+    renderables: Vec<RenderableEntry>,
 }
 
 #[derive(Serialize)]
@@ -227,7 +227,7 @@ struct DirectionalLightEntry {
     /// The way the light travels.
     direction: [f32; 3],
     color: [f32; 3],
-    /// Lux.
+    /// Lux [ref:khr-lights-punctual-units].
     illuminance: f32,
 }
 
@@ -235,9 +235,10 @@ struct DirectionalLightEntry {
 struct PointLightEntry {
     position: [f64; 3],
     color: [f32; 3],
-    /// Candela.
+    /// Candela [ref:khr-lights-punctual-units].
     intensity: f32,
-    /// Metres, KHR_lights_punctual's.
+    /// Metres past which it adds nothing, KHR_lights_punctual's
+    /// [ref:khr-lights-punctual-range].
     range: f32,
     casts_shadow: bool,
 }
@@ -247,7 +248,7 @@ struct MeshEntry {
     /// A glTF file, and the index of the Mesh in it.
     file: String,
     mesh: usize,
-    /// Each Primitive's Material, which an Instance's Material overrides.
+    /// Each Primitive's Material, which a Renderable's Material overrides.
     materials: Vec<Option<String>>,
 }
 
@@ -263,9 +264,9 @@ struct MaterialEntry {
 
 #[derive(Serialize)]
 struct TextureEntry {
-    /// `albedo` and `emissive` hold sRGB, the others linear values, as glTF's
-    /// `baseColorTexture`, `normalTexture`, `metallicRoughnessTexture`,
-    /// `occlusionTexture` and `emissiveTexture`.
+    /// `albedo`'s and `emissive`'s colour is sRGB, albedo's alpha and the
+    /// other Channels linear, as glTF's `baseColorTexture`, `emissiveTexture`,
+    /// `normalTexture`, `metallicRoughnessTexture` and `occlusionTexture`.
     channel: &'static str,
     /// An image file, or with `image` the glTF file whose image it is.
     file: String,
@@ -274,7 +275,7 @@ struct TextureEntry {
 }
 
 #[derive(Serialize)]
-struct InstanceEntry {
+struct RenderableEntry {
     translation: [f64; 3],
     rotation: [f32; 4],
     scale: [f32; 3],
@@ -555,7 +556,8 @@ impl Exported<'_> {
                     name,
                     image: generated,
                 } => {
-                    let file = format!("textures/{}.png", file_name(name));
+                    let channel = channel_name(*channel);
+                    let file = format!("textures/{}-{channel}.png", file_name(name));
                     let path = self.directory.join(&file);
                     std::fs::create_dir_all(self.directory.join("textures"))?;
                     image::save_buffer_with_format(
@@ -611,8 +613,8 @@ fn channel_name(channel: MaterialChannel) -> &'static str {
     }
 }
 
-/// The normal and glTF tangent, its w the bitangent sign, that a QTangent
-/// decodes to as the shaders decode it: each Snorm16 component over 32,767,
+/// The normal and glTF tangent, its w the bitangent sign
+/// [ref:gltf-2.0-tangent-bitangent], that a QTangent decodes to as the shaders decode it: each Snorm16 component over 32,767,
 /// clamped at −1, the quaternion normalised and applied to +Z and +X.
 fn tangent_frame(qtangent: [i16; 4]) -> ([f32; 3], [f32; 4]) {
     let components = qtangent.map(|component| (f32::from(component) / i16::MAX as f32).max(-1.0));
@@ -783,14 +785,14 @@ mod tests {
         let scene = read_scene(&directory);
 
         assert_eq!(scene["frame"], 59);
-        let instances = scene["instances"].as_array().unwrap();
-        assert_eq!(instances.len(), 11);
-        for instance in instances {
-            assert_eq!(instance["mesh"], "SciFiHelmet");
+        let renderables = scene["renderables"].as_array().unwrap();
+        assert_eq!(renderables.len(), 11);
+        for renderable in renderables {
+            assert_eq!(renderable["mesh"], "SciFiHelmet");
         }
-        let textured: Vec<_> = instances
+        let textured: Vec<_> = renderables
             .iter()
-            .filter(|instance| instance["material"].is_null())
+            .filter(|renderable| renderable["material"].is_null())
             .collect();
         assert_eq!(textured.len(), 1);
         assert_eq!(floats(&textured[0]["translation"]), [0.0, 0.0, -8.0]);
@@ -798,9 +800,9 @@ mod tests {
         for (row, metallic) in [0.0, 1.0].into_iter().enumerate() {
             for (column, roughness) in [0.1, 0.3, 0.5, 0.7, 0.9].into_iter().enumerate() {
                 let name = format!("metallic-{metallic}-roughness-{roughness}");
-                let copies: Vec<_> = instances
+                let copies: Vec<_> = renderables
                     .iter()
-                    .filter(|instance| instance["material"] == name.as_str())
+                    .filter(|renderable| renderable["material"] == name.as_str())
                     .collect();
                 assert_eq!(copies.len(), 1, "{name}");
                 let translation = [(column as f64 - 2.0) * 2.0, 2.6 - row as f64 * 5.2, -8.0];
@@ -865,10 +867,24 @@ mod tests {
             assert_eq!(light["intensity"], 900_000.0);
             assert_eq!(light["range"], 20.0);
         }
-        assert_eq!(scene["directional_lights"].as_array().unwrap().len(), 1);
-        assert_eq!(
-            floats(&scene["environment"]["ambient_illuminance"]),
-            [10_000.0; 3]
+        let suns = scene["directional_lights"].as_array().unwrap();
+        assert_eq!(suns.len(), 1);
+        let direction = glam::dvec3(0.5, -1.0, -0.3).normalize();
+        assert_near(
+            &floats(&suns[0]["direction"]),
+            &direction.to_array(),
+            1e-6,
+            "sun direction",
+        );
+        assert_eq!(floats(&suns[0]["color"]), [1.0; 3]);
+        assert_eq!(suns[0]["illuminance"], 100_000.0);
+        let environment = &scene["environment"];
+        assert_eq!(floats(&environment["ambient_illuminance"]), [10_000.0; 3]);
+        assert_near(
+            &floats(&environment["background_luminance"]),
+            &[10_000.0, 20_000.0, 30_000.0],
+            0.01,
+            "background",
         );
         assert!(!directory.join("meshes").exists());
         std::fs::remove_dir_all(&directory).ok();
@@ -882,9 +898,9 @@ mod tests {
             assert!(directory.join(file).exists(), "{file} is not written");
         };
         let (meshes, materials) = (&scene["meshes"], &scene["materials"]);
-        for instance in scene["instances"].as_array().unwrap() {
-            assert!(meshes.get(instance["mesh"].as_str().unwrap()).is_some());
-            if let Some(material) = instance["material"].as_str() {
+        for renderable in scene["renderables"].as_array().unwrap() {
+            assert!(meshes.get(renderable["mesh"].as_str().unwrap()).is_some());
+            if let Some(material) = renderable["material"].as_str() {
                 assert!(materials.get(material).is_some(), "{material}");
             }
         }
@@ -904,7 +920,7 @@ mod tests {
     }
 
     /// Every Reference scene but crowd, and town, which its own test
-    /// exports: each Instance's Mesh and Material, and each file they name.
+    /// exports: each Renderable's Mesh and Material, and each file they name.
     #[test]
     fn every_reference_scene_but_crowd_exports_whole() {
         let helmet_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -920,7 +936,7 @@ mod tests {
             export_scene(scene, Some(0), &assets(), &directory).unwrap();
             let exported = read_scene(&directory);
             assert_eq!(exported["scene"], scene.name());
-            assert!(!exported["instances"].as_array().unwrap().is_empty());
+            assert!(!exported["renderables"].as_array().unwrap().is_empty());
             check_references(&directory, &exported);
             std::fs::remove_dir_all(&directory).ok();
         }
@@ -931,7 +947,7 @@ mod tests {
     /// while nothing else moved.
     #[test]
     fn town_exports_its_pigeons_where_the_fixed_schedule_placed_them() {
-        let instances_at = |frame| {
+        let renderables_at = |frame| {
             let directory = scratch(&format!("town-{frame}"));
             export_scene(ReferenceScene::Town, Some(frame), &assets(), &directory).unwrap();
             let scene = read_scene(&directory);
@@ -939,7 +955,7 @@ mod tests {
             std::fs::remove_dir_all(&directory).ok();
             scene
         };
-        let (start, later) = (instances_at(0), instances_at(30));
+        let (start, later) = (renderables_at(0), renderables_at(30));
         // Up the avenue from (2, 1.7, 445) at 4 m/s for half a second.
         assert_near(
             &floats(&later["camera"]["position"]),
@@ -949,8 +965,8 @@ mod tests {
         );
         assert_eq!(later["point_lights"].as_array().unwrap().len(), 1_024);
         let (start, later) = (
-            start["instances"].as_array().unwrap(),
-            later["instances"].as_array().unwrap(),
+            start["renderables"].as_array().unwrap(),
+            later["renderables"].as_array().unwrap(),
         );
         assert_eq!(start.len(), later.len());
         let mut birds = 0;
@@ -977,7 +993,7 @@ mod tests {
     const STEP: f64 = 1.0 / i16::MAX as f64;
 
     /// shadows, which needs no fetched source: its camera, lights,
-    /// Environment, Instance and Materials are `src/scenes/mod.rs`'s, and its
+    /// Environment, Renderable and Materials are `src/scenes/mod.rs`'s, and its
     /// generated Mesh, read back by the `gltf` crate, is the one the cooker
     /// cooks, its normals and tangents the analytic sphere's and plane's
     /// within the QTangent's Snorm16 steps.
@@ -1044,13 +1060,13 @@ mod tests {
         assert_eq!(lights[0]["range"], 20.0);
         assert_eq!(lights[0]["casts_shadow"], true);
 
-        let instances = scene["instances"].as_array().unwrap();
-        assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0]["mesh"], "sphere-over-plane");
-        assert_eq!(instances[0]["material"], Value::Null);
-        assert_eq!(floats(&instances[0]["translation"]), [0.0; 3]);
-        assert_eq!(floats(&instances[0]["rotation"]), [0.0, 0.0, 0.0, 1.0]);
-        assert_eq!(floats(&instances[0]["scale"]), [1.0; 3]);
+        let renderables = scene["renderables"].as_array().unwrap();
+        assert_eq!(renderables.len(), 1);
+        assert_eq!(renderables[0]["mesh"], "sphere-over-plane");
+        assert_eq!(renderables[0]["material"], Value::Null);
+        assert_eq!(floats(&renderables[0]["translation"]), [0.0; 3]);
+        assert_eq!(floats(&renderables[0]["rotation"]), [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(floats(&renderables[0]["scale"]), [1.0; 3]);
 
         for (name, base_color) in [
             ("ground", [0.8, 0.8, 0.8, 1.0]),
