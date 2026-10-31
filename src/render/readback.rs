@@ -16,7 +16,7 @@ use std::time::Duration;
 use crate::render::bend_pass::BEND_PASS;
 use crate::render::blas_refit::BLAS_REFIT_PASS;
 use crate::render::culling_pass::{CullingPhase, FrameDraw};
-use crate::render::froxel_pass::LightCounts;
+use crate::render::froxel_pass::{FROXEL_PASS, LightCounts};
 use crate::render::main_pass::LIT_PASS;
 use crate::render::renderer::RENDER_PASSES;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
@@ -484,11 +484,12 @@ struct FrameTimes {
 
 /// Each of `TIMED_PASSES`' time in a frame of `shape` whose timestamps read
 /// `ticks`, `nanoseconds_per_tick` apart, a render pass's past the passes
-/// before it; the frame's GPU time: the dynamic TLAS's build, plus the span
-/// of each submission's passes, so neither the waits between submissions
-/// nor what a submission records before its first pass counts; ADR 0019's
-/// gate, from the start of culling phase one to the latest end of the
-/// passes up to the lit pass; and the tick its last pass ended at. The build, in a submission before the frame's passes, starts no
+/// before it that it waits on; the frame's GPU time: the dynamic TLAS's
+/// build, plus the span of each submission's passes, so neither the waits
+/// between submissions nor what a submission records before its first pass
+/// counts; ADR 0019's gate, from the start of culling phase one to the
+/// latest end of the passes up to the lit pass; and the tick its last pass
+/// ended at. The build, in a submission before the frame's passes, starts no
 /// earlier than `build_floor`; the passes `untimed` names take no time.
 fn frame_times(
     ticks: &[u64; QUERIES_PER_FRAME],
@@ -550,14 +551,18 @@ fn frame_times(
     // tonemapping pass's beside the lit pass in every frame. So a render
     // pass counts from the latest end of the passes before it, if later than
     // its start: its time is what it adds past them. A compute pass keeps
-    // its own time, as the Froxel pass runs beside culling phase one.
+    // its own time, as the Froxel pass runs beside culling phase one. The
+    // lit pass is the first render pass to read the Froxel pass's lists, so
+    // the depth passes, which Metal can run beside it and end first, do not
+    // count from its end.
+    let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
     let counted_begin = |pass: usize| {
         let begin = ticks[2 * pass];
         if !RENDER_PASSES.contains(&TIMED_PASSES[pass]) {
             return begin;
         }
         (bend_pass..pass)
-            .filter(|&earlier| wrote_end(earlier))
+            .filter(|&earlier| wrote_end(earlier) && (earlier != froxel_pass || pass >= lit_pass))
             .map(|earlier| ticks[2 * earlier + 1])
             .fold(begin, u64::max)
     };
@@ -602,7 +607,7 @@ mod tests {
 
     use super::*;
     use crate::gpu::GpuContext;
-    use crate::render::froxel_pass::FROXEL_PASS;
+    use crate::render::main_pass::{DEPTH_PREPASS, PHASE_TWO_DEPTH_PASS};
     use crate::render::renderer::SHADOW_RAY_PASSES;
     use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
     use crate::render::tonemapping_pass::TONEMAPPING_PASS;
@@ -790,6 +795,29 @@ mod tests {
             times.gate_time,
             microseconds(mask_start + 2_480 - culling_start)
         );
+    }
+
+    /// The depth passes read none of the Froxel pass's lists, so Metal can
+    /// run them beside it and end them first: each counts from the passes
+    /// it waits on, not from the Froxel pass's end, and reads its own time
+    /// rather than 0. The lit pass reads the lists, so it counts from their
+    /// end.
+    #[test]
+    fn a_depth_pass_counts_past_the_froxel_pass_it_does_not_read() {
+        let mut ticks = spread_ticks();
+        let microseconds = Duration::from_micros;
+        let froxel_pass = pass_position(FROXEL_PASS);
+        let lit_pass = pass_position(LIT_PASS);
+        let lit_start = ticks[2 * lit_pass];
+        ticks[2 * froxel_pass + 1] = lit_start + 2;
+        let untimed = [false; TIMED_PASSES.len()];
+
+        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let taken = |pass| times.pass_times[pass_position(pass)].1;
+        assert_eq!(taken(DEPTH_PREPASS), microseconds(4));
+        assert_eq!(taken(PHASE_TWO_DEPTH_PASS), microseconds(4));
+        assert_eq!(taken(LIT_PASS), microseconds(2));
+        assert_eq!(taken(TONEMAPPING_PASS), microseconds(4));
     }
 
     /// Frames that never complete, as their encoders are never submitted:

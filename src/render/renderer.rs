@@ -23,10 +23,10 @@ use crate::render::{
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
 /// The passes `render` records, in order, each timed from its start, or a
-/// render pass from the latest end of the passes before it if later, to its
-/// end, after the dynamic TLAS's build, timed from the end of the marker
-/// before it, or of the frame before's last pass if later, to the start of
-/// the marker after it in frames that build it.
+/// render pass from the latest end of the passes before it that it waits on
+/// if later, to its end, after the dynamic TLAS's build, timed from the end
+/// of the marker before it, or of the frame before's last pass if later, to
+/// the start of the marker after it in frames that build it.
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
