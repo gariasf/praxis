@@ -14,8 +14,8 @@ use crate::preflight::{BUSY_GPU_PERCENT, gpu_load_percent, other_praxis_processe
 
 /// Names what the bench's metrics mean: raised by any change to how a
 /// metric is measured, so that two Bench records compare only when they
-/// share it. Versions 1 to 9 are the eras of the Baselines the Bench
-/// history imported.
+/// share it. The lower versions name the eras before the Bench history,
+/// numbered by its import of the Baselines from 1.
 pub const HARNESS_VERSION: u32 = 10;
 
 /// The top-level paths whose changes can change a measurement, which the

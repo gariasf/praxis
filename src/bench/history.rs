@@ -202,7 +202,8 @@ pub struct Publication {
     pub on_series: usize,
     /// Records written under `tagged/`.
     pub tagged: usize,
-    /// Records dropped for one at least as quiet under their key.
+    /// Records dropped for the same record, or one at least as quiet, under
+    /// their key.
     pub dropped: usize,
     /// Records already on the branch given the current Harness version.
     pub restamped: usize,

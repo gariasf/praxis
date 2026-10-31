@@ -14,7 +14,7 @@ use crate::bench::Spread;
 use crate::bench::provenance::{QUIET_P95_OVER_MEDIAN, git, source_hash};
 
 /// Where `main` keeps its Baselines.
-const BASELINES: &str = "bench/baselines";
+const BASELINES_DIRECTORY: &str = "bench/baselines";
 
 /// The commit that started publishing Bench records: every Baseline
 /// committed before it is imported, and every bench since has published
@@ -65,7 +65,7 @@ const HARNESS_BREAKS: [(&str, &str); 9] = [
 ];
 
 /// What an imported record's provenance names as its source.
-const SOURCE: &str = "baseline-commit";
+const IMPORTED_SOURCE: &str = "baseline-commit";
 
 /// Imports every Baseline file each commit before `HISTORY_STARTED`
 /// changed into the remote's `bench-history` branch, and gives the records
@@ -89,13 +89,15 @@ pub(super) fn import_up_to(
     let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
     let repository = Path::new(&root);
     let records = baseline_records(repository, history_started, breaks)?;
-    let current_harness_version = breaks.len() as u32 + 1;
+    // The version of the method in force when the history started, which
+    // records published before the import name 1.
+    let started_harness_version = breaks.len() as u32 + 1;
     let message = format!(
         "Import {} Baselines committed before the Bench history",
         records.len()
     );
     push(repository, &message, |worktree| {
-        let restamped = worktree.restamp(current_harness_version)?;
+        let restamped = worktree.restamp(started_harness_version)?;
         Ok(Publication {
             restamped,
             ..worktree.apply(&records)?
@@ -114,8 +116,9 @@ struct BaselineCommit<'commit> {
 /// A record per Baseline file per commit on the first-parent line before
 /// `history_started` that added or changed it, newest first: of two
 /// Baselines of one source, the quieter stays, and when neither measured
-/// its spread, the later, which replaced the earlier. A file only renamed
-/// was not measured again.
+/// its spread, the later, which replaced the earlier. A file only renamed,
+/// or given fields without a value it held changing, was not measured
+/// again.
 fn baseline_records(
     repository: &Path,
     history_started: &str,
@@ -144,7 +147,7 @@ fn baseline_records(
             "--format=%H",
             history_started,
             "--",
-            BASELINES,
+            BASELINES_DIRECTORY,
         ],
         None,
     )?;
@@ -175,12 +178,24 @@ fn baseline_records(
                 "--diff-filter=AM",
                 commit,
                 "--",
-                BASELINES,
+                BASELINES_DIRECTORY,
             ],
             None,
         )?;
         for path in paths.lines().filter(|path| path.ends_with(".json")) {
             let json = git(repository, &["show", &format!("{commit}:{path}")], None)?;
+            let earlier = git(repository, &["show", &format!("{commit}^:{path}")], None).ok();
+            if let Some(earlier) = earlier
+                && !remeasured(&earlier, &json)
+                    .with_context(|| format!("comparing {path} at {commit} with its parent's"))?
+            {
+                tracing::info!(
+                    path,
+                    commit,
+                    "Baseline not imported: its values are its parent's"
+                );
+                continue;
+            }
             records.push(
                 imported(&baseline_commit, path, &json)
                     .with_context(|| format!("importing {path} at {commit}"))?,
@@ -193,6 +208,17 @@ fn baseline_records(
     );
     records.reverse();
     Ok(records)
+}
+
+/// Whether the Baseline `current` measured again what `earlier`, the same
+/// file in the commit before, held: whether any value `earlier` held
+/// differs or is gone, rather than only fields added.
+fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
+    let earlier: serde_json::Map<String, serde_json::Value> = serde_json::from_str(earlier)?;
+    let current: serde_json::Map<String, serde_json::Value> = serde_json::from_str(current)?;
+    Ok(earlier
+        .iter()
+        .any(|(key, value)| current.get(key) != Some(value)))
 }
 
 /// What the import reads from every Baseline, whichever bench wrote it.
@@ -243,7 +269,7 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
     file.insert(
         "provenance".to_owned(),
         serde_json::to_value(ImportedProvenance {
-            source: SOURCE,
+            source: IMPORTED_SOURCE,
             baseline: path,
             commit: commit.commit,
             source_hash: &commit.source_hash,
@@ -281,10 +307,10 @@ fn backend_before_keyed(adapter: &str) -> anyhow::Result<&'static str> {
 
 impl Worktree<'_> {
     /// Gives every record a bench published at Harness version 1 the
-    /// version `current`: before the import numbered the eras before it,
+    /// Harness version `version`: before the import numbered the eras before it,
     /// version 1 named the method in force. Rebuilds the Series they are
     /// on, and returns how many it changed.
-    fn restamp(&self, current: u32) -> anyhow::Result<usize> {
+    fn restamp(&self, version: u32) -> anyhow::Result<usize> {
         let listing = git(
             &self.directory,
             &["ls-files", "--", ON_SERIES, TAGGED],
@@ -305,7 +331,7 @@ impl Worktree<'_> {
             {
                 continue;
             }
-            provenance.insert("harness_version".to_owned(), current.into());
+            provenance.insert("harness_version".to_owned(), version.into());
             std::fs::write(&path, serde_json::to_string_pretty(&file)? + "\n")?;
             restamped += 1;
             if relative_path.starts_with(ON_SERIES) {
@@ -390,7 +416,7 @@ mod tests {
                 stored.provenance.harness_version,
                 stored.committed_unix_seconds,
             ),
-            (Some(SOURCE), "591433d7", 1, 1_791_871_200)
+            (Some(IMPORTED_SOURCE), "591433d7", 1, 1_791_871_200)
         );
         let row = serde_json::to_value(SeriesRow::of(&stored)).unwrap();
         assert_eq!(row["cpu_frame_microseconds"]["median"], 33.041);
@@ -464,6 +490,18 @@ mod tests {
         assert_eq!(record.tags, ["machine not quiet"]);
         let unknown = FIRST_BASELINE.replace("Apple M4 Pro", "Some GPU");
         assert!(imported(&commit(1), "bench/baselines/pbr-sweep.json", &unknown).is_err());
+    }
+
+    #[test]
+    fn only_a_baseline_whose_held_values_changed_was_measured_again() {
+        let earlier = r#"{"scene": "helmet", "cpu_frame_microseconds": {"median": 30.0}}"#;
+        let with_backend = r#"{"scene": "helmet", "backend": "metal", "cpu_frame_microseconds": {"median": 30.0}}"#;
+        let remeasured_baseline =
+            r#"{"scene": "helmet", "cpu_frame_microseconds": {"median": 31.0}}"#;
+        let renamed_metric = r#"{"scene": "helmet", "gpu_frame_microseconds": {"median": 30.0}}"#;
+        assert!(!remeasured(earlier, with_backend).unwrap());
+        assert!(remeasured(earlier, remeasured_baseline).unwrap());
+        assert!(remeasured(earlier, renamed_metric).unwrap());
     }
 
     #[test]
