@@ -1602,7 +1602,8 @@ pub(crate) mod tests {
     /// (`SAMPLE_OFFSETS`). The floor there lies off the panel's plane by
     /// under a pixel's width, so the pixel shows one surface by depth, whose
     /// nearest sample turns from the sun. It resolves between the panel,
-    /// which only ambient light reaches, and the lit floor.
+    /// which only ambient light reaches, and the lit floor, and so it does
+    /// under a point light the panel turns from.
     #[test]
     fn an_edge_pixel_of_a_panel_seen_edge_on_resolves_between_it_and_the_lit_floor() {
         let Some(context) = gpu_context() else {
@@ -1628,15 +1629,27 @@ pub(crate) mod tests {
             offset: [1.0, 0.0, -1.0],
             ..SUN
         };
-        let (_, image, ..) = shadowed_floor(&context, &[sun], &[panel]);
+        // A point light 2 m left of the panel's far end, level with the
+        // camera: the panel turns from it too, and its rays to the floor
+        // pass left of the panel's far end.
+        let point = LightData {
+            range: 10.0,
+            offset: (far_end + glam::vec3(-2.0, 0.0, far_distance)).to_array(),
+            intensity: [9.0; 3],
+            ..LightData::default()
+        };
+        for (light, name) in [(sun, "sun"), (point, "point light")] {
+            let (_, image, ..) = shadowed_floor(&context, &[light], &[panel]);
 
-        let red = |column| image.get_pixel(column, row).0[0];
-        let (panel, edge, floor) = (red(column - 1), red(column), red(column + 1));
-        // Far more than the dither's step from either.
-        assert!(
-            panel.saturating_add(16) < edge && edge.saturating_add(16) < floor,
-            "the edge pixel {edge} is not between the panel {panel} and the floor {floor}"
-        );
+            let red = |column| image.get_pixel(column, row).0[0];
+            let (panel, edge, floor) = (red(column - 1), red(column), red(column + 1));
+            // Far more than the dither's step from either.
+            assert!(
+                panel.saturating_add(16) < edge && edge.saturating_add(16) < floor,
+                "under the {name}, the edge pixel {edge} is not between the panel {panel} and \
+                 the floor {floor}"
+            );
+        }
     }
 
     /// The floor under the sun and a rectangle behind the camera whose
