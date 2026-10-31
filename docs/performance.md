@@ -12,8 +12,8 @@ the Froxel pass included, and the depth pre-pass, which reads none of
 the Froxel pass's lists, can run beside it on the M4 Pro and end first.
 Its line then read 0 ns. A render pass now counts from the passes it
 waits on: the two depth passes skip the Froxel pass, and the lit pass,
-the first to read its lists, still counts from its end. No Baseline
-moves.
+the first render pass to read its lists, still counts from its end. No
+Baseline moves.
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, the test's release
 binary in a loop with a patch, not committed, that printed a frame's
@@ -574,9 +574,9 @@ early changes from run to run, 0 to 34% here, so the median falls on
 either mode once it nears half. Frame stats now count a render pass from
 the latest end of the passes before it that it waits on, when that is
 later than its start. Every pass before it counts but the Froxel pass
-for the two depth passes: the lit pass is the first to read its lists,
-and a depth pass that ended beside it read 0 ns (#414, above). Compute
-passes keep their own begin-to-end times, as the Froxel
+for the two depth passes: the lit pass is the first render pass to read
+its lists, and a depth pass that ended beside it read 0 ns (#414,
+above). Compute passes keep their own begin-to-end times, as the Froxel
 pass runs beside culling phase one and reads none of its output. Five
 runs then give the light scenes' pass lines within 2.8% of each other,
 inside `compare`'s 5% warning, and the GPU frame and gate do not move,

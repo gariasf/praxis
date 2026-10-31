@@ -552,9 +552,9 @@ fn frame_times(
     // pass counts from the latest end of the passes before it, if later than
     // its start: its time is what it adds past them. A compute pass keeps
     // its own time, as the Froxel pass runs beside culling phase one. The
-    // lit pass is the first to read the Froxel pass's lists, so the depth
-    // passes, which Metal can run beside it and end first, do not count from
-    // its end.
+    // lit pass is the first render pass to read the Froxel pass's lists, so
+    // the depth passes, which Metal can run beside it and end first, do not
+    // count from its end.
     let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
     let counted_begin = |pass: usize| {
         let begin = ticks[2 * pass];
