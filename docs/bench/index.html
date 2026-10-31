@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Praxis Bench history</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* The field guides' tokens, with the reference categorical palette for machines and passes. */
+:root {
+  color-scheme: light;
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --warm: #c9771a;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
+  --series-other: #9aa3b0;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --warm: #e8a34a;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --series-other: #5d6878;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --warm: #e8a34a;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  --series-other: #5d6878;
+}
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 17px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+header.intro { padding-block: 48px 0; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 6vw, 54px); line-height: 1.05; margin: 12px 0 14px; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 24px; margin: 0; }
+.lede { font-size: 19px; color: var(--ink-soft); margin: 0; max-width: 720px; }
+.note { font-size: 16px; color: var(--ink-soft); margin: 0; max-width: 720px; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+section { display: grid; gap: 12px; min-width: 0; }
+.controls {
+  position: sticky; top: 0; z-index: 2; background: var(--paper);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  padding-block: 10px; border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 14px;
+}
+.controls label { display: inline-flex; align-items: center; gap: 6px; }
+.controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 6px; max-width: 100%; }
+.controls nav { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; }
+.status { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); margin: 0; }
+.status.error { color: var(--series-8); }
+.chart { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 12px 8px; min-width: 0; }
+.chart h3 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 6px; }
+.chart svg { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
+.chart .empty { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); margin: 8px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; padding: 0; list-style: none; }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chip { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.marks { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.marks svg { vertical-align: -2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.axis text, .mark-label, .direct-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); }
+.gridline { stroke: var(--rule); stroke-width: 1; }
+.budget { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.harness-break { stroke: var(--warm); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.milestone { stroke: var(--ink-soft); stroke-width: 1; opacity: 0.6; }
+.crosshair { stroke: var(--ink-soft); stroke-width: 1; }
+.tooltip {
+  position: fixed; z-index: 3; pointer-events: none; max-width: min(320px, calc(100vw - 32px));
+  background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.45;
+}
+.tooltip .row { display: flex; align-items: center; gap: 6px; }
+.tooltip .row span:last-child { margin-left: auto; padding-left: 12px; }
+details summary { cursor: pointer; font-family: var(--mono); font-size: 14px; color: var(--accent); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; font-family: var(--mono); font-size: 13px; width: 100%; }
+th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child, th.text, td.text { text-align: left; }
+th { color: var(--ink-soft); font-weight: 600; }
+td button { font: inherit; color: var(--accent); background: none; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
+.detail { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.detail > * { min-width: 0; }
+.detail summary { overflow-wrap: anywhere; }
+.detail h3 { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 0; }
+.detail dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 14px; margin: 0; font-family: var(--mono); font-size: 13.5px; }
+.detail dt { color: var(--ink-soft); }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.detail pre { font-family: var(--mono); font-size: 12px; overflow-x: auto; max-height: 420px; background: var(--paper); padding: 10px; border-radius: 4px; margin: 8px 0 0; }
+.up { color: var(--series-8); }
+.down { color: var(--series-6); }
+footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 15px; }
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .controls nav { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="intro">
+  <div class="eyebrow">Praxis</div>
+  <h1>Bench history</h1>
+  <p class="lede">Every Reference scene's Series over the commits of <code>main</code>: one line per adapter and backend, drawn from the <a href="https://github.com/gariasf/praxis/tree/bench-history">bench-history</a> branch as it stands now. Click a point for its commit, its pull request, its change from the point before and the record itself.</p>
+</header>
+
+<div class="controls">
+  <label>Scene <select id="scene-select"></select></label>
+  <label>Machine <select id="machine-select"></select></label>
+  <label><input type="checkbox" id="tagged-toggle"> Tagged records</label>
+  <nav aria-label="Views"><a href="#overview">Overview</a><a href="#passes">Passes</a><a href="#counters">Counters</a><a href="#record">Record</a></nav>
+</div>
+
+<p class="status" id="status" role="status">Loading the Bench history…</p>
+
+<div class="marks" aria-label="What the marks mean">
+  <span><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="var(--ink-soft)"></circle></svg> record on a Series</span>
+  <span><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg> Baseline record</span>
+  <span><svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg> tagged record</span>
+  <span><svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg> tagged record off the Series' scale</span>
+  <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="harness-break"></line></svg> Harness version or scene content changed: the line breaks</span>
+  <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg> Budget</span>
+  <span><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="milestone"></line></svg> milestone closed</span>
+</div>
+
+<section id="overview" aria-labelledby="overview-heading">
+  <h2 id="overview-heading">Overview</h2>
+  <p class="note">The scene's CPU frame and GPU frame medians on every adapter and backend, against the Budgets in <code>bench/budgets.json</code>, which ADR 0013 judges on the M4 Pro at 1440p.</p>
+  <div class="chart" id="cpu-chart"></div>
+  <div class="chart" id="gpu-chart"></div>
+  <details>
+    <summary>Table of these records</summary>
+    <div class="table-wrap" id="overview-table"></div>
+  </details>
+</section>
+
+<section id="passes" aria-labelledby="passes-heading">
+  <h2 id="passes-heading">Passes</h2>
+  <p class="note">The machine's GPU pass medians for the scene, stacked per record of its Series in source order. The seven largest passes keep their own colour; the rest are summed as other. Passes can overlap on the GPU, so a stack can stand taller than the GPU frame, as it does on the M4 Pro.</p>
+  <div class="chart" id="passes-chart"></div>
+</section>
+
+<section id="counters" aria-labelledby="counters-heading">
+  <h2 id="counters-heading">Counters and memory</h2>
+  <p class="note">The machine's counters over the scene's counter frames, and GPU memory against its Budget. Counters do not depend on load, so lavapipe's are as good as any machine's.</p>
+  <div class="grid" id="counter-charts"></div>
+</section>
+
+<section id="record" aria-labelledby="record-heading">
+  <h2 id="record-heading">Record</h2>
+  <div class="detail" id="record-detail"><p class="note">Click a point in any chart, or a row of the table, to see its record here.</p></div>
+</section>
+
+<footer class="project">
+  <a href="https://github.com/gariasf/praxis">Praxis on GitHub</a>
+  <a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024: Bench history</a>
+  <a href="../guides/">Field guides</a>
+</footer>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script>
+"use strict";
+
+const REPOSITORY = "gariasf/praxis";
+const HISTORY_URL = `https://raw.githubusercontent.com/${REPOSITORY}/bench-history/`;
+const BUDGETS_URL = `https://raw.githubusercontent.com/${REPOSITORY}/main/bench/budgets.json`;
+const API_URL = `https://api.github.com/repos/${REPOSITORY}/`;
+const SECONDS_PER_DAY = 86400;
+const PASS_COLOURS = 7;
+const HIT_RADIUS_PIXELS = 24;
+// Series row fields that are neither a timing nor a counter.
+const ROW_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "tags"]);
+const TIMINGS = ["cpu_frame_microseconds", "gpu_frame_microseconds", "gate_microseconds", "shadow_ray_microseconds", "dynamic_tlas_cpu_microseconds"];
+
+const state = {
+  paths: [],
+  machines: [],
+  scenes: [],
+  budgets: {},
+  milestones: [],
+  // `${directory}/${machine}/${scene}` to its points, oldest first.
+  points: new Map(),
+  scene: null,
+  machine: null,
+  showTagged: false,
+  selected: null,
+};
+const pullRequests = new Map();
+const rawRecords = new Map();
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const remaining = response.headers.get("x-ratelimit-remaining");
+    const reset = response.headers.get("x-ratelimit-reset");
+    if (remaining === "0" && reset) {
+      const until = new Date(Number(reset) * 1000).toLocaleTimeString();
+      throw new Error(`GitHub's API allows no more requests from this address until ${until}`);
+    }
+    throw new Error(`${url} answered ${response.status}`);
+  }
+  return response.json();
+}
+
+/** A Bench record file as its Series row, the way `praxis publish` writes one, with its tags. */
+function rowOf(record) {
+  const provenance = record.provenance;
+  const passes = {};
+  for (const [pass, spread] of Object.entries(record.gpu_pass_microseconds ?? {})) passes[pass] = spread.median;
+  const { frames, ...counters } = record.counter_frames ?? {};
+  const row = {
+    commit: provenance.commit,
+    source_hash: provenance.source_hash,
+    committed_unix_seconds: record.committed_unix_seconds,
+    harness_version: provenance.harness_version,
+    source: provenance.source ?? null,
+    scene_content_hash: provenance.scene_content_hash ?? null,
+    gpu_pass_median_microseconds: passes,
+    aliasing_rmse: record.aliasing_rmse ?? null,
+    aliasing_p99: record.aliasing_p99 ?? null,
+    tags: record.tags ?? [],
+  };
+  for (const timing of TIMINGS) row[timing] = record[timing] ?? null;
+  return Object.assign(row, counters);
+}
+
+/** Whether two rows measure the same thing: one Harness version, and one scene content where both know it. */
+function sameDefinition(earlier, later) {
+  if (earlier.harness_version !== later.harness_version) return false;
+  return earlier.scene_content_hash === null || later.scene_content_hash === null || earlier.scene_content_hash === later.scene_content_hash;
+}
+
+/** Points for rows in source order: each knows its line segment, the point before it, and what broke the line at it. */
+function pointsOf(rows, machine, scene, directory) {
+  const sorted = [...rows].sort((first, second) => first.committed_unix_seconds - second.committed_unix_seconds || first.commit.localeCompare(second.commit));
+  const points = [];
+  let segment = 0;
+  for (const row of sorted) {
+    const previous = points.at(-1) ?? null;
+    let breakLabel = null;
+    if (previous && !sameDefinition(previous.row, row)) {
+      segment += 1;
+      breakLabel = previous.row.harness_version !== row.harness_version ? `harness ${row.harness_version}` : "scene content";
+    }
+    points.push({ machine, scene, row, directory, tagged: directory === "tagged", segment, previous, breakLabel,
+      path: `${directory}/${machine}/${scene}/${row.source_hash}.json` });
+  }
+  return points;
+}
+
+async function loadSeries(machine, scene) {
+  const name = `records/${machine}/${scene}`;
+  if (state.points.has(name)) return state.points.get(name);
+  let points = [];
+  if (state.paths.includes(`series/${machine}/${scene}.json`)) {
+    points = pointsOf(await fetchJson(`${HISTORY_URL}series/${machine}/${scene}.json`), machine, scene, "records");
+  }
+  state.points.set(name, points);
+  return points;
+}
+
+async function loadTagged(machine, scene) {
+  const name = `tagged/${machine}/${scene}`;
+  if (state.points.has(name)) return state.points.get(name);
+  const files = state.paths.filter((path) => path.startsWith(`${name}/`));
+  const records = await Promise.all(files.map((path) => fetchJson(HISTORY_URL + path)));
+  records.forEach((record, index) => rawRecords.set(files[index], record));
+  const points = pointsOf(records.map(rowOf), machine, scene, "tagged");
+  state.points.set(name, points);
+  return points;
+}
+
+/** Every point of the scene on every machine: Series records, and tagged ones when shown. */
+async function scenePoints(scene) {
+  const loads = state.machines.map(async (machine) => ({
+    machine,
+    series: await loadSeries(machine, scene),
+    tagged: state.showTagged ? await loadTagged(machine, scene) : [],
+  }));
+  return Promise.all(loads);
+}
+
+/* Formatting */
+
+function isTiming(metric) { return metric.endsWith("_microseconds") || metric.startsWith("pass:"); }
+function isBytes(metric) { return metric.endsWith("_bytes") || metric.endsWith("_bytes_in_use"); }
+function formatValue(metric, value) {
+  if (value === null || value === undefined) return "—";
+  if (isTiming(metric)) return value > 0 && value < 0.5 ? "<0.001 ms" : `${(value / 1000).toFixed(value < 10000 ? 3 : 2)} ms`;
+  if (isBytes(metric)) {
+    const [divisor, unit] = byteUnit(value);
+    return `${(value / divisor).toLocaleString("en", { maximumFractionDigits: 1 })} ${unit}`;
+  }
+  return value.toLocaleString("en");
+}
+function byteUnit(bytes) { return bytes >= 1e6 ? [1e6, "MB"] : bytes >= 1e3 ? [1e3, "kB"] : [1, "B"]; }
+/** The divisor and unit of an axis whose ticks reach `high`. */
+function axisUnit(metric, high) {
+  if (isTiming(metric)) return [1000, "ms"];
+  if (isBytes(metric)) return byteUnit(high);
+  return [1, ""];
+}
+/** An axis tick in the axis's unit, with as many decimals as the tick step needs. */
+function axisValue(metric, value, step, high) {
+  const [divisor] = axisUnit(metric, high);
+  const decimals = Math.min(Math.max(Math.ceil(-Math.log10(step / divisor)), 0), 6);
+  const compact = divisor === 1 && value >= 1e5;
+  return (value / divisor).toLocaleString("en", { notation: compact ? "compact" : "standard", maximumFractionDigits: compact ? 3 : decimals, minimumFractionDigits: compact ? 0 : decimals });
+}
+function metricName(metric) {
+  return metric.replace(/^pass:/, "").replace(/_microseconds$/, "").replaceAll("_", " ").replace(/^gpu /, "GPU ").replace(/^cpu /, "CPU ").replace(" tlas ", " TLAS ").replace(" cpu", " CPU");
+}
+function dateOf(seconds) { return new Date(seconds * 1000).toISOString().slice(0, 10); }
+function shortDate(seconds) { return new Date(seconds * 1000).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" }); }
+function machineName(machine) {
+  const backend = machine.slice(machine.lastIndexOf("-") + 1);
+  const adapter = machine.slice(0, machine.lastIndexOf("-")).replace(/^(apple|nvidia-geforce|nvidia|amd-radeon|amd|intel)-/, "").replace(/^llvmpipe-.*/, "llvmpipe");
+  return `${adapter} · ${backend}`;
+}
+function machineColour(machine) {
+  const slot = state.machines.indexOf(machine);
+  return slot < 8 ? `var(--series-${slot + 1})` : "var(--series-other)";
+}
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
+}
+function isBaseline(row) { return row.source === "baseline-commit"; }
+
+/* Scales */
+
+function niceScale(minimum, maximum, tickCount) {
+  if (minimum === maximum) {
+    const half = Math.abs(maximum) * 0.05 || 1;
+    minimum -= half;
+    maximum += half;
+  }
+  const rough = (maximum - minimum) / tickCount;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= rough);
+  const low = Math.floor(minimum / step) * step;
+  const high = Math.ceil(maximum / step) * step;
+  const ticks = [];
+  for (let tick = low; tick <= high + step / 2; tick += step) ticks.push(Number(tick.toPrecision(12)));
+  return { low, high, ticks, step };
+}
+
+function timeTicks(start, end, plotWidth) {
+  const span = Math.max(end - start, SECONDS_PER_DAY);
+  const dayStep = [1, 2, 3, 7, 14, 28, 56].find((days) => (days * SECONDS_PER_DAY / span) * plotWidth >= 64) ?? 112;
+  const ticks = [];
+  for (let day = Math.ceil(start / SECONDS_PER_DAY); day * SECONDS_PER_DAY <= end; day += dayStep) ticks.push(day * SECONDS_PER_DAY);
+  return ticks;
+}
+
+/** Plot frame: margins, and the y scale over `values` plus the Budget when it is near them. */
+function frameOf(container, values, budget, height) {
+  const width = Math.max(container.clientWidth - 24, 240);
+  const margin = { left: 52, right: 14, top: 22, bottom: 26 };
+  const known = values.filter((value) => value !== null && value !== undefined);
+  let minimum = Math.min(...known);
+  let maximum = Math.max(...known);
+  const budgetShown = budget !== null && budget !== undefined && budget <= maximum * 1.5 && budget >= minimum / 1.5;
+  if (budgetShown) { minimum = Math.min(minimum, budget); maximum = Math.max(maximum, budget); }
+  const scale = niceScale(minimum, maximum, height < 180 ? 3 : 4);
+  const plotHeight = height - margin.top - margin.bottom;
+  return {
+    width, height, margin, scale, budgetShown,
+    plotWidth: width - margin.left - margin.right,
+    y: (value) => margin.top + plotHeight * (1 - (value - scale.low) / (scale.high - scale.low)),
+    /** Where a value falls outside the scale: "above", "below" or null. */
+    outside: (value) => value > scale.high ? "above" : value < scale.low ? "below" : null,
+  };
+}
+
+function yAxisSvg(frame, metric) {
+  const { margin, width, scale } = frame;
+  let svg = `<g class="axis">`;
+  for (const tick of scale.ticks) {
+    const y = frame.y(tick);
+    svg += `<line class="gridline" x1="${margin.left}" x2="${width - margin.right}" y1="${y}" y2="${y}"></line>`;
+    svg += `<text x="${margin.left - 6}" y="${y + 4}" text-anchor="end">${axisValue(metric, tick, scale.step, scale.high)}</text>`;
+  }
+  const [, unit] = axisUnit(metric, scale.high);
+  if (unit) svg += `<text x="${margin.left - 6}" y="${margin.top - 10}" text-anchor="end">${unit}</text>`;
+  return svg + `</g>`;
+}
+
+function budgetSvg(frame, metric, budget) {
+  if (budget === null || budget === undefined) return "";
+  const { margin, width } = frame;
+  if (!frame.budgetShown) return "";
+  const y = frame.y(budget);
+  return `<line class="budget" x1="${margin.left}" x2="${width - margin.right}" y1="${y}" y2="${y}"></line>`
+    + `<text class="mark-label" x="${margin.left + 4}" y="${y - 4}">Budget ${formatValue(metric, budget)}</text>`;
+}
+
+/** Vertical marks for closed milestones and line breaks, each label written once. */
+function verticalMarksSvg(frame, xOf, timeRange, breaks) {
+  const { margin, height } = frame;
+  const bottom = height - margin.bottom;
+  const marks = breaks.map((mark) => ({ ...mark, kind: "harness-break" }));
+  for (const milestone of state.milestones) {
+    if (milestone.time >= timeRange[0] && milestone.time <= timeRange[1]) marks.push({ x: xOf(milestone.time), label: `${milestone.title} closed`, kind: "milestone" });
+  }
+  let svg = "";
+  // Labels take the first of two rows with room, above the plot then just inside it.
+  const labelled = new Set();
+  const rowRights = [-Infinity, -Infinity];
+  for (const mark of marks.sort((first, second) => first.x - second.x)) {
+    svg += `<line class="${mark.kind}" x1="${mark.x}" x2="${mark.x}" y1="${margin.top - 6}" y2="${bottom}"></line>`;
+    const labelWidth = mark.label.length * 7;
+    const left = mark.x + 3 + labelWidth <= frame.width ? mark.x + 3 : mark.x - 3 - labelWidth;
+    const row = rowRights.findIndex((right) => left > right);
+    if (labelled.has(mark.label) || row === -1) continue;
+    labelled.add(mark.label);
+    svg += `<text class="mark-label" x="${left}" y="${row === 0 ? margin.top - 8 : margin.top + 10}">${escapeHtml(mark.label)}</text>`;
+    rowRights[row] = left + labelWidth + 6;
+  }
+  return svg;
+}
+
+/** A point's mark; one off the scale is an arrow on the plot's edge, pointing to where it lies. */
+function markerSvg(x, y, point, colour, selected, outside) {
+  const ring = selected ? `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="var(--ink)" stroke-width="2"></circle>` : "";
+  if (outside) {
+    const tip = outside === "above" ? -5 : 5;
+    return `${ring}<path d="M${x - 5},${y - tip}L${x + 5},${y - tip}L${x},${y + tip}Z" fill="${point.tagged ? "var(--panel)" : colour}" stroke="${colour}" stroke-width="1.5"></path>`;
+  }
+  if (point.tagged) return `${ring}<circle cx="${x}" cy="${y}" r="4" fill="var(--panel)" stroke="${colour}" stroke-width="2"></circle>`;
+  if (isBaseline(point.row)) return `${ring}<rect x="${x - 4}" y="${y - 4}" width="8" height="8" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></rect>`;
+  return `${ring}<circle cx="${x}" cy="${y}" r="4.5" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></circle>`;
+}
+
+/* Charts */
+
+/**
+ * A line chart over commit time. `lines` holds one entry per machine: its Series points and its tagged
+ * points, each read through `valueOf`. Registers its points on `container` for hover and click.
+ */
+function drawLineChart(container, { title, metric, lines, valueOf, budget, height = 220, legend = true }) {
+  const all = lines.flatMap((line) => [...line.series, ...line.tagged]).filter((point) => valueOf(point.row) !== null);
+  const drawn = lines.filter((line) => all.some((point) => point.machine === line.machine));
+  const legendHtml = legend && drawn.length > 1
+    ? `<ul class="legend">${drawn.map((line) => `<li><span class="chip" style="background:${machineColour(line.machine)}"></span>${escapeHtml(machineName(line.machine))}</li>`).join("")}</ul>`
+    : "";
+  if (all.length === 0) {
+    container.innerHTML = `<h3>${escapeHtml(title)}</h3><p class="empty">No record of this scene measures it${state.showTagged ? "" : " on a Series; tagged records may"}.</p>`;
+    container.hitPoints = [];
+    return;
+  }
+  const seriesValues = all.filter((point) => !point.tagged).map((point) => valueOf(point.row));
+  const frame = frameOf(container, seriesValues.length > 0 ? seriesValues : all.map((point) => valueOf(point.row)), budget, height);
+  const plotTop = frame.margin.top;
+  const plotBottom = frame.height - frame.margin.bottom;
+  const yOf = (value) => Math.min(Math.max(frame.y(value), plotTop), plotBottom);
+  if (budget !== null && budget !== undefined && !frame.budgetShown) title += ` · Budget ${formatValue(metric, budget)}, off the chart`;
+  const times = all.map((point) => point.row.committed_unix_seconds);
+  const timeRange = [Math.min(...times), Math.max(...times)];
+  const pad = Math.max((timeRange[1] - timeRange[0]) * 0.02, 3600);
+  const domain = [timeRange[0] - pad, timeRange[1] + pad];
+  const xOf = (time) => frame.margin.left + frame.plotWidth * (time - domain[0]) / (domain[1] - domain[0]);
+
+  let svg = yAxisSvg(frame, metric);
+  svg += `<g class="axis">${timeTicks(domain[0], domain[1], frame.plotWidth).map((tick) =>
+    `<text x="${xOf(tick)}" y="${frame.height - 6}" text-anchor="middle">${shortDate(tick)}</text>`).join("")}</g>`;
+  const breaks = [];
+  let paths = "";
+  let markers = "";
+  const hitPoints = [];
+  for (const line of lines) {
+    const colour = machineColour(line.machine);
+    let path = "";
+    let previous = null;
+    for (const point of line.series) {
+      const value = valueOf(point.row);
+      if (value === null) { previous = null; continue; }
+      const x = xOf(point.row.committed_unix_seconds);
+      const y = frame.y(value);
+      if (point.breakLabel) breaks.push({ x, label: point.breakLabel });
+      path += `${previous && previous.segment === point.segment ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+      previous = point;
+    }
+    if (path) paths += `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round"></path>`;
+    for (const point of [...line.series, ...line.tagged]) {
+      const value = valueOf(point.row);
+      if (value === null) continue;
+      const x = xOf(point.row.committed_unix_seconds);
+      const y = yOf(value);
+      markers += markerSvg(x, y, point, colour, point.path === state.selected?.path, frame.outside(value));
+      hitPoints.push({ x, y, point, colour, value });
+    }
+  }
+  svg += budgetSvg(frame, metric, budget);
+  svg += verticalMarksSvg(frame, xOf, domain, breaks);
+  svg += paths + markers + `<line class="crosshair" visibility="hidden" y1="${frame.margin.top}" y2="${frame.height - frame.margin.bottom}"></line>`;
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${legendHtml}<svg viewBox="0 0 ${frame.width} ${frame.height}" height="${frame.height}" role="img" aria-label="${escapeHtml(title)}">${svg}</svg>`;
+  container.hitPoints = hitPoints;
+  container.tooltipOf = (hit) => {
+    const row = hit.point.row;
+    const spread = row[metric];
+    const p95 = spread && typeof spread === "object" ? `<div class="row"><span>p95</span><span>${formatValue(metric, spread.p95)}</span></div>` : "";
+    return `<div class="row"><span class="chip" style="background:${hit.colour}"></span><span>${escapeHtml(machineName(hit.point.machine))}</span></div>`
+      + `<div>${dateOf(row.committed_unix_seconds)} · ${row.commit.slice(0, 8)}</div>`
+      + `<div class="row"><span>${escapeHtml(metricName(metric))}</span><span>${formatValue(metric, hit.value)}</span></div>${p95}`
+      + `<div>harness ${row.harness_version}${isBaseline(row) ? " · Baseline" : ""}${hit.point.tagged ? ` · tagged: ${escapeHtml(row.tags.join("; "))}` : ""}</div>`;
+  };
+}
+
+/** The machine's GPU passes stacked per Series record, in source order. */
+function drawPassesChart(container, points) {
+  const title = `GPU passes · ${machineName(state.machine)} · ${state.scene}`;
+  const rows = points.filter((point) => Object.keys(point.row.gpu_pass_median_microseconds).length > 0);
+  if (rows.length === 0) {
+    container.innerHTML = `<h3>${escapeHtml(title)}</h3><p class="empty">No record of this scene on this machine's Series times its passes.</p>`;
+    container.hitPoints = [];
+    return;
+  }
+  const totals = new Map();
+  for (const point of rows) {
+    for (const [pass, median] of Object.entries(point.row.gpu_pass_median_microseconds)) totals.set(pass, (totals.get(pass) ?? 0) + median);
+  }
+  const ranked = [...totals.entries()].filter(([, total]) => total > 0).sort((first, second) => second[1] - first[1]).map(([pass]) => pass);
+  const named = ranked.slice(0, PASS_COLOURS);
+  const layers = ranked.length > PASS_COLOURS ? [...named, "other"] : named;
+  const colourOf = (layer) => layer === "other" ? "var(--series-other)" : `var(--series-${named.indexOf(layer) + 1})`;
+  const stackOf = (row) => layers.map((layer) => layer === "other"
+    ? ranked.slice(PASS_COLOURS).reduce((sum, pass) => sum + (row.gpu_pass_median_microseconds[pass] ?? 0), 0)
+    : row.gpu_pass_median_microseconds[layer] ?? 0);
+  const sums = rows.map((point) => stackOf(point.row).reduce((sum, value) => sum + value, 0));
+  const frame = frameOf(container, [0, ...sums], null, 260);
+  const slot = frame.plotWidth / rows.length;
+  const barWidth = Math.max(Math.min(slot * 0.72, 28), 2);
+  const xOf = (index) => frame.margin.left + slot * (index + 0.5);
+
+  let svg = yAxisSvg(frame, "pass:total");
+  const labelEvery = Math.ceil(70 / slot);
+  svg += `<g class="axis">${rows.map((point, index) => index % labelEvery === 0
+    ? `<text x="${xOf(index)}" y="${frame.height - 6}" text-anchor="middle">${shortDate(point.row.committed_unix_seconds)}</text>` : "").join("")}</g>`;
+  const breaks = [];
+  let bars = "";
+  const hitPoints = [];
+  rows.forEach((point, index) => {
+    const x = xOf(index);
+    if (index > 0 && point.segment !== rows[index - 1].segment) {
+      breaks.push({ x: x - slot / 2, label: point.breakLabel ?? `harness ${point.row.harness_version}` });
+    }
+    let base = 0;
+    stackOf(point.row).forEach((value, layer) => {
+      if (value <= 0) return;
+      const top = frame.y(base + value);
+      bars += `<rect x="${x - barWidth / 2}" y="${top}" width="${barWidth}" height="${Math.max(frame.y(base) - top, 0)}" fill="${colourOf(layers[layer])}" stroke="var(--panel)" stroke-width="${barWidth > 6 ? 1 : 0}"></rect>`;
+      base += value;
+    });
+    if (point.path === state.selected?.path) {
+      bars += `<rect x="${x - barWidth / 2 - 3}" y="${frame.y(base) - 3}" width="${barWidth + 6}" height="${frame.y(0) - frame.y(base) + 6}" fill="none" stroke="var(--ink)" stroke-width="2"></rect>`;
+    }
+    if (isBaseline(point.row)) bars += `<rect x="${x - 3}" y="${frame.y(base) - 10}" width="6" height="6" fill="var(--ink-soft)"></rect>`;
+    hitPoints.push({ x, y: frame.y(base), point, total: base, column: true });
+  });
+  // Milestones sit between the records they fall between.
+  const times = rows.map((point) => point.row.committed_unix_seconds);
+  const xOfTime = (time) => {
+    const after = times.findIndex((recorded) => recorded > time);
+    return after === -1 ? xOf(rows.length - 1) + slot / 2 : xOf(after) - slot / 2;
+  };
+  svg += verticalMarksSvg(frame, xOfTime, [times[0], times.at(-1)], breaks);
+  svg += bars + `<line class="crosshair" visibility="hidden" y1="${frame.margin.top}" y2="${frame.height - frame.margin.bottom}"></line>`;
+  const legend = `<ul class="legend">${layers.map((layer) => `<li><span class="chip" style="background:${colourOf(layer)}"></span>${escapeHtml(layer.replaceAll("_", " "))}</li>`).join("")}</ul>`;
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${legend}<svg viewBox="0 0 ${frame.width} ${frame.height}" height="${frame.height}" role="img" aria-label="${escapeHtml(title)}">${svg}</svg>`;
+  container.hitPoints = hitPoints;
+  container.tooltipOf = (hit) => {
+    const row = hit.point.row;
+    const values = stackOf(row);
+    return `<div>${dateOf(row.committed_unix_seconds)} · ${row.commit.slice(0, 8)}${isBaseline(row) ? " · Baseline" : ""}</div>`
+      + layers.map((layer, index) => [layer, values[index]]).reverse().map(([layer, value]) =>
+        `<div class="row"><span class="chip" style="background:${colourOf(layer)}"></span><span>${escapeHtml(layer.replaceAll("_", " "))}</span><span>${formatValue("pass:", value)}</span></div>`).join("")
+      + `<div class="row"><span>sum</span><span>${formatValue("pass:", hit.total)}</span></div>`;
+  };
+}
+
+/* Hover and click */
+
+function nearestHit(container, event) {
+  const svg = container.querySelector("svg");
+  if (!svg || !container.hitPoints?.length) return null;
+  const bounds = svg.getBoundingClientRect();
+  const scale = svg.viewBox.baseVal.width / bounds.width;
+  const x = (event.clientX - bounds.left) * scale;
+  const y = (event.clientY - bounds.top) * scale;
+  let best = null;
+  let bestDistance = Infinity;
+  for (const hit of container.hitPoints) {
+    const distance = hit.column ? Math.abs(hit.x - x) : Math.hypot(hit.x - x, hit.y - y);
+    if (distance < bestDistance) { best = hit; bestDistance = distance; }
+  }
+  return bestDistance <= HIT_RADIUS_PIXELS * (best?.column ? 2 : 1) ? best : null;
+}
+
+const tooltip = document.getElementById("tooltip");
+function attachHover(container) {
+  container.addEventListener("pointermove", (event) => {
+    const hit = nearestHit(container, event);
+    const crosshair = container.querySelector(".crosshair");
+    if (!hit) { tooltip.hidden = true; crosshair?.setAttribute("visibility", "hidden"); return; }
+    crosshair?.setAttribute("x1", hit.x);
+    crosshair?.setAttribute("x2", hit.x);
+    crosshair?.setAttribute("visibility", "visible");
+    tooltip.innerHTML = container.tooltipOf(hit);
+    tooltip.hidden = false;
+    const width = tooltip.offsetWidth;
+    const height = tooltip.offsetHeight;
+    const left = event.clientX + 14 + width > window.innerWidth - 8 ? event.clientX - 14 - width : event.clientX + 14;
+    tooltip.style.left = `${Math.max(8, left)}px`;
+    tooltip.style.top = `${Math.min(window.innerHeight - height - 8, Math.max(8, event.clientY - height / 2))}px`;
+  });
+  container.addEventListener("pointerleave", () => {
+    tooltip.hidden = true;
+    container.querySelector(".crosshair")?.setAttribute("visibility", "hidden");
+  });
+  container.addEventListener("click", (event) => {
+    const hit = nearestHit(container, event);
+    if (hit) select(hit.point, true);
+  });
+}
+
+/* Record detail */
+
+async function pullRequestOf(commit) {
+  if (!pullRequests.has(commit)) {
+    pullRequests.set(commit, fetchJson(`${API_URL}commits/${commit}/pulls`).then((pulls) => pulls.find((pull) => pull.merged_at) ?? pulls[0] ?? null));
+  }
+  return pullRequests.get(commit);
+}
+
+async function rawRecordOf(path) {
+  if (!rawRecords.has(path)) rawRecords.set(path, fetchJson(HISTORY_URL + path));
+  return rawRecords.get(path);
+}
+
+function metricsOf(row) {
+  const metrics = [];
+  for (const timing of TIMINGS) metrics.push([timing, row[timing]?.median ?? null]);
+  for (const [pass, median] of Object.entries(row.gpu_pass_median_microseconds)) metrics.push([`pass:${pass}`, median]);
+  for (const [field, value] of Object.entries(row)) {
+    if (!ROW_FIELDS.has(field) && !TIMINGS.includes(field) && typeof value === "number") metrics.push([field, value]);
+  }
+  return metrics;
+}
+
+function deltaTable(point) {
+  const previous = point.previous?.row ?? null;
+  const previousMetrics = new Map(previous ? metricsOf(previous) : []);
+  const rows = metricsOf(point.row).filter(([metric, value]) => value !== null || previousMetrics.get(metric) != null);
+  return `<div class="table-wrap"><table><thead><tr><th>metric</th><th>this</th><th>previous</th><th>change</th></tr></thead><tbody>${rows.map(([metric, value]) => {
+    const before = previousMetrics.get(metric) ?? null;
+    let change = "—";
+    if (value !== null && before !== null) {
+      const difference = value - before;
+      // Counters change by exact amounts, timings by noisy ones, so counters show the amount and timings the ratio.
+      const amount = isTiming(metric)
+        ? (before === 0 ? "new" : `${difference >= 0 ? "+" : ""}${(difference / before * 100).toFixed(1)}%`)
+        : `${difference >= 0 ? "+" : "−"}${formatValue(metric, Math.abs(difference))}`;
+      change = difference === 0 ? "0" : `<span class="${difference > 0 ? "up" : "down"}">${amount}</span>`;
+    }
+    return `<tr><td>${escapeHtml(metricName(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${change}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
+async function select(point, scroll) {
+  state.selected = point;
+  render();
+  const row = point.row;
+  const detail = document.getElementById("record-detail");
+  const previous = point.previous;
+  const previousText = previous
+    ? `${dateOf(previous.row.committed_unix_seconds)} · <a href="https://github.com/${REPOSITORY}/commit/${previous.row.commit}">${previous.row.commit.slice(0, 8)}</a>${point.breakLabel ? ` · across a break: ${escapeHtml(point.breakLabel)}` : ""}`
+    : "none: the first record";
+  detail.innerHTML = `<h3>${escapeHtml(machineName(point.machine))} · ${escapeHtml(point.scene)} · ${dateOf(row.committed_unix_seconds)}</h3>
+    <dl>
+      <dt>commit</dt><dd><a href="https://github.com/${REPOSITORY}/commit/${row.commit}">${row.commit}</a></dd>
+      <dt>pull request</dt><dd id="record-pull">looking it up…</dd>
+      <dt>source hash</dt><dd>${row.source_hash}</dd>
+      <dt>harness</dt><dd>version ${row.harness_version}</dd>
+      <dt>scene content</dt><dd>${row.scene_content_hash ?? "not recorded"}</dd>
+      <dt>kind</dt><dd>${point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : "on the Series"}${isBaseline(row) ? ", a Baseline imported from main's history" : ""}</dd>
+      <dt>previous</dt><dd>${previousText}</dd>
+    </dl>
+    ${deltaTable(point)}
+    <details id="record-raw"><summary>Raw record <span class="mono">${escapeHtml(point.path)}</span></summary><pre>Loading…</pre></details>`;
+  if (scroll) document.getElementById("record").scrollIntoView({ behavior: "smooth", block: "start" });
+  const pullCell = document.getElementById("record-pull");
+  pullRequestOf(row.commit).then((pull) => {
+    if (state.selected !== point) return;
+    pullCell.innerHTML = pull
+      ? `<a href="${pull.html_url}">#${pull.number}</a> ${escapeHtml(pull.title)}`
+      : "none found; the commit's page lists any";
+  }, (error) => {
+    if (state.selected === point) pullCell.textContent = `${error.message}; the commit's page lists it`;
+  });
+  document.getElementById("record-raw").addEventListener("toggle", async (event) => {
+    if (!event.target.open) return;
+    const pre = event.target.querySelector("pre");
+    try {
+      pre.textContent = JSON.stringify(await rawRecordOf(point.path), null, 2);
+    } catch (error) {
+      pre.textContent = error.message;
+    }
+  }, { once: true });
+}
+
+/* Page */
+
+function overviewTable(lines) {
+  const points = lines.flatMap((line) => [...line.series, ...line.tagged])
+    .sort((first, second) => second.row.committed_unix_seconds - first.row.committed_unix_seconds);
+  const container = document.getElementById("overview-table");
+  container.innerHTML = `<table><thead><tr><th>machine</th><th class="text">date</th><th class="text">commit</th><th>harness</th><th>CPU frame</th><th>GPU frame</th><th class="text">kind</th><th></th></tr></thead><tbody>${points.map((point, index) => `<tr>
+    <td>${escapeHtml(machineName(point.machine))}</td><td class="text">${dateOf(point.row.committed_unix_seconds)}</td><td class="text">${point.row.commit.slice(0, 8)}</td><td>${point.row.harness_version}</td>
+    <td>${formatValue("cpu_frame_microseconds", point.row.cpu_frame_microseconds?.median)}</td><td>${formatValue("gpu_frame_microseconds", point.row.gpu_frame_microseconds?.median)}</td>
+    <td class="text">${point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"}</td><td><button type="button" data-index="${index}">Show</button></td></tr>`).join("")}</tbody></table>`;
+  container.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => select(points[Number(button.dataset.index)], true)));
+}
+
+let renderedLines = [];
+function render() {
+  const median = (metric) => (row) => row[metric]?.median ?? null;
+  drawLineChart(document.getElementById("cpu-chart"), { title: `CPU frame median · ${state.scene}`, metric: "cpu_frame_microseconds", lines: renderedLines, valueOf: median("cpu_frame_microseconds"), budget: state.budgets.cpu_frame_microseconds });
+  drawLineChart(document.getElementById("gpu-chart"), { title: `GPU frame median · ${state.scene}`, metric: "gpu_frame_microseconds", lines: renderedLines, valueOf: median("gpu_frame_microseconds"), budget: state.budgets.gpu_frame_microseconds });
+  const machineLine = renderedLines.find((line) => line.machine === state.machine) ?? { machine: state.machine, series: [], tagged: [] };
+  drawPassesChart(document.getElementById("passes-chart"), machineLine.series);
+
+  const counterContainer = document.getElementById("counter-charts");
+  const counterPoints = [...machineLine.series, ...machineLine.tagged];
+  const counters = [...new Set(counterPoints.flatMap((point) => metricsOf(point.row).map(([metric]) => metric)))]
+    .filter((metric) => !isTiming(metric))
+    .sort((first, second) => (second === "gpu_memory_bytes") - (first === "gpu_memory_bytes") || first.localeCompare(second));
+  if (counters.length === 0) {
+    counterContainer.innerHTML = `<p class="note">No record of ${escapeHtml(state.scene)} on ${escapeHtml(machineName(state.machine))} counts anything${state.showTagged ? "" : " on a Series; tagged records may"}.</p>`;
+  } else {
+    counterContainer.innerHTML = counters.map((metric) => `<div class="chart" data-counter="${metric}"></div>`).join("");
+    for (const element of counterContainer.querySelectorAll(".chart")) {
+      const metric = element.dataset.counter;
+      attachHover(element);
+      drawLineChart(element, { title: `${metricName(metric)} · ${machineName(state.machine)}`, metric, lines: [machineLine], valueOf: (row) => row[metric] ?? null, budget: state.budgets[metric], height: 170, legend: false });
+    }
+  }
+}
+
+async function refresh() {
+  const status = document.getElementById("status");
+  const parameters = new URLSearchParams({ scene: state.scene, machine: state.machine });
+  history.replaceState(null, "", `?${parameters}${location.hash}`);
+  status.textContent = `Loading ${state.scene}…`;
+  try {
+    renderedLines = await scenePoints(state.scene);
+    const pointCount = renderedLines.reduce((sum, line) => sum + line.series.length + line.tagged.length, 0);
+    status.textContent = `${state.scene}: ${pointCount} records on ${renderedLines.filter((line) => line.series.length + line.tagged.length > 0).length} machines.`;
+    status.classList.remove("error");
+    if (state.selected && state.selected.scene !== state.scene) state.selected = null;
+    render();
+    overviewTable(renderedLines);
+  } catch (error) {
+    status.textContent = `Could not load ${state.scene}: ${error.message}.`;
+    status.classList.add("error");
+  }
+}
+
+async function start() {
+  const status = document.getElementById("status");
+  try {
+    const [tree, budgets, milestones] = await Promise.all([
+      fetchJson(`${API_URL}git/trees/bench-history?recursive=1`),
+      fetchJson(BUDGETS_URL),
+      fetchJson(`${API_URL}milestones?state=closed`).catch(() => []),
+    ]);
+    state.paths = tree.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path);
+    state.budgets = budgets;
+    state.milestones = milestones.filter((milestone) => milestone.closed_at)
+      .map((milestone) => ({ title: milestone.title, time: Date.parse(milestone.closed_at) / 1000 }));
+    const machines = new Set();
+    const scenes = new Set();
+    for (const path of state.paths) {
+      const match = path.match(/^(?:records|tagged)\/([^/]+)\/([^/]+)\/[^/]+\.json$/);
+      if (match) { machines.add(match[1]); scenes.add(match[2]); }
+    }
+    state.machines = [...machines].sort();
+    state.scenes = [...scenes].sort();
+  } catch (error) {
+    status.textContent = `Could not read the Bench history: ${error.message}.`;
+    status.classList.add("error");
+    return;
+  }
+  const parameters = new URLSearchParams(location.search);
+  const onSeries = (machine) => state.paths.some((path) => path.startsWith(`series/${machine}/`));
+  state.scene = state.scenes.includes(parameters.get("scene")) ? parameters.get("scene") : state.scenes.includes("town") ? "town" : state.scenes[0];
+  state.machine = state.machines.includes(parameters.get("machine")) ? parameters.get("machine") : state.machines.find(onSeries) ?? state.machines[0];
+
+  const sceneSelect = document.getElementById("scene-select");
+  sceneSelect.innerHTML = state.scenes.map((scene) => `<option${scene === state.scene ? " selected" : ""}>${escapeHtml(scene)}</option>`).join("");
+  sceneSelect.addEventListener("change", () => { state.scene = sceneSelect.value; refresh(); });
+  const machineSelect = document.getElementById("machine-select");
+  machineSelect.innerHTML = state.machines.map((machine) => `<option value="${escapeHtml(machine)}"${machine === state.machine ? " selected" : ""}>${escapeHtml(machineName(machine))}${onSeries(machine) ? "" : " (tagged only)"}</option>`).join("");
+  machineSelect.addEventListener("change", () => { state.machine = machineSelect.value; refresh(); });
+  const taggedToggle = document.getElementById("tagged-toggle");
+  taggedToggle.addEventListener("change", () => { state.showTagged = taggedToggle.checked; refresh(); });
+  ["cpu-chart", "gpu-chart", "passes-chart"].forEach((id) => attachHover(document.getElementById(id)));
+  // Charts are drawn at the page's width, so only a change of width redraws them.
+  let drawnWidth = document.querySelector(".page").clientWidth;
+  new ResizeObserver(([entry]) => {
+    if (entry.contentRect.width === drawnWidth) return;
+    drawnWidth = entry.contentRect.width;
+    render();
+  }).observe(document.querySelector(".page"));
+  await refresh();
+}
+
+start();
+</script>
+</body>
+</html>
