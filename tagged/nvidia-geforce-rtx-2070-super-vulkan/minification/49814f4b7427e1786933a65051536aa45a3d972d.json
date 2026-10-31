@@ -1,0 +1,122 @@
+{
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "aliasing_p99": 145354,
+  "aliasing_rmse": 35304,
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793474416,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 767823127,
+    "heap_allocations": 351,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 272
+  },
+  "cpu_frame_microseconds": {
+    "median": 343.7,
+    "p95": 438.0
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.1,
+    "p95": 0.3
+  },
+  "gate_microseconds": {
+    "median": 642.272,
+    "p95": 674.24
+  },
+  "gpu_frame_microseconds": {
+    "median": 1864.896,
+    "p95": 2221.056
+  },
+  "gpu_memory_bytes": 767823127,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 19.008000000000003,
+      "p95": 21.696
+    },
+    "culling_phase_two": {
+      "median": 16.512,
+      "p95": 19.328
+    },
+    "depth_prepass": {
+      "median": 86.49600000000001,
+      "p95": 103.296
+    },
+    "depth_pyramid_pass": {
+      "median": 133.152,
+      "p95": 140.224
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.912,
+      "p95": 8.352
+    },
+    "lit_pass": {
+      "median": 389.12,
+      "p95": 401.952
+    },
+    "phase_two_depth_pass": {
+      "median": 2.4320000000000004,
+      "p95": 3.392
+    },
+    "shadow_mask_pass": {
+      "median": 926.912,
+      "p95": 1142.4
+    },
+    "tonemapping_pass": {
+      "median": 194.816,
+      "p95": 196.448
+    }
+  },
+  "heap_allocations": 351,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "branch": "main",
+    "commit": "e7fab12965f010ac4f57d5210fd447afaffa66bc",
+    "dirty": false,
+    "driver": "NVIDIA",
+    "driver_info": "621.01",
+    "gpu_frame_p95_over_median": 1.19098115927108,
+    "gpu_load_percent": 77,
+    "harness_version": 10,
+    "other_processes": [],
+    "quiet": false,
+    "scene_content_hash": "6d4e984f4e33e937e599760f3da8fc920ef5c00abe53e03b89d5b3abc4fa7a88",
+    "source_hash": "49814f4b7427e1786933a65051536aa45a3d972d",
+    "started_unix_seconds": 1793475412
+  },
+  "scene": "minification",
+  "shadow_ray_microseconds": {
+    "median": 1017.376,
+    "p95": 1341.4719999999998
+  },
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 2,
+  "uploaded_bytes": 272,
+  "width": 2560
+}
