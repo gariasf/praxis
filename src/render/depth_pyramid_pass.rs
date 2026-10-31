@@ -107,7 +107,9 @@ impl DepthPyramidPass {
             label: Some(DEPTH_PYRAMID_PASS),
             timestamp_writes,
         });
-        // Level 0 reduces the depth target, each later level the one below.
+        // Level 0 reduces the depth target, each later level the one below,
+        // a workgroup per tile of texels: level 0's with an invocation per
+        // pixel of the tile, the others' per texel.
         for (index, (bind_group, size)) in self.levels.iter().enumerate() {
             pass.set_pipeline(if index == 0 {
                 &self.reduce_depth
@@ -132,11 +134,13 @@ pub(crate) mod tests {
     use crate::render::targets;
 
     /// The pass, rebound to render targets created again at an odd size, so
-    /// each level rounds down and some texels cover three below them: after
-    /// triangles at several depths over one that covers most of the screen,
-    /// each texel of each level holds the minimum depth of the texels below
-    /// whose share of the screen overlaps its own, against a CPU reduction of
-    /// every sample of the depth target, read back.
+    /// each level rounds down and some texels cover three below them, and at
+    /// an even one, where level 0 halves exactly; each spans several of level
+    /// 0's workgroups along both sides: after triangles at several depths
+    /// over one that covers most of the screen, each texel of each level
+    /// holds the minimum depth of the texels below whose share of the screen
+    /// overlaps its own, against a CPU reduction of every sample of the depth
+    /// target, read back.
     #[test]
     fn each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen() {
         let Some(context) = gpu_context() else {
@@ -144,7 +148,21 @@ pub(crate) mod tests {
         };
         let device = &context.device;
         let mut pass = DepthPyramidPass::new(device, &RenderTargets::new(device, 16, 16));
-        let (width, height) = (37, 23);
+        for (width, height) in [(37, 23), (64, 48)] {
+            assert_pyramid_holds_minimum_depths(&context, &mut pass, width, height);
+        }
+    }
+
+    /// Asserts that `pass`, rebound to render targets created again at
+    /// `width` × `height`, builds the pyramid `minimum_depth_pyramid` reduces
+    /// from the depth target's samples.
+    fn assert_pyramid_holds_minimum_depths(
+        context: &GpuContext,
+        pass: &mut DepthPyramidPass,
+        width: u32,
+        height: u32,
+    ) {
+        let device = &context.device;
         let render_targets = RenderTargets::new(device, width, height);
         pass.bind_render_targets(device, &render_targets);
         // Each triangle's centre, half its width and its depth, in clip space.
@@ -159,17 +177,17 @@ pub(crate) mod tests {
             [[-1.0, -1.0], [1.0, -1.0], [0.0, 1.0]]
                 .map(|[across, up]| [x + across * half_width, y + up * half_width, depth, 1.0])
         });
-        draw_depth(&context, &render_targets, &triangles);
+        draw_depth(context, &render_targets, &triangles);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         pass.record(&mut encoder, None);
         context.queue.submit([encoder.finish()]);
 
-        let samples = read_depth_samples(&context, render_targets.depth());
+        let samples = read_depth_samples(context, render_targets.depth());
         let expected = minimum_depth_pyramid(&samples, width, height);
         let levels = render_targets.depth_pyramid_levels();
         assert_eq!(levels.len(), expected.len());
         for ((level, view), expected) in (0..).zip(levels).zip(&expected) {
-            let actual = read_texels(&context, view, level);
+            let actual = read_texels(context, view, level);
             let differing = actual
                 .iter()
                 .zip(expected)
@@ -177,7 +195,7 @@ pub(crate) mod tests {
                 .count();
             assert!(
                 actual.len() == expected.len() && differing == 0,
-                "level {level}: {differing} of {} texels differ\n{actual:?}\n{expected:?}",
+                "{width} x {height}, level {level}: {differing} of {} texels differ\n{actual:?}\n{expected:?}",
                 expected.len()
             );
         }
