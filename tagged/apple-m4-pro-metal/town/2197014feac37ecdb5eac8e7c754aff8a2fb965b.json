@@ -1,0 +1,105 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 85280,
+  "backend": "metal",
+  "committed_unix_seconds": 1793002853,
+  "counter_frames": {
+    "arena_bytes_in_use": 85280,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 616555272,
+    "heap_allocations": 10478,
+    "instances_drawn": 5609,
+    "instances_overflowed": 0,
+    "triangles_drawn": 203958,
+    "uploaded_bytes": 2049344
+  },
+  "cpu_frame_microseconds": {
+    "median": 20195.208,
+    "p95": 21861.208
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 1138.208,
+    "p95": 1291.958
+  },
+  "gpu_frame_microseconds": {
+    "median": 18123.125,
+    "p95": 21688.458
+  },
+  "gpu_memory_bytes": 616555272,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 1549.791,
+      "p95": 2241.2920000000004
+    },
+    "culling_phase_two": {
+      "median": 902.083,
+      "p95": 1327.0
+    },
+    "depth_prepass": {
+      "median": 1798.958,
+      "p95": 2198.167
+    },
+    "depth_pyramid_pass": {
+      "median": 254.417,
+      "p95": 371.75
+    },
+    "dynamic_tlas_build": {
+      "median": 4195.25,
+      "p95": 5369.209
+    },
+    "froxel_pass": {
+      "median": 537.667,
+      "p95": 846.167
+    },
+    "lit_pass": {
+      "median": 8965.916000000001,
+      "p95": 11354.25
+    },
+    "phase_two_depth_pass": {
+      "median": 50.208,
+      "p95": 287.291
+    },
+    "shadow_mask_pass": {
+      "median": 4752.375,
+      "p95": 6729.9580000000005
+    },
+    "tonemapping_pass": {
+      "median": 4034.292,
+      "p95": 8540.25
+    }
+  },
+  "heap_allocations": 10478,
+  "height": 1440,
+  "instances_drawn": 137730,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/town.json",
+    "commit": "71918ac5199bbefe24205444a55a21bc7dd9b7b2",
+    "gpu_frame_p95_over_median": 1.1967283787978067,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "2197014feac37ecdb5eac8e7c754aff8a2fb965b"
+  },
+  "scene": "town",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 5552214,
+  "uploaded_bytes": 2049344,
+  "width": 2560
+}

@@ -1,0 +1,89 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 258368,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792760887,
+  "counter_frames": {
+    "arena_bytes_in_use": 258368,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 346153356,
+    "heap_allocations": 279,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 7774,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 111917.284,
+    "p95": 117043.524
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.2,
+    "p95": 0.35
+  },
+  "gpu_frame_microseconds": {
+    "median": 111865.306,
+    "p95": 116896.14
+  },
+  "gpu_memory_bytes": 346153356,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 547.327,
+      "p95": 634.588
+    },
+    "culling_phase_two": {
+      "median": 220.063,
+      "p95": 258.847
+    },
+    "depth_prepass": {
+      "median": 1774.54,
+      "p95": 1917.582
+    },
+    "depth_pyramid_pass": {
+      "median": 951.775,
+      "p95": 1367.256
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 251.07900000000004,
+      "p95": 392.644
+    },
+    "lit_pass": {
+      "median": 104259.981,
+      "p95": 109128.706
+    },
+    "tonemapping_pass": {
+      "median": 3191.241,
+      "p95": 3424.4179999999997
+    }
+  },
+  "heap_allocations": 279,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
+    "commit": "80227bcaebf571e6801d7ef32b278492056e3c63",
+    "gpu_frame_p95_over_median": 1.0449722454609833,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "382eed81ab63f8024bc8a2aca37db9dfdc898a26"
+  },
+  "scene": "normal-tangent",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 7774,
+  "uploaded_bytes": 384,
+  "width": 640
+}

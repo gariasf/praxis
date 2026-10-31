@@ -1,0 +1,113 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793050396,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 395066788,
+    "heap_allocations": 324,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 240
+  },
+  "cpu_frame_microseconds": {
+    "median": 413422.632,
+    "p95": 417144.913
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.351,
+    "p95": 0.6419999999999999
+  },
+  "gate_microseconds": {
+    "median": 392171.132,
+    "p95": 395726.329
+  },
+  "gpu_frame_microseconds": {
+    "median": 413322.301,
+    "p95": 417099.113
+  },
+  "gpu_memory_bytes": 395066788,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 575.0640000000001,
+      "p95": 642.329
+    },
+    "culling_phase_two": {
+      "median": 307.986,
+      "p95": 344.634
+    },
+    "depth_prepass": {
+      "median": 895.3639999999999,
+      "p95": 1012.172
+    },
+    "depth_pyramid_pass": {
+      "median": 1649.289,
+      "p95": 1944.14
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 230.17,
+      "p95": 318.397
+    },
+    "lit_pass": {
+      "median": 389797.021,
+      "p95": 392950.735
+    },
+    "phase_two_depth_pass": {
+      "median": 137.006,
+      "p95": 171.853
+    },
+    "shadow_mask_pass": {
+      "median": 13290.745,
+      "p95": 15029.905
+    },
+    "tonemapping_pass": {
+      "median": 5093.165,
+      "p95": 5581.175
+    }
+  },
+  "heap_allocations": 324,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/minification.json",
+    "commit": "800c0d213aba1796f4689f02f94820cd3f859410",
+    "gpu_frame_p95_over_median": 1.0091376922824207,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "f2f39439f2304c255e30abfa3000864a5270fe86"
+  },
+  "scene": "minification",
+  "shadow_ray_microseconds": {
+    "median": 15650.037000000011,
+    "p95": 20138.901999999944
+  },
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2,
+  "uploaded_bytes": 240,
+  "width": 640
+}

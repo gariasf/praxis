@@ -1,0 +1,33 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "vulkan",
+  "committed_unix_seconds": 1791981243,
+  "cpu_frame_microseconds": {
+    "median": 4187.505,
+    "p95": 4734.7789999999995
+  },
+  "draw_calls": 2,
+  "gpu_main_pass_microseconds": {
+    "median": 4116.257,
+    "p95": 4687.829
+  },
+  "gpu_memory_bytes": 673346848,
+  "heap_allocations": 80,
+  "height": 360,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
+    "commit": "610fb4fbb90ccddcc4c0f5d6794b15e5d32bf330",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "398e99a524df99a171bb1133bd8fc392c0c4177f"
+  },
+  "scene": "far-coplanar",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "uploaded_bytes": 288,
+  "width": 640
+}

@@ -1,0 +1,70 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 258368,
+  "backend": "metal",
+  "committed_unix_seconds": 1792616571,
+  "counter_frames": {
+    "arena_bytes_in_use": 258368,
+    "draw_calls": 3,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 397060889,
+    "heap_allocations": 227,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 7774,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 92.666,
+    "p95": 122.708
+  },
+  "draw_calls": 3,
+  "gpu_frame_microseconds": {
+    "median": 740.208,
+    "p95": 749.625
+  },
+  "gpu_memory_bytes": 397060889,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 57.625,
+      "p95": 58.917
+    },
+    "culling_phase_two": {
+      "median": 14.625,
+      "p95": 15.708
+    },
+    "depth_prepass": {
+      "median": 93.917,
+      "p95": 94.459
+    },
+    "depth_pyramid_pass": {
+      "median": 182.75,
+      "p95": 188.166
+    },
+    "lit_pass": {
+      "median": 391.875,
+      "p95": 400.125
+    }
+  },
+  "heap_allocations": 227,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/normal-tangent.json",
+    "commit": "7be466e1cb072ab6a3f1a6165128ced0dbb09229",
+    "gpu_frame_p95_over_median": 1.0127220997341289,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "6fc802388f2ee27db98ca1fd34f54b312a36e824"
+  },
+  "scene": "normal-tangent",
+  "triangles_drawn": 7774,
+  "uploaded_bytes": 288,
+  "width": 2560
+}

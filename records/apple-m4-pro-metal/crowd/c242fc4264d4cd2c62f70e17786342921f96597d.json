@@ -1,0 +1,98 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 11325896,
+  "backend": "metal",
+  "committed_unix_seconds": 1792792369,
+  "counter_frames": {
+    "arena_bytes_in_use": 11325896,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 449514087,
+    "heap_allocations": 2078,
+    "instances_drawn": 101,
+    "instances_overflowed": 0,
+    "triangles_drawn": 512002,
+    "uploaded_bytes": 322192
+  },
+  "cpu_frame_microseconds": {
+    "median": 732.042,
+    "p95": 950.167
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 291.126,
+    "p95": 396.125
+  },
+  "gpu_frame_microseconds": {
+    "median": 3282.832,
+    "p95": 3424.584
+  },
+  "gpu_memory_bytes": 449514087,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 29.375,
+      "p95": 30.5
+    },
+    "culling_phase_one": {
+      "median": 83.417,
+      "p95": 88.916
+    },
+    "culling_phase_two": {
+      "median": 23.209,
+      "p95": 24.042
+    },
+    "depth_prepass": {
+      "median": 246.25,
+      "p95": 253.208
+    },
+    "depth_pyramid_pass": {
+      "median": 253.49999999999997,
+      "p95": 258.95799999999997
+    },
+    "dynamic_tlas_build": {
+      "median": 606.0,
+      "p95": 659.875
+    },
+    "froxel_pass": {
+      "median": 7.542,
+      "p95": 12.208
+    },
+    "lit_pass": {
+      "median": 1697.333,
+      "p95": 1778.083
+    },
+    "phase_two_depth_pass": {
+      "median": 11.917,
+      "p95": 12.334
+    },
+    "shadow_mask_pass": {
+      "median": 1174.209,
+      "p95": 1200.75
+    },
+    "tonemapping_pass": {
+      "median": 1787.625,
+      "p95": 1873.875
+    }
+  },
+  "heap_allocations": 2078,
+  "height": 1440,
+  "instances_drawn": 101,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/crowd.json",
+    "commit": "bd7b9886bbd1ade35d2b3e1dfe549a9c074c41df",
+    "gpu_frame_p95_over_median": 1.0431797911071903,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "c242fc4264d4cd2c62f70e17786342921f96597d"
+  },
+  "scene": "crowd",
+  "triangles_drawn": 512002,
+  "uploaded_bytes": 322192,
+  "width": 2560
+}

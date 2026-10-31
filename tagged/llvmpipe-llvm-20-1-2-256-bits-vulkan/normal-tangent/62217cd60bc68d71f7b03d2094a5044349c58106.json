@@ -1,0 +1,93 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 258368,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792775526,
+  "counter_frames": {
+    "arena_bytes_in_use": 258368,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 346235388,
+    "heap_allocations": 279,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 7774,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 276718.829,
+    "p95": 285992.707
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.35,
+    "p95": 0.5720000000000001
+  },
+  "gpu_frame_microseconds": {
+    "median": 276586.514,
+    "p95": 285906.76300000004
+  },
+  "gpu_memory_bytes": 346235388,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 683.6360000000001,
+      "p95": 767.945
+    },
+    "culling_phase_two": {
+      "median": 313.89599999999996,
+      "p95": 355.284
+    },
+    "depth_prepass": {
+      "median": 2996.7000000000003,
+      "p95": 3187.319
+    },
+    "depth_pyramid_pass": {
+      "median": 1781.796,
+      "p95": 2250.491
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 356.43600000000004,
+      "p95": 422.229
+    },
+    "lit_pass": {
+      "median": 264415.02,
+      "p95": 273856.91099999996
+    },
+    "tonemapping_pass": {
+      "median": 5155.437,
+      "p95": 5448.032
+    }
+  },
+  "heap_allocations": 279,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
+    "commit": "5c570f7e0a5166b6601c95c2e2dd9eea0e3acc41",
+    "gpu_frame_p95_over_median": 1.0336974094116533,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "62217cd60bc68d71f7b03d2094a5044349c58106"
+  },
+  "scene": "normal-tangent",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 7774,
+  "uploaded_bytes": 384,
+  "width": 640
+}

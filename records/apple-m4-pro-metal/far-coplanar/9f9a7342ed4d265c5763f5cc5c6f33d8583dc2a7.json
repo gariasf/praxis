@@ -1,0 +1,86 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792763373,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419149623,
+    "heap_allocations": 280,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 167.917,
+    "p95": 272.0
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.08399999999999999
+  },
+  "gpu_frame_microseconds": {
+    "median": 3548.041,
+    "p95": 3580.625
+  },
+  "gpu_memory_bytes": 419149623,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 21.833,
+      "p95": 22.875
+    },
+    "culling_phase_two": {
+      "median": 18.0,
+      "p95": 18.542
+    },
+    "depth_prepass": {
+      "median": 102.667,
+      "p95": 109.291
+    },
+    "depth_pyramid_pass": {
+      "median": 253.45899999999995,
+      "p95": 255.791
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.75,
+      "p95": 7.25
+    },
+    "lit_pass": {
+      "median": 2821.4590000000003,
+      "p95": 2831.958
+    },
+    "tonemapping_pass": {
+      "median": 3128.875,
+      "p95": 3140.0
+    }
+  },
+  "heap_allocations": 280,
+  "height": 1440,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
+    "commit": "5a5f075e1cd4164da85c37276be573d33bf4403e",
+    "gpu_frame_p95_over_median": 1.0091836593771042,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "9f9a7342ed4d265c5763f5cc5c6f33d8583dc2a7"
+  },
+  "scene": "far-coplanar",
+  "triangles_drawn": 4,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

@@ -1,0 +1,89 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792760887,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419149623,
+    "heap_allocations": 280,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 297.125,
+    "p95": 520.9159999999999
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.16699999999999998
+  },
+  "gpu_frame_microseconds": {
+    "median": 3529.709,
+    "p95": 3907.624999999999
+  },
+  "gpu_memory_bytes": 419149623,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 21.917,
+      "p95": 24.417
+    },
+    "culling_phase_two": {
+      "median": 17.917,
+      "p95": 18.917
+    },
+    "depth_prepass": {
+      "median": 107.542,
+      "p95": 121.375
+    },
+    "depth_pyramid_pass": {
+      "median": 255.04199999999997,
+      "p95": 266.70799999999997
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.708,
+      "p95": 7.375
+    },
+    "lit_pass": {
+      "median": 2761.834,
+      "p95": 3088.708
+    },
+    "tonemapping_pass": {
+      "median": 3081.25,
+      "p95": 3437.7079999999996
+    }
+  },
+  "heap_allocations": 280,
+  "height": 1440,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
+    "commit": "80227bcaebf571e6801d7ef32b278492056e3c63",
+    "gpu_frame_p95_over_median": 1.1070671831587249,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "382eed81ab63f8024bc8a2aca37db9dfdc898a26"
+  },
+  "scene": "far-coplanar",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 4,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

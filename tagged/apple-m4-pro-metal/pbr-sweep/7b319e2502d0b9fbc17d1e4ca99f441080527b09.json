@@ -1,31 +1,42 @@
 {
-  "scene": "pbr-sweep",
   "adapter": "Apple M4 Pro",
+  "aliasing_p99": 15042,
+  "aliasing_rmse": 10958,
+  "arena_bytes_in_use": 76680,
   "backend": "metal",
-  "profile": "release",
-  "width": 2560,
-  "height": 1440,
-  "measured_frames": 1800,
+  "committed_unix_seconds": 1793462562,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 663389960,
+    "heap_allocations": 351,
+    "instances_drawn": 10,
+    "instances_overflowed": 0,
+    "triangles_drawn": 22080,
+    "uploaded_bytes": 416
+  },
   "cpu_frame_microseconds": {
-    "median": 396.66700000000003,
+    "median": 396.667,
     "p95": 505.91600000000005
   },
+  "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "median": 0.08399999999999999,
     "p95": 0.334
-  },
-  "gpu_frame_microseconds": {
-    "median": 3897.916,
-    "p95": 4223.708
   },
   "gate_microseconds": {
     "median": 798.75,
     "p95": 820.333
   },
-  "shadow_ray_microseconds": {
-    "median": 2772.5420000000004,
-    "p95": 3092.7919999999995
+  "gpu_frame_microseconds": {
+    "median": 3897.916,
+    "p95": 4223.708
   },
+  "gpu_memory_bytes": 663389960,
   "gpu_pass_microseconds": {
     "bend_pass": {
       "median": 0.0,
@@ -61,7 +72,7 @@
     },
     "lit_pass": {
       "median": 482.916,
-      "p95": 499.41700000000003
+      "p95": 499.417
     },
     "phase_two_depth_pass": {
       "median": 12.167,
@@ -76,50 +87,39 @@
       "p95": 320.66700000000003
     }
   },
-  "draw_calls": 4,
-  "instances_drawn": 10,
-  "triangles_drawn": 22080,
-  "instances_overflowed": 0,
-  "uploaded_bytes": 416,
-  "gpu_memory_bytes": 663389960,
-  "arena_bytes_in_use": 76680,
   "heap_allocations": 351,
-  "counter_frames": {
-    "frames": {
-      "start": 8,
-      "end": 72
-    },
-    "draw_calls": 4,
-    "instances_drawn": 10,
-    "triangles_drawn": 22080,
-    "instances_overflowed": 0,
-    "uploaded_bytes": 416,
-    "gpu_memory_bytes": 663389960,
-    "arena_bytes_in_use": 76680,
-    "heap_allocations": 351
-  },
-  "aliasing_rmse": 10958,
-  "aliasing_p99": 15042,
+  "height": 1440,
+  "instances_drawn": 10,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
   "provenance": {
-    "source_hash": "7b319e2502d0b9fbc17d1e4ca99f441080527b09",
+    "branch": "track/430-publish",
     "commit": "17c603545e9d6aa58ae4d46f53fa3e3df69d635f",
     "dirty": false,
-    "branch": "track/430-publish",
     "driver": "",
     "driver_info": "",
-    "harness_version": 1,
-    "scene_content_hash": "e53a320f3e6939e7602700ae781e6ad88785ec915b412c1e17d94085d8410021",
+    "gpu_frame_p95_over_median": 1.0835810725526152,
     "gpu_load_percent": 8,
+    "harness_version": 10,
     "other_processes": [
       "target/release/praxis 2914"
     ],
-    "gpu_frame_p95_over_median": 1.0835810725526152,
     "quiet": false,
+    "scene_content_hash": "e53a320f3e6939e7602700ae781e6ad88785ec915b412c1e17d94085d8410021",
+    "source_hash": "7b319e2502d0b9fbc17d1e4ca99f441080527b09",
     "started_unix_seconds": 1793462660
   },
-  "committed_unix_seconds": 1793462562,
+  "scene": "pbr-sweep",
+  "shadow_ray_microseconds": {
+    "median": 2772.5420000000004,
+    "p95": 3092.7919999999995
+  },
   "tags": [
     "machine not quiet",
     "source not main's"
-  ]
+  ],
+  "triangles_drawn": 22080,
+  "uploaded_bytes": 416,
+  "width": 2560
 }

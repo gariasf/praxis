@@ -1,0 +1,113 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 85280,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793187960,
+  "counter_frames": {
+    "arena_bytes_in_use": 85280,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 495610244,
+    "heap_allocations": 10491,
+    "instances_drawn": 6841,
+    "instances_overflowed": 0,
+    "triangles_drawn": 259996,
+    "uploaded_bytes": 1969344
+  },
+  "cpu_frame_microseconds": {
+    "median": 436330.883,
+    "p95": 450483.269
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 352015.208,
+    "p95": 367211.573
+  },
+  "gate_microseconds": {
+    "median": 225645.555,
+    "p95": 234786.039
+  },
+  "gpu_frame_microseconds": {
+    "median": 435271.438,
+    "p95": 450465.767
+  },
+  "gpu_memory_bytes": 495610244,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 29168.926,
+      "p95": 31912.501000000004
+    },
+    "culling_phase_two": {
+      "median": 24421.16,
+      "p95": 26490.962
+    },
+    "depth_prepass": {
+      "median": 43926.752,
+      "p95": 50523.716
+    },
+    "depth_pyramid_pass": {
+      "median": 1808.791,
+      "p95": 2305.887
+    },
+    "dynamic_tlas_build": {
+      "median": 73877.989,
+      "p95": 81620.55799999999
+    },
+    "froxel_pass": {
+      "median": 24581.62,
+      "p95": 26008.304
+    },
+    "lit_pass": {
+      "median": 107592.11,
+      "p95": 114641.035
+    },
+    "phase_two_depth_pass": {
+      "median": 254.873,
+      "p95": 330.764
+    },
+    "shadow_mask_pass": {
+      "median": 117634.279,
+      "p95": 130533.805
+    },
+    "tonemapping_pass": {
+      "median": 5158.895,
+      "p95": 5552.811000000001
+    }
+  },
+  "heap_allocations": 10491,
+  "height": 360,
+  "instances_drawn": 6841,
+  "instances_overflowed": 0,
+  "measured_frames": 64,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/town.json",
+    "commit": "79c3e877e468ed78a2f71037174e3bbfe5dd0c46",
+    "gpu_frame_p95_over_median": 1.034907709703663,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "a0fd200d5498eda708ec9b183c254e37bec2d7f2"
+  },
+  "scene": "town",
+  "shadow_ray_microseconds": {
+    "median": 131938.77499999997,
+    "p95": 152256.849
+  },
+  "tags": [
+    "640x360 over 64 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 259996,
+  "uploaded_bytes": 1969344,
+  "width": 640
+}

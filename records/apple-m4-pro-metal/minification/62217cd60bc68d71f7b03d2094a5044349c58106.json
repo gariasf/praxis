@@ -1,0 +1,90 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792775526,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419492343,
+    "heap_allocations": 279,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 240
+  },
+  "cpu_frame_microseconds": {
+    "median": 170.875,
+    "p95": 312.583
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.041,
+    "p95": 0.08399999999999999
+  },
+  "gpu_frame_microseconds": {
+    "median": 4540.875,
+    "p95": 4551.875
+  },
+  "gpu_memory_bytes": 419492343,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 22.584,
+      "p95": 23.708
+    },
+    "culling_phase_two": {
+      "median": 17.167,
+      "p95": 17.75
+    },
+    "depth_prepass": {
+      "median": 108.083,
+      "p95": 114.875
+    },
+    "depth_pyramid_pass": {
+      "median": 256.375,
+      "p95": 259.584
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.0,
+      "p95": 6.625
+    },
+    "lit_pass": {
+      "median": 3804.416,
+      "p95": 3810.541
+    },
+    "tonemapping_pass": {
+      "median": 4116.458,
+      "p95": 4122.334
+    }
+  },
+  "heap_allocations": 279,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/minification.json",
+    "commit": "5c570f7e0a5166b6601c95c2e2dd9eea0e3acc41",
+    "gpu_frame_p95_over_median": 1.0024224406089135,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "62217cd60bc68d71f7b03d2094a5044349c58106"
+  },
+  "scene": "minification",
+  "triangles_drawn": 2,
+  "uploaded_bytes": 240,
+  "width": 2560
+}

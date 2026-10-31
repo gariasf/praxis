@@ -1,0 +1,62 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1792531394,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 2,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 372257748,
+    "heap_allocations": 138,
+    "instances_drawn": 10,
+    "instances_overflowed": 0,
+    "triangles_drawn": 22080,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 71.375,
+    "p95": 100.958
+  },
+  "draw_calls": 2,
+  "gpu_frame_microseconds": {
+    "median": 459.5,
+    "p95": 469.917
+  },
+  "gpu_memory_bytes": 372257748,
+  "gpu_pass_microseconds": {
+    "culling_pass": {
+      "median": 27.542,
+      "p95": 28.542
+    },
+    "depth_prepass": {
+      "median": 94.75,
+      "p95": 95.334
+    },
+    "lit_pass": {
+      "median": 408.792,
+      "p95": 418.958
+    }
+  },
+  "heap_allocations": 138,
+  "height": 1440,
+  "instances_drawn": 10,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/pbr-sweep.json",
+    "commit": "93355f150544f6f0437c3239cf90b217e9ff8541",
+    "gpu_frame_p95_over_median": 1.022670293797606,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "d30c4480cf849c95e40dd09972a0a34a1c26f676"
+  },
+  "scene": "pbr-sweep",
+  "triangles_drawn": 22080,
+  "uploaded_bytes": 288,
+  "width": 2560
+}

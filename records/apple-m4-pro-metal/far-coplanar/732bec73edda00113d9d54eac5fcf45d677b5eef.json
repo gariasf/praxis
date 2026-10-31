@@ -1,0 +1,31 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 216,
+  "backend": "metal",
+  "committed_unix_seconds": 1792155451,
+  "cpu_frame_microseconds": {
+    "median": 24.583,
+    "p95": 41.041999999999994
+  },
+  "draw_calls": 2,
+  "gpu_main_pass_microseconds": {
+    "median": 401.083,
+    "p95": 405.834
+  },
+  "gpu_memory_bytes": 48325940,
+  "heap_allocations": 74,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
+    "commit": "7d271dcd2df0e2b4a542ee57a132665dfc56daae",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "732bec73edda00113d9d54eac5fcf45d677b5eef"
+  },
+  "scene": "far-coplanar",
+  "uploaded_bytes": 288,
+  "width": 2560
+}

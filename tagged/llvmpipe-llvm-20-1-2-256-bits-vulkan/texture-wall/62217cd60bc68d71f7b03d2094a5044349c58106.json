@@ -1,0 +1,93 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792775526,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 326379668,
+    "heap_allocations": 285,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 192
+  },
+  "cpu_frame_microseconds": {
+    "median": 47005.929,
+    "p95": 49949.762
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.36099999999999993,
+    "p95": 0.531
+  },
+  "gpu_frame_microseconds": {
+    "median": 49248.722,
+    "p95": 51651.527
+  },
+  "gpu_memory_bytes": 326379668,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 715.407,
+      "p95": 2437.056
+    },
+    "culling_phase_two": {
+      "median": 368.221,
+      "p95": 427.43
+    },
+    "depth_prepass": {
+      "median": 1043.48,
+      "p95": 1167.396
+    },
+    "depth_pyramid_pass": {
+      "median": 2233.135,
+      "p95": 2537.7960000000003
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 223.227,
+      "p95": 272.059
+    },
+    "lit_pass": {
+      "median": 38486.893,
+      "p95": 40037.949
+    },
+    "tonemapping_pass": {
+      "median": 5131.914,
+      "p95": 5302.043000000001
+    }
+  },
+  "heap_allocations": 285,
+  "height": 360,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "5c570f7e0a5166b6601c95c2e2dd9eea0e3acc41",
+    "gpu_frame_p95_over_median": 1.048789184823923,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "62217cd60bc68d71f7b03d2094a5044349c58106"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 192,
+  "width": 640
+}

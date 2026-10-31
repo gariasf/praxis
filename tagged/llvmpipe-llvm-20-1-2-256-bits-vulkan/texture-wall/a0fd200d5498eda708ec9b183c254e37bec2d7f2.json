@@ -1,0 +1,113 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793187960,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 395332372,
+    "heap_allocations": 333,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 192
+  },
+  "cpu_frame_microseconds": {
+    "median": 50028.55,
+    "p95": 53054.689
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.361,
+    "p95": 0.6410000000000001
+  },
+  "gate_microseconds": {
+    "median": 40843.648,
+    "p95": 42695.931
+  },
+  "gpu_frame_microseconds": {
+    "median": 52266.627,
+    "p95": 54979.085
+  },
+  "gpu_memory_bytes": 395332372,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 922.032,
+      "p95": 3385.379
+    },
+    "culling_phase_two": {
+      "median": 371.855,
+      "p95": 438.903
+    },
+    "depth_prepass": {
+      "median": 964.235,
+      "p95": 1041.615
+    },
+    "depth_pyramid_pass": {
+      "median": 2159.143,
+      "p95": 2428.816
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 221.885,
+      "p95": 266.377
+    },
+    "lit_pass": {
+      "median": 36080.419,
+      "p95": 36919.167
+    },
+    "phase_two_depth_pass": {
+      "median": 133.893,
+      "p95": 168.464
+    },
+    "shadow_mask_pass": {
+      "median": 4954.893999999999,
+      "p95": 6686.307
+    },
+    "tonemapping_pass": {
+      "median": 5052.325,
+      "p95": 5458.584
+    }
+  },
+  "heap_allocations": 333,
+  "height": 360,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "79c3e877e468ed78a2f71037174e3bbfe5dd0c46",
+    "gpu_frame_p95_over_median": 1.0518965572429229,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "a0fd200d5498eda708ec9b183c254e37bec2d7f2"
+  },
+  "scene": "texture-wall",
+  "shadow_ray_microseconds": {
+    "median": 6201.552000000011,
+    "p95": 8935.820999999996
+  },
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 192,
+  "width": 640
+}

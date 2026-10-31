@@ -1,0 +1,110 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 258368,
+  "backend": "metal",
+  "committed_unix_seconds": 1793222753,
+  "counter_frames": {
+    "arena_bytes_in_use": 258368,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 594739977,
+    "heap_allocations": 326,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 7774,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 162.41699999999997,
+    "p95": 182.875
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.041,
+    "p95": 0.08399999999999999
+  },
+  "gate_microseconds": {
+    "median": 808.334,
+    "p95": 813.125
+  },
+  "gpu_frame_microseconds": {
+    "median": 2911.333,
+    "p95": 2917.917
+  },
+  "gpu_memory_bytes": 594739977,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 41.459,
+      "p95": 42.375
+    },
+    "culling_phase_two": {
+      "median": 20.584000000000003,
+      "p95": 21.25
+    },
+    "depth_prepass": {
+      "median": 163.5,
+      "p95": 166.041
+    },
+    "depth_pyramid_pass": {
+      "median": 203.459,
+      "p95": 205.0
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 7.0,
+      "p95": 7.5
+    },
+    "lit_pass": {
+      "median": 476.208,
+      "p95": 480.042
+    },
+    "phase_two_depth_pass": {
+      "median": 12.208,
+      "p95": 12.583
+    },
+    "shadow_mask_pass": {
+      "median": 1643.292,
+      "p95": 1647.8339999999998
+    },
+    "tonemapping_pass": {
+      "median": 781.708,
+      "p95": 785.292
+    }
+  },
+  "heap_allocations": 326,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/normal-tangent.json",
+    "commit": "17a7fa919b0790100d9790469d5dda69a5f1ce4e",
+    "gpu_frame_p95_over_median": 1.002261507014141,
+    "harness_version": 7,
+    "source": "baseline-commit",
+    "source_hash": "d11e7f0b225e88b41be7aa075524bce561265bf1"
+  },
+  "scene": "normal-tangent",
+  "shadow_ray_microseconds": {
+    "median": 1778.0,
+    "p95": 1785.7910000000002
+  },
+  "triangles_drawn": 7774,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

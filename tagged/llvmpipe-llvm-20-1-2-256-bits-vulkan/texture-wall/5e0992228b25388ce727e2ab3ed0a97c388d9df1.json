@@ -1,0 +1,45 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792507700,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 1,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 238990412,
+    "heap_allocations": 106,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 29962.723,
+    "p95": 31990.698999999997
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 32194.866,
+    "p95": 33776.106
+  },
+  "gpu_memory_bytes": 238990412,
+  "heap_allocations": 106,
+  "height": 360,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "8202c045d3994ba83d52ab1ff6307ec2adac69b8",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 2,
+    "source": "baseline-commit",
+    "source_hash": "5e0992228b25388ce727e2ab3ed0a97c388d9df1"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "uploaded_bytes": 288,
+  "width": 640
+}

@@ -1,0 +1,98 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792792369,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 454315515,
+    "heap_allocations": 322,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 185.708,
+    "p95": 307.709
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.041,
+    "p95": 0.08399999999999999
+  },
+  "gpu_frame_microseconds": {
+    "median": 2305.167,
+    "p95": 2321.4590000000003
+  },
+  "gpu_memory_bytes": 454315515,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 21.833,
+      "p95": 23.25
+    },
+    "culling_phase_two": {
+      "median": 17.541999999999998,
+      "p95": 18.25
+    },
+    "depth_prepass": {
+      "median": 89.917,
+      "p95": 91.708
+    },
+    "depth_pyramid_pass": {
+      "median": 215.083,
+      "p95": 220.375
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 7.0,
+      "p95": 7.584
+    },
+    "lit_pass": {
+      "median": 429.875,
+      "p95": 442.75
+    },
+    "phase_two_depth_pass": {
+      "median": 12.083,
+      "p95": 12.417
+    },
+    "shadow_mask_pass": {
+      "median": 1175.292,
+      "p95": 1180.792
+    },
+    "tonemapping_pass": {
+      "median": 741.042,
+      "p95": 753.875
+    }
+  },
+  "heap_allocations": 322,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/uv-grid.json",
+    "commit": "bd7b9886bbd1ade35d2b3e1dfe549a9c074c41df",
+    "gpu_frame_p95_over_median": 1.007067600742159,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "c242fc4264d4cd2c62f70e17786342921f96597d"
+  },
+  "scene": "uv-grid",
+  "triangles_drawn": 2,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

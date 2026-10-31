@@ -1,0 +1,86 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 258368,
+  "backend": "metal",
+  "committed_unix_seconds": 1792763373,
+  "counter_frames": {
+    "arena_bytes_in_use": 258368,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 439076761,
+    "heap_allocations": 279,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 7774,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 185.291,
+    "p95": 343.125
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.167
+  },
+  "gpu_frame_microseconds": {
+    "median": 8854.792,
+    "p95": 9226.834
+  },
+  "gpu_memory_bytes": 439076761,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 66.167,
+      "p95": 67.334
+    },
+    "culling_phase_two": {
+      "median": 17.666999999999998,
+      "p95": 18.292
+    },
+    "depth_prepass": {
+      "median": 94.792,
+      "p95": 95.292
+    },
+    "depth_pyramid_pass": {
+      "median": 204.167,
+      "p95": 207.958
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.875,
+      "p95": 7.375
+    },
+    "lit_pass": {
+      "median": 8140.334000000001,
+      "p95": 8501.583
+    },
+    "tonemapping_pass": {
+      "median": 8447.667000000001,
+      "p95": 8819.583
+    }
+  },
+  "heap_allocations": 279,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/normal-tangent.json",
+    "commit": "5a5f075e1cd4164da85c37276be573d33bf4403e",
+    "gpu_frame_p95_over_median": 1.0420158937669006,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "9f9a7342ed4d265c5763f5cc5c6f33d8583dc2a7"
+  },
+  "scene": "normal-tangent",
+  "triangles_drawn": 7774,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

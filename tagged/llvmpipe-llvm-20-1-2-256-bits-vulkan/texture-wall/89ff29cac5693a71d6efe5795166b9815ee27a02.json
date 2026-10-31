@@ -1,0 +1,81 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792742121,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 323897520,
+    "heap_allocations": 283,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 192
+  },
+  "cpu_frame_microseconds": {
+    "median": 45892.596,
+    "p95": 48267.755000000005
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 48050.356,
+    "p95": 49828.23
+  },
+  "gpu_memory_bytes": 323897520,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 703.438,
+      "p95": 2455.7509999999997
+    },
+    "culling_phase_two": {
+      "median": 365.796,
+      "p95": 422.982
+    },
+    "depth_prepass": {
+      "median": 975.675,
+      "p95": 1138.774
+    },
+    "depth_pyramid_pass": {
+      "median": 2179.8540000000003,
+      "p95": 2586.206
+    },
+    "froxel_pass": {
+      "median": 224.09,
+      "p95": 278.872
+    },
+    "lit_pass": {
+      "median": 37551.28,
+      "p95": 38688.158
+    },
+    "tonemapping_pass": {
+      "median": 5062.724999999999,
+      "p95": 5301.7519999999995
+    }
+  },
+  "heap_allocations": 283,
+  "height": 360,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "0db5e46b36f91475efdc6c58d1de523fd87bfd0b",
+    "gpu_frame_p95_over_median": 1.0370002253469257,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "89ff29cac5693a71d6efe5795166b9815ee27a02"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 192,
+  "width": 640
+}

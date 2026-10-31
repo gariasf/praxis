@@ -1,0 +1,42 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1792510633,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 1,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 257881188,
+    "heap_allocations": 113,
+    "uploaded_bytes": 928
+  },
+  "cpu_frame_microseconds": {
+    "median": 78.667,
+    "p95": 113.083
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 127.917,
+    "p95": 173.167
+  },
+  "gpu_memory_bytes": 257881188,
+  "heap_allocations": 113,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/orrery.json",
+    "commit": "5cfc8478459b860b3ecb48c38114da203dbe8176",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "41b81cd631e2454b9db455ef78cd39b0aea84cc8"
+  },
+  "scene": "orrery",
+  "uploaded_bytes": 928,
+  "width": 2560
+}

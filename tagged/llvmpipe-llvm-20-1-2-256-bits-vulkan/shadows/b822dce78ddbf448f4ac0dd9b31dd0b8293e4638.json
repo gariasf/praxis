@@ -1,0 +1,77 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76856,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792694264,
+  "counter_frames": {
+    "arena_bytes_in_use": 76856,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 313965724,
+    "heap_allocations": 249,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2210,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 11249.769,
+    "p95": 11847.279
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 11178.501,
+    "p95": 11768.28
+  },
+  "gpu_memory_bytes": 313965724,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 309.837,
+      "p95": 396.177
+    },
+    "culling_phase_two": {
+      "median": 190.598,
+      "p95": 216.356
+    },
+    "depth_prepass": {
+      "median": 643.65,
+      "p95": 713.84
+    },
+    "depth_pyramid_pass": {
+      "median": 873.137,
+      "p95": 1057.4340000000002
+    },
+    "lit_pass": {
+      "median": 5911.251,
+      "p95": 6357.473
+    },
+    "tonemapping_pass": {
+      "median": 2947.895,
+      "p95": 3049.341
+    }
+  },
+  "heap_allocations": 249,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/shadows.json",
+    "commit": "c4454af258dbcd8426150e7efcf41ae07998ea45",
+    "gpu_frame_p95_over_median": 1.0527601151531856,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "b822dce78ddbf448f4ac0dd9b31dd0b8293e4638"
+  },
+  "scene": "shadows",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2210,
+  "uploaded_bytes": 288,
+  "width": 640
+}

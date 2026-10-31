@@ -1,0 +1,112 @@
+{
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "aliasing_p99": 6677,
+  "aliasing_rmse": 3178,
+  "arena_bytes_in_use": 76856,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793446947,
+  "counter_frames": {
+    "arena_bytes_in_use": 76856,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 767625377,
+    "heap_allocations": 351,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2210,
+    "uploaded_bytes": 272
+  },
+  "cpu_frame_microseconds": {
+    "median": 482.6,
+    "p95": 516.1999999999999
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.2,
+    "p95": 0.3
+  },
+  "gate_microseconds": {
+    "median": 672.896,
+    "p95": 690.368
+  },
+  "gpu_frame_microseconds": {
+    "median": 2338.752,
+    "p95": 2389.056
+  },
+  "gpu_memory_bytes": 767625377,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 24.16,
+      "p95": 24.64
+    },
+    "culling_phase_two": {
+      "median": 16.288,
+      "p95": 16.832
+    },
+    "depth_prepass": {
+      "median": 122.08,
+      "p95": 171.744
+    },
+    "depth_pyramid_pass": {
+      "median": 142.624,
+      "p95": 143.20000000000002
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 5.696000000000001,
+      "p95": 6.016
+    },
+    "lit_pass": {
+      "median": 395.264,
+      "p95": 401.984
+    },
+    "phase_two_depth_pass": {
+      "median": 2.4320000000000004,
+      "p95": 3.392
+    },
+    "shadow_mask_pass": {
+      "median": 1361.728,
+      "p95": 1369.12
+    },
+    "tonemapping_pass": {
+      "median": 184.352,
+      "p95": 185.792
+    }
+  },
+  "heap_allocations": 351,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super/shadows.json",
+    "commit": "cfb84b7c9587ada97815b23f8145a1b804a82a65",
+    "gpu_frame_p95_over_median": 1.0215089073146704,
+    "harness_version": 10,
+    "source": "baseline-commit",
+    "source_hash": "919dd18c5f7830b9aa4358cc785f50fbe85345de"
+  },
+  "scene": "shadows",
+  "shadow_ray_microseconds": {
+    "median": 1473.152,
+    "p95": 1522.848
+  },
+  "triangles_drawn": 2210,
+  "uploaded_bytes": 272,
+  "width": 2560
+}

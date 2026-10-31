@@ -1,0 +1,89 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1792763373,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 424845500,
+    "heap_allocations": 390,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1384
+  },
+  "cpu_frame_microseconds": {
+    "median": 376.625,
+    "p95": 597.4580000000001
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 200.666,
+    "p95": 307.541
+  },
+  "gpu_frame_microseconds": {
+    "median": 6442.541,
+    "p95": 7917.250000000001
+  },
+  "gpu_memory_bytes": 424845500,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 36.459,
+      "p95": 37.917
+    },
+    "culling_phase_two": {
+      "median": 17.709,
+      "p95": 20.291
+    },
+    "depth_prepass": {
+      "median": 91.792,
+      "p95": 92.5
+    },
+    "depth_pyramid_pass": {
+      "median": 201.25,
+      "p95": 209.084
+    },
+    "dynamic_tlas_build": {
+      "median": 173.542,
+      "p95": 181.0
+    },
+    "froxel_pass": {
+      "median": 6.667,
+      "p95": 7.083
+    },
+    "lit_pass": {
+      "median": 5584.292,
+      "p95": 7050.667
+    },
+    "tonemapping_pass": {
+      "median": 5895.417,
+      "p95": 7366.416
+    }
+  },
+  "heap_allocations": 390,
+  "height": 1440,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/orrery.json",
+    "commit": "5a5f075e1cd4164da85c37276be573d33bf4403e",
+    "gpu_frame_p95_over_median": 1.2289017640710398,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "9f9a7342ed4d265c5763f5cc5c6f33d8583dc2a7"
+  },
+  "scene": "orrery",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1384,
+  "width": 2560
+}

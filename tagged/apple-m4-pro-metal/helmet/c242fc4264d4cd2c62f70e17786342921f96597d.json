@@ -1,0 +1,101 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 844804,
+  "backend": "metal",
+  "committed_unix_seconds": 1792792369,
+  "counter_frames": {
+    "arena_bytes_in_use": 844804,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 469362365,
+    "heap_allocations": 326,
+    "instances_drawn": 11,
+    "instances_overflowed": 0,
+    "triangles_drawn": 256938,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 214.541,
+    "p95": 465.333
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.125
+  },
+  "gpu_frame_microseconds": {
+    "median": 4207.625,
+    "p95": 4564.0
+  },
+  "gpu_memory_bytes": 469362365,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 165.083,
+      "p95": 168.334
+    },
+    "culling_phase_two": {
+      "median": 17.75,
+      "p95": 20.292
+    },
+    "depth_prepass": {
+      "median": 154.417,
+      "p95": 158.541
+    },
+    "depth_pyramid_pass": {
+      "median": 228.666,
+      "p95": 238.25
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.792000000000001,
+      "p95": 7.417000000000001
+    },
+    "lit_pass": {
+      "median": 761.0419999999999,
+      "p95": 779.2909999999999
+    },
+    "phase_two_depth_pass": {
+      "median": 12.167,
+      "p95": 12.625
+    },
+    "shadow_mask_pass": {
+      "median": 2518.917,
+      "p95": 2713.833
+    },
+    "tonemapping_pass": {
+      "median": 1005.75,
+      "p95": 1054.083
+    }
+  },
+  "heap_allocations": 326,
+  "height": 1440,
+  "instances_drawn": 11,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/helmet.json",
+    "commit": "bd7b9886bbd1ade35d2b3e1dfe549a9c074c41df",
+    "gpu_frame_p95_over_median": 1.0846974243189447,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "c242fc4264d4cd2c62f70e17786342921f96597d"
+  },
+  "scene": "helmet",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 256938,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

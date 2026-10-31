@@ -1,0 +1,30 @@
+{
+  "adapter": "Apple M4 Pro",
+  "backend": "metal",
+  "committed_unix_seconds": 1791981243,
+  "cpu_frame_microseconds": {
+    "median": 24.290999999999997,
+    "p95": 51.291
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 211.666,
+    "p95": 214.792
+  },
+  "gpu_memory_bytes": 687169312,
+  "heap_allocations": 73,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/normal-tangent.json",
+    "commit": "610fb4fbb90ccddcc4c0f5d6794b15e5d32bf330",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "398e99a524df99a171bb1133bd8fc392c0c4177f"
+  },
+  "scene": "normal-tangent",
+  "uploaded_bytes": 288,
+  "width": 2560
+}

@@ -1,0 +1,101 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792792369,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 333289448,
+    "heap_allocations": 324,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 40696.58,
+    "p95": 42944.2
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.22,
+    "p95": 0.4310000000000001
+  },
+  "gpu_frame_microseconds": {
+    "median": 40607.046,
+    "p95": 42872.117
+  },
+  "gpu_memory_bytes": 333289448,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 286.892,
+      "p95": 395.205
+    },
+    "culling_phase_two": {
+      "median": 187.406,
+      "p95": 218.064
+    },
+    "depth_prepass": {
+      "median": 280.213,
+      "p95": 354.18800000000005
+    },
+    "depth_pyramid_pass": {
+      "median": 841.016,
+      "p95": 1174.624
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 213.601,
+      "p95": 287.759
+    },
+    "lit_pass": {
+      "median": 29842.514,
+      "p95": 31367.411999999997
+    },
+    "phase_two_depth_pass": {
+      "median": 77.431,
+      "p95": 93.967
+    },
+    "shadow_mask_pass": {
+      "median": 5559.584,
+      "p95": 6074.615
+    },
+    "tonemapping_pass": {
+      "median": 2888.2819999999997,
+      "p95": 3183.281
+    }
+  },
+  "heap_allocations": 324,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/uv-grid.json",
+    "commit": "bd7b9886bbd1ade35d2b3e1dfe549a9c074c41df",
+    "gpu_frame_p95_over_median": 1.0557802456253527,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "c242fc4264d4cd2c62f70e17786342921f96597d"
+  },
+  "scene": "uv-grid",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2,
+  "uploaded_bytes": 384,
+  "width": 640
+}

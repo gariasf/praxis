@@ -1,0 +1,70 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792616571,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 3,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 377135287,
+    "heap_allocations": 227,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 96.834,
+    "p95": 140.125
+  },
+  "draw_calls": 3,
+  "gpu_frame_microseconds": {
+    "median": 858.0830000000001,
+    "p95": 868.417
+  },
+  "gpu_memory_bytes": 377135287,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 17.208,
+      "p95": 18.165999999999997
+    },
+    "culling_phase_two": {
+      "median": 18.334,
+      "p95": 20.209
+    },
+    "depth_prepass": {
+      "median": 92.041,
+      "p95": 95.708
+    },
+    "depth_pyramid_pass": {
+      "median": 243.125,
+      "p95": 250.16699999999997
+    },
+    "lit_pass": {
+      "median": 494.417,
+      "p95": 787.625
+    }
+  },
+  "heap_allocations": 227,
+  "height": 1440,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
+    "commit": "7be466e1cb072ab6a3f1a6165128ced0dbb09229",
+    "gpu_frame_p95_over_median": 1.012043124033456,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "6fc802388f2ee27db98ca1fd34f54b312a36e824"
+  },
+  "scene": "far-coplanar",
+  "triangles_drawn": 4,
+  "uploaded_bytes": 288,
+  "width": 2560
+}

@@ -1,0 +1,89 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792763373,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419675703,
+    "heap_allocations": 285,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 192
+  },
+  "cpu_frame_microseconds": {
+    "median": 2289.541,
+    "p95": 2625.208
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.208
+  },
+  "gpu_frame_microseconds": {
+    "median": 15540.0,
+    "p95": 16534.125
+  },
+  "gpu_memory_bytes": 419675703,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 69.666,
+      "p95": 70.875
+    },
+    "culling_phase_two": {
+      "median": 59.5,
+      "p95": 60.334
+    },
+    "depth_prepass": {
+      "median": 410.458,
+      "p95": 411.25
+    },
+    "depth_pyramid_pass": {
+      "median": 789.75,
+      "p95": 790.7090000000001
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 26.292,
+      "p95": 28.125
+    },
+    "lit_pass": {
+      "median": 5430.0,
+      "p95": 5642.583
+    },
+    "tonemapping_pass": {
+      "median": 6843.625,
+      "p95": 7386.709
+    }
+  },
+  "heap_allocations": 285,
+  "height": 1440,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/texture-wall.json",
+    "commit": "5a5f075e1cd4164da85c37276be573d33bf4403e",
+    "gpu_frame_p95_over_median": 1.0639720077220076,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "9f9a7342ed4d265c5763f5cc5c6f33d8583dc2a7"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 192,
+  "width": 2560
+}

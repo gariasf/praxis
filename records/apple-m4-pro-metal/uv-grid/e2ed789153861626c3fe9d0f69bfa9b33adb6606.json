@@ -1,0 +1,30 @@
+{
+  "adapter": "Apple M4 Pro",
+  "backend": "metal",
+  "committed_unix_seconds": 1791992281,
+  "cpu_frame_microseconds": {
+    "median": 23.958,
+    "p95": 64.54100000000001
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 216.875,
+    "p95": 220.125
+  },
+  "gpu_memory_bytes": 32857908,
+  "heap_allocations": 73,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/uv-grid.json",
+    "commit": "116ac08a38b5398d0ea8495432ae0c8671f9f23f",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "e2ed789153861626c3fe9d0f69bfa9b33adb6606"
+  },
+  "scene": "uv-grid",
+  "uploaded_bytes": 288,
+  "width": 2560
+}

@@ -1,0 +1,81 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76680,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792755123,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 326003936,
+    "heap_allocations": 282,
+    "instances_drawn": 10,
+    "instances_overflowed": 0,
+    "triangles_drawn": 22080,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 64094.374,
+    "p95": 67534.90400000001
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 64027.074,
+    "p95": 67451.295
+  },
+  "gpu_memory_bytes": 326003936,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 719.251,
+      "p95": 806.504
+    },
+    "culling_phase_two": {
+      "median": 325.333,
+      "p95": 363.162
+    },
+    "depth_prepass": {
+      "median": 4256.183,
+      "p95": 4478.3369999999995
+    },
+    "depth_pyramid_pass": {
+      "median": 1876.343,
+      "p95": 2189.3210000000004
+    },
+    "froxel_pass": {
+      "median": 352.221,
+      "p95": 414.207
+    },
+    "lit_pass": {
+      "median": 50636.907,
+      "p95": 54143.606
+    },
+    "tonemapping_pass": {
+      "median": 5158.384999999999,
+      "p95": 5328.575000000001
+    }
+  },
+  "heap_allocations": 282,
+  "height": 360,
+  "instances_drawn": 10,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/pbr-sweep.json",
+    "commit": "79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b",
+    "gpu_frame_p95_over_median": 1.0534808290630304,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "56aa4424442509c13d056366690fba8cdc193a85"
+  },
+  "scene": "pbr-sweep",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 22080,
+  "uploaded_bytes": 384,
+  "width": 640
+}

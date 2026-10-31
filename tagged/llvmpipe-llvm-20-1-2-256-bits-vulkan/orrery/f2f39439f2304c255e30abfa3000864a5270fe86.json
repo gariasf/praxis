@@ -1,0 +1,114 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76680,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793050396,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 400631028,
+    "heap_allocations": 445,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1344
+  },
+  "cpu_frame_microseconds": {
+    "median": 120924.938,
+    "p95": 136171.93899999998
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 117827.054,
+    "p95": 133086.618
+  },
+  "gate_microseconds": {
+    "median": 85891.80500000001,
+    "p95": 99810.861
+  },
+  "gpu_frame_microseconds": {
+    "median": 120545.301,
+    "p95": 135696.791
+  },
+  "gpu_memory_bytes": 400631028,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 528.7669999999999,
+      "p95": 1036.6450000000002
+    },
+    "culling_phase_two": {
+      "median": 303.957,
+      "p95": 344.46299999999997
+    },
+    "depth_prepass": {
+      "median": 2229.497,
+      "p95": 2574.326
+    },
+    "depth_pyramid_pass": {
+      "median": 1626.356,
+      "p95": 1792.977
+    },
+    "dynamic_tlas_build": {
+      "median": 2627.468,
+      "p95": 2702.815
+    },
+    "froxel_pass": {
+      "median": 366.404,
+      "p95": 479.905
+    },
+    "lit_pass": {
+      "median": 81778.02500000001,
+      "p95": 94584.503
+    },
+    "phase_two_depth_pass": {
+      "median": 129.456,
+      "p95": 159.67600000000002
+    },
+    "shadow_mask_pass": {
+      "median": 24433.607,
+      "p95": 31056.474
+    },
+    "tonemapping_pass": {
+      "median": 5069.686000000001,
+      "p95": 5302.945
+    }
+  },
+  "heap_allocations": 445,
+  "height": 360,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/orrery.json",
+    "commit": "800c0d213aba1796f4689f02f94820cd3f859410",
+    "gpu_frame_p95_over_median": 1.125691253614274,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "f2f39439f2304c255e30abfa3000864a5270fe86"
+  },
+  "scene": "orrery",
+  "shadow_ray_microseconds": {
+    "median": 25776.987000000023,
+    "p95": 35344.55
+  },
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1344,
+  "width": 640
+}

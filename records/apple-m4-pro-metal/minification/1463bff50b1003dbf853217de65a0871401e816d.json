@@ -1,0 +1,31 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 136,
+  "backend": "metal",
+  "committed_unix_seconds": 1792410200,
+  "cpu_frame_microseconds": {
+    "median": 30.667,
+    "p95": 122.292
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 474.542,
+    "p95": 476.833
+  },
+  "gpu_memory_bytes": 48586628,
+  "heap_allocations": 60,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/minification.json",
+    "commit": "9bc5dd103f6f2d8021b68b56bd4af9816d5c1705",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "1463bff50b1003dbf853217de65a0871401e816d"
+  },
+  "scene": "minification",
+  "uploaded_bytes": 288,
+  "width": 2560
+}

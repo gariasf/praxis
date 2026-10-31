@@ -1,0 +1,82 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792739879,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 323371424,
+    "heap_allocations": 269,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 368
+  },
+  "cpu_frame_microseconds": {
+    "median": 23479.180999999997,
+    "p95": 30005.384
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 23329.739,
+    "p95": 29701.898
+  },
+  "gpu_memory_bytes": 323371424,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 573.907,
+      "p95": 1150.145
+    },
+    "culling_phase_two": {
+      "median": 326.714,
+      "p95": 454.0619999999999
+    },
+    "depth_prepass": {
+      "median": 1177.4260000000002,
+      "p95": 1846.134
+    },
+    "depth_pyramid_pass": {
+      "median": 1739.459,
+      "p95": 3474.633
+    },
+    "froxel_pass": {
+      "median": 330.059,
+      "p95": 475.112
+    },
+    "lit_pass": {
+      "median": 13209.049,
+      "p95": 16083.902
+    },
+    "tonemapping_pass": {
+      "median": 5173.308,
+      "p95": 6202.415999999999
+    }
+  },
+  "heap_allocations": 269,
+  "height": 360,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
+    "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
+    "gpu_frame_p95_over_median": 1.2731346030060602,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"
+  },
+  "scene": "far-coplanar",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 4,
+  "uploaded_bytes": 368,
+  "width": 640
+}

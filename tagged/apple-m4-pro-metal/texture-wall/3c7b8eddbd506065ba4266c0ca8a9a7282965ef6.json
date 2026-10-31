@@ -1,0 +1,101 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792796089,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 516358135,
+    "heap_allocations": 329,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 192
+  },
+  "cpu_frame_microseconds": {
+    "median": 2245.041,
+    "p95": 2611.5
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.166
+  },
+  "gpu_frame_microseconds": {
+    "median": 15714.124999999998,
+    "p95": 16672.875
+  },
+  "gpu_memory_bytes": 516358135,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 38.667,
+      "p95": 69.792
+    },
+    "culling_phase_two": {
+      "median": 35.125,
+      "p95": 59.958
+    },
+    "depth_prepass": {
+      "median": 226.166,
+      "p95": 410.75
+    },
+    "depth_pyramid_pass": {
+      "median": 438.334,
+      "p95": 790.041
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 11.292,
+      "p95": 27.625
+    },
+    "lit_pass": {
+      "median": 582.8330000000001,
+      "p95": 977.125
+    },
+    "phase_two_depth_pass": {
+      "median": 16.541999999999998,
+      "p95": 29.375
+    },
+    "shadow_mask_pass": {
+      "median": 2196.0,
+      "p95": 4006.0
+    },
+    "tonemapping_pass": {
+      "median": 1368.792,
+      "p95": 2412.292
+    }
+  },
+  "heap_allocations": 329,
+  "height": 1440,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/texture-wall.json",
+    "commit": "20595353d67720185481328aa23517142d87daa4",
+    "gpu_frame_p95_over_median": 1.0610119876226007,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "3c7b8eddbd506065ba4266c0ca8a9a7282965ef6"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 192,
+  "width": 2560
+}

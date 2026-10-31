@@ -1,0 +1,110 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 85280,
+  "backend": "metal",
+  "committed_unix_seconds": 1793050396,
+  "counter_frames": {
+    "arena_bytes_in_use": 85280,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 616555272,
+    "heap_allocations": 10478,
+    "instances_drawn": 5609,
+    "instances_overflowed": 0,
+    "triangles_drawn": 203958,
+    "uploaded_bytes": 2049344
+  },
+  "cpu_frame_microseconds": {
+    "median": 17652.708,
+    "p95": 18184.25
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 1039.208,
+    "p95": 1109.542
+  },
+  "gate_microseconds": {
+    "median": 9820.708,
+    "p95": 10483.292
+  },
+  "gpu_frame_microseconds": {
+    "median": 13568.291,
+    "p95": 14188.375
+  },
+  "gpu_memory_bytes": 616555272,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 1512.958,
+      "p95": 1585.417
+    },
+    "culling_phase_two": {
+      "median": 897.75,
+      "p95": 936.25
+    },
+    "depth_prepass": {
+      "median": 1756.333,
+      "p95": 1814.583
+    },
+    "depth_pyramid_pass": {
+      "median": 250.417,
+      "p95": 266.833
+    },
+    "dynamic_tlas_build": {
+      "median": 48.625,
+      "p95": 462.75
+    },
+    "froxel_pass": {
+      "median": 517.2090000000001,
+      "p95": 556.3340000000001
+    },
+    "lit_pass": {
+      "median": 8714.417,
+      "p95": 9186.083
+    },
+    "phase_two_depth_pass": {
+      "median": 48.917,
+      "p95": 98.625
+    },
+    "shadow_mask_pass": {
+      "median": 4648.3330000000005,
+      "p95": 4940.2919999999995
+    },
+    "tonemapping_pass": {
+      "median": 3825.208,
+      "p95": 4499.791
+    }
+  },
+  "heap_allocations": 10478,
+  "height": 1440,
+  "instances_drawn": 137730,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/town.json",
+    "commit": "800c0d213aba1796f4689f02f94820cd3f859410",
+    "gpu_frame_p95_over_median": 1.0457009655821798,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "f2f39439f2304c255e30abfa3000864a5270fe86"
+  },
+  "scene": "town",
+  "shadow_ray_microseconds": {
+    "median": 3227.9590000000007,
+    "p95": 3984.707
+  },
+  "triangles_drawn": 5552214,
+  "uploaded_bytes": 2049344,
+  "width": 2560
+}

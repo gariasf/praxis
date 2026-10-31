@@ -1,0 +1,98 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1792796089,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 521527932,
+    "heap_allocations": 433,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1384
+  },
+  "cpu_frame_microseconds": {
+    "median": 359.625,
+    "p95": 503.041
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 185.791,
+    "p95": 235.916
+  },
+  "gpu_frame_microseconds": {
+    "median": 2314.792,
+    "p95": 2388.959
+  },
+  "gpu_memory_bytes": 521527932,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 31.875000000000004,
+      "p95": 32.709
+    },
+    "culling_phase_two": {
+      "median": 17.833000000000002,
+      "p95": 21.125
+    },
+    "depth_prepass": {
+      "median": 94.417,
+      "p95": 96.042
+    },
+    "depth_pyramid_pass": {
+      "median": 191.25,
+      "p95": 195.834
+    },
+    "dynamic_tlas_build": {
+      "median": 175.125,
+      "p95": 197.458
+    },
+    "froxel_pass": {
+      "median": 6.708,
+      "p95": 7.125
+    },
+    "lit_pass": {
+      "median": 323.292,
+      "p95": 344.083
+    },
+    "phase_two_depth_pass": {
+      "median": 12.084,
+      "p95": 12.458
+    },
+    "shadow_mask_pass": {
+      "median": 1115.083,
+      "p95": 1169.375
+    },
+    "tonemapping_pass": {
+      "median": 626.125,
+      "p95": 645.292
+    }
+  },
+  "heap_allocations": 433,
+  "height": 1440,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/orrery.json",
+    "commit": "20595353d67720185481328aa23517142d87daa4",
+    "gpu_frame_p95_over_median": 1.0320404597907717,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "3c7b8eddbd506065ba4266c0ca8a9a7282965ef6"
+  },
+  "scene": "orrery",
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1384,
+  "width": 2560
+}

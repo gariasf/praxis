@@ -1,0 +1,82 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792739879,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 323897504,
+    "heap_allocations": 269,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 176
+  },
+  "cpu_frame_microseconds": {
+    "median": 44364.005,
+    "p95": 48354.79
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 46749.534,
+    "p95": 51868.163
+  },
+  "gpu_memory_bytes": 323897504,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 710.584,
+      "p95": 2483.312
+    },
+    "culling_phase_two": {
+      "median": 378.431,
+      "p95": 500.429
+    },
+    "depth_prepass": {
+      "median": 1032.058,
+      "p95": 1672.4699999999998
+    },
+    "depth_pyramid_pass": {
+      "median": 2256.664,
+      "p95": 3844.767
+    },
+    "froxel_pass": {
+      "median": 258.635,
+      "p95": 557.146
+    },
+    "lit_pass": {
+      "median": 35847.928,
+      "p95": 38318.986
+    },
+    "tonemapping_pass": {
+      "median": 5120.131,
+      "p95": 5828.151
+    }
+  },
+  "heap_allocations": 269,
+  "height": 360,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
+    "gpu_frame_p95_over_median": 1.1094904817660856,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 176,
+  "width": 640
+}

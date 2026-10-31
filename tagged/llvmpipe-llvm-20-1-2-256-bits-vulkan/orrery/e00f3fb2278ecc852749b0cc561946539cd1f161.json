@@ -1,0 +1,82 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76680,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792739879,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 329193280,
+    "heap_allocations": 269,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1008
+  },
+  "cpu_frame_microseconds": {
+    "median": 90881.438,
+    "p95": 103146.559
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 90929.505,
+    "p95": 103305.076
+  },
+  "gpu_memory_bytes": 329193280,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 636.375,
+      "p95": 1041.275
+    },
+    "culling_phase_two": {
+      "median": 327.79499999999996,
+      "p95": 411.312
+    },
+    "depth_prepass": {
+      "median": 2326.256,
+      "p95": 2988.5710000000004
+    },
+    "depth_pyramid_pass": {
+      "median": 1798.908,
+      "p95": 3390.977
+    },
+    "froxel_pass": {
+      "median": 359.124,
+      "p95": 574.358
+    },
+    "lit_pass": {
+      "median": 79632.386,
+      "p95": 90576.206
+    },
+    "tonemapping_pass": {
+      "median": 5167.651,
+      "p95": 5906.68
+    }
+  },
+  "heap_allocations": 269,
+  "height": 360,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/orrery.json",
+    "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
+    "gpu_frame_p95_over_median": 1.1361007189030667,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"
+  },
+  "scene": "orrery",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1008,
+  "width": 640
+}

@@ -1,0 +1,93 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 11320660,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792779380,
+  "counter_frames": {
+    "arena_bytes_in_use": 11320660,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 325899668,
+    "heap_allocations": 295,
+    "instances_drawn": 101,
+    "instances_overflowed": 0,
+    "triangles_drawn": 512002,
+    "uploaded_bytes": 2192
+  },
+  "cpu_frame_microseconds": {
+    "median": 215372.196,
+    "p95": 220773.968
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.33099999999999996,
+    "p95": 0.491
+  },
+  "gpu_frame_microseconds": {
+    "median": 215252.277,
+    "p95": 220610.373
+  },
+  "gpu_memory_bytes": 325899668,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 2862.443,
+      "p95": 3670.596
+    },
+    "culling_phase_one": {
+      "median": 2758.842,
+      "p95": 3731.628
+    },
+    "culling_phase_two": {
+      "median": 348.451,
+      "p95": 382.824
+    },
+    "depth_prepass": {
+      "median": 61414.65,
+      "p95": 62791.942
+    },
+    "depth_pyramid_pass": {
+      "median": 1836.428,
+      "p95": 2369.335
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 165.60899999999998,
+      "p95": 196.067
+    },
+    "lit_pass": {
+      "median": 139809.509,
+      "p95": 143998.10199999998
+    },
+    "tonemapping_pass": {
+      "median": 5101.424,
+      "p95": 5362.79
+    }
+  },
+  "heap_allocations": 295,
+  "height": 360,
+  "instances_drawn": 101,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/crowd.json",
+    "commit": "b8cdb10737eeebb5905f40b6c932a8e020dde625",
+    "gpu_frame_p95_over_median": 1.0248921687365007,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "e0e7aee5929a82165da9ee93b3c751bd4ec3017e"
+  },
+  "scene": "crowd",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 512002,
+  "uploaded_bytes": 2192,
+  "width": 640
+}

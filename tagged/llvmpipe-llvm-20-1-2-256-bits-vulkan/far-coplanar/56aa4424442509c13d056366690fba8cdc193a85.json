@@ -1,0 +1,81 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792755123,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 325771440,
+    "heap_allocations": 280,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 27047.723,
+    "p95": 28009.157
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 26944.058,
+    "p95": 27895.113
+  },
+  "gpu_memory_bytes": 325771440,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 519.3860000000001,
+      "p95": 588.835
+    },
+    "culling_phase_two": {
+      "median": 301.386,
+      "p95": 339.197
+    },
+    "depth_prepass": {
+      "median": 1049.49,
+      "p95": 1143.8780000000002
+    },
+    "depth_pyramid_pass": {
+      "median": 1601.627,
+      "p95": 1998.252
+    },
+    "froxel_pass": {
+      "median": 313.058,
+      "p95": 420.74
+    },
+    "lit_pass": {
+      "median": 17402.532,
+      "p95": 17908.614999999998
+    },
+    "tonemapping_pass": {
+      "median": 5087.302000000001,
+      "p95": 5312.004000000001
+    }
+  },
+  "heap_allocations": 280,
+  "height": 360,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
+    "commit": "79cdabbabf6f9c9217ebc3b97e3f2d1dbc59dd6b",
+    "gpu_frame_p95_over_median": 1.0352973928426075,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "56aa4424442509c13d056366690fba8cdc193a85"
+  },
+  "scene": "far-coplanar",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 4,
+  "uploaded_bytes": 384,
+  "width": 640
+}

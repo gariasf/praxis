@@ -1,0 +1,65 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792525436,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 2,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 245442148,
+    "heap_allocations": 146,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 35975.549,
+    "p95": 38431.028999999995
+  },
+  "draw_calls": 2,
+  "gpu_frame_microseconds": {
+    "median": 38180.59,
+    "p95": 40183.194
+  },
+  "gpu_memory_bytes": 245442148,
+  "gpu_pass_microseconds": {
+    "culling_pass": {
+      "median": 629.006,
+      "p95": 2499.434
+    },
+    "depth_prepass": {
+      "median": 967.572,
+      "p95": 1114.154
+    },
+    "lit_pass": {
+      "median": 35846.533,
+      "p95": 36776.454
+    }
+  },
+  "heap_allocations": 146,
+  "height": 360,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
+    "commit": "c77647ff51e09cb9effeddb527ecd91f9d7eb477",
+    "gpu_frame_p95_over_median": 1.0524508395496248,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "6381a5327490cf9c3e6af839369a64f2c0f30c18"
+  },
+  "scene": "texture-wall",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 288,
+  "width": 640
+}

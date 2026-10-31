@@ -1,0 +1,34 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 136,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792410200,
+  "cpu_frame_microseconds": {
+    "median": 219509.376,
+    "p95": 223052.923
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 219385.038,
+    "p95": 222964.199
+  },
+  "gpu_memory_bytes": 34762628,
+  "heap_allocations": 66,
+  "height": 360,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/minification.json",
+    "commit": "9bc5dd103f6f2d8021b68b56bd4af9816d5c1705",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "1463bff50b1003dbf853217de65a0871401e816d"
+  },
+  "scene": "minification",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "uploaded_bytes": 288,
+  "width": 640
+}

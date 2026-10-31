@@ -1,0 +1,93 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 11320660,
+  "backend": "metal",
+  "committed_unix_seconds": 1792779380,
+  "counter_frames": {
+    "arena_bytes_in_use": 11320660,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419277735,
+    "heap_allocations": 295,
+    "instances_drawn": 101,
+    "instances_overflowed": 0,
+    "triangles_drawn": 512002,
+    "uploaded_bytes": 2192
+  },
+  "cpu_frame_microseconds": {
+    "median": 243.5,
+    "p95": 443.75
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.209
+  },
+  "gpu_frame_microseconds": {
+    "median": 7414.625,
+    "p95": 7991.415999999999
+  },
+  "gpu_memory_bytes": 419277735,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 28.833,
+      "p95": 30.167
+    },
+    "culling_phase_one": {
+      "median": 77.666,
+      "p95": 80.875
+    },
+    "culling_phase_two": {
+      "median": 18.375,
+      "p95": 19.583
+    },
+    "depth_prepass": {
+      "median": 244.042,
+      "p95": 253.00000000000003
+    },
+    "depth_pyramid_pass": {
+      "median": 251.708,
+      "p95": 262.125
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.041,
+      "p95": 7.458
+    },
+    "lit_pass": {
+      "median": 6468.625,
+      "p95": 7025.8330000000005
+    },
+    "tonemapping_pass": {
+      "median": 6634.1669999999995,
+      "p95": 7207.708
+    }
+  },
+  "heap_allocations": 295,
+  "height": 1440,
+  "instances_drawn": 101,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/crowd.json",
+    "commit": "b8cdb10737eeebb5905f40b6c932a8e020dde625",
+    "gpu_frame_p95_over_median": 1.0777909874066456,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "e0e7aee5929a82165da9ee93b3c751bd4ec3017e"
+  },
+  "scene": "crowd",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 512002,
+  "uploaded_bytes": 2192,
+  "width": 2560
+}

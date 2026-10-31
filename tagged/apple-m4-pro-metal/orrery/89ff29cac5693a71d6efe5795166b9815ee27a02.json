@@ -1,0 +1,81 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1792742121,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 421960384,
+    "heap_allocations": 273,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1024
+  },
+  "cpu_frame_microseconds": {
+    "median": 137.208,
+    "p95": 282.542
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 1549.208,
+    "p95": 1682.334
+  },
+  "gpu_memory_bytes": 421960384,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 36.75,
+      "p95": 38.042
+    },
+    "culling_phase_two": {
+      "median": 18.0,
+      "p95": 18.833
+    },
+    "depth_prepass": {
+      "median": 92.083,
+      "p95": 93.0
+    },
+    "depth_pyramid_pass": {
+      "median": 197.375,
+      "p95": 205.583
+    },
+    "froxel_pass": {
+      "median": 6.958,
+      "p95": 7.5
+    },
+    "lit_pass": {
+      "median": 870.3330000000001,
+      "p95": 1000.458
+    },
+    "tonemapping_pass": {
+      "median": 1183.25,
+      "p95": 1313.0
+    }
+  },
+  "heap_allocations": 273,
+  "height": 1440,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/orrery.json",
+    "commit": "0db5e46b36f91475efdc6c58d1de523fd87bfd0b",
+    "gpu_frame_p95_over_median": 1.0859316502367662,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "89ff29cac5693a71d6efe5795166b9815ee27a02"
+  },
+  "scene": "orrery",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1024,
+  "width": 2560
+}

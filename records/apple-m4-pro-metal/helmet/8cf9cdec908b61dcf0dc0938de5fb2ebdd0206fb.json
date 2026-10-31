@@ -1,0 +1,30 @@
+{
+  "adapter": "Apple M4 Pro",
+  "backend": "metal",
+  "committed_unix_seconds": 1791897878,
+  "cpu_frame_microseconds": {
+    "median": 36.916,
+    "p95": 83.5
+  },
+  "draw_calls": 11,
+  "gpu_main_pass_microseconds": {
+    "median": 602.625,
+    "p95": 659.833
+  },
+  "gpu_memory_bytes": 689745136,
+  "heap_allocations": 83,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/helmet.json",
+    "commit": "d9b446a4dad9bb95056a241290f2c6014af23eb1",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "8cf9cdec908b61dcf0dc0938de5fb2ebdd0206fb"
+  },
+  "scene": "helmet",
+  "uploaded_bytes": 1856,
+  "width": 2560
+}

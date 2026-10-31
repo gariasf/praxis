@@ -1,0 +1,90 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792760887,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 325771556,
+    "heap_allocations": 280,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 13602.231,
+    "p95": 14636.479
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.06999999999999999,
+    "p95": 0.19
+  },
+  "gpu_frame_microseconds": {
+    "median": 13537.243,
+    "p95": 14592.287
+  },
+  "gpu_memory_bytes": 325771556,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 264.11899999999997,
+      "p95": 458.662
+    },
+    "culling_phase_two": {
+      "median": 200.283,
+      "p95": 230.177
+    },
+    "depth_prepass": {
+      "median": 473.344,
+      "p95": 578.289
+    },
+    "depth_pyramid_pass": {
+      "median": 898.7370000000001,
+      "p95": 1113.631
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 206.873,
+      "p95": 281.194
+    },
+    "lit_pass": {
+      "median": 7996.151999999999,
+      "p95": 8696.417
+    },
+    "tonemapping_pass": {
+      "median": 3063.398,
+      "p95": 3247.259
+    }
+  },
+  "heap_allocations": 280,
+  "height": 360,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
+    "commit": "80227bcaebf571e6801d7ef32b278492056e3c63",
+    "gpu_frame_p95_over_median": 1.0779364010825543,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "382eed81ab63f8024bc8a2aca37db9dfdc898a26"
+  },
+  "scene": "far-coplanar",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 4,
+  "uploaded_bytes": 384,
+  "width": 640
+}

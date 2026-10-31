@@ -1,0 +1,105 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 76680,
+  "backend": "metal",
+  "committed_unix_seconds": 1793002853,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 521528044,
+    "heap_allocations": 433,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 1384
+  },
+  "cpu_frame_microseconds": {
+    "median": 354.125,
+    "p95": 509.41599999999994
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 181.083,
+    "p95": 239.501
+  },
+  "gpu_frame_microseconds": {
+    "median": 2313.542,
+    "p95": 3110.0
+  },
+  "gpu_memory_bytes": 521528044,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 31.333,
+      "p95": 32.208
+    },
+    "culling_phase_two": {
+      "median": 17.334,
+      "p95": 20.333
+    },
+    "depth_prepass": {
+      "median": 94.041,
+      "p95": 95.791
+    },
+    "depth_pyramid_pass": {
+      "median": 191.0,
+      "p95": 196.25
+    },
+    "dynamic_tlas_build": {
+      "median": 173.041,
+      "p95": 198.083
+    },
+    "froxel_pass": {
+      "median": 6.75,
+      "p95": 7.25
+    },
+    "lit_pass": {
+      "median": 321.583,
+      "p95": 346.584
+    },
+    "phase_two_depth_pass": {
+      "median": 12.0,
+      "p95": 12.334
+    },
+    "shadow_mask_pass": {
+      "median": 1117.0,
+      "p95": 1173.584
+    },
+    "tonemapping_pass": {
+      "median": 623.333,
+      "p95": 647.958
+    }
+  },
+  "heap_allocations": 433,
+  "height": 1440,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/orrery.json",
+    "commit": "71918ac5199bbefe24205444a55a21bc7dd9b7b2",
+    "gpu_frame_p95_over_median": 1.3442591489586098,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "2197014feac37ecdb5eac8e7c754aff8a2fb965b"
+  },
+  "scene": "orrery",
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 1384,
+  "width": 2560
+}

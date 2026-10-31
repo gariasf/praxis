@@ -1,0 +1,110 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1793050396,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 516092855,
+    "heap_allocations": 322,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 240
+  },
+  "cpu_frame_microseconds": {
+    "median": 241.5,
+    "p95": 298.625
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.375
+  },
+  "gate_microseconds": {
+    "median": 859.0,
+    "p95": 865.25
+  },
+  "gpu_frame_microseconds": {
+    "median": 2296.458,
+    "p95": 2305.167
+  },
+  "gpu_memory_bytes": 516092855,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 22.583,
+      "p95": 23.875
+    },
+    "culling_phase_two": {
+      "median": 16.792,
+      "p95": 17.375
+    },
+    "depth_prepass": {
+      "median": 106.5,
+      "p95": 109.833
+    },
+    "depth_pyramid_pass": {
+      "median": 257.25,
+      "p95": 259.833
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 5.708,
+      "p95": 6.084
+    },
+    "lit_pass": {
+      "median": 488.667,
+      "p95": 494.125
+    },
+    "phase_two_depth_pass": {
+      "median": 12.084,
+      "p95": 12.458
+    },
+    "shadow_mask_pass": {
+      "median": 1047.917,
+      "p95": 1051.833
+    },
+    "tonemapping_pass": {
+      "median": 797.833,
+      "p95": 803.125
+    }
+  },
+  "heap_allocations": 322,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/minification.json",
+    "commit": "800c0d213aba1796f4689f02f94820cd3f859410",
+    "gpu_frame_p95_over_median": 1.0037923619765743,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "f2f39439f2304c255e30abfa3000864a5270fe86"
+  },
+  "scene": "minification",
+  "shadow_ray_microseconds": {
+    "median": 1115.75,
+    "p95": 1125.167
+  },
+  "triangles_drawn": 2,
+  "uploaded_bytes": 240,
+  "width": 2560
+}

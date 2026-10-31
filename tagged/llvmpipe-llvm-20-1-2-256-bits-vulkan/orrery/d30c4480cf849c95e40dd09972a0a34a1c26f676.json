@@ -1,0 +1,66 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76680,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792531394,
+  "counter_frames": {
+    "arena_bytes_in_use": 76680,
+    "draw_calls": 2,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 313652692,
+    "heap_allocations": 146,
+    "instances_drawn": 5,
+    "instances_overflowed": 0,
+    "triangles_drawn": 11040,
+    "uploaded_bytes": 928
+  },
+  "cpu_frame_microseconds": {
+    "median": 81384.103,
+    "p95": 94975.636
+  },
+  "draw_calls": 2,
+  "gpu_frame_microseconds": {
+    "median": 81280.73700000001,
+    "p95": 94897.805
+  },
+  "gpu_memory_bytes": 313652692,
+  "gpu_pass_microseconds": {
+    "culling_pass": {
+      "median": 484.13,
+      "p95": 563.604
+    },
+    "depth_prepass": {
+      "median": 2348.773,
+      "p95": 2761.685
+    },
+    "lit_pass": {
+      "median": 78390.633,
+      "p95": 91515.876
+    }
+  },
+  "heap_allocations": 146,
+  "height": 360,
+  "instances_drawn": 5,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/orrery.json",
+    "commit": "93355f150544f6f0437c3239cf90b217e9ff8541",
+    "gpu_frame_p95_over_median": 1.1675313057262262,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "d30c4480cf849c95e40dd09972a0a34a1c26f676"
+  },
+  "scene": "orrery",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 11040,
+  "uploaded_bytes": 928,
+  "width": 640
+}

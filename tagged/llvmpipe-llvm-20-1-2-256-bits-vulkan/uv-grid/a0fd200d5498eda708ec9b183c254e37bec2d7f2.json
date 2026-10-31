@@ -1,0 +1,113 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793187960,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 400398724,
+    "heap_allocations": 326,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 80309.103,
+    "p95": 83967.686
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.33999999999999997,
+    "p95": 0.511
+  },
+  "gate_microseconds": {
+    "median": 60454.301,
+    "p95": 63625.288
+  },
+  "gpu_frame_microseconds": {
+    "median": 80227.735,
+    "p95": 83868.66
+  },
+  "gpu_memory_bytes": 400398724,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 671.954,
+      "p95": 769.7570000000001
+    },
+    "culling_phase_two": {
+      "median": 344.39300000000003,
+      "p95": 396.751
+    },
+    "depth_prepass": {
+      "median": 675.745,
+      "p95": 729.712
+    },
+    "depth_pyramid_pass": {
+      "median": 1624.381,
+      "p95": 2097.181
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 350.24399999999997,
+      "p95": 448.847
+    },
+    "lit_pass": {
+      "median": 57331.435,
+      "p95": 60451.63
+    },
+    "phase_two_depth_pass": {
+      "median": 133.385,
+      "p95": 167.06
+    },
+    "shadow_mask_pass": {
+      "median": 12999.314,
+      "p95": 14310.837
+    },
+    "tonemapping_pass": {
+      "median": 5056.2660000000005,
+      "p95": 5632.921
+    }
+  },
+  "heap_allocations": 326,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/uv-grid.json",
+    "commit": "79c3e877e468ed78a2f71037174e3bbfe5dd0c46",
+    "gpu_frame_p95_over_median": 1.0453823730658731,
+    "harness_version": 6,
+    "source": "baseline-commit",
+    "source_hash": "a0fd200d5498eda708ec9b183c254e37bec2d7f2"
+  },
+  "scene": "uv-grid",
+  "shadow_ray_microseconds": {
+    "median": 14378.194999999992,
+    "p95": 17103.728999999992
+  },
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2,
+  "uploaded_bytes": 384,
+  "width": 640
+}

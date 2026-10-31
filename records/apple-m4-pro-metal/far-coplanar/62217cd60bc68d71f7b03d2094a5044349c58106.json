@@ -1,0 +1,90 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1792775526,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 419231655,
+    "heap_allocations": 280,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 384
+  },
+  "cpu_frame_microseconds": {
+    "median": 160.708,
+    "p95": 382.458
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.042,
+    "p95": 0.124
+  },
+  "gpu_frame_microseconds": {
+    "median": 3550.667,
+    "p95": 3580.166
+  },
+  "gpu_memory_bytes": 419231655,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 22.25,
+      "p95": 23.458
+    },
+    "culling_phase_two": {
+      "median": 17.958,
+      "p95": 18.625
+    },
+    "depth_prepass": {
+      "median": 103.709,
+      "p95": 115.75
+    },
+    "depth_pyramid_pass": {
+      "median": 252.834,
+      "p95": 258.75
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.917,
+      "p95": 7.625
+    },
+    "lit_pass": {
+      "median": 2821.0420000000004,
+      "p95": 2833.459
+    },
+    "tonemapping_pass": {
+      "median": 3130.958,
+      "p95": 3142.291
+    }
+  },
+  "heap_allocations": 280,
+  "height": 1440,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
+    "commit": "5c570f7e0a5166b6601c95c2e2dd9eea0e3acc41",
+    "gpu_frame_p95_over_median": 1.0083080164938025,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "62217cd60bc68d71f7b03d2094a5044349c58106"
+  },
+  "scene": "far-coplanar",
+  "triangles_drawn": 4,
+  "uploaded_bytes": 384,
+  "width": 2560
+}

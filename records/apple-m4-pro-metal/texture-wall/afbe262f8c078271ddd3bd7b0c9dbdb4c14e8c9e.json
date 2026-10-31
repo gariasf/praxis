@@ -1,0 +1,31 @@
+{
+  "adapter": "Apple M4 Pro",
+  "arena_bytes_in_use": 136,
+  "backend": "metal",
+  "committed_unix_seconds": 1792410621,
+  "cpu_frame_microseconds": {
+    "median": 2198.7920000000004,
+    "p95": 3122.667
+  },
+  "draw_calls": 100,
+  "gpu_main_pass_microseconds": {
+    "median": 444.542,
+    "p95": 3491.4579999999996
+  },
+  "gpu_memory_bytes": 48866356,
+  "heap_allocations": 64,
+  "height": 1440,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/texture-wall.json",
+    "commit": "81f25800c140ceb9f5d164d463b47b5bac94f45d",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "afbe262f8c078271ddd3bd7b0c9dbdb4c14e8c9e"
+  },
+  "scene": "texture-wall",
+  "uploaded_bytes": 288,
+  "width": 2560
+}

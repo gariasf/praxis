@@ -1,0 +1,89 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76856,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792760887,
+  "counter_frames": {
+    "arena_bytes_in_use": 76856,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 325999652,
+    "heap_allocations": 279,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2210,
+    "uploaded_bytes": 240
+  },
+  "cpu_frame_microseconds": {
+    "median": 19551.013,
+    "p95": 20450.37
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.06999999999999999,
+    "p95": 0.18
+  },
+  "gpu_frame_microseconds": {
+    "median": 19479.729000000003,
+    "p95": 20393.865
+  },
+  "gpu_memory_bytes": 325999652,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 362.137,
+      "p95": 455.317
+    },
+    "culling_phase_two": {
+      "median": 199.391,
+      "p95": 229.406
+    },
+    "depth_prepass": {
+      "median": 651.5699999999999,
+      "p95": 715.264
+    },
+    "depth_pyramid_pass": {
+      "median": 891.155,
+      "p95": 1132.019
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 160.62300000000002,
+      "p95": 226.261
+    },
+    "lit_pass": {
+      "median": 13789.787,
+      "p95": 14401.576
+    },
+    "tonemapping_pass": {
+      "median": 2990.6400000000003,
+      "p95": 3130.636
+    }
+  },
+  "heap_allocations": 279,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/shadows.json",
+    "commit": "80227bcaebf571e6801d7ef32b278492056e3c63",
+    "gpu_frame_p95_over_median": 1.0469275522262143,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "382eed81ab63f8024bc8a2aca37db9dfdc898a26"
+  },
+  "scene": "shadows",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2210,
+  "uploaded_bytes": 240,
+  "width": 640
+}

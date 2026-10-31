@@ -1,0 +1,112 @@
+{
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "aliasing_p99": 2985,
+  "aliasing_rmse": 1556,
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793446947,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 767562439,
+    "heap_allocations": 351,
+    "instances_drawn": 2,
+    "instances_overflowed": 0,
+    "triangles_drawn": 4,
+    "uploaded_bytes": 416
+  },
+  "cpu_frame_microseconds": {
+    "median": 327.59999999999997,
+    "p95": 389.5
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.2,
+    "p95": 0.3
+  },
+  "gate_microseconds": {
+    "median": 715.5840000000001,
+    "p95": 728.4159999999999
+  },
+  "gpu_frame_microseconds": {
+    "median": 1594.6560000000002,
+    "p95": 1616.576
+  },
+  "gpu_memory_bytes": 767562439,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 18.912000000000003,
+      "p95": 21.28
+    },
+    "culling_phase_two": {
+      "median": 17.92,
+      "p95": 20.192
+    },
+    "depth_prepass": {
+      "median": 216.736,
+      "p95": 230.432
+    },
+    "depth_pyramid_pass": {
+      "median": 137.15200000000002,
+      "p95": 137.76000000000002
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.624,
+      "p95": 7.168
+    },
+    "lit_pass": {
+      "median": 306.88,
+      "p95": 315.392
+    },
+    "phase_two_depth_pass": {
+      "median": 2.4320000000000004,
+      "p95": 3.36
+    },
+    "shadow_mask_pass": {
+      "median": 615.264,
+      "p95": 620.192
+    },
+    "tonemapping_pass": {
+      "median": 187.264,
+      "p95": 188.192
+    }
+  },
+  "heap_allocations": 351,
+  "height": 1440,
+  "instances_drawn": 2,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super/far-coplanar.json",
+    "commit": "cfb84b7c9587ada97815b23f8145a1b804a82a65",
+    "gpu_frame_p95_over_median": 1.0137459113438885,
+    "harness_version": 10,
+    "source": "baseline-commit",
+    "source_hash": "919dd18c5f7830b9aa4358cc785f50fbe85345de"
+  },
+  "scene": "far-coplanar",
+  "shadow_ray_microseconds": {
+    "median": 683.2319999999999,
+    "p95": 701.9519999999999
+  },
+  "triangles_drawn": 4,
+  "uploaded_bytes": 416,
+  "width": 2560
+}

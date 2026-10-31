@@ -1,0 +1,102 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76856,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792796089,
+  "counter_frames": {
+    "arena_bytes_in_use": 76856,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 395034084,
+    "heap_allocations": 324,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2210,
+    "uploaded_bytes": 240
+  },
+  "cpu_frame_microseconds": {
+    "median": 57727.537,
+    "p95": 63657.983
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.29,
+    "p95": 0.481
+  },
+  "gpu_frame_microseconds": {
+    "median": 57616.42,
+    "p95": 63514.64
+  },
+  "gpu_memory_bytes": 395034084,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 698.259,
+      "p95": 765.813
+    },
+    "culling_phase_two": {
+      "median": 303.344,
+      "p95": 342.057
+    },
+    "depth_prepass": {
+      "median": 1329.953,
+      "p95": 1447.046
+    },
+    "depth_pyramid_pass": {
+      "median": 1604.97,
+      "p95": 1695.666
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 225.941,
+      "p95": 300.8
+    },
+    "lit_pass": {
+      "median": 16108.322000000002,
+      "p95": 16751.913
+    },
+    "phase_two_depth_pass": {
+      "median": 131.895,
+      "p95": 165.27800000000002
+    },
+    "shadow_mask_pass": {
+      "median": 31355.446000000004,
+      "p95": 37388.136000000006
+    },
+    "tonemapping_pass": {
+      "median": 4949.102000000001,
+      "p95": 5164.354
+    }
+  },
+  "heap_allocations": 324,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/shadows.json",
+    "commit": "20595353d67720185481328aa23517142d87daa4",
+    "gpu_frame_p95_over_median": 1.1023704700847432,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "3c7b8eddbd506065ba4266c0ca8a9a7282965ef6"
+  },
+  "scene": "shadows",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2210,
+  "uploaded_bytes": 240,
+  "width": 640
+}

@@ -1,0 +1,33 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "vulkan",
+  "committed_unix_seconds": 1791911931,
+  "cpu_frame_microseconds": {
+    "median": 10014.5,
+    "p95": 12493.146
+  },
+  "draw_calls": 1,
+  "gpu_main_pass_microseconds": {
+    "median": 9907.239,
+    "p95": 12377.002
+  },
+  "gpu_memory_bytes": 673345552,
+  "heap_allocations": 86,
+  "height": 360,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
+    "commit": "b7a5b1b5cd162e275a92da4f624e07e342bc9dd0",
+    "gpu_frame_p95_over_median": null,
+    "harness_version": 1,
+    "source": "baseline-commit",
+    "source_hash": "b88f8fc8c7c61397003c97f917237dd213f60489"
+  },
+  "scene": "normal-tangent",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "uploaded_bytes": 416,
+  "width": 640
+}

@@ -1,0 +1,65 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792531394,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 2,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 308091524,
+    "heap_allocations": 146,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 288
+  },
+  "cpu_frame_microseconds": {
+    "median": 388734.757,
+    "p95": 391185.133
+  },
+  "draw_calls": 2,
+  "gpu_frame_microseconds": {
+    "median": 388641.735,
+    "p95": 391104.481
+  },
+  "gpu_memory_bytes": 308091524,
+  "gpu_pass_microseconds": {
+    "culling_pass": {
+      "median": 451.67,
+      "p95": 506.348
+    },
+    "depth_prepass": {
+      "median": 807.611,
+      "p95": 880.0709999999999
+    },
+    "lit_pass": {
+      "median": 387081.482,
+      "p95": 389425.262
+    }
+  },
+  "heap_allocations": 146,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/minification.json",
+    "commit": "93355f150544f6f0437c3239cf90b217e9ff8541",
+    "gpu_frame_p95_over_median": 1.006336802711114,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "d30c4480cf849c95e40dd09972a0a34a1c26f676"
+  },
+  "scene": "minification",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2,
+  "uploaded_bytes": 288,
+  "width": 640
+}

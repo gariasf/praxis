@@ -1,0 +1,112 @@
+{
+  "adapter": "Apple M4 Pro",
+  "aliasing_p99": 13754,
+  "aliasing_rmse": 3221,
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1793443961,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 663812595,
+    "heap_allocations": 354,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 224
+  },
+  "cpu_frame_microseconds": {
+    "median": 2153.6659999999997,
+    "p95": 2351.167
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.209,
+    "p95": 0.583
+  },
+  "gate_microseconds": {
+    "median": 14089.584,
+    "p95": 14489.5
+  },
+  "gpu_frame_microseconds": {
+    "median": 15924.25,
+    "p95": 16770.959
+  },
+  "gpu_memory_bytes": 663812595,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 50.667,
+      "p95": 86.292
+    },
+    "culling_phase_two": {
+      "median": 39.541,
+      "p95": 67.417
+    },
+    "depth_prepass": {
+      "median": 398.417,
+      "p95": 726.292
+    },
+    "depth_pyramid_pass": {
+      "median": 490.417,
+      "p95": 887.25
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 11.209,
+      "p95": 27.667
+    },
+    "lit_pass": {
+      "median": 607.291,
+      "p95": 1032.4589999999998
+    },
+    "phase_two_depth_pass": {
+      "median": 16.625,
+      "p95": 29.541
+    },
+    "shadow_mask_pass": {
+      "median": 2782.125,
+      "p95": 4932.167
+    },
+    "tonemapping_pass": {
+      "median": 807.625,
+      "p95": 1475.125
+    }
+  },
+  "heap_allocations": 354,
+  "height": 1440,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/apple-m4-pro/texture-wall.json",
+    "commit": "6aec92785bf5dafebebc0369b8e4e422adb2b8f2",
+    "gpu_frame_p95_over_median": 1.0531710441622053,
+    "harness_version": 10,
+    "source": "baseline-commit",
+    "source_hash": "1c52be35d093a938125c3835b6e79217317bb0df"
+  },
+  "scene": "texture-wall",
+  "shadow_ray_microseconds": {
+    "median": 365.2089999999989,
+    "p95": 1527.0
+  },
+  "triangles_drawn": 200,
+  "uploaded_bytes": 224,
+  "width": 2560
+}

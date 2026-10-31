@@ -1,0 +1,82 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 76856,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792739879,
+  "counter_frames": {
+    "arena_bytes_in_use": 76856,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 323599520,
+    "heap_allocations": 269,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2210,
+    "uploaded_bytes": 224
+  },
+  "cpu_frame_microseconds": {
+    "median": 24653.91,
+    "p95": 32771.021
+  },
+  "draw_calls": 4,
+  "gpu_frame_microseconds": {
+    "median": 24550.041,
+    "p95": 32404.439
+  },
+  "gpu_memory_bytes": 323599520,
+  "gpu_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 765.7669999999999,
+      "p95": 1438.15
+    },
+    "culling_phase_two": {
+      "median": 330.00899999999996,
+      "p95": 460.083
+    },
+    "depth_prepass": {
+      "median": 1531.335,
+      "p95": 2588.875
+    },
+    "depth_pyramid_pass": {
+      "median": 1932.095,
+      "p95": 3452.0409999999997
+    },
+    "froxel_pass": {
+      "median": 271.339,
+      "p95": 559.5609999999999
+    },
+    "lit_pass": {
+      "median": 13839.566,
+      "p95": 18071.963
+    },
+    "tonemapping_pass": {
+      "median": 5087.583,
+      "p95": 6086.786999999999
+    }
+  },
+  "heap_allocations": 269,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/shadows.json",
+    "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
+    "gpu_frame_p95_over_median": 1.3199342111078347,
+    "harness_version": 3,
+    "source": "baseline-commit",
+    "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"
+  },
+  "scene": "shadows",
+  "tags": [
+    "machine not quiet",
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 2210,
+  "uploaded_bytes": 224,
+  "width": 640
+}

@@ -1,0 +1,101 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 11325896,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1792796089,
+  "counter_frames": {
+    "arena_bytes_in_use": 11325896,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 395606820,
+    "heap_allocations": 2090,
+    "instances_drawn": 101,
+    "instances_overflowed": 0,
+    "triangles_drawn": 512002,
+    "uploaded_bytes": 309392
+  },
+  "cpu_frame_microseconds": {
+    "median": 238836.298,
+    "p95": 245872.35
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 221575.91,
+    "p95": 228417.454
+  },
+  "gpu_frame_microseconds": {
+    "median": 238244.367,
+    "p95": 245653.897
+  },
+  "gpu_memory_bytes": 395606820,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 3496.388,
+      "p95": 3966.371
+    },
+    "culling_phase_one": {
+      "median": 7293.667,
+      "p95": 7601.499000000001
+    },
+    "culling_phase_two": {
+      "median": 1107.0310000000002,
+      "p95": 1156.994
+    },
+    "depth_prepass": {
+      "median": 61361.41299999999,
+      "p95": 62672.749
+    },
+    "depth_pyramid_pass": {
+      "median": 1776.076,
+      "p95": 2099.2580000000003
+    },
+    "dynamic_tlas_build": {
+      "median": 15869.741,
+      "p95": 18960.144
+    },
+    "froxel_pass": {
+      "median": 183.061,
+      "p95": 226.782
+    },
+    "lit_pass": {
+      "median": 116940.765,
+      "p95": 121507.15
+    },
+    "phase_two_depth_pass": {
+      "median": 133.632,
+      "p95": 163.37400000000002
+    },
+    "shadow_mask_pass": {
+      "median": 24845.338,
+      "p95": 26284.447
+    },
+    "tonemapping_pass": {
+      "median": 5069.804,
+      "p95": 5361.052
+    }
+  },
+  "heap_allocations": 2090,
+  "height": 360,
+  "instances_drawn": 101,
+  "instances_overflowed": 0,
+  "measured_frames": 256,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/crowd.json",
+    "commit": "20595353d67720185481328aa23517142d87daa4",
+    "gpu_frame_p95_over_median": 1.0311005464402019,
+    "harness_version": 4,
+    "source": "baseline-commit",
+    "source_hash": "3c7b8eddbd506065ba4266c0ca8a9a7282965ef6"
+  },
+  "scene": "crowd",
+  "tags": [
+    "640x360 over 256 frames, not the reference configuration"
+  ],
+  "triangles_drawn": 512002,
+  "uploaded_bytes": 309392,
+  "width": 640
+}

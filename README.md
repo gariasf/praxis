@@ -13,3 +13,9 @@ This branch holds data only and is never merged.
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
 lower. A bad publish is undone with `git revert`.
+
+`praxis history import` added the Baselines committed to `main` before the
+history existed: each Baseline file a commit changed is a record of that
+commit's source, its `provenance.source` `baseline-commit`. It holds what the
+bench measured then, so a metric added later is absent from it and null in
+its Series row.
