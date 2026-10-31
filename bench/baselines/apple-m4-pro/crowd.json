@@ -7,73 +7,73 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 766.917,
-    "p95": 850.75
+    "median": 744.5419999999999,
+    "p95": 854.9169999999999
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 353.58299999999997,
-    "p95": 382.293
+    "median": 343.74899999999997,
+    "p95": 388.29099999999994
   },
   "gpu_frame_microseconds": {
-    "median": 3686.5,
-    "p95": 3724.166
+    "median": 3747.542,
+    "p95": 3785.75
   },
   "gate_microseconds": {
-    "median": 1294.959,
-    "p95": 1339.0
+    "median": 1296.9579999999999,
+    "p95": 1340.209
   },
   "shadow_ray_microseconds": {
-    "median": 2069.916,
-    "p95": 2125.7920000000004
+    "median": 2128.584,
+    "p95": 2184.334
   },
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 29.541999999999998,
-      "p95": 30.959
+      "median": 27.791,
+      "p95": 30.666
     },
     "blas_refit": {
       "median": 0.0,
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 92.709,
-      "p95": 95.625
+      "median": 93.042,
+      "p95": 95.542
     },
     "culling_phase_two": {
-      "median": 21.667,
-      "p95": 24.333
+      "median": 21.208000000000002,
+      "p95": 22.166999999999998
     },
     "depth_prepass": {
-      "median": 386.584,
-      "p95": 396.66700000000003
+      "median": 384.04200000000003,
+      "p95": 394.208
     },
     "depth_pyramid_pass": {
-      "median": 214.625,
-      "p95": 216.75
+      "median": 213.708,
+      "p95": 217.125
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 8.458,
-      "p95": 11.541
-    },
-    "lit_pass": {
-      "median": 713.7909999999999,
-      "p95": 725.75
-    },
-    "phase_two_depth_pass": {
-      "median": 12.292,
+      "median": 10.167,
       "p95": 12.625
     },
+    "lit_pass": {
+      "median": 712.4590000000001,
+      "p95": 726.917
+    },
+    "phase_two_depth_pass": {
+      "median": 12.333,
+      "p95": 12.666
+    },
     "shadow_mask_pass": {
-      "median": 1887.0829999999999,
-      "p95": 1911.0
+      "median": 1950.292,
+      "p95": 1973.6250000000002
     },
     "tonemapping_pass": {
-      "median": 318.417,
-      "p95": 318.834
+      "median": 319.667,
+      "p95": 320.084
     }
   },
   "draw_calls": 4,
