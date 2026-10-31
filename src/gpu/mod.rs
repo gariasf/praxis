@@ -1,5 +1,23 @@
 use std::fmt;
 
+/// The size of the device memory blocks gpu-allocator sub-allocates from on
+/// Vulkan and DX12, in place of the `Performance` hint's 128 to 256 MiB
+/// [ref:wgpu-hal-30-manual-memory-hints]. Metal ignores it. A resource larger
+/// than a block gets a block of its own, destroyed with it
+/// [ref:gpu-allocator-0.28-personal-block], as each of the main pass's
+/// attachments at the reference size does, while a 2048² BC7 Texture with its
+/// mips still shares one, so Textures cost few allocations. In blocks of 128
+/// to 256 MiB, on the RTX 2070 SUPER under Vulkan, a State whose targets
+/// landed in a block an earlier State had filled drew pbr-sweep's depth
+/// pre-pass in 198 µs instead of 52 and its lit pass in 798 µs instead of
+/// 285. wgpu-hal's Vulkan backend puts
+/// no texture it creates in dedicated memory
+/// [ref:wgpu-hal-30-vulkan-texture-allocation], which NVIDIA says may speed
+/// colour and depth attachments, most on pre-Turing GPUs
+/// [ref:nvidia-vulkan-dos-donts-dedicated-memory]; a block of its own is the
+/// nearest the hint comes.
+const DEVICE_MEMORY_BLOCK_BYTES: u64 = 16 << 20;
+
 /// The adapter, device and queue that every GPU path shares. Created for a
 /// window's surface, or headless for offscreen work.
 pub struct GpuContext {
@@ -58,7 +76,10 @@ impl GpuContext {
                 // risk.
                 experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
                 required_limits: floor_limits(),
-                memory_hints: Default::default(),
+                memory_hints: wgpu::MemoryHints::Manual {
+                    suballocated_device_memory_block_size: DEVICE_MEMORY_BLOCK_BYTES
+                        ..DEVICE_MEMORY_BLOCK_BYTES,
+                },
                 trace: wgpu::Trace::Off,
             })
             .await?;
@@ -536,6 +557,7 @@ fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     const MSAA_X4: wgpu::TextureFormatFeatureFlags =
         wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2
@@ -817,5 +839,65 @@ mod tests {
              Gl: no adapter: an error occurred when formatting an argument"
         );
         assert!(error.is::<std::fmt::Error>());
+    }
+
+    /// Each render target at the reference size sits alone in its device
+    /// memory, though a buffer was allocated before it. Metal reports no
+    /// allocator, and gives every texture its own memory.
+    #[test]
+    fn render_targets_at_the_reference_size_get_memory_of_their_own() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let _buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Memory Test Buffer"),
+            size: 1 << 20,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let reference = crate::bench::Configuration::REFERENCE;
+        let _targets = crate::render::targets::RenderTargets::new(
+            &context.device,
+            reference.width,
+            reference.height,
+        );
+        let Some(report) = context.device.generate_allocator_report() else {
+            writeln!(
+                std::io::stderr(),
+                "skipped: the backend reports no allocator"
+            )
+            .ok();
+            return;
+        };
+        let mut alone = Vec::new();
+        for block in &report.blocks {
+            let allocations = &report.allocations[block.allocations.clone()];
+            let names: Vec<_> = allocations.iter().map(|other| &other.name).collect();
+            for allocation in allocations {
+                if allocation.size > DEVICE_MEMORY_BLOCK_BYTES {
+                    assert_eq!(
+                        names,
+                        [&allocation.name],
+                        "{} shares its block",
+                        allocation.name
+                    );
+                    alone.push(allocation.name.as_str());
+                }
+            }
+        }
+        for target in [
+            "Depth Texture",
+            "Multisampled Colour Texture",
+            "HDR Texture",
+            "Surface Normals",
+        ] {
+            assert!(alone.contains(&target), "{target} not among {alone:?}");
+        }
     }
 }
