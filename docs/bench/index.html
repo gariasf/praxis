@@ -594,12 +594,12 @@ function commitAxisSvg(frame, axis, contentBreaks) {
     const next = axis.ordered[index + 1];
     if (point.row.harness_version === undefined || (next && next.row.harness_version === point.row.harness_version)) return;
     const left = margin.left + axis.stepPixels * bandStart;
-    const width = axis.stepPixels * (index + 1 - bandStart);
-    if (bandNumber % 2 === 0) svg += `<rect class="harness-band" x="${left}" y="${top}" width="${width}" height="${bottom - top}"></rect>`;
+    const bandWidthPixels = axis.stepPixels * (index + 1 - bandStart);
+    if (bandNumber % 2 === 0) svg += `<rect class="harness-band" x="${left}" y="${top}" width="${bandWidthPixels}" height="${bottom - top}"></rect>`;
     const label = `harness ${point.row.harness_version}`;
     const labelWidthPixels = label.length * 6.6;
-    const text = width >= labelWidthPixels + 4 ? label : width >= 30 ? `h${point.row.harness_version}` : "";
-    if (text) svg += `<text class="mark-label" x="${left + width / 2}" y="${top - 8}" text-anchor="middle">${text}</text>`;
+    const labelText = bandWidthPixels >= labelWidthPixels + 4 ? label : bandWidthPixels >= 30 ? `h${point.row.harness_version}` : "";
+    if (labelText) svg += `<text class="mark-label" x="${left + bandWidthPixels / 2}" y="${top - 8}" text-anchor="middle">${escapeHtml(labelText)}</text>`;
     bandStart = index + 1;
     bandNumber += 1;
   });
@@ -776,8 +776,8 @@ function drawPassesChart(container, points) {
     return { x, y: frame.margin.top, point, column: true };
   });
   const svg = commitAxisSvg(frame, axis, contentBreaksOf(rows, axis.xOf, axis.stepPixels)) + yAxisSvg(frame, "pass:") + paths + markers;
-  const rest = ranked.length - namedPasses.length;
-  const subtitle = rest > 0 ? `The ${NAMED_PASS_COUNT} largest passes; the other ${rest} are in each point's tooltip and record.` : "";
+  const otherPassCount = ranked.length - namedPasses.length;
+  const subtitle = otherPassCount > 0 ? `The ${NAMED_PASS_COUNT} largest passes; the other ${otherPassCount} are in each point's tooltip and record.` : "";
   container.innerHTML = chartHtml(title, subtitle, legendOf(namedPasses.map((pass) => [colourOf(pass), passLabel(pass)])), frame, svg);
   container.hitPoints = hitPoints;
   container.tooltipOf = (hit) => {
@@ -854,11 +854,11 @@ function attachHover(container) {
     crosshair?.setAttribute("visibility", "visible");
     tooltip.innerHTML = container.tooltipOf(hit);
     tooltip.hidden = false;
-    const width = tooltip.offsetWidth;
-    const height = tooltip.offsetHeight;
-    const left = event.clientX + 14 + width > window.innerWidth - 8 ? event.clientX - 14 - width : event.clientX + 14;
+    const tooltipWidthPixels = tooltip.offsetWidth;
+    const tooltipHeightPixels = tooltip.offsetHeight;
+    const left = event.clientX + 14 + tooltipWidthPixels > window.innerWidth - 8 ? event.clientX - 14 - tooltipWidthPixels : event.clientX + 14;
     tooltip.style.left = `${Math.max(8, left)}px`;
-    tooltip.style.top = `${Math.min(window.innerHeight - height - 8, Math.max(8, event.clientY - height / 2))}px`;
+    tooltip.style.top = `${Math.min(window.innerHeight - tooltipHeightPixels - 8, Math.max(8, event.clientY - tooltipHeightPixels / 2))}px`;
   });
   container.addEventListener("pointerleave", () => {
     tooltip.hidden = true;
@@ -873,8 +873,8 @@ function attachHover(container) {
 /* Record detail */
 
 async function pullRequestOf(commit) {
-  const known = state.commits.get(commit);
-  if (known?.pullRequest) return { number: known.pullRequest, title: known.subject };
+  const listedCommit = state.commits.get(commit);
+  if (listedCommit?.pullRequest) return { number: listedCommit.pullRequest, title: listedCommit.subject };
   if (!pullRequests.has(commit)) {
     pullRequests.set(commit, fetchJson(`${API_URL}commits/${commit}/pulls`)
       .then((candidates) => candidates.find((candidate) => candidate.merged_at) ?? candidates[0] ?? null));
@@ -913,13 +913,13 @@ function deltaTable(point) {
     .map((entry) => ({ ...entry, moved: movement(entry.metric, entry.value, entry.before) }))
     .sort((first, second) => second.moved - first.moved);
   const rowHtml = ({ metric, value, before }) => `<tr><td class="text">${escapeHtml(labelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before)}</td></tr>`;
-  const head = `<thead><tr><th class="text">Metric</th><th>This record</th><th>Previous</th><th>Change</th></tr></thead>`;
+  const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>Previous</th><th>Change</th></tr></thead>`;
   // A timing moved when it passed the noise threshold; a counter moved when it changed at all.
   const passedNoise = (row) => row.moved > 0 && (!isTiming(row.metric) || row.moved * 100 >= NOISE_PERCENT);
-  const moved = rows.filter(passedNoise);
-  const still = rows.filter((row) => !passedNoise(row));
-  return `<div class="table-wrap"><table>${head}<tbody>${moved.map(rowHtml).join("") || `<tr><td class="text" colspan="4">Nothing moved past ${NOISE_PERCENT}%, and no counter changed.</td></tr>`}</tbody></table></div>`
-    + (still.length > 0 ? `<details><summary>${still.length} more: timings within ${NOISE_PERCENT}%, unchanged counters, unmeasured</summary><div class="table-wrap"><table>${head}<tbody>${still.map(rowHtml).join("")}</tbody></table></div></details>` : "");
+  const movedRows = rows.filter(passedNoise);
+  const otherRows = rows.filter((row) => !passedNoise(row));
+  return `<div class="table-wrap"><table>${headerHtml}<tbody>${movedRows.map(rowHtml).join("") || `<tr><td class="text" colspan="4">Nothing moved past ${NOISE_PERCENT}%, and no counter changed.</td></tr>`}</tbody></table></div>`
+    + (otherRows.length > 0 ? `<details><summary>${otherRows.length} more: timings within ${NOISE_PERCENT}%, unchanged counters, unmeasured</summary><div class="table-wrap"><table>${headerHtml}<tbody>${otherRows.map(rowHtml).join("")}</tbody></table></div></details>` : "");
 }
 
 async function select(point, scroll) {
@@ -1030,13 +1030,13 @@ function renderCounterStanding(container) {
 
 function attachRowPicks(container) {
   container.querySelectorAll("tr.pick").forEach((tableRow) => {
-    const open = () => {
+    const openScene = () => {
       state.scene = tableRow.dataset.scene;
       document.getElementById("scene-select").value = state.scene;
       refresh().then(() => document.getElementById("scene").scrollIntoView({ behavior: "smooth", block: "start" }));
     };
-    tableRow.addEventListener("click", open);
-    tableRow.addEventListener("keydown", (event) => { if (event.key === "Enter") open(); });
+    tableRow.addEventListener("click", openScene);
+    tableRow.addEventListener("keydown", (event) => { if (event.key === "Enter") openScene(); });
   });
 }
 
