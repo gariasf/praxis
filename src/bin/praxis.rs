@@ -65,12 +65,16 @@ enum Command {
         scenes: Vec<String>,
         crowd_form: CrowdForm,
         publish: bool,
+        /// The Experiment the results publish to, off every Series.
+        experiment: Option<String>,
     },
     Publish {
         results: String,
         /// The wall time of the release build that made this binary, which
         /// then joins the results as a release build.
         release_build_seconds: Option<u64>,
+        /// The Experiment the results publish to, off every Series.
+        experiment: Option<String>,
     },
     ImportBaselines,
     UnrecordedScenes,
@@ -118,11 +122,20 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             scenes,
             crowd_form,
             publish,
-        } => bench(&output, configuration, &scenes, crowd_form, publish),
+            experiment,
+        } => bench(
+            &output,
+            configuration,
+            &scenes,
+            crowd_form,
+            publish,
+            experiment.as_deref(),
+        ),
         Command::Publish {
             results,
             release_build_seconds,
-        } => publish(&results, release_build_seconds),
+            experiment,
+        } => publish(&results, release_build_seconds, experiment.as_deref()),
         Command::ImportBaselines => import_baselines(),
         Command::UnrecordedScenes => unrecorded_scenes(),
         Command::Compare { results, mode } => compare(&results, mode),
@@ -154,6 +167,10 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             })
         })
         .transpose()?;
+    let experiment = take_option(&mut arguments, "--experiment")?;
+    if let Some(name) = &experiment {
+        praxis::bench::check_experiment_name(name)?;
+    }
     let skip_aliasing = take_flag(&mut arguments, "--skip-aliasing");
     let no_publish = take_flag(&mut arguments, "--no-publish");
     let command = arguments.first().map(String::as_str);
@@ -168,6 +185,18 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     anyhow::ensure!(
         release_build_seconds.is_none() || command == Some("publish"),
         "only `publish` takes --release-build-seconds"
+    );
+    anyhow::ensure!(
+        experiment.is_none() || matches!(command, Some("bench" | "publish")),
+        "only `bench` and `publish` take --experiment"
+    );
+    anyhow::ensure!(
+        experiment.is_none() || !no_publish,
+        "--experiment publishes, so it takes no --no-publish"
+    );
+    anyhow::ensure!(
+        experiment.is_none() || release_build_seconds.is_none(),
+        "a release build publishes beside main's results, never an Experiment's"
     );
     anyhow::ensure!(
         crowd_form.is_none() || matches!(command, Some("bench" | "capture")),
@@ -187,6 +216,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         scenes: scenes.to_vec(),
         crowd_form,
         publish: !no_publish,
+        experiment: experiment.clone(),
     };
     Ok(match arguments.as_slice() {
         [] => Command::Window(ReferenceScene::Helmet),
@@ -239,6 +269,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, results] if command == "publish" => Command::Publish {
             results: results.clone(),
             release_build_seconds,
+            experiment,
         },
         [command, subcommand] if command == "history" && subcommand == "import" => {
             Command::ImportBaselines
@@ -265,8 +296,8 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds>]`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -362,13 +393,15 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 /// are present, prints one line per scene, and writes `<scene>.json` into
 /// `output`. A crowd form other than the default benches `crowd` alone,
 /// written as `crowd-<form>.json`. With `publish`, the results then join
-/// the Bench history; a publish that fails warns and fails no bench.
+/// the Bench history, as the `experiment` named; a publish that fails warns
+/// and fails no bench.
 fn bench(
     output: &str,
     configuration: Configuration,
     scene_names: &[String],
     crowd_form: CrowdForm,
     publish: bool,
+    experiment: Option<&str>,
 ) -> anyhow::Result<()> {
     let crowd = ReferenceScene::Crowd.name();
     let other_form = crowd_form != CrowdForm::default();
@@ -413,11 +446,17 @@ fn bench(
         results.push(result);
     }
     if publish {
-        match praxis::bench::publish(Path::new("."), &results, None) {
+        let published = match experiment {
+            Some(name) => praxis::bench::publish_experiment(Path::new("."), &results, name),
+            None => praxis::bench::publish(Path::new("."), &results, None),
+        };
+        let retry_arguments =
+            experiment.map_or(String::new(), |name| format!(" --experiment {name}"));
+        match published {
             Ok(publication) => writeln!(std::io::stdout(), "{publication}")?,
             Err(error) => tracing::warn!(
                 error = format!("{error:#}"),
-                "bench results not published; `praxis publish {output}` retries"
+                "bench results not published; `praxis publish {output}{retry_arguments}` retries"
             ),
         }
     }
@@ -427,8 +466,13 @@ fn bench(
 /// Publishes every `<scene>.json` in `results` as Bench records on the
 /// `bench-history` branch, and prints what it did. With
 /// `release_build_seconds`, this binary's release build joins them: its
-/// size and the build's wall time.
-fn publish(results: &str, release_build_seconds: Option<u64>) -> anyhow::Result<()> {
+/// size and the build's wall time. With `experiment`, they publish as that
+/// Experiment's records instead, on no Series.
+fn publish(
+    results: &str,
+    release_build_seconds: Option<u64>,
+    experiment: Option<&str>,
+) -> anyhow::Result<()> {
     let measurements = result_paths(results)?
         .iter()
         .map(|path| read_json(path))
@@ -445,7 +489,10 @@ fn publish(results: &str, release_build_seconds: Option<u64>) -> anyhow::Result<
             })
         })
         .transpose()?;
-    let publication = praxis::bench::publish(Path::new("."), &measurements, release_build)?;
+    let publication = match experiment {
+        Some(name) => praxis::bench::publish_experiment(Path::new("."), &measurements, name)?,
+        None => praxis::bench::publish(Path::new("."), &measurements, release_build)?,
+    };
     writeln!(std::io::stdout(), "{publication}")?;
     Ok(())
 }
@@ -774,6 +821,7 @@ mod tests {
             scenes,
             crowd_form,
             publish,
+            experiment,
         } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
         else {
             panic!("bench parsed as another command");
@@ -783,6 +831,57 @@ mod tests {
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
         assert!(publish);
+        assert_eq!(experiment, None);
+    }
+
+    #[test]
+    fn bench_and_publish_take_an_experiment_and_nothing_else_does() {
+        let experiment = |arguments: &[&str]| match parse(arguments).unwrap() {
+            Command::Bench {
+                publish,
+                experiment,
+                ..
+            } => publish.then_some(experiment).flatten(),
+            Command::Publish { experiment, .. } => experiment,
+            _ => panic!("parsed as another command"),
+        };
+        for arguments in [
+            &["bench", "out", "--experiment", "faster-cull", "town"][..],
+            &["publish", "out", "--experiment", "faster-cull"][..],
+        ] {
+            assert_eq!(experiment(arguments).as_deref(), Some("faster-cull"));
+        }
+        for (arguments, expected) in [
+            (
+                &["compare", "out", "--experiment", "faster-cull"][..],
+                "only `bench` and `publish` take --experiment",
+            ),
+            (
+                &[
+                    "bench",
+                    "out",
+                    "--experiment",
+                    "faster-cull",
+                    "--no-publish",
+                ][..],
+                "takes no --no-publish",
+            ),
+            (
+                &[
+                    "publish",
+                    "out",
+                    "--experiment",
+                    "faster-cull",
+                    "--release-build-seconds",
+                    "412",
+                ][..],
+                "never an Experiment's",
+            ),
+            (&["bench", "out", "--experiment", "../main"][..], "../main"),
+        ] {
+            let error = parse(arguments).unwrap_err().to_string();
+            assert!(error.contains(expected), "{arguments:?}: {error}");
+        }
     }
 
     #[test]
@@ -805,6 +904,7 @@ mod tests {
         let Command::Publish {
             results,
             release_build_seconds,
+            ..
         } = parse(&["publish", "out"]).unwrap()
         else {
             panic!("publish parsed as another command");
