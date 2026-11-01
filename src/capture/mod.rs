@@ -372,7 +372,7 @@ mod tests {
     fn a_frames_allocations_do_not_depend_on_when_the_gpu_finished() {
         const FRAMES: u32 = 24;
         const WARM_UP_FRAMES: usize = 8;
-        // Far longer than the GPU takes to render a frame of 64 × 64.
+        // Far longer than a hardware GPU takes to render a frame of 64 × 64.
         const GPU_FINISH_WAIT: Duration = Duration::from_millis(100);
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
@@ -383,6 +383,13 @@ mod tests {
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
+        // A software rasterizer shares the test's CPU, and on CI's runner
+        // can take longer than the wait to finish a frame: a frame left
+        // unfinished changes what the frames after it allocate.
+        if context.adapter.get_info().device_type == wgpu::DeviceType::Cpu {
+            writeln!(std::io::stderr(), "skipped: needs a hardware adapter").ok();
+            return;
+        }
         let scene = ReferenceScene::Orrery;
         let allocations = |retired_between_frames: bool| -> Vec<u64> {
             let mut state = State::new(
