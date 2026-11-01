@@ -165,7 +165,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>Each point is one Bench record of <code>main</code>'s source, from the <a href="https://github.com/gariasf/praxis/tree/bench-history">bench-history</a> branch (<a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a>). Points are spaced by commit, not by date.</li>
     <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn beside the Series record of its merge base's source and compared with it.</li>
     <li><svg width="22" height="12" aria-hidden="true"><rect width="22" height="12" class="harness-band"></rect></svg>Shaded bands are Harness versions. A metric's definition can change from one to the next, so lines break between bands and no change is measured across them. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="content-break"></line></svg>A scene whose content changed breaks its line the same way.</li>
-    <li>Timing changes are coloured as <code>praxis compare</code> judges them: <span class="warn">amber</span> past +5%, <span class="up">red</span> past +10% when also past its noise floor (10 µs on the CPU, 20 µs on the GPU), <span class="down">green</span> when shrunk past 5%; the rest stay grey as noise. Counter changes are exact, so every one is marked. Changes across a Harness version or scene content break stay grey.</li>
+    <li>Timing changes are coloured by <code>praxis compare</code>'s warn and fail ratios and noise floors: <span class="warn">amber</span> past +5%, <span class="up">red</span> past +10% when also past the noise floor (10 µs on the CPU, 20 µs on the GPU), <span class="down">green</span> past −5%; the rest stay grey as noise. Counter changes are exact, so every one is marked. Changes across a Harness version or scene content break stay grey.</li>
     <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440 at the newest Harness version, on the median as <code>praxis compare</code> judges them. Other machines are comparison adapters: their figures are not Budgets. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
   </ul>
 </details>
@@ -201,7 +201,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   </div>
 
   <h3 class="view" id="record">Record</h3>
-  <div class="panel detail" id="record-detail"></div>
+  <div class="panel detail" id="record-detail"><p class="empty">Pick a point in any chart to see its record.</p></div>
 </section>
 
 <section id="across" aria-labelledby="across-heading">
@@ -527,8 +527,8 @@ function changeReference(row) {
 }
 
 /**
- * How `praxis compare` judges a time moving from `before` to `value`: "fail", "warn", "better" when it
- * shrank as far as a warning grows, or "flat". From `before` at or below zero, any growth passes every ratio.
+ * A time's move from `before` to `value` by `praxis compare`'s regression rule: "fail", "warn", "better"
+ * when it shrank by more than a warning's share, or "flat". From `before` at or below zero, any growth passes every ratio.
  */
 function timingVerdict(metric, value, before) {
   const noiseFloor = CPU_TIMINGS.has(metric) ? CPU_NOISE_FLOOR_MICROSECONDS : GPU_NOISE_FLOOR_MICROSECONDS;
@@ -536,7 +536,7 @@ function timingVerdict(metric, value, before) {
     const ratio = before > 0 ? value / before : Infinity;
     return ratio > FAIL_RATIO && value - before > noiseFloor ? "fail" : ratio > WARN_RATIO ? "warn" : "flat";
   }
-  if (value < before) return value <= 0 || before / value > WARN_RATIO ? "better" : "flat";
+  if (value < before) return before <= 0 || (before - value) / before > WARN_RATIO - 1 ? "better" : "flat";
   return "flat";
 }
 const VERDICT_CLASSES = { fail: "up", warn: "warn", better: "down", flat: "flat" };
@@ -559,7 +559,7 @@ function changeHtml(metric, value, before, comparable = true) {
   return `<span class="${comparable ? "changed" : "flat"}">${difference > 0 ? "+" : "−"}${formatValue(metric, Math.abs(difference))}</span>`;
 }
 
-/** Whether ADR 0013 judges a machine's row against the Budgets: the M4 Pro's, at the newest Harness version. */
+/** Whether ADR 0013 judges a machine's row against the Budgets: the M4 Pro's, at its newest Harness version. */
 function judgesBudgets(machine, row) {
   return machine === BUDGET_MACHINE && row.harness_version === state.newestHarnessVersion;
 }
@@ -1084,7 +1084,7 @@ async function select(point, scroll) {
 /** A row's Budgets as one cell, "✗ 2 over" or "✓ 6 under", each Budget's figure on hover. */
 function budgetCell(row) {
   if (!judgesBudgets(state.machine, row)) {
-    return `<span class="flat" title="Harness ${escapeHtml(row.harness_version)}: Budgets are judged at Harness ${escapeHtml(state.newestHarnessVersion)}">—</span>`;
+    return `<span class="flat" title="Harness ${escapeHtml(row.harness_version ?? "unknown")}: Budgets are judged at Harness ${escapeHtml(state.newestHarnessVersion)}">—</span>`;
   }
   const verdicts = budgetVerdicts(row);
   const detail = verdicts.map(({ metric, value, budget, over }) => `${labelOf(metric)}: ${formatValue(metric, value)}, ${over ? "over" : "under"} ${formatBudget(metric, budget)}`).join("\n");
@@ -1103,7 +1103,7 @@ function budgetNote(machine) {
 
 function renderStanding() {
   const container = document.getElementById("standing-table");
-  document.getElementById("standing-note").textContent = `Each scene's latest record on ${machineName(state.machine)}, its median over the ${MEASURED_FRAMES.toLocaleString("en")} frames a record measures, against the record before it and the median of up to ${RECENT_RECORDS} before it. A dash means no earlier record at the same Harness version and scene content. Pick a row to open its scene below.`;
+  document.getElementById("standing-note").textContent = `Each scene's latest record on ${machineName(state.machine)}, its median over the ${MEASURED_FRAMES.toLocaleString("en")} frames a record measures, against the record before it and the median of up to ${RECENT_RECORDS} before it. A dash means no earlier record at the same Harness version and scene content; changes within praxis compare's ratios stay grey as noise. Pick a row to open its scene below.`;
   const note = budgetNote(state.machine);
   const noteElement = document.getElementById("budget-note");
   noteElement.hidden = note === null;
@@ -1127,7 +1127,7 @@ function renderStanding() {
   const showsBudgets = state.machine === BUDGET_MACHINE;
   const valueHeaders = `<th>median of ${MEASURED_FRAMES.toLocaleString("en")} frames</th><th>vs previous record</th><th>vs median of last ${RECENT_RECORDS}</th>`;
   container.innerHTML = `<table><thead>
-    <tr><th class="text" rowspan="2">Scene</th><th colspan="3" class="text">GPU frame</th><th colspan="3" class="text">CPU frame</th>${showsBudgets ? `<th class="text" rowspan="2">Budgets<br><span class="unit">all ${Object.keys(state.budgets).length}, on hover</span></th>` : ""}<th class="text" rowspan="2">Latest record</th></tr>
+    <tr><th class="text" rowspan="2">Scene</th><th colspan="3" class="text">GPU frame</th><th colspan="3" class="text">CPU frame</th>${showsBudgets ? `<th class="text" rowspan="2">Budgets<br><span class="unit">each one on hover</span></th>` : ""}<th class="text" rowspan="2">Latest record</th></tr>
     <tr>${valueHeaders}${valueHeaders}</tr>
     </thead><tbody>${rows.map(({ scene, gpu, cpu, latestPoint }) => {
       const latest = latestPoint.row;
@@ -1236,7 +1236,7 @@ function renderAcross() {
     if (!latest) return `<td>—</td><td>—</td><td>—</td>`;
     return `<td>${formatValue("gpu_frame_microseconds", latest.gpu_frame_microseconds?.median ?? null)}</td>`
       + `<td>${formatValue("cpu_frame_microseconds", latest.cpu_frame_microseconds?.median ?? null)}</td>`
-      + `<td>${latest.harness_version ?? "—"}</td>`;
+      + `<td>${escapeHtml(latest.harness_version ?? "—")}</td>`;
   };
   container.innerHTML = `<table><thead>
     <tr><th class="text" rowspan="2">Scene</th>${machines.map((machine) => `<th colspan="3" class="text">${escapeHtml(machineName(machine))}</th>`).join("")}</tr>
@@ -1342,7 +1342,8 @@ async function start() {
       ...state.machines.map(loadMachineName),
       ...state.machines.flatMap((machine) => [...state.scenes, RELEASE_BUILD].map((scene) => loadSeries(machine, scene))),
     ]);
-    state.newestHarnessVersion = Math.max(...[...state.points.values()].flat().map((point) => point.row.harness_version).filter(Number.isFinite));
+    const budgetVersions = [...state.points.values()].flat().filter((point) => point.machine === BUDGET_MACHINE).map((point) => point.row.harness_version).filter(Number.isFinite);
+    state.newestHarnessVersion = budgetVersions.length > 0 ? Math.max(...budgetVersions) : null;
   } catch (error) {
     status.textContent = `Could not read the Bench history: ${error.message}.`;
     status.classList.add("error");
