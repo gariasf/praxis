@@ -39,11 +39,14 @@ const PUSH_ATTEMPTS: u32 = 5;
 /// What the branch's README says: how it is laid out.
 const README: &str = "# Bench history
 
-Bench records published by `praxis publish` and `praxis bench` (ADR 0024).
+Bench records published by `praxis publish` and `praxis bench`, and the
+Baselines `praxis history import` added from `main`'s history (ADR 0024).
 This branch holds data only and is never merged.
 
 - `records/<adapter>-<backend>/<scene>/<source hash>.json`: the records on a
-  Series, clean and release-profile runs of `main`'s source on a quiet machine.
+  Series, clean and release-profile runs of `main`'s source in their Series'
+  configuration: 2560x1440 over 1800 frames on a quiet machine, or on lavapipe
+  CI's 640x360 over 64 frames, quiet or not.
 - `tagged/<adapter>-<backend>/<scene>/<source hash>.json`: every other record,
   its `tags` saying why it is kept off the Series.
 - `records/<adapter>-<backend>/release-build/<source hash>.json`: the release
@@ -58,10 +61,15 @@ This branch holds data only and is never merged.
   on no Series. Each names its `experiment.merge_base` with `main` and that
   commit's source hash, whose record on the Series is what it compares with.
 
-lavapipe's Series read no GPU time: its counters and its binary's size, which
-load cannot change, and its build time, which a shared runner's load and cache
-hits move whatever a quiet test says. So its records join them from CI's
-configuration whether or not the runner was quiet.
+A machine is quiet when preflight warned of no GPU load over 10%, other
+praxis process, battery power or busy display at the run's start, and the
+run's GPU frame p95 over its median stayed under 1.06.
+
+lavapipe's records hold CPU, GPU and pass times like any other, but lavapipe
+renders on a shared runner's CPU, so the page draws only its counters and its
+binary's size, which load cannot change, and its build time, which a shared
+runner's load and cache hits move whatever a quiet test says. So its records
+join its Series from CI's configuration whether or not the runner was quiet.
 
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
@@ -69,10 +77,19 @@ lower, and a lavapipe or release build record never does: a source publishes
 there once. A bad publish is undone with `git revert`.
 
 `praxis history import` added the Baselines committed to `main` before the
-history existed: each Baseline file a commit changed is a record of that
-commit's source, its `provenance.source` `baseline-commit`. It holds what the
-bench measured then, so a metric added later is absent from it and null in
-its Series row.
+history existed, each a record of its commit's source, its `provenance.source`
+`baseline-commit`. A Baseline file a commit on `main`'s first-parent line
+added or changed is a record, unless the commit only renamed it or gave it new
+fields without changing a value it held, which measured nothing again. Two
+Baselines of one source meet the rules above with the later first: it stays
+unless the earlier goes on a Series and it does not, or the earlier's GPU frame
+spread is lower and neither is lavapipe's. A Baseline counts as quiet unless the
+GPU frame spread it recorded reached 1.06: one that recorded none counts as
+quiet unchecked. Each import rewrites the records an earlier one wrote, with
+the tags the rules of its day give them. A record holds what the bench
+measured then, so a metric added later is absent from it: its Series row
+holds null for a time, Aliasing figure or scene content hash it lacks, and
+leaves out a counter or pass it lacks.
 ";
 
 /// A Bench record to publish: the file the branch keeps under its key, and
@@ -1473,6 +1490,28 @@ mod tests {
     }
 
     #[test]
+    fn the_readme_names_the_series_configurations_and_quiet_thresholds() {
+        let configuration = |configuration: Configuration| {
+            format!(
+                "{}x{} over {} frames",
+                configuration.width, configuration.height, configuration.measured_frames
+            )
+        };
+        for fact in [
+            configuration(Configuration::REFERENCE),
+            configuration(Configuration::CI_COUNTERS),
+            format!("GPU load over {}%", crate::preflight::BUSY_GPU_PERCENT),
+            format!("under {}", crate::bench::provenance::QUIET_P95_OVER_MEDIAN),
+            format!(
+                "reached {}",
+                crate::bench::provenance::QUIET_P95_OVER_MEDIAN
+            ),
+        ] {
+            assert!(README.contains(&fact), "{fact}");
+        }
+    }
+
+    #[test]
     fn a_run_of_another_configuration_is_tagged_with_it() {
         let fixture = Fixture::new("configuration");
         let counters = Measurements {
@@ -1574,11 +1613,74 @@ mod tests {
 
         let commits = fixture.commits();
         let second = import::import_up_to(checkout, &history_started, &[&harness_break]).unwrap();
+        // It writes again every record the first wrote, to the same tree.
         assert_eq!(
-            (second.dropped, second.restamped, second.commit),
-            (3, 0, None)
+            (
+                second.on_series,
+                second.tagged,
+                second.dropped,
+                second.restamped,
+                second.commit
+            ),
+            (2, 1, 0, 0, None)
         );
         assert_eq!(fixture.commits(), commits);
+
+        // An import under older rules tagged a record today's rules put on
+        // its Series, and gave a lavapipe record, which publishes once, tags
+        // today's rules do not: the next import writes both as today's would.
+        let imported = |directory: &str, adapter_key: &str| {
+            fixture
+                .files()
+                .into_iter()
+                .find(|path| {
+                    path.starts_with(&format!("{directory}/{adapter_key}/pbr-sweep/"))
+                        && fixture
+                            .read(path)
+                            .contains(r#""source": "baseline-commit""#)
+                })
+                .unwrap()
+        };
+        let metal_path = imported(ON_SERIES, "apple-m4-pro-metal");
+        let lavapipe_path = imported(TAGGED, "llvmpipe-llvm-20-1-2-vulkan");
+        let (metal_record, lavapipe_record) =
+            (fixture.read(&metal_path), fixture.read(&lavapipe_path));
+        let stale = |record: &str, tags: &[&str]| {
+            let mut file: serde_json::Value = serde_json::from_str(record).unwrap();
+            file["tags"] = serde_json::json!(tags);
+            file.to_string()
+        };
+        let metal_stale_path = metal_path.replacen(ON_SERIES, TAGGED, 1);
+        let editor = fixture.directory.join("editor");
+        fixture.clone_into(&editor);
+        git(&editor, &["checkout", "--quiet", BRANCH], None).unwrap();
+        std::fs::remove_file(editor.join(&metal_path)).unwrap();
+        let metal_stale_file = editor.join(&metal_stale_path);
+        std::fs::create_dir_all(metal_stale_file.parent().unwrap()).unwrap();
+        std::fs::write(
+            metal_stale_file,
+            stale(&metal_record, &["machine not quiet"]),
+        )
+        .unwrap();
+        commit(
+            &editor,
+            &lavapipe_path,
+            &stale(
+                &lavapipe_record,
+                &[
+                    "machine not quiet",
+                    "640x1440 over 1800 frames, not the reference configuration",
+                ],
+            ),
+        );
+        git(&editor, &["push", "--quiet", "origin", BRANCH], None).unwrap();
+
+        let third = import::import_up_to(checkout, &history_started, &[&harness_break]).unwrap();
+        assert!(third.commit.is_some());
+        let files = fixture.files();
+        assert!(!files.contains(&metal_stale_path), "{files:?}");
+        assert_eq!(fixture.read(&metal_path), metal_record);
+        assert_eq!(fixture.read(&lavapipe_path), lavapipe_record);
     }
 
     /// lavapipe's result of `checkout` in CI's configuration.
