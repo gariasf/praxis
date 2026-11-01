@@ -766,9 +766,11 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
     }
     for (const point of drawnExperiments.filter((candidate) => candidate.machine === line.machine)) {
       const value = valueOf(point.row);
-      const x = axis.xOf(point.previous);
+      const baseX = axis.xOf(point.previous);
+      // Beside its base's point, so neither hides the other when they are close.
+      const x = baseX + Math.min(axis.stepPixels / 3, 9);
       const y = yOf(value);
-      paths += `<line class="experiment-link" x1="${x}" x2="${x}" y1="${yOf(valueOf(point.previous.row))}" y2="${y}" stroke="${colour}"></line>`;
+      paths += `<line class="experiment-link" x1="${baseX}" x2="${x}" y1="${yOf(valueOf(point.previous.row))}" y2="${y}" stroke="${colour}"></line>`;
       markers += markerSvg(x, y, point, colour, point.path === state.selected?.path, frame.outside(value));
       hitPoints.push({ x, y, point, colour, value });
     }
@@ -997,7 +999,9 @@ async function select(point, scroll) {
       ? `${pullRequestLink(pullRequest.number)} ${escapeHtml(pullRequest.title)}`
       : "none found; the commit's page lists any";
   }, (error) => {
-    if (state.selected === point) pullRequestCell.textContent = `${error.message}; the commit's page lists it`;
+    if (state.selected !== point) return;
+    // GitHub answers 422 for a commit it has never seen, as an Experiment's unpushed branch commit is.
+    pullRequestCell.textContent = point.experiment ? "none found: its branch may not be pushed" : `${error.message}; the commit's page lists it`;
   });
   document.getElementById("record-raw").addEventListener("toggle", async (event) => {
     if (!event.target.open) return;

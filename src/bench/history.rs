@@ -345,13 +345,18 @@ pub struct Publication {
 
 impl std::fmt::Display for Publication {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            formatter,
-            "published {} Bench records on a Series and {} tagged to {BRANCH}, dropped {}",
-            self.on_series, self.tagged, self.dropped
-        )?;
         if self.experiment > 0 {
-            write!(formatter, ", {} to an Experiment", self.experiment)?;
+            write!(
+                formatter,
+                "published {} Bench records to an Experiment on {BRANCH}, dropped {}",
+                self.experiment, self.dropped
+            )?;
+        } else {
+            write!(
+                formatter,
+                "published {} Bench records on a Series and {} tagged to {BRANCH}, dropped {}",
+                self.on_series, self.tagged, self.dropped
+            )?;
         }
         if self.restamped > 0 {
             write!(formatter, ", re-stamped {}", self.restamped)?;
