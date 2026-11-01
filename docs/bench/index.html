@@ -162,7 +162,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <summary>How to read this page</summary>
   <ul>
     <li>Each point is one Bench record of <code>main</code>'s source, from the <a href="https://github.com/gariasf/praxis/tree/bench-history">bench-history</a> branch (<a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a>). Points are spaced by commit, not by date.</li>
-    <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn above the Series record of its merge base's source and compared with it.</li>
+    <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn beside the Series record of its merge base's source and compared with it.</li>
     <li><svg width="22" height="12" aria-hidden="true"><rect width="22" height="12" class="harness-band"></rect></svg>Shaded bands are Harness versions. A metric's definition can change from one to the next, so lines break between bands and no change is measured across them. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="content-break"></line></svg>A scene whose content changed breaks its line the same way.</li>
     <li>Timing changes under 3% are left uncoloured. Counter changes are exact, so every one is marked.</li>
     <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
@@ -725,7 +725,7 @@ function pointTooltip(point, rows) {
 
 /**
  * A line chart in source order. `lines` holds one entry per machine: its Series points, its tagged
- * points and any Experiment points, each read through `valueOf`; an Experiment's point is drawn above
+ * points and any Experiment points, each read through `valueOf`; an Experiment's point is drawn beside
  * its base's. Registers its points on `container` for hover and click.
  */
 function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf, budget, height = 230 }) {
@@ -783,7 +783,7 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
     const spread = hit.point.row[metric];
     const rows = [[hit.colour, machineName(hit.point.machine), formatValue(metric, hit.value)]];
     if (spread && typeof spread === "object") rows.push([null, "p95", formatValue(metric, spread.p95)]);
-    if (hit.point.experiment) rows.push([null, "vs its base", changeHtml(metric, hit.value, valueOf(hit.point.previous.row))]);
+    if (hit.point.experiment) rows.push([null, "vs its base", experimentChangeHtml(hit.point, metric, hit.value, valueOf(hit.point.previous.row))]);
     return pointTooltip(hit.point, rows);
   };
 }
@@ -984,7 +984,7 @@ async function select(point, scroll) {
       <dt>Machine</dt><dd>${escapeHtml(machineName(point.machine))} · ${escapeHtml(point.scene)}</dd>
       <dt>Commit</dt><dd>${commitLink(row, shortCommit(row))} · ${dateOf(row.committed_unix_seconds)}</dd>
       <dt>Pull request</dt><dd id="record-pull">looking it up…</dd>
-      <dt>Kind</dt><dd>${point.experiment ? `Experiment ${escapeHtml(point.experiment.name)}, benched from a branch${row.tags.length > 0 ? `: ${escapeHtml(row.tags.join("; "))}` : ""}` : point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : isBaseline(row) ? "a Baseline imported from main's history" : "on the Series"}</dd>
+      <dt>Kind</dt><dd>${point.experiment ? `Experiment ${escapeHtml(point.experiment.name)}, benched from a branch${experimentTags(point).length > 0 ? `: ${escapeHtml(experimentTags(point).join("; "))}` : ""}` : point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : isBaseline(row) ? "a Baseline imported from main's history" : "on the Series"}</dd>
       ${row.harness_version === undefined ? "" : `<dt>Harness</dt><dd>version ${escapeHtml(row.harness_version)}</dd>`}
       <dt>${point.experiment ? "Base" : "Previous"}</dt><dd>${previous ? `${commitLink(previous.row, shortCommit(previous.row))} · ${dateOf(previous.row.committed_unix_seconds)} · ${changeName(previous.row)}` : point.experiment ? baseMissing(point) : "none: the first record"}</dd>
     </dl>
@@ -1000,8 +1000,9 @@ async function select(point, scroll) {
       : "none found; the commit's page lists any";
   }, (error) => {
     if (state.selected !== point) return;
-    // GitHub answers 422 for a commit it has never seen, as an Experiment's unpushed branch commit is.
-    pullRequestCell.textContent = point.experiment ? "none found: its branch may not be pushed" : `${error.message}; the commit's page lists it`;
+    // GitHub answers an error (422, though its documentation lists only 200 and 409) for a commit it has
+    // never seen, as an Experiment's unpushed branch commit is.
+    pullRequestCell.textContent = point.experiment ? `none found (${error.message.replace(/^https:\S+ answered/, "GitHub answered")}): its branch may not be pushed` : `${error.message}; the commit's page lists it`;
   });
   document.getElementById("record-raw").addEventListener("toggle", async (event) => {
     if (!event.target.open) return;
@@ -1090,6 +1091,14 @@ function attachRowPicks(container) {
   });
 }
 
+/** An Experiment record's change from its base, unless a Harness version or scene content lies between them. */
+function experimentChangeHtml(point, metric, value, before) {
+  return point.breakLabel ? `<span class="flat">— ${escapeHtml(point.breakLabel)} differs</span>` : changeHtml(metric, value, before);
+}
+
+/** What kept an Experiment's record from being a quiet, clean run; every one is off main's source. */
+function experimentTags(point) { return point.row.tags.filter((tag) => tag !== "source not main's"); }
+
 /** Why an Experiment's record has no base to compare with. */
 function baseMissing(point) {
   const base = point.experiment.merge_base;
@@ -1110,19 +1119,20 @@ function renderExperiment() {
   }
   const cells = (point, metric) => {
     const value = point.row[metric]?.median ?? null;
-    return `<td>${formatValue(metric, value)}</td><td>${point.previous ? changeHtml(metric, value, point.previous.row[metric]?.median ?? null) : "—"}</td>`;
+    return `<td>${formatValue(metric, value)}</td><td>${point.previous ? experimentChangeHtml(point, metric, value, point.previous.row[metric]?.median ?? null) : "—"}</td>`;
   };
   const countersChanged = (point) => {
-    if (!point.previous) return "—";
+    if (!point.previous || point.breakLabel) return "—";
     const before = new Map(metricsOf(point.previous.row));
     return metricsOf(point.row).filter(([metric, value]) => !isTiming(metric) && before.has(metric) && before.get(metric) !== value).length;
   };
-  container.innerHTML = `<table><thead><tr><th class="text">Machine</th><th class="text">Commit</th><th class="text">Base</th><th>GPU frame</th><th>vs base</th><th>CPU frame</th><th>vs base</th><th>Counters changed</th></tr></thead><tbody>${points.map((point, index) => `<tr class="pick${point.path === state.selected?.path ? " current" : ""}" tabindex="0" data-index="${index}">
+  container.innerHTML = `<table><thead><tr><th class="text">Machine</th><th class="text">Commit</th><th class="text">Base</th><th>GPU frame</th><th>vs base</th><th>CPU frame</th><th>vs base</th><th>Counters changed</th><th class="text">Tags</th></tr></thead><tbody>${points.map((point, index) => `<tr class="pick${point.path === state.selected?.path ? " current" : ""}" tabindex="0" data-index="${index}">
     <td class="text">${escapeHtml(machineName(point.machine))}</td>
     <td class="text">${commitLink(point.row, shortCommit(point.row))}</td>
     <td class="text">${point.previous ? changeReference(point.previous.row) : "no Series record"}</td>
     ${cells(point, "gpu_frame_microseconds")}${cells(point, "cpu_frame_microseconds")}
-    <td>${countersChanged(point)}</td></tr>`).join("")}</tbody></table>`;
+    <td>${countersChanged(point)}</td>
+    <td class="text">${escapeHtml(experimentTags(point).join("; ")) || "—"}</td></tr>`).join("")}</tbody></table>`;
   container.querySelectorAll("tr.pick").forEach((tableRow) => {
     const point = points[Number(tableRow.dataset.index)];
     tableRow.addEventListener("click", () => select(point, true));

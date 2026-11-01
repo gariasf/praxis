@@ -333,7 +333,9 @@ pub struct Publication {
     /// Records written under `tagged/`.
     pub tagged: usize,
     /// Records written under `experiments/`.
-    pub experiment: usize,
+    pub in_experiment: usize,
+    /// The Experiment published to; none for a publish to the Series.
+    pub experiment: Option<String>,
     /// Records dropped for the same record, or one at least as quiet, under
     /// their key.
     pub dropped: usize,
@@ -345,11 +347,11 @@ pub struct Publication {
 
 impl std::fmt::Display for Publication {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if self.experiment > 0 {
+        if let Some(name) = &self.experiment {
             write!(
                 formatter,
-                "published {} Bench records to an Experiment on {BRANCH}, dropped {}",
-                self.experiment, self.dropped
+                "published {} Bench records to Experiment {name} on {BRANCH}, dropped {}",
+                self.in_experiment, self.dropped
             )?;
         } else {
             write!(
@@ -408,7 +410,10 @@ pub fn publish_experiment(
     let main_source_hash = source_hash(repository, &main)?;
     let records: Vec<BenchRecord> =
         bench_records(repository, results, &main, &main_source_hash, Some(name)).collect();
-    push_records(repository, &records)
+    Ok(Publication {
+        experiment: Some(name.to_owned()),
+        ..push_records(repository, &records)?
+    })
 }
 
 /// Fails unless `name` can name an Experiment: one directory on the branch,
@@ -804,7 +809,8 @@ impl<'repository> Worktree<'repository> {
         let mut publication = Publication {
             on_series: 0,
             tagged: 0,
-            experiment: 0,
+            in_experiment: 0,
+            experiment: None,
             dropped: 0,
             restamped: 0,
             commit: None,
@@ -859,7 +865,7 @@ impl<'repository> Worktree<'repository> {
                 publication.on_series += 1;
                 series.insert(directory.to_owned());
             } else if record.experiment.is_some() {
-                publication.experiment += 1;
+                publication.in_experiment += 1;
             } else {
                 publication.tagged += 1;
             }
@@ -1329,11 +1335,17 @@ mod tests {
         .unwrap();
         assert_eq!(
             (
-                publication.experiment,
+                publication.in_experiment,
                 publication.on_series,
                 publication.tagged
             ),
             (1, 0, 0)
+        );
+        assert!(
+            publication
+                .to_string()
+                .contains("to Experiment faster-cull"),
+            "{publication}"
         );
         let source_hash = |measurements: &Measurements| {
             measurements
@@ -1374,7 +1386,14 @@ mod tests {
         // Even main's own clean, quiet source stays off the Series.
         git(&fixture.checkout, &["switch", "--quiet", "main"], None).unwrap();
         let publication = publish_experiment(&fixture.checkout, &[on_main], "control").unwrap();
-        assert_eq!((publication.experiment, publication.on_series), (1, 0));
+        assert_eq!((publication.in_experiment, publication.on_series), (1, 0));
+        // A record dropped as no quieter still reads as the Experiment's.
+        let again = publish_experiment(&fixture.checkout, &[on_branch], "faster-cull").unwrap();
+        assert_eq!((again.in_experiment, again.dropped), (0, 1));
+        assert!(
+            again.to_string().contains("to Experiment faster-cull"),
+            "{again}"
+        );
         assert_eq!(
             fixture.read("series/apple-m4-pro-metal/pbr-sweep.json"),
             series

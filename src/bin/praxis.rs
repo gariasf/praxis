@@ -450,12 +450,13 @@ fn bench(
             Some(name) => praxis::bench::publish_experiment(Path::new("."), &results, name),
             None => praxis::bench::publish(Path::new("."), &results, None),
         };
-        let retry = experiment.map_or(String::new(), |name| format!(" --experiment {name}"));
+        let retry_arguments =
+            experiment.map_or(String::new(), |name| format!(" --experiment {name}"));
         match published {
             Ok(publication) => writeln!(std::io::stdout(), "{publication}")?,
             Err(error) => tracing::warn!(
                 error = format!("{error:#}"),
-                "bench results not published; `praxis publish {output}{retry}` retries"
+                "bench results not published; `praxis publish {output}{retry_arguments}` retries"
             ),
         }
     }
