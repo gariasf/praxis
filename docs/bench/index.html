@@ -94,6 +94,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .budget { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .content-break { stroke: var(--warm); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .tagged-line { stroke-width: 1.5; stroke-dasharray: 5 4; }
+.experiment-link { stroke-width: 1.5; stroke-dasharray: 2 3; }
 .milestone { stroke: var(--ink-soft); stroke-width: 1; opacity: 0.6; }
 .crosshair { stroke: var(--ink-soft); stroke-width: 1; }
 .tooltip {
@@ -151,6 +152,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <label>Machine <select id="machine-select"></select></label>
   <label>Scene <select id="scene-select"></select></label>
   <label><input type="checkbox" id="tagged-toggle"> Tagged records</label>
+  <label>Experiment <select id="experiment-select"></select></label>
   <nav aria-label="Views"><a href="#standing">Standing</a><a href="#frame">Frame</a><a href="#passes">Passes</a><a href="#counters">Counters</a><a href="#build">Build</a><a href="#record">Record</a></nav>
 </div>
 
@@ -160,7 +162,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <summary>How to read this page</summary>
   <ul>
     <li>Each point is one Bench record of <code>main</code>'s source, from the <a href="https://github.com/gariasf/praxis/tree/bench-history">bench-history</a> branch (<a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a>). Points are spaced by commit, not by date.</li>
-    <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale.</li>
+    <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn above the Series record of its merge base's source and compared with it.</li>
     <li><svg width="22" height="12" aria-hidden="true"><rect width="22" height="12" class="harness-band"></rect></svg>Shaded bands are Harness versions. A metric's definition can change from one to the next, so lines break between bands and no change is measured across them. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="content-break"></line></svg>A scene whose content changed breaks its line the same way.</li>
     <li>Timing changes under 3% are left uncoloured. Counter changes are exact, so every one is marked.</li>
     <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
@@ -180,6 +182,10 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <p class="note">CPU and GPU frame medians on every machine with a GPU. lavapipe, CI's software renderer, is left out: only its counters count.</p>
   <div class="panel chart" id="cpu-chart"></div>
   <div class="panel chart" id="gpu-chart"></div>
+  <div id="experiment-view" hidden>
+    <p class="note" id="experiment-note"></p>
+    <div class="panel table-wrap" id="experiment-table"></div>
+  </div>
 
   <h3 class="view" id="passes">Passes</h3>
   <p class="note" id="passes-note">Each GPU pass's median on the machine above, one line per pass.</p>
@@ -263,6 +269,9 @@ const state = {
   scene: null,
   machine: null,
   showTagged: false,
+  // Experiment names, and the one overlaid on the charts.
+  experiments: [],
+  experiment: null,
   selected: null,
   listingTruncated: false,
 };
@@ -340,6 +349,7 @@ function pointsOf(rows, machine, scene, directory) {
 
 function seriesPoints(machine, scene) { return state.points.get(`records/${machine}/${scene}`) ?? []; }
 function taggedPoints(machine, scene) { return state.showTagged ? state.points.get(`tagged/${machine}/${scene}`) ?? [] : []; }
+function experimentPoints(machine, scene) { return state.experiment ? state.points.get(`experiments/${state.experiment}/${machine}/${scene}`) ?? [] : []; }
 
 async function loadSeries(machine, scene) {
   const key = `records/${machine}/${scene}`;
@@ -368,10 +378,33 @@ async function loadTagged(machine, scene) {
   state.points.set(key, points);
 }
 
+/**
+ * An Experiment's records of a scene on a machine, each compared with the Series record of its merge
+ * base's source: a branch's change is measured against the main it started from.
+ */
+async function loadExperiment(name, machine, scene) {
+  const key = `experiments/${name}/${machine}/${scene}`;
+  if (state.points.has(key)) return;
+  const files = state.paths.filter((path) => path.startsWith(`${key}/`));
+  const records = await Promise.all(files.map((path) => fetchJson(HISTORY_URL + path)));
+  const series = seriesPoints(machine, scene);
+  const points = records.map((record, index) => {
+    rawRecords.set(files[index], record);
+    const row = rowOf(record);
+    const previous = series.find((candidate) => candidate.row.source_hash === record.experiment.merge_base_source_hash) ?? null;
+    const breakLabel = previous && !sameDefinition(previous.row, row) ? breakLabelOf(previous.row, row) : null;
+    return { machine, scene, row, experiment: record.experiment, tagged: false, segment: -1, previous, breakLabel, path: files[index] };
+  });
+  state.points.set(key, points.sort((first, second) => bySourceOrder(first.row, second.row)));
+}
+
+/** The machine a record's path is under: `records/<machine>/…`, `tagged/<machine>/…` or `experiments/<name>/<machine>/…`. */
+function machineOfPath(path) { return path.split("/")[path.startsWith("experiments/") ? 2 : 1]; }
+
 /** A machine's name from one of its records: "M4 Pro · Metal". */
 async function loadMachineName(machine) {
   const backend = machine.slice(machine.lastIndexOf("-") + 1);
-  const path = state.paths.find((candidate) => candidate.match(/^(?:records|tagged)\//) && candidate.split("/")[1] === machine);
+  const path = state.paths.find((candidate) => candidate.match(/^(?:records|tagged|experiments)\//) && machineOfPath(candidate) === machine);
   let adapter = machine.slice(0, machine.lastIndexOf("-"));
   try {
     const record = await fetchJson(HISTORY_URL + path);
@@ -448,8 +481,8 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
 }
 function isBaseline(row) { return row.source === "baseline-commit"; }
-/** "tagged", "Baseline" or "Series": what a point's mark and labels say it is. */
-function kindOf(point) { return point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"; }
+/** "Experiment", "tagged", "Baseline" or "Series": what a point's mark and labels say it is. */
+function kindOf(point) { return point.experiment ? "Experiment" : point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"; }
 function shortCommit(row) { return escapeHtml(row.commit.slice(0, 8)); }
 function commitLink(row, text) { return `<a href="https://github.com/${REPOSITORY}/commit/${encodeURIComponent(row.commit)}">${text}</a>`; }
 function pullRequestLink(number) { return `<a href="https://github.com/${REPOSITORY}/pull/${Number(number)}">#${Number(number)}</a>`; }
@@ -643,6 +676,7 @@ function markerSvg(x, y, point, colour, selected, outside) {
     tagged: `<circle cx="${x}" cy="${y}" r="4" fill="var(--panel)" stroke="${colour}" stroke-width="2"></circle>`,
     Baseline: `<rect x="${x - 4}" y="${y - 4}" width="8" height="8" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></rect>`,
     Series: `<circle cx="${x}" cy="${y}" r="4.5" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></circle>`,
+    Experiment: `<path d="M${x},${y - 6}L${x + 6},${y}L${x},${y + 6}L${x - 6},${y}Z" fill="${colour}" stroke="var(--panel)" stroke-width="1.5"></path>`,
   };
   return ring + marks[kindOf(point)];
 }
@@ -685,22 +719,25 @@ function legendOf(entries) {
 function pointTooltip(point, rows) {
   const row = point.row;
   return `<div class="title">${changeName(row)}</div>`
-    + `<div class="muted">${dateOf(row.committed_unix_seconds)}${row.harness_version === undefined ? "" : ` · harness ${escapeHtml(row.harness_version)}`} · ${kindOf(point)}${point.tagged ? `: ${escapeHtml(row.tags.join("; "))}` : ""}</div>`
+    + `<div class="muted">${dateOf(row.committed_unix_seconds)}${row.harness_version === undefined ? "" : ` · harness ${escapeHtml(row.harness_version)}`} · ${kindOf(point)}${point.experiment ? ` ${escapeHtml(point.experiment.name)}` : point.tagged ? `: ${escapeHtml(row.tags.join("; "))}` : ""}</div>`
     + rows.map(([chip, label, value]) => `<div class="row">${chip ? `<span class="chip" style="background:${chip}"></span>` : ""}<span>${escapeHtml(label)}</span><span>${value}</span></div>`).join("");
 }
 
 /**
- * A line chart in source order. `lines` holds one entry per machine: its Series points and its tagged
- * points, each read through `valueOf`. Registers its points on `container` for hover and click.
+ * A line chart in source order. `lines` holds one entry per machine: its Series points, its tagged
+ * points and any Experiment points, each read through `valueOf`; an Experiment's point is drawn above
+ * its base's. Registers its points on `container` for hover and click.
  */
 function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf, budget, height = 230 }) {
   const drawnPoints = lines.flatMap((line) => [...line.series, ...line.tagged]).filter((point) => valueOf(point.row) !== null);
+  const drawnExperiments = lines.flatMap((line) => line.experiment ?? [])
+    .filter((point) => valueOf(point.row) !== null && point.previous && valueOf(point.previous.row) !== null);
   if (drawnPoints.length === 0) {
     emptyChart(container, title, state.showTagged ? "No record of this scene measures it." : "No record on a Series measures it; tagged records may.");
     return;
   }
   const drawnLines = lines.filter((line) => drawnPoints.some((point) => point.machine === line.machine));
-  const seriesValues = drawnPoints.filter((point) => !point.tagged).map((point) => valueOf(point.row));
+  const seriesValues = [...drawnPoints.filter((point) => !point.tagged), ...drawnExperiments].map((point) => valueOf(point.row));
   const frame = frameOf(container, seriesValues.length > 0 ? seriesValues : drawnPoints.map((point) => valueOf(point.row)), budget, height);
   if (budget !== null && budget !== undefined && !frame.budgetShown) {
     const highest = Math.max(...drawnPoints.map((point) => valueOf(point.row)));
@@ -727,6 +764,14 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
       markers += markerSvg(x, y, point, colour, point.path === state.selected?.path, frame.outside(value));
       hitPoints.push({ x, y, point, colour, value });
     }
+    for (const point of drawnExperiments.filter((candidate) => candidate.machine === line.machine)) {
+      const value = valueOf(point.row);
+      const x = axis.xOf(point.previous);
+      const y = yOf(value);
+      paths += `<line class="experiment-link" x1="${x}" x2="${x}" y1="${yOf(valueOf(point.previous.row))}" y2="${y}" stroke="${colour}"></line>`;
+      markers += markerSvg(x, y, point, colour, point.path === state.selected?.path, frame.outside(value));
+      hitPoints.push({ x, y, point, colour, value });
+    }
   }
   const svg = commitAxisSvg(frame, axis, contentBreaks) + yAxisSvg(frame, metric) + budgetSvg(frame, metric, budget) + paths + markers;
   const legend = legendOf(drawnLines.map((line) => [machineColour(line.machine), machineName(line.machine)]));
@@ -736,6 +781,7 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
     const spread = hit.point.row[metric];
     const rows = [[hit.colour, machineName(hit.point.machine), formatValue(metric, hit.value)]];
     if (spread && typeof spread === "object") rows.push([null, "p95", formatValue(metric, spread.p95)]);
+    if (hit.point.experiment) rows.push([null, "vs its base", changeHtml(metric, hit.value, valueOf(hit.point.previous.row))]);
     return pointTooltip(hit.point, rows);
   };
 }
@@ -913,7 +959,7 @@ function deltaTable(point) {
     .map((entry) => ({ ...entry, moved: movement(entry.metric, entry.value, entry.before) }))
     .sort((first, second) => second.moved - first.moved);
   const rowHtml = ({ metric, value, before }) => `<tr><td class="text">${escapeHtml(labelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before)}</td></tr>`;
-  const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>Previous</th><th>Change</th></tr></thead>`;
+  const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>${point.experiment ? "Base" : "Previous"}</th><th>Change</th></tr></thead>`;
   // A timing moved when it passed the noise threshold; a counter moved when it changed at all.
   const passedNoise = (row) => row.moved > 0 && (!isTiming(row.metric) || row.moved * 100 >= NOISE_PERCENT);
   const movedRows = rows.filter(passedNoise);
@@ -936,9 +982,9 @@ async function select(point, scroll) {
       <dt>Machine</dt><dd>${escapeHtml(machineName(point.machine))} · ${escapeHtml(point.scene)}</dd>
       <dt>Commit</dt><dd>${commitLink(row, shortCommit(row))} · ${dateOf(row.committed_unix_seconds)}</dd>
       <dt>Pull request</dt><dd id="record-pull">looking it up…</dd>
-      <dt>Kind</dt><dd>${point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : isBaseline(row) ? "a Baseline imported from main's history" : "on the Series"}</dd>
+      <dt>Kind</dt><dd>${point.experiment ? `Experiment ${escapeHtml(point.experiment.name)}, benched from a branch${row.tags.length > 0 ? `: ${escapeHtml(row.tags.join("; "))}` : ""}` : point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : isBaseline(row) ? "a Baseline imported from main's history" : "on the Series"}</dd>
       ${row.harness_version === undefined ? "" : `<dt>Harness</dt><dd>version ${escapeHtml(row.harness_version)}</dd>`}
-      <dt>Previous</dt><dd>${previous ? `${commitLink(previous.row, shortCommit(previous.row))} · ${dateOf(previous.row.committed_unix_seconds)} · ${changeName(previous.row)}` : "none: the first record"}</dd>
+      <dt>${point.experiment ? "Base" : "Previous"}</dt><dd>${previous ? `${commitLink(previous.row, shortCommit(previous.row))} · ${dateOf(previous.row.committed_unix_seconds)} · ${changeName(previous.row)}` : point.experiment ? baseMissing(point) : "none: the first record"}</dd>
     </dl>
     ${crossing}
     ${deltaTable(point)}
@@ -1040,9 +1086,49 @@ function attachRowPicks(container) {
   });
 }
 
+/** Why an Experiment's record has no base to compare with. */
+function baseMissing(point) {
+  const base = point.experiment.merge_base;
+  return `none yet: its merge base ${commitLink({ commit: base }, escapeHtml(base.slice(0, 8)))} has no record on this machine's Series; the sweep benches main's sources, or bench that commit here`;
+}
+
+/** The chosen Experiment's records of the scene, one row each, against their bases. */
+function renderExperiment() {
+  const view = document.getElementById("experiment-view");
+  view.hidden = !state.experiment;
+  if (!state.experiment) return;
+  const points = state.machines.flatMap((machine) => experimentPoints(machine, state.scene));
+  document.getElementById("experiment-note").textContent = `Experiment ${state.experiment}: each record against the Series record of its merge base's source on the same machine. Pick a row to see every metric's change.`;
+  const container = document.getElementById("experiment-table");
+  if (points.length === 0) {
+    container.innerHTML = `<p class="empty">Experiment ${escapeHtml(state.experiment)} has no record of ${escapeHtml(state.scene)}.</p>`;
+    return;
+  }
+  const cells = (point, metric) => {
+    const value = point.row[metric]?.median ?? null;
+    return `<td>${formatValue(metric, value)}</td><td>${point.previous ? changeHtml(metric, value, point.previous.row[metric]?.median ?? null) : "—"}</td>`;
+  };
+  const countersChanged = (point) => {
+    if (!point.previous) return "—";
+    const before = new Map(metricsOf(point.previous.row));
+    return metricsOf(point.row).filter(([metric, value]) => !isTiming(metric) && before.has(metric) && before.get(metric) !== value).length;
+  };
+  container.innerHTML = `<table><thead><tr><th class="text">Machine</th><th class="text">Commit</th><th class="text">Base</th><th>GPU frame</th><th>vs base</th><th>CPU frame</th><th>vs base</th><th>Counters changed</th></tr></thead><tbody>${points.map((point, index) => `<tr class="pick${point.path === state.selected?.path ? " current" : ""}" tabindex="0" data-index="${index}">
+    <td class="text">${escapeHtml(machineName(point.machine))}</td>
+    <td class="text">${commitLink(point.row, shortCommit(point.row))}</td>
+    <td class="text">${point.previous ? changeReference(point.previous.row) : "no Series record"}</td>
+    ${cells(point, "gpu_frame_microseconds")}${cells(point, "cpu_frame_microseconds")}
+    <td>${countersChanged(point)}</td></tr>`).join("")}</tbody></table>`;
+  container.querySelectorAll("tr.pick").forEach((tableRow) => {
+    const point = points[Number(tableRow.dataset.index)];
+    tableRow.addEventListener("click", () => select(point, true));
+    tableRow.addEventListener("keydown", (event) => { if (event.key === "Enter") select(point, true); });
+  });
+}
+
 function renderScene() {
   document.getElementById("scene-heading").textContent = state.scene;
-  const lines = state.machines.map((machine) => ({ machine, series: seriesPoints(machine, state.scene), tagged: taggedPoints(machine, state.scene) }));
+  const lines = state.machines.map((machine) => ({ machine, series: seriesPoints(machine, state.scene), tagged: taggedPoints(machine, state.scene), experiment: experimentPoints(machine, state.scene) }));
   const timedLines = lines.filter((line) => timesFrames(line.machine));
   const medianOf = (metric) => (row) => row[metric]?.median ?? null;
   drawLineChart(document.getElementById("cpu-chart"), { title: "CPU frame", metric: "cpu_frame_microseconds", lines: timedLines, valueOf: medianOf("cpu_frame_microseconds"), budget: state.budgets.cpu_frame_microseconds });
@@ -1060,6 +1146,7 @@ function renderScene() {
     title: `GPU memory · ${machineName(state.machine)}`, metric: "gpu_memory_bytes",
     lines: [machineLine], valueOf: (row) => row.gpu_memory_bytes ?? null, budget: state.budgets.gpu_memory_bytes, height: 200,
   });
+  renderExperiment();
 }
 
 let refreshCount = 0;
@@ -1067,14 +1154,19 @@ let refreshCount = 0;
 async function refresh() {
   const request = ++refreshCount;
   const status = document.getElementById("status");
-  history.replaceState(null, "", `?${new URLSearchParams({ machine: state.machine, scene: state.scene })}${location.hash}`);
+  const parameters = { machine: state.machine, scene: state.scene, ...(state.experiment ? { experiment: state.experiment } : {}) };
+  history.replaceState(null, "", `?${new URLSearchParams(parameters)}${location.hash}`);
   try {
     if (state.showTagged) {
       status.textContent = `Loading ${state.scene}'s tagged records…`;
       await Promise.all(state.machines.map((machine) => loadTagged(machine, state.scene)));
     }
+    if (state.experiment) {
+      status.textContent = `Loading Experiment ${state.experiment}…`;
+      await Promise.all(state.machines.map((machine) => loadExperiment(state.experiment, machine, state.scene)));
+    }
     if (request !== refreshCount) return;
-    if (state.selected && state.selected.scene !== state.scene) state.selected = null;
+    if (state.selected && (state.selected.scene !== state.scene || (state.selected.experiment && state.selected.experiment.name !== state.experiment))) state.selected = null;
     const seriesCount = state.scenes.reduce((sum, scene) => sum + state.machines.reduce((count, machine) => count + seriesPoints(machine, scene).length, 0), 0);
     status.textContent = `${seriesCount} records on Series across ${state.machines.length} machines and ${state.scenes.length} scenes.${state.listingTruncated ? " GitHub cut the branch's listing short, so some records are missing." : ""}`;
     status.classList.remove("error");
@@ -1102,10 +1194,12 @@ async function start() {
       .map((milestone) => ({ title: milestone.title, time: Date.parse(milestone.closed_at) / 1000 }));
     const machines = new Set();
     const scenes = new Set();
+    const experiments = new Set();
     for (const path of state.paths) {
-      const match = path.match(/^(?:records|tagged)\/([^/]+)\/([^/]+)\/[^/]+\.json$/);
-      if (match) { machines.add(match[1]); scenes.add(match[2]); }
+      const match = path.match(/^(?:records|tagged|experiments\/([^/]+))\/([^/]+)\/([^/]+)\/[^/]+\.json$/);
+      if (match) { if (match[1]) experiments.add(match[1]); machines.add(match[2]); scenes.add(match[3]); }
     }
+    state.experiments = [...experiments].sort();
     state.machines = [...machines].sort();
     state.scenes = [...scenes].filter((scene) => scene !== RELEASE_BUILD).sort();
     status.textContent = "Loading every Series…";
@@ -1134,6 +1228,12 @@ async function start() {
   sceneSelect.addEventListener("change", () => { state.scene = sceneSelect.value; refresh(); });
   const taggedToggle = document.getElementById("tagged-toggle");
   taggedToggle.addEventListener("change", () => { state.showTagged = taggedToggle.checked; refresh(); });
+  state.experiment = state.experiments.includes(parameters.get("experiment")) ? parameters.get("experiment") : null;
+  const experimentSelect = document.getElementById("experiment-select");
+  experimentSelect.disabled = state.experiments.length === 0;
+  experimentSelect.innerHTML = `<option value="">${state.experiments.length === 0 ? "none published" : "none"}</option>`
+    + state.experiments.map((name) => `<option${name === state.experiment ? " selected" : ""}>${escapeHtml(name)}</option>`).join("");
+  experimentSelect.addEventListener("change", () => { state.experiment = experimentSelect.value || null; refresh(); });
   ["cpu-chart", "gpu-chart", "passes-chart", "memory-chart", "binary-chart", "build-time-chart"].forEach((id) => attachHover(document.getElementById(id)));
   // Charts are drawn at the page's width, so only a change of width redraws them.
   let drawnWidth = document.querySelector(".page").clientWidth;

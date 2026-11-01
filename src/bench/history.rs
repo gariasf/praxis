@@ -22,6 +22,9 @@ const BRANCH: &str = "bench-history";
 const ON_SERIES: &str = "records";
 const TAGGED: &str = "tagged";
 
+/// The branch's directory of Experiments, one directory each by name.
+const EXPERIMENTS: &str = "experiments";
+
 /// The directory, in place of a scene's, of the release builds published
 /// beside an adapter's results.
 const RELEASE_BUILD: &str = "release-build";
@@ -48,6 +51,10 @@ This branch holds data only and is never merged.
   time, published by CI beside lavapipe's records.
 - `series/<adapter>-<backend>/<scene>.json`: one row per record in `records/`,
   in the order their commits were made, rebuilt in the commit that changes them.
+- `experiments/<name>/<adapter>-<backend>/<scene>/<source hash>.json`: an
+  Experiment's records, published with `--experiment <name>` from any branch,
+  on no Series. Each names its `experiment.merge_base` with `main` and that
+  commit's source hash, whose record on the Series is what it compares with.
 
 lavapipe's Series read no GPU time: its counters and its binary's size, which
 load cannot change, and its build time, which a shared runner's load and cache
@@ -82,6 +89,8 @@ struct BenchRecord {
     /// Whether the first record under its key stays: lavapipe's and a
     /// release build's, whose Series read no time.
     publishes_once: bool,
+    /// The Experiment it belongs to, which keeps it off every Series.
+    experiment: Option<String>,
     /// The file's JSON object.
     file: serde_json::Map<String, serde_json::Value>,
 }
@@ -120,8 +129,32 @@ impl BenchRecord {
             tags,
             p95_over_median,
             publishes_once,
+            experiment: None,
             file,
         })
+    }
+
+    /// Moves the record of `commit` into the Experiment `name`, naming its
+    /// merge base with `main` and that commit's source hash.
+    fn join_experiment(
+        &mut self,
+        repository: &Path,
+        name: &str,
+        commit: &str,
+        main: &str,
+    ) -> anyhow::Result<()> {
+        let merge_base = git(repository, &["merge-base", commit, main], None)?;
+        let merge_base_source_hash = source_hash(repository, &merge_base)?;
+        self.file.insert(
+            "experiment".to_owned(),
+            serde_json::json!({
+                "name": name,
+                "merge_base": merge_base,
+                "merge_base_source_hash": merge_base_source_hash,
+            }),
+        );
+        self.experiment = Some(name.to_owned());
+        Ok(())
     }
 
     /// The record's path under `directory`, `ON_SERIES` or `TAGGED`: its
@@ -299,6 +332,8 @@ pub struct Publication {
     pub on_series: usize,
     /// Records written under `tagged/`.
     pub tagged: usize,
+    /// Records written under `experiments/`.
+    pub experiment: usize,
     /// Records dropped for the same record, or one at least as quiet, under
     /// their key.
     pub dropped: usize,
@@ -315,6 +350,9 @@ impl std::fmt::Display for Publication {
             "published {} Bench records on a Series and {} tagged to {BRANCH}, dropped {}",
             self.on_series, self.tagged, self.dropped
         )?;
+        if self.experiment > 0 {
+            write!(formatter, ", {} to an Experiment", self.experiment)?;
+        }
         if self.restamped > 0 {
             write!(formatter, ", re-stamped {}", self.restamped)?;
         }
@@ -342,21 +380,69 @@ pub fn publish(
     let release_build = release_build
         .map(|build| release_build_record(repository, results, build, &main, &main_source_hash))
         .transpose()?;
-    let records: Vec<BenchRecord> = results
-        .iter()
-        .filter_map(|measurements| {
-            record(repository, measurements, &main, &main_source_hash)
-                .inspect_err(|error| {
-                    tracing::warn!(
-                        scene = measurements.scene,
-                        error = format!("{error:#}"),
-                        "bench result not published"
-                    )
-                })
-                .ok()
-        })
-        .chain(release_build)
-        .collect();
+    let records: Vec<BenchRecord> =
+        bench_records(repository, results, &main, &main_source_hash, None)
+            .chain(release_build)
+            .collect();
+    push_records(repository, &records)
+}
+
+/// Publishes `results`, measured in the checkout holding `repository` from
+/// any branch, as the Experiment `name`'s Bench records, which join no
+/// Series. Each names its merge base with the remote's `main`, so that it
+/// compares with the record of that commit's source.
+pub fn publish_experiment(
+    repository: &Path,
+    results: &[Measurements],
+    name: &str,
+) -> anyhow::Result<Publication> {
+    check_experiment_name(name)?;
+    let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+    let repository = Path::new(&root);
+    let main = fetch_main(repository)?;
+    let main_source_hash = source_hash(repository, &main)?;
+    let records: Vec<BenchRecord> =
+        bench_records(repository, results, &main, &main_source_hash, Some(name)).collect();
+    push_records(repository, &records)
+}
+
+/// Fails unless `name` can name an Experiment: one directory on the branch,
+/// of ASCII letters, digits, `-` and `_`.
+pub fn check_experiment_name(name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || "-_".contains(character)),
+        "an Experiment's name is ASCII letters, digits, `-` and `_`, not {name:?}"
+    );
+    Ok(())
+}
+
+/// `results` as Bench records, in the Experiment `experiment` when named; a
+/// result that cannot be one is skipped with a warning.
+fn bench_records<'results>(
+    repository: &'results Path,
+    results: &'results [Measurements],
+    main: &'results str,
+    main_source_hash: &'results str,
+    experiment: Option<&'results str>,
+) -> impl Iterator<Item = BenchRecord> + 'results {
+    results.iter().filter_map(move |measurements| {
+        record(repository, measurements, main, main_source_hash, experiment)
+            .inspect_err(|error| {
+                tracing::warn!(
+                    scene = measurements.scene,
+                    error = format!("{error:#}"),
+                    "bench result not published"
+                )
+            })
+            .ok()
+    })
+}
+
+/// Pushes `records` to the branch in one commit naming their adapters.
+fn push_records(repository: &Path, records: &[BenchRecord]) -> anyhow::Result<Publication> {
     let adapter_keys: BTreeSet<_> = records
         .iter()
         .map(|record| record.adapter_key.as_str())
@@ -366,7 +452,7 @@ pub fn publish(
         records.len(),
         adapter_keys.into_iter().collect::<Vec<_>>().join(", ")
     );
-    push(repository, &message, |worktree| worktree.apply(&records))
+    push(repository, &message, |worktree| worktree.apply(records))
 }
 
 /// Which of `scenes` have no record on a Series for the source of the
@@ -461,12 +547,13 @@ fn push(
 }
 
 /// `measurements` as a Bench record, tagged with every reason it is kept
-/// off a Series.
+/// off a Series, in the Experiment `experiment` when named.
 fn record(
     repository: &Path,
     measurements: &Measurements,
     main: &str,
     main_source_hash: &str,
+    experiment: Option<&str>,
 ) -> anyhow::Result<BenchRecord> {
     let provenance = measurements
         .provenance
@@ -476,7 +563,7 @@ fn record(
     let serde_json::Value::Object(file) = serde_json::to_value(measurements)? else {
         anyhow::bail!("a bench result is a JSON object");
     };
-    BenchRecord::new(
+    let mut record = BenchRecord::new(
         file,
         &measurements.scene,
         &checkout.source_hash,
@@ -494,7 +581,11 @@ fn record(
             }),
         ),
         provenance.gpu_frame_p95_over_median,
-    )
+    )?;
+    if let Some(name) = experiment {
+        record.join_experiment(repository, name, &checkout.commit, main)?;
+    }
+    Ok(record)
 }
 
 /// `build` as a Bench record beside `results`, which must all be one
@@ -702,22 +793,28 @@ impl<'repository> Worktree<'repository> {
 
     /// Writes `records` into the worktree and rebuilds the Series files
     /// they join. A record on a Series holds its key against a tagged one;
-    /// otherwise a record replaces one under its key only when quieter.
+    /// otherwise a record replaces one under its key only when quieter. An
+    /// Experiment's records join no Series.
     fn apply(&self, records: &[BenchRecord]) -> anyhow::Result<Publication> {
         let mut publication = Publication {
             on_series: 0,
             tagged: 0,
+            experiment: 0,
             dropped: 0,
             restamped: 0,
             commit: None,
         };
         let mut series = BTreeSet::new();
         for record in records {
-            let on_series = record.tags.is_empty();
+            let on_series = record.tags.is_empty() && record.experiment.is_none();
             let series_path = self.directory.join(record.path(ON_SERIES));
             let tagged_path = self.directory.join(record.path(TAGGED));
-            let relative_path = record.path(if on_series { ON_SERIES } else { TAGGED });
-            if !on_series && series_path.exists() {
+            let relative_path = match &record.experiment {
+                Some(name) => record.path(&format!("{EXPERIMENTS}/{name}")),
+                None if on_series => record.path(ON_SERIES),
+                None => record.path(TAGGED),
+            };
+            if !on_series && record.experiment.is_none() && series_path.exists() {
                 tracing::info!(
                     record = %relative_path.display(),
                     "Bench record dropped: one on a Series holds its key"
@@ -756,6 +853,8 @@ impl<'repository> Worktree<'repository> {
                 }
                 publication.on_series += 1;
                 series.insert(directory.to_owned());
+            } else if record.experiment.is_some() {
+                publication.experiment += 1;
             } else {
                 publication.tagged += 1;
             }
@@ -1201,6 +1300,86 @@ mod tests {
         let publication = publish(&fixture.checkout, &[noisy, counters], None).unwrap();
         assert_eq!(publication.dropped, 2);
         assert_eq!((paths("records/"), paths("tagged/")), (1, 0));
+    }
+
+    #[test]
+    fn an_experiment_publishes_under_its_name_beside_its_base_and_on_no_series() {
+        let fixture = Fixture::new("experiment");
+        let on_main = result(&fixture.checkout, "Apple M4 Pro", 1.02);
+        publish(&fixture.checkout, std::slice::from_ref(&on_main), None).unwrap();
+        let series = fixture.read("series/apple-m4-pro-metal/pbr-sweep.json");
+        git(
+            &fixture.checkout,
+            &["switch", "--quiet", "-c", "faster-cull"],
+            None,
+        )
+        .unwrap();
+        commit(&fixture.checkout, "src/lib.rs", "fn main() { cull() }");
+        let on_branch = result(&fixture.checkout, "Apple M4 Pro", 1.02);
+        let publication = publish_experiment(
+            &fixture.checkout,
+            std::slice::from_ref(&on_branch),
+            "faster-cull",
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                publication.experiment,
+                publication.on_series,
+                publication.tagged
+            ),
+            (1, 0, 0)
+        );
+        let source_hash = |measurements: &Measurements| {
+            measurements
+                .provenance
+                .as_ref()
+                .unwrap()
+                .checkout
+                .source_hash
+                .clone()
+        };
+        let path = format!(
+            "experiments/faster-cull/apple-m4-pro-metal/pbr-sweep/{}.json",
+            source_hash(&on_branch)
+        );
+        assert!(fixture.files().contains(&path), "{:?}", fixture.files());
+        assert!(
+            fixture
+                .files()
+                .iter()
+                .all(|path| !path.starts_with("tagged/")),
+            "{:?}",
+            fixture.files()
+        );
+        assert_eq!(
+            fixture.read("series/apple-m4-pro-metal/pbr-sweep.json"),
+            series
+        );
+        let record: serde_json::Value = serde_json::from_str(&fixture.read(&path)).unwrap();
+        let main = git(&fixture.checkout, &["rev-parse", "main"], None).unwrap();
+        assert_eq!(
+            record["experiment"],
+            serde_json::json!({
+                "name": "faster-cull",
+                "merge_base": main,
+                "merge_base_source_hash": source_hash(&on_main),
+            })
+        );
+        // Even main's own clean, quiet source stays off the Series.
+        git(&fixture.checkout, &["switch", "--quiet", "main"], None).unwrap();
+        let publication = publish_experiment(&fixture.checkout, &[on_main], "control").unwrap();
+        assert_eq!((publication.experiment, publication.on_series), (1, 0));
+        assert_eq!(
+            fixture.read("series/apple-m4-pro-metal/pbr-sweep.json"),
+            series
+        );
+        for name in ["", "..", "a/b", "with space"] {
+            assert!(
+                publish_experiment(&fixture.checkout, &[], name).is_err(),
+                "{name:?}"
+            );
+        }
     }
 
     #[test]
