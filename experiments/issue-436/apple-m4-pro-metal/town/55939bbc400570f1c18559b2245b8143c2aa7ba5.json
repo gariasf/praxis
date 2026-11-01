@@ -1,0 +1,128 @@
+{
+  "adapter": "Apple M4 Pro",
+  "aliasing_p99": 15451,
+  "aliasing_rmse": 5078,
+  "arena_bytes_in_use": 85280,
+  "backend": "metal",
+  "committed_unix_seconds": 1793520719,
+  "counter_frames": {
+    "arena_bytes_in_use": 85280,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 764009620,
+    "heap_allocations": 10502,
+    "instances_drawn": 5609,
+    "instances_overflowed": 0,
+    "triangles_drawn": 203958,
+    "uploaded_bytes": 2049376
+  },
+  "cpu_frame_microseconds": {
+    "median": 5593.667,
+    "p95": 5983.75
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 1139.833,
+    "p95": 1213.0839999999998
+  },
+  "experiment": {
+    "merge_base": "30338f0e8e4f84b394c4c192d8b7b23aa70cf2bf",
+    "merge_base_source_hash": "49814f4b7427e1786933a65051536aa45a3d972d",
+    "name": "issue-436"
+  },
+  "gate_microseconds": {
+    "median": 8613.625,
+    "p95": 8877.75
+  },
+  "gpu_frame_microseconds": {
+    "median": 19928.75,
+    "p95": 20152.333000000002
+  },
+  "gpu_memory_bytes": 764009620,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 1143.5410000000002,
+      "p95": 1183.458
+    },
+    "culling_phase_two": {
+      "median": 168.917,
+      "p95": 189.167
+    },
+    "depth_prepass": {
+      "median": 2153.7079999999996,
+      "p95": 2243.209
+    },
+    "depth_pyramid_pass": {
+      "median": 221.25,
+      "p95": 225.875
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 86.542
+    },
+    "froxel_pass": {
+      "median": 578.667,
+      "p95": 597.875
+    },
+    "lit_pass": {
+      "median": 3746.0,
+      "p95": 3872.375
+    },
+    "phase_two_depth_pass": {
+      "median": 53.917,
+      "p95": 107.70800000000001
+    },
+    "shadow_mask_pass": {
+      "median": 11955.417,
+      "p95": 12388.5
+    },
+    "tonemapping_pass": {
+      "median": 324.5,
+      "p95": 370.75
+    }
+  },
+  "heap_allocations": 10502,
+  "height": 1440,
+  "instances_drawn": 137730,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "branch": "bench/436-experiments",
+    "commit": "99466ebb6352954cc6da3b0fc27f60464e73e311",
+    "dirty": false,
+    "driver": "",
+    "driver_info": "",
+    "gpu_frame_p95_over_median": 1.0112191181082608,
+    "gpu_load_percent": 99,
+    "harness_version": 10,
+    "other_processes": [],
+    "quiet": false,
+    "scene_content_hash": "a1be4c5882044dde73928763be5b8cf0552a87c9f2ad7b11d42f7dd6ae31435e",
+    "source_hash": "55939bbc400570f1c18559b2245b8143c2aa7ba5",
+    "started_unix_seconds": 1793520813
+  },
+  "scene": "town",
+  "shadow_ray_microseconds": {
+    "median": 10791.75,
+    "p95": 11372.0
+  },
+  "tags": [
+    "source not main's",
+    "machine not quiet"
+  ],
+  "triangles_drawn": 5552214,
+  "uploaded_bytes": 2049376,
+  "width": 2560
+}

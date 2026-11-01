@@ -12,6 +12,10 @@ This branch holds data only and is never merged.
   time, published by CI beside lavapipe's records.
 - `series/<adapter>-<backend>/<scene>.json`: one row per record in `records/`,
   in the order their commits were made, rebuilt in the commit that changes them.
+- `experiments/<name>/<adapter>-<backend>/<scene>/<source hash>.json`: an
+  Experiment's records, published with `--experiment <name>` from any branch,
+  on no Series. Each names its `experiment.merge_base` with `main` and that
+  commit's source hash, whose record on the Series is what it compares with.
 
 lavapipe's Series read no GPU time: its counters and its binary's size, which
 load cannot change, and its build time, which a shared runner's load and cache
