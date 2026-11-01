@@ -29,22 +29,23 @@ use crate::stats::{FrameRecorder, GpuFrameStats};
 /// in flight and the one being recorded. Its timestamps resolve then.
 const COMPLETION_LAG: u64 = FRAMES_IN_FLIGHT as u64 + 1;
 
-/// A slot's resolve completes `COMPLETION_LAG` frames after it is recorded,
-/// so the slot is read and reused that many frames later again.
-const SLOT_COUNT: u64 = 2 * COMPLETION_LAG;
-
 /// Frames after the frame copying a slot's timestamps when its map is
-/// requested, once that copy completed. The CPU has waited for that frame by
-/// then, so each frame requests one map whatever the GPU's timing, and its
-/// first submission maps it. A map requested with the copy maps in whichever
-/// submission or poll first sees the copy complete
+/// requested at the earliest, once that copy completed. The bench has
+/// waited for that frame by then, so each frame requests one map whatever
+/// the GPU's timing, and the frame's first submission maps it
+/// [ref:wgpu-30-submit-maintains]. A map requested with the copy maps in
+/// whichever submission or poll first sees the copy complete
 /// [ref:wgpu-30-map-after-submission], and wgpu allocates for it there
 /// [ref:wgpu-30-handle-mapping]: inside a frame or between two, as the GPU's
 /// timing falls.
 const MAP_LAG: u64 = FRAMES_IN_FLIGHT as u64;
 
-// A slot is mapped before the ring comes round to it again.
-const _: () = assert!(COMPLETION_LAG + MAP_LAG < SLOT_COUNT);
+/// A slot's timestamps are copied `COMPLETION_LAG` frames after its frame.
+/// A window polls only through its submissions, so the copy may be seen
+/// complete as late as the submissions `MAP_LAG` frames after it; its map is
+/// then requested in the next frame and done by that frame's submissions,
+/// and the slot is read, and reused, in the frame after.
+const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;
 
 /// A timestamp at the start and one at the end of each timed pass.
 const QUERIES_PER_FRAME: usize = 2 * TIMED_PASSES.len();
@@ -220,13 +221,8 @@ impl GpuStatsReadback {
         recorder: &mut FrameRecorder,
     ) -> Option<FrameTimestamps<'_>> {
         self.read_back.clear();
-        for slot in &mut self.slots {
-            if let SlotState::Copying { frame, copied_in } = slot.state
-                && copied_in + MAP_LAG <= self.frame
-                && slot.progress.load(Ordering::Acquire) == COPY_DONE
-            {
-                slot.map(frame);
-            }
+        if let Some(latest_copy) = self.frame.checked_sub(MAP_LAG) {
+            self.request_maps(latest_copy);
         }
         if let Some(resolved) = self.frame.checked_sub(COMPLETION_LAG) {
             let index = slot_index(resolved);
@@ -290,11 +286,8 @@ impl GpuStatsReadback {
             }
         }
         let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
-        // The slot whose timestamps this frame copies, which completes with it.
-        let copying = self.slots.iter().find_map(|slot| {
-            matches!(slot.state, SlotState::Copying { copied_in, .. } if copied_in == frame)
-                .then(|| slot.progress.clone())
-        });
+        // At most the one slot `begin_frame` resolved.
+        let copying = self.copying_in(frame).next();
         encoder.on_submitted_work_done(move || {
             frames_completed.fetch_max(frame + 1, Ordering::Release);
             if let Some(progress) = copying {
@@ -319,14 +312,7 @@ impl GpuStatsReadback {
                 self.resolve(&mut encoder, index, frame);
             }
         }
-        let copying: Vec<_> = self
-            .slots
-            .iter()
-            .filter(|slot| {
-                matches!(slot.state, SlotState::Copying { copied_in, .. } if copied_in == self.frame)
-            })
-            .map(|slot| slot.progress.clone())
-            .collect();
+        let copying: Vec<_> = self.copying_in(self.frame).collect();
         encoder.on_submitted_work_done(move || {
             for progress in copying {
                 progress.store(COPY_DONE, Ordering::Release);
@@ -335,13 +321,7 @@ impl GpuStatsReadback {
         queue.submit(std::iter::once(encoder.finish()));
         device.poll(wgpu::PollType::wait_indefinitely())?;
         // Every copy submitted has completed, so every slot copied maps now.
-        for slot in &mut self.slots {
-            if let SlotState::Copying { frame, .. } = slot.state
-                && slot.progress.load(Ordering::Acquire) == COPY_DONE
-            {
-                slot.map(frame);
-            }
-        }
+        self.request_maps(self.frame);
         device.poll(wgpu::PollType::wait_indefinitely())?;
         for index in slots {
             self.read(index);
@@ -352,6 +332,30 @@ impl GpuStatsReadback {
     /// The stats the last `begin_frame` or `flush` read back, by frame.
     pub fn read_back(&self) -> &[GpuFrameStats] {
         &self.read_back
+    }
+
+    /// Requests the maps of the slots whose copies, recorded in frame
+    /// `latest_copy` or before it, have completed.
+    fn request_maps(&mut self, latest_copy: u64) {
+        for slot in &mut self.slots {
+            if let SlotState::Copying { frame, copied_in } = slot.state
+                && copied_in <= latest_copy
+                && slot.progress.load(Ordering::Acquire) == COPY_DONE
+            {
+                slot.map(frame);
+            }
+        }
+    }
+
+    /// The progress of each slot whose timestamps frame `frame` copies, for
+    /// its work-done callback to mark them copied.
+    fn copying_in(&self, frame: u64) -> impl Iterator<Item = Arc<AtomicU8>> + '_ {
+        self.slots
+            .iter()
+            .filter(move |slot| {
+                matches!(slot.state, SlotState::Copying { copied_in, .. } if copied_in == frame)
+            })
+            .map(|slot| slot.progress.clone())
     }
 
     /// Records the copy of `frame`'s timestamps, from slot `index`'s
@@ -377,7 +381,7 @@ impl GpuStatsReadback {
     }
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
-    /// it is free; one still mapping is not. A frame whose draw had no room
+    /// it is free; one still copying or mapping is not. A frame whose draw had no room
     /// for some Instances, whose Froxel lists had none for some lights, or
     /// whose shadow mask had no bit for some, is warned about, once until a
     /// frame read back has room for all; a skipped readback neither warns
@@ -972,7 +976,17 @@ mod tests {
                 "frame {number}"
             );
         }
-        assert_eq!(frame(&mut ring, true), (false, 1, vec![]), "frame 6");
-        assert_eq!(frame(&mut ring, true), (true, 0, vec![1]), "frame 7");
+        let frame_number = SLOT_COUNT;
+        assert_eq!(
+            frame(&mut ring, true),
+            (false, 1, vec![]),
+            "frame {frame_number}"
+        );
+        let frame_number = SLOT_COUNT + 1;
+        assert_eq!(
+            frame(&mut ring, true),
+            (true, 0, vec![1]),
+            "frame {frame_number}"
+        );
     }
 }

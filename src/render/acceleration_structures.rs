@@ -233,7 +233,7 @@ pub struct DynamicTlas {
     marker_bind_group: wgpu::BindGroup,
     /// What the markers found, which nothing reads.
     marker_result: wgpu::Buffer,
-    /// The encoder `take_encoder` took for the next `record`.
+    /// The encoder `prepare_encoder` created for the next `record`.
     encoder: Option<wgpu::CommandEncoder>,
 }
 
@@ -370,19 +370,22 @@ impl DynamicTlas {
         Some((encoder.finish(), uploaded_bytes))
     }
 
-    /// Takes the encoder its next `record` records into, unless it holds
-    /// one, before the frame takes its own. wgpu-core hands out the
-    /// encoders the GPU finished with, last released first
-    /// [ref:wgpu-30-command-encoder-pool], and a frame releases the dynamic
-    /// TLAS's before its own, which it submits after. Taken in this order,
-    /// each encoder alternates between the two, so every encoder the frames
-    /// reuse records the frame's passes within its first two frames, and the
-    /// state Metal's encoder keeps for them has grown by then. Taken in the
-    /// other order, an encoder that recorded only builds records the frame's
-    /// passes when the GPU completes a frame's build, but not the rest of
-    /// it, before the next frame starts, and its state grows then: in a
-    /// frame that the GPU's timing picks.
-    pub fn take_encoder(&mut self, device: &wgpu::Device) {
+    /// Creates the encoder its next `record` records into, unless it holds
+    /// one: called before the frame creates its own. A new encoder reuses
+    /// the encoder the GPU finished with last [ref:wgpu-30-command-encoder-pool],
+    /// and a frame submits the dynamic TLAS's build before its passes, so the
+    /// build's encoder is released first. Created in this order, when no
+    /// other submission takes an encoder, the two swap roles every frame, so
+    /// every encoder the frames reuse records the frame's passes within its
+    /// first two frames, and the state Metal keeps per encoder, which grows
+    /// to the largest pipeline and bindings it recorded and never shrinks
+    /// [ref:wgpu-hal-30-metal-command-state], has grown by then. Created in
+    /// the other order, each keeps its role, until the GPU finishes a frame's
+    /// build but not its passes before the next frame starts: that frame's
+    /// passes then reuse the build's encoder, whose state grows in a frame
+    /// the GPU's timing picks. An encoder held over a frame that builds
+    /// nothing breaks the swap for a frame, harmlessly.
+    pub fn prepare_encoder(&mut self, device: &wgpu::Device) {
         if self.encoder.is_none() {
             self.encoder = Some(create_encoder(device));
         }
@@ -432,12 +435,6 @@ impl DynamicTlas {
 
 /// An Instance's entry in a TLAS: `blas`, placed by `transform`
 /// (`anchored_transform`) and tagged with its `slot`.
-fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Dynamic TLAS Encoder"),
-    })
-}
-
 fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::TlasInstance {
     // Every ray's cull mask.
     wgpu::TlasInstance::new(blas, transform, slot, 0xff)
@@ -452,6 +449,12 @@ fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::Tl
 /// specification bounds cosine or angles past ±π, which an azimuth can be.
 /// Every Mesh grows, as which ones bend is not known here.
 const BEND_ROUNDING_SHARE: f32 = 0.00390625; // 2^-8
+
+fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Dynamic TLAS Encoder"),
+    })
+}
 
 /// The box that holds `bounds`, a Mesh's box, its lowest corner then its
 /// highest, grown by `BEND_ROUNDING_SHARE` and placed by `transform`, a TLAS

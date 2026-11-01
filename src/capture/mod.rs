@@ -373,7 +373,7 @@ mod tests {
         const FRAMES: u32 = 24;
         const WARM_UP_FRAMES: usize = 8;
         // Far longer than the GPU takes to render a frame of 64 × 64.
-        const GPU_FINISHED: Duration = Duration::from_millis(100);
+        const GPU_FINISH_WAIT: Duration = Duration::from_millis(100);
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -416,7 +416,7 @@ mod tests {
                         let wait = context.device.poll(wgpu::PollType::wait_indefinitely());
                         wait.expect("the frames before finish");
                     } else {
-                        std::thread::sleep(GPU_FINISHED);
+                        std::thread::sleep(GPU_FINISH_WAIT);
                     }
                     state
                         .simulation

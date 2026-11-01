@@ -4145,7 +4145,19 @@ quote = '''submission .map_or(&mut self.ready_to_map, |a| &mut a.mapped) .push(b
 checked = 2026-11-01
 
 ["wgpu-30-handle-mapping"]
-url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L414"
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413"
 section = "wgpu-core 30.0.1, device/life.rs, LifetimeTracker::handle_mapping: each maintenance that finds buffers ready to map allocates their callbacks' list"
 quote = '''if self.ready_to_map.is_empty() { return Vec::new(); } let mut pending_callbacks: Vec<super::BufferMapPendingClosure> = Vec::with_capacity(self.ready_to_map.len());'''
+checked = 2026-11-01
+
+["wgpu-30-submit-maintains"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1536-L1541"
+section = "wgpu-core 30.0.1, device/queue.rs, Queue::submit: every submission ends by maintaining the device, which retires finished submissions and maps the buffers ready to map"
+quote = '''// This will schedule destruction of all resources that are no longer needed // by the user but used in the command stream, among other things. // `device.maintain` consumes and will release the snatch guard. let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);'''
+checked = 2026-11-01
+
+["wgpu-hal-30-metal-command-state"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L432-L441"
+section = "wgpu-hal 30.0.1, metal/command.rs, CommandState::reset: an encoder's per-pipeline and per-binding state is cleared for reuse, keeping what it allocated"
+quote = '''fn reset(&mut self) { self.storage_buffer_length_map.clear(); self.vertex_buffer_size_map.clear(); self.stage_infos.vs.clear(); [...] self.immediates.clear(); }'''
 checked = 2026-11-01

@@ -12,16 +12,14 @@ const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
 /// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
 /// slots grow on demand, never past the most one frame uploads. Each frame
 /// fills the next slot in turn, copies it into its targets, and requests the
-/// map of the slot it fills next, which copied `FRAMES_IN_FLIGHT` frames
-/// ago. The fixed turn keeps the frame's heap allocations the same on every
-/// run: wgpu grows an encoder's tracking by each buffer's tracker index, so
-/// which slot a frame takes changes its allocation count. So does the late
-/// map: the CPU has waited for the frame that copied from the slot by then,
-/// so the frame's own submission maps it, whatever the GPU's timing. A map
-/// requested with the copy maps in whichever submission or poll first sees
-/// the copy complete [ref:wgpu-30-map-after-submission], and wgpu allocates
-/// for it there [ref:wgpu-30-handle-mapping]: inside a frame or between two,
-/// as the GPU's timing falls.
+/// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
+/// before. The fixed turn keeps the frame's heap allocations the same on
+/// every run: wgpu grows an encoder's tracking by each buffer's tracker
+/// index, so which slot a frame takes changes its allocation count. So does
+/// the late map, for the reason the GPU stats readback maps late: the bench
+/// has waited for the frame that copied from the slot, so the frame's own
+/// submission maps it, whatever the GPU's timing
+/// [ref:wgpu-30-handle-mapping].
 pub struct FrameStaging {
     slots: Vec<StagingSlot>,
     slot_size: u64,
