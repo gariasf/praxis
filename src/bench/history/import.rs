@@ -316,9 +316,9 @@ fn backend_before_keyed(adapter: &str) -> anyhow::Result<&'static str> {
 impl Worktree<'_> {
     /// Gives every record a bench published at Harness version 1 the
     /// Harness version `version`: before the import numbered the eras before it,
-    /// version 1 named the method in force. Rebuilds the Series they are
-    /// on, and returns how many it changed. A release build's record, which
-    /// no Harness measured, keeps what it holds.
+    /// version 1 named the method in force. Returns how many it changed;
+    /// the `apply` that follows rebuilds every Series. A release build's
+    /// record, which no Harness measured, keeps what it holds.
     fn restamp(&self, version: u32) -> anyhow::Result<usize> {
         let listing = git(
             &self.directory,
@@ -326,7 +326,6 @@ impl Worktree<'_> {
             None,
         )?;
         let mut restamped = 0;
-        let mut series = BTreeSet::new();
         for relative_path in listing.lines().map(Path::new) {
             if relative_path
                 .parent()
@@ -349,17 +348,6 @@ impl Worktree<'_> {
             provenance.insert("harness_version".to_owned(), version.into());
             std::fs::write(&path, serde_json::to_string_pretty(&file)? + "\n")?;
             restamped += 1;
-            if relative_path.starts_with(ON_SERIES) {
-                series.insert(
-                    relative_path
-                        .parent()
-                        .context("a record has a directory")?
-                        .to_owned(),
-                );
-            }
-        }
-        for directory in series {
-            self.rebuild_series(&directory)?;
         }
         Ok(restamped)
     }
@@ -392,6 +380,10 @@ mod tests {
   "gpu_memory_bytes": 687168016,
   "heap_allocations": 83
 }"#;
+
+    /// town's Baseline as this checkout holds it: its measured frames draw
+    /// far more than its counter frames.
+    const TOWN_BASELINE: &str = include_str!("../../../bench/baselines/apple-m4-pro/town.json");
 
     /// pbr-sweep's Baseline as this checkout holds it.
     const CURRENT_BASELINE: &str =
@@ -435,8 +427,19 @@ mod tests {
         );
         let row = serde_json::to_value(SeriesRow::of(&stored)).unwrap();
         assert_eq!(row["cpu_frame_microseconds"]["median"], 33.041);
+        // The GPU frame under its first name, which measured the same span.
+        assert_eq!(row["gpu_frame_microseconds"]["median"], 198.875);
+        assert_eq!(row["measured_frames"], 1800);
+        assert_eq!(
+            row["measured_counters"],
+            serde_json::json!({
+                "draw_calls": 10,
+                "uploaded_bytes": 1712,
+                "gpu_memory_bytes": 687168016,
+                "heap_allocations": 83,
+            })
+        );
         for metric in [
-            "gpu_frame_microseconds",
             "gate_microseconds",
             "shadow_ray_microseconds",
             "scene_content_hash",
@@ -475,6 +478,31 @@ mod tests {
         assert_eq!(
             row["harness_version"],
             HARNESS_BREAKS.len() as u64 + 1,
+            "{row}"
+        );
+    }
+
+    #[test]
+    fn a_row_holds_the_measured_frames_counters_beside_the_counter_frames() {
+        let record = imported(
+            &commit(HARNESS_BREAKS.len() as u32 + 1),
+            "bench/baselines/apple-m4-pro/town.json",
+            TOWN_BASELINE,
+        )
+        .unwrap();
+        let baseline: crate::bench::Measurements = serde_json::from_str(TOWN_BASELINE).unwrap();
+        let (measured, counted) = (baseline.counters, baseline.counter_frames.counters);
+        assert!(measured.instances_drawn > counted.instances_drawn * 10);
+        let row = serde_json::to_value(SeriesRow::of(&stored(&record))).unwrap();
+        assert_eq!(row["instances_drawn"], counted.instances_drawn, "{row}");
+        assert_eq!(row["triangles_drawn"], counted.triangles_drawn, "{row}");
+        assert_eq!(row["measured_frames"], 1800, "{row}");
+        let measured_row = &row["measured_counters"];
+        assert_eq!(measured_row["instances_drawn"], measured.instances_drawn);
+        assert_eq!(measured_row["triangles_drawn"], measured.triangles_drawn);
+        assert_eq!(
+            measured_row.as_object().unwrap().len(),
+            crate::bench::Counters::NAMES.len(),
             "{row}"
         );
     }

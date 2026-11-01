@@ -194,7 +194,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <div class="panel chart" id="passes-chart"></div>
 
   <h3 class="view" id="counters">Counters and memory</h3>
-  <p class="note">What the counter frames counted on the machine above. Counters do not depend on load, so every machine's are exact.</p>
+  <p class="note">What the machine above counted. Measured frames are the 1,800 frames a reference run times, the load ADR 0013's Budgets judge. Counter frames are frames 8 to 71, early in the warm-up, which every configuration renders, lavapipe's included. Aliasing is measured on its own captures. Counters do not depend on load, so every machine's are exact.</p>
   <div class="grid">
     <div class="panel table-wrap" id="counter-table"></div>
     <div class="panel chart" id="memory-chart"></div>
@@ -252,7 +252,11 @@ const NAMED_PASS_COUNT = 6;
 const HIT_RADIUS_PIXELS = 24;
 const TIMINGS = ["cpu_frame_microseconds", "gpu_frame_microseconds", "gate_microseconds", "shadow_ray_microseconds", "dynamic_tlas_cpu_microseconds"];
 // Series row fields that are neither a timing nor a counter.
-const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "tags"]);
+const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "measured_frames", "measured_counters", "tags"]);
+// Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
+const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations"];
+// `Configuration::REFERENCE`'s measured frames: only rows of that length show their measured counters, so no two counted different frames.
+const REFERENCE_MEASURED_FRAMES = 1800;
 const METRIC_LABELS = {
   cpu_frame_microseconds: "CPU frame",
   gpu_frame_microseconds: "GPU frame",
@@ -325,6 +329,8 @@ function rowOf(record) {
   const passes = {};
   for (const [pass, spread] of Object.entries(record.gpu_pass_microseconds ?? {})) passes[pass] = spread.median;
   const { frames, ...counters } = record.counter_frames ?? {};
+  const measuredCounters = {};
+  for (const counter of COUNTERS) if (counter in record) measuredCounters[counter] = record[counter];
   const row = {
     commit: provenance.commit,
     source_hash: provenance.source_hash,
@@ -333,11 +339,15 @@ function rowOf(record) {
     source: provenance.source ?? null,
     scene_content_hash: provenance.scene_content_hash ?? null,
     gpu_pass_median_microseconds: passes,
+    measured_frames: record.measured_frames,
+    measured_counters: measuredCounters,
     aliasing_rmse: record.aliasing_rmse ?? null,
     aliasing_p99: record.aliasing_p99 ?? null,
     tags: record.tags ?? [],
   };
   for (const timing of TIMINGS) row[timing] = record[timing] ?? null;
+  // Tagged and Experiment records reach the page raw, so it reads the GPU frame's first name, which measured the same span, as the Series rows do.
+  row.gpu_frame_microseconds ??= record.gpu_main_pass_microseconds ?? null;
   return Object.assign(row, counters);
 }
 
@@ -488,8 +498,11 @@ function passLabel(pass) {
 }
 function labelOf(metric) {
   if (metric.startsWith("pass:")) return passLabel(metric.slice(5));
+  if (metric.startsWith("measured:")) return `${labelOf(metric.slice(9))}, measured frames`;
   return METRIC_LABELS[metric] ?? passLabel(metric);
 }
+/** A metric's label where both kinds of frame count it: a counter-frames counter says so. */
+function countedLabelOf(metric) { return COUNTERS.includes(metric) ? `${labelOf(metric)}, counter frames` : labelOf(metric); }
 function dateOf(seconds) { return new Date(seconds * 1000).toISOString().slice(0, 10); }
 function shortDate(seconds) { return new Date(seconds * 1000).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" }); }
 /**
@@ -572,7 +585,8 @@ function budgetVerdicts(row) {
     gate_microseconds: row.gate_microseconds?.median,
     dynamic_tlas_cpu_microseconds: row.dynamic_tlas_cpu_microseconds?.median,
     dynamic_tlas_gpu_microseconds: row.gpu_pass_median_microseconds?.dynamic_tlas_build,
-    gpu_memory_bytes: row.gpu_memory_bytes,
+    // `praxis compare` judges a reference run's measured frames.
+    gpu_memory_bytes: row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes,
   };
   return Object.entries(values)
     .filter(([metric, value]) => value !== null && value !== undefined && state.budgets[metric] !== undefined)
@@ -898,9 +912,9 @@ function drawPassesChart(container, points) {
   };
 }
 
-/** A small trend line of one counter, broken between segments. */
-function sparklineSvg(points, metric) {
-  const values = points.map((point) => point.row[metric]).filter((value) => value !== null && value !== undefined);
+/** A small trend line of one counter, `valueOf` each row, broken between segments. */
+function sparklineSvg(points, valueOf) {
+  const values = points.map((point) => valueOf(point.row)).filter((value) => value !== null && value !== undefined);
   if (values.length < 2) return "";
   const widthPixels = 120;
   const heightPixels = 24;
@@ -909,30 +923,39 @@ function sparklineSvg(points, metric) {
   const valueRange = maximum - minimum;
   const frame = { y: (value) => valueRange === 0 ? heightPixels / 2 : 3 + (heightPixels - 6) * (1 - (value - minimum) / valueRange), outside: () => null };
   const xOf = (point) => 3 + (widthPixels - 6) * points.indexOf(point) / Math.max(points.length - 1, 1);
-  const path = linePath(points, (point) => point.row[metric] ?? null, xOf, frame);
-  const last = points.findLast((point) => point.row[metric] !== null && point.row[metric] !== undefined);
+  const path = linePath(points, (point) => valueOf(point.row) ?? null, xOf, frame);
+  const last = points.findLast((point) => valueOf(point.row) !== null && valueOf(point.row) !== undefined);
   return `<svg width="${widthPixels}" height="${heightPixels}" aria-hidden="true"><path d="${path}" fill="none" stroke="${machineColour(state.machine)}" stroke-width="1.5"></path>`
-    + `<circle cx="${xOf(last)}" cy="${frame.y(last.row[metric])}" r="2.5" fill="${machineColour(state.machine)}"></circle></svg>`;
+    + `<circle cx="${xOf(last)}" cy="${frame.y(valueOf(last.row))}" r="2.5" fill="${machineColour(state.machine)}"></circle></svg>`;
 }
 
+/** Each counter's latest on the measured frames, where rows are at the reference length, and on the counter frames. */
 function counterTable(points) {
   const container = document.getElementById("counter-table");
-  const counters = [...new Set(points.flatMap((point) => metricsOf(point.row).map(([metric]) => metric)))].filter((metric) => !isTiming(metric));
-  if (counters.length === 0) {
+  const metrics = [...new Set(points.flatMap((point) => metricsOf(point.row).map(([metric]) => metric)))].filter((metric) => !isTiming(metric));
+  const names = [...new Set(metrics.map((metric) => metric.replace(/^measured:/, "")))];
+  if (names.length === 0) {
     container.innerHTML = `<p class="empty">${state.showTagged ? "No record of this scene on this machine counts anything." : "No Series record counts anything here; tagged records may."}</p>`;
     return;
   }
   const latest = points.at(-1);
-  const rows = counters.map((metric) => {
-    const standing = standingOf(points, (row) => row[metric] ?? null);
-    return { metric, standing, moved: standing && standing.previous !== null && standing.value !== standing.previous };
-  }).sort((first, second) => second.moved - first.moved || labelOf(first.metric).localeCompare(labelOf(second.metric)));
-  container.innerHTML = `<table><thead><tr><th class="text">Counter</th><th>Latest</th><th>vs previous</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ metric, standing }) => `<tr>
-    <td class="text">${escapeHtml(labelOf(metric))}</td>
-    <td>${formatValue(metric, standing?.value)}</td>
-    <td>${standing ? changeHtml(metric, standing.value, standing.previous) : "—"}</td>
-    <td class="text">${sparklineSvg(points, metric)}</td></tr>`).join("")}</tbody></table>
-    <p class="empty">Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`;
+  const anyMeasured = metrics.some((metric) => metric.startsWith("measured:"));
+  const measuredValue = (name) => (row) => row.measured_frames === REFERENCE_MEASURED_FRAMES ? row.measured_counters?.[name] ?? null : null;
+  const countedValue = (name) => (row) => row[name] ?? null;
+  const moved = (standing) => Boolean(standing && standing.previous !== null && standing.value !== standing.previous);
+  const rows = names.map((name) => {
+    const measured = anyMeasured ? standingOf(points, measuredValue(name)) : null;
+    const counted = standingOf(points, countedValue(name));
+    return { name, measured, counted, moved: moved(measured) || moved(counted) };
+  }).sort((first, second) => second.moved - first.moved || labelOf(first.name).localeCompare(labelOf(second.name)));
+  // A value's change from the previous record follows it, only when it moved. A metric that is no
+  // counter, such as aliasing, measures its own captures, so its value spans both frame columns.
+  const cell = (name, standing) => `<td>${formatValue(name, standing?.value)}${moved(standing) ? ` ${changeHtml(name, standing.value, standing.previous)}` : ""}</td>`;
+  container.innerHTML = `<table><thead><tr><th class="text">Counter</th>${anyMeasured ? "<th>Measured<br>frames</th>" : ""}<th>Counter<br>frames</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ name, measured, counted }) => `<tr>
+    <td class="text">${escapeHtml(labelOf(name))}</td>
+    ${!COUNTERS.includes(name) ? cell(name, counted).replace("<td>", `<td colspan="${anyMeasured ? 2 : 1}" style="text-align: center">`) : `${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}`}
+    <td class="text">${sparklineSvg(points, measured ? measuredValue(name) : countedValue(name))}</td></tr>`).join("")}</tbody></table>
+    <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`;
 }
 
 /* Hover and click */
@@ -1001,6 +1024,9 @@ function metricsOf(row) {
   const metrics = [];
   for (const timing of TIMINGS) if (timing in row) metrics.push([timing, row[timing]?.median ?? null]);
   for (const [pass, value] of Object.entries(row.gpu_pass_median_microseconds ?? {})) metrics.push([`pass:${pass}`, value]);
+  if (row.measured_frames === REFERENCE_MEASURED_FRAMES) {
+    for (const [counter, value] of Object.entries(row.measured_counters ?? {})) metrics.push([`measured:${counter}`, value]);
+  }
   for (const [field, value] of Object.entries(row)) {
     if (!NON_METRIC_FIELDS.has(field) && !TIMINGS.includes(field) && typeof value === "number") metrics.push([field, value]);
   }
@@ -1023,7 +1049,7 @@ function deltaTable(point) {
     .filter(({ value, before }) => value !== null || before !== null)
     .map((entry) => ({ ...entry, moved: movement(entry.metric, entry.value, entry.before) }))
     .sort((first, second) => second.moved - first.moved);
-  const rowHtml = ({ metric, value, before }) => `<tr><td class="text">${escapeHtml(labelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before, comparable)}</td></tr>`;
+  const rowHtml = ({ metric, value, before }) => `<tr><td class="text">${escapeHtml(countedLabelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before, comparable)}</td></tr>`;
   const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>${point.experiment ? "Base" : "Previous"}</th><th>Change</th></tr></thead>`;
   // A timing moved when `praxis compare` would flag it; a counter moved when it changed at all. Across a
   // break nothing is judged, so every row shows.

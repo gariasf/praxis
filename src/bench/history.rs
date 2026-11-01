@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use anyhow::Context;
 
 use super::provenance::{Checkout, git, source_hash};
-use super::{Configuration, Measurements, Spread, adapter_key};
+use super::{Configuration, Counters, Measurements, Spread, adapter_key};
 
 pub use import::import_baselines;
 
@@ -50,7 +50,9 @@ This branch holds data only and is never merged.
   build whose binary ran that source's results, its binary's size and its wall
   time, published by CI beside lavapipe's records.
 - `series/<adapter>-<backend>/<scene>.json`: one row per record in `records/`,
-  in the order their commits were made, rebuilt in the commit that changes them.
+  in the order their commits were made, every one rebuilt by each publish. A
+  row holds the counter frames' counters by name and the measured frames'
+  under `measured_counters`.
 - `experiments/<name>/<adapter>-<backend>/<scene>/<source hash>.json`: an
   Experiment's records, published with `--experiment <name>` from any branch,
   on no Series. Each names its `experiment.merge_base` with `main` and that
@@ -181,8 +183,12 @@ struct StoredRecord {
     /// When the measured commit was committed, which orders a Series.
     committed_unix_seconds: u64,
     provenance: StoredProvenance,
+    measured_frames: u32,
     cpu_frame_microseconds: Option<Spread>,
     dynamic_tlas_cpu_microseconds: Option<Spread>,
+    /// Named `gpu_main_pass_microseconds` until the bench renamed it, the
+    /// same span under a new name.
+    #[serde(alias = "gpu_main_pass_microseconds")]
     gpu_frame_microseconds: Option<Spread>,
     gate_microseconds: Option<Spread>,
     shadow_ray_microseconds: Option<Spread>,
@@ -191,6 +197,11 @@ struct StoredRecord {
     counter_frames: Option<StoredCounterFrames>,
     aliasing_rmse: Option<u64>,
     aliasing_p99: Option<u64>,
+    /// Every field not named above, the measured frames' counters among
+    /// them under their names in `Counters::NAMES`: a map, as a record
+    /// holds only the counters its bench counted.
+    #[serde(flatten)]
+    remaining_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// What every stored record's provenance holds, whichever form wrote it.
@@ -321,6 +332,11 @@ struct SeriesRow<'record> {
     /// The counter frames' counters.
     #[serde(flatten)]
     counters: BTreeMap<&'record str, u64>,
+    /// How many frames `measured_counters` count: the configuration's, so
+    /// two rows' compare only when these match.
+    measured_frames: u32,
+    /// The measured frames' counters, as many as the bench counted.
+    measured_counters: BTreeMap<&'record str, u64>,
     aliasing_rmse: Option<u64>,
     aliasing_p99: Option<u64>,
 }
@@ -801,8 +817,9 @@ impl<'repository> Worktree<'repository> {
         Ok(worktree)
     }
 
-    /// Writes `records` into the worktree and rebuilds the Series files
-    /// they join. A record on a Series holds its key against a tagged one;
+    /// Writes `records` into the worktree and rebuilds every Series file,
+    /// so rows take the form this bench writes whichever records they hold.
+    /// A record on a Series holds its key against a tagged one;
     /// otherwise a record replaces one under its key only when quieter. An
     /// Experiment's records join no Series.
     fn apply(&self, records: &[BenchRecord]) -> anyhow::Result<Publication> {
@@ -815,7 +832,6 @@ impl<'repository> Worktree<'repository> {
             restamped: 0,
             commit: None,
         };
-        let mut series = BTreeSet::new();
         for record in records {
             let on_series = record.tags.is_empty() && record.experiment.is_none();
             let series_path = self.directory.join(record.path(ON_SERIES));
@@ -863,18 +879,31 @@ impl<'repository> Worktree<'repository> {
                     std::fs::remove_file(&tagged_path)?;
                 }
                 publication.on_series += 1;
-                series.insert(directory.to_owned());
             } else if record.experiment.is_some() {
                 publication.in_experiment += 1;
             } else {
                 publication.tagged += 1;
             }
         }
-        for directory in series {
-            self.rebuild_series(&directory)?;
-        }
+        self.rebuild_every_series()?;
         std::fs::write(self.directory.join("README.md"), README)?;
         Ok(publication)
+    }
+
+    /// Rebuilds the Series file of each directory of records on a Series.
+    fn rebuild_every_series(&self) -> anyhow::Result<()> {
+        let records = self.directory.join(ON_SERIES);
+        if !records.exists() {
+            return Ok(());
+        }
+        for adapter_key in std::fs::read_dir(&records)? {
+            let adapter_key = adapter_key?.file_name();
+            for subject in std::fs::read_dir(records.join(&adapter_key))? {
+                let subject = subject?.file_name();
+                self.rebuild_series(&Path::new(ON_SERIES).join(&adapter_key).join(subject))?;
+            }
+        }
+        Ok(())
     }
 
     /// Rebuilds the Series file of the records in `directory`,
@@ -979,6 +1008,14 @@ impl<'record> SeriesRow<'record> {
                 .iter()
                 .flat_map(|frames| &frames.counters)
                 .map(|(counter, value)| (counter.as_str(), *value))
+                .collect(),
+            measured_frames: record.measured_frames,
+            measured_counters: Counters::NAMES
+                .into_iter()
+                .filter_map(|counter| {
+                    let value = record.remaining_fields.get(counter)?.as_u64()?;
+                    Some((counter, value))
+                })
                 .collect(),
             aliasing_rmse: record.aliasing_rmse,
             aliasing_p99: record.aliasing_p99,
@@ -1133,6 +1170,35 @@ mod tests {
             1
         );
     }
+
+    #[test]
+    fn a_publish_rebuilds_every_series_so_rows_take_the_current_form() {
+        let fixture = Fixture::new("rebuild");
+        let mut results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
+        results[0].counters.triangles_drawn *= 27;
+        publish(&fixture.checkout, &results, None).unwrap();
+        let series_path = "series/apple-m4-pro-metal/pbr-sweep.json";
+        let rebuilt = fixture.read(series_path);
+        // A Series an older bench wrote, in a form rows no longer take.
+        let clone = fixture.directory.join("stale");
+        fixture.clone_into(&clone);
+        git(&clone, &["checkout", "--quiet", BRANCH], None).unwrap();
+        commit(&clone, series_path, "[\n{}\n]\n");
+        git(&clone, &["push", "--quiet", "origin", BRANCH], None).unwrap();
+        let town = Measurements {
+            scene: "town".to_owned(),
+            ..result(&fixture.checkout, "Apple M4 Pro", 1.02)
+        };
+        let publication = publish(&fixture.checkout, &[town], None).unwrap();
+        assert_eq!(publication.on_series, 1);
+        assert_eq!(fixture.read(series_path), rebuilt);
+        // A published record's row holds both kinds of frame's counters.
+        let rows: serde_json::Value = serde_json::from_str(&rebuilt).unwrap();
+        assert_eq!(rows[0]["measured_frames"], 1800);
+        assert_eq!(rows[0]["measured_counters"]["triangles_drawn"], 22_080 * 27);
+        assert_eq!(rows[0]["triangles_drawn"], 22_080);
+    }
+
     #[test]
     fn a_quieter_record_replaces_a_noisier_one_and_a_noisier_one_is_dropped() {
         let fixture = Fixture::new("quieter");

@@ -230,17 +230,30 @@ impl Counters {
         }
     }
 
+    /// Each counter's name, as results and Bench records spell it.
+    pub(super) const NAMES: [&'static str; 8] = [
+        "draw_calls",
+        "instances_drawn",
+        "triangles_drawn",
+        "instances_overflowed",
+        "uploaded_bytes",
+        "gpu_memory_bytes",
+        "arena_bytes_in_use",
+        "heap_allocations",
+    ];
+
     fn named(&self) -> [(&'static str, u64); 8] {
-        [
-            ("draw_calls", self.draw_calls),
-            ("instances_drawn", self.instances_drawn),
-            ("triangles_drawn", self.triangles_drawn),
-            ("instances_overflowed", self.instances_overflowed),
-            ("uploaded_bytes", self.uploaded_bytes),
-            ("gpu_memory_bytes", self.gpu_memory_bytes),
-            ("arena_bytes_in_use", self.arena_bytes_in_use),
-            ("heap_allocations", self.heap_allocations),
-        ]
+        let values = [
+            self.draw_calls,
+            self.instances_drawn,
+            self.triangles_drawn,
+            self.instances_overflowed,
+            self.uploaded_bytes,
+            self.gpu_memory_bytes,
+            self.arena_bytes_in_use,
+            self.heap_allocations,
+        ];
+        std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
 }
 
@@ -894,6 +907,26 @@ mod tests {
         arena_bytes_in_use: 85_296,
         heap_allocations: 100,
     };
+
+    #[test]
+    fn each_counter_is_named_as_results_spell_it() {
+        let counters = Counters {
+            draw_calls: 1,
+            instances_drawn: 2,
+            triangles_drawn: 3,
+            instances_overflowed: 4,
+            uploaded_bytes: 5,
+            gpu_memory_bytes: 6,
+            arena_bytes_in_use: 7,
+            heap_allocations: 8,
+        };
+        let serialized = serde_json::to_value(counters).unwrap();
+        let serialized = serialized.as_object().unwrap();
+        assert_eq!(serialized.len(), Counters::NAMES.len());
+        for (name, value) in counters.named() {
+            assert_eq!(serialized[name], value, "{name}");
+        }
+    }
 
     pub(super) fn baseline() -> Measurements {
         Measurements {
