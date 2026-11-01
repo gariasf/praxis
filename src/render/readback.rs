@@ -8,9 +8,9 @@
 //! reads timestamps resolved before their pass's submission completed as 0
 //! or stale (`docs/research/wgpu-capability-matrix.md`), so a frame's
 //! timestamps are resolved only once its submission completed. A slot maps
-//! a fixed number of frames after its copy, once the copy completed, so the
-//! frame that maps it, and allocates for it in wgpu, does not depend on the
-//! GPU's timing.
+//! once its copy completed and no sooner than a fixed number of frames after
+//! it, so in the bench the frame that maps it, and allocates for it in wgpu,
+//! does not depend on the GPU's timing.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
@@ -380,12 +380,12 @@ impl GpuStatsReadback {
         };
     }
 
-    /// Reads slot `index` back if it is mapped, and frees it. Returns whether
-    /// it is free; one still copying or mapping is not. A frame whose draw had no room
-    /// for some Instances, whose Froxel lists had none for some lights, or
-    /// whose shadow mask had no bit for some, is warned about, once until a
-    /// frame read back has room for all; a skipped readback neither warns
-    /// nor clears it.
+    /// Reads slot `index` back if it is mapped, and frees it. Returns
+    /// whether it is free; one still copying or mapping is not. A frame
+    /// whose draw had no room for some Instances, whose Froxel lists had
+    /// none for some lights, or whose shadow mask had no bit for some, is
+    /// warned about, once until a frame read back has room for all; a
+    /// skipped readback neither warns nor clears it.
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {
