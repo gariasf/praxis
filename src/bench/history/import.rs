@@ -3,7 +3,7 @@
 //! (ADR 0024).
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 
@@ -70,8 +70,10 @@ const IMPORTED_SOURCE: &str = "baseline-commit";
 
 /// Imports every Baseline file each commit before `HISTORY_STARTED`
 /// changed into the remote's `bench-history` branch, and gives the records
-/// a bench published before the import their era's Harness version. A
-/// second import changes nothing.
+/// a bench published before the import their era's Harness version. Each
+/// import replaces the records an earlier one wrote, so they carry the tags
+/// today's rules give them; a second import under the same rules changes
+/// nothing.
 pub fn import_baselines(repository: &Path) -> anyhow::Result<Publication> {
     import_up_to(
         repository,
@@ -99,6 +101,7 @@ pub(super) fn import_up_to(
     );
     push(repository, &message, |worktree| {
         let restamped = worktree.restamp(started_harness_version)?;
+        worktree.remove_imported()?;
         Ok(Publication {
             restamped,
             ..worktree.apply(&records)?
@@ -320,26 +323,12 @@ impl Worktree<'_> {
     /// the `apply` that follows rebuilds every Series. A release build's
     /// record, which no Harness measured, keeps what it holds.
     fn restamp(&self, version: u32) -> anyhow::Result<usize> {
-        let listing = git(
-            &self.directory,
-            &["ls-files", "--", ON_SERIES, TAGGED],
-            None,
-        )?;
         let mut restamped = 0;
-        for relative_path in listing.lines().map(Path::new) {
-            if relative_path
-                .parent()
-                .is_some_and(|directory| directory.ends_with(RELEASE_BUILD))
-            {
-                continue;
-            }
-            let path = self.directory.join(relative_path);
-            let mut file: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
-                .with_context(|| format!("parsing {}", relative_path.display()))?;
+        for (path, mut file) in self.measured_records()? {
             let provenance = file
                 .get_mut("provenance")
                 .and_then(serde_json::Value::as_object_mut)
-                .with_context(|| format!("{} has provenance", relative_path.display()))?;
+                .with_context(|| format!("{} has provenance", path.display()))?;
             if provenance.contains_key("source")
                 || provenance.get("harness_version") != Some(&1.into())
             {
@@ -350,6 +339,44 @@ impl Worktree<'_> {
             restamped += 1;
         }
         Ok(restamped)
+    }
+
+    /// Removes every record an earlier import wrote, on a Series or tagged,
+    /// so the `apply` that follows writes each again with today's tags and
+    /// places.
+    fn remove_imported(&self) -> anyhow::Result<()> {
+        for (path, file) in self.measured_records()? {
+            if file["provenance"]["source"] == IMPORTED_SOURCE {
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("removing {}", path.display()))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Every record on a Series or tagged but a release build's, which no
+    /// Harness measured, with its path in the worktree.
+    fn measured_records(&self) -> anyhow::Result<Vec<(PathBuf, serde_json::Value)>> {
+        let listing = git(
+            &self.directory,
+            &["ls-files", "--", ON_SERIES, TAGGED],
+            None,
+        )?;
+        listing
+            .lines()
+            .map(Path::new)
+            .filter(|relative_path| {
+                !relative_path
+                    .parent()
+                    .is_some_and(|directory| directory.ends_with(RELEASE_BUILD))
+            })
+            .map(|relative_path| {
+                let path = self.directory.join(relative_path);
+                let file = serde_json::from_slice(&std::fs::read(&path)?)
+                    .with_context(|| format!("parsing {}", relative_path.display()))?;
+                Ok((path, file))
+            })
+            .collect()
     }
 }
 
@@ -533,6 +560,32 @@ mod tests {
         assert_eq!(record.tags, ["machine not quiet"]);
         let unknown = FIRST_BASELINE.replace("Apple M4 Pro", "Some GPU");
         assert!(imported(&commit(1), "bench/baselines/pbr-sweep.json", &unknown).is_err());
+    }
+
+    #[test]
+    fn a_lavapipe_baseline_in_ci_configuration_joins_its_series_however_noisy() {
+        let ci_configuration = crate::bench::Configuration::CI_COUNTERS;
+        let lavapipe = FIRST_BASELINE
+            .replace("Apple M4 Pro", "llvmpipe (LLVM 20.1.2, 256 bits)")
+            .replace(
+                "\"width\": 2560",
+                &format!("\"width\": {}", ci_configuration.width),
+            )
+            .replace(
+                "\"height\": 1440",
+                &format!("\"height\": {}", ci_configuration.height),
+            )
+            .replace(
+                "\"measured_frames\": 1800",
+                &format!("\"measured_frames\": {}", ci_configuration.measured_frames),
+            )
+            .replace(
+                "\"draw_calls\"",
+                "\"gpu_frame_microseconds\": { \"median\": 100.0, \"p95\": 110.0 },\n  \"draw_calls\"",
+            );
+        let record = imported(&commit(1), "bench/baselines/llvmpipe/town.json", &lavapipe).unwrap();
+        assert_eq!(record.p95_over_median, Some(1.1));
+        assert!(record.tags.is_empty(), "{:?}", record.tags);
     }
 
     #[test]
