@@ -194,7 +194,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <div class="panel chart" id="passes-chart"></div>
 
   <h3 class="view" id="counters">Counters and memory</h3>
-  <p class="note">What the machine above counted. Measured frames are the 1,800 frames a reference run times, the load ADR 0013's Budgets judge. Counter frames are frames 8 to 71, early in the warm-up, which every configuration renders, lavapipe's included. Counters do not depend on load, so every machine's are exact.</p>
+  <p class="note">What the machine above counted. Measured frames are the 1,800 frames a reference run times, the load ADR 0013's Budgets judge. Counter frames are frames 8 to 71, early in the warm-up, which every configuration renders, lavapipe's included. Aliasing is measured on its own captures. Counters do not depend on load, so every machine's are exact.</p>
   <div class="grid">
     <div class="panel table-wrap" id="counter-table"></div>
     <div class="panel chart" id="memory-chart"></div>
@@ -948,11 +948,12 @@ function counterTable(points) {
     const counted = standingOf(points, countedValue(name));
     return { name, measured, counted, moved: moved(measured) || moved(counted) };
   }).sort((first, second) => second.moved - first.moved || labelOf(first.name).localeCompare(labelOf(second.name)));
-  // A value's change from the previous record follows it, only when it moved.
+  // A value's change from the previous record follows it, only when it moved. A metric that is no
+  // counter, such as aliasing, measures its own captures, so its value spans both frame columns.
   const cell = (name, standing) => `<td>${formatValue(name, standing?.value)}${moved(standing) ? ` ${changeHtml(name, standing.value, standing.previous)}` : ""}</td>`;
   container.innerHTML = `<table><thead><tr><th class="text">Counter</th>${anyMeasured ? "<th>Measured<br>frames</th>" : ""}<th>Counter<br>frames</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ name, measured, counted }) => `<tr>
     <td class="text">${escapeHtml(labelOf(name))}</td>
-    ${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}
+    ${!COUNTERS.includes(name) ? cell(name, counted).replace("<td>", `<td colspan="${anyMeasured ? 2 : 1}" style="text-align: center">`) : `${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}`}
     <td class="text">${sparklineSvg(points, measured ? measuredValue(name) : countedValue(name))}</td></tr>`).join("")}</tbody></table>
     <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`;
 }
