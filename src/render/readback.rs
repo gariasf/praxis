@@ -7,7 +7,10 @@
 //! ready is skipped and counted; `flush` waits, at the end of a run. Metal
 //! reads timestamps resolved before their pass's submission completed as 0
 //! or stale (`docs/research/wgpu-capability-matrix.md`), so a frame's
-//! timestamps are resolved only once its submission completed.
+//! timestamps are resolved only once its submission completed. A slot maps
+//! a fixed number of frames after its copy, once the copy completed, so the
+//! frame that maps it, and allocates for it in wgpu, does not depend on the
+//! GPU's timing.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
@@ -30,6 +33,19 @@ const COMPLETION_LAG: u64 = FRAMES_IN_FLIGHT as u64 + 1;
 /// so the slot is read and reused that many frames later again.
 const SLOT_COUNT: u64 = 2 * COMPLETION_LAG;
 
+/// Frames after the frame copying a slot's timestamps when its map is
+/// requested, once that copy completed. The CPU has waited for that frame by
+/// then, so each frame requests one map whatever the GPU's timing, and its
+/// first submission maps it. A map requested with the copy maps in whichever
+/// submission or poll first sees the copy complete
+/// [ref:wgpu-30-map-after-submission], and wgpu allocates for it there
+/// [ref:wgpu-30-handle-mapping]: inside a frame or between two, as the GPU's
+/// timing falls.
+const MAP_LAG: u64 = FRAMES_IN_FLIGHT as u64;
+
+// A slot is mapped before the ring comes round to it again.
+const _: () = assert!(COMPLETION_LAG + MAP_LAG < SLOT_COUNT);
+
 /// A timestamp at the start and one at the end of each timed pass.
 const QUERIES_PER_FRAME: usize = 2 * TIMED_PASSES.len();
 
@@ -47,10 +63,12 @@ const SHADOW_MASK_OVERFLOW_OFFSET: u64 = LIGHT_COUNTS_OFFSET + size_of::<LightCo
 const TIMESTAMP_OFFSET: u64 =
     (SHADOW_MASK_OVERFLOW_OFFSET + size_of::<u32>() as u64).next_multiple_of(8);
 
-/// What a slot's map callback reported.
-const MAP_PENDING: u8 = 0;
-const MAP_DONE: u8 = 1;
-const MAP_FAILED: u8 = 2;
+/// How far a slot's copy and map have come, as wgpu's callbacks report it.
+const COPY_PENDING: u8 = 0;
+const COPY_DONE: u8 = 1;
+const MAP_PENDING: u8 = 2;
+const MAP_DONE: u8 = 3;
+const MAP_FAILED: u8 = 4;
 
 /// The ring of readbacks of the frames' GPU stats.
 pub struct GpuStatsReadback {
@@ -89,7 +107,7 @@ struct Slot {
     /// Its frame's draw, then its timestamps.
     buffer: wgpu::Buffer,
     state: SlotState,
-    map_result: Arc<AtomicU8>,
+    progress: Arc<AtomicU8>,
     shape: FrameShape,
 }
 
@@ -117,6 +135,12 @@ enum SlotState {
     /// submission to complete.
     Recorded {
         frame: u64,
+    },
+    /// The frame's timestamps are being copied in too, by the submission of
+    /// frame `copied_in`; the buffer maps once the copy completed.
+    Copying {
+        frame: u64,
+        copied_in: u64,
     },
     /// The frame's timestamps are copied in too, and the buffer maps.
     Mapping {
@@ -163,7 +187,7 @@ impl GpuStatsReadback {
                         wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                     ),
                     state: SlotState::Free,
-                    map_result: Arc::new(AtomicU8::new(MAP_PENDING)),
+                    progress: Arc::new(AtomicU8::new(COPY_PENDING)),
                     shape: FrameShape::default(),
                 })
                 .collect(),
@@ -184,16 +208,26 @@ impl GpuStatsReadback {
         }
     }
 
-    /// Starts recording the next frame into `encoder`: reads back the slot
-    /// it takes, resolves the timestamps of the frame `COMPLETION_LAG`
-    /// before it, and returns where its passes write theirs; `None` when its
-    /// slot is still mapping, a skip counted in `recorder`.
+    /// Starts recording the next frame into `encoder`: requests the maps of
+    /// the slots whose copies completed, at least `MAP_LAG` frames ago,
+    /// reads back the slot it takes, resolves the timestamps of the frame
+    /// `COMPLETION_LAG` before it, and returns where its passes write
+    /// theirs; `None` when its slot is still copying or mapping, a skip
+    /// counted in `recorder`.
     pub fn begin_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         recorder: &mut FrameRecorder,
     ) -> Option<FrameTimestamps<'_>> {
         self.read_back.clear();
+        for slot in &mut self.slots {
+            if let SlotState::Copying { frame, copied_in } = slot.state
+                && copied_in + MAP_LAG <= self.frame
+                && slot.progress.load(Ordering::Acquire) == COPY_DONE
+            {
+                slot.map(frame);
+            }
+        }
         if let Some(resolved) = self.frame.checked_sub(COMPLETION_LAG) {
             let index = slot_index(resolved);
             if let SlotState::Recorded { frame } = self.slots[index].state {
@@ -256,8 +290,16 @@ impl GpuStatsReadback {
             }
         }
         let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
+        // The slot whose timestamps this frame copies, which completes with it.
+        let copying = self.slots.iter().find_map(|slot| {
+            matches!(slot.state, SlotState::Copying { copied_in, .. } if copied_in == frame)
+                .then(|| slot.progress.clone())
+        });
         encoder.on_submitted_work_done(move || {
             frames_completed.fetch_max(frame + 1, Ordering::Release);
+            if let Some(progress) = copying {
+                progress.store(COPY_DONE, Ordering::Release);
+            }
         });
         self.frame += 1;
     }
@@ -277,7 +319,29 @@ impl GpuStatsReadback {
                 self.resolve(&mut encoder, index, frame);
             }
         }
+        let copying: Vec<_> = self
+            .slots
+            .iter()
+            .filter(|slot| {
+                matches!(slot.state, SlotState::Copying { copied_in, .. } if copied_in == self.frame)
+            })
+            .map(|slot| slot.progress.clone())
+            .collect();
+        encoder.on_submitted_work_done(move || {
+            for progress in copying {
+                progress.store(COPY_DONE, Ordering::Release);
+            }
+        });
         queue.submit(std::iter::once(encoder.finish()));
+        device.poll(wgpu::PollType::wait_indefinitely())?;
+        // Every copy submitted has completed, so every slot copied maps now.
+        for slot in &mut self.slots {
+            if let SlotState::Copying { frame, .. } = slot.state
+                && slot.progress.load(Ordering::Acquire) == COPY_DONE
+            {
+                slot.map(frame);
+            }
+        }
         device.poll(wgpu::PollType::wait_indefinitely())?;
         for index in slots {
             self.read(index);
@@ -291,7 +355,8 @@ impl GpuStatsReadback {
     }
 
     /// Records the copy of `frame`'s timestamps, from slot `index`'s
-    /// queries, into the slot, which maps once the copy is done.
+    /// queries, into the slot, which maps once the copy is done and
+    /// `MAP_LAG` frames have passed.
     fn resolve(&mut self, encoder: &mut wgpu::CommandEncoder, index: usize, frame: u64) {
         let first_query = (index * QUERIES_PER_FRAME) as u32;
         let queries = first_query..first_query + QUERIES_PER_FRAME as u32;
@@ -304,13 +369,11 @@ impl GpuStatsReadback {
             TIMESTAMP_OFFSET,
             TIMESTAMP_BYTES,
         );
-        slot.map_result.store(MAP_PENDING, Ordering::Relaxed);
-        let map_result = slot.map_result.clone();
-        encoder.map_buffer_on_submit(&slot.buffer, wgpu::MapMode::Read, .., move |result| {
-            let reported = if result.is_ok() { MAP_DONE } else { MAP_FAILED };
-            map_result.store(reported, Ordering::Release);
-        });
-        slot.state = SlotState::Mapping { frame };
+        slot.progress.store(COPY_PENDING, Ordering::Relaxed);
+        slot.state = SlotState::Copying {
+            frame,
+            copied_in: self.frame,
+        };
     }
 
     /// Reads slot `index` back if it is mapped, and frees it. Returns whether
@@ -322,9 +385,9 @@ impl GpuStatsReadback {
     fn read(&mut self, index: usize) -> bool {
         let slot = &mut self.slots[index];
         let SlotState::Mapping { frame } = slot.state else {
-            return true;
+            return !matches!(slot.state, SlotState::Copying { .. });
         };
-        match slot.map_result.load(Ordering::Acquire) {
+        match slot.progress.load(Ordering::Acquire) {
             MAP_PENDING => return false,
             MAP_DONE => {
                 match slot.buffer.get_mapped_range(..) {
@@ -411,6 +474,21 @@ impl GpuStatsReadback {
         }
         slot.state = SlotState::Free;
         true
+    }
+}
+
+impl Slot {
+    /// Requests the map of its buffer, whose copies completed, to read
+    /// `frame`'s stats from.
+    fn map(&mut self, frame: u64) {
+        self.progress.store(MAP_PENDING, Ordering::Relaxed);
+        let progress = self.progress.clone();
+        self.buffer
+            .map_async(wgpu::MapMode::Read, .., move |result| {
+                let reported = if result.is_ok() { MAP_DONE } else { MAP_FAILED };
+                progress.store(reported, Ordering::Release);
+            });
+        self.state = SlotState::Mapping { frame };
     }
 }
 
@@ -823,8 +901,8 @@ mod tests {
     /// Frames that never complete, as their encoders are never submitted:
     /// from `COMPLETION_LAG` frames on, each skips the timestamps of the
     /// frame that far back, counted, and none is read back. Then, in a ring
-    /// whose frames complete, a slot whose map was never requested, as the
-    /// encoder requesting it was dropped, is skipped when the ring comes
+    /// whose frames complete, a slot whose copy never ran, as the encoder
+    /// copying it was dropped, never maps and is skipped when the ring comes
     /// round to it, and the next slot is read: no frame waits.
     #[test]
     fn readbacks_not_ready_are_skipped_and_counted() {
@@ -886,7 +964,7 @@ mod tests {
 
         let mut ring = new_ring();
         for number in 0..SLOT_COUNT {
-            // Frame 3 resolves frame 0's timestamps, never to be mapped.
+            // Frame 3 copies frame 0's timestamps, never to be mapped.
             let completes = number != COMPLETION_LAG;
             assert_eq!(
                 frame(&mut ring, completes),

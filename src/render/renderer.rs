@@ -484,6 +484,11 @@ impl Renderer {
         // takes them.
         self.load_staging.submit(&self.queue);
         self.mesh_pool.compact_blases(&self.queue);
+        // Before the frame's encoder, as `take_encoder` says; it counts as
+        // the dynamic TLAS's recording.
+        let taking = Instant::now();
+        self.dynamic_tlas.take_encoder(&self.device);
+        let take_time = recorder.stage(DYNAMIC_TLAS_RECORDING, taking);
         let mut encoder = create_frame_encoder(&self.device);
         self.static_tlas
             .update(frame, &self.mesh_pool, &mut encoder);
@@ -496,7 +501,7 @@ impl Renderer {
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
             self.dynamic_tlas.fill(frame, &self.mesh_pool, tlas_anchor);
         let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
-        let started = started + fill_time;
+        let started = started + take_time + fill_time;
         let camera = CameraUniform {
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.

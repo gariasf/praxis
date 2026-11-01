@@ -4131,3 +4131,21 @@ url = "https://docs.nvidia.com/deploy/nvidia-smi/index.html"
 section = "NVIDIA, nvidia-smi documentation, GPU Attributes, Utilization, GPU"
 quote = '''Percent of time over the past sample period during which one or more kernels was executing on the GPU. The sample period may be between 1 second and 1/6 second depending on the product.'''
 checked = 2026-10-31
+
+["wgpu-30-command-encoder-pool"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/allocator.rs#L32-L51"
+section = "wgpu-core 30.0.1, command/allocator.rs, CommandAllocator::acquire_encoder and release_encoder: a new command encoder takes the free encoder released last"
+quote = '''match free_encoders.pop() { Some(encoder) => Ok(encoder), [...] free_encoders.push(encoder);'''
+checked = 2026-11-01
+
+["wgpu-30-map-after-submission"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L236-L250"
+section = "wgpu-core 30.0.1, device/life.rs, LifetimeTracker::map: a map waits on the latest pending submission that uses the buffer, else is ready to map at the next maintenance"
+quote = '''submission .map_or(&mut self.ready_to_map, |a| &mut a.mapped) .push(buffer.clone());'''
+checked = 2026-11-01
+
+["wgpu-30-handle-mapping"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L414"
+section = "wgpu-core 30.0.1, device/life.rs, LifetimeTracker::handle_mapping: each maintenance that finds buffers ready to map allocates their callbacks' list"
+quote = '''if self.ready_to_map.is_empty() { return Vec::new(); } let mut pending_callbacks: Vec<super::BufferMapPendingClosure> = Vec::with_capacity(self.ready_to_map.len());'''
+checked = 2026-11-01
