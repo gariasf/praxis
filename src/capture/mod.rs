@@ -357,7 +357,93 @@ pub(crate) fn submit_and_map(
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
+
+    /// A frame allocates as often whenever the GPU finished the frames
+    /// before it. wgpu retires a finished submission, and maps the buffers
+    /// that waited on it, in the first submission or poll that finds it
+    /// finished, which may fall in a frame or between two. The orrery,
+    /// whose Moving Instances build the dynamic TLAS every frame, renders
+    /// twice: once with the GPU's work retired by a poll between frames,
+    /// once with it left finished for the frame's own submissions to retire.
+    #[test]
+    fn a_frames_allocations_do_not_depend_on_when_the_gpu_finished() {
+        const FRAMES: u32 = 24;
+        const WARM_UP_FRAMES: usize = 8;
+        // Far longer than a hardware GPU takes to render a frame of 64 × 64.
+        const GPU_FINISH_WAIT: Duration = Duration::from_millis(100);
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        // A software rasterizer shares the test's CPU, and on CI's runner
+        // can take longer than the wait to finish a frame: a frame left
+        // unfinished changes what the frames after it allocate.
+        if context.adapter.get_info().device_type == wgpu::DeviceType::Cpu {
+            writeln!(std::io::stderr(), "skipped: needs a hardware adapter").ok();
+            return;
+        }
+        let scene = ReferenceScene::Orrery;
+        let allocations = |retired_between_frames: bool| -> Vec<u64> {
+            let mut state = State::new(
+                &context,
+                TARGET_FORMAT,
+                64,
+                64,
+                scene,
+                glam::DVec3::ZERO,
+                RenderSwitches::default(),
+            )
+            .expect("the orrery loads");
+            let target = context.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Allocation Test Target"),
+                size: wgpu::Extent3d {
+                    width: 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: TARGET_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+            (0..FRAMES)
+                .map(|frame| {
+                    if retired_between_frames {
+                        let wait = context.device.poll(wgpu::PollType::wait_indefinitely());
+                        wait.expect("the frames before finish");
+                    } else {
+                        std::thread::sleep(GPU_FINISH_WAIT);
+                    }
+                    state
+                        .simulation
+                        .world
+                        .insert_resource(scene.camera_at(frame, glam::DVec3::ZERO));
+                    state.update(scene.frame_delta());
+                    state.render(&view);
+                    state.frame_stats().heap_allocations
+                })
+                .collect()
+        };
+
+        let retired = allocations(true);
+        let left_finished = allocations(false);
+        assert_eq!(
+            retired[WARM_UP_FRAMES..],
+            left_finished[WARM_UP_FRAMES..],
+            "heap allocations per frame, retired between frames {retired:?}, left finished {left_finished:?}"
+        );
+    }
 
     #[test]
     fn compare_counts_pixels_beyond_tolerance_and_marks_them_red() {

@@ -11,11 +11,15 @@ const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
 /// Staging memory for the per-frame uploads, reused every frame, where
 /// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
 /// slots grow on demand, never past the most one frame uploads. Each frame
-/// fills the next slot in turn, copies it into its targets, and the slot is
-/// mapped again once the GPU has run the copies. The fixed turn keeps the
-/// frame's heap allocations the same on every run: wgpu grows an encoder's
-/// tracking by each buffer's tracker index, so which slot a frame takes
-/// changes its allocation count.
+/// fills the next slot in turn, copies it into its targets, and requests the
+/// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
+/// before. The fixed turn keeps the frame's heap allocations the same on
+/// every run: wgpu grows an encoder's tracking by each buffer's tracker
+/// index, so which slot a frame takes changes its allocation count. So does
+/// the late map, for the reason the GPU stats readback maps late: the bench
+/// has waited for the frame that copied from the slot, so the frame's own
+/// submission maps it, whatever the GPU's timing
+/// [ref:wgpu-30-handle-mapping].
 pub struct FrameStaging {
     slots: Vec<StagingSlot>,
     slot_size: u64,
@@ -28,6 +32,8 @@ struct StagingSlot {
     buffer: wgpu::Buffer,
     /// Set by the map callback once `buffer` is mapped for writing again.
     is_mapped: Arc<AtomicBool>,
+    /// Whether its map was requested since it was last written.
+    map_requested: bool,
 }
 
 impl FrameStaging {
@@ -67,18 +73,21 @@ impl FrameStaging {
             self.resize(device, needed.next_power_of_two().min(self.max_slot_size));
         }
 
-        let slot = &self.slots[self.next_slot];
+        let index = self.next_slot;
         self.next_slot = (self.next_slot + 1) % SLOT_COUNT;
+        self.slots[self.next_slot].request_map();
+        let slot = &mut self.slots[index];
         if !slot.is_mapped.load(Ordering::Acquire) {
             // Every slot is in flight: wait for the GPU to finish this one.
+            slot.request_map();
             if let Err(error) = device.poll(wgpu::PollType::wait_indefinitely()) {
                 tracing::error!(%error, "waiting for a frame staging slot failed");
             }
             if !slot.is_mapped.load(Ordering::Acquire) {
                 // Its map failed, so the buffer is unmapped: map it again.
                 tracing::error!("frame staging slot not mapped; skipping the frame's uploads");
-                slot.buffer
-                    .map_async(wgpu::MapMode::Write, .., mark_mapped(&slot.is_mapped));
+                slot.map_requested = false;
+                slot.request_map();
                 return 0;
             }
         }
@@ -105,12 +114,7 @@ impl FrameStaging {
         }
         slot.buffer.unmap();
         slot.is_mapped.store(false, Ordering::Release);
-        encoder.map_buffer_on_submit(
-            &slot.buffer,
-            wgpu::MapMode::Write,
-            ..,
-            mark_mapped(&slot.is_mapped),
-        );
+        slot.map_requested = false;
         needed
     }
 
@@ -131,6 +135,7 @@ impl FrameStaging {
                     mapped_at_creation: true,
                 }),
                 is_mapped: Arc::new(AtomicBool::new(true)),
+                map_requested: false,
             })
             .collect();
         tracing::info!(
@@ -139,6 +144,18 @@ impl FrameStaging {
             "frame staging slots resized"
         );
         self.slot_size = slot_size;
+    }
+}
+
+impl StagingSlot {
+    /// Requests the map of its buffer for writing, unless it is mapped or
+    /// its map was requested since it was last written.
+    fn request_map(&mut self) {
+        if !self.map_requested && !self.is_mapped.load(Ordering::Acquire) {
+            self.map_requested = true;
+            self.buffer
+                .map_async(wgpu::MapMode::Write, .., mark_mapped(&self.is_mapped));
+        }
     }
 }
 

@@ -233,6 +233,8 @@ pub struct DynamicTlas {
     marker_bind_group: wgpu::BindGroup,
     /// What the markers found, which nothing reads.
     marker_result: wgpu::Buffer,
+    /// The encoder `prepare_encoder` created for the next `record`.
+    encoder: Option<wgpu::CommandEncoder>,
 }
 
 impl DynamicTlas {
@@ -248,9 +250,7 @@ impl DynamicTlas {
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Dynamic TLAS Encoder"),
-        });
+        let mut encoder = create_encoder(device);
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&tlas));
         queue.submit(std::iter::once(encoder.finish()));
         let marker_result = device.create_buffer(&wgpu::BufferDescriptor {
@@ -298,6 +298,7 @@ impl DynamicTlas {
             marker_pipeline,
             marker_bind_group,
             marker_result,
+            encoder: None,
         }
     }
 
@@ -358,14 +359,36 @@ impl DynamicTlas {
         timestamps: Option<[wgpu::ComputePassTimestampWrites<'_>; 2]>,
     ) -> Option<(wgpu::CommandBuffer, u64)> {
         let uploaded_bytes = self.unrecorded_upload_bytes.take()?;
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Dynamic TLAS Encoder"),
-        });
+        let mut encoder = self
+            .encoder
+            .take()
+            .unwrap_or_else(|| create_encoder(device));
         let [before, after] = timestamps.map_or([None, None], |writes| writes.map(Some));
         self.mark(&mut encoder, before);
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
         self.mark(&mut encoder, after);
         Some((encoder.finish(), uploaded_bytes))
+    }
+
+    /// Creates the encoder its next `record` records into, unless it holds
+    /// one: called before the frame creates its own. A new encoder reuses
+    /// the encoder the GPU finished with last [ref:wgpu-30-command-encoder-pool],
+    /// and a frame submits the dynamic TLAS's build before its passes, so the
+    /// build's encoder is released first. Created in this order, when no
+    /// other submission takes an encoder, the two swap roles every frame, so
+    /// every encoder the frames reuse records the frame's passes within its
+    /// first two frames, and the state Metal keeps per encoder, which grows
+    /// to the largest pipeline and bindings it recorded and never shrinks
+    /// [ref:wgpu-hal-30-metal-command-state], has grown by then. Created in
+    /// the other order, each keeps its role, until the GPU finishes a frame's
+    /// build but not its passes before the next frame starts: that frame's
+    /// passes then reuse the build's encoder, whose state grows in a frame
+    /// the GPU's timing picks. An encoder held over a frame that builds
+    /// nothing breaks the swap for a frame, harmlessly.
+    pub fn prepare_encoder(&mut self, device: &wgpu::Device) {
+        if self.encoder.is_none() {
+            self.encoder = Some(create_encoder(device));
+        }
     }
 
     /// Records a marker into `encoder`, timed into `timestamp_writes`; none
@@ -426,6 +449,12 @@ fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::Tl
 /// specification bounds cosine or angles past ±π, which an azimuth can be.
 /// Every Mesh grows, as which ones bend is not known here.
 const BEND_ROUNDING_SHARE: f32 = 0.00390625; // 2^-8
+
+fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("Dynamic TLAS Encoder"),
+    })
+}
 
 /// The box that holds `bounds`, a Mesh's box, its lowest corner then its
 /// highest, grown by `BEND_ROUNDING_SHARE` and placed by `transform`, a TLAS

@@ -83,7 +83,7 @@
   "uploaded_bytes": 416,
   "gpu_memory_bytes": 404020448,
   "arena_bytes_in_use": 176,
-  "heap_allocations": 346,
+  "heap_allocations": 341,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -96,6 +96,6 @@
     "uploaded_bytes": 416,
     "gpu_memory_bytes": 404020448,
     "arena_bytes_in_use": 176,
-    "heap_allocations": 346
+    "heap_allocations": 341
   }
 }
