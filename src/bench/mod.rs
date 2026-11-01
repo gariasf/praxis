@@ -230,17 +230,30 @@ impl Counters {
         }
     }
 
+    /// Each counter's name, as results and Bench records spell it.
+    pub(super) const NAMES: [&'static str; 8] = [
+        "draw_calls",
+        "instances_drawn",
+        "triangles_drawn",
+        "instances_overflowed",
+        "uploaded_bytes",
+        "gpu_memory_bytes",
+        "arena_bytes_in_use",
+        "heap_allocations",
+    ];
+
     fn named(&self) -> [(&'static str, u64); 8] {
-        [
-            ("draw_calls", self.draw_calls),
-            ("instances_drawn", self.instances_drawn),
-            ("triangles_drawn", self.triangles_drawn),
-            ("instances_overflowed", self.instances_overflowed),
-            ("uploaded_bytes", self.uploaded_bytes),
-            ("gpu_memory_bytes", self.gpu_memory_bytes),
-            ("arena_bytes_in_use", self.arena_bytes_in_use),
-            ("heap_allocations", self.heap_allocations),
-        ]
+        let values = [
+            self.draw_calls,
+            self.instances_drawn,
+            self.triangles_drawn,
+            self.instances_overflowed,
+            self.uploaded_bytes,
+            self.gpu_memory_bytes,
+            self.arena_bytes_in_use,
+            self.heap_allocations,
+        ];
+        std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
 }
 
