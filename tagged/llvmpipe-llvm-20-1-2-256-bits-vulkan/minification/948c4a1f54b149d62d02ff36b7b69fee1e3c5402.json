@@ -73,7 +73,7 @@
   },
   "scene": "minification",
   "tags": [
-    "640x360 over 256 frames, not the reference configuration"
+    "640x360 over 256 frames, not CI's configuration"
   ],
   "triangles_drawn": 2,
   "uploaded_bytes": 224,

@@ -105,7 +105,7 @@
     "p95": 51550.05900000001
   },
   "tags": [
-    "640x360 over 256 frames, not the reference configuration"
+    "640x360 over 256 frames, not CI's configuration"
   ],
   "triangles_drawn": 512002,
   "uploaded_bytes": 309424,

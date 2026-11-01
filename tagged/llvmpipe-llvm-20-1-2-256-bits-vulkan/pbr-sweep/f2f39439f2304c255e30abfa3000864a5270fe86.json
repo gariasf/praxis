@@ -105,8 +105,7 @@
     "p95": 44086.598000000005
   },
   "tags": [
-    "machine not quiet",
-    "640x360 over 256 frames, not the reference configuration"
+    "640x360 over 256 frames, not CI's configuration"
   ],
   "triangles_drawn": 22080,
   "uploaded_bytes": 384,

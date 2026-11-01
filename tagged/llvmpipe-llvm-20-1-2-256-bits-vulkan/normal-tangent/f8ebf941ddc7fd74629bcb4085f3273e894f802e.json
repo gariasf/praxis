@@ -57,7 +57,7 @@
   },
   "scene": "normal-tangent",
   "tags": [
-    "640x360 over 256 frames, not the reference configuration"
+    "640x360 over 256 frames, not CI's configuration"
   ],
   "triangles_drawn": 7774,
   "uploaded_bytes": 288,

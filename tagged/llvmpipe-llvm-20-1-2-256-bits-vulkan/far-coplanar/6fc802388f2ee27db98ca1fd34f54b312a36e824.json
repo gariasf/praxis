@@ -65,8 +65,7 @@
   },
   "scene": "far-coplanar",
   "tags": [
-    "machine not quiet",
-    "640x360 over 256 frames, not the reference configuration"
+    "640x360 over 256 frames, not CI's configuration"
   ],
   "triangles_drawn": 4,
   "uploaded_bytes": 288,

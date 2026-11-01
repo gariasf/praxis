@@ -104,9 +104,6 @@
     "median": 166803.42599999998,
     "p95": 185380.26900000003
   },
-  "tags": [
-    "640x360 over 64 frames, not the reference configuration"
-  ],
   "triangles_drawn": 259996,
   "uploaded_bytes": 1969376,
   "width": 640
