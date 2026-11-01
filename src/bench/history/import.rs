@@ -316,9 +316,9 @@ fn backend_before_keyed(adapter: &str) -> anyhow::Result<&'static str> {
 impl Worktree<'_> {
     /// Gives every record a bench published at Harness version 1 the
     /// Harness version `version`: before the import numbered the eras before it,
-    /// version 1 named the method in force, and returns how many it
-    /// changed; the `apply` that follows rebuilds every Series. A release build's record, which
-    /// no Harness measured, keeps what it holds.
+    /// version 1 named the method in force. Returns how many it changed;
+    /// the `apply` that follows rebuilds every Series. A release build's
+    /// record, which no Harness measured, keeps what it holds.
     fn restamp(&self, version: u32) -> anyhow::Result<usize> {
         let listing = git(
             &self.directory,

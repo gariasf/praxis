@@ -346,7 +346,7 @@ function rowOf(record) {
     tags: record.tags ?? [],
   };
   for (const timing of TIMINGS) row[timing] = record[timing] ?? null;
-  // The GPU frame's first name, which measured the same span.
+  // Tagged and Experiment records reach the page raw, so it reads the GPU frame's first name, which measured the same span, as the Series rows do.
   row.gpu_frame_microseconds ??= record.gpu_main_pass_microseconds ?? null;
   return Object.assign(row, counters);
 }
@@ -950,11 +950,10 @@ function counterTable(points) {
   }).sort((first, second) => second.moved - first.moved || labelOf(first.name).localeCompare(labelOf(second.name)));
   // A value's change from the previous record follows it, only when it moved.
   const cell = (name, standing) => `<td>${formatValue(name, standing?.value)}${moved(standing) ? ` ${changeHtml(name, standing.value, standing.previous)}` : ""}</td>`;
-  const trendOf = (name, measured) => measured ? measuredValue(name) : countedValue(name);
   container.innerHTML = `<table><thead><tr><th class="text">Counter</th>${anyMeasured ? "<th>Measured<br>frames</th>" : ""}<th>Counter<br>frames</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ name, measured, counted }) => `<tr>
     <td class="text">${escapeHtml(labelOf(name))}</td>
     ${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}
-    <td class="text">${sparklineSvg(points, trendOf(name, measured))}</td></tr>`).join("")}</tbody></table>
+    <td class="text">${sparklineSvg(points, measured ? measuredValue(name) : countedValue(name))}</td></tr>`).join("")}</tbody></table>
     <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`;
 }
 

@@ -908,6 +908,26 @@ mod tests {
         heap_allocations: 100,
     };
 
+    #[test]
+    fn each_counter_is_named_as_results_spell_it() {
+        let counters = Counters {
+            draw_calls: 1,
+            instances_drawn: 2,
+            triangles_drawn: 3,
+            instances_overflowed: 4,
+            uploaded_bytes: 5,
+            gpu_memory_bytes: 6,
+            arena_bytes_in_use: 7,
+            heap_allocations: 8,
+        };
+        let serialized = serde_json::to_value(counters).unwrap();
+        let serialized = serialized.as_object().unwrap();
+        assert_eq!(serialized.len(), Counters::NAMES.len());
+        for (name, value) in counters.named() {
+            assert_eq!(serialized[name], value, "{name}");
+        }
+    }
+
     pub(super) fn baseline() -> Measurements {
         Measurements {
             scene: "pbr-sweep".to_owned(),

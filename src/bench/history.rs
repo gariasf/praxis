@@ -197,10 +197,11 @@ struct StoredRecord {
     counter_frames: Option<StoredCounterFrames>,
     aliasing_rmse: Option<u64>,
     aliasing_p99: Option<u64>,
-    /// The fields named above leave the measured frames' counters, under
-    /// their names in `Counters::NAMES`, among the rest.
+    /// Every field not named above, the measured frames' counters among
+    /// them under their names in `Counters::NAMES`: a map, as a record
+    /// holds only the counters its bench counted.
     #[serde(flatten)]
-    rest: serde_json::Map<String, serde_json::Value>,
+    remaining_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// What every stored record's provenance holds, whichever form wrote it.
@@ -895,11 +896,11 @@ impl<'repository> Worktree<'repository> {
         if !records.exists() {
             return Ok(());
         }
-        for machine in std::fs::read_dir(records)? {
-            let machine = machine?.file_name();
-            for subject in std::fs::read_dir(self.directory.join(ON_SERIES).join(&machine))? {
+        for adapter_key in std::fs::read_dir(&records)? {
+            let adapter_key = adapter_key?.file_name();
+            for subject in std::fs::read_dir(records.join(&adapter_key))? {
                 let subject = subject?.file_name();
-                self.rebuild_series(&Path::new(ON_SERIES).join(&machine).join(subject))?;
+                self.rebuild_series(&Path::new(ON_SERIES).join(&adapter_key).join(subject))?;
             }
         }
         Ok(())
@@ -1012,7 +1013,7 @@ impl<'record> SeriesRow<'record> {
             measured_counters: Counters::NAMES
                 .into_iter()
                 .filter_map(|counter| {
-                    let value = record.rest.get(counter)?.as_u64()?;
+                    let value = record.remaining_fields.get(counter)?.as_u64()?;
                     Some((counter, value))
                 })
                 .collect(),
@@ -1169,10 +1170,12 @@ mod tests {
             1
         );
     }
+
     #[test]
     fn a_publish_rebuilds_every_series_so_rows_take_the_current_form() {
         let fixture = Fixture::new("rebuild");
-        let results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
+        let mut results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
+        results[0].counters.triangles_drawn *= 27;
         publish(&fixture.checkout, &results, None).unwrap();
         let series_path = "series/apple-m4-pro-metal/pbr-sweep.json";
         let rebuilt = fixture.read(series_path);
@@ -1189,6 +1192,11 @@ mod tests {
         let publication = publish(&fixture.checkout, &[town], None).unwrap();
         assert_eq!(publication.on_series, 1);
         assert_eq!(fixture.read(series_path), rebuilt);
+        // A published record's row holds both kinds of frame's counters.
+        let rows: serde_json::Value = serde_json::from_str(&rebuilt).unwrap();
+        assert_eq!(rows[0]["measured_frames"], 1800);
+        assert_eq!(rows[0]["measured_counters"]["triangles_drawn"], 22_080 * 27);
+        assert_eq!(rows[0]["triangles_drawn"], 22_080);
     }
 
     #[test]
