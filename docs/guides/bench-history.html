@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Bench History Explained</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook, volume 28 of the series, after Waiting on the GPU Explained. One reading column; figures, demos and tables break out wider. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --bad: #c43a31;
+  --bad-wash: rgba(196, 58, 49, 0.14);
+  --good: #23855a;
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
+  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 18px; line-height: 1.6;
+}
+.sheet {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 24px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.lede { font-size: 21px; color: var(--ink-soft); }
+.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
+.status b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
+.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.fluid svg { display: block; width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
+.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
+.keypoints li { padding-left: 22px; position: relative; }
+.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.keypoints li { min-width: 0; }
+.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+
+svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
+svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
+svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
+svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
+svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
+svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
+svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
+svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
+svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
+.control-label { color: var(--ink-soft); }
+output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
+.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.readout b { color: var(--ink); font-weight: 600; }
+canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
+.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
+.canvas-frame canvas { border-radius: 0; }
+canvas.demo { touch-action: none; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
+.legend i.dashed { border-top: 2.5px dashed var(--warm); }
+.legend i.thin { border-top: 1.5px solid var(--ink); }
+.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
+.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.demo-grid > div { min-width: 0; }
+
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
+.figures div { min-width: 0; }
+.figures dt { color: var(--ink-soft); font-size: 12px; }
+.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
+.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
+.reading h3 { margin: 0 0 10px; font-size: 18px; }
+.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
+.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
+.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
+.reading li span { color: var(--ink-soft); }
+.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
+.glossary div { min-width: 0; }
+.glossary dt { font-family: var(--display); font-weight: 700; }
+.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
+footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  figure { padding: 12px; }
+  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .formula { font-size: 13px; }
+}
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.meter { display: grid; gap: 14px; }
+.meter-row { display: grid; gap: 5px; min-width: 0; }
+.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
+.meter-label b { color: var(--ink); font-weight: 600; }
+.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
+.meter-fill { left: 0; background: var(--accent); }
+.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
+.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-axis span.first { transform: none; }
+.meter-axis span.last { transform: translateX(-100%); }
+.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
+
+
+/* The series parts this volume shares with Waiting on the GPU Explained. */
+p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
+.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
+.legend .dot.one { background: var(--accent); border-color: var(--accent); }
+.legend .dot.two { background: var(--warm); border-color: var(--warm); }
+.legend .dot.ring { background: transparent; border-color: var(--bad); }
+.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.bad-text { color: var(--bad); }
+.good-text { color: var(--good); }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
+details.check summary { cursor: pointer; font-weight: 600; }
+details.check[open] summary { margin-bottom: 8px; }
+details.check p { margin: 0; }
+.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.in-brief p { margin: 0 0 12px; }
+.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
+.in-brief li { margin: 2px 0; }
+.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
+.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
+.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
+.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-canvas { width: 100%; }
+.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
+
+/* This volume's own parts: the key's fields and the demo's marks. */
+.key-parts { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--mono); font-size: 13.5px; margin: 0 0 16px; }
+.key-parts span { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; }
+.key-parts span.path { border-color: var(--accent); }
+.legend .dot.inside { background: var(--accent); border-color: var(--accent); }
+.legend .dot.suspect { background: var(--accent); border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-wash); }
+.legend .swatch.band { display: inline-block; width: 16px; height: 12px; background: var(--accent-wash); border: 1px solid var(--accent); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
+  <div class="eyebrow">Praxis &middot; observability track &middot; ticket #435 &middot; PR #487</div>
+  <h1>Bench History Explained</h1>
+  <aside class="in-brief" aria-labelledby="in-brief">
+    <h2 id="in-brief">In brief</h2>
+    <p>A bench run is only worth keeping if a later run can be compared with it. Praxis keeps every run as a Bench record on the <code>bench-history</code> branch, keyed by a hash of the source it measured and labelled with the Harness version that defines its metrics; only quiet runs of <code>main</code> form a Series. Each publish marks a Suspect where a frame median leaves a band around the median of the 8 records before it, ± 4 median absolute deviations or 3%. The idea to keep: compare only like with like, and judge a step against the median and its spread, which one bad run cannot move.</p>
+    <p class="in-brief-label">You'll learn</p>
+    <ul>
+      <li>Why a record is keyed by a hash of five paths, not by its commit</li>
+      <li>What a Harness version is, and why a break in one means the ruler changed, not the engine</li>
+      <li>What makes a run quiet, and which records form a Series</li>
+      <li>How the median and the median absolute deviation set a band one outlier cannot widen, and what a Suspect is</li>
+      <li>What the detector cannot see yet, and what confirms a Suspect</li>
+    </ul>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html#frame">Frame Timing Explained</a>, for the CPU and GPU frame a Series draws; optionally <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a>, for Harness version 8.</p>
+    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at e3a96ae0 (PR #487, 2026-11-02). <b>Since then:</b> nothing, as of that commit. #485 (re-bench and bisect a Suspect) and #486 (one issue per confirmed Regression) are open.</p>
+  </aside>
+  <p class="lede">Before the observability track, a bench run lived as long as a session's terminal, and the only figures kept were the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> a PR chose to commit. ADR 0024 keeps every run instead, as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span>, so a slow drift or a step between two Baselines can be seen. This volume covers what makes two records comparable, which of them form a line on the <a href="https://gariasf.github.io/praxis/bench/">bench page</a>, and how PR #487 finds the record where a line steps.</p>
+  <p class="status"><b>Provenance.</b> The code is main at e3a96ae0, PR #487, part 1 of ticket #435. Figures about the branch are from <code>bench-history</code> at 438cfe9c, 2026-11-02, and from a rebuild of it with PR #487's binary. The Harness versions are those <code>praxis history import</code> numbers, listed on #427.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#key">1 &middot; The key</a>
+    <a href="#harness">2 &middot; The ruler</a>
+    <a href="#series">3 &middot; Quiet records and the Series</a>
+    <a href="#suspects">4 &middot; Suspects</a>
+    <a href="#next">5 &middot; What a Suspect is not yet</a>
+    <a href="#check">Check yourself</a>
+    <a href="#reading">Reading list</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<section class="chapter" id="key">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 1 &middot; <code>src/bench/provenance.rs</code> &middot; <code>source_hash</code></div>
+    <h2>The key: what the run measured</h2>
+    <p class="key-idea"><b>Key idea.</b> A record is keyed by a hash of the paths that can change a measurement, so two commits that differ only in docs share one record, and so do a PR's head and its squashed merge when the branch is up to date with main.</p>
+    <p class="plain">To compare two runs you must know they measured the same engine. A commit hash says too little and too much: a README edit makes a new commit, and a squash merge gives the code a commit its PR never had.</p>
+    <p>So a record's key names the source, not the commit. <code>MEASURED_PATHS</code> lists the five top-level paths that can change a measurement: <code>src</code>, <code>assets</code>, <code>Cargo.toml</code>, <code>Cargo.lock</code> and <code>.cargo</code>. The source hash is the git tree built from just those entries:</p>
+<pre class="code"><code><span class="comment">// src/bench/provenance.rs, source_hash: the five paths' tree entries at a revision, as one tree.</span>
+let listing = git(repository, &amp;[&amp;["ls-tree", "--full-tree", revision, "--"][..], &amp;MEASURED_PATHS[..]].concat(), None)?;
+git(repository, &amp;["mktree"], Some(&amp;entries))</code></pre>
+    <ul class="keypoints" style="margin-top: 16px">
+      <li><b>Every path is classified.</b> A test fails when a new top-level path is in neither <code>MEASURED_PATHS</code> nor the twelve <code>UNMEASURED_PATHS</code>, so a new directory cannot slip out of the hash unnoticed.</li>
+      <li><b>A docs-only commit inherits.</b> <code>91fda48b</code> and <code>3f7fd6b5</code>, which changed only <code>README.md</code>, both hash to <code>2d5d1c36</code>. The M4 Pro's sweep, run on the second, logged "nothing to bench: main's source has a record on every Series here".</li>
+    </ul>
+    <p>The full key adds where and how the run measured:</p>
+    <div class="key-parts" aria-label="The key's parts"><span>source hash</span><span>adapter</span><span>backend</span><span>scene</span><span>Harness version</span></div>
+    <p>A record's path is its key, less the Harness version: <code>records/apple-m4-pro-metal/town/2d5d1c36&hellip;.json</code>. The Harness version is defined under <code>src/</code>, so a source hash already names one. When a second record lands on a path that exists, the quieter of the two stays (chapter 3).</p>
+  </div>
+</section>
+
+<section class="chapter" id="harness">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 2 &middot; <code>HARNESS_VERSION</code> &middot; <code>HARNESS_BREAKS</code></div>
+    <h2>The ruler: Harness version</h2>
+    <p class="key-idea"><b>Key idea.</b> When a change alters how a metric is measured, its Harness version rises, and charts break their line there: a jump across a break is the ruler changing, not the engine.</p>
+    <p>A <span class="concept" data-term="Harness version" data-tip="A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.">Harness version</span> names what the bench's metrics mean. It is 10 on main. Before the history existed nobody numbered it, so <code>praxis history import</code> numbers the commits that changed a metric's meaning, and gives each imported Baseline the version in force at its commit:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th class="n">Version</th><th>Starts at</th><th>What changed</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td><code>591433d7</code>, #83</td><td>the first Baselines</td></tr>
+        <tr><td class="n">2</td><td><code>926fcc18</code>, #230</td><td>the GPU main pass spans the culling pass's start to the main pass's end</td></tr>
+        <tr><td class="n">3</td><td><code>0b29a3c0</code>, #236</td><td>the GPU stats readback ring's own CPU time, allocations and memory join the metrics</td></tr>
+        <tr><td class="n">4</td><td><code>80227bca</code>, #266</td><td>the GPU frame is the dynamic TLAS build plus the span of the frame's passes</td></tr>
+        <tr><td class="n">5</td><td><code>c5a12eb2</code>, #291</td><td>the GPU frame spans its passes' earliest start to their latest end</td></tr>
+        <tr><td class="n">6</td><td><code>800c0d21</code>, #299</td><td>the dynamic TLAS build counts from the end of the previous frame's last pass</td></tr>
+        <tr><td class="n">7</td><td><code>5264094f</code>, #372</td><td>GPU memory leaves out the GPU stats readback</td></tr>
+        <tr><td class="n">8</td><td><code>958ed4e9</code>, #400</td><td>the bench spin-waits on hardware adapters, so CPU times are at full clock</td></tr>
+        <tr><td class="n">9</td><td><code>a5280dce</code>, #410</td><td>a render pass's time counts from the end of the passes before it</td></tr>
+        <tr class="focus"><td class="n">10</td><td><code>a00280dc</code>, #421</td><td>the depth passes count only from the passes they wait on</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p class="note" style="margin-top: 12px">From #427's list of Harness version changes, metric names in words.</p>
+    <p>What does not raise it matters as much. A renamed field that measures the same span, a counter added beside the old ones, and a new pass inside the frame are not breaks: the last is engine work, and the line should show it. Version 8 is the case to remember: the bench started spin-waiting, and <code>town</code>'s M4 Pro CPU line fell by about 30% with no engine change at all (<a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a>).</p>
+    <p>A scene's content hash breaks a line the same way: a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> given more Instances measures a different load. On the bench page both breaks shade bands or draw a dashed rule, and no change is measured across them.</p>
+  </div>
+</section>
+
+<section class="chapter" id="series">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 3 &middot; <code>src/bench/history.rs</code> &middot; <code>tags</code></div>
+    <h2>Quiet records and the Series</h2>
+    <p class="key-idea"><b>Key idea.</b> Every run is kept, but only clean, release-profile runs of main's source on a quiet machine form a Series; the rest are tagged with why they are not on one.</p>
+    <p>A <span class="concept" data-term="Series" data-tip="One metric's Bench records for one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.">Series</span> is what a chart draws and what a Regression is found in. A record joins one only if nothing tags it:</p>
+    <ul class="keypoints">
+      <li><b>Clean and release.</b> No uncommitted change, and the release profile.</li>
+      <li><b>Main's source.</b> The source hash is main's, or the commit is on main.</li>
+      <li><b>The Series' configuration.</b> 2560&times;1440 over 1,800 frames; lavapipe's is CI's 640&times;360 over 64.</li>
+      <li><b>A quiet machine.</b> At the run's start preflight warned of no GPU load over 10%, no other praxis process, no battery power and no busy display, and the run's GPU frame p95 over its median stayed under 1.06.</li>
+    </ul>
+    <p>The last rule is the one a night tests. On the evening of 2026-10-31 the RTX 2070 SUPER's second sweep read p95/median from 1.08 to 1.83 on six of eleven scenes, every one started at 0% GPU load; none of those six joined a Series. Two runs of one key keep the quieter, the lower p95/median, so a noisy evening cannot replace a quiet night's record. lavapipe is the exception: its times mean nothing, so the first record under its key stays, quiet or not.</p>
+    <p>On 2026-11-02 at 04:00 the M4 Pro's sweep benched main's new source and put all 11 records on their Series. Each Series still begins with the imported Baselines, which is why most of its points are squares on the bench page:</p>
+  </div>
+  <div class="prose table-wrap">
+    <table class="facts compact">
+      <thead><tr><th>M4 Pro Series</th><th class="n">Imported Baselines</th><th class="n">Benched since</th></tr></thead>
+      <tbody>
+        <tr><td><code>helmet</code></td><td class="n">38</td><td class="n">1</td></tr>
+        <tr><td><code>pbr-sweep</code></td><td class="n">37</td><td class="n">2</td></tr>
+        <tr><td><code>texture-wall</code></td><td class="n">18</td><td class="n">1</td></tr>
+        <tr><td><code>town</code></td><td class="n">13</td><td class="n">2</td></tr>
+        <tr><td><code>crowd</code></td><td class="n">11</td><td class="n">2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="chapter" id="suspects">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 4 &middot; <code>src/bench/history/suspects.rs</code> &middot; <code>suspects</code></div>
+    <h2>Suspects: a band one bad run cannot widen</h2>
+    <p class="key-idea"><b>Key idea.</b> A record is a <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspect</span> when its frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%; only a step's first record is marked.</p>
+    <p class="plain">A fixed percentage alone, say anything 5% off the last record, fires on noisy passes and misses steady ones, so ticket #435 ruled it out. The band has to follow each Series' own noise.</p>
+    <p>The textbook band is the mean ± a few standard deviations, but one outlier pulls the mean and inflates the deviation, widening the band it should fall outside. The median and the median absolute deviation (MAD) do not move that way: half the window must change before the median does. Leys and colleagues' 2013 note puts it in its title: "Do not use standard deviation around the mean, use absolute deviation around the median".</p>
+<pre class="formula">center     = median(window)
+deviation  = median(|value − center| for each value in window)
+tolerance  = max(4 × deviation, 0.03 × center)
+suspect    = |median − center| &gt; tolerance</pre>
+    <ul class="keypoints">
+      <li><b>The window.</b> Up to 8 medians before the record on its line. A line starts at a Harness version, a new scene content or an imported Baseline, and a record with fewer than 3 before it on its line is not judged.</li>
+      <li><b>4 MADs.</b> For normally distributed noise the standard deviation is about 1.4826 MADs, so 4 MADs is about 2.7 standard deviations.</li>
+      <li><b>The 3% floor.</b> Quiet M4 Pro medians can agree to a few tenths of a percent, which makes the MAD tiny; the floor keeps a 1% wobble from reading as a step.</li>
+      <li><b>The first of a step.</b> After a real step, the window's median lags until five of its eight are at the new level, so the next four records also sit outside. A record continues a step flagged among the 8 before it while it stays on the same side, within the flagged record's tolerance of that record's median, even after a noisy record between them fell back inside the band; a second step on the same side is flagged again.</li>
+      <li><b>Which metrics.</b> The CPU and GPU frame medians, on every Series but lavapipe's, whose times measure no GPU. Faster records are marked too; only slower ones are Regressions.</li>
+    </ul>
+    <p>Each publish rebuilds every Series, so each row carries its marks: <code>"suspects": {"gpu_frame_microseconds": 0.052}</code>, the shift as a share of the window's median. The bench page rings them, red when slower and green when faster.</p>
+  </div>
+  <figure class="wide" id="demo-detector">
+    <div class="canvas-frame"><canvas id="d-canvas" class="demo-canvas" role="img" aria-label="A synthetic Series of 28 frame medians with the band each record is judged against, and rings on the Suspects."></canvas></div>
+    <div class="legend">
+      <span><span class="dot inside"></span>a record</span>
+      <span><span class="dot suspect"></span>a Suspect</span>
+      <span><span class="swatch band"></span>the band it was judged against</span>
+    </div>
+    <div class="sliders">
+      <label for="d-noise" class="control-label">Noise <output id="d-noise-out" for="d-noise"></output></label>
+      <input type="range" id="d-noise" min="0" max="6" step="0.1" value="1.2">
+      <label for="d-step" class="control-label">Step at record 16 <output id="d-step-out" for="d-step"></output></label>
+      <input type="range" id="d-step" min="-15" max="15" step="0.5" value="5">
+      <label for="d-outlier" class="control-label">Outlier at record 9 <output id="d-outlier-out" for="d-outlier"></output></label>
+      <input type="range" id="d-outlier" min="0" max="30" step="1" value="12">
+    </div>
+    <div class="controls"><button type="button" class="btn" id="d-reseed">New noise</button></div>
+    <p class="readout" id="d-note" aria-live="polite" style="margin-top: 12px"></p>
+    <figcaption><b>Live demo.</b> A made-up Series around 10 ms, with noise drawn evenly within the chosen ± share, a step from record 16 on, and one outlier at record 9. The detector is this page's copy of <code>suspects</code>: the same window, MAD, floor, nearest-rank median and step rule. Try a 3% step under 1% noise, then under 4%; and see the outlier flagged once while the records after it are judged as before.</figcaption>
+  </figure>
+  <div class="prose">
+    <h3>On the real branch</h3>
+    <p>Rebuilt with PR #487's binary, no live Series has a Suspect: each M4 Pro Series has one or two records benched since its last imported Baseline, and a record needs three before it. Run over the M4 Pro's Baseline history with Baselines not starting lines, a copy of the rule flagged up to 6 records per Series and metric, none on some, each at a commit that re-recorded that Baseline, from 3.5% to 574%. That is the rule finding the steps the Baselines were re-recorded for. It also flagged two CPU frames from the 2026-11-02 night: <code>town</code>'s at 14.2% over the median of the three records before it, and <code>crowd</code>'s at 15.9% faster.</p>
+    <p>One detail of the arithmetic: the median is the bench's own nearest-rank percentile, so for an even window it is the lower of the two middle values. That sets the band a little low, so slowdowns are flagged slightly more readily than speedups.</p>
+  </div>
+</section>
+
+<section class="chapter" id="next">
+  <div class="prose">
+    <div class="chapter-mark">Chapter 5 &middot; tickets #485 and #486</div>
+    <h2>What a Suspect is not yet</h2>
+    <p class="key-idea"><b>Key idea.</b> A Suspect is a candidate, not a Regression: the sweep must re-bench it beside its predecessor on one night, bisect the commits between them, and only then file an issue.</p>
+    <p>Machine state moves medians between nights, as the RTX's evening showed, so a Suspect compared with records from other nights proves little. #485 has the sweep re-bench the Suspect's source and its predecessor's interleaved on the same night. If the shift holds, it bisects the first-parent commits between them with other source hashes until one is pinned, and a pinned commit starts a new line. #486 then files one <code>needs-triage</code> issue per confirmed Regression, naming the commit, its PR, the Series, the delta and the chart.</p>
+    <p>MongoDB's performance team made the same split. They inspected results by hand, then added a threshold-based system, and "neither system was sufficient for finding changes in performance in a timely manner"; their system "built upon the E-Divisive means algorithm" now finds change points for a person to triage (Daly and colleagues, ICPE 2020).</p>
+    <h3>What the detector cannot see</h3>
+    <ul class="keypoints">
+      <li><b>Baselines re-recorded since the history began.</b> Only imported Baselines start a line. A Baseline a PR re-records now does not, so its step will be a Suspect until #485 pins it to that commit and marks it covered.</li>
+      <li><b>A slow drift.</b> A metric that grows 1% a record never leaves a band that follows it. A window of medians finds steps, not slopes.</li>
+      <li><b>A step right after an outlier on the same side.</b> If the outlier sits within the step's tolerance of it, the step reads as continuing the outlier, and the outlier takes the mark. Once #485 clears the outlier, the step should be judged again.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="chapter" id="check">
+  <div class="prose">
+    <div class="chapter-mark">Review</div>
+    <h2>Check yourself</h2>
+    <details class="check"><summary>A commit changes only <code>docs/guides/</code>. Will the nightly sweep bench it?</summary><p>No. The source hash covers only <code>src</code>, <code>assets</code>, <code>Cargo.toml</code>, <code>Cargo.lock</code> and <code>.cargo</code>, so the commit hashes to the same source as the one before it. If that source already has a record on each of the machine's Series, the sweep logs "nothing to bench" and stops.</p></details>
+    <details class="check"><summary><code>town</code>'s M4 Pro CPU line drops by about 30% at one commit, with no engine change. Is that a Suspect?</summary><p>Not if it is a change of method. That commit, #400's spin-wait, starts Harness version 8, and a new Harness version starts a new line, so no record is judged against records measured the old way. If a change of method lands without raising the Harness version, its step would read as a Suspect, which is why the version must rise with it.</p></details>
+    <details class="check"><summary>Eight quiet records read 10.00 to 10.08 ms, then one reads 11.5 ms, then the next eight read 10.00 to 10.08 again. Which are Suspects, and why does the 11.5 not widen the band?</summary><p>Only the 11.5 ms record. The band's centre is a median and its width a median absolute deviation, so a single 11.5 among eight values near 10 moves neither: for the records after it, the median stays near 10.04 and the tolerance at the 3% floor, about 0.3 ms. A mean and standard deviation would have been pulled up by it, and a later real step could have hidden inside the wider band.</p></details>
+  </div>
+</section>
+
+<section class="chapter" id="reading">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Reading list</h2>
+    <p>Grouped by source, each with what it is good for here. Code links are pinned to e3a96ae0.</p>
+  </div>
+  <div class="reading page">
+    <article>
+      <h3>This track</h3>
+      <h4>In the repo</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a> <span>the decision: the key, the quiet rule, Harness version breaks, Suspects, and the options it rejected</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/427">Map #427</a> <span>the observability track, and its comment listing the ten Harness versions</span></li>
+        <li><a href="https://github.com/gariasf/praxis/issues/435">Ticket #435</a> and <a href="https://github.com/gariasf/praxis/pull/487">PR #487</a> <span>the detector and its marks; #485 and #486 for what follows</span></li>
+        <li><a href="https://github.com/gariasf/praxis/tree/bench-history"><code>bench-history</code></a> <span>the records, the Series and the branch's README</span></li>
+        <li><a href="https://gariasf.github.io/praxis/bench/">The bench page</a> <span>the Series drawn, with each Suspect ringed</span></li>
+      </ul>
+      <h4>The code, at e3a96ae0</h4>
+      <ul>
+        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/provenance.rs"><code>src/bench/provenance.rs</code></a> <span><code>MEASURED_PATHS</code>, <code>source_hash</code>, <code>HARNESS_VERSION</code>, the quiet threshold</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/history.rs"><code>src/bench/history.rs</code></a> <span><code>tags</code>, the publish, and the Series rows with their marks</span></li>
+        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/history/suspects.rs"><code>src/bench/history/suspects.rs</code></a> <span>the detector and its tests</span></li>
+      </ul>
+      <h4>Earlier volumes</h4>
+      <ul>
+        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>the CPU and GPU frame the Series judge</span></li>
+        <li><a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> <span>the previous volume, and the change behind Harness version 8</span></li>
+      </ul>
+    </article>
+    <article>
+      <h3>Robust statistics and regression finding</h3>
+      <ul>
+        <li>C. Leys, C. Ley, O. Klein, P. Bernard and L. Licata, <a href="https://doi.org/10.1016/j.jesp.2013.03.013">&ldquo;Detecting outliers: Do not use standard deviation around the mean, use absolute deviation around the median&rdquo;</a>, <i>Journal of Experimental Social Psychology</i> 49(4), 764&ndash;766, 2013 <span>why the median and the MAD, not the mean and standard deviation, set an outlier's band</span></li>
+        <li>D. Daly, W. Brown, H. Ingo, J. O'Leary and D. Bradford, <a href="https://arxiv.org/abs/2003.00584">&ldquo;Change Point Detection in Software Performance Testing&rdquo;</a>, arXiv 2003.00584, published at ICPE 2020 as &ldquo;The Use of Change Point Detection to Identify Software Performance Regressions in a Continuous Integration System&rdquo; <span>MongoDB's change point detection on its CI's performance history, and why people still triage what it finds</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="chapter" id="glossary">
+  <div class="prose">
+    <div class="chapter-mark">Reference</div>
+    <h2>Glossary</h2>
+    <p>Bench record, Series, Harness version, Suspect, Reference scene and Baseline are <code>CONTEXT.md</code>'s definitions, Bench record shortened; the rest are this guide's own.</p>
+  </div>
+  <dl class="glossary page">
+    <div><dt>Bench record</dt><dd>One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. (Shortened.)</dd></div>
+    <div><dt>Source hash</dt><dd>The git tree of the five paths that can change a measurement, at a revision: a record's key in place of its commit.</dd></div>
+    <div><dt>Series</dt><dd>One metric's Bench records for one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.</dd></div>
+    <div><dt>Harness version</dt><dd>A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.</dd></div>
+    <div><dt>Line</dt><dd>A Series' records between two breaks: a new Harness version, a new scene content or an imported Baseline. Only records on one line are compared.</dd></div>
+    <div><dt>Median absolute deviation</dt><dd>The median of each value's distance from the values' median: a spread that one outlier cannot move.</dd></div>
+    <div><dt>Suspect</dt><dd>A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.</dd></div>
+    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
+    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.</dd></div>
+  </dl>
+  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/435">#435</a>, PR <a href="https://github.com/gariasf/praxis/pull/487">#487</a> at e3a96ae0, ADR 0024, <code>CONTEXT.md</code>, the <code>bench-history</code> branch and the sources in the reading list. The demo's Series is made up; its detector is this page's copy of the code's.</footer>
+</section>
+<nav class="series" aria-label="Praxis field guides"><a href="waiting-on-the-gpu.html">Previous: Waiting on the GPU Explained</a><a href="index.html">All field guides</a></nav>
+</div>
+</div>
+
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  // ---- The detector: this page's copy of src/bench/history/suspects.rs.
+  const WINDOW_RECORDS = 8;
+  const FEWEST_JUDGING_RECORDS = 3;
+  const MEDIAN_ABSOLUTE_DEVIATIONS = 4;
+  const SMALLEST_SHIFT_FRACTION = 0.03;
+  // The bench's nearest-rank percentile: the smallest value with at least `fraction` of the values at or below it.
+  function percentile(values, fraction) {
+    const sorted = [...values].sort((first, second) => first - second);
+    const rank = Math.ceil(fraction * sorted.length);
+    return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1];
+  }
+  function band(window) {
+    if (window.length < FEWEST_JUDGING_RECORDS) return null;
+    const center = percentile(window, 0.5);
+    const deviation = percentile(window.map((value) => Math.abs(value - center)), 0.5);
+    return { center, tolerance: Math.max(MEDIAN_ABSOLUTE_DEVIATIONS * deviation, SMALLEST_SHIFT_FRACTION * center) };
+  }
+  /** Each median's band and, for a Suspect, its shift; one line, as the demo's Series is. */
+  function judge(medians) {
+    const line = [];
+    // The flagged step: the Suspect that started it.
+    let step = null;
+    return medians.map((median) => {
+      const position = line.length;
+      const judged = band(line.slice(-WINDOW_RECORDS));
+      line.push(median);
+      if (!judged) return { median, band: null, shift: null };
+      if (Math.abs(median - judged.center) <= judged.tolerance) return { median, band: judged, shift: null };
+      const slower = median > judged.center;
+      const continues = step && position - step.position <= WINDOW_RECORDS && step.slower === slower && Math.abs(median - step.median) <= step.tolerance;
+      if (continues) return { median, band: judged, shift: null };
+      step = { position, slower, median, tolerance: judged.tolerance };
+      return { median, band: judged, shift: (median - judged.center) / judged.center };
+    });
+  }
+
+  // ---- The demo's Series.
+  const RECORD_COUNT = 28;
+  // Records count from 1, as the axis and the sliders name them.
+  const STEP_RECORD = 16;
+  const OUTLIER_RECORD = 9;
+  const LEVEL_MS = 10;
+  let seed = 7;
+  // A fixed sequence of uniform draws in [-1, 1), redrawn by "New noise".
+  let draws = [];
+  function redraw() {
+    let state = seed >>> 0;
+    draws = Array.from({ length: RECORD_COUNT }, () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 2 ** 31 - 1;
+    });
+  }
+  redraw();
+
+  const canvas = document.getElementById("d-canvas");
+  const noise = document.getElementById("d-noise");
+  const stepSlider = document.getElementById("d-step");
+  const outlier = document.getElementById("d-outlier");
+  const note = document.getElementById("d-note");
+  const colour = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function medians() {
+    const noiseFraction = Number(noise.value) / 100;
+    const stepFraction = Number(stepSlider.value) / 100;
+    const outlierFraction = Number(outlier.value) / 100;
+    return draws.map((draw, index) => {
+      let median = LEVEL_MS * (1 + draw * noiseFraction);
+      if (index + 1 >= STEP_RECORD) median *= 1 + stepFraction;
+      if (index + 1 === OUTLIER_RECORD) median *= 1 + outlierFraction;
+      return median;
+    });
+  }
+
+  function draw() {
+    document.getElementById("d-noise-out").textContent = `±${Number(noise.value).toFixed(1)}%`;
+    document.getElementById("d-step-out").textContent = `${Number(stepSlider.value) > 0 ? "+" : ""}${Number(stepSlider.value).toFixed(1)}%`;
+    document.getElementById("d-outlier-out").textContent = `+${outlier.value}%`;
+    const results = judge(medians());
+    const ratio = window.devicePixelRatio || 1;
+    const widthPixels = Math.max(canvas.parentElement.clientWidth, 280);
+    const heightPixels = widthPixels < 500 ? 240 : 300;
+    canvas.width = widthPixels * ratio;
+    canvas.height = heightPixels * ratio;
+    canvas.style.height = `${heightPixels}px`;
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.fillStyle = colour("--panel");
+    context.fillRect(0, 0, widthPixels, heightPixels);
+    const margin = { left: 44, right: 12, top: 24, bottom: 26 };
+    const values = results.flatMap((result) => result.band ? [result.median, result.band.center - result.band.tolerance, result.band.center + result.band.tolerance] : [result.median]);
+    const low = Math.min(...values) * 0.995;
+    const high = Math.max(...values) * 1.005;
+    const xOf = (index) => margin.left + (widthPixels - margin.left - margin.right) * (index + 0.5) / RECORD_COUNT;
+    const yOf = (value) => margin.top + (heightPixels - margin.top - margin.bottom) * (1 - (value - low) / (high - low));
+    const stepPixels = (widthPixels - margin.left - margin.right) / RECORD_COUNT;
+    context.font = "11px " + colour("--mono");
+    context.fillStyle = colour("--ink-soft");
+    context.strokeStyle = colour("--rule");
+    context.lineWidth = 1;
+    for (let tick = 0; tick <= 4; tick += 1) {
+      const value = low + (high - low) * tick / 4;
+      const y = yOf(value);
+      context.beginPath(); context.moveTo(margin.left, y); context.lineTo(widthPixels - margin.right, y); context.stroke();
+      context.textAlign = "right";
+      context.fillText(`${value.toFixed(2)}`, margin.left - 6, y + 4);
+    }
+    context.textAlign = "left";
+    context.fillText("ms", 4, 12);
+    context.textAlign = "center";
+    for (let index = 0; index < RECORD_COUNT; index += 3) context.fillText(String(index + 1), xOf(index), heightPixels - 8);
+    results.forEach((result, index) => {
+      if (!result.band) return;
+      const top = yOf(result.band.center + result.band.tolerance);
+      const bottom = yOf(result.band.center - result.band.tolerance);
+      context.fillStyle = colour("--accent-wash");
+      context.fillRect(xOf(index) - stepPixels * 0.35, top, stepPixels * 0.7, bottom - top);
+      context.strokeStyle = colour("--accent");
+      context.beginPath(); context.moveTo(xOf(index) - stepPixels * 0.35, yOf(result.band.center)); context.lineTo(xOf(index) + stepPixels * 0.35, yOf(result.band.center)); context.stroke();
+    });
+    context.strokeStyle = colour("--ink-soft");
+    context.lineWidth = 1.5;
+    context.beginPath();
+    results.forEach((result, index) => { const x = xOf(index), y = yOf(result.median); if (index === 0) context.moveTo(x, y); else context.lineTo(x, y); });
+    context.stroke();
+    results.forEach((result, index) => {
+      const x = xOf(index), y = yOf(result.median);
+      context.fillStyle = colour("--accent");
+      context.beginPath(); context.arc(x, y, 4, 0, Math.PI * 2); context.fill();
+      if (result.shift !== null) {
+        context.strokeStyle = result.shift > 0 ? colour("--bad") : colour("--good");
+        context.lineWidth = 2;
+        context.beginPath(); context.arc(x, y, 8, 0, Math.PI * 2); context.stroke();
+      }
+    });
+    const suspects = results.map((result, index) => ({ index, shift: result.shift })).filter((result) => result.shift !== null);
+    note.innerHTML = suspects.length === 0
+      ? "<b>No Suspect.</b> Every judged record sits inside its band."
+      : `<b>${suspects.length === 1 ? "1 Suspect" : `${suspects.length} Suspects`}:</b> ` + suspects.map(({ index, shift }) => `record ${index + 1}, ${shift > 0 ? "+" : "−"}${Math.abs(shift * 100).toFixed(1)}%`).join("; ") + ". Records 1 to 3 are not judged: a record needs 3 before it.";
+  }
+  [noise, stepSlider, outlier].forEach((input) => input.addEventListener("input", draw));
+  document.getElementById("d-reseed").addEventListener("click", () => { seed = (seed * 48271 + 1) % 2147483647; redraw(); draw(); });
+  window.addEventListener("resize", draw);
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  draw();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+  window.addEventListener("resize", hide);
+})();
+</script>
+</body>
+</html>
