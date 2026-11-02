@@ -1967,6 +1967,984 @@ the acceleration structures, the bend pass, the shader function tests),
 `tests/`, `scripts/cycles-reference/render.py`, `scripts/gallery.sh`,
 `docs/references.toml` and the ADRs the module cites.
 
+## tooling
+
+Scope: `src/bench/` (`mod.rs`, `provenance.rs`, `report.rs`, `history.rs`
+and `history/import.rs`, `history/suspects.rs`, `history/verdicts.rs`),
+`src/capture/mod.rs`, `src/stats/mod.rs`, `src/preflight/mod.rs`,
+`src/gpu/mod.rs`, `src/bin/praxis.rs` (the thin binary, read here as the
+tools' command dispatch and the site of the cognitive complexity probe's
+third hit), `scripts/*.sh` with `scripts/sweep.plist` and
+`scripts/sweep-task.xml`, `scripts/cycles-reference/` (`calibrate.py`,
+`render.py`, `compare.py`, `DIFFERENCES.md`, `display-ramp.txt`) and
+`.github/workflows/`; 10,130 lines of Rust and 1,906 of shell, Python,
+Markdown, XML and YAML, beside the 350-line display ramp the Cycles
+comparison checks itself against. The lane's coverage floor outside `src/render` is
+every fifth file in path order, a wrong sample opening its module; this
+section read every file in full with its test module instead, so the
+sweep table is the record of coverage. Six readers at high effort shared
+the module by file, each with the lane brief verbatim: the bench
+(configurations, measurements, compare, provenance and the report); the
+Bench history (records, Series, the worktree and the Suspects); the
+import and the verdicts (the Baselines' import, the sweep's bisect and
+the Regression issues); capture, stats and preflight; the GPU context and
+the binary; and the scripts and the workflows. Each swept its files along
+the six axes and recorded the sweep. The cognitive complexity probe,
+`cargo clippy --all-targets -- -W clippy::cognitive_complexity`, ran once
+at the frozen commit and named one function in this module, the binary's
+command parser, filed on that axis below; its other two hits are tests in
+the scene exporter, filed under cook, assets and scenes. Every `where` is
+`path:line` at the frozen commit, given in full. `deviations.md` holds no
+row at this commit; `DIFFERENCES.md` was read for what is not a Finding.
+`tests/conventions.rs` was read for the rules already mechanical, and
+none of its catches is re-filed. The ADRs whose clauses fall here, 0013
+and 0024, and ADR 0021 for the Capability floor, were read for the
+comment-accuracy axis. Each Finding's evidence block says whether the fix
+it implies can move a pixel, change what a measurement means (which
+raises the Harness version), change a Bench record's key, or change what
+the verify command, CI or the sweep does. `src/lib.rs`, `src/state.rs`,
+`src/camera/`, `src/input/`, `src/environment/`, `src/helmet/` and
+`tests/*.rs` fall in no module of this lane's split; they were read for
+use counts, and what was seen in them is under *Notes for the verifier*
+as outside every module's scope, for the report session to place.
+
+### Axis sweep
+
+| File | Over-engineering | Vestigial | Cognitive complexity | Naming | Module depth | Comments |
+|---|---|---|---|---|---|---|
+| `src/bench/mod.rs` | clean (the six `check_budget` calls in `compare` and the five `spread(...)` builds in `measure` weighed, see the notes) | L5-T01 | none in this file (probe ran clean) | L5-T03, L5-T04 (`stats`, `rmse`, `p95`, `p99`, `tlas` weighed as the domain's words) | L5-T09 | L5-T02, L5-T05, L5-T06, L5-T07 (the ADR 0022 citation at `mod.rs:453` checked against the ADR's line 23 and holds) |
+| `src/bench/provenance.rs` | L5-T19 | clean (`Checkout.branch` and five `Provenance` fields are written and read by no code, weighed as record data, see the notes) | none in this file (probe ran clean) | clean (`driver_info` is wgpu's `AdapterInfo` field, `stdin` is std's) | L5-T09 | clean (`HARNESS_VERSION` 10 is 1 plus the import's 9 breaks; the 17 tracked top-level paths split 5 measured and 12 unmeasured as the comment says) |
+| `src/bench/report.rs` | clean (the test module's `BUDGETS` twin of `mod.rs`'s weighed, see the notes) | clean (`grouped`, `signed`, `ratio` each have 2 or more callers) | none in this file (probe ran clean) | clean | clean (`report` is the file's one public item, called at `src/bin/praxis.rs:681` and `:691`) | L5-T08 (the header's `docs/performance.md` exists and `docs/agents/workflow.md:55` names it) |
+| `src/bench/history.rs` | L5-T11, L5-T12 (the in-memory and stored twins, the `SeriesRecord` trait and `MedianOf` were weighed and kept: notes 1 to 4) | clean (every constant at `history.rs:21-40` has a reader: `grep -rn` counts in *Interface widths*; `Default` on `Publication` is used at `verdicts.rs:668`; every test helper is used twice or more) | none in this section (probe ran clean) | clean (`json` at `history.rs:962,1047` is the domain's word; `tip`, `main`, `path`, `left`, `right` are words; `%ct` is git's format) | L5-T10 (the `pub` fields of `Publication`) | L5-T13 (every other doc comment, the `README` constant and each `tracing` message were read against the code beside them: the README's configurations and quiet thresholds are pinned by the test at `history.rs:1601-1620`, its Suspect clause matches `suspects.rs:7-19`, its tagging clauses match `tags` at `history.rs:808-845`, its replacement clause matches `apply` at `history.rs:952-981`) |
+| `src/bench/history/suspects.rs` | clean (`Step` is built once and read once, the four constants each read once in `band` or `suspects`; a struct for four fields of one step is the smaller form, not a tuple) | clean (`WINDOW_RECORDS` 2 uses, `FEWEST_JUDGING_RECORDS` 1, `MEDIAN_ABSOLUTE_DEVIATIONS` 1, `SMALLEST_SHIFT_FRACTION` 1, all read) | none in this section (probe ran clean) | clean (`center`, `deviation`, `tolerance`, `slower`, `continues` are words; `NOISE` is a test constant) | clean (`Point` and `suspects` are `pub(super)`, one caller at `history.rs:366-374`) | L5-T14 |
+| `src/bench/history/import.rs` | L5-T16, L5-T17 (`BaselineCommit`, `Baseline` and `ImportedProvenance` beside `history.rs`'s `StoredProvenance` weighed, see note 3; `import_up_to`'s parameters, note 4) | L5-T15 (every other constant and function has a reader: `BASELINES_DIRECTORY` 2 uses, `HISTORY_STARTED` 1, `IMPORTED_SOURCE` read in `history.rs:361`, `backend_before_keyed`, `remeasured` and `measured_records` each called) | none in this section (probe ran clean) | clean (`json`, `p95_over_median`, `ci_configuration` weighed; every local, field and parameter a full word) | clean (3 non-private items, see Interface widths) | clean (the `HISTORY_STARTED` doc's "before it" against an inclusive `rev-list`, note 7; the `baseline_records` doc's "the quieter stays", which `apply` in `history.rs:936` does, not this function, read as a reason for the order and left) |
+| `src/bench/history/verdicts.rs` | L5-T19 (`Suspect` and `Verdict` sharing five fields, note 5; `Row` beside `SeriesRow`, note 6; `Filing`, `State` and `Issue` each with every variant and field constructed and read) | clean (`NIGHT_VERDICT` 2 uses, `BENCH_PAGE` 2, `TRIAGE_LABEL` 3, `END_RUNS` 4, `SMALLEST_HELD_SHIFT` 5; every private function called; `pinned_sources` and `VERDICTS` read in `history.rs:1026`) | none in this section (probe ran clean) | clean (`gh`, `url`, `tip`, `key`, `cpu`, `gpu`, `fmt` weighed as the domain's and std's own words; `each` in a closure, `so_far` in a test) | 14 of 16 `pub(super)` items have no reader in `history.rs`, see Interface widths and note 1; not filed in a private module | clean (the `next_commit` doc's "the commit that changed the source to the bad end's" against the one-change case, note 8; the `record` doc leaves out that it rewrites `README.md`, read as harmless) |
+| `src/capture/mod.rs` | clean (the three layers `capture`, `capture_frames`, `render_frames` each have callers of their own; `FrameWait`'s two variants are both constructed, `Block` in the file and `Spin` at `src/bench/mod.rs:442`; `texture_bytes` is not here) | clean (every `pub` and `pub(crate)` item has a reader outside the file; `ImageDifference` is named nowhere outside but is the return type of `compare_images`) | none in this section (probe ran clean) | clean (`gpu` at `:294` is a domain word; `oldest`, `drawn`, `wait` full words) | clean (14 items, every one with a caller outside the file) | clean (`:9-10` against `src/gpu/mod.rs:457-461`, `:13-14` against `tests/goldens/`, `:98` against `capture`, `:132-137` against `:151-158`, `:282-288` against `src/bench/mod.rs:439-442`) |
+| `src/stats/mod.rs` | L5-T18 | clean (every `FrameStats` field is read outside the file or printed by `Display`, which `praxis capture` prints at `src/bin/praxis.rs:785` and `tests/frame_stats.rs:253` reads; `texture_bytes`'s `transient_saves_memory` takes a variable at two call sites and `false` at one) | none in this section (probe ran clean) | clean (`gpu` locals at `:121`, `:133` are a domain word; `formatter`, `pass`, `span`, `index` full words) | clean (the recorder's `pub(crate)` counters are written by `src/state.rs`, `src/render/renderer.rs` and `src/render/readback.rs`; `SystemTimer::scope` has its one caller at `src/state.rs:319`) | L5-T23 |
+| `src/preflight/mod.rs` | L5-T19 | clean (`LISTED_NAMES` read at `:213`, `:622`, `:623`; both `assets()` sides built, CI runs `--no-default-features` at `.github/workflows/ci.yml:116` and `:134`; every `Verdict` variant constructed; `Machine::description` read at `:118`) | none in this section (probe ran clean) | L5-T21, L5-T22 | L5-T20 | L5-T24 (`:212` against `src/bin/praxis.rs:434-441` and `:219` against `.github/workflows/ci.yml:178` hold; the goldens `FAIL` holds since `scripts/verify.sh:61` sets `PRAXIS_REQUIRE_GOLDENS=1`) |
+| `src/gpu/mod.rs` | L5-T31 (the headless adapter request written three times; `backend_order`, `first_backend`, `first_success`, `instance_descriptor` each have one shipping caller and a test, which is the shape of a seam, not a wrapper) | clean (every private item has a caller in the file: `check_floor` 1, `floor_format_features` 2, `MAIN_PASS_FORMATS` 2, `DEVICE_MEMORY_BLOCK_BYTES` 2, `BACKEND_ORDER` 2; the four `pub(crate)` floor items each have one reader outside the file) | none in this file (probe ran clean) | L5-T32 (`info` at line 134; `msaa_x4`, `wgpu_instance`, `formatter`, `gaps`, `built`, `requested` weighed and allowed) | L5-T30 (`BelowCapabilityFloor` and `LimitGap` public with public fields, no reader outside the crate; `vendor` has one caller in `tests/frame_stats.rs`, `device_type` two in `tests/goldens.rs`, so those stay public) | L5-T28 (the report's doc names the floor's limits, the report prints three of four), L5-T29 (four measured timings in the block-size constant's doc) |
+| `src/bin/praxis.rs` | clean (the four `adapter_info` sites and the two `publish` matches weighed, see the notes; every per-command function is called once from `run_command`, which is the dispatch's shape) | clean (`DEFAULT_CAPTURE_SIZE` 1 use at line 241; `take_option` 4 callers, `take_flag` 2; every `Command` variant is constructed in `parse_command` and matched in `run_command`; every test uses the `parse` helper) | L5-T25 (`parse_command`, the probe's 27 over 25) | clean (`ci_run`, `json`, `stdout`, `night`, `mode`, `tables`, `pixels` weighed: `ci` and `json` are domain words, the rest full words) | clean (`Command` is private with 17 variants, one reader in `run_command` and the test module; nothing in the file is `pub`) | L5-T26 (the usage text omits `preflight`), L5-T27 (the usage text lists five `cook`-gated commands in a build that lacks them); the doc comments of `bench`, `publish`, `compare`, `report`, `capture`, `difference` and the comment at line 601 checked against their code and `src/bench/mod.rs:55-87` and found accurate |
+| `scripts/verify.sh` | clean (three functions, each called from the step list at `:72-76`; `bench`'s scene list is one pipeline) | clean (`skip_aliasing` set at `:37`, cleared at `:42`, read at `:52` and `:77`) | none in this file (probe ran clean; a shell file, no probe; nesting depth 2) | clean (`logs`, `results`, `step`, `goldens_job`, `others`; `fmt` at `:72` is cargo's subcommand) | clean (3 functions, 0 callers outside; the script is the interface) | L5-T35 (`:56`); `:28-36` against `src/bench/mod.rs:48,64` and `:2-3` against `docs/agents/workflow.md`, PRs, match |
+| `scripts/gallery.sh` | L5-T33 (`:57-59`, the Blender command line spelled twice) | clean (every function called: `blender` 4 sites, `reference` 1, `capture` 3) | none in this file (probe ran clean; nesting depth 2) | clean (`against`, `golden_frame`, `town_frames`, `form`; `tmp` at `:5,9,28` is the `target/tmp/` directory's name) | clean (3 functions, 0 callers outside; one positional argument and one environment variable) | clean (`:31-33` equal `tests/goldens.rs:294,299`; `:2-3` "every Reference scene": 11 variants at `src/scenes/mod.rs:88-98`, 11 captured at `:111-120`; `:105` against `src/cook/export.rs:47-48`) |
+| `scripts/pr-lint.sh` | clean (`(\.rs$\|/)` at `:67` anticipates a `src/cook/texture/` directory that does not exist; `CLAUDE.md`'s split rule makes the form a convention, note 14) | clean (`miss` 11 sites, `section` 5) | none in this file (probe ran clean; nesting depth 3 at `:65-85`) | clean (`misses`, `heading`, `verification`, `uncounted`, `unlinked`; Perl's `$embedded`, `$text`, `$url`, `$found`) | clean (2 functions; the interface is three positional files, called at `.github/workflows/pr-lint.yml:57` and `scripts/pr-lint-test.sh:60`) | L5-T37 (`:30`); `:2-4`, `:62-64` and `:102` match the rules at `:29-105` |
+| `scripts/pr-lint-test.sh` | clean (six helpers, each with 2 to 26 call sites) | clean (every `expect_fail` names a rule `pr-lint.sh` holds at `:29-105`; every `expect_pass` exercises a form the lint handles: fences `:22`, CRLF `:21`, counts kind first `:47`, 64 KB `:36-38`, `perl -CA` `:95`) | none in this file (probe ran clean; one loop at `:177-181`) | clean (`failures`, `cases`, `changed_paths`, `fragment`, `human_commit`, `fence`; `raw` at `:153` is the raw-content host's own word) | clean (6 helpers, 0 callers outside; `pr-lint.yml:36` runs the file) | clean (`:2-3`, `:43`, `:75`, `:89-90`, `:113-114`, `:158` describe the code beside them; `:23` "20 passed" is sample body text, note 13) |
+| `scripts/sweep.sh` | clean (`log` 14 sites, `fail` 7, `may_start` 2, `gpu_busy` 1, `tree_at` 1; the two environment knobs at `:44-45` are the operator's, note 6) | clean (`bisect_done` set `:153,160`, read `:186`; `runs` `:152,169,170,177`) | none in this file (probe ran clean; the body is one block of nesting depth 3 at `:154-175`) | clean (`cap_seconds` carries its unit, `wait_start`, `tree`, `build`, `fetched`, `night`, `job`; `dev` is `/dev/null`) | clean (5 functions, 0 callers outside; `sweep.plist:11` and `sweep-task.xml:36` run the file) | clean (the install recipe `:18-43` against `sweep.plist` and `sweep-task.xml`, note 15; `:44-45` `WGPU_BACKEND` is read at `src/gpu/mod.rs:485-506`; `:59-61` dated timings, note 5; `:99-101` against `:103-105`; `:136-139` against `:138-139`) |
+| `scripts/sweep.plist` | clean | clean (every key read by launchd) | none in this file (no code) | clean | clean (one program, one schedule) | clean (`:3` and `:13-14` match `:10-11` and `:15-16`) |
+| `scripts/sweep-task.xml` | clean | clean | none in this file (no code) | clean (`@SWEEP@`, `@BASH@` are the recipe's placeholders, `sweep.sh:23,32`) | clean (one action, one trigger) | clean (`:1-3` and `:6` match `:10-14`, `:19`, `:28`, `:36`) |
+| `scripts/cycles-reference/calibrate.py` | clean (`measured` has one caller, `:83`, and is a function, not an abstraction) | clean (`TOLERANCE` read at `:86-87`) | none in this file (probe ran clean; one loop) | clean (`plane_data`, `camera_data`, `add_light`, `illuminance`, `luminance`; `np` by convention) | clean (3 functions, 1 constant; `gallery.sh:55,57` run the file twice) | clean (`:2-10` against `:59-89`; `:72` 1 − (10 / 20)⁴ = 0.9375 holds; `:21` against `:22-24`) |
+| `scripts/cycles-reference/compare.py` | clean (the inverse matrices at `:69-74` are literal, as `gt7.wgsl:98-108`'s, by design under the ramp oracle) | clean (13 constant names, each read; 14 functions, each called; `crop` at `:198` has no caller in the tree but its seven products are committed, note 9) | none in this file (probe ran clean; `__main__` has nesting depth 2) | L5-T34 (`:79`) | clean (interface is three commands; `gallery.sh:62,77` run `ramp` and `compare`) | clean (`:2-14` against `:185-207`; `:27-29`, note 8; `:137-138` against `src/render/shader_function_tests.rs:1084-1089`) |
+| `scripts/cycles-reference/render.py` | clean (`Gltf`'s 5 methods, `MaterialBuilder`'s 3, `instancer`, `to_blender`: each called; `point_light`'s `casts_shadow` takes both values, `calibrate.py:69` and `:404`) | clean (9 constants each read; `UNBOUNDED_RANGE` only by `calibrate.py:69,71`, note 11; `SCENE_FORMAT_VERSION = 1` equals `src/cook/export.rs:31`) | none in this file (probe ran clean; `build` is 68 lines at depth 3, `:374-441`) | clean (`x, y, z, w` at `:391,431` are quaternion components; `co`, `bpy`, `bsdf` are Blender's own; `uri`, `uvs` domain words) | clean (9 constants, 11 functions, 2 classes; `calibrate.py` imports 7 functions and 2 constants, `compare.py` 2 functions, `gallery.sh:76` runs the file) | clean (`:2-11` against `:52-86` and `:444-450`; `:24-25`, `:28-29`, `:33-34`, `:37` match the lines beneath; `:37-40` reads `src/render/shaders/shading.wgsl:22`) |
+| `scripts/cycles-reference/DIFFERENCES.md` | clean (no code) | clean (5 entries, 7 images named, 7 files in `differences/`) | none in this file (no code) | clean | clean | L5-T38 (`:9-10`) |
+| `scripts/cycles-reference/display-ramp.txt` | clean (data) | clean (read by `compare.py:143-144` and written by `src/render/shader_function_tests.rs:1121-1131`) | none in this file (no code) | clean | clean (348 rows, 2 readers) | clean (`:1-2` names the test that writes it, `shader_function_tests.rs:1091`) |
+| `.github/workflows/ci.yml` | clean (the setup block repeats four times, `:37-43`, `:63-67`, `:101-107`, `:151-155`, and the lavapipe install three, `:69-73`, `:109-113`, `:157-161`; a composite action would be as long as what it removes and needs a `components` input, note 2) | clean (`benched` output `:149` read at `:216`; `release-build-seconds` `:169` read at `:238`; the three failure artifacts are read by hand, `:183-184`; the `Build` step at `:51-52` repeats what `Test` compiles, note 4) | none in this file (no code) | clean (`tree`, `started`, `ARTIFACT_DIRECTORY`) | clean (5 jobs; one output and one artifact cross jobs) | L5-T36 (`:58`); `:13-15` holds for concurrency, note 3; `:171-173` lists the 8 counters of `src/bench/mod.rs:198-207`; `:25-29` against `tests/goldens.rs:1-5`; action pins are lane 7's L7-R04, note 1 |
+| `.github/workflows/pr-lint.yml` | clean | clean (both `gh api` outputs read at `:57-58`) | none in this file (no code) | clean (`BODY`, `REPOSITORY`, `NUMBER`; `sha` at `:52` is git's word) | clean (1 job, 2 steps) | clean (`:3-4` against `:5-8`; `:20` against `:21`; `:38-40` against `:42-58`) |
+
+### Interface widths
+
+| Type | Public items | Callers outside the file | Wider than needed | Where |
+|---|---|---|---|---|
+| `Configuration` | 5 `pub` fields, 4 associated constants | `src/bin/praxis.rs` (built at `:220`, constants at `:266-275`, `:603`), `src/bench/history.rs:824-826` and tests, `src/gpu/mod.rs:864` (test) | `CI` is built by no script, workflow or Series (L5-T01) | `src/bench/mod.rs:41-93` |
+| `Measurements` | 16 `pub` fields, `from_baseline_json` | `src/bin/praxis.rs` (7 sites, `:498` to `:702`), `src/bench/history.rs` (12 sites), `src/bench/history/import.rs:488,520`, `report.rs` | no: the binary reads `scene`, `width`, `height`, `adapter`, `backend`; the history reads the rest | `src/bench/mod.rs:149-193` |
+| `Counters` | 8 `pub` fields, `NAMES` (`pub(super)`), `of` and `named` private | `history.rs:16,246,1127`, `import.rs:532` (`NAMES`) | no | `src/bench/mod.rs:198-258` |
+| `Aliasing` | 2 `pub` fields, `pub fn between` | none: `between` is called at `mod.rs:351` and in 3 tests of the same file | yes: `between` is `pub` in the `pub mod bench` and nothing outside the crate calls it (L5-T09) | `src/bench/mod.rs:269-330` |
+| `CounterFrames`, `Spread` | 2 and 2 `pub` fields | `history.rs` (12 sites), `import.rs:14,240`, `provenance.rs:12,98` | no: both are field types of `Measurements` | `src/bench/mod.rs:360-370` |
+| `Budgets` | 6 `pub` fields | `src/bin/praxis.rs:6,592,673`, `report.rs` | no | `src/bench/mod.rs:375-389` |
+| `CompareMode`, `Verdict`, `Finding` | 2 variants, 2 variants, 3 `pub` fields plus `Display` | `src/bin/praxis.rs:6,88,301,305,591` (`CompareMode`), `:6,657` (`Verdict`), `:657-659` (`Finding` through its fields and `Display`) | no in width; both names collide with the glossary (L5-T03, L5-T04) | `src/bench/mod.rs:392-421` |
+| `run`, `compare` | 2 `pub fn` | `src/bin/praxis.rs:458`, `:645` | no | `src/bench/mod.rs:426`, `:634` |
+| `baseline_directory`, `BASELINE_DIRECTORY`, `BUDGETS_PATH` | 1 `pub fn`, 2 `pub const` | `baseline_directory`: `src/bin/praxis.rs:702`, `src/preflight/mod.rs:198`, `src/bench/history/verdicts.rs:13,405`; `BASELINE_DIRECTORY`: `src/preflight/mod.rs:10,202,203,710` only; `BUDGETS_PATH`: `src/bin/praxis.rs:592,673` | `BASELINE_DIRECTORY` is `pub` and read only inside the crate (L5-T09) | `src/bench/mod.rs:32,35,109` |
+| `Provenance` | 10 `pub` fields | `src/bench/history.rs:693-717` (reads `checkout`, `quiet`, `gpu_frame_p95_over_median`), `mod.rs:184,478` | the fields are a serialized record's; 5 of them and `Checkout.branch` are read by no code (notes 5) | `src/bench/provenance.rs:34-55` |
+| `BenchStart` | 4 `pub` fields, `pub fn read`, `pub(crate) fn provenance` | `src/bin/praxis.rs:450` (`read()`), `src/bench/mod.rs:431,478` (`provenance`); no field is read outside `provenance.rs:101-116` | yes: four `pub` fields nothing outside the file reads (L5-T09) | `src/bench/provenance.rs:61-124` |
+| `Checkout` | 4 `pub` fields, `pub fn read` | `history.rs:15,303,312,780,1261` (the type and `read` in a test), `verdicts.rs:898` (test), `mod.rs:1025` (test) | yes: `read` is re-exported `pub` and nothing outside the crate calls it (L5-T09) | `src/bench/provenance.rs:144-188` |
+| `source_hash`, `git`, `HARNESS_VERSION`, `QUIET_P95_OVER_MEDIAN`, `MEASURED_PATHS` | `pub fn`, `pub(super) fn`, `pub const`, `pub(super) const`, private | `source_hash`: `history.rs` (4 sites), `import.rs:15,170`, `verdicts.rs:11,616`; `git`: `history.rs` (40 sites), `import.rs` (7), `verdicts.rs` (6); `HARNESS_VERSION`: `import.rs:387,605`; `QUIET_P95_OVER_MEDIAN`: `mod.rs:990`, `history.rs:1612-1615`, `import.rs:15,285` | no: `provenance` is a private module, so its `pub` reaches the crate only | `src/bench/provenance.rs:21-30,225,246` |
+| `report` | 1 `pub fn`; `grouped`, `signed`, `ratio` private | `src/bin/praxis.rs:681,691` | no | `src/bench/report.rs:17` |
+| `Publication` | 7 `pub` fields (`on_series`, `tagged`, `in_experiment`, `experiment`, `dropped`, `restamped`, `commit`), `Display`, derived `Default` | `src/bin/praxis.rs:475,515,523` print it through `Display` and read no field (`grep -n "\.on_series\|\.tagged\|\.in_experiment\|\.dropped\|\.restamped" src/bin/praxis.rs`: 0); `import.rs:105` and `verdicts.rs:668` construct it, both child modules | yes, L5-T10 | `history.rs:454-470` |
+| `ReleaseBuild` | 2 `pub` fields (`binary_bytes`, `build_seconds`) | `src/bin/praxis.rs:505` constructs it | no | `history.rs:292-295` |
+| the `publish` family | `publish`, `publish_experiment`, `check_experiment_name`, `unrecorded_scenes` (4 functions) | `praxis.rs:470,513` (`publish`), `praxis.rs:469,512` (`publish_experiment`), `praxis.rs:180` (`check_experiment_name`, also called inside `publish_experiment` at `history.rs:530`), `praxis.rs:534` (`unrecorded_scenes`, which `scripts/sweep.sh:80` reaches through `praxis history unrecorded`) | yes, L5-T12 (two publish functions where one serves) | `history.rs:502-621` |
+| `Worktree` | private; `add`, `apply`, `rebuild_every_series`, `rebuild_series`, `series_lines`, `commit`, `Drop`, plus the field `directory` read by `import.rs:362` and `verdicts.rs:667`; `import.rs:319-383` adds `restamp`, `remove_imported`, `measured_records` | `import.rs` (3 method definitions, `directory`), `verdicts.rs:667` (`directory`), both through `push`'s closure (`history.rs:642-646`) | no | `history.rs:880-1098` |
+| `SeriesRecord` | trait, 2 methods (`order`, `rows`) | none; 2 implementors (`StoredRecord` at `history.rs:340`, `StoredReleaseBuild` at `history.rs:399`), 1 generic site (`series_lines` at `history.rs:1039`) | no | `history.rs:328-338` |
+| `BenchRecord`, `StoredRecord`, `StoredProvenance`, `StoredCounterFrames`, `SeriesRow` | private | `import.rs` uses `BenchRecord` (16 mentions across the two files) and `StoredRecord`, `SeriesRow` in its tests (`import.rs:385`) | no | `history.rs:124-282, 424-450` |
+| the constants | `REMOTE` (7 mentions, this file), `BRANCH` (16, this file and `verdicts.rs`), `ON_SERIES` (12, this file and `import.rs`), `TAGGED` (7, same), `EXPERIMENTS` (2: definition and `history.rs:948`), `RELEASE_BUILD` (8, three files), `LAVAPIPE_ADAPTER_PREFIX` (2: definition and `is_lavapipe`), `PUSH_ATTEMPTS` (2: definition and `history.rs:671`), `README` (written at `history.rs:997` and `verdicts.rs:667`, tested at `history.rs:1618`) | as listed | no | `history.rs:21-119` |
+| `suspects::Point`, `suspects::suspects` | `pub(super)`: 2 fields, 1 function | `history.rs:366,374` | no | `suspects.rs:22-87` |
+| the import (`import_baselines`, `import_up_to`, `IMPORTED_SOURCE`) | 3: one `pub` function re-exported through `history.rs:18` and `bench/mod.rs:7`, one `pub(super)` function, one `pub(super)` constant | `import_baselines`: `src/bin/praxis.rs:522` (1 shipping caller); `import_up_to`: `src/bench/history.rs:1689,1723,1786` (3 test callers, 0 shipping); `IMPORTED_SOURCE`: `src/bench/history.rs:361` (1 shipping) and `:1836` (1 test) | no: `import_up_to` is the test seam for the one-shot command (note 4) | `src/bench/history/import.rs:69-91` |
+| `Worktree`'s import methods (`restamp`, `remove_imported`, `measured_records`) | 0 public: three private methods on another file's type | none; all three called from `import_up_to` only (`import.rs:103,104` and `:327,348`) | no, but `restamp` writes nothing any longer (L5-T16) | `src/bench/history/import.rs:319-381` |
+| the verdicts' commands (`suspects`, `bisect`, `file_regressions`, `Suspect`) | 4 `pub`, re-exported through `history.rs:19` and `bench/mod.rs:6-7`; `Suspect`'s six fields are `pub(super)`, so a caller outside the crate reads it through `Display` only | `src/bin/praxis.rs:550,563,581` (one caller each); `scripts/sweep.sh:155,193` through the binary (`history bisect`, `history regressions`); `history suspects` has no script caller, only the binary's command and its usage text | no: one function per command, each returning what the binary prints | `src/bench/history/verdicts.rs:123,317,366,451` |
+| the verdicts' internals (`VERDICTS`, `pinned_sources`, `Commit`, `State`, `Pinned`, `Measured`, `Ends`, `Verdict`, `Row`, `Run`, `unjudged`, `step`, `Issue`, `issue`, `Filing`, `filing`) | 16 `pub(super)` | `VERDICTS` and `pinned_sources`: `src/bench/history.rs:1026` (1 each); the other 14: 0 callers in `history.rs` or anywhere outside the file (`grep -rn` over the worktree for each name, quoted in note 1) | 14 items are visible one module wider than any reader; inside the private `history` module the spelling alone is not a Finding (note 1) | `src/bench/history/verdicts.rs:16-31,39,46,59,67,81,148,159,169,222,569,678,688,745,757` |
+| capture's surface (`capture`, `capture_frames`, `render_frames`, `FrameWait`, `read_back`, `submit_and_map`, `compare_images`, `difference_image`, `golden_key`, `ImageDifference` with 2 fields, `GOLDEN_DIRECTORY`, `GOLDEN_TOLERANCE`, `FRAME_COUNT`, `TARGET_FORMAT`) | 14 items: 8 `pub`, re-exported at `src/lib.rs:39-42`, 6 `pub(crate)` | `src/bin/praxis.rs` 5 (`capture` :764, `capture_frames` :751, `compare_images` :828, `difference_image` :822, `GOLDEN_TOLERANCE` :833); `src/bench/mod.rs` 3 (`capture` :341, `render_frames` :445, `FrameWait` :441-442); `src/preflight/mod.rs` 2 (`GOLDEN_DIRECTORY`, `golden_key`); `src/cook/export.rs:50` (`FRAME_COUNT`); render and assets test modules 3 (`TARGET_FORMAT` and `read_back` in `tonemapping_pass.rs`, `read_back` in `renderer.rs`, `submit_and_map` in `staging.rs` and `pools.rs`); 8 files under `tests/` | no | `src/capture/mod.rs:11-356` |
+| `FrameStats` | 18 `pub` fields, `Display` | `src/bench/mod.rs`, `src/bench/report.rs`, `src/bench/history/import.rs`, `src/state.rs`, `src/render/renderer.rs`, `src/capture/mod.rs`, `tests/frame_stats.rs`; three fields (`renderables_refused`, `static_instances_left_out`, `allocator_report_bytes`) are written outside and read only by `Display`, which `src/bin/praxis.rs:785` prints | no | `src/stats/mod.rs:10-65` |
+| `GpuFrameStats` | 13 `pub` fields | `src/render/readback.rs` (writes all 13), `src/bench/mod.rs` (reads 12), `src/bench/report.rs`, `tests/frame_stats.rs` | no | `src/stats/mod.rs:69-105` |
+| `FrameRecorder` | 11 `pub(crate)` fields, 5 `pub(crate)` methods | `src/state.rs` (10 lines), `src/render/renderer.rs` (14), `src/render/readback.rs` (4), `src/cook/export.rs:58` | no, but the ten counters are listed four times (L5-T18) | `src/stats/mod.rs:204-309` |
+| `SystemTimer` | 1 `pub(crate)` method `scope`; `tracing::Subscriber` (8 methods) | `src/state.rs:319`, through `recorder.systems` | no | `src/stats/mod.rs:316-394` |
+| `texture_bytes` | 1 `pub(crate)` function | `src/render/targets.rs:373`, `src/render/tonemapping_pass.rs:142`, `src/assets/material.rs:233` | no | `src/stats/mod.rs:185` |
+| preflight's surface (`Machine` with `classify`, `Verdict`, `Check` with 3 fields, `run`; `pub(crate)` `BUSY_GPU_PERCENT`, `gpu_load_percent`, `machine_warnings`, `other_praxis_processes`) | 8 `pub` items in a `pub mod`, 4 `pub(crate)` | `src/bin/praxis.rs:355-362` (`run`, `Verdict::Fail`, `check.verdict`, `Display`); `src/render/coverage_tests.rs:17,662` (`Machine`, `classify`); `src/bench/provenance.rs:13-14` (the 4 `pub(crate)`); `src/bench/history.rs:1611` (`BUSY_GPU_PERCENT`); 0 in `tests/` | yes: `Machine`, `classify`, `Check.name`, `Check.detail` have no reader outside the crate (L5-T20) | `src/preflight/mod.rs:22-136` |
+| `GpuContext` | 8: the struct, 3 `pub(crate)` fields (`adapter`, `device`, `queue`), `headless` (pub), `with_surface` (`pub(crate)`), `backend`, `vendor`, `device_type` (pub) | `headless` 25 (13 in `src/`, 12 in `tests/`); `with_surface` 1 (`src/lib.rs:154`); `backend` 10 (4 in `src/`, 6 in `tests/`); `vendor` 1 (`tests/frame_stats.rs:63`); `device_type` 2 (`tests/goldens.rs:101-102`); `.adapter` read directly at 9 sites outside `src/gpu/` | no (each getter has a caller outside the crate; the field reads that bypass `device_type` are in other modules, see the notes) | `src/gpu/mod.rs:23-109` |
+| The Capability floor | 7: `floor_features`, `floor_downlevel_flags`, `floor_limits`, `FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE` (`pub(crate)`); `BelowCapabilityFloor` (pub, 4 pub fields); `LimitGap` (pub, 3 pub fields); `check_floor`, `floor_format_features`, `MAIN_PASS_FORMATS` private | `floor_features` 1 (`src/render/shader_tests.rs:454`), `floor_downlevel_flags` 1 (same line), `floor_limits` 1 (`src/render/shader_tests.rs:460`), `FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE` 1 (`src/assets/material.rs:16`); `BelowCapabilityFloor` 0, `LimitGap` 0 (`grep -rn BelowCapabilityFloor src tests` hits `src/gpu/mod.rs` only; `grep -rn downcast src tests` hits nothing) | yes: two `pub` error types with seven `pub` fields in a `pub` module, read by nothing outside the file (L5-T30) | `src/gpu/mod.rs:259-379` |
+| The adapter reports | 2: `capability_report`, `adapter_info` (pub); `adapter_report` private | `capability_report` 2 (`src/bin/praxis.rs:347`, `tests/gpu_context.rs:19`); `adapter_info` 5 (`src/bin/praxis.rs:531,548,562,578`, `src/preflight/mod.rs:106`) | no | `src/gpu/mod.rs:111-253` |
+| The backend choice | 0 public: `BACKEND_ORDER`, `backend_order`, `first_backend`, `first_success`, `instance_descriptor`, `request_adapter`, `choose_surface_format` all private | none; each has 1 or 2 shipping callers in the file and a test | no | `src/gpu/mod.rs:418-555` |
+| `Command` (the binary) | 0 public: a private enum of 17 variants (`Window`, `Capabilities`, `Preflight`, `Cook`, `Fetch`, `Capture`, `ExportScene`, `Difference`, `Bench`, `Publish`, `ImportBaselines`, `UnrecordedScenes`, `Suspects`, `Bisect`, `Regressions`, `Compare`, `Report`), five of them `cook`-gated | none (a binary crate); 1 reader in the file, `run_command` at `src/bin/praxis.rs:95-152`, plus the test module | no | `src/bin/praxis.rs:34-93` |
+| The per-command functions | 0 public: `print_capabilities`, `preflight`, `cook`, `fetch`, `bench`, `publish`, `import_baselines`, `unrecorded_scenes`, `suspects`, `bisect`, `regressions`, `compare`, `report`, `capture`, `export_scene`, `difference`, and the helpers `parse_scene`, `baseline_path`, `result_paths`, `read_json`, `take_option`, `take_flag` | none; each command function has 1 caller in `run_command`; `parse_scene` 4, `baseline_path` 2, `result_paths` 3, `read_json` 5 | no | `src/bin/praxis.rs:346-837` |
+| `scripts/verify.sh` (`step`, `bench`, `tests`) | 3 functions; no arguments, no environment variable | 0 function callers; the file is named by `CLAUDE.md`, `README.md`, `docs/agents/workflow.md`, `docs/agents/sessions.md`, `src/bin/praxis.rs`, `src/preflight/mod.rs` (6 files) | no | `scripts/verify.sh:14,45,58` |
+| `scripts/gallery.sh` (`blender`, `reference`, `capture`) | 3 functions; 1 positional argument, 1 environment variable (`PRAXIS_BLENDER`) | 0 function callers; the file is named by `docs/agents/workflow.md`, `docs/agents/audit.md`, `docs/performance.md`, `.github/pull_request_template.md`, `scripts/pr-lint.sh`, `DIFFERENCES.md` (6 files) | no | `scripts/gallery.sh:43,68,83` |
+| `scripts/pr-lint.sh` (`miss`, `section`) | 2 functions; 3 positional file arguments | `.github/workflows/pr-lint.yml:57`, `scripts/pr-lint-test.sh:60` (2 sites) | no | `scripts/pr-lint.sh:13,25` |
+| `scripts/pr-lint-test.sh` (`passing_body` 3 sites, `run_lint` 2, `expect_pass` 16, `expect_fail` 26, `edited_body` 19, `images_body` 5) | 6 helpers; no arguments | `.github/workflows/pr-lint.yml:36` (1 site) | no | `scripts/pr-lint-test.sh:13-93,159` |
+| `scripts/sweep.sh` (`log` 14 sites, `fail` 7, `gpu_busy` 1, `may_start` 2, `tree_at` 1) | 5 functions; 2 environment knobs (`PRAXIS_SWEEP_CAP_SECONDS`, `WGPU_BACKEND`), 1 re-exec guard (`PRAXIS_SWEEP_UPDATED`) | `scripts/sweep.plist:11`, `scripts/sweep-task.xml:36` (2 sites); `PRAXIS_SWEEP_CAP_SECONDS` is set nowhere in the tree | no (a documented operator knob) | `scripts/sweep.sh:64-65,102,109,129` |
+| `scripts/cycles-reference/render.py` | 9 constants, 11 functions, 2 classes with 8 methods; command line of 3 to 4 arguments | `calibrate.py`: `world` 2, `link` 2, `point_light` 3, `sun` 1, `new_scene` 1, `require_blender` 1, `arguments` 1, `POINT_POWER_PER_INTENSITY` 1, `UNBOUNDED_RANGE` 2; `compare.py`: `arguments` 1, `require_blender` 1; `gallery.sh:76` runs it | no | `scripts/cycles-reference/render.py:26-40,43-156,162-366` |
+| `scripts/cycles-reference/compare.py` | 13 constant names, 14 functions, 3 commands (`ramp`, `compare`, `crop`) | `gallery.sh:62` (`ramp`), `gallery.sh:77` (`compare`); `crop`: 0 in the tree (note 9) | no (the by-hand `crop` made the seven committed images) | `scripts/cycles-reference/compare.py:54-75,78-182,185-207` |
+| `scripts/cycles-reference/calibrate.py` | 1 constant, 3 functions, 1 flag (`--wrong-unit`) | `gallery.sh:55` and `:57` (2 sites) | no | `scripts/cycles-reference/calibrate.py:26,29,50,59` |
+| `.github/workflows/ci.yml` (5 jobs) | 5 jobs, 1 job output (`benched`), 4 artifacts | `publish-bench` reads `benched` (`:216`) and `bench-publish` (`:225-228`); the three failure artifacts are read by hand | no | `.github/workflows/ci.yml:33,57,93,144,214` |
+| `.github/workflows/pr-lint.yml` (1 job) | 1 job, 2 steps | none; it runs the two scripts | no | `.github/workflows/pr-lint.yml:24` |
+
+### Findings
+
+| id | claim | severity | where | evidence | expected |
+|---|---|---|---|---|---|
+| L5-T01 | `Configuration::CI` and the `bench --ci` flag that builds it are run by no script, workflow or test of a run, and a lavapipe record of that shape joins no Series; the constant's two remaining readers use it as the Goldens' size, which the tree spells in five places. | health; 7 lines, 1 parse arm, 5 spellings of one size | `src/bench/mod.rs:67-73` | block below | One constant names the Goldens' size (640 by 360), `CI_COUNTERS` carries CI's size from it, and `CI` with its `--ci` arm goes; CLAUDE.md, "No throwaway code" and "Prefer deep modules behind small interfaces" |
+| L5-T02 | The doc comments on `CI` and `CI_COUNTERS` say CI benches `CI`'s frames and falls back to `CI_COUNTERS` for a scene too dense, while CI runs `--ci-counters` for every scene and the history calls `CI_COUNTERS` "CI's configuration". | drift; load-bearing (a reader recording a lavapipe Baseline by it runs the wrong command and gets a record tagged off its Series) | `src/bench/mod.rs:63-66, 85-86` | block below | A comment that says what CI runs: `CI_COUNTERS` for every scene (`.github/workflows/ci.yml:178`), with `compare --ci` reading counters only |
+| L5-T03 | `bench::Verdict`, the warn-or-fail outcome of `compare`, takes the glossary's term Verdict, which `CONTEXT.md` gives to what the sweep found of a Suspect and `history::verdicts::Verdict` implements, so the crate carries three `Verdict` types and the binary must spell out `praxis::preflight::Verdict::Fail`. | health; 37 sites in `mod.rs`, 2 in `src/bin/praxis.rs` | `src/bench/mod.rs:400-403` | block below | `CONTEXT.md`, Verdict: the glossary's term names one concept; a compare outcome is a `fails: bool` on the result (two variants, printed `warn` or `FAIL`), or a name outside the glossary |
+| L5-T04 | `bench::Finding`, a metric that regressed or exceeds its Budget, takes the glossary's term Finding, which `CONTEXT.md` gives to an Audit lane's eight-field record. | health; 6 sites in `mod.rs`, 2 reads in `src/bin/praxis.rs` | `src/bench/mod.rs:405-411` | block below | `CONTEXT.md`, Finding: a name outside the glossary (Regression is also taken), such as `Breach` or `CompareResult`, chosen with L5-T03's |
+| L5-T05 | The comment justifying `WARN_RATIO` and `FAIL_RATIO` quotes a noise measurement ("6 runs", "GPU medians within 3.4%, CPU medians of 31–42 µs within 8.1 µs") that nothing in the tree re-measures and that describes CPU frames two orders of magnitude below today's Baselines. | drift; not load-bearing (the ratios themselves are stated correctly beside it) | `src/bench/mod.rs:129-133` | block below | A comment that says what the ratios do and why without a dated figure (CLAUDE.md, Comments; `docs/audit/deviations.md`: "not in a code comment, where no number may sit"); the measurement belongs in `docs/performance.md` if kept |
+| L5-T06 | The comment justifying `GPU_PASS_NOISE_FLOOR_MICROSECONDS` quotes a measurement ("over three runs on the M4 Pro, helmet's culling pass read 136 to 153 µs, every other pass within 3%") that nothing in the tree re-measures. | drift; not load-bearing | `src/bench/mod.rs:141-143` | block below | As L5-T05: the floor's purpose without the dated figure |
+| L5-T07 | The `Display for Measurements` doc lists the line's fields and omits the dynamic TLAS CPU median the line prints, and the aliasing figures that follow the counters. | drift; not load-bearing | `src/bench/mod.rs:594-596` | block below | A doc that lists what the line holds: the CPU frame, the dynamic TLAS CPU median, the GPU frame, the gate, the shadow-ray time, each pass's median, the counters, then the aliasing figures when measured |
+| L5-T08 | `report`'s doc says times compare "with a Baseline of as many frames on the same adapter, as `compare` judges them", but `compare` also refuses another backend, which `report` does not. | drift; not load-bearing (the binary pairs a result with its adapter and backend's Baseline, so no report crosses backends today) | `src/bench/report.rs:12-14` | block below | Either the doc says "on the same adapter, whatever the backend" or `times_baseline` also matches `backend`, as `compare` does at `mod.rs:673-682` |
+| L5-T09 | The `pub mod bench`'s surface holds four items nothing outside the crate reads: `Aliasing::between`, `BASELINE_DIRECTORY`, `BenchStart`'s four fields and `Checkout::read`. | health; 4 items, 7 declarations | `src/bench/mod.rs:5-35` (the module's surface) | block below | `pub(crate)` or private, as the module split's rule reads: in a `pub` module a `pub` item nothing outside the crate reads is wider than its callers need |
+| L5-T10 | `Publication`'s seven fields are `pub` in a `pub` module, and nothing outside the crate reads one: the binary prints the `Display` only. | health; 7 fields | `src/bench/history.rs:454-470` | block below | A `pub` item in a `pub` module that nothing outside the crate reads is wider than its callers need; the fields can be private, since the two constructors and the tests are child modules. |
+| L5-T11 | `Worktree::apply` spells out a `Publication` of seven zero fields where the derived `Default`, which `verdicts.rs` already uses, serves in one line. | health; 9 lines | `src/bench/history.rs:934-942` | block below | `let mut publication = Publication::default();`, the form `verdicts.rs:668` takes. |
+| L5-T12 | `publish_experiment` repeats `publish`'s prelude and body; the two differ only in the Experiment name and the release build, which the binary already keeps exclusive. | health; 20 lines, 2 branching call sites | `src/bench/history.rs:502-541` | block below | One `publish(repository, results, release_build, experiment)`; the binary's two `match experiment` arms at `praxis.rs:468-470` and `praxis.rs:511-513` collapse to one call each. |
+| L5-T13 | `PUSH_ATTEMPTS`'s doc comment says it is how many times a publish rebuilds its commit on a new tip, but the loop rebuilds four times and pushes five. | drift; not load-bearing | `src/bench/history.rs:38-40` | block below | The comment names what the constant counts: push attempts, of which all but the first rebuild the commit. |
+| L5-T14 | `Point::starts_line`'s doc comment names three reasons a record starts a line and leaves out the fourth the code sets it for: a commit a Verdict pinned. | drift; not load-bearing | `src/bench/history/suspects.rs:25-28` | block below | The comment lists the four cases `history.rs:356-364` computes, as the README at `history.rs:81-83` does. |
+| L5-T15 | The second column of `HARNESS_BREAKS`, nine strings saying what each break changed, is read by nothing: the one shipping use maps it away and the three test uses take the array's length | health; 9 lines, 0 readers | `src/bench/history/import.rs:29-66` | block below | `CLAUDE.md`, Code conventions: comments say what the code does and why. The smaller form is a `[&str; 9]` of commits with the description as a comment beside each, which the same reader reads at the same place |
+| L5-T16 | `Worktree::restamp`, which gives records published at Harness version 1 the version in force when the history started, has had nothing to write since the first import: every record on `bench-history` at version 1 is an imported one, and every record the bench publishes carries version 10 | health; 18 lines plus the `restamped` field and its `Display` arm, 0 records reached | `src/bench/history/import.rs:325-342` | block below | ADR 0024: the Baselines before the history "are imported as records, each with the Harness version in force at its commit", a one-time migration; a shipping command carries only what a run can still do. The smaller form drops `restamp`, the `Publication::restamped` field (`history.rs:467`) and its `Display` arm (`history.rs:487-488`), and leaves `remove_imported` and `apply`, which a second import does exercise |
+| L5-T17 | The two lines that resolve a repository's top level (`git rev-parse --show-toplevel`, then `Path::new(&root)`) are written four times across the bench | health; 4 sites, 8 lines | `src/bench/history/import.rs:92-93` | block below | one function in `provenance.rs` beside `git`, `toplevel(repository) -> anyhow::Result<PathBuf>`, called at the four sites; the other three sites fall in tooling, the Bench history (`history.rs:507,531`) and tooling, the bench (`provenance.rs:162`) |
+| L5-T18 | `FrameRecorder` lists its ten per-frame counters four times (declaration, `new`, `begin`, `stats`) where one `FrameStats` field reset and copied would serve | health; about 40 lines | `src/stats/mod.rs:211-220` | block below | `CLAUDE.md`, How agents work here: deep modules behind small interfaces; a recorder holding `counters: FrameStats`, `begin` setting it to `FrameStats::default()` and `stats` cloning it, lists the counters once |
+| L5-T19 | `output` is the fourth process runner of one shape in the crate, beside the verdicts' `gh`, the provenance's `run` and the cooker's `download` | health; 4 sites, about 20 lines | `src/preflight/mod.rs:276-282` | block below | one `run(command) -> anyhow::Result<String>` that reports a non-zero exit with its standard error, the preflight's callers taking `.ok()` on it |
+| L5-T20 | Four of preflight's eight `pub` items (`Machine`, `Machine::classify`, `Check.name`, `Check.detail`) have no reader outside the crate | health; 4 items, 1 crate-internal caller | `src/preflight/mod.rs:22-77` | block below | The module depth axis: in a `pub` module a `pub` item nothing outside the crate reads is `pub(crate)`; `Machine` and `classify` `pub(crate)` for `src/render/coverage_tests.rs`, `name` and `detail` private behind `Display` |
+| L5-T21 | `preflight::Verdict` names a check's four-way result with the glossary's term for the sweep's judgement of a Suspect, the third type of that name in the crate | health; 3 types of one name, 4 variants | `src/preflight/mod.rs:61` | block below | `CONTEXT.md`, Verdict: "What the sweep found of one slower Suspect"; the code's names use the glossary's terms, so a check's result takes another name (its `Display` already calls it a verdict only in prose) |
+| L5-T22 | The local `info`, bound to a `wgpu::AdapterInfo`, is an abbreviation of "information" used seven times in `run` | health; 7 uses in the file, 21 in the crate | `src/preflight/mod.rs:107` | block below | `CLAUDE.md`, Code conventions: identifiers are full words; `adapter` or `adapter_info` |
+| L5-T23 | The `uploaded_bytes` doc comment names two of the frame's uploads where the renderer sums six | drift; load-bearing | `src/stats/mod.rs:20-21` | block below | the comment lists what `Renderer::upload` stages (`src/render/renderer.rs:514-551`) and what the dynamic TLAS's recording adds (`:605-613`): the camera and light uniforms, the light buffer, the bends, the Instances written, the slot count and the dynamic TLAS's instances |
+| L5-T24 | The module doc promises every `FAIL` "the command that fixes it", and the `assets` check's `FAIL` carries only the error's text | drift; not load-bearing | `src/preflight/mod.rs:1-3` | block below | `docs/agents/workflow.md`, Session start: "A `FAIL` line blocks `scripts/verify.sh` and names its fix"; the `assets` error path names `praxis fetch` or the manifest to fix, or the module doc says a `FAIL` names its fix where one is known |
+| L5-T25 | `parse_command` is the one shipping function the cognitive complexity probe names, at 27 over the lint's default threshold of 25, because one function holds the option extraction, eight scope checks and a 24-arm match | health; 2 over the threshold, 174 lines | `src/bin/praxis.rs:154-324` | block below | `CLAUDE.md`, Code conventions: `cargo clippy` passes; the probe's threshold of 25 is the lane's bar. One of the three groups named below moves into a helper and the function reads under 25 |
+| L5-T26 | The usage text `parse_command` prints on bad arguments lists every command the `Command` enum has but `preflight` | drift; not load-bearing | `src/bin/praxis.rs:313-322` | block below | The usage names every command: `Command::Preflight` at `src/bin/praxis.rs:37`, parsed at `src/bin/praxis.rs:232`, which `scripts/sweep.sh:85,104` runs and `CLAUDE.md:108` documents as `praxis preflight` |
+| L5-T27 | The usage text names `cook`, `fetch`, `capture`, `export-scene` and `difference` in every build, while those five `Command` variants and their match arms exist only under the `cook` feature, which CI builds without | drift; load-bearing in a `--no-default-features` build | `src/bin/praxis.rs:313-322` | block below | The usage text, or the five command names in it, gated as the variants are (`#[cfg(feature = "cook")]` at `src/bin/praxis.rs:38-61` and `233-264`), so a build without `cook` never tells a reader to run a command it then refuses with the same text |
+| L5-T28 | `adapter_report`'s doc says the planned-feature lines are "followed by the Capability floor's limits", but the report prints three of the floor's four raised limits: `max_storage_buffers_per_shader_stage` is absent | drift; not load-bearing | `src/gpu/mod.rs:128-132` against `src/gpu/mod.rs:233-251` | block below | Either the report prints the fourth limit `floor_limits` raises (`src/gpu/mod.rs:306`), or the doc says which limits it prints. `tests/gpu_context.rs:46-49` pins only `max buffer size` and `acceleration structures` |
+| L5-T29 | `DEVICE_MEMORY_BLOCK_BYTES`'s doc carries four measured pass timings (198, 52, 798 and 285 µs) that nothing in the tree records or re-measures | drift; not load-bearing | `src/gpu/mod.rs:9-13` | block below | `docs/audit/deviations.md`: a code comment holds no number; `docs/research/source-audit.md:170`: measured figures are checked against where they were measured, and `docs/performance.md` has no row for this one (`grep -n -i -e 'memory block' -e suballocat -e '16 MiB' docs/performance.md` finds only the Arena capacity at line 2937). The comment keeps the mechanism (a resource larger than a block gets its own) and the figures move to `docs/performance.md`, which the comment cites |
+| L5-T30 | `BelowCapabilityFloor` and `LimitGap` are `pub` types with seven `pub` fields in the `pub mod gpu`, and nothing outside `src/gpu/mod.rs` names either or downcasts to them | health; 2 types, 7 fields, 0 call sites | `src/gpu/mod.rs:361-379` | block below | The module's axis 5 rule: in a `pub` module, a `pub` item nothing outside the crate reads is wider than needed. `check_floor` is private and `request_device` returns the error inside `anyhow::Result`, so the two types and their fields can be private to the module (the `Display` impl is what every caller sees) |
+| L5-T31 | The headless adapter request `first_backend(async \|wgpu_instance\| request_adapter(wgpu_instance, None).await).await?` is written out three times where one private function would serve | health; 3 call sites, 6 lines | `src/gpu/mod.rs:32-33`, `115-116`, `123-124` | block below | `CLAUDE.md`, How agents work here: deep modules behind small interfaces. One `async fn headless_adapter() -> anyhow::Result<wgpu::Adapter>` called from `headless`, `capability_report` and `adapter_info` |
+| L5-T32 | The local `info` in `adapter_report` abbreviates "adapter info" | health; 1 definition, 5 uses | `src/gpu/mod.rs:134` | block below | `CLAUDE.md`, Code conventions: identifiers are full words; the same file spells it `adapter_info` at `src/gpu/mod.rs:431`. Rename to `adapter_info` |
+| L5-T33 | The wrong-unit check spells the Blender command line a second time instead of reusing `blender`, with a line continuation collapsed into five spaces and a literal newline inside its `printf` format. | health; 5 lines | `scripts/gallery.sh:57-59` | block below | One function runs Blender and reports its status; the inverse check passes the status it expects, or reads the function's return under `if`, so the command line is spelled once (`CLAUDE.md`, "No throwaway code. Clean naming, structure"). |
+| L5-T34 | `smoothstep`'s local `t` is a single letter outside the loop-index and coordinate forms. | health; 1 site | `scripts/cycles-reference/compare.py:79` | block below | `CLAUDE.md`, Code conventions: identifiers are full words; `fraction` (or `interpolant`), with `t` as the textbook symbol in a comment if wanted. |
+| L5-T35 | The comment says the Goldens test "takes about half the step", a share nothing in the tree measures, records or checks. | drift; not load-bearing | `scripts/verify.sh:56-57` | block below | A comment states the reason without the figure ("the Goldens test is the step's longest, so it runs beside the rest"), or the figure sits where the verify command prints its step times (`:20`), which the comment could cite. |
+| L5-T36 | The comment "Not a required check until two green weeks" names a trigger that has passed: the job has run since 2026-10-13, every push to `main` since 2026-10-26 ended green or cancelled, and branch protection still requires only the `check` job. | drift; not load-bearing | `.github/workflows/ci.yml:58` | block below | The comment says what is true now (the job is not a required check, and why, or until what), or goes once the job is made required. |
+| L5-T37 | The ticket-line miss message attributes three forms to `docs/agents/workflow.md`, PRs, which names one of them ("Closes #N"); "Part k of #N" appears in no document under `docs/` or `.github/`. | drift; not load-bearing | `scripts/pr-lint.sh:30` | block below | The message cites where each form is written, or the PRs section and the template name the partial-PR form the lint accepts (the second is lane 7's placement; lane 7's docs table read the pair as "matches"). |
+| L5-T38 | The provenance line says each crop comes "from `scripts/gallery.sh` with `PRAXIS_BLENDER` set", but `gallery.sh` runs only `compare.py`'s `ramp` and `compare` commands; the crops come from `compare.py crop`, which nothing in the tree runs. | drift; not load-bearing | `scripts/cycles-reference/DIFFERENCES.md:9-10` | block below | "Each crop is praxis \| Cycles \| difference, cut by `compare.py crop` from a gallery (`scripts/gallery.sh` with `PRAXIS_BLENDER` set), at 2x." |
+
+
+#### L5-T01
+
+The four configurations and what builds them:
+
+```
+src/bench/mod.rs:55  pub const REFERENCE    2560x1440, 248 warm-up, 1800 measured, aliasing
+src/bench/mod.rs:67  pub const CI            640x360, 248 warm-up,  256 measured, no aliasing
+src/bench/mod.rs:77  pub const COUNTERS     2560x1440,   8 warm-up,   64 measured, aliasing
+src/bench/mod.rs:87  pub const CI_COUNTERS   640x360,   8 warm-up,   64 measured, no aliasing
+```
+
+- `grep -rnE 'Configuration::CI\b' src tests scripts .github docs` gives 4 sites: `src/bench/mod.rs:339` (`.width`, `.height` as "the Goldens' size" for `measure_aliasing`), `src/bin/praxis.rs:266` (the `--ci` parse arm), `src/bin/praxis.rs:603` (`.width`, `.height`: "Both of CI's configurations render at its size"), `src/bin/praxis.rs:892` (a parse test). No test runs it through `run` or `measure`; `mod.rs:1380` and `:1408` run `REFERENCE` and `COUNTERS`.
+- `grep -rnE -- '--ci\b' src/bin scripts .github tests docs/agents` gives `bench --ci` only at `src/bin/praxis.rs:265`, `:318` (usage) and `:887` (parse test); `scripts/verify.sh:53` and `.github/workflows/ci.yml:181` are `compare --ci`, and `.github/workflows/ci.yml:178` is `praxis bench target/bench --ci-counters --no-publish` for every scene (no scene list). `scripts/sweep.sh:171,199` run `bench` with no flag (`REFERENCE`).
+- `src/bench/history.rs:822-826` tags a lavapipe record off its Series unless its size and frame count are `Configuration::CI_COUNTERS`'s ("CI's configuration"), so a `bench --ci` record (256 frames) never joins a Series.
+- `bench/baselines/llvmpipe-llvm-20-1-2-256-bits/*.json`: 9 scenes carry `"measured_frames": 256` (recorded under `CI`), `town.json` carries 64 (`CI_COUNTERS`). `compare` in `CompareMode::Ci` compares the counter frames when the lengths differ (`mod.rs:794-803`), so these Baselines need no re-record for the fix, though a re-record would make them match CI's artifact.
+- The Goldens' size, 640 by 360, is spelled at `src/bench/mod.rs:68-69`, `tests/goldens.rs:47-48`, `tests/crowd.rs:11-12`, `tests/shadows.rs:22-23` and `src/bin/praxis.rs:13` (`DEFAULT_CAPTURE_SIZE: &str = "640x360"`): `grep -rnE '\b640\b' src tests scripts`. The two readers of `Configuration::CI` want that size, not CI's run.
+
+The fix removes a constant and a parse arm (the arm and the usage string fall in the GPU context and the binary; the four other spellings fall in capture, stats and preflight for a home constant, and outside every module's scope for the tests) and renders nothing, so it can move no pixel. It changes no measurement's meaning, no Bench record key (`CI_COUNTERS` keeps its fields), and no step of the verify command, CI or the sweep, none of which runs `--ci`; it changes the flags the binary accepts.
+
+#### L5-T02
+
+`src/bench/mod.rs:63-66`:
+
+```
+/// CI's lavapipe renders on the CPU, so CI benches at the Goldens' size
+/// and for fewer frames, and without `Aliasing`, whose render at three
+/// times the Goldens' size it is too slow for: `compare --ci` reads
+/// counters only.
+pub const CI: Self = Self { ... measured_frames: 256 ... };
+```
+
+`src/bench/mod.rs:85-86`:
+
+```
+/// CI's size, rendering the counter frames and no more: CI's bench of a
+/// scene too dense for lavapipe to render `CI`'s frames in its time.
+pub const CI_COUNTERS: Self = Self { ... };
+```
+
+Against the code: `.github/workflows/ci.yml:170-178` benches every scene with `--ci-counters` ("Each scene renders its counter frames alone, which compare with a Baseline of any length at CI's size"), and `src/bench/history.rs:824` names `CI_COUNTERS` "CI's configuration" and keeps a lavapipe record of any other shape off its Series. Nothing runs `CI`'s 256 frames (L5-T01's grep). The comments describe the arrangement under which 9 of the 10 lavapipe Baselines were recorded (256 frames) and `town` alone took the counter frames; a reader who records a lavapipe Baseline by them runs `bench --ci` and publishes a record tagged "640x360 over 256 frames, not CI's configuration" (`history.rs:838`), which is the wrong command, so the drift is load-bearing. The fix is a comment, and no pixel, measurement or step moves.
+
+#### L5-T03
+
+`src/bench/mod.rs:400-403`:
+
+```
+pub enum Verdict {
+    Warn,
+    Fail,
+}
+```
+
+`CONTEXT.md`, Verdict: "What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench ... else cleared." That is `src/bench/history/verdicts.rs:81` (`pub(super) struct Verdict`). A third, `src/preflight/mod.rs:61` (`pub enum Verdict { Ok, Note, Warn, Fail }`), is a check's state. `grep -rnE '^\s*pub(\([a-z]+\))? (enum|struct) Verdict' src` gives the three. `grep -cE '\bVerdict\b' src/bench/mod.rs` gives 37; in `src/bin/praxis.rs`, 5 lines, of which `:362` spells `praxis::preflight::Verdict::Fail` in full because `:6` imports the bench's. The glossary's rule is that its terms are "the vocabulary of code, tickets, and reviews" (`CLAUDE.md`, Documents), so a term with one meaning there should name one concept in code. The smaller form: a `fails: bool` on the compare result (the `Display` at `mod.rs:413-421` already maps the two variants to `warn` and `FAIL`), which also removes the enum; `check_regression` (`mod.rs:851-855`) sets it from the two ratios. No pixel, measurement, record or step moves; the binary's `compare` output text is unchanged.
+
+#### L5-T04
+
+`src/bench/mod.rs:405-411`:
+
+```
+/// A metric that regressed against its Baseline or exceeds its Budget.
+#[derive(Debug, PartialEq)]
+pub struct Finding {
+    pub metric: &'static str,
+    pub verdict: Verdict,
+    pub detail: String,
+}
+```
+
+`CONTEXT.md`, Finding: "One defect at one location, filed by an Audit lane's reader in eight fields", _Avoid_ "Issue (a ticket), observation, note". `grep -nE '\bFinding\b' src/bench/mod.rs` gives 10 lines (6 outside tests: `:405-421`, `:647`, `:819`, `:858`, `:871`); `src/bin/praxis.rs:657-659` reads `finding.verdict` and prints it. The term entered the glossary at this commit with the audit skill, so the collision is new; it stands all the same, since this report and every triage will say "Finding" of something else. `Regression` is also a glossary term (a commit a Verdict pinned), so the new name is neither: `Breach` or `CompareResult`, chosen together with L5-T03's. A rename moves nothing but names.
+
+#### L5-T05
+
+`src/bench/mod.rs:129-135`:
+
+```
+/// A time warns above this ratio to its Baseline and fails above
+/// `FAIL_RATIO`; a counter fails on any increase, as it is the same on every
+/// run. Noise floor on the M4 Pro, 6 runs of each scene under the owner's
+/// usual load: counters identical, GPU medians within 3.4%, CPU medians of
+/// 31–42 µs within 8.1 µs.
+const WARN_RATIO: f64 = 1.05;
+const FAIL_RATIO: f64 = 1.10;
+```
+
+The figures "6 runs", "3.4%", "31–42 µs" and "8.1 µs" are a measurement nothing in the tree re-measures (`grep -rn '8.1 µs\|3.4%' src docs/performance.md bench` finds the comment alone). The CPU medians the Baselines hold today are `bench/baselines/apple-m4-pro/helmet.json` 186.1 µs and `town.json` 4,734.8 µs (`"cpu_frame_microseconds":{"median":...}`), so "31–42 µs" describes scenes of another era. The ratios and the counter rule stated beside the figures are what the code does (`check_regression`, `mod.rs:842-857`; `compare`, `mod.rs:643-653`), so the drift is not load-bearing. `docs/bench/index.html:171` restates the ratios and floors for the page's readers. The fix is a comment.
+
+#### L5-T06
+
+`src/bench/mod.rs:141-143`:
+
+```
+/// Likewise for a pass's GPU time: over three runs on the M4 Pro, helmet's
+/// culling pass read 136 to 153 µs, every other pass within 3%.
+const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
+```
+
+"three runs", "136 to 153 µs" and "within 3%" are a measurement nothing re-measures; the pass set has since split (`TIMED_PASSES`, `src/render/renderer.rs`, has no pass named culling pass alone; `culling_phase_one` and others appear in `report.rs:276`'s fixtures). The floor's rule (`check_regression` with `noise_floor` at `mod.rs:710-711`, `:723-732`) is stated correctly in the sentence before (`mod.rs:137-138`). Not load-bearing; the fix is a comment.
+
+#### L5-T07
+
+`src/bench/mod.rs:594-596`:
+
+```
+/// One line, `key=value` pairs after the scene name: medians and p95s of
+/// the CPU and GPU frame, the gate and shadow-ray time, each pass's median,
+/// then the counters.
+impl std::fmt::Display for Measurements {
+```
+
+The line it documents (`mod.rs:600-624`) writes `cpu_us median= p95=`, then `dynamic_tlas_cpu_us=<median>` (`:602`, `:606`), then `gpu_us`, `gate_us`, `shadow_ray_us`, each pass's median, the counters, and the aliasing figures when measured (`:621-623`). The doc omits the dynamic TLAS CPU median and the aliasing figures. `src/bin/praxis.rs:462` prints this line per scene. Not load-bearing; the fix is a comment.
+
+#### L5-T08
+
+`src/bench/report.rs:10-16`:
+
+```
+/// `current`'s times and counters, its aliasing among them when it was
+/// measured, as markdown tables, each against its `baseline`, when there is
+/// one, and the Budgets. Times compare only with a
+/// Baseline of as many frames on the same adapter, as `compare` judges them,
+/// each pass with the Baseline's pass of its name; counters compare as
+/// `compare` reads them. ...
+```
+
+`report.rs:25-27` keeps a times Baseline when `(&baseline.adapter, baseline.measured_frames) == (&current.adapter, current.measured_frames)`. `compare` at `src/bench/mod.rs:673-682` refuses a Baseline whose `(adapter, backend)` differs ("compare times on the Baseline's machine and backend"). So `report` would show time columns against the same adapter's Baseline on another backend, where `compare` errors; "as `compare` judges them" overstates the parity. The binary reads the Baseline from `baseline_directory(&current.adapter, &current.backend)` (`src/bin/praxis.rs:701-703`), so today no report meets such a Baseline, and the drift is not load-bearing. Whether `report` should also match `backend` is a one-line question for the fix; neither form moves a pixel or a measurement.
+
+#### L5-T09
+
+`src/lib.rs:19` declares `pub mod bench;`, so its `pub` items are the crate's public surface, read outside the library by `src/bin/praxis.rs` and `tests/`. Four items nothing outside the crate reads:
+
+- `pub fn between` (`src/bench/mod.rs:278`): `grep -rn 'Aliasing::between' src tests` gives `mod.rs:351` and three tests in the same file (`:1501`, `:1518`, `:1530`).
+- `pub const BASELINE_DIRECTORY` (`src/bench/mod.rs:32`): `grep -rn BASELINE_DIRECTORY src tests scripts` gives `mod.rs:113` and `src/preflight/mod.rs:10,202,203,710`, all in the crate; the binary reaches the directory through `baseline_directory` (`src/bin/praxis.rs:702`).
+- `pub struct BenchStart` with four `pub` fields (`src/bench/provenance.rs:61-68`): `grep -nE 'start\.' src/bin/praxis.rs` gives none; the binary calls `BenchStart::read()` (`:450`) and passes `&start` (`:458`); the fields are read at `provenance.rs:101-116` only.
+- `pub fn read` on `Checkout` (`src/bench/provenance.rs:159`): callers `provenance.rs:75` and its tests, `src/bench/history.rs:1261` (a test); none in the binary or `tests/`.
+
+`Checkout`, `Provenance`, `Spread`, `Counters`, `CounterFrames` and `Aliasing` stay `pub` as field types of `Measurements`, which the binary reads and writes. The fix narrows four visibilities and compiles or does not; it moves no pixel, measurement, record or step.
+
+#### L5-T10
+
+```rust
+// src/bench/history.rs:453-470
+#[derive(Debug, Default, PartialEq)]
+pub struct Publication {
+    /// Records written under `records/`, so on a Series.
+    pub on_series: usize,
+    /// Records written under `tagged/`.
+    pub tagged: usize,
+    /// Records written under `experiments/`.
+    pub in_experiment: usize,
+    /// The Experiment published to; none for a publish to the Series.
+    pub experiment: Option<String>,
+    /// Records dropped for the same record, or one at least as quiet, under
+    /// their key.
+    pub dropped: usize,
+    /// Records already on the branch given the current Harness version.
+    pub restamped: usize,
+    /// The commit pushed; none when nothing changed.
+    pub commit: Option<String>,
+}
+```
+
+`src/lib.rs:19` declares `pub mod bench`, and `src/bench/mod.rs:6` re-exports `Publication`, so the fields reach the binary. The binary never reads one:
+
+- `grep -n "Publication\|publication\|\.on_series\|\.tagged\|\.in_experiment\|\.dropped\|\.restamped" src/bin/praxis.rs` finds `praxis.rs:475,511,515,522,523`, each a `writeln!(std::io::stdout(), "{publication}")` or the binding it prints: 0 field reads.
+- `grep -rn "Publication {" src/bench/` finds the three constructors, `history.rs:537,934` and `import.rs:105`; `verdicts.rs:668` uses `Publication::default()`. `import` and `verdicts` are declared at `history.rs:5-7` as child modules, which read a parent's private fields.
+- The tests that read the fields (`history.rs:1273,1275,1318,...`) sit in `mod tests` at `history.rs:1152`, a child module too.
+
+The smaller form drops the seven `pub` keywords. The fix moves no pixel, changes no record's key or path, no measurement's meaning, and nothing the verify command, CI or the sweep does; the `Display` is unchanged.
+
+#### L5-T11
+
+```rust
+// src/bench/history.rs:934-942
+let mut publication = Publication {
+    on_series: 0,
+    tagged: 0,
+    in_experiment: 0,
+    experiment: None,
+    dropped: 0,
+    restamped: 0,
+    commit: None,
+};
+```
+
+`Publication` derives `Default` at `history.rs:453`, and `grep -rn "Publication::default()" src` finds one use, `verdicts.rs:668`. The literal above is `Default::default()` written out: `usize` defaults to 0 and `Option` to `None`. One line serves nine, and the type's two constructors then take one form. The fix moves no pixel and changes no record, measurement, key or workflow.
+
+#### L5-T12
+
+```rust
+// src/bench/history.rs:507-518
+let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+let repository = Path::new(&root);
+let main = fetch_main(repository)?;
+let main_source_hash = source_hash(repository, &main)?;
+let release_build = release_build
+    .map(|build| release_build_record(repository, results, build, &main, &main_source_hash))
+    .transpose()?;
+let records: Vec<BenchRecord> =
+    bench_records(repository, results, &main, &main_source_hash, None)
+        .chain(release_build)
+        .collect();
+push_records(repository, &records)
+
+// src/bench/history.rs:530-540
+check_experiment_name(name)?;
+let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+let repository = Path::new(&root);
+let main = fetch_main(repository)?;
+let main_source_hash = source_hash(repository, &main)?;
+let records: Vec<BenchRecord> =
+    bench_records(repository, results, &main, &main_source_hash, Some(name)).collect();
+Ok(Publication {
+    experiment: Some(name.to_owned()),
+    ..push_records(repository, &records)?
+})
+```
+
+Lines 507-510 and 531-534 are the same four lines; `bench_records` at `history.rs:558-564` already takes `experiment: Option<&str>`, so the only difference the second function adds is the `release_build` the first takes and the `experiment` field it sets. The binary branches on the same `Option` at both call sites:
+
+- `grep -n "praxis::bench::publish" src/bin/praxis.rs`: `praxis.rs:469-470` (`match experiment { Some(name) => publish_experiment(..), None => publish(.., None) }`) and `praxis.rs:512-513` (the same match with `release_build`).
+- `praxis.rs:206-207` already refuses `--experiment` with `--release-build-seconds` ("a release build publishes beside main's results, never an Experiment's"), so a merged `publish(repository, results, release_build: Option<ReleaseBuild>, experiment: Option<&str>)` has no new case to reject; the `anyhow::ensure!` can move into it or stay in the parser.
+
+The smaller form is one public function of about 20 lines in place of two (`history.rs:497-541`, 45 lines), and one call per site in the binary. `check_experiment_name` stays public: the parser calls it at `praxis.rs:180` to fail before the bench runs. The fix moves no pixel, changes no record, key, path or Harness version, and the Experiment records land where they do today; the test at `history.rs:1508-1598` is the proof.
+
+#### L5-T13
+
+```rust
+// src/bench/history.rs:38-40
+/// How many times a publish rebuilds its commit on the branch's new tip
+/// after another publish pushed first.
+const PUSH_ATTEMPTS: u32 = 5;
+```
+
+```rust
+// src/bench/history.rs:647-680
+let mut attempt = 1;
+let mut tip = remote_tip(repository)?;
+loop {
+    let worktree = Worktree::add(repository, tip.as_deref())?;
+    // ... write, commit, push ...
+    let current = remote_tip(repository)?;
+    if current == tip || attempt == PUSH_ATTEMPTS {
+        return Err(error);
+    }
+    // ...
+    tip = current;
+    attempt += 1;
+}
+```
+
+`attempt` starts at 1 and the loop returns the error when it reaches `PUSH_ATTEMPTS`, so the body runs five times: one first build and four rebuilds on a moved tip. The comment says the constant counts the rebuilds, which would make five rebuilds and six pushes. The name `PUSH_ATTEMPTS` matches the code; the comment does not. Not load-bearing: a reader tuning the retry count would be off by one in either direction, and no record or measurement changes. The fix is the comment.
+
+#### L5-T14
+
+```rust
+// src/bench/history/suspects.rs:22-29
+pub(super) struct Point {
+    /// None when the record did not measure the metric.
+    pub median: Option<f64>,
+    /// Whether no record before it compares with it: its Harness version or
+    /// scene content changed, or it is an imported Baseline, which accepted
+    /// its level.
+    pub starts_line: bool,
+}
+```
+
+```rust
+// src/bench/history.rs:356-364
+let starts_line: Vec<bool> = rows
+    .iter()
+    .enumerate()
+    .map(|(index, row)| {
+        (index > 0 && !rows[index - 1].same_definition(row))
+            || row.source == Some(import::IMPORTED_SOURCE)
+            || line_starts.contains(row.source_hash)
+    })
+    .collect();
+```
+
+`line_starts` is `verdicts::pinned_sources(...)` at `history.rs:1025-1027`: the source hashes of commits a Verdict pinned. The README the same file writes has all four cases (`history.rs:81-83`: "A new Harness version or scene content, an imported Baseline, or a commit a Verdict pinned starts a line"), the glossary's Verdict entry has it ("which then starts its Series' line"), and the test at `history.rs:1839-1843` pins it ("A bisect pinned the step's commit: its line starts there"). The field's own comment, the one a reader of `suspects.rs` sees, stops at three. Not load-bearing: the README and the test carry the full rule. The fix is the comment.
+
+#### L5-T15
+
+The table and its one shipping use:
+
+```
+src/bench/history/import.rs:29  const HARNESS_BREAKS: [(&str, &str); 9] = [
+src/bench/history/import.rs:30      (
+src/bench/history/import.rs:31          "926fcc18",
+src/bench/history/import.rs:32          "gpu_main_pass_microseconds spans the culling pass's start to the main pass's end",
+src/bench/history/import.rs:33      ),
+...
+src/bench/history/import.rs:81          &HARNESS_BREAKS.map(|(commit, _)| commit),
+```
+
+The grep and its count: `grep -rn 'HARNESS_BREAKS' src tests scripts bench docs .github` finds 7 lines: the definition (`import.rs:29`), the shipping use that discards the string (`import.rs:81`), three test uses of `.len()` (`import.rs:483,507,605`), and two mentions in `docs/guides/bench-history.html:285` naming the constant in a chapter mark. No line reads the tuple's second element: no `.1`, no destructuring that binds it, no `Display`, no test asserting a description. The doc comment above the table (`import.rs:25-28`) already says what the column is for: "and what changed".
+
+The fix is a rename of the array's type and nine comments; it moves no pixel, raises no Harness version (the breaks' commits and their order are the key's input, the strings are not), changes no record's key or path, and changes nothing the verify command, CI or the sweep do. Proof: `cargo test` green, the import's `Publication` unchanged on the fixture in `history.rs:1689`.
+
+#### L5-T16
+
+The method and its one call:
+
+```
+src/bench/history/import.rs:103         let restamped = worktree.restamp(started_harness_version)?;
+src/bench/history/import.rs:325     fn restamp(&self, version: u32) -> anyhow::Result<usize> {
+src/bench/history/import.rs:326         let mut restamped = 0;
+src/bench/history/import.rs:327         for (path, mut file) in self.measured_records()? {
+...
+src/bench/history/import.rs:332             if provenance.contains_key("source")
+src/bench/history/import.rs:333                 || provenance.get("harness_version") != Some(&1.into())
+src/bench/history/import.rs:334             {
+src/bench/history/import.rs:335                 continue;
+src/bench/history/import.rs:336             }
+src/bench/history/import.rs:337             provenance.insert("harness_version".to_owned(), version.into());
+```
+
+What the branch holds, read from the local `origin/bench-history` ref (fetched 2026-11-02; the verifier can `git fetch` and re-run the same reads):
+
+- `git grep -l '"source": "baseline-commit"' origin/bench-history -- records tagged | wc -l` gives 780: the import has run.
+- `git grep -l '"harness_version": 1,\?$' origin/bench-history -- records tagged | wc -l` gives 135, and `git show` of each of the 135 finds `"source"` in every one: no record at version 1 lacks a source, so the `continue` at `import.rs:332-336` is taken for every record on the branch.
+- No new record can arrive at version 1: `src/bench/provenance.rs:21` has `pub const HARNESS_VERSION: u32 = 10;` and `BenchStart::provenance` writes it (`provenance.rs:108`); the import writes `commit.harness_version` from the breaks table (`import.rs:281`), 1 to 10, always with a `source`.
+- The branch holds no `verdicts/` directory yet (`git ls-tree --name-only origin/bench-history`: `README.md`, `experiments`, `records`, `series`, `tagged`).
+
+So the second and every later run of `praxis history import` walks every record under `records/` and `tagged/` twice (once in `restamp`, once in `remove_imported`), parses each, and `restamp` writes nothing. The doc comment on `import_baselines` (`import.rs:71-76`) describes this correctly ("a second import under the same rules changes nothing"); the code is accurate, and unreachable with the branch as it is.
+
+The one argument for keeping it: ADR 0024 says a bad publish "is undone with `git revert` on `bench-history`". A revert of the import's own commit would bring back the 135 pre-import records at version 1 without a source, and `restamp` would be needed again. That is a revert of the migration itself, not of a bad publish; the verifier may narrow the claim to "keep behind the revert case" if the owner wants the import to be re-runnable from any branch state.
+
+The fix removes `restamp` (`import.rs:320-342`, 23 lines with its doc), the call (`import.rs:103`), the `restamped` field of `Publication` (`history.rs:467`, its zero at `history.rs:940`, its `Display` arm at `history.rs:487-488`) and the two test assertions on it (`history.rs:1695,1730`). It moves no pixel, raises no Harness version, changes no record's key, path or bytes, and changes nothing the verify command, CI or the sweep do; it changes what `praxis history import` prints only by dropping a `, re-stamped N` that is never printed today. Proof: the import fixture test in `history.rs:1660-1795` with its `restamped` assertions removed, and a dry import against the branch producing `(nothing changed)`.
+
+#### L5-T17
+
+The site in the import and its three twins:
+
+```
+src/bench/history/import.rs:92      let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+src/bench/history/import.rs:93      let repository = Path::new(&root);
+src/bench/history.rs:507            let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+src/bench/history.rs:508            let repository = Path::new(&root);
+src/bench/history.rs:531            let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+src/bench/history.rs:532            let repository = Path::new(&root);
+src/bench/provenance.rs:162         let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
+```
+
+The grep and its count: `grep -rn 'show-toplevel' src` finds exactly these 4 lines, each followed by the same `Path::new(&root)` shadowing (the `provenance.rs` site continues on its own line 163). Four public entry points (`import_up_to`, `publish`, `publish_experiment`, `Checkout::read`) each normalise the caller's path the same way before passing it to `git`.
+
+The smaller form: `pub(super) fn toplevel(repository: &Path) -> anyhow::Result<PathBuf>` in `provenance.rs` beside `git`, four one-line calls. It moves no pixel, raises no Harness version, changes no record's key or path, and changes nothing the verify command, CI or the sweep do. Proof: `cargo test` green (the fixture tests in `history.rs` call every one of the four entry points from a nested directory or the root).
+
+#### L5-T18
+
+`src/stats/mod.rs:211-220` declares the counters:
+
+```rust
+    pub(crate) draw_calls: u32,
+    pub(crate) uploaded_bytes: u64,
+    pub(crate) instances_written: u32,
+    pub(crate) renderables_refused: u32,
+    pub(crate) lights_overflowed: u32,
+    pub(crate) static_instances_left_out: u32,
+    pub(crate) moving_instances_left_out: u32,
+    pub(crate) bends_left_out: u32,
+    pub(crate) dropped_time: Duration,
+    pub(crate) gpu_readbacks_skipped: u32,
+```
+
+The same ten names are listed again at `:232-241` (`new`, each set to zero), `:249-258` (`begin`, each set to zero again) and `:295-305` (`stats`, each copied into a `FrameStats`). `grep -c 'gpu_readbacks_skipped' src/stats/mod.rs` gives 5: the `FrameStats` field, and the four listings. `FrameStats` already declares each of these fields with the same name and type (`:19-38`, `:60-64`) and derives `Default`, so a `counters: FrameStats` field on the recorder, `self.counters = FrameStats::default()` in `begin` and `FrameStats { cpu_times, cpu_frame_time, heap_allocations, ..self.counters.clone() }` in `stats` lists them once; the writers (`src/state.rs:256,271-274`, `src/render/renderer.rs:495,551,557,694`, `src/render/readback.rs:235,242`) change from `recorder.x` to `recorder.counters.x`. `FrameStats::default()` allocates nothing (empty `Vec`), so the doc at `:202-203`, "without allocating once the first frames have sized its lists", still holds. The fix moves no pixel and changes no counter's meaning, so ADR 0024's Harness version stays; the proof is counters equal in `praxis compare` and `tests/frame_stats.rs` green.
+
+#### L5-T19
+
+`grep -rn 'Command::new(' src` gives 4 sites: `src/bench/provenance.rs:255` (`git_command`, run by `run` at `:262-285`), `src/bench/history/verdicts.rs:553` (`gh`), `src/preflight/mod.rs:277` (`output`) and `src/cook/fetch.rs:137` (`download`). The preflight's:
+
+```rust
+fn output(program: &str, arguments: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(arguments).output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+```
+
+The verdicts' `gh` (`verdicts.rs:552-565`) is the same shape with `anyhow::Result`, a `current_dir` and the standard error in its message; the provenance's `run` (`provenance.rs:262-285`) adds a piped standard input and trims; the cooker's `download` (`fetch.rs:136-158`) is `curl` with fixed flags. Two of the four run `gh`: the preflight's `gh_json` at `:606-608` wraps `output("gh", ...)`, the verdicts' `gh` runs it with a repository. One runner returning `anyhow::Result<String>` with the program, arguments and standard error in its error, taking an optional working directory and standard input, serves all four; the preflight's callers, which want silence on a missing program, call `.ok()`. The git runner's `-C` argument and the `curl` flags stay at their call sites. About 20 lines go. The fix moves no pixel, measures nothing differently and changes no Bench record's key; the proof is the preflight's and the sweep's output unchanged, and the provenance and verdicts tests green. The bench and the import and the verdicts weighed the same shape from the `git` and `gh` sides (the provenance's `run` hardcodes `git` in both its messages, which is what kept `gh` from calling it); this row stands for all four sites.
+
+#### L5-T20
+
+`src/lib.rs:28` declares `pub mod preflight`, so its `pub` items reach `src/bin/praxis.rs` and `tests/`. `grep -rn 'preflight::' src/bin tests` gives 3 lines, all in `src/bin/praxis.rs:355-362`: `praxis::preflight::run()`, `praxis::preflight::Verdict::Fail` and `check.verdict`; the checks print through `Display` (`writeln!(stdout, "{check}")` at `:358`). `grep -rn 'Machine' src tests --include='*.rs' | grep -v '^src/preflight/'` gives 2 lines, both `src/render/coverage_tests.rs` (`:17` the import, `:662` `Machine::classify(...) == Machine::M4Pro`), inside the crate. `grep -rnE 'check\.(name|detail)' src/bin tests` gives 0. So of the eight `pub` items (`Machine` at `:22`, `classify` at `:36`, `Verdict` at `:61`, `Check` at `:73` with `name`, `verdict`, `detail`, `run` at `:102`), four have no reader outside the crate: `Machine` and `classify` serve one crate-internal test, `name` and `detail` are read only by the `Display` at `:89-99`. `pub(crate)` on `Machine` and `classify`, and private `name` and `detail`, narrow the module's interface to `run`, `Verdict` and `Check.verdict`, which is what the binary reads. No pixel, measurement or script output changes.
+
+#### L5-T21
+
+`grep -rn 'enum Verdict\|struct Verdict' src` gives 3: `src/bench/mod.rs:400` (`pub enum Verdict { Warn, Fail }`, a compare Finding's), `src/bench/history/verdicts.rs:81` (`pub(super) struct Verdict`, the sweep's) and `src/preflight/mod.rs:61`:
+
+```rust
+pub enum Verdict {
+    Ok,
+    /// Information, such as work in flight, that passes or fails nothing.
+    Note,
+    /// Worth acting on before a bench, but `verify` still passes.
+    Warn,
+    /// `scripts/verify.sh` fails until it is fixed.
+    Fail,
+}
+```
+
+`CONTEXT.md` defines Verdict once, as the sweep's: "What the sweep found of one slower Suspect, kept on `bench-history`: held ... else cleared", with "Confirmation, bisect result" to avoid. `CLAUDE.md`, Documents, makes the glossary's terms the vocabulary of code, and a glossary term borrowed for an unrelated four-way result (a check's) makes the word mean three things in one crate: `src/bin/praxis.rs:362` and `:657` compare a `preflight::Verdict` and a `bench::Verdict` within 300 lines of each other. A rename (`Outcome`, `Status`, or `Level`) at `:61` and its 4 variants' 43 use lines in the file plus `src/bin/praxis.rs:362` changes no behaviour, no output text (the `Display` at `:91-96` prints `ok`, `note`, `warn`, `FAIL`) and no pixel. The bench's `Verdict` at `src/bench/mod.rs:400` falls in tooling, the bench.
+
+#### L5-T22
+
+`src/preflight/mod.rs:107-125`:
+
+```rust
+        Ok(info) => {
+            let machine = Machine::classify(&info.name, info.backend, info.device_type);
+```
+
+`info` stands for "information" and is bound to the `wgpu::AdapterInfo` that `crate::gpu::adapter_info()` returns; `grep -c '\binfo\b' src/preflight/mod.rs` gives 7 uses (`:107`, `:108`, `:114`, `:115`, `:116`, `:117`, `:122`, `:125`; the grep counts lines). `CLAUDE.md`'s full-word rule allows the domain's own words and wgpu's own API names as the API spells them, which covers `AdapterInfo` and `get_info()` but not a local chosen here. `grep -rnE '\binfo\b' src --include='*.rs' | grep -vE 'tracing::info|info!|//' | wc -l` gives 21 lines in 5 files: 7 here, 4 in `src/gpu/mod.rs:134-211` (falls in tooling, the GPU context and the binary), 2 in `src/render/coverage_tests.rs:661-662` and 4 in `src/render/shader_tests.rs:475-517` (fall in render), 3 in `src/cook/mod.rs:359-365` (fall in cook, assets and scenes, where it is gltf's own `texture info` and so allowed). `adapter` or `adapter_info` serves; the rename changes no output.
+
+#### L5-T23
+
+`src/stats/mod.rs:20-22`:
+
+```rust
+    /// Bytes the frame's uploads wrote to GPU buffers: the Instances it wrote
+    /// and the uniforms. Pools upload only while a Scene loads.
+    pub uploaded_bytes: u64,
+```
+
+`grep -rn 'uploaded_bytes +=' src/render` gives 2 writers: `src/render/renderer.rs:551`, which sums the `uploads` list built at `:514-547` (the camera uniform and the light uniform at `:535-541`, `light_upload` (the light buffer, `:526-527`), `bend_upload` (the bend parameters, `:528-534`), `instance_uploads` (`:514-520`) and `slot_count_upload` (the culling pass's slot count, `:521-525`)), and `src/render/renderer.rs:612`, which adds the dynamic TLAS's upload returned by `record` (`src/render/acceleration_structures.rs:361`, "the bytes the build uploads"). The comment names the Instances and the uniforms and omits the light buffer, the bends, the slot count and the dynamic TLAS's instances. Load-bearing: `uploaded_bytes` is a Baseline counter `praxis compare` judges (`src/bench/mod.rs:203`, `:226`, `:239`), so a reader placing a counter Regression from this comment would look at Instances and uniforms and miss the lights, bends and TLAS that `town` and `crowd` upload every frame. The fix is the comment alone.
+
+#### L5-T24
+
+`src/preflight/mod.rs:1-3`:
+
+```rust
+//! `praxis preflight`: a session's starting state, one line per check, so
+//! the session reads it rather than working it out. A check that would make
+//! `scripts/verify.sh` fail is a `FAIL`, with the command that fixes it.
+```
+
+`grep -n 'Verdict::Fail' src/preflight/mod.rs` gives 4 sites. `:192` (goldens) names `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` or CI's artifact; `:228` (baselines) names `praxis bench <directory>`; `:129-130` (adapter) names `praxis capabilities`, which "diagnoses it"; `:240` (assets) is:
+
+```rust
+            Err(error) => return Check::new("assets", Verdict::Fail, format!("{error:#}")),
+```
+
+the error of `crate::cook::absent_fetched` (`src/cook/fetch.rs:32-43`, a manifest read that failed) with no command. The doc, and `docs/agents/workflow.md`'s session start ("A `FAIL` line blocks `scripts/verify.sh` and names its fix"), say every `FAIL` names its fix; one of four does not. Not load-bearing: the error text names the manifest path, and the reader who meets it has `praxis fetch` two lines above at `:247`. The fix is a fix in the message (`; check assets/manifest.json`) or a doc that says "where one is known".
+
+#### L5-T25
+
+The probe's line, from the lane's measurement stamp:
+
+```
+warning: the function has a cognitive complexity of (27/25)
+   --> src/bin/praxis.rs:154:4
+154 | fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
+```
+
+The function has three groups, any one of which moved into a helper takes it under 25:
+
+1. The option extraction, `src/bin/praxis.rs:155-183`: `--crowd-form`, `--frame`, `--release-build-seconds`, `--experiment`, `--skip-aliasing`, `--no-publish`, each a `take_option` or `take_flag` with its own parse closure.
+2. The eight scope checks, `src/bin/praxis.rs:185-216`: eight `anyhow::ensure!` calls saying which command each option belongs to. A `fn check_option_scope(command: Option<&str>, options: &Options) -> anyhow::Result<()>` holds them.
+3. The match, `src/bin/praxis.rs:229-323`, 24 arms. The five `history` arms (`src/bin/praxis.rs:282-298`) group into `fn parse_history(rest: &[String]) -> anyhow::Result<Command>`, and the four `bench` arms (`src/bin/praxis.rs:265-276`, one per `Configuration` constant) into `fn parse_bench(output, rest, ...)`, which takes the configuration flag off the front of `rest` and benches the remainder as scenes.
+
+The refactor moves no pixel: `parse_command` builds a `Command` and renders nothing. It changes no measurement's meaning and raises no Harness version, since `Configuration` and the bench are untouched. It can change what the verify command, CI and the sweep do only if a flag stops parsing, and the test module `src/bin/praxis.rs:839-1111` (15 tests) pins every form those callers use: `scripts/verify.sh:52-53` (`bench ... --counters --no-publish [--skip-aliasing]`, `compare ... --ci`), `.github/workflows/ci.yml:178-181,237` (`bench ... --ci-counters --no-publish`, `compare ... --ci`, `publish ... --release-build-seconds`), `scripts/sweep.sh:80-202` (`history unrecorded`, `preflight`, `history bisect`, `bench ... --no-publish <scene>`, `publish`, `history regressions`). Those tests passing is the fix ticket's proof.
+
+#### L5-T26
+
+The usage text, `src/bin/praxis.rs:313-322`:
+
+```
+"unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
+ `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+ `export-scene <scene> <directory> [--frame <n>]`, \
+ `difference <expected png> <actual png> <difference png>`, \
+ `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
+ `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+ `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}"
+```
+
+`sed -n 313,322p src/bin/praxis.rs | grep -c preflight` gives 0. The enum has `Preflight` at `src/bin/praxis.rs:37` and the arm `[command] if command == "preflight" => Command::Preflight` at `src/bin/praxis.rs:232`. Every other variant is named: `Window` as `praxis [<scene>]`, and `Capabilities`, `Cook`, `Fetch`, `Capture`, `ExportScene`, `Difference`, `Bench`, `Publish`, `ImportBaselines`, `UnrecordedScenes`, `Suspects`, `Bisect`, `Regressions`, `Compare`, `Report` each by their command word. Not load-bearing: a reader is told too little, not told wrong; `preflight` takes no arguments, so no form can be mistyped, and `scripts/sweep.sh:85` and `CLAUDE.md:108` name it. The fix adds one word to the string and moves no pixel.
+
+#### L5-T27
+
+The same usage text at `src/bin/praxis.rs:313-322` names `cook`, `fetch`, `capture`, `export-scene` and `difference` with no `cfg`. Their variants are gated: `#[cfg(feature = "cook")]` before `Cook`, `Fetch`, `Capture`, `ExportScene` and `Difference` at `src/bin/praxis.rs:38,40,42,50,56`, and before their match arms at `src/bin/praxis.rs:233,235,237,245,253,259`. `Cargo.toml:37-41` makes `cook` default-on and says "a shipping build turns it off", and CI builds that configuration: `.github/workflows/ci.yml:116` (`cargo clippy --all-targets --no-default-features -- -D warnings`) and `.github/workflows/ci.yml:134` (`cargo test --no-default-features --test goldens`). In that build, `praxis cook` falls to the `_` arm and prints a usage that tells the reader to run `cook`. Load-bearing by the lane's definition (a reader acting on it runs the wrong command), though only in the build no session runs today. The fix gates the five names (a `cfg!(feature = "cook")` branch choosing between two strings, or a gated `const` for the five names concatenated into the text) and moves no pixel; the test `a_command_missing_its_arguments_is_refused_with_the_usage` at `src/bin/praxis.rs:873-876` pins the text's presence.
+
+#### L5-T28
+
+The doc at `src/gpu/mod.rs:128-132`:
+
+```
+/// The adapter, its backend, and whether the adapter supports each
+/// feature the roadmap plans on, with the related features and limits.
+/// One line per entry, followed by the Capability floor's limits, 4x MSAA on
+/// the main pass's attachment formats, resolved on colour ones, and
+/// anisotropic filtering.
+```
+
+The floor raises four limits at `src/gpu/mod.rs:297-309`: `max_buffer_size`, `max_binding_array_elements_per_shader_stage`, `max_acceleration_structures_per_shader_stage` and `max_storage_buffers_per_shader_stage`. The report prints `max buffer size` and `acceleration structures` in the block at `src/gpu/mod.rs:233-251`, and `max {} per stage` for binding arrays inside the `binding arrays` line at `src/gpu/mod.rs:151-158`. `grep -rn max_storage_buffers_per_shader_stage src` hits `src/gpu/mod.rs:306` (the floor), `:600` (the M4 Pro test literal) and `:769` (the floor-exact test): no `format!` prints it. Not load-bearing: `praxis capabilities` is a diagnostic, and an adapter short of that limit is named by `check_floor`'s error (`src/gpu/mod.rs:402-407`), so a reader diagnosing a floor failure is not misled, only one reading the report alone. The fix is one more `{:<24} max {} per stage` pair in the `format!` at `src/gpu/mod.rs:233-251`, or two words in the doc; neither moves a pixel. `tests/gpu_context.rs:30` caps the report at 30 lines; it has 14 today (two header lines at `src/gpu/mod.rs:209-212`, eight feature lines, four trailing lines at `:233-251`), so a line fits.
+
+#### L5-T29
+
+The doc at `src/gpu/mod.rs:9-13`:
+
+```
+/// ... In blocks of 128
+/// to 256 MiB, on the RTX 2070 SUPER under Vulkan, a State whose targets
+/// landed in a block an earlier State had filled drew pbr-sweep's depth
+/// pre-pass in 198 µs instead of 52 and its lit pass in 798 µs instead of
+/// 285.
+```
+
+`grep -rn DEVICE_MEMORY_BLOCK_BYTES src tests docs` hits `src/gpu/mod.rs` only (lines 19, 80, 81, 883). `grep -n -i -e 'memory block' -e suballocat -e '16 MiB' -e '198' docs/performance.md` finds no row for this measurement (line 2937 is the Arena capacity; the 198s at lines 894, 2693 and 3171 are other metrics). The test `render_targets_at_the_reference_size_get_memory_of_their_own` at `src/gpu/mod.rs:847-902` re-checks the mechanism (each target alone in its block) and not the timings, and skips on Metal, the reference machine's backend. So four timings sit in a shipping comment that nothing re-measures, the form the lane's axis 6 names. Not load-bearing: the constant's value rests on the mechanism, which is tested, and a reader who kept or changed the value would do so by re-measuring, not by these numbers. The fix moves the four figures into `docs/performance.md` with their run conditions and leaves the comment citing that page; it moves no pixel and changes no measurement.
+
+#### L5-T30
+
+```
+pub struct BelowCapabilityFloor {
+    pub missing_features: wgpu::Features,
+    pub missing_downlevel_flags: wgpu::DownlevelFlags,
+    pub missing_format_features: Vec<(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags)>,
+    pub limits: Vec<LimitGap>,
+}
+pub struct LimitGap {
+    pub name: &'static str,
+    pub required: u64,
+    pub adapter: u64,
+}
+```
+
+(`src/gpu/mod.rs:364-379`.) `src/lib.rs:26` declares `pub mod gpu`, so these are the crate's public API. `grep -rn BelowCapabilityFloor src tests scripts docs` hits `src/gpu/mod.rs` alone (6 lines: the definition, `check_floor`'s construction at 328, the `Display` and `Error` impls at 381 and 416, and the test at 711); `grep -rn LimitGap src tests` likewise (4 lines, all in the file); `grep -rn downcast src tests` hits nothing. The only producer is the private `check_floor` (`src/gpu/mod.rs:314`), and the only consumer path is `request_device`'s `?` at `src/gpu/mod.rs:60-65`, which wraps it in `anyhow::Error`; the binary logs it through `Display` at `src/bin/praxis.rs:26`, as the ADR's consequence says ("the binary logs it with `tracing::error!`"). ADR 0021 asks for "one typed error naming each missing feature", which a private type with a `Display` impl satisfies. Smaller form: drop `pub` from both structs and their seven fields (the test module is in the file and keeps access). No pixel moves; no measurement changes.
+
+#### L5-T31
+
+The three sites:
+
+```
+src/gpu/mod.rs:32:        let adapter =
+src/gpu/mod.rs:33:            first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
+src/gpu/mod.rs:115:    let adapter =
+src/gpu/mod.rs:116:        first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
+src/gpu/mod.rs:123:    let adapter =
+src/gpu/mod.rs:124:        first_backend(async |wgpu_instance| request_adapter(wgpu_instance, None).await).await?;
+```
+
+`grep -c 'request_adapter(wgpu_instance, None)' src/gpu/mod.rs` gives 3. `headless`, `capability_report` and `adapter_info` each want the adapter a headless context would use, and `capability_report`'s and `adapter_info`'s docs both say so ("the adapter a headless context would use", `src/gpu/mod.rs:111,120`). One private `async fn headless_adapter() -> anyhow::Result<wgpu::Adapter>` makes each a one-line body and gives the shared doc one home. Six lines become one function of four and three calls. No pixel moves, no measurement changes: the adapter chosen is the same.
+
+#### L5-T32
+
+```
+src/gpu/mod.rs:134:    let info = adapter.get_info();
+```
+
+Read at `src/gpu/mod.rs:198` (`info.subgroup_min_size`), `:199` (`info.subgroup_max_size`) and `:211` (`info.name`, `info.device_type`, `info.backend`): 5 uses. `info` stands for "adapter info" (wgpu's `AdapterInfo`); the module's abbreviation list names `info`, and the same file spells the full word at `src/gpu/mod.rs:431` (`let adapter_info = adapter.get_info();`). `tests/conventions.rs` checks shading initials only, so this is not already caught. The rename touches one function and moves no pixel.
+
+#### L5-T33
+
+`scripts/gallery.sh:43-52` defines the one way the script runs Blender:
+
+```
+blender() {
+  local log="$1" script="$2"
+  shift 2
+  if ! "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 \
+    --python "scripts/cycles-reference/$script" -- "$@" >>"$log" 2>&1; then
+    printf 'FAIL  %s  full log: %s\n' "$script" "$log"
+    tail -n 20 "$log"
+    exit 1
+  fi
+}
+```
+
+`scripts/gallery.sh:56-61` spells the same command line again, because `blender` exits on failure and this check needs the inverse (a run that must fail):
+
+```
+  # The check itself: point lights built in the wrong unit must fail it.
+  if "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 --python     scripts/cycles-reference/calibrate.py -- --wrong-unit >>"$logs/calibrate.log" 2>&1; then
+    printf 'FAIL  calibrate.py  passed point lights in the wrong unit: %s
+' "$logs/calibrate.log"
+    exit 1
+  fi
+```
+
+`sed -n 57p scripts/gallery.sh | grep -o "python *scripts" | od -c` shows `p y t h o n` followed by five spaces then `s c r i p t s`: the `\` and newline of a continuation like `:46-47`'s collapsed into the spaces. `sed -n 57,59p scripts/gallery.sh | od -c` shows the `printf` format string `'FAIL  calibrate.py  passed point lights in the wrong unit: %s` closed by a real newline byte and then `'` on `:59`: the `\n` escape every other `printf` in the file writes (`:48`, `:63`, `:72`, `:79`, `:90`, `:95`, `:97`, `:102`, `:103`) became a literal line break inside the quotes. The output is the same, so the script works; the second spelling of the Blender command line (two sites: `:46-47` and `:57`) is the health defect, five lines where a status-returning helper would serve both callers (`blender` reporting its exit status, with the exit moved to the callers that want it, or an argument naming the status expected). The fix changes no render: the script only drives `praxis capture`, `praxis export-scene` and Blender; no pixel of a Golden, Baseline or Bench record depends on it, and `verify`, CI and the sweep do not run it.
+
+#### L5-T34
+
+`scripts/cycles-reference/compare.py:78-80`:
+
+```
+def smoothstep(edge0, edge1, x):
+    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+```
+
+`grep -nE "(^|[ (,])[a-z]{1,2} (=|in )" scripts/cycles-reference/*.py` finds, outside `x, y, z, w` quaternion components at `render.py:391,431`, this one single-letter local, used 3 times on `:80`. `t` is neither a loop index nor a coordinate; it is the interpolant. The parameter `x` is the WGSL builtin `smoothstep(low, high, x)`'s own spelling of its third argument and is weighed as the API's name (note 10); `edge0` and `edge1` are GLSL's names for the same arguments, words with a digit. `tests/conventions.rs` checks `.rs` and `.wgsl` under `src/` and `tests/` only (`:47`, `:81`), so no test reaches this file. The rename changes the port's text and not its values: `check_ramp` at `:142-148` holds the port to the GPU's own ramp within one 8-bit step on every run, so a wrong rename fails the gallery's first Blender step, and no pixel of praxis's own render depends on this file.
+
+#### L5-T35
+
+`scripts/verify.sh:56-57`:
+
+```
+# The Goldens test takes about half the step, so it runs beside every other
+# test once both are built; its log is printed when it fails.
+```
+
+`grep -rn --include='*.md' --include='*.sh' "half the step\|Goldens test takes" .` finds the figure at this one site; `docs/agents/workflow.md:30` gives the whole command "about a minute once built" and no share per step. The script prints each step's time (`:20`, `printf 'ok    %-7s %4ss\n'`) but the `test` step is one line, so the Goldens' share inside it is printed nowhere, and nothing in `tests/`, `bench/` or `docs/` records or re-measures it. The axis names "a number in a shipping comment: a size, a timing, a ratio nothing in the tree re-measures"; this is a ratio of that kind. Not load-bearing: the structure the comment justifies (the Goldens test in the background at `:61`, the rest in the foreground at `:63`) is right whatever the share, and a reader acting on the comment runs no wrong command. The dated timings at `scripts/sweep.sh:59-61` are the same form and are not filed (note 5). A comment change can move no pixel and changes nothing the verify command does.
+
+#### L5-T36
+
+`.github/workflows/ci.yml:57-59`:
+
+```
+  software-goldens:
+    # Not a required check until two green weeks.
+    name: Goldens (software Vulkan)
+```
+
+`git log --format='%h %ad %s' --date=short -S'Not a required check until two green weeks' -- .github/workflows/ci.yml` places the comment and the job at 2026-10-13, 20 days before the frozen commit (2026-11-02). `gh api repos/gariasf/praxis/branches/main/protection/required_status_checks --jq '.contexts'` returns `["Check, Clippy & Format"]`: the `check` job alone is required; `software-goldens`, `shipping-goldens`, `software-bench` and the PR form check are not. `gh run list --workflow ci.yml --branch main --event push --limit 60 --json conclusion,createdAt` grouped by day: 2026-10-26 1 success 1 cancelled; 10-27 3 success 2 cancelled; 10-28 9 success 1 cancelled; 10-29 1 success; 10-30 11 success; 10-31 18 success 3 cancelled; 11-01 4 success; 11-02 6 success; no failure in the 60 runs, which reach back one week (the listing's limit, not the job's history). The comment's "why" cites a condition (fewer than two green weeks) that no longer holds, and the comment stays while the setting it describes did not change. Not load-bearing: a reader is misled about what gates a merge, writes no wrong code and runs no wrong command. Whether the job should now be required is the owner's (a process matter, lane 7's rules or the map); the Finding is the comment's stale reason. The comment's change moves no pixel and changes nothing CI runs.
+
+#### L5-T37
+
+`scripts/pr-lint.sh:29-31`:
+
+```
+if ! grep -Eq '^(Closes #[0-9]+|Part [0-9]+ of #[0-9]+|Ticket: n/a \(.+\))$' <<<"$body"; then
+  miss 'body: no ticket line; one ticket per PR needs "Closes #N", "Part k of #N" or "Ticket: n/a (reason)" on a line of its own (workflow.md, PRs)'
+fi
+```
+
+`docs/agents/workflow.md:28`, PRs: "One ticket per PR (`Closes #N`)". `.github/pull_request_template.md:1-3`: `Closes #` and "Docs, ADR, and process PRs: replace the line above with `Ticket: n/a (reason)`". `grep -rn --include='*.md' "Part [0-9k] of #\|Part k of" .` (excluding `target/`) finds nothing: no document names the partial-PR form. The form is live: `git log --format='%h %s' --grep='Part [0-9]* of #[0-9]'` on `main` finds 25 commits whose messages carry it, and `scripts/pr-lint-test.sh:102` tests it ("a partial PR"). So the message is the only text that states the three forms, and it cites `workflow.md`, PRs as their source. Lane 7's docs table (`docs/audit/m3.5/docs-drift.md:717`) read `workflow.md:28` against `pr-lint.sh:29-31` and wrote "matches", so the doc gap is not filed there; the Finding here is the usage string's attribution, axis 6. Not load-bearing: a reader using the form gets a pass; a reader of the doc alone does not learn it. If the triage prefers the doc to name the form, the fix is lane 7's. A message or doc change moves no pixel and changes nothing the lint rejects.
+
+#### L5-T38
+
+`scripts/cycles-reference/DIFFERENCES.md:9-10`:
+
+```
+Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
+`PRAXIS_BLENDER` set, at 2x.
+```
+
+`grep -nE "^\s*(blender|reference|capture) " scripts/gallery.sh` lists the script's Blender runs: `:55` `calibrate.py`, `:62` `compare.py ramp`, `:76` `render.py`, `:77` `compare.py compare`; the script writes whole images (`<scene>-frame-<n>-cycles.png`, `-cycles-difference.png`, `:66-79`) and no crop. The three-panel 2x crop is `compare.py`'s `crop` command, `scripts/cycles-reference/compare.py:8` and `:198-205` ("writes praxis | Cycles | difference of a region, each pixel doubled"). `grep -rn --include='*.md' --include='*.sh' --include='*.py' --include='*.yml' --include='*.html' "compare.py crop\|-- crop\|\"crop\"" .` finds `crop` called nowhere but defined at `compare.py:198`; the seven images under `differences/` are its products, cut by hand from a gallery's images. The sentence names the gallery as the source of the crops; the gallery is the source of the images the crops are cut from. Not load-bearing: a reader redoing a crop finds the command in `compare.py`'s docstring, one file away, and no measurement or render depends on the sentence. A one-clause change to the entry; no code moves.
+
+### Notes for the verifier
+
+Not filed, since each is a near-miss under the lane's axes, an allowed form, or belongs to another lane; recorded so the next audit does not re-find them. By reader: A the bench, B the Bench history, C the import and the verdicts, D capture, stats and preflight, E the GPU context and the binary, F the scripts and the workflows.
+
+
+**A.**
+
+1. Near-miss, `compare`'s shape (`src/bench/mod.rs:634-755`, 122 lines): six `check_budget` calls of five to six lines each (`:654-659`, `:691-696`, `:716-721`, `:734-739`, `:740-745`, `:747-752`, about 30 lines) where a `[(metric, current, budget)]` loop like the one at `:724-733` would take ten; and two `ensure!` at `:665-682` that `ensure_comparable` cannot hold because `report` shares it and allows them. Not filed: the helper exists and the calls are its table; a ticket for L5-T03 or L5-T04 may fold it in.
+2. Near-miss, `measure` (`src/bench/mod.rs:495-592`): five `spread(measured....map(|...| microseconds(...)).collect())` builds (`:542-580`) that one closure over a field selector would make five lines. Not filed for the same reason.
+3. `spread` (`src/bench/mod.rs:879-885`) clones its values and `percentile` sorts the vector twice; a cost nit of lane 3's kind, trivial at 1,800 values; not filed.
+4. `Display for Measurements` (`src/bench/mod.rs:597-627`) beside `report` (`src/bench/report.rs:17-167`) are two renderings of the same figures, weighed as asked: the first is the bench's one-line stdout per scene (`src/bin/praxis.rs:462`), the second the markdown tables PRs paste. Different consumers, different forms; not filed (L5-T07 is the first's doc).
+5. Written and read by no code: `Provenance.driver`, `.driver_info`, `.gpu_load_percent`, `.other_processes`, `.started_unix_seconds` (`src/bench/provenance.rs:39-54`) and `Checkout.branch` (`:152`). `StoredProvenance` (`src/bench/history.rs:254-265`) reads `commit`, `source_hash`, `harness_version`, `source`, `scene_content_hash`, `gpu_frame_p95_over_median`; `record` (`history.rs:693-717`) reads `checkout`, `quiet`, `gpu_frame_p95_over_median`; `docs/bench/index.html:340-345` reads the same five as `StoredProvenance`. They are a Bench record's data, which ADR 0024 means to be queried "with `git` and `jq`", so weighed as record content and not filed as vestigial.
+6. Falls in lane 1 and the Bench history: `quiet` is false on a battery or display warning (`is_quiet`, `provenance.rs:130-140`, through `BenchStart.machine_warnings`, `:67`), but the record carries no field saying which warning, and the only tag is "machine not quiet" (`history.rs:830`); ADR 0024 says a kept record is "tagged with its reasons".
+7. Unverifiable, not filed: `REFERENCE`'s doc "With the warm-up, as many frames as one run can time on the GPU" (`src/bench/mod.rs:53-54`): no constant in the tree bounds 2,048 frames (`src/render/readback.rs:30-53` sizes a ring of a few slots per frame in flight, not a run), so nothing pins the claim.
+8. Checked and holding: `// ADR 0022 judges Budgets at 60 Hz.` (`src/bench/mod.rs:453`) against ADR 0022's line 23, "Budgets stay judged at 60 Hz"; `HARNESS_VERSION` 10 (`provenance.rs:21`) against `HARNESS_BREAKS`'s 9 entries (`src/bench/history/import.rs:29`) and the test at `import.rs:605`; `MEASURED_PATHS` 5 plus `UNMEASURED_PATHS` 12 against the 17 paths of `git ls-tree --name-only HEAD`, with the test ADR 0024 promises at `provenance.rs:311`; `QUIET_P95_OVER_MEDIAN` 1.06 against the ADR's "about 1.06"; `baseline_directory`'s doc against its test (`mod.rs:1476-1491`) and `bench/baselines/`'s four directory names; `report.rs:1-2`'s `docs/performance.md`, which exists and `docs/agents/workflow.md:55` names; the `khronos-dfs-srgb-eotf` key at `mod.rs:284` exists in `docs/references.toml:224`.
+9. Allowed abbreviations weighed: `stats` as a lambda binding (`mod.rs:214-229`, `:504-556`) is the crate's own module name and the glossary's Frame stats; `rmse`, `p95`, `p99` are statistics' own terms, and `aliasing_rmse` is a Baseline and Bench record field, so a rename would change the record form; `tlas`, `blas` are ray tracing's; `driver_info` is wgpu's `AdapterInfo` field; `stdin` is std's; `cpu`, `gpu`, `ci`, `json`, `git`, `gh` are on the allowed list. `tests/conventions.rs` covers no abbreviation in these files, so nothing here re-finds it.
+10. Near-miss in the tests: `BUDGETS` is spelled identically at `src/bench/mod.rs:995-1002` and `src/bench/report.rs:223-230` (8 lines), and `report.rs:236-268` builds its own `Measurements` fixture while `mod.rs:931` exposes `pub(super) fn baseline()`, which `src/bench/history/verdicts.rs:897` already reuses. Eight lines; not filed alone.
+11. Falls in lane 7: `docs/bench/index.html:171` restates `WARN_RATIO`, `FAIL_RATIO` and the two noise floors as literal text ("past +5%", "past +10% when also past the noise floor (10 µs on the CPU, 20 µs on the GPU)") beside the constants at `src/bench/mod.rs:134-143`: text held twice, a change to one leaves the other.
+12. The module split's description of "`history.rs`'s own git runner" does not hold at this commit: `src/bench/history.rs:15` imports `provenance::git` and has no `Command::new`. The three runners are `provenance.rs:262`, `verdicts.rs:552` and `preflight/mod.rs:276` (L5-T19).
+13. For L5-T01's fix, the lavapipe Baselines need no re-record: 9 carry 256 frames and `town` 64, and `compare --ci` compares counter frames across lengths (`mod.rs:794-803`); `praxis compare`'s hint for a missing lavapipe Baseline already says "copy <scene>.json from CI's bench-results artifact" (`src/bin/praxis.rs:605-608`), which yields 64 frames.
+14. Falls in lane 6 or lane 1: `percentile` on an empty vector panics at `values[rank.clamp(1, 0) - 1]` (`src/bench/mod.rs:892`, `clamp` with `min > max`); unreachable from the four constants since `run` ensures at least 72 frames (`:435-438`) and every constant measures 64 or more, but no test pins it.
+15. `Configuration`'s `warm_up_frames` doc, "the counter frames among them are counted" (`mod.rs:44-46`), holds for `REFERENCE` and `CI` (warm-up 248 covers frames 8 to 72) and reads loosely for `COUNTERS` and `CI_COUNTERS`, whose warm-up is 8 and whose counter frames are their measured frames; weighed accurate enough, not filed.
+16. The usage string at `src/bin/praxis.rs:318` lists `--ci`; if L5-T01 is fixed it goes with the arm, in the GPU context and the binary.
+
+
+**B.**
+
+1. The in-memory and stored twins (`BenchRecord` at `history.rs:124-141`, `StoredRecord` at `history.rs:225-250`): weighed and not filed. `BenchRecord` carries the serialized `Measurements` as a JSON map plus the publish's own decisions (`tags`, `publishes_once`, `experiment`); `StoredRecord` reads every record on the branch, imported Baselines included, which lack the fields `Measurements` requires (`history.rs:221-223`, `232-243` are all `Option`), and keeps the counters as a flattened map because a record holds only the counters its bench counted. One type with serde attributes would have to make every `Measurements` timing optional, which `compare` and the Baselines' reader do not want. The split follows the ADR's import clause, not a repeated shape.
+2. `ReleaseBuildRecord` (`history.rs:300-306`), `StoredReleaseBuild` (`history.rs:310-315`) and `ReleaseBuildRow` (`history.rs:319-325`): three shapes of one payload around `ReleaseBuild`. Merging the first two into one owned type that both serializes and deserializes would save about 8 lines and cost two `String` clones per publish and a `committed_unix_seconds` field that `BenchRecord::new` inserts into the map after serialization (`history.rs:163-166`), so it would need `skip_serializing`. Weighed and not filed: the saving is below the cost in attributes.
+3. `MedianOf` (`history.rs:386`): a type alias with one use, the type of `JUDGED_TIMINGS` at `history.rs:390`. One line that names the closure's role; not filed.
+4. `SeriesRecord` (`history.rs:328-338`): two implementors and one generic site (`series_lines`), so not an abstraction with one use. Its `rows` takes `line_starts`, which `StoredReleaseBuild::rows` ignores (`history.rs:406`); a parameter one of two implementors ignores is the trait's shape, not flexibility nothing exercises.
+5. The Suspect rule in prose sits in four places: the `README` constant (`history.rs:77-83`), the bench page's legend (`docs/bench/index.html:169`), the field guide `docs/guides/bench-history.html`, and `CONTEXT.md`'s Suspect entry. The test at `history.rs:1601-1620` pins the README's configurations and quiet thresholds against `Configuration`, `BUSY_GPU_PERCENT` and `QUIET_P95_OVER_MEDIAN`, but not the README's "8 records", "4 median absolute deviations" or "3%" against `suspects.rs:7-19`, and nothing pins the page's legend. They agree at this commit, so no drift is filed; that a test misses the seam is lane 6's, and the page's and guide's copies are lane 7's.
+6. `BenchRecord::path`'s comment (`history.rs:205-207`) says the Harness version is not in the path "as it is defined under `src/`, so a source hash names one", while the ADR's key clause lists the Harness version as a key component and `import.rs:319-341` restamps records published at version 1. Whether a source hash names one Harness version after a restamp is a correctness question: falls in lane 1.
+7. `history.rs` has no git runner of its own: `fetch_main`, `push`, `remote_tip` and `committed_unix_seconds` (`history.rs:624-876`) call `provenance::git` (`provenance.rs:246`). The "three process runners of one shape" are provenance's `git`, `verdicts.rs:552`'s `gh` and `preflight/mod.rs`'s `gh_json`; the first falls in tooling, the bench, the other two in tooling, the import and the verdicts, and tooling, capture, stats and preflight.
+8. `import.rs:312` writes `adapter.starts_with("llvmpipe")` where `is_lavapipe` and `LAVAPIPE_ADAPTER_PREFIX` exist (`history.rs:36,286-288`; `grep -rn '"llvmpipe' src --include='*.rs'` outside tests: `import.rs:312`, `preflight/mod.rs:39`). A repeated literal: falls in tooling, the import and the verdicts, and tooling, capture, stats and preflight.
+9. `Worktree` (`history.rs:880-1098`) beside `scripts/sweep.sh:123-143`'s trees under `target/sweep/trees`: the one is a temporary detached worktree of `bench-history` that a publish writes and removes; the other a worktree of one of `main`'s commits that holds a release binary for the night's bisect and is kept for a later night. Neither wraps the other. `import.rs:319-383`'s `impl Worktree` adds three methods the import alone calls (`import.rs:103` and inside the impl), reading only `directory`.
+10. The serde alias comment at `history.rs:234-236` ("Named `gpu_main_pass_microseconds` until the bench renamed it, the same span under a new name"): whether the old field measured the same span is a question for the import's `HARNESS_BREAKS` and lane 1, not a comment this section can judge against code beside it.
+11. Naming forms weighed and allowed: `json` as the bytes of a JSON file (`history.rs:962,1047`), `p95_over_median`, `ci_configuration` (`history.rs:1852`), `_frames` as serde's renamed ignored field (`history.rs:270`), `%ct` as git's format string (`history.rs:851`). `metal` and `lavapipe` as test path variables (`history.rs:1660-1661`) are words.
+12. `Run` (`history.rs:794-801`) is built at `history.rs:708` and `import.rs:294` and destructured once at `history.rs:813-820`: two construction sites, not a parameter object with one use.
+13. `BenchRecord::p95_over_median` and `StoredRecord::p95_over_median` (`history.rs:216-218,277-281`) are two three-line methods of one shape on two types; a shared helper would be as long. Not filed.
+14. The test module's helpers each have two or more uses: `Fixture::commits` 6, `Fixture::read` and `Fixture::files` many, `commit` many, `result` many, `lavapipe_result` 3, `LAVAPIPE_KEY` 3, `LAVAPIPE` 2. No test pins nothing: each asserts on the branch's files, Series rows or `Publication` counts.
+15. Fix tickets for L5-T10 to L5-T12 carry the refactor licence with this proof: no Golden changes (the Bench history touches no render), counters equal, no record key, path or Harness version changes, the `Display` of `Publication` unchanged, the history tests at `history.rs:1151-1942` green. L5-T13 and L5-T14 are comment edits.
+
+
+**C.**
+
+1. **Visibility one module too wide, not filed.** Of the 16 `pub(super)` items in `verdicts.rs`, 14 have no reader outside the file: `grep -rn` over the worktree for `Commit {`, `State::`, `Pinned {`, `Measured {`, `Ends {`, `Verdict::of`, `Row {`, `Run {`, `unjudged`, `step(`, `Issue {`, `fn issue\|issue(`, `Filing`, `filing(` finds each only in `verdicts.rs` (its shipping code and its tests), while `VERDICTS` and `pinned_sources` are read at `history.rs:1026`. `verdicts` and `history` are private modules (`history.rs:5-7`, `bench/mod.rs:1`), so by the lane's rule the spelling alone is not a Finding; a fix ticket on L5-T19 or L5-T16 could tighten them in passing. `Verdict::of` is `pub fn` on a `pub(super)` type, which reaches no further than the type.
+2. **Three types named `Verdict`.** `grep -rn 'enum Verdict\|struct Verdict' src` finds `src/bench/mod.rs:400` (`pub enum Verdict`, a compare's outcome per metric), `src/preflight/mod.rs:61` (`pub enum Verdict`, a check's line class) and `src/bench/history/verdicts.rs:81` (the sweep's). `CONTEXT.md` defines Verdict as the sweep's: "What the sweep found of one slower Suspect". The two other uses of the glossary word fall in tooling, the bench, and tooling, capture, stats and preflight; the one here matches the glossary. Likewise two types named `Run` one module apart: `history.rs:794` (`Run<'run>`, what a bench run measured on) and `verdicts.rs:159` (`Run`, a night's run: commit and median); neither is imported into the other's file, so there is no clash, but a reader of `import.rs:294` (`Some(Run { adapter, ... })`) and `verdicts.rs:641` (`Run { commit, median }`) meets two `Run`s. Not an abbreviation, so not axis 4; recorded for the next audit.
+3. **`ImportedProvenance` as a third provenance shape, weighed and not filed.** `provenance.rs:34` `Provenance` (the bench's writer, 12 fields with `Checkout` flattened), `history.rs:259` `StoredProvenance` (the reader of both writers, 6 fields, three of them `Option`) and `import.rs:246` `ImportedProvenance` (the import's writer, 6 fields, with `baseline` that the reader ignores and without `scene_content_hash`). Two writers of different fields and one loose reader is the smallest arrangement that keeps the stored bytes as they are; deriving `Serialize` on `StoredProvenance` and writing it from the import would add `"scene_content_hash": null` to 780 records, which changes record bytes, so a fix would not carry the unchanged-behaviour proof. `Baseline` (`import.rs:230`) is likewise a loose reader of Baselines older than `Measurements` can parse (its `backend` and `gpu_frame_microseconds` are `Option`), and `BaselineCommit` (`import.rs:113`) is built once (`import.rs:168`) and read by `imported`; neither is a twin of `BenchRecord`.
+4. **`import_up_to`'s parameters exist for tests.** Its one shipping caller, `import_baselines` (`import.rs:78-82`), passes the two constants; its three other callers are the fixture tests at `history.rs:1689,1723,1786`, which need a `history_started` and a break of their own. A test seam, not flexibility nothing exercises.
+5. **`Suspect` and `Verdict` share five fields.** `Verdict::of` (`verdicts.rs:105-118`) copies `scene`, `metric`, `shift`, `suspect` and `predecessor` from a `Suspect`; `Suspect` adds `committed_unix_seconds` for the sort at `verdicts.rs:355` and is not serialised, `Verdict` is the stored file. Embedding one in the other would change the Verdict file's shape; nothing is on the branch yet (no `verdicts/` directory), so a fix now would carry the proof cheaply, but the gain is five lines. Not filed.
+6. **`Row` beside `SeriesRow`.** `verdicts.rs:148` `Row` reads four fields of a Series row; `history.rs:424` `SeriesRow<'record>` writes nineteen, borrowing from a `StoredRecord`. A borrowing writer cannot be the owned reader; the pair is by need. Not filed.
+7. **`HISTORY_STARTED`'s doc against the inclusive range, weighed and not filed.** `import.rs:20-22` says "every Baseline committed before it is imported", and `import_up_to` (`:85`) and `baseline_records` (`:120-121`) say "before `history_started`"; the code's `rev-list --reverse --first-parent history_started` (`:143`) and `log --first-parent ... history_started -- bench/baselines` (`:149-156`) include the commit itself. `git show --stat 3c6b9d92 -- bench/baselines` is empty: that commit changed no Baseline, so on `main` the two readings import the same records and no reader is misled today. A later `HISTORY_STARTED` that did change a Baseline would import it beside the record its own bench published, and `apply` would keep the quieter. Recorded so the next audit does not re-weigh it.
+8. **`next_commit`'s one-change case.** `verdicts.rs:292-296` says that with no other source between the ends "the commit that changed the source to the bad end's is pinned"; with `changes.len() == 1` (every commit of one source, so the ends share a source) the code pins `changes[0]`, the good end (`verdicts.rs:307-310`). The ends are two distinct Series rows, whose paths are their source hashes (`history.rs:216-221`), and a moved end is always the first commit of a source run, so the case does not arise from `bisect`; a correctness question for lane 1 if it ever does, not a comment defect.
+9. **`night/all` and `night_runs`.** `scripts/sweep.sh:178-183` copies a night's results into `$night/all/` as `<run>-<scene>.json` and publishes that directory; `night_runs` (`verdicts.rs:624-648`) reads every directory under the night for `<scene>.json`, so `all/` holds no file it would read and the runs are not double-counted. Checked because the doc at `verdicts.rs:622-623` says "in `night`'s directories" without excluding one. Clean.
+10. **`SMALLEST_HELD_SHIFT` beside `SMALLEST_SHIFT_FRACTION`.** `verdicts.rs:23` and `suspects.rs:19` both hold `0.03`; `grep -rn SMALLEST_SHIFT_FRACTION src docs` finds it at `suspects.rs:19,43,102` and in the guide's JavaScript twin at `docs/guides/bench-history.html:486,497`. `CONTEXT.md` names the two 3% floors separately (Suspect: "the larger of 4 median absolute deviations and 3%"; Verdict: "half its shift and 3%"), so they are two values of one magnitude, not one constant; the comparison is tooling, the Bench history's item and is left to it.
+11. **`BENCH_PAGE`'s link lands.** `verdicts.rs:711` writes `?machine=<adapter key>&scene=<scene>`; `docs/bench/index.html:1410-1415` reads `parameters.get("machine")` and `parameters.get("scene")`. Clean. `TRIAGE_LABEL` is `needs-triage` (`verdicts.rs:444`), the string `docs/agents/triage-labels.md` maps the role to. Clean.
+12. **ADR 0024's "61 commits", falls in lane 7.** `git rev-list --first-parent 3c6b9d92 -- bench/baselines | wc -l` gives 64 first-parent commits that touched `bench/baselines/` before the history started; the ADR's Consequences say 61. The import also skips a commit whose Baselines were only renamed or given fields (`import.rs:189-202`), so the number of commits imported is a third figure. A doc against the code, not a comment in these files.
+13. **Test helpers each used by one test, not filed.** In `verdicts.rs`'s tests `next` (1 test, 6 calls), `row_commit` (1 test, 2 calls) and `row` (1 test, 5 calls) serve one test each, and still shorten it; `night`, `runs`, `commits` and `regression` serve several. In `import.rs`'s tests `commit` serves 5 tests and `stored` 3. No helper is unused.
+14. **Parsing a Baseline twice.** `import.rs:260-261` parses the same `json` into a `Baseline` and into a `serde_json::Value`; `serde_json::from_value` on a clone of the object would parse once. Two lines; recorded, not filed.
+15. **Falls in lane 1 (none found).** No correctness disagreement with ADR 0024's Suspect, bisect or Regression clauses was seen in these two files: `holds` is half the marked shift and 3% (`verdicts.rs:795-797`, the glossary's Verdict); `step` benches the ends interleaved `END_RUNS` times before judging (`:231-238`); `file_regressions` opens one issue per scene and pinned commit and records it (`:451-498`); `unjudged` lists slower Suspects only (`:190`).
+16. **Outside every module's scope.** Nothing seen in `src/lib.rs`, `src/state.rs` or `tests/*.rs` while counting uses; `tests/` references no item of these two files.
+
+
+**D.**
+
+1. `src/preflight/mod.rs:612-618`, `live_milestone`, parses `M<n>` as a `u32` after stripping `M`, so `M3.5` parses as nothing and `praxis preflight` prints `no open milestone named M<n>` while the live milestone is `M3.5`. The doc comment at `:610-611` ("the open one with the lowest number in its `M<n>` title") and the message at `:568` describe the code as written, so nothing here is drift; the disagreement with the live milestone falls in lane 1.
+2. `src/capture/mod.rs:282-288`, `FrameWait::Spin`'s doc, carries "about 30% slower", a figure nothing in the tree re-measures. Weighed and not filed: it is the reason the variant exists, is cited with its registry key `apple-tech-talk-110147-busy-waits`, and the bench's choice at `src/bench/mod.rs:439-442` matches the doc's "only the bench spins, on a hardware adapter".
+3. `src/capture/mod.rs:27-33`, `GOLDEN_TOLERANCE`'s doc, carries "20 captures of each of the first two Golden scenes, `pbr-sweep` and `uv-grid`" and "the noise is 0". Weighed and not filed: both scenes exist (`src/scenes/mod.rs:31,33`), the figure is the measurement's provenance rather than a parameter, and every Goldens run (`scripts/verify.sh:61`, `.github/workflows/ci.yml:134`) re-checks that the tolerance holds on three adapters.
+4. The capture's three layers: `capture` has callers in `src/bin/praxis.rs:764`, `src/bench/mod.rs:341` and seven files under `tests/`; `capture_frames` in `src/bin/praxis.rs:751` and `tests/goldens.rs:317`; `render_frames` has one caller outside the file (`src/bench/mod.rs:445`, which alone reads the returned content hash and chooses `FrameWait`) and the two wrappers inside. The two wrappers return different things (one the last frame's pixels and every frame's stats, the other several frames' pixels), so neither is the other's special case; not filed.
+5. `ImageDifference` is re-exported at `src/lib.rs:40` and named nowhere outside `src/capture/mod.rs` (`grep -rn ImageDifference src tests` gives the definition, the re-export and the test); callers read its fields from `compare_images`'s return value. A `pub` function's return type must be `pub`, so the re-export is required; not filed.
+6. `src/render/renderer.rs:836` declares a test-module `const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;` that duplicates `src/capture/mod.rs:11`, which `src/render/tonemapping_pass.rs:181` imports instead. Falls in render.
+7. `tests/frame_stats.rs:18` declares `const FRAME_COUNT: usize = 60;`, the value of `src/capture/mod.rs:99`, which is `pub(crate)` and not re-exported, so the integration test cannot read it. Outside every module's scope; a `pub` re-export would remove the twin.
+8. `texture_bytes`'s `transient_saves_memory` parameter (`src/stats/mod.rs:185`): `src/render/targets.rs:373` and `src/assets/material.rs:233` pass a variable, `src/render/tonemapping_pass.rs:142` passes `false`; exercised both ways, clean.
+9. The two `assets()` under `cfg(feature = "cook")` and `cfg(not(feature = "cook"))` (`src/preflight/mod.rs:235-273`): CI builds and tests without the feature (`.github/workflows/ci.yml:116`, `:134`), so neither side is dead; clean.
+10. `SystemTimer` implements `tracing::Subscriber` in full (`src/stats/mod.rs:357-394`, eight methods, four of them empty) to time bevy_ecs's system spans; it has one caller (`src/state.rs:319`). A `tracing_subscriber::Layer` would need a `Registry` installed as the default subscriber for the schedule's lifetime, while the doc at `:311-314` explains that a span reports to the subscriber that was the default when it was created, so `scope` captures the systems whatever the global subscriber filters; the width is what the mechanism needs. Not filed.
+11. The bench's `Finding { metric, verdict, detail }` with its `Display` "verdict metric detail" (`src/bench/mod.rs:400-421`) and the preflight's `Check { name, verdict, detail }` with its `Display` "verdict name detail" (`src/preflight/mod.rs:73-99`) are one shape twice, with different verdict sets (two against four). Weighed and not filed: one type would carry `Ok` and `Note` into the compare's Findings, which never produce them; L5-T21 covers the name they share.
+12. The fourth process runner, `src/cook/fetch.rs:136-158` (`curl`), falls in cook, assets and scenes; it is counted in L5-T19's four sites and needs no Finding of its own.
+13. `FrameStats` fields read outside the file only through `Display`: `renderables_refused` (written at `src/state.rs:271`), `static_instances_left_out` (`src/render/renderer.rs:495`), `allocator_report_bytes` (`src/state.rs`, `src/render/renderer.rs`). `praxis capture` prints the `Display` (`src/bin/praxis.rs:785`) and `tests/frame_stats.rs:253` reads it, so none is vestigial.
+14. `GpuFrameStats::gate_time` and `phase_two_triangles_drawn` are absent from `FrameStats`'s `Display` (`src/stats/mod.rs:109-179`) while the bench reads both (`src/bench/mod.rs`, 3 and 1 lines). The `Display`'s doc at `:107-108` promises groups of `key=value` pairs, not every field; not filed. If the capture's print is meant as the full record, that is a lane 6 or lane 7 question.
+15. Preflight's comments checked against other files and found accurate: `:212` ("With no scene named, bench records every scene whose assets are present") against `src/bin/praxis.rs:434-441`, which takes `ReferenceScene::ALL` less an unfetched helmet; `:219` ("CI fetches no helmet, so benches none") against `.github/workflows/ci.yml:178`, which runs `praxis bench` with no scene and no fetch step; `:67` (`Fail`: "`scripts/verify.sh` fails until it is fixed") for goldens against `scripts/verify.sh:61` (`PRAXIS_REQUIRE_GOLDENS=1`) and for baselines against `scripts/verify.sh:30-33`.
+16. Abbreviations weighed and allowed: `gpu` as a local (`src/capture/mod.rs:294`, `src/stats/mod.rs:121,133`), a domain word; `gh`, `ps`, `ioreg`, `pmset`, `tasklist`, `powershell` as program names in `output` calls and test locals (`src/preflight/mod.rs:289,295,361,432,434,758`); `id` (`:466,477`); `pid=,comm=` and `/FO`, `/NH` as `ps`'s and `tasklist`'s own flags; `KEY` (`:334`), a full word.
+17. The `Finding` type in `src/bench/mod.rs:407` uses the glossary's term Finding (an audit's) for a compare's result, the same borrowing as L5-T21; falls in tooling, the bench.
+
+
+**E.**
+
+1. Weighed and not filed: the four history commands in the binary each run `let adapter = pollster::block_on(praxis::gpu::adapter_info())?;` and pass `&adapter.name, adapter.backend.to_str()` (`src/bin/praxis.rs:531-537`, `548-550`, `562-566`, `578-581`). A helper would replace one line with one line; the shape worth questioning is the `(repository: &Path, adapter: &str, backend: &str)` triple that `unrecorded_scenes`, `suspects`, `bisect` and `file_regressions` all take (`src/bench/history.rs:595-599`, `src/bench/history/verdicts.rs:317,366-370,451-454`), where one adapter-key type would serve; that falls in tooling, the Bench history, and the import and the verdicts.
+2. Weighed and not filed: the `match experiment { Some(name) => publish_experiment(..), None => publish(..) }` appears twice in the binary (`src/bin/praxis.rs:468-471`, `511-514`), four lines each with a different third argument; a helper would be as long as what it replaces.
+3. Weighed and not filed: the Baseline read chain `std::fs::read(&baseline_path).map_err(anyhow::Error::from).and_then(|json| Measurements::from_baseline_json(&json))` appears twice (`src/bin/praxis.rs:629-631`, `678-680`). `src/bench/` has no reader of a results directory (`grep -rn read_dir src/bench` hits only the Bench history's record directories at `src/bench/history.rs:1007,1009,1045`), so `result_paths`, `baseline_path` and `read_json` are not duplicated there.
+4. Weighed and not filed: `Path::new(".")` is passed nine times in the binary (`grep -c 'Path::new(".")' src/bin/praxis.rs` gives 9) as the `repository` of every history function. The history tests pass fixture roots, so it is not a parameter every caller passes the same value; it is the binary's working directory, which is the right place for that knowledge.
+5. Weighed and not filed: `first_success`'s `let Some(..) = failures.pop() else { anyhow::bail!("no backend to try") }` at `src/gpu/mod.rs:530-532` is unreachable from its two callers (`first_backend` ensures a non-empty list at `src/gpu/mod.rs:504-507`; the test at `:820,829` passes two). Three defensive lines for an empty slice, since `std` has no non-empty slice type.
+6. Weighed and not filed: `[scene] if ReferenceScene::from_name(scene).is_some() => Command::Window(parse_scene(scene)?)` at `src/bin/praxis.rs:310-312` parses the name twice and the `?` cannot fail. The guard keeps a one-word non-scene (`bench` alone) on the usage arm, which `a_command_missing_its_arguments_is_refused_with_the_usage` pins; `if let` guards are not stable Rust.
+7. Weighed and not filed: the test constant `MSAA_X4` at `src/gpu/mod.rs:562-565` holds `MULTISAMPLE_X2 | MULTISAMPLE_X4 | MULTISAMPLE_RESOLVE`, more than its name says. Test-only and no abbreviation; a rename to `M4_PRO_FORMAT_FEATURES` would read truer.
+8. Near-miss on comment accuracy, not filed: `adapter_report`'s doc says the lines are "each feature the roadmap plans on" (`src/gpu/mod.rs:128-129`). `ROADMAP.md` names immediates alone (`ROADMAP.md:52`); ADR 0021 says subgroups are among the features "which nothing uses", mesh shaders are what "ADR 0019 does not use", and `INDIRECT_FIRST_INSTANCE` "left the floor". `tests/gpu_context.rs:3-5` pins the same eight as "the features the renderer plans to use". `docs/research/source-audit.md:170` leaves the matrix's mesh-shader, subgroup and immediate rows to the milestone that implements them, so "plans on" is loose rather than wrong; a doc or ADR question for lane 7 if it is one at all.
+9. Weighed and not filed: `BACKEND_ORDER`'s doc carries driver versions (617.42, 621.01) and an exception code (0x87D) at `src/gpu/mod.rs:475-476`. Identifiers of a measured failure, not measurements; `docs/research/source-audit.md:200` reviewed the comment and marked it measured.
+10. Falls in tooling, the bench, and capture, stats and preflight: `context.adapter.get_info().device_type` is read through the field at `src/bench/mod.rs:440` and `src/capture/mod.rs:389` where the getter `device_type()` exists (`src/gpu/mod.rs:106`), and `context.adapter.get_info()` whole at `src/bench/mod.rs:465` and `src/render/renderer.rs:405` (the last falls in render). The getter is justified by its callers outside the crate (`tests/goldens.rs:101-102`); the mixed access is a near-miss on module depth at those sites, not in `src/gpu/mod.rs`.
+11. Outside every module's scope: `surface_caps` at `src/lib.rs:155`, read at `:162-163` (3 uses), abbreviates "surface capabilities"; the full-word rule, as `src/gpu/mod.rs:451` spells it (`surface_capabilities`).
+12. Falls in render: `let info = context.adapter.get_info();` at `src/render/coverage_tests.rs:661`, the same abbreviation as L5-T32.
+13. Not filed, the map's fog line: a Vulkan adapter below the floor ends the run at `request_device` (`src/gpu/mod.rs:60-65`) rather than falling through to DX12, since `first_backend` wraps only the adapter request (`src/gpu/mod.rs:33,42-47`) and the floor check runs after it.
+14. Falls in lane 6: `render_targets_at_the_reference_size_get_memory_of_their_own` (`src/gpu/mod.rs:847-902`) returns early when the backend reports no allocator, which Metal does (`:870-877`), so on the reference machine it asserts nothing; it runs on CI's lavapipe and the RTX 2070 SUPER. Also lane 6: `m4_pro_limits` (`src/gpu/mod.rs:587-647`) is a 60-line literal of one adapter's limits on one wgpu version, which two tests use; a change in wgpu's `Limits` fields breaks compilation rather than a test.
+15. Allowed abbreviations weighed in these two files: `msaa_x4` (`msaa` is a domain word), `ci_run` (`ci`), `json`, `stdout`, `fmt` (std's module and the trait method as the API spells them), `driver_info`, `subgroup_min_size` and every other wgpu field name as wgpu spells it, `T` as a type parameter (not an argument, parameter, local, field or lambda binding), `png` in the usage string.
+16. `vendor()` has one caller and it is outside the crate (`tests/frame_stats.rs:63`), so its `pub` stands. `DEFAULT_CAPTURE_SIZE` has one use (`src/bin/praxis.rs:241`) and is a named, documented constant, not a vestige.
+17. `src/bin/praxis.rs:601`'s comment "Both of CI's configurations render at its size" holds: `Configuration::CI_COUNTERS` takes `Self::CI.width` and `Self::CI.height` (`src/bench/mod.rs:82-87`).
+18. The usage text was checked in the reverse direction too: it names no command the enum lacks in a `cook` build, and its option scopes (`--crowd-form` on `capture` and `bench`, `--frame` on `capture` and `export-scene`, `--skip-aliasing` and `--no-publish` on `bench`, `--release-build-seconds` on `publish`, `--experiment` on `bench` and `publish`) match the `ensure!` calls at `src/bin/praxis.rs:185-216`.
+
+
+**F.**
+
+1. `.github/workflows/ci.yml` pins mutable refs at 18 sites (`actions/checkout@v4` at `:37,63,101,151,223`; `dtolnay/rust-toolchain@stable` at `:39,65,103,153`; `Swatinem/rust-cache@v2` at `:43,67,107,155`; `actions/upload-artifact@v4` at `:87,138,187,200`; `actions/download-artifact@v4` at `:225`) while `.github/workflows/pr-lint.yml:29` pins a commit SHA with `# v4.4.0`. Lane 7 filed it as L7-R04 against `CLAUDE.md:387-388`; not refiled. Two facts for that ticket: there is no `.github/dependabot.yml`, so SHA pins would not be refreshed by a bot; and `dtolnay/rust-toolchain@stable` reads its ref as the toolchain name, so a SHA pin of it needs `with: toolchain: stable`.
+2. `ci.yml`'s setup block (`checkout`, `rust-toolchain`, `rust-cache`) appears four times (`:37-43`, `:63-67`, `:101-107`, `:151-155`) and the lavapipe install three (`:69-73`, `:109-113`, `:157-161`). Weighed and not filed: the blocks differ (`components: clippy, rustfmt` at `:41`, `components: clippy` at `:105`, none elsewhere), so a composite action under `.github/actions/` would need an input and would be about as long as the 27 lines it removes, plus one more file. If the triage wants it, it is a workflow change with no pixel moved and no measurement changed.
+3. `ci.yml:13-15` says "Each push to main runs in a group of its own, so none is cancelled and every one publishes its Bench records". The group key `ci-${{ github.event.pull_request.number || github.run_id }}` (`:17`) is the run id on a push, so concurrency cancels no `main` run: the comment holds for what it describes. But `gh run list --workflow ci.yml --branch main --event push --limit 60` shows 8 of 60 `main` push runs since 2026-10-26 ended `cancelled`; the one inspected (`gh run view 41223987799 --json jobs`, 2026-10-31 17:19 UTC, head `7c562597`) had all four jobs cancelled at once about five minutes in, before `publish-bench` could run, so those commits published no lavapipe Bench record. Whatever cancels them (a hand, a tool, a timeout) is not in the tree. Falls in lane 1 (ADR 0024: "CI's lavapipe on every push to `main`"), and lane 6 if a check should notice a missing record.
+4. `ci.yml:51-52`, the `check` job's `Build` step (`cargo build`) before `Test` (`cargo test`): `cargo test` compiles the library, the binary (integration tests need it) and the test targets, so the step compiles nothing `Test` would not; it names a compile failure apart from a test failure in the job's log. Weighed as a readability choice, not vestigial. Not filed.
+5. `scripts/sweep.sh:57-62` derives the 450 s cap from "219 s on the M4 Pro, 155 s on the RTX 2070 SUPER, both measured 2026-10-31": the same form as L5-T35 (a timing in a shipping comment nothing re-measures) but dated, which stamps it as a measurement, and it is the cap's derivation rather than a justification. Weighed and not filed; the verifier may want both treated alike.
+6. `scripts/sweep.sh:62` `PRAXIS_SWEEP_CAP_SECONDS` is set nowhere in the tree (`grep -rn "PRAXIS_SWEEP" .`: the header `:44`, the read `:62`, and `PRAXIS_SWEEP_UPDATED` at `:74`); `WGPU_BACKEND` (`:44-45`) is read by `src/gpu/mod.rs:485-506`, so the header is accurate about it. An operator's knob the header documents, not flexibility nothing exercises. Not filed.
+7. `scripts/gallery.sh:31-33` hold `golden_frame=59` and `town_frames=(59 300 500 700 900 1200 1500 1800)` as copies of `tests/goldens.rs:294,299`; equal at this commit, and the comment names the source. No test ties them (`render.py:38-40` shows the tree's precedent of reading a constant from source text with a regular expression; a shell `grep` of `tests/goldens.rs` would do the same). A drift between them would be caught by nothing: lane 6's.
+8. `scripts/cycles-reference/compare.py:27-29`: "The constants and matrices of display.wgsl and gt7.wgsl, which cite their sources; each function below is its namesake there." `gt7_curve`, `pq_encode`, `pq_decode`, `rec2020_to_ictcp`, `ictcp_to_rec2020`, `gt7_tonemap` are in `gt7.wgsl:46-115`, `tonemap` and `srgb_encode` in `display.wgsl:22,30`, `GT7_PAPER_WHITE` and the five `PQ_*` constants at `gt7.wgsl:32-40`, `REC709_TO_REC2020` and `REC2020_TO_REC709` at `display.wgsl:8,13`. The four LMS and ICtCp matrices (`compare.py:67-74`) are inline `dot` rows at `gt7.wgsl:84-108` with no names, `EIGHT_BIT_STEP` and `display` (`:136`) have no namesake (the WGSL composition is `srgb_encode(tonemap(...))` in `tonemapping.wgsl:16`'s `fs_tonemap` and `shader_function_tests.rs:1084`), and `smoothstep` is the WGSL builtin. Weighed as a near-miss: `display`'s own docstring two lines below says what it is, and "constants and matrices of" is true of unnamed rows. Not filed.
+9. `compare.py:198-205`, the `crop` command: no caller in the tree (grep count 0 outside the file). Not vestigial: its seven products are the committed images `DIFFERENCES.md` shows, its usage is in the docstring at `:8`, and a milestone's visual audit cuts crops by hand. L5-T38 is about the entry that names its source, not about the command.
+10. Allowed abbreviations weighed in these files: `tmp` (`target/tmp/`, a directory name, `gallery.sh:5,9,28`), `src` and `dev` in paths, `fmt` (cargo's subcommand, `verify.sh:72`), `np` and `bpy` (numpy's convention, Blender's module), `co` (Blender's vertex attribute, `render.py:237,435`), `bsdf`, `uv`, `uvs`, `uri`, `exr`, `rgb`, `rgba`, `ictcp`, `lms`, `pq`, `sha` (`pr-lint.yml:52`), `raw` (`pr-lint-test.sh:153`, the raw-content host), `x, y, z, w` as quaternion components (`render.py:391,431`), `x, y, width, height` as a crop's coordinates (`compare.py:200`), and `smoothstep(edge0, edge1, x)`'s parameters (`compare.py:78`): WGSL names the builtin's third argument `x`, GLSL names the first two `edge0`, `edge1`.
+11. `render.py:32` `UNBOUNDED_RANGE = 1e9` is read only by `calibrate.py:69,71`; `render.py`'s own `build` passes the export's `light["range"]` (`:404`), which `src/cook/export.rs:119,242` writes for every point light. A constant of the calibration living in the module it imports; one line, two uses. Not filed.
+12. `tests/references.rs:154` scans `rs`, `wgsl`, `md`, `sh`, `toml`: the registry keys cited at `render.py:99,304,313` and `compare.py:30` are checked by no test (the `.sh` citations at `sweep.sh:19,96` are). All four keys exist in `docs/references.toml` (`:79`, `:109`, `:139`, `:170`) at this commit. Falls in lane 6.
+13. `scripts/pr-lint-test.sh:23` "`scripts/pr-lint-test.sh`: 20 passed." is sample PR body text, not a claim about the test, which runs about 47 cases (41 `expect_` lines, one of them in a loop of 5 paths, and 2 inline cases). `:153` is a fixture URL whose last segment names a PR directory on the `pr-images` branch: a data string, not a comment, outside the ticket-number convention test's `.rs`/`.wgsl` scope. Neither filed.
+14. `scripts/pr-lint.sh:67`'s `src/cook/(texture|mesh)(\.rs$|/)` accepts `src/cook/texture/` and `src/cook/mesh/` directories that do not exist at this commit (`ls src/cook/`: files only). `CLAUDE.md`, Project shape: "When a feature folder grows past one file, split into `feature/{resource,system,...}.rs`", so the form anticipates a documented convention; `pr-lint-test.sh:177` exercises only the `.rs` forms. Not filed.
+15. `scripts/sweep.sh:18-43`'s install recipe against `sweep.plist` and `sweep-task.xml`: the label `com.github.gariasf.praxis.sweep` (`plist:7`, recipe `:24,26,39`), the `@SWEEP@` placeholder (`plist:11,25,27`; `xml:36`), `@BASH@` (`xml:35`), 04:00 (`plist:19-22`; `xml:10`), wake (`xml:28`), logged-on user (`xml:19`) all match. The Mac recipe creates `target/sweep` before launchd opens its log there (`:22`, `plist:25,27`); the Windows recipe does not and need not, since Task Scheduler opens no file and `sweep.sh:54` makes the directory. Clean.
+16. `render.py:162-206`, the `Gltf` class, reads glTF itself rather than through Blender's importer: a design choice (the materials are built by hand at `:276-345` to match praxis's model) and not health. Not filed.
+17. `ci.yml:148-149` and `:216`: `software-bench`'s `benched` output is `steps.bench.outcome`, and `publish-bench`'s `if` also tests `!cancelled()`; with note 3's cancellations the job's guard behaves as the comment at `:210-213` says. Clean.
+18. Only the `check` job is a required status check (note on L5-T36); `shipping-goldens`, `software-bench` and the PR form check are not required either, and no comment says so of them. Whether they should be is the owner's, through lane 7's rules or the map; outside this lane.
+19. `DIFFERENCES.md`'s five entries name seven images (`:29,31,43,57,59,67,76`) and `scripts/cycles-reference/differences/` holds seven files with those names: no entry without an image, no image without an entry.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 0 |
+| `drift` | 17 (L5-T02, L5-T05 to L5-T08, L5-T13, L5-T14, L5-T23, L5-T24, L5-T26 to L5-T29, L5-T35 to L5-T38); load-bearing 3 (L5-T02, L5-T23, and L5-T27 in a build without the `cook` feature) |
+| `health` | 21 (L5-T01, L5-T03, L5-T04, L5-T09 to L5-T12, L5-T15 to L5-T22, L5-T25, L5-T30 to L5-T34) |
+
+By axis: over-engineering 8 (L5-T11, L5-T12, L5-T16, L5-T17, L5-T18,
+L5-T19, L5-T31, L5-T33); vestigial 2 (L5-T01, L5-T15); cognitive
+complexity 1 (L5-T25, the probe's one hit in this module, the binary's
+command parser); naming 6 (L5-T03, L5-T04, L5-T21, L5-T22, L5-T32,
+L5-T34, of which three are glossary terms borrowed for another concept and
+three are abbreviations or a single letter); module depth 4 (L5-T09,
+L5-T10, L5-T20, L5-T30, each a `pub` surface in a `pub` module that
+nothing outside the crate reads); comment accuracy 17 (the `drift` rows,
+of which five are measured figures in shipping comments that nothing in
+the tree re-measures: L5-T05, L5-T06, L5-T29, L5-T35 and L5-T36's
+dated trigger). The same shape, a process runner, was filed from three
+sides and stands once (L5-T19); the glossary's `Verdict` is borrowed
+twice, at two sites, and stands twice (L5-T03, L5-T21). Every `health`
+row is in shipping code; none is in a test module. No implied fix moves a
+pixel; L5-T01, L5-T12 and L5-T16 change what the binary accepts or what a
+publish writes, so their proof is the sweep's and CI's output unchanged
+beside green tests, and the rest carry the refactor licence with Goldens
+bit-exact, counters equal and timings within noise. Axis sweep: 26 file
+rows. Interface widths: 49 types and module surfaces, 226 public items
+counted where a row gives a number. Files read in full: the 26 of the
+module (12 Rust files, 10,130 lines; 14 shell, Python, Markdown, XML,
+plist and YAML files, 1,906 lines, beside the display ramp); read in part
+for use counts: `src/lib.rs`, `src/state.rs`, `src/render/` (the
+renderer and the coverage tests), `src/cook/fetch.rs`, `tests/`,
+`docs/bench/index.html`, `docs/agents/workflow.md`, `docs/performance.md`,
+`docs/research/source-audit.md`, the ADRs the module cites and the
+`bench-history` branch's records through read-only `git` commands.
+
 ## Killed
 
 Written by the report session.
