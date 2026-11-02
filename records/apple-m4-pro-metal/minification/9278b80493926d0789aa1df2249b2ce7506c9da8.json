@@ -1,0 +1,119 @@
+{
+  "adapter": "Apple M4 Pro",
+  "aliasing_p99": 143799,
+  "aliasing_rmse": 32960,
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1793631085,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 663547203,
+    "heap_allocations": 345,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 272
+  },
+  "cpu_frame_microseconds": {
+    "median": 246.41700000000003,
+    "p95": 425.375
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.08399999999999999,
+    "p95": 0.75
+  },
+  "gate_microseconds": {
+    "median": 843.083,
+    "p95": 862.5840000000001
+  },
+  "gpu_frame_microseconds": {
+    "median": 3006.834,
+    "p95": 3057.0
+  },
+  "gpu_memory_bytes": 663547203,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 27.584,
+      "p95": 29.125
+    },
+    "culling_phase_two": {
+      "median": 19.5,
+      "p95": 20.209
+    },
+    "depth_prepass": {
+      "median": 159.75,
+      "p95": 162.708
+    },
+    "depth_pyramid_pass": {
+      "median": 215.625,
+      "p95": 220.0
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 5.8340000000000005,
+      "p95": 6.25
+    },
+    "lit_pass": {
+      "median": 531.792,
+      "p95": 542.625
+    },
+    "phase_two_depth_pass": {
+      "median": 12.084,
+      "p95": 12.5
+    },
+    "shadow_mask_pass": {
+      "median": 1693.625,
+      "p95": 1741.0
+    },
+    "tonemapping_pass": {
+      "median": 319.458,
+      "p95": 319.959
+    }
+  },
+  "heap_allocations": 345,
+  "height": 1440,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "branch": "HEAD",
+    "commit": "8bc34eb18fcfb79307193551e96619316aef566c",
+    "dirty": false,
+    "driver": "",
+    "driver_info": "",
+    "gpu_frame_p95_over_median": 1.0166839938619825,
+    "gpu_load_percent": 0,
+    "harness_version": 10,
+    "other_processes": [],
+    "quiet": true,
+    "scene_content_hash": "6d4e984f4e33e937e599760f3da8fc920ef5c00abe53e03b89d5b3abc4fa7a88",
+    "source_hash": "9278b80493926d0789aa1df2249b2ce7506c9da8",
+    "started_unix_seconds": 1793641214
+  },
+  "scene": "minification",
+  "shadow_ray_microseconds": {
+    "median": 1840.416,
+    "p95": 1887.5410000000002
+  },
+  "triangles_drawn": 2,
+  "uploaded_bytes": 272,
+  "width": 2560
+}
