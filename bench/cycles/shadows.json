@@ -1,0 +1,10 @@
+{
+  "scene": "shadows",
+  "frame": 59,
+  "width": 2560,
+  "height": 1440,
+  "commit": "8bc34eb18fcfb79307193551e96619316aef566c",
+  "blender": "5.2.3 LTS",
+  "mean_difference_steps": 2.23,
+  "linear_rmse": 0.01108
+}
