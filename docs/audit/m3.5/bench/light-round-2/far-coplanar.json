@@ -1,0 +1,118 @@
+{
+  "scene": "far-coplanar",
+  "adapter": "Apple M4 Pro",
+  "backend": "metal",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 225.333,
+    "p95": 423.208
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.08399999999999999,
+    "p95": 0.583
+  },
+  "gpu_frame_microseconds": {
+    "median": 2622.166,
+    "p95": 2696.459
+  },
+  "gate_microseconds": {
+    "median": 679.8340000000001,
+    "p95": 695.375
+  },
+  "shadow_ray_microseconds": {
+    "median": 1617.583,
+    "p95": 1694.6659999999997
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 27.958,
+      "p95": 30.334
+    },
+    "culling_phase_two": {
+      "median": 20.792,
+      "p95": 21.5
+    },
+    "depth_prepass": {
+      "median": 161.667,
+      "p95": 166.375
+    },
+    "depth_pyramid_pass": {
+      "median": 213.875,
+      "p95": 220.875
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.625,
+      "p95": 7.083
+    },
+    "lit_pass": {
+      "median": 359.791,
+      "p95": 390.083
+    },
+    "phase_two_depth_pass": {
+      "median": 12.084,
+      "p95": 12.583
+    },
+    "shadow_mask_pass": {
+      "median": 1479.25,
+      "p95": 1503.167
+    },
+    "tonemapping_pass": {
+      "median": 319.375,
+      "p95": 319.959
+    }
+  },
+  "draw_calls": 4,
+  "instances_drawn": 2,
+  "triangles_drawn": 4,
+  "instances_overflowed": 0,
+  "uploaded_bytes": 416,
+  "gpu_memory_bytes": 663286515,
+  "arena_bytes_in_use": 176,
+  "heap_allocations": 345,
+  "counter_frames": {
+    "frames": {
+      "start": 8,
+      "end": 72
+    },
+    "draw_calls": 4,
+    "instances_drawn": 2,
+    "triangles_drawn": 4,
+    "instances_overflowed": 0,
+    "uploaded_bytes": 416,
+    "gpu_memory_bytes": 663286515,
+    "arena_bytes_in_use": 176,
+    "heap_allocations": 345
+  },
+  "aliasing_rmse": 1557,
+  "aliasing_p99": 3033,
+  "provenance": {
+    "source_hash": "9278b80493926d0789aa1df2249b2ce7506c9da8",
+    "commit": "8bc34eb18fcfb79307193551e96619316aef566c",
+    "dirty": false,
+    "branch": "HEAD",
+    "driver": "",
+    "driver_info": "",
+    "harness_version": 10,
+    "scene_content_hash": "d9512ea1552dc0091920ca4880a03f30d35b4a80598e365e5229aaf9d172aefd",
+    "gpu_load_percent": 1,
+    "other_processes": [],
+    "gpu_frame_p95_over_median": 1.0283326837431344,
+    "quiet": true,
+    "started_unix_seconds": 1793641349
+  }
+}
