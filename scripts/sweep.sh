@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # The nightly sweep (ADR 0024): benches `main` on this machine when its
 # source lacks a record on a Series here, the scenes it lacks, and only on a
-# quiet machine. The records publish to `bench-history`. It runs in a
+# quiet machine. First it re-benches a Suspect that got slower beside the
+# record before it, and bisects the commits between when the shift holds,
+# each commit from a release binary built in a worktree of its own under
+# target/sweep/trees, which a later night's bisect reuses. The records
+# publish to `bench-history`, and each night's Verdict lands there too. It runs in a
 # clone of its own, which it moves to `main` each night, and appends what
 # it did to target/sweep/sweep.log there. On the Mac the clone sits outside
 # ~/Documents, ~/Desktop and ~/Downloads, which macOS keeps from a launchd
@@ -47,8 +51,8 @@
   mkdir -p target/sweep
   exec >>target/sweep/sweep.log 2>&1
 
-  # Scenes start until this many seconds of benching, and of waiting for
-  # the GPU between scenes, have passed, the rest left to the next night:
+  # Runs start until this many seconds of building, benching, and waiting
+  # for the GPU between runs have passed, the rest left to the next night:
   # about twice a full pass of the Reference scenes on the slower machine
   # (219 s on the M4 Pro, 155 s on the RTX 2070 SUPER, both measured
   # 2026-10-31).
@@ -71,10 +75,6 @@
   cargo build --release --quiet || fail "cargo build --release"
   praxis=target/release/praxis
   scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
-  if [ -z "$scenes" ]; then
-    log "nothing to bench: main's source has a record on every Series here"
-    exit 0
-  fi
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
 
   # A FAIL line, such as a scene without a Golden here, spoils no bench, and
@@ -101,22 +101,94 @@
     checks=$("$praxis" preflight 2>/dev/null)
     grep -q '^warn *gpu load' <<<"$checks"
   }
-
-  results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
-  start=$SECONDS
-  for scene in $scenes; do
+  # Whether the next run, $1, may start: within the time cap, once the GPU
+  # is idle; it logs why not.
+  may_start() {
     if [ $((SECONDS - start)) -ge "$cap_seconds" ]; then
-      log "time cap of ${cap_seconds}s reached; left for the next night: $scene and after"
-      break
+      log "time cap of ${cap_seconds}s reached; left for the next night: $1 and after"
+      return 1
     fi
-    wait_start=$SECONDS
+    local wait_start=$SECONDS
     while gpu_busy; do
       if [ $((SECONDS - wait_start)) -ge 60 ]; then
-        log "skipped, the GPU is still busy after a minute; left for the next night: $scene and after"
-        break 2
+        log "skipped, the GPU is still busy after a minute; left for the next night: $1 and after"
+        return 1
       fi
       sleep 1
     done
+  }
+  # A worktree of commit $1 under target/sweep/trees, with its release
+  # binary, the fetched sources and its Cooked cache, made once and kept
+  # for later nights: prints its path. Every tree builds into one target
+  # directory, so the dependencies build once; this clone's fetched sources
+  # and Cooked cache are copied in, so only what differs is fetched and
+  # cooked again.
+  tree_at() {
+    local tree="$PWD/target/sweep/trees/$1" build="$PWD/target/sweep/build" fetched
+    if [ ! -x "$tree/praxis" ]; then
+      rm -rf "$tree"
+      git worktree prune
+      git worktree add --quiet --detach "$tree" "$1" || return 1
+      (cd "$tree" && CARGO_TARGET_DIR="$build" cargo build --release --quiet) || return 1
+      # praxis.exe on Windows, which Git Bash runs as ./praxis; cargo's
+      # dependency file and debug symbols are not needed.
+      cp "$build/release/praxis"* "$tree/" 2>/dev/null
+      rm -f "$tree/praxis.d" "$tree/praxis.pdb"
+      git ls-files --others --ignored --exclude-standard --directory -- assets |
+        while read -r fetched; do cp -R "$fetched" "$tree/$fetched"; done
+      cp -R cooked "$tree/cooked" &&
+        (cd "$tree" && ./praxis fetch && ./praxis cook) >/dev/null || return 1
+    fi
+    printf '%s\n' "$tree"
+  }
+
+  start=$SECONDS
+  # One Suspect a night: its ends interleaved, then the bisect's commits,
+  # as `history bisect` names them.
+  night="$PWD/target/sweep/bisect-$(date '+%Y%m%dT%H%M%S')"
+  runs=0
+  bisect_done=0
+  while true; do
+    job=$("$praxis" history bisect "$night") || {
+      log "praxis history bisect failed"
+      break
+    }
+    if [ -z "$job" ]; then
+      bisect_done=1
+      break
+    fi
+    read -r scene commit <<<"$job"
+    may_start "the re-bench of $scene at $commit" || break
+    tree=$(tree_at "$commit") || {
+      log "no release binary of $commit"
+      break
+    }
+    runs=$((runs + 1))
+    run="$night/$(printf '%03d' "$runs")"
+    (cd "$tree" && ./praxis bench "$run" --no-publish "$scene") || {
+      log "re-bench of $scene at $commit failed"
+      break
+    }
+  done
+  if compgen -G "$night/[0-9]*/*.json" >/dev/null; then
+    log "re-benched $runs runs of a Suspect into $night"
+    # A night's runs publish together, each a file of its own.
+    mkdir -p "$night/all"
+    for result in "$night"/[0-9]*/*.json; do
+      cp "$result" "$night/all/$(basename "$(dirname "$result")")-$(basename "$result")"
+    done
+    "$praxis" publish "$night/all" || log "praxis publish $night/all failed"
+  fi
+  # No bisect waits for a later night: its trees go.
+  if [ "$bisect_done" = 1 ] && compgen -G "target/sweep/trees/*/" >/dev/null; then
+    for tree in target/sweep/trees/*/; do git worktree remove --force "$tree"; done
+    git worktree prune
+  fi
+
+  [ -z "$scenes" ] && log "main's source has a record on every Series here"
+  results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
+  for scene in $scenes; do
+    may_start "$scene" || break
     "$praxis" bench "$results" --no-publish "$scene" || log "bench of $scene failed"
   done
   if compgen -G "$results/*.json" >/dev/null; then

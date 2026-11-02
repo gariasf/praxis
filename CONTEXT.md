@@ -212,6 +212,10 @@ _Avoid_: Branch run, trial
 A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
 _Avoid_: Alert, outlier, anomaly
 
+**Verdict**:
+What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
+_Avoid_: Confirmation, bisect result
+
 **Budget**:
 A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold

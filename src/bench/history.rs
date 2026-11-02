@@ -4,6 +4,7 @@
 
 mod import;
 mod suspects;
+mod verdicts;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -15,6 +16,7 @@ use super::provenance::{Checkout, git, source_hash};
 use super::{Configuration, Counters, Measurements, Spread, adapter_key};
 
 pub use import::import_baselines;
+pub use verdicts::{Suspect, bisect, suspects};
 
 const REMOTE: &str = "origin";
 const BRANCH: &str = "bench-history";
@@ -77,7 +79,20 @@ record a suspect, with its shift as a share of the median of up to 8 records
 before it on its line: it lies outside that median ± the larger of 4 median
 absolute deviations and 3%, unless it only continues a suspect among those 8:
 on the same side, within that suspect's tolerance of its median. A new Harness
-version or scene content, or an imported Baseline, starts a line. lavapipe's records are never suspects.
+version or scene content, an imported Baseline, or a commit a Verdict pinned
+starts a line. lavapipe's records are never suspects.
+
+- `verdicts/<adapter>-<backend>/<scene>/<source hash>.json`: what the sweep
+  found of the slower suspect of that source: the night re-benched it and the
+  record before it on its line, interleaved, from release binaries of their
+  commits, and the shift `held` when their mean medians still differed in its
+  direction by half its marked shift and by 3%, else `cleared`. A held shift
+  is bisected along `main`'s first-parent commits of other source hashes
+  between `good` and `bad`, each commit's median judged by which end's median
+  of that night it lies nearer, over as many nights as it takes, until
+  `pinned` names the commit that changed it and whether that commit changed
+  the scene's Baseline for the adapter (`covered_by_baseline`). A suspect from
+  the record after a Verdict's predecessor to its suspect has that Verdict.
 
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
@@ -311,8 +326,12 @@ trait SeriesRecord: serde::de::DeserializeOwned {
     /// Where its row sorts: in the order commits were made.
     fn order(&self) -> (u64, &str);
 
-    /// The rows of `records`, which are in order.
-    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_>;
+    /// The rows of `records`, which are in order, each of the
+    /// `line_starts` source hashes starting a line.
+    fn rows<'records>(
+        records: &'records [Self],
+        line_starts: &BTreeSet<String>,
+    ) -> Vec<impl serde::Serialize + 'records>;
 }
 
 impl SeriesRecord for StoredRecord {
@@ -320,7 +339,10 @@ impl SeriesRecord for StoredRecord {
         (self.committed_unix_seconds, &self.provenance.commit)
     }
 
-    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_> {
+    fn rows<'records>(
+        records: &'records [Self],
+        line_starts: &BTreeSet<String>,
+    ) -> Vec<impl serde::Serialize + 'records> {
         let mut rows: Vec<SeriesRow> = records.iter().map(SeriesRow::of).collect();
         // A Series is one adapter's, and lavapipe's times mean nothing, so
         // none of its records is a suspect.
@@ -334,6 +356,7 @@ impl SeriesRecord for StoredRecord {
                 .map(|(index, row)| {
                     (index > 0 && !rows[index - 1].same_definition(row))
                         || row.source == Some(import::IMPORTED_SOURCE)
+                        || line_starts.contains(row.source_hash)
                 })
                 .collect();
             for (metric, median) in JUDGED_TIMINGS {
@@ -375,7 +398,10 @@ impl SeriesRecord for StoredReleaseBuild {
         (self.committed_unix_seconds, &self.checkout.commit)
     }
 
-    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_> {
+    fn rows<'records>(
+        records: &'records [Self],
+        _line_starts: &BTreeSet<String>,
+    ) -> Vec<impl serde::Serialize + 'records> {
         records
             .iter()
             .map(|record| ReleaseBuildRow {
@@ -421,7 +447,7 @@ struct SeriesRow<'record> {
 }
 
 /// What a publish did.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Publication {
     /// Records written under `records/`, so on a Series.
     pub on_series: usize,
@@ -989,14 +1015,15 @@ impl<'repository> Worktree<'repository> {
     /// `records/<adapter>-<backend>/<scene>`, one row per line in the
     /// order their commits were made.
     fn rebuild_series(&self, directory: &Path) -> anyhow::Result<()> {
+        let series = directory.strip_prefix(ON_SERIES)?;
         let lines = if directory.ends_with(RELEASE_BUILD) {
-            self.series_lines::<StoredReleaseBuild>(directory)?
+            self.series_lines::<StoredReleaseBuild>(directory, &BTreeSet::new())?
         } else {
-            self.series_lines::<StoredRecord>(directory)?
+            let pinned =
+                verdicts::pinned_sources(&self.directory.join(verdicts::VERDICTS).join(series))?;
+            self.series_lines::<StoredRecord>(directory, &pinned)?
         };
-        let series = Path::new("series")
-            .join(directory.strip_prefix(ON_SERIES)?)
-            .with_extension("json");
+        let series = Path::new("series").join(series).with_extension("json");
         let path = self.directory.join(series);
         std::fs::create_dir_all(path.parent().context("a Series has a directory")?)?;
         std::fs::write(path, format!("[\n{}\n]\n", lines.join(",\n")))?;
@@ -1004,8 +1031,13 @@ impl<'repository> Worktree<'repository> {
     }
 
     /// The rows of the records in `directory`, each a line of JSON, in the
-    /// order their commits were made.
-    fn series_lines<Record: SeriesRecord>(&self, directory: &Path) -> anyhow::Result<Vec<String>> {
+    /// order their commits were made, each of the `line_starts` source
+    /// hashes starting a line.
+    fn series_lines<Record: SeriesRecord>(
+        &self,
+        directory: &Path,
+        line_starts: &BTreeSet<String>,
+    ) -> anyhow::Result<Vec<String>> {
         let mut records = Vec::new();
         for entry in std::fs::read_dir(self.directory.join(directory))? {
             let path = entry?.path();
@@ -1015,7 +1047,7 @@ impl<'repository> Worktree<'repository> {
             records.push(record);
         }
         records.sort_by(|left, right| left.order().cmp(&right.order()));
-        Ok(Record::rows(&records)
+        Ok(Record::rows(&records, line_starts)
             .iter()
             .map(serde_json::to_string)
             .collect::<Result<_, _>>()?)
@@ -1757,8 +1789,8 @@ mod tests {
     }
 
     #[test]
-    fn a_series_marks_a_step_as_a_suspect_unless_a_baseline_or_lavapipe_takes_it() {
-        let rows = |adapter: &str, step_source: Option<&str>| {
+    fn a_series_marks_a_step_as_a_suspect_unless_a_baseline_a_pinned_commit_or_lavapipe_takes_it() {
+        let rows = |adapter: &str, step_source: Option<&str>, line_starts: &[&str]| {
             let records: Vec<StoredRecord> = [10_000.0, 10_050.0, 9_950.0, 10_020.0, 11_000.0]
                 .iter()
                 .enumerate()
@@ -1779,7 +1811,11 @@ mod tests {
                     .unwrap()
                 })
                 .collect();
-            serde_json::to_value(StoredRecord::rows(&records)).unwrap()
+            let line_starts = line_starts
+                .iter()
+                .map(|&source| source.to_owned())
+                .collect();
+            serde_json::to_value(StoredRecord::rows(&records, &line_starts)).unwrap()
         };
         let suspects = |rows: serde_json::Value| {
             rows.as_array()
@@ -1792,12 +1828,20 @@ mod tests {
         let mut stepped = unmarked.clone();
         // 11,000 on the four medians before it, whose median is 10,000.
         stepped[4] = serde_json::json!({ "gpu_frame_microseconds": 0.1 });
-        assert_eq!(suspects(rows("Apple M4 Pro", None)), stepped);
+        assert_eq!(suspects(rows("Apple M4 Pro", None, &[])), stepped);
         assert_eq!(
-            suspects(rows("Apple M4 Pro", Some(import::IMPORTED_SOURCE))),
+            suspects(rows("Apple M4 Pro", Some(import::IMPORTED_SOURCE), &[])),
             unmarked
         );
-        assert_eq!(suspects(rows("llvmpipe (LLVM 20.1.2)", None)), unmarked);
+        // A bisect pinned the step's commit: its line starts there.
+        assert_eq!(
+            suspects(rows("Apple M4 Pro", None, &["source-4"])),
+            unmarked
+        );
+        assert_eq!(
+            suspects(rows("llvmpipe (LLVM 20.1.2)", None, &[])),
+            unmarked
+        );
     }
 
     /// lavapipe's result of `checkout` in CI's configuration.
