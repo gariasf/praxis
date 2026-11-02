@@ -2,9 +2,11 @@
 
 What praxis does not do yet, or does on purpose, and how each shows beside
 its Cycles render, so that neither an audit nor a review reads it as a
-defect. Anything else a Cycles difference image shows is a finding. This
-is the image half of the engine's Deviations; the rest, where the code
-should not match the literature and why, is `docs/audit/deviations.md`.
+defect. Anything else a Cycles difference image shows is a finding. Each
+item carries its tag: `deliberate until <trigger>`, or `ticketed` with its
+ticket once the triage opens a fix. This is the image half of the engine's
+Deviations; the rest, where the code should not match the literature and
+why, is `docs/audit/deviations.md`.
 
 Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
 `PRAXIS_BLENDER` set, at 2x. The difference is praxis's capture dimmed to a
@@ -17,6 +19,8 @@ The reference is direct light only, as praxis has no indirect light yet: a
 reflection of another surface is black in Cycles.
 
 ## Ambient light without visibility
+
+Tag: `ticketed at triage 1`.
 
 praxis's ambient, a stand-in for ADR 0020's irradiance probes, reaches every
 surface at full strength, darkened only by a Material's occlusion texture.
@@ -32,6 +36,8 @@ object itself or its neighbours (`helmet`'s and `pbr-sweep`'s metals,
 
 ## Ambient light as an ideal diffuse response
 
+Tag: `deliberate until ADR 0020's irradiance probes and reflection cubemaps land`.
+
 praxis's ambient reflects E/π times the base colour from every surface, an
 ideal Lambertian surface's response, standing for the whole BRDF's. Cycles
 integrates the BSDF itself over its white world, and single-scatter GGX
@@ -40,9 +46,17 @@ Fresnel moves light between the diffuse and specular lobes. Shows as praxis
 a few 8-bit steps brighter wherever only the ambient lights a surface, most
 on rough metals and towards rims (`pbr-sweep`, `orrery`, `shadows`).
 
+The response has no specular lobe either: Cycles reflects its sky off
+smooth surfaces, most at grazing angles, where praxis's ambient adds
+nothing. Shows as Cycles the brighter one in a band inside the silhouette
+of a smooth metal (`pbr-sweep`) and across car paint seen at a low angle
+(`town`), the opposite sign to the rough metals above.
+
 ![A metal of roughness 0.9: praxis brighter where only the ambient reaches it](differences/ambient-response.png)
 
 ## Highlights widened by specular antialiasing and Toksvig
+
+Tag: `deliberate until shading takes more than one sample per pixel`.
 
 praxis widens roughness for the shading normal's change across a pixel
 (Tokuyoshi and Kaplanyan's specular antialiasing) and, in a normal
@@ -60,6 +74,8 @@ difference.
 
 ## 4x MSAA against supersampling
 
+Tag: `deliberate until ADR 0019's 4x MSAA is superseded`.
+
 praxis resolves edges from four samples per pixel; Cycles averages
 hundreds. Shows as one-pixel lines along silhouettes, and along wires and
 other geometry thinner than a pixel, whose coverage four samples quantise.
@@ -67,6 +83,8 @@ other geometry thinner than a pixel, whose coverage four samples quantise.
 ![Town's wires and window edges](differences/msaa-edges.png)
 
 ## BC compression and mips against source images
+
+Tag: `deliberate until ADR 0018's cooked BC formats are superseded`.
 
 praxis samples BC-compressed Textures through mips filtered ahead of time;
 Cycles samples the source images, before BC, mips or Toksvig, at each of its
