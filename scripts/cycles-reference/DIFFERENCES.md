@@ -3,10 +3,10 @@
 What praxis does not do yet, or does on purpose, and how each shows beside
 its Cycles render, so that neither an audit nor a review reads it as a
 defect. Anything else a Cycles difference image shows is a finding. Each
-item carries its tag: `deliberate until <trigger>`, or `ticketed` where a
-fix is charted. This is the image half of the engine's Deviations; the
-rest, where the code should not match the literature and why, is
-`docs/audit/deviations.md`.
+item carries its tag: `deliberate until <trigger>`, or `ticketed` with its
+ticket once the triage opens a fix. This is the image half of the engine's
+Deviations; the rest, where the code should not match the literature and
+why, is `docs/audit/deviations.md`.
 
 Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
 `PRAXIS_BLENDER` set, at 2x. The difference is praxis's capture dimmed to a
@@ -36,7 +36,7 @@ object itself or its neighbours (`helmet`'s and `pbr-sweep`'s metals,
 
 ## Ambient light as an ideal diffuse response
 
-Tag: `deliberate until the irradiance probes (ADR 0020) land`.
+Tag: `deliberate until ADR 0020's irradiance probes and reflection cubemaps land`.
 
 praxis's ambient reflects E/π times the base colour from every surface, an
 ideal Lambertian surface's response, standing for the whole BRDF's. Cycles
@@ -84,7 +84,7 @@ other geometry thinner than a pixel, whose coverage four samples quantise.
 
 ## BC compression and mips against source images
 
-Tag: `deliberate until ADR 0017's BC Textures are superseded`.
+Tag: `deliberate until ADR 0018's cooked BC formats are superseded`.
 
 praxis samples BC-compressed Textures through mips filtered ahead of time;
 Cycles samples the source images, before BC, mips or Toksvig, at each of its
