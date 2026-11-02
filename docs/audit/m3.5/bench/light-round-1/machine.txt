@@ -1,0 +1,7 @@
+round 1 start 2026-11-02T17:39:10Z
+load averages: { 7.27 10.87 8.63 }
+ -InternalBattery-0 (id=23199843)	100%; charged; 0:00 remaining present: true
+ok    gpu load  1%
+ok    processes no other praxis process
+ok    power     AC Power
+round 1 end 2026-11-02T17:40:49Z

@@ -1,0 +1,118 @@
+{
+  "scene": "uv-grid",
+  "adapter": "Apple M4 Pro",
+  "backend": "metal",
+  "profile": "release",
+  "width": 2560,
+  "height": 1440,
+  "measured_frames": 1800,
+  "cpu_frame_microseconds": {
+    "median": 262.209,
+    "p95": 343.83299999999997
+  },
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.083,
+    "p95": 0.16799999999999998
+  },
+  "gpu_frame_microseconds": {
+    "median": 2940.166,
+    "p95": 3394.625
+  },
+  "gate_microseconds": {
+    "median": 775.833,
+    "p95": 792.25
+  },
+  "shadow_ray_microseconds": {
+    "median": 1840.125,
+    "p95": 2293.708
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 26.917,
+      "p95": 28.209
+    },
+    "culling_phase_two": {
+      "median": 20.792,
+      "p95": 21.542
+    },
+    "depth_prepass": {
+      "median": 157.584,
+      "p95": 158.625
+    },
+    "depth_pyramid_pass": {
+      "median": 206.0,
+      "p95": 208.625
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 6.75,
+      "p95": 7.167
+    },
+    "lit_pass": {
+      "median": 460.375,
+      "p95": 470.5
+    },
+    "phase_two_depth_pass": {
+      "median": 12.083,
+      "p95": 12.5
+    },
+    "shadow_mask_pass": {
+      "median": 1710.5,
+      "p95": 1850.25
+    },
+    "tonemapping_pass": {
+      "median": 319.25,
+      "p95": 319.79200000000003
+    }
+  },
+  "draw_calls": 4,
+  "instances_drawn": 1,
+  "triangles_drawn": 2,
+  "instances_overflowed": 0,
+  "uploaded_bytes": 416,
+  "gpu_memory_bytes": 668878947,
+  "arena_bytes_in_use": 176,
+  "heap_allocations": 345,
+  "counter_frames": {
+    "frames": {
+      "start": 8,
+      "end": 72
+    },
+    "draw_calls": 4,
+    "instances_drawn": 1,
+    "triangles_drawn": 2,
+    "instances_overflowed": 0,
+    "uploaded_bytes": 416,
+    "gpu_memory_bytes": 668878947,
+    "arena_bytes_in_use": 176,
+    "heap_allocations": 345
+  },
+  "aliasing_rmse": 6558,
+  "aliasing_p99": 33364,
+  "provenance": {
+    "source_hash": "9278b80493926d0789aa1df2249b2ce7506c9da8",
+    "commit": "8bc34eb18fcfb79307193551e96619316aef566c",
+    "dirty": false,
+    "branch": "HEAD",
+    "driver": "",
+    "driver_info": "",
+    "harness_version": 10,
+    "scene_content_hash": "d4050475ce4f263fd8ce05564f0801355418a3cd67eb4ac1beda6cfac2c7001f",
+    "gpu_load_percent": 46,
+    "other_processes": [],
+    "gpu_frame_p95_over_median": 1.1545691637819089,
+    "quiet": false,
+    "started_unix_seconds": 1793648917
+  }
+}
