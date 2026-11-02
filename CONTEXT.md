@@ -208,6 +208,10 @@ _Avoid_: Schema version, bench version
 Bench records taken from a branch under a name, kept beside the Series and compared with them, never part of one.
 _Avoid_: Branch run, trial
 
+**Suspect**:
+A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
+_Avoid_: Alert, outlier, anomaly
+
 **Budget**:
 A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold
