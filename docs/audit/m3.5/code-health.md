@@ -720,6 +720,543 @@ widths: 28 types and module surfaces, 313 public items counted. Files
 read in full: the 20 of the module; read in part for use counts: 25
 others across `src/`, `tests/`, `docs/` and `bench/`.
 
+## shaders
+
+Scope: `src/render/shaders/`, the 16 WGSL parts (`common.wgsl`,
+`shading.wgsl`, `main.wgsl`, `gt7.wgsl`, `hdr.wgsl`, `display.wgsl`,
+`tonemapping.wgsl`, `culling.wgsl`, `depth_pyramid.wgsl`,
+`froxel_grid.wgsl`, `froxel.wgsl`, `light_count.wgsl`, `bend.wgsl`,
+`shadow_mask.wgsl`, `dynamic_tlas_marker.wgsl`, `blas_refit_marker.wgsl`)
+and `mod.rs`, which assembles them into the eleven shader modules after
+the constants Rust declares to WGSL, the Render switches' overrides and the
+bind groups' declarations; with the two shader test modules,
+`src/render/shader_function_tests.rs` (the oracle harness and 28 oracle
+tests) and `src/render/shader_tests.rs` (module validation, stage
+visibility and the CPU-twin layout checks); 5,972 lines, every file read
+in full. Four readers at high effort shared the module by file, each with
+the lane brief verbatim: shading and the display (the shading chain from
+`main.wgsl` through `shading.wgsl` to `hdr.wgsl`, and the tonemapping
+chain through `display.wgsl` and `gt7.wgsl`, with `common.wgsl`);
+geometry, culling and lights (the culling phases, the depth pyramid, the
+Froxel grid, the light count and the bend); the shadow mask and the
+assembly (`shadow_mask.wgsl`, the two marker parts and `mod.rs`); and the
+shader tests. Each swept its files along the six axes and recorded the
+sweep, so what was read and judged clean is on the record beside what was
+filed. The cognitive complexity probe,
+`cargo clippy --all-targets -- -W clippy::cognitive_complexity`, ran once
+at the frozen commit: three functions over the default threshold of 25,
+two in the cooker's exporter and one in the binary's command dispatch,
+none under `src/render/`; the two shader test modules were in its scope
+and are clean, and clippy reads no WGSL, so this section files nothing on
+that axis and the longest WGSL function is recorded in the notes for a
+probe that can. Every `where` is `path:line` at the frozen commit, under
+`src/render/shaders/` unless given in full. `deviations.md` holds no row
+at this commit; `DIFFERENCES.md` was read for what is not a Finding, and
+its shader differences describe `ambient_luminance` and
+`specular_antialiased_roughness` as they are. `tests/conventions.rs` was
+read for the rules already mechanical, and none of its catches is
+re-filed; the `view_proj` spelling's 23 WGSL sites are counted under the
+render section's row and not re-filed here. The worktree was unavailable
+for two minutes during the read, so a few of the use counts ran on the
+main checkout, whose `src/` and `tests/` are identical to the frozen
+commit (`git diff --stat 8bc34eb1 3368786d -- src tests` prints nothing).
+Each Finding's evidence block says whether the fix it implies can move a
+pixel: none can, so every `health` fix ticket carries the refactor licence
+and none is a defect; one, L5-S05, can change a Bench counter by a
+last-bit rounding, so its ticket compares the light count pass's three
+counters with the Baselines rather than relying on bit-exactness, and
+L5-S09 leans on naga accepting storage pointers as function parameters,
+with the smaller fallback its block names.
+
+### Axis sweep
+
+| File | Over-engineering | Vestigial | Cognitive complexity | Naming | Module depth | Comments |
+|---|---|---|---|---|---|---|
+| `common.wgsl` | clean (`point_light_position`'s two camera parameters take `camera.anchor, camera.offset` at all 4 call sites, but the part is assembled into the bend module and the oracle harness, which declare no `camera`, so the parameters are what lets it compile there; `camera_relative_position`'s `local_position` varies, `vec3(0.0)` at one caller and a rotated vertex at the others; `rotate` has 3 callers in 2 parts) | clean (every struct field is read by some part: `unshadowed_range` at `shadow_mask.wgsl:300`, `dynamic_tlas_entries` and the bounds at `shadow_mask.wgsl:103-109`, `tlas_anchor` at `:149`, `exposure` at `main.wgsl:305`, `MeshletData.material_id` at `culling.wgsl:385`; `extra.yzw` and `emissive.w` are the 16-byte layout's padding, see Notes 6) | none (probe ran clean; the probe reads no WGSL) | clean (`view_proj` at lines 14, 44, 47, 49, 51, 52: counted under the render section's `view_proj` row; `uv`, `qtangent`, `tlas` domain words; `bounds_min`, `box_min` and their `max` twins weighed as the builtins' own spelling, Notes 9; `z` a coordinate) | clean (12 functions, 14 structs; the 3 functions one module calls, `position_at`, `segment_meets_box`, `octahedral_decode`, and `pack_index`, `unpack_index`, `decode_vertex`, `octahedral_encode` each sit under an oracle, which the convention puts in a shared part; 11 structs are named by bind group declarations or `shading.wgsl`) | L5-S01 (the header's "every shader module"; the other 24 comments checked against the code, the Rust twins in `uniforms.rs`, `instance.rs`, `material.rs`, `froxel_pass.rs` and ADRs 0014, 0015, 0018, 0019, 0020, 0023) |
+| `shading.wgsl` | clean (the 11 functions with one WGSL caller each are under oracles, and `decode_surface`'s 7 parameters all vary at its caller `main.wgsl:196-204`) | clean (every constant and function is called; `Surface`'s 7 fields all read, `opacity` at `main.wgsl:306`, `occlusion` at `:267`) | none (probe ran clean; the probe reads no WGSL) | clean (`alpha` is glTF's own α, a full word; `brdf` a domain word; every dot product spelled out) | clean (19 items; 6 reach `main.wgsl`, the other 13 are internal and read by the oracle harness through `SHARED`) | L5-S02 (the 25 µs figure); the other 17 comments checked against the code and the 14 registry quotes they cite (`gltf-2.0-specular-brdf`'s ν formula, `gltf-2.0-normal-texture-scale`, `khr-lights-punctual-range`, `gltf-2.0-occlusion`, `tokuyoshi-2019-normal-derivatives` among them); the 1.1% figure at line 110 weighed, Notes 3 |
+| `main.wgsl` | clean (`vertex_output` has 3 entry-point callers; `masked` and `directional_hidden_share` 2 each; `froxel_mask_bit` 1, 15 lines; `DepthNormalsOutput` beside `VertexOutput` carries 3 interpolants in place of 5; the first directional light hoisted out of its loop is the measured branch cost's workaround, Notes 4) | clean (`fs_depth` is set by `main_pass.rs:141` for the lit pass's depth pipeline; `UNMASKED` returned at `:163` and read by `masked` through its `bit < SHADOW_MASK_LIGHTS` test; `VertexOutput`'s 6 fields all read in `fs_main`) | none (probe ran clean; the probe reads no WGSL) | L5-S04 (`vs_`, `fs_` on 6 entry points); `in`, `out`, `half`, `first`, `low`, `high`, `middle` are words | clean (13 items, none shared: 6 entry points named by `main_pass.rs`, 7 helpers and types local to the pass) | clean (the header weighed, Notes 5; `fs_surface_normals`'s edge-on clause against lines 56-60, the flat-input clause against ADR 0019; the mask comment's "top bits of the word's second half" against `SHADOW_MASK_LIGHTS - 32u` at line 276, 59 - 32 = 27; `fs_depth`'s comment against `main_pass.rs:135-146`); L5-S03 (the 10% figure) |
+| `hdr.wgsl` | clean (`relative_luminance` 2 callers in the part plus an oracle) | clean (`LARGEST_HALF` read at `main.wgsl:305` and `hdr.wgsl:30-31`; `resolve_weighted` at `main.wgsl:306`; `resolve_unweighted` at `tonemapping.wgsl:19`) | none (probe ran clean; the probe reads no WGSL) | clean (`color` a full word; `hdr` a domain word) | clean (4 items; 2 read by the main module, 1 by the tonemapping module, 1 internal under an oracle) | clean ("every shader of the lit pass writes it", line 17, weighed, Notes 7; the Karis and WGSL f16 quotes match) |
+| `display.wgsl` | clean (`tonemap`, `srgb_encode`, `dither_noise` have one caller each in `tonemapping.wgsl` and sit here because each is under an oracle, with the display ramp over the two together) | clean (both matrices read at lines 23-24) | none (probe ran clean; the probe reads no WGSL) | clean (`uniform`, `centred`, `clamped` words; `srgb` a domain word) | clean (5 items; 3 read by the tonemapping module, 2 internal) | clean (BT.2087's matrix read against lines 8-12 column by column; the sRGB knee against `khronos-dfs-srgb`; Peters and Lipshitz quotes match) |
+| `gt7.wgsl` | clean (adapted code under Polyphony's MIT notice; `let peak = GT7_PAPER_WHITE` keeps the sample's parameter as a local, Notes 8) | clean (five PQ constants each read in `pq_encode` and `pq_decode`; six functions each called) | none (probe ran clean; the probe reads no WGSL) | clean (`PQ_M1` to `PQ_C3` are BT.2100's own symbols, which the comment at lines 34-35 says the names follow; `rgb`, `lms`, `ictcp`, `pq` domain words, Notes 10) | clean (12 items; `gt7_tonemap` and `GT7_PAPER_WHITE` read by `display.wgsl`, the other 10 internal under oracles) | clean (the shoulder's 1.19 recomputed from lines 54-55: (0.444 - 1)/(0.25 - 1) = 0.741, 0.444 + 0.741 = 1.185; the PQ constants and the ICtCp rows against the BT.2100 quotes; the paper white against `gt7-slides`) |
+| `tonemapping.wgsl` | clean | clean | none (probe ran clean; the probe reads no WGSL) | L5-S04 (`vs_full_screen`, `fs_tonemap`) | clean (2 entry points, each named once in `tonemapping_pass.rs:64, 70`) | clean (the triangle's corners recomputed from line 8: vertex 0 (-1, -1), 1 (3, -1), 2 (-1, 3); "a power of two declared from Rust's" is asserted at `tonemapping_pass.rs:18`) |
+| `src/render/shaders/culling.wgsl` | clean (every helper with one caller, `clip_space_bounds`, `in_view_frustum`, `occluded`, `visible_before`, carries a named step of the two phases; `saturating_add` 7 sites, `slot_offsets` 2, `fits` 2, `side_plane_distances` 4, `near_plane_distance` 4; both phases run every branch, as `PHASE_TWO` and `CULLING` are pipeline constants; every constant the module declares from Rust that the part relies on, `SCAN_BLOCK_SIZE`, `MAX_WORKGROUPS_PER_DIMENSION`, `INSTANCE_CAPACITY`, `NO_MESH`, `NO_MATERIAL`, is read) | clean (26 items, each referenced; `FrameDraw.phase_two_offsets` written at `:320`, read at `:307`; `visible_words` written `:270`, read `:276`) | none (probe ran clean; the probe reads no WGSL) | clean (`view_proj` at `:131-132` counted under the render section's `view_proj` row; `.r`, `u` suffixes, `e` in `1e-4`, `w`, `x`, `y`, `z` are WGSL's spellings and components; `num_workgroups` is the builtin's name) | clean (4 entry points and 1 override are the interface; 20 items private to the part) | clean (the header's draw claim checked against `main_pass.rs:262`, `:296`, `:330`, `:333`; "0.041 mm" at `:162` checked against ADR 0014's Consequences; the Hillis and Steele key exists and the scan reads one place back as `:78` says; `fits`'s and `append_records`'s comments checked against the saturating offsets) |
+| `src/render/shaders/depth_pyramid.wgsl` | clean (`pixel_minimum`, `shared_block_minimum`, `overlapped_texels` have one caller each and each names a reduction step the `reduce_depth` comment refers to; `OverlappedTexels` is WGSL's form for two return values) | clean (10 items, each referenced; `pixel_minima`'s extra row and column written `:81-90`, read `:102-108`) | none (probe ran clean; the probe reads no WGSL) | clean (`.r` swizzle, `u` suffixes, `x`, `y`; `below_size`, `odd_sides`, `past_tile` are words) | clean (2 entry points; 8 items private to the part) | clean ("Rust asserts it has (SAMPLE_COUNT)" at `:27` matches `depth_pyramid_pass.rs:18`; the formula at `:17` matches `:21-22`; "two along a side that is even and three along one that is odd" at `:67-68` checked for a width of 37 and 18 texels) |
+| `src/render/shaders/froxel_grid.wgsl` | clean (`froxel_slice_start` serves one module, the Froxel pass, 2 sites; its inverse `froxel_slice` sits beside it, so the pair defines the slicing; Notes 4) | clean (5 items, each read by another part or by `froxel_at`) | none (probe ran clean; the probe reads no WGSL) | clean (`u` suffixes, `x`, `y`) | clean (5 items; `froxel_at` read by 3 modules, `FROXEL_GRID_SIZE`, `froxel_index`, `froxel_slice_start` by the Froxel pass, `froxel_slice` a helper of `froxel_at`) | clean (the header's slicing matches `froxel_pass.rs:17-22`; "counted from the lowest normalised device coordinates" at `:13`, `:32` matches `1.0 - point.y / size.y` at `:36`) |
+| `src/render/shaders/froxel.wgsl` | clean (one entry point, no helper) | clean | none (probe ran clean; the probe reads no WGSL) | clean (`view_proj` at `:20-25` counted under the render section's `view_proj` row; `clip_x`, `clip_y`, `inside_sides`, `normal_lengths` are words) | clean (1 entry point) | clean (the plane derivation at `:20-24` matches `:26-31` and `:42-47`; "in light order" at `:3` matches the loop from `directional_light_count` at `:36`; "counting those its list has no room for" matches `:61-63`) |
+| `src/render/shaders/light_count.wgsl` | L5-S05, L5-S06 | clean (every item referenced) | none (probe ran clean; the probe reads no WGSL) | clean (`view_proj` at `:17-20`, `:40` counted under the render section's `view_proj` row; `x_row`, `y_row`, `w_row`, `y_cross_w` name rows and a cross product by their coordinate) | L5-S05, L5-S06 (two private items re-derive what the shared part and the generated constants give the module) | clean (the header matches `light_count_pass.rs:1-7`; "clip z is the near plane's distance" at `:37` matches `common.wgsl:45-47`; the `webgpu-standard-sample-pattern` key exists and quotes sample 0 at (0.375, 0.125)) |
+| `src/render/shaders/bend.wgsl` | clean (`sinc` and `quaternion_product` have one caller each and are the two mathematical steps the entry point composes) | clean (every item referenced; `BendData`'s 5 fields read at `:45-56`) | none (probe ran clean; the probe reads no WGSL) | clean (`toward`, `chord`, `middle`, `turned`, `stored`, `squared`, `series`, `axis_length` are words; `w`, `x`, `y`, `z` components) | clean (1 entry point and the CPU twin `BendData`) | clean ("a stand-in for skinning" at `:2` as the glossary's Bend entry says; the Taylor bound at `:24` checked, 0.5^8 / 9! = 1.08e-8; the series factors 6, 20, 42 give 1/6, 1/120, 1/5040; `msl-4.1-fast-math` and `msl-4.1-sin-fast-accuracy` exist and quote what `:25-26` claims; the quaternion's axis `(toward.z, 0, -toward.x)` is +Y x toward as `:52` says; the chord length at `:53-54` checked) |
+| `src/render/shaders/shadow_mask.wgsl` | L5-S08, L5-S09, L5-S10 (every function's callers counted across the three modules that could include it: none has none; `sample_offset` and `turned_lights_other_samples_face` have one caller each, weighed in the Notes) | clean (every constant, struct and function read at least once; `PixelList` is the type of two bindings; `listed_count` is shared by two entry points) | none (probe ran clean; the probe reads no WGSL) | clean (`view_proj` at lines 212, 216, 261 and 419 to 422 counted under the render section's `view_proj` row; `hit.t`, `lane`, `own`, `point` weighed in the Notes) | clean (four entry points, four pipelines in `shadow_mask_pass.rs`; no function of the part is called from another part) | L5-S11, L5-S12 (every other comment checked against its lines, the margins' sines and cosines recomputed, `docs/performance.md`'s section on `first_intersection` and the six cited registry keys found) |
+| `src/render/shaders/dynamic_tlas_marker.wgsl` | clean (one entry point, one pipeline, `acceleration_structures.rs:272`; the ray's zero origin, up direction, cull mask and `1e-6` reach are the cheapest query that still orders the pass) | clean | none (probe ran clean; the probe reads no WGSL) | clean | clean (its own bind group keeps the static TLAS's dependency walk out of the marker pass, `bind_groups.rs:99` to `106`) | clean (its comment matches `DynamicTlas::record`, `acceleration_structures.rs:355` to `371`: a marker before the build timed at its end, one after timed at its start) |
+| `src/render/shaders/blas_refit_marker.wgsl` | clean (one entry point, one pipeline, `blas_refit.rs:404`) | clean (gated to Apple with its bind group and its caller, `mod.rs:153`, `bind_groups.rs:173`, `blas_refit.rs:285`) | none (probe ran clean; the probe reads no WGSL) | clean | clean | clean (matches `RefitMarker::record`, `blas_refit.rs:430` to `459`: one dispatch of one workgroup after the refits, timed at its start) |
+| `src/render/shaders/mod.rs` | clean (`Part`, `ShaderModule`, `part!`, `descriptor`, `source`, `locate` and `assemble` each have callers outside the file or serve one that does; `enables` is non-empty on three modules) | L5-S07 | none (probe ran clean) | clean (`starts`, `before`, `line_start`, `switch`, `extension`; `x` and `y` bind the sample offsets' coordinates at line 271) | clean (counts below: every public item has a caller outside the file; `pub` is crate-wide in effect since `lib.rs:30` keeps `render` private) | clean (the `COMMON` doc at lines 57 to 58 is incomplete rather than wrong, weighed in the Notes; the `assemble` doc's order matches lines 232 to 290) |
+| `src/render/shader_function_tests.rs` | clean (every helper has 2 or more callers except `srgb_decode`, 1 line with 2 calls, and `Case`, one test's fixture whose 4 methods hold real logic; `evaluate_cases`'s `vertices` is passed by 1 of 9 callers and `&[]` by 8; its `VECTORS` generic has 6 instantiations, 1, 3, 4, 5, 6 and `evaluate`'s 1; Notes 3, 4, 6) | clean (every function, constant and `Case` method has a caller; counts under Interface widths) | none (probe ran clean) | L5-S13 (`m1`, `m2`, `c1`, `c2`, `c3` at :809-817); `view_proj` at :1611, :1614, :1628, :1629, :1657 counted under the render section's view_proj row; `x`, `y`, `z` are coordinates, `xyz` a coordinate triple; `uv`, `uvs`, `gpu`, `pq`, `ictcp`, `gt7` the domain's words | clean (no public item; 13 functions, 1 struct with 4 methods, 14 constants, every caller inside the file) | L5-S14 (the comment at :1630 beside :1631), L5-S15 (the test name at :1298 against its assertion at :1316); every other test doc checked against what its assertions pin, and every number a doc names checked against the tree (Notes 11) |
+| `src/render/shader_tests.rs` | clean (`ShaderScalar` has 5 impls, each a type some twin holds, `i16` for `CookedVertex::qtangent`; the `Twin` struct update at :345-351 is the flexibility `layout_check_reports_every_kind_of_mismatch` exercises; `validate` returns the module and its analysis, both read by `stage_problems` and the module alone by `structs_shared_with_the_cpu`) | clean (every function has a caller; `Field::size` and `Field::scalar` are read by `describe` through `twin_problems`) | none (probe ran clean) | clean (`ty` and `span` are naga's field names, `info` a word for naga's `ModuleInfo`; `wgsl` and `rust` name the two sides' sets at :697 and :705; `view_proj` at :242 counted under the render section's view_proj row) | clean (no public item; 10 functions, 2 structs, 1 trait with 5 impls, 1 macro; every caller inside the file) | clean (`wgpu-core 30.0.1` at :40 matches `Cargo.lock`; the header's four claims at :1-5 are each a test, :24, :35, :124, :232; `validate`'s "as `GpuContext` does" at :441 matches `src/gpu/mod.rs:70`, which requests `floor_features()`) |
+
+### Interface widths
+
+| Part or type | Public items | Callers outside the file | Wider than needed | Where |
+|---|---|---|---|---|
+| `common.wgsl` | 26: 14 structs, 12 functions | 11 structs named by bind group declarations (`bind_groups.rs:26-87, 128-154, 190-193, 208-215, 277, 312-322`) or by `shading.wgsl` (`MaterialData`); 11 functions called from other parts: `camera_relative_position` 3 parts (`culling.wgsl`, `main.wgsl`, `shadow_mask.wgsl`), `point_light_position` 4 (`froxel.wgsl`, `light_count.wgsl`, `main.wgsl`, `shadow_mask.wgsl`), `position_at` 1 (`shadow_mask.wgsl`, 6 sites), `segment_meets_box` 1 (`shadow_mask.wgsl`), `octahedral_decode` 1 (`shadow_mask.wgsl`, 4 sites), `octahedral_encode` 1 (`main.wgsl`, 2 sites), `pack_index` 1 (`culling.wgsl`), `unpack_index` 1 (`main.wgsl`), `decode_vertex` 1 (`main.wgsl`), `rotate` 1 (`bend.wgsl`), `unpack_qtangent` 1 (`bend.wgsl`); internal only: `PackedIndex`, `TangentFrame`, `Vertex`, `decode_qtangent` | no: each function one module calls is under an oracle (`position_at`, `segment_meets_box`, octahedral, packed index, `decode_vertex`, `camera_relative_position`), which the convention keeps in a shared part; 6 of 10 shipping modules include the part | `src/render/shaders/common.wgsl:13-305` |
+| `shading.wgsl` | 19: 7 constants, `Surface`, 11 functions | `main.wgsl` reads 6: `Surface`, `decode_surface`, `tangent_space_normal`, `reflected_luminance`, `point_light_luminance`, `ambient_luminance`; the oracle harness reads `PI` and `MINIMUM_ROUGHNESS` and calls 11 functions; 1 module includes the part (`MAIN`) | no: the 13 internal items are the oracles' seams | `src/render/shaders/shading.wgsl:11-268` |
+| `main.wgsl` | 13: 6 entry points, 2 structs, `UNMASKED`, 4 functions | `main_pass.rs` names 6 entry points at 7 sites (`:119, 122, 132, 138, 141, 155, 161`); `coverage_tests.rs:286, 292` names `vs_main` and `fs_main` | no: nothing outside the pass reads a helper | `src/render/shaders/main.wgsl:5-307` |
+| `hdr.wgsl` | 4: `LARGEST_HALF`, 3 functions | `main.wgsl:305-306` reads `LARGEST_HALF` and `resolve_weighted`; `tonemapping.wgsl:19` reads `resolve_unweighted`; `relative_luminance` internal, under an oracle; 2 modules include the part | no | `src/render/shaders/hdr.wgsl:7-32` |
+| `display.wgsl` | 5: 2 matrices, 3 functions | `tonemapping.wgsl:19, 22` calls `tonemap`, `srgb_encode`, `dither_noise`; `scripts/cycles-reference/compare.py` ports all 3 and both matrices; 1 module includes the part | no: the three functions sit apart from `tonemapping.wgsl` for their oracles | `src/render/shaders/display.wgsl:8-51` |
+| `gt7.wgsl` | 12: 6 constants, 6 functions | `display.wgsl:23` calls `gt7_tonemap` and reads `GT7_PAPER_WHITE`; `compare.py` ports all 6 functions; 1 module includes the part | no | `src/render/shaders/gt7.wgsl:32-124` |
+| `tonemapping.wgsl` | 2 entry points | `tonemapping_pass.rs:64, 70` | no | `src/render/shaders/tonemapping.wgsl:7-24` |
+| `culling.wgsl` | 6: 4 entry points (`offset_slots`, `offset_blocks`, `append_records`, `append_triangles`), the `PHASE_TWO` override, `FrameDraw` (read back by the CPU); 20 items private to the part | `culling_pass.rs:261-264` (the 4 entry points), `:245` (`PHASE_TWO`), `readback.rs:399` (`FrameDraw`'s layout through its Rust twin at `culling_pass.rs:82`) | no | `src/render/shaders/culling.wgsl:19`, `:45`, `:240`, `:294`, `:362`, `:401` |
+| `depth_pyramid.wgsl` | 2: `reduce_depth`, `reduce_level`; 8 items private to the part | `depth_pyramid_pass.rs:54-55` | no | `src/render/shaders/depth_pyramid.wgsl:71`, `:127` |
+| `froxel_grid.wgsl` | 5: `FROXEL_GRID_SIZE`, `froxel_index`, `froxel_slice_start`, `froxel_slice`, `froxel_at` | `froxel.wgsl` (`FROXEL_GRID_SIZE` 2, `froxel_index` 1, `froxel_slice_start` 2); `main.wgsl:275`, `shadow_mask.wgsl:262`, `light_count.wgsl:49` (`froxel_at`); `froxel_slice` only `froxel_at` at `:40` | no (`froxel_slice_start` serves one module; Notes 4) | `src/render/shaders/froxel_grid.wgsl:10-41` |
+| `froxel.wgsl` | 1: `build_froxel_lists` | `froxel_pass.rs:103` | no | `src/render/shaders/froxel.wgsl:8` |
+| `light_count.wgsl` | 1: `count_point_lights`; 5 items private to the part (`FIRST_SAMPLE`, `camera_relative_point`, 3 workgroup atomics) | `light_count_pass.rs:60` | no; two private items duplicate what the module already holds (L5-S05, L5-S06) | `src/render/shaders/light_count.wgsl:30` |
+| `bend.wgsl` | 2: `bend_vertices`, `BendData` (CPU twin); 2 items private to the part | `bend_pass.rs:77` (the entry point), `bend_pass.rs:29`, `prepare.rs` (4 sites), `shader_tests.rs:302` (`BendData`) | no | `src/render/shaders/bend.wgsl:15`, `:44` |
+| `shadow_mask.wgsl` | 4 entry points (`build_shadow_mask`, `trace_second_surfaces`, `list_shadow_edges`, `trace_shadow_edges`); 0 functions, structs or constants another part calls (`grep -lw` of each of its 33 names across `src/render/shaders/*.wgsl` lists only itself) | 4 pipelines, `shadow_mask_pass.rs:200` to `203` | no | `src/render/shaders/shadow_mask.wgsl:388`, `:481`, `:600`, `:631` |
+| `dynamic_tlas_marker.wgsl` | 1 entry point | 1, `acceleration_structures.rs:280` | no | `src/render/shaders/dynamic_tlas_marker.wgsl:7` |
+| `blas_refit_marker.wgsl` | 1 entry point | 1, `blas_refit.rs:412` | no | `src/render/shaders/blas_refit_marker.wgsl:5` |
+| `mod.rs` `Part` | struct, 2 public fields (`path`, `source`) | `shader_tests.rs` builds 9 test parts (lines 79, 90, 142, 173, 177, 181, 353, 395, 422) and reads `path` at 128; `path` is read nowhere outside tests (`cfg_attr(not(test), allow(dead_code))` at `mod.rs:42`) | no | `src/render/shaders/mod.rs:40` |
+| `mod.rs` `ShaderModule` | struct, 4 public fields, `descriptor`, `source`, `locate` (test) | `descriptor`: 10 passes (`grep -rn 'shaders::' src tests`: `culling_pass.rs:236`, `bend_pass.rs:68`, `froxel_pass.rs:94`, `depth_pyramid_pass.rs:34`, `acceleration_structures.rs:271`, `blas_refit.rs:403`, `tonemapping_pass.rs:53`, `light_count_pass.rs:51`, `shadow_mask_pass.rs:133`, `main_pass.rs:67`); `source`: `shader_tests.rs:445`, `shader_function_tests.rs:2200`; `locate`: `shader_tests.rs:448`; the fields: `shader_tests.rs` builds 8 test modules and reads `name`, `bind_groups` and `parts` (lines 50, 60, 127, 446, 511, 545, 627) | no | `src/render/shaders/mod.rs:79` |
+| `mod.rs` module constants | 10 shipping (`MAIN` to `BEND`), `SHARED` and `MODULES` under `cfg(test)` | one pass each for the 10 (the list above); `SHARED`: `shader_function_tests.rs:2200`; `MODULES`: `shader_tests.rs:25`, `36`, `46`, `125`, `233` | no | `src/render/shaders/mod.rs:87` to `192` |
+| `mod.rs` constants declared to WGSL | 26 scalar or vector constants plus `SAMPLE_OFFSETS` (lines 238 to 277) and 3 overrides (`CULLING`, `FROXEL_LIGHTS`, `SHADOW_RAYS`, `renderer.rs:154` to `160`) | 25 of the 26 read by some part; `MESHLET_MAX_TRIANGLES` by none (L5-S07); each override read by at least one part (`CULLING` 5 sites in `culling.wgsl`; `FROXEL_LIGHTS` 7 in `main.wgsl` and `shadow_mask.wgsl`; `SHADOW_RAYS` 2 in `main.wgsl`) | one constant | `src/render/shaders/mod.rs:240` |
+| The GPU harness: `gpu_context`, `evaluate`, `evaluate_cases`, `KERNEL`, `WORKGROUP_SIZE` | 0 (5 private) | 0 | no | `gpu_context` 28 callers (every test), `evaluate` 27, `evaluate_cases` 9 (8 pass `&[]` as `vertices`, `cooked_vertices_decode_to_their_position_uv_and_tangent_frame` passes the vertices), `KERNEL` and `WORKGROUP_SIZE` read by `evaluate_cases` alone; `src/render/shader_function_tests.rs:2143-2296` |
+| The f64 references: `reference_distribution`, `reference_visibility`, `reference_brdf`, `srgb_decode` | 0 (4 private) | 0 | no | 2, 2, 3 and 1 callers (`reference_brdf` calls the first two); `src/render/shader_function_tests.rs:1171-1284` |
+| The case builders: `direction`, `cosines`, `surface`, `minimum_roughness`, `assert_close` | 0 (5 private) | 0 | no | 12, 3, 4, 7 and 25 callers; `src/render/shader_function_tests.rs:1197-1227`, `:1460-1467` |
+| The tolerances and tables: `TOLERANCE`, `RELATIVE_TOLERANCE`, `DIRECTION_TOLERANCE`, `GT7_TOLERANCE`, `SRGB_TOLERANCE`, `DISPLAY_RAMP_TOLERANCE`, `FURNACE_SUM_TOLERANCE`, `QUADRATURE_TOLERANCE`, `PRECISION_BAR`, `GOLD`, `GT7_REFERENCE`, `TONEMAP_REFERENCE` | 0 (12 private constants) | 0 | no | mentions 8, 9, 3, 13, 2, 2, 2, 3, 4, 6, 3, 3; three constants have one use beside their definition (Notes 4) |
+| `Case` (4 methods) with `sums_in_every_order` | 0 (1 struct, 4 methods, 1 function) | 0 | no | one test, `camera_relative_position_meets_the_precision_bar_within_100_km`, calls `Case::new` once, `test_vectors` once, `worst_error_in_any_order` and `world_space_error` once each; `src/render/shader_function_tests.rs:2054-2139` |
+| The module validation: `validate`, `stage_problems`, `defined_binding`, `wgsl_files` | 0 (4 private) | 0 | no | 10, 2, 2 and 1 call sites; `src/render/shader_tests.rs:444-575` |
+| The layout checker: `Twin`, `Field`, `ShaderScalar` with 5 impls, `scalar_of`, `twin!`, `layout_problems`, `structs_shared_with_the_cpu`, `twin_problems`, `wgsl_scalar`, `describe` | 0 (14 private items) | 0 | no | `twin!` 12 uses, `layout_problems` 3, `structs_shared_with_the_cpu` 1, `twin_problems` 1, `wgsl_scalar` 1 plus its recursion, `describe` 2, `scalar_of` 1 (inside `twin!`); `src/render/shader_tests.rs:213-229`, `:577-741` |
+| What the tests consume of `shaders::` (`MODULES`, `Part`, `ShaderModule`, `SHARED.source()`, `locate`) | judged with the assembly, above | `shader_tests.rs` imports 3 names at :20 and calls `locate` at :448; `shader_function_tests.rs` calls `SHARED.source()` at :2200 | judged with the assembly, above | `src/render/shaders/mod.rs:170-176`, `:179-192`, `:211-223` |
+
+
+For the two test modules, counts are `grep` over the file; a function's count excludes its definition, a constant's includes its definition and doc mentions (`grep -ow`). Neither file has a `pub` item, and `grep -rn 'shader_function_tests\|shader_tests' src tests scripts docs` finds no caller outside them: `src/render/mod.rs:24` and `:26` declare them under `#[cfg(test)]`, `tests/conventions.rs:279-280` names them as the two test-only files its `unwrap` rule skips, and the rest are doc mentions.
+
+### Findings
+
+| id | claim | severity | where | evidence | expected |
+|---|---|---|---|---|---|
+| L5-S01 | The header says the part is "Shared by every shader module", but 4 of the 10 shipping modules do not include it, and its list of contents omits 3 of the part's 12 functions. | drift; not load-bearing | `src/render/shaders/common.wgsl:1-3` | block below | `CLAUDE.md`, Code conventions: comments say what the code does. "Shared by the modules that read the frame, the geometry or the lights" (or `mod.rs:57-58`'s "The structs more than one pass reads"), listing the ray and box test, the point light's position and the octahedral codec with the rest. |
+| L5-S02 | The comment on the BRDF's lobe mix carries a measured cost, "the lit pass took up to 25 µs (5%) longer at 1440p on the M4 Pro", that nothing in the tree re-measures or checks. | drift; not load-bearing | `src/render/shaders/shading.wgsl:181-182` | block below | `CLAUDE.md`, Code conventions: comments say what the code does and why. The why is the line before it, that Schlick's F is linear in F0 so one lobe at the mixed F0 is Appendix B's mix exactly, which the BRDF oracle pins; measured costs live in the Bench history. |
+| L5-S03 | The comment on the first directional light carries a measured cost, "a branch around it cost the lit pass about 10% on the M4 Pro", that nothing in the tree re-measures or checks. | drift; not load-bearing | `src/render/shaders/main.wgsl:208-211` | block below | As L5-S02: the why, that a uniform branch around the shading costs more on the M4 Pro than shading a zero light, stands without the figure; the figure belongs to the Bench history. |
+| L5-S04 | The 8 render entry points are named with the two-letter stage prefixes `vs_` and `fs_`, abbreviating vertex and fragment, while every compute entry point in the tree is named by what it does. | health; 8 names, 19 sites in 4 files | `src/render/shaders/main.wgsl:17` | block below | `CLAUDE.md`, Code conventions: identifiers are full words, WGSL included. Names that say what the stage does, as the compute parts' do (`build_shadow_mask`, `reduce_level`, `bend_vertices`): `project_vertex`, `project_depth_vertex`, `write_surface_normals`, `write_depth`, `shade_pixel`, `cover_target`, `tonemap_pixel`; or the full words `vertex_main` and `fragment_main`. |
+| L5-S05 | `camera_relative_point` and the clip-space position built around it re-derive the point a depth shows through a pixel, which the shared part's `position_at`, under an oracle and included in the module, already computes. | health; about 17 lines, 1 call site | `src/render/shaders/light_count.wgsl:19` | block below | CLAUDE.md, Code conventions: "a function under an oracle lives in a shared part"; `common.wgsl:1-3` lists "the position a depth target's depth places at a pixel" among what the shared part holds. One call, `position_at(camera.view_proj, sample, pixel_depth, vec2<f32>(size))`, as `shadow_mask.wgsl:212` makes it. |
+| L5-S06 | `FIRST_SAMPLE` declares the first sample's offset a second time, which `SAMPLE_OFFSETS[0]`, declared from Rust into every module and checked against the backend by a test, already holds. | health; 3 lines, 1 call site | `src/render/shaders/light_count.wgsl:10` | block below | One declaration per constant, in `mod.rs`'s generated prelude; `SAMPLE_OFFSETS[0]`, as `shadow_mask.wgsl:419` reads it. |
+| L5-S07 | `assemble` declares `MESHLET_MAX_TRIANGLES` to every WGSL module and no part reads it | health; 2 lines, 0 call sites | `src/render/shaders/mod.rs:240` | block below | A constant declared to WGSL is one some part reads (the header, `mod.rs:3`, "the constants Rust shares with WGSL"); drop the line and the import at `mod.rs:8` |
+| L5-S08 | The four-sample depth load and the nearest-sample pick are written out three times, once per dispatch that needs them, where one function would serve | health; 3 call sites, 20 lines | `src/render/shaders/shadow_mask.wgsl:397` | block below | One `pixel_depths(pixel) -> vec4<f32>` (and `nearest_sample(depths) -> u32`) in the part, called at the three sites, as `first_sample_of` already serves its four |
+| L5-S09 | The list-append and indirect-dispatch-size block of `build_shadow_mask` is repeated verbatim in `list_shadow_edges`, differing only in the bindings it names | health; 2 call sites, 24 lines | `src/render/shaders/shadow_mask.wgsl:434` | block below | One function that appends an entry to a `PixelList` and grows its dispatch, called from both, with the `SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE` product (6 sites) a named constant |
+| L5-S10 | A directional light's direction and the turn test against `INTERPOLATED_TURN_MARGIN` are spelled out at three sites, and `directional_hidden`'s body is repeated inline in `surface_word`'s directional branch | health; 3 call sites, 9 lines | `src/render/shaders/shadow_mask.wgsl:281` | block below | One `directional_light_direction(index)` and one `turns_from(normal, direction) -> bool`, which `directional_hidden`, `surface_word` and `turned_lights_other_samples_face` call |
+| L5-S11 | The part's header describes the first two of its four dispatches: it never mentions that pixels at a directional light's shadow edge, or whose nearest sample turns from a light another sample faces, are listed and traced again per sample into `shadow_mask_samples` | drift; not load-bearing | `src/render/shaders/shadow_mask.wgsl:1` | block below | A header that says what the part does (CLAUDE.md, Code conventions: comments say what the code does and why): the four dispatches, the second layer and the per-sample verdicts, as `shadow_mask_pass.rs:1` to `12` and ADR 0020 state them |
+| L5-S12 | The `SHADOW_RAY_PIXEL_OFFSET` comment sizes the constant from a measurement (points within 0.0031 of a pixel's width, 320x180 to 2560x1440, the first distance as little as 0.0033 at 320x180) that nothing in the tree records or reproduces | drift; not load-bearing | `src/render/shaders/shadow_mask.wgsl:41` | block below | A number a shipping comment relies on is checked by a test or recorded with its run in `docs/` (as `docs/performance.md` records `first_intersection`'s A/B, cited from `shadow_mask.wgsl:95`); the comment then cites the record |
+| L5-S13 | Five test locals are a letter and a digit, `m1`, `m2`, `c1`, `c2`, `c3`, against the full-word rule, where the shader and the Cycles port spell the same constants `PQ_M1` to `PQ_C3`. | health; 5 identifiers on 4 lines in 1 file | `src/render/shader_function_tests.rs:809` | block below | `CLAUDE.md`, Code conventions: identifiers are full words, a textbook symbol goes in a comment. The spelling the shader (`gt7.wgsl:36-40`) and `scripts/cycles-reference/compare.py:55-56` share, `pq_m1`, `pq_m2`, `pq_c1`, `pq_c2`, `pq_c3`, which names the standard the constants come from. |
+| L5-S14 | The comment "The near plane's distance over the depth along the view axis" heads `let near = f64::from(columns[3][2])`, which is the near plane's distance alone; the quotient it describes is computed seven lines below. | drift; not load-bearing | `src/render/shader_function_tests.rs:1630` | block below | `CLAUDE.md`, Code conventions: comments say what the code beside them does. The comment belongs beside `depth` at :1638, or reads "The near plane's distance, which over the depth along the view axis gives the depth"; `common.wgsl:44-47` states the relation correctly. |
+| L5-S15 | The test name says `tangent_space_normal` "normalises as glTF writes it", but the function returns an unnormalised vector and the test normalises it in its own WGSL wrapper, so no assertion pins a normalisation by the function. | drift; not load-bearing | `src/render/shader_function_tests.rs:1298` | block below | A test's name claims what its assertions pin. The assertions pin the direction of the function's result against glTF's formula, so a name of that shape serves: `tangent_space_normal_scales_x_and_y_and_points_where_gltf_normalises_to`, or the "normalises" clause dropped. |
+
+
+#### L5-S01
+
+`src/render/shaders/common.wgsl:1-3`:
+
+```
+// Shared by every shader module: the structs the CPU writes, the Anchor
+// composition, the position a depth target's depth places at a pixel, the
+// packed index and the vertex decode (src/render/shaders/mod.rs).
+```
+
+`src/render/shaders/mod.rs` lists the parts of each module. `COMMON` is in `MAIN` (`:92`), `SHADOW_MASK` (`:101`), `CULLING` (`:109`), `FROXEL` (`:117`), `LIGHT_COUNT` (`:125`) and `BEND` (`:166`), and in the test-only `SHARED` (`:175`). It is not in `DEPTH_PYRAMID` (`:133`, `parts: &[part!("depth_pyramid.wgsl")]`), `TONEMAPPING` (`:141`, `parts: &[HDR, GT7, DISPLAY, part!("tonemapping.wgsl")]`), `DYNAMIC_TLAS_MARKER` (`:149`) or `BLAS_REFIT_MARKER` (`:158`): `grep -c COMMON src/render/shaders/mod.rs` counts 8 lines, the declaration plus 7 module lists, against 11 modules. The same file's own doc for the part, `mod.rs:57-58`, says "The structs more than one pass reads", which is the accurate form.
+
+The header's list names the structs, `camera_relative_position`, `position_at`, `pack_index` and `unpack_index`, and the vertex decode. It does not name `segment_meets_box` (`:69-97`, 29 lines, the ray-against-box test the shadow mask pass calls), `point_light_position` (`:121-133`, called from 4 parts) or `octahedral_encode` and `octahedral_decode` (`:293-305`, the surface normals' codec). A reader who trusts the header to say what every module can call, or what the part holds, is misled on both counts, but writing code on either belief fails at shader validation rather than at the image, so the drift is not load-bearing. The fix is a comment: it cannot move a pixel.
+
+#### L5-S02
+
+`src/render/shaders/shading.wgsl:177-182`:
+
+```
+    // The mix, gathered by lobe. A dielectric's surface reflects F of the
+    // light, from its fixed F0, and the rest enters, scatters and leaves
+    // diffuse; a metal's F0 is its base colour. Schlick's F is linear in F0,
+    // so metallic's mix of the two specular lobes is one lobe whose F is at
+    // the mixed F0, which no light changes. Mixed as Appendix B writes it,
+    // the lit pass took up to 25 µs (5%) longer at 1440p on the M4 Pro.
+```
+
+`grep -rn "25 µs" docs src` finds the figure in `docs/performance.md:2491` (the culling pass's fixed cost, a different measurement) and in this comment only; `grep -rn "lobe" docs/performance.md` finds one line about Toksvig; `grep -rn "by lobe\|one-lobe" docs src` finds this comment and `docs/research/source-audit.md:17`, which records that the one-lobe mix expands to the source's exactly and names no cost. No Baseline, Bench record or performance note holds the 25 µs or the 5%, and the lit pass's cost has moved many times since (the shadow mask, the Froxel lists, the second surfaces). The sentence before the figure is the why, and `metallic_roughness_brdf_matches_appendix_b_and_is_reciprocal` (`src/render/shader_function_tests.rs:210`) pins that the one-lobe form is Appendix B's to `RELATIVE_TOLERANCE`. The same form as the render section's L5-R13. The fix is a comment: it cannot move a pixel.
+
+#### L5-S03
+
+`src/render/shaders/main.wgsl:208-211`:
+
+```
+    // The first directional light is shaded whether or not the light buffer
+    // holds one, since a branch around it cost the lit pass about 10% on
+    // the M4 Pro: without one, its illuminance is zero and a fixed direction
+    // keeps the term finite. Any others follow.
+```
+
+`grep -rn "about 10%\|10% on the M4\|branch around" docs src` finds this comment alone; `grep -rn "10%" docs/performance.md docs/research/*.md` filtered to "lit pass", "directional" or "branch" finds two unrelated lines (shadow map research, an HDR pixel share). Nothing re-measures the branch's cost, and the code the comment guards, the hoisted first light at lines 212-248 beside the loop at 249-261, is what a reader needs the why for: that a uniform branch around the shading is dearer than shading a zero light on the M4 Pro. That sentence holds without its figure. The same form as L5-S02 and the render section's L5-R13. The fix is a comment: it cannot move a pixel.
+
+#### L5-S04
+
+The 8 render entry points, `grep -n "^fn vs_\|^fn fs_" src/render/shaders/*.wgsl`:
+
+```
+main.wgsl:17:fn vs_depth_prepass(...)
+main.wgsl:34:fn vs_depth_normals(...)
+main.wgsl:51:fn fs_surface_normals(...)
+main.wgsl:78:fn fs_depth() {}
+main.wgsl:81:fn vs_main(...)
+main.wgsl:171:fn fs_main(...)
+tonemapping.wgsl:7:fn vs_full_screen(...)
+tonemapping.wgsl:16:fn fs_tonemap(...)
+```
+
+`vs` and `fs` stand for vertex stage and fragment stage; neither is on the full-word rule's list of the domain's own words, nor a WGSL, naga, wgpu or glam API name (WGSL names the stages `@vertex` and `@fragment`). The tree's 13 compute entry points take the other form, a verb phrase: `build_shadow_mask`, `trace_second_surfaces`, `list_shadow_edges`, `trace_shadow_edges` (`shadow_mask.wgsl`), `reduce_depth`, `reduce_level` (`depth_pyramid.wgsl`), `build_froxel_lists`, `count_point_lights`, `bend_vertices`, `offset_slots`, `offset_blocks`, `append_records`, `append_triangles`, `mark_dynamic_tlas`, `mark_blas_refit`. Sites: the 8 definitions; `grep -rno 'entry_point: Some("[a-z_]*")' src/render/*.rs` names them at `main_pass.rs:119, 122, 132, 138, 141, 155, 161` (7) and `tonemapping_pass.rs:64, 70` (2); `coverage_tests.rs:286, 292` names `vs_main` and `fs_main` for its own test WGSL (2, which the render section deferred here as the engine's convention). 19 sites in 4 files. `tests/conventions.rs` catches no stage prefix. Weighed against filing: wgpu's examples spell their entry points `vs_main` and `fs_main`, so the form is a familiar idiom; but an idiom from a tutorial is not an API name, and `CLAUDE.md` names the rule for WGSL in so many words. A rename of entry points changes the strings `main_pass.rs` and `tonemapping_pass.rs` pass and nothing the GPU runs: it cannot move a pixel, so the fix needs a bit-exact Golden check only.
+
+#### L5-S05
+
+`src/render/shaders/light_count.wgsl:16-27`:
+
+```wgsl
+// The point relative to the camera at clip-space position `clip`: the
+// solution of view_proj's x, y and w rows, which hold no translation (ADR
+// 0014), by Cramer's rule in cross products.
+fn camera_relative_point(clip: vec4<f32>) -> vec3<f32> {
+    let rows = transpose(camera.view_proj);
+    let x_row = rows[0].xyz;
+    let y_row = rows[1].xyz;
+    let w_row = rows[3].xyz;
+    let y_cross_w = cross(y_row, w_row);
+    return (clip.x * y_cross_w + clip.y * cross(w_row, x_row) + clip.w * cross(x_row, y_row))
+        / dot(x_row, y_cross_w);
+}
+```
+
+and its one call site, `:40-48`:
+
+```wgsl
+            let near = camera.view_proj[3].z;
+            let view_depth = near / pixel_depth;
+            let sample = vec2<f32>(pixel.xy) + FIRST_SAMPLE;
+            let normalised = vec2<f32>(
+                sample.x / f32(size.x) * 2.0 - 1.0,
+                1.0 - sample.y / f32(size.y) * 2.0
+            );
+            let clip = vec4<f32>(normalised * view_depth, near, view_depth);
+            let position = camera_relative_point(clip);
+```
+
+`src/render/shaders/common.wgsl:49-56` computes the same point from the same inputs:
+
+```wgsl
+fn position_at(view_proj: mat4x4<f32>, point: vec2<f32>, depth: f32, size: vec2<f32>) -> vec3<f32> {
+    let device = vec2<f32>(point.x / size.x * 2.0 - 1.0, 1.0 - point.y / size.y * 2.0);
+    let rows = transpose(view_proj);
+    let view_depth = view_proj[3].z / depth;
+    let right = rows[0].xyz / dot(rows[0].xyz, rows[0].xyz);
+    let up = rows[1].xyz / dot(rows[1].xyz, rows[1].xyz);
+    return view_depth * (rows[3].xyz + device.x * right + device.y * up);
+}
+```
+
+Counts. `grep -rnw camera_relative_point src tests docs scripts`: 2 lines, both in `light_count.wgsl` (`:19` the definition, `:48` the call). `grep -rnw position_at src tests`: `common.wgsl:49` (the definition), `shadow_mask.wgsl` 6 call sites (`:212`, `:216`, `:419-422`), `shader_function_tests.rs:1618` (the oracle `position_at_rebuilds_the_point_a_depth_shows_through_a_pixel`, which holds it within 2^-20 relative of the f64 inverse over 30 pixels and 6 distances at 2560 x 1440). The `LIGHT_COUNT` module's parts are `COMMON, FROXEL_GRID, light_count.wgsl` (`mod.rs:125`), so `position_at` is in scope at `:48`. The two forms agree: `view_proj`'s x, y and w rows are mutually orthogonal (a rigid view under a projection without skew), so Cramer's solution of `rows[0] . p = clip.x`, `rows[1] . p = clip.y`, `rows[3] . p = clip.w` is `clip.x rows[0] / |rows[0]|^2 + clip.y rows[1] / |rows[1]|^2 + clip.w rows[3]`, which with `clip = (normalised * view_depth, near, view_depth)` is `position_at`'s expression term for term. The `normalised` computation at `:43-46` repeats `position_at`'s `device` line. Smaller form: `let view_depth = camera.view_proj[3].z / pixel_depth;` stays for `froxel_at`; `camera_relative_point`, `near`, `normalised` and `clip` go, and `:48` becomes `let position = position_at(camera.view_proj, sample, pixel_depth, vec2<f32>(size));`: about 17 lines fewer, one function fewer in the part.
+
+Pixel movement: the light count pass writes no image, so no Golden moves. It writes the Bench counters `lit_pixels`, `listed_point_lights` and `reaching_point_lights` (`common.wgsl:112-117`, read back at `readback.rs:410`). `lit_pixels` and `listed_point_lights` cannot change (the depth test at `:39` and `froxel_at`'s inputs are unchanged). `reaching_point_lights` compares `dot(to_light, to_light) < range^2` at `:55` from a position whose last-bit rounding differs between the two expressions, so a light at exactly its range at some pixel could flip by one; the fix ticket compares the three counters with the Baselines rather than relying on bit-exactness.
+
+#### L5-S06
+
+`src/render/shaders/light_count.wgsl:8-10`:
+
+```wgsl
+// Where a pixel's first sample lies within it: WebGPU's standard 4x
+// pattern puts sample 0 at (0.375, 0.125) [webgpu-standard-sample-pattern].
+const FIRST_SAMPLE: vec2<f32> = vec2<f32>(0.375, 0.125);
+```
+
+`src/render/shaders/mod.rs:269-277` declares, into every module's prelude, `const SAMPLE_OFFSETS: array<vec2<f32>, 4> = array<vec2<f32>, 4>(vec2<f32>(0.375, 0.125), ...)` from `shadow_mask_pass.rs:41-46`, whose doc says "WGSL declares them as `SAMPLE_OFFSETS`, and a test checks the backend's depth target against them": `shadow_mask_pass.rs:416`, `each_depth_sample_lies_where_the_pass_rebuilds_it`. `shadow_mask.wgsl:419` reads the same offset as `SAMPLE_OFFSETS[0]`. Counts: `grep -rnw FIRST_SAMPLE src tests docs scripts`: `light_count.wgsl:10` (the definition), `:42` (the one use), `docs/research/source-audit.md:76` (the source audit's row naming it as the citation's site). `grep -rnw SAMPLE_OFFSETS src/render/shaders`: `mod.rs` 3, `shadow_mask.wgsl` 7. The second declaration carries its own citation and its own literal, which the test checking `SAMPLE_OFFSETS` does not cover. Smaller form: `let sample = vec2<f32>(pixel.xy) + SAMPLE_OFFSETS[0];` at `:42`, and lines 8-10 go; the citation then lives once, at `shadow_mask_pass.rs:38`, and `docs/research/source-audit.md:76` is updated to name it (falls in lane 7's docs).
+
+Pixel movement: none. The value is the same literal (`{:?}` of the f32 0.375 prints `0.375`, of 0.125 prints `0.125`), so the assembled module differs only in the constant's name; Goldens bit-exact, counters equal.
+
+#### L5-S07
+
+`src/render/shaders/mod.rs:8` and `mod.rs:240`:
+
+```rust
+use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
+...
+             const MESHLET_MAX_TRIANGLES: u32 = {MESHLET_MAX_TRIANGLES}u;\n\
+```
+
+The grep over every part: `grep -ow MESHLET_MAX_TRIANGLES src/render/shaders/*.wgsl | wc -l` gives 0. Every other name `assemble` declares is read by at least one part: `grep -lw <name> src/render/shaders/*.wgsl` lists `common.wgsl` for `ANCHOR_CELL_SIZE` (2 sites) and `MESHLET_VERTEX_BITS` (4), `culling.wgsl` for `SCAN_BLOCK_SIZE` (18), `INSTANCE_CAPACITY` (6) and `NO_MESH` (2, with `common.wgsl`), `shadow_mask.wgsl` for `SAMPLE_OFFSETS` (9) and `SHADOW_MASK_TILE_SIZE` (16), and so on through the 26; only the Meshlet triangle cap has no reader. Across the crate the constant is read by the cooker and the cooked reader alone: `grep -rn MESHLET_MAX_TRIANGLES src tests scripts docs` lists `src/assets/cooked.rs:44` (its definition) and `:445`, `src/cook/mesh.rs:12`, `:31` and `:180`, and the two `mod.rs` lines. The culling pass reads each Meshlet's `triangle_count` from `MeshletData` rather than the cap, so no part needs it. The fix removes one declaration and one import name; it changes no module's behaviour and cannot move a pixel (a Golden check is a formality; the Goldens are bit-exact).
+
+#### L5-S08
+
+The same block three times. `build_shadow_mask`, `src/render/shaders/shadow_mask.wgsl:397` to `405`:
+
+```wgsl
+    let depths = vec4<f32>(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );
+    // The nearest sample has the greatest depth (ADR 0015); the first such.
+    let depth = max(max(depths.x, depths.y), max(depths.z, depths.w));
+    let sample = first_sample_of(depths, depth);
+```
+
+`turned_lights_other_samples_face`, `shadow_mask.wgsl:567` to `573`, loads the same `vec4` and picks `first_sample_of(depths, max(max(depths.x, depths.y), max(depths.z, depths.w)))`; `trace_shadow_edges`, `shadow_mask.wgsl:649` to `655`, does both again. `grep -c 'textureLoad(depth_target, pixel, 0)' src/render/shaders/shadow_mask.wgsl` gives 3; `grep -c 'max(max(depths.x, depths.y), max(depths.z, depths.w))'` gives 3. The comment at line 395 to 396 explains why the four loads are spelled out rather than looped (Metal's compiler does not unroll a loop over them); that reason holds inside a function as well as at each site, so `fn pixel_depths(pixel: vec2<i32>) -> vec4<f32>` with the four loads, and `fn nearest_sample(depths: vec4<f32>) -> u32`, serve the three sites and keep the explanation in one place. The part already does this for the four-way pick (`first_sample_of`, 4 callers) and for the other-samples mask (`other_nearest_samples`, 2 callers). Moving the loads and the `max` chain into a function reorders no floating-point operation, so the fix cannot move a pixel; the Goldens stay bit-exact.
+
+#### L5-S09
+
+`build_shadow_mask`, `src/render/shaders/shadow_mask.wgsl:434` to `447`:
+
+```wgsl
+            let entry = atomicAdd(&second_surfaces.count, 1u);
+            second_surfaces.entries[entry] = invocation.x | (invocation.y << 16u) | (second_sample << 30u);
+            // The entry that opens a workgroup's run of the second dispatch
+            // adds that workgroup, in rows of MAX_WORKGROUPS_PER_DIMENSION.
+            let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+            if entry % group_size == 0u {
+                let groups = entry / group_size + 1u;
+                atomicMax(&second_surface_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+                atomicMax(
+                    &second_surface_dispatch[1],
+                    (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+                );
+                atomicStore(&second_surface_dispatch[2], 1u);
+            }
+```
+
+`list_shadow_edges`, `shadow_mask.wgsl:610` to `621`, is the same twelve lines with `shadow_edges` for `second_surfaces`, `shadow_edge_dispatch` for `second_surface_dispatch`, and no sample in bit 30. `grep -c 'atomicMax(&' src/render/shaders/shadow_mask.wgsl` gives 4, two per site; `grep -c 'atomicStore(&' ` gives 2; `grep -c 'SHADOW_MASK_TILE_SIZE \* SHADOW_MASK_TILE_SIZE'` gives 6 (lines 438, 480, 489, 612, 630, 639), the workgroup's size of the two list-reading dispatches recomputed at each use. One function, `fn list_pixel(list: ptr<storage, PixelList, read_write>, dispatch: ptr<storage, array<atomic<u32>, 3>, read_write>, entry_bits: u32)`, serves both sites, and a `const LIST_GROUP_SIZE: u32 = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;` the six. The fix leans on naga accepting pointers to storage as function parameters, which WGSL's core grammar does not and naga's frontend does; if a future naga refuses them, the two sites stay and the constant alone is extracted. The fix changes no arithmetic and no atomic's order, so it cannot move a pixel; the dispatch counts are the same words.
+
+#### L5-S10
+
+The directional light's direction and its turn test, three times. `directional_hidden`, `src/render/shaders/shadow_mask.wgsl:225` to `229`:
+
+```wgsl
+fn directional_hidden(surface: SampleSurface, index: u32) -> bool {
+    let direction = normalize(-lights[index].offset);
+    return !(dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN)
+        || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
+}
+```
+
+`surface_word`'s directional branch, `shadow_mask.wgsl:281` to `286` and `343`, repeats the body inline:
+
+```wgsl
+                direction = normalize(-lights[entry].offset);
+                distance = UNBOUNDED_RAY_DISTANCE;
+                if !(dot(interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN) {
+                    hidden = with_bit(hidden, entry);
+                    continue;
+                }
+```
+
+and `turned_lights_other_samples_face`, `shadow_mask.wgsl:584`, spells the pair out a third time:
+
+```wgsl
+                && dot(interpolated_normal, normalize(-lights[index].offset)) > -INTERPOLATED_TURN_MARGIN {
+```
+
+`grep -c 'normalize(-lights\[' src/render/shaders/shadow_mask.wgsl` gives 3; `grep -c '> -INTERPOLATED_TURN_MARGIN' ` gives 5, the three directional sites and the two point-light sites at lines 311 and 328, which scale the margin by the unnormalised distance and so take a different form. `surface_word` cannot call `directional_hidden` whole, since it records which lights it traced a ray toward (`traced |= 1u << entry`, line 288) between the turn test and the ray; but `fn directional_light_direction(index: u32) -> vec3<f32>` and `fn turns_from(normal: vec3<f32>, direction: vec3<f32>) -> bool` serve all three sites and name the test the comments at lines 61 to 71 describe. The extracted expressions are the same operations in the same order, so the fix cannot move a pixel; the Goldens stay bit-exact. (`directional_hidden` itself has one caller, `trace_shadow_edges` at line 673; it is kept as the name of the per-sample verdict, not filed.)
+
+#### L5-S11
+
+The header, `src/render/shaders/shadow_mask.wgsl:1` to `7`:
+
+```wgsl
+// The shadow mask pass (src/render/shadow_mask_pass.rs): an invocation per
+// pixel traces one hard shadow ray toward each light that reaches the surface
+// the pixel's nearest sample shows (ADR 0020), and keeps a bit per light that
+// its ray found hidden, for the lit pass to read. Where other samples of the
+// pixel show another surface, it does the same from the farthest of them
+// into the mask's second layer, and marks which samples show it, so each
+// fragment of an edge pixel reads its own surface's bits.
+```
+
+The rest of the header (lines 7 to 19) covers the bit order, the overflow count, lights that cast no shadow and the inputs. Nothing in it names the third and fourth dispatches, `list_shadow_edges` (lines 592 to 622) and `trace_shadow_edges` (lines 624 to 681), which together with `directional_verdicts`, `shadow_edges`, `shadow_edge_dispatch` and the `shadow_mask_samples` texture make 90 of the part's 681 lines: a pixel whose verdict for one of the first `SHADOW_EDGE_LIGHTS` directional lights differs from a 4-neighbour's, or whose nearest sample turns from such a light that another sample of its surface faces, is traced again from each other sample, and the lit pass shades that light by the share of its samples that see it. The `shadow_mask_pass.rs` header (lines 8 to 11) and ADR 0020's amendment both state that form; the part's header stops at the form before it. The entry points' own comments (lines 381 to 386, 592 to 598, 624 to 629) are accurate, so a reader who reads past the header is not misled: not load-bearing. A comment fix; it cannot move a pixel.
+
+#### L5-S12
+
+`src/render/shaders/shadow_mask.wgsl:41` to `48`:
+
+```wgsl
+// that grid, by estimate, as no specification bounds it. Measured on the
+// M4 Pro, whose grid Metal does not document, every Reference scene's
+// points lie within 0.0031 of a pixel's width of their triangles, from
+// 320x180 to 2560x1440, while the first distance spans as little as 0.0033
+// of a pixel's width at 320x180 through the camera's 45° field of view, and
+// less through a wider one. This share is ten times the measured error and
+// half a step of a 1/16 grid.
+const SHADOW_RAY_PIXEL_OFFSET: f32 = 0.03125; // 2^-5
+```
+
+The constant's value rests on the measured 0.0031: "ten times the measured error". `grep -rn '0\.0031\b\|0\.0033\|width of their triangles\|SHADOW_RAY_PIXEL_OFFSET' src tests scripts docs` finds the number at this comment alone (the other hits are sRGB's 0.0031308); no test, script, Bench record or page under `docs/` records the run (adapter, commit, scenes, resolutions) or reproduces it, where the part's other measured claim, the one-call ray query at line 95, cites `docs/performance.md`, which holds the A/B at lines 643 to 690. The neighbouring margins' claim, 0.95° for the 8-bit octahedral normals at line 64, is pinned by an oracle (`shader_function_tests.rs:1680`, `octahedral_coordinates_decode_to_the_unit_vector_they_encode`). Not load-bearing: a reader keeps the constant and its reasoning, and nothing says the number is wrong; the Finding is that nothing in the tree can say it is right. The fix is a record in `docs/` (or a test over the Reference scenes' depth against their triangles) that the comment cites, not a code change; it cannot move a pixel.
+
+#### L5-S13
+
+`src/render/shader_function_tests.rs:809-817`:
+
+```rust
+    let (m1, m2) = (2610.0 / 16384.0, 2523.0 / 4096.0 * 128.0);
+    let (c1, c2, c3) = (
+        3424.0 / 4096.0,
+        2413.0 / 4096.0 * 32.0,
+        2392.0 / 4096.0 * 32.0,
+    );
+    for ((value, encoded), decoded) in frame_buffer_values.into_iter().zip(&encoded).zip(decoded) {
+        let normalized = (f64::from(value) * 100.0 / 10000.0).powf(m1);
+        let expected = ((c1 + c2 * normalized) / (1.0 + c3 * normalized)).powf(m2);
+```
+
+The names stand for SMPTE ST 2084's exponents m₁, m₂ and its rational coefficients c₁, c₂, c₃, the standard's own symbols. `grep -rnw 'm1\|m2\|c1\|c2\|c3' src --include='*.rs' --include='*.wgsl'` finds these 4 lines and no other site in the crate. The shipping spelling is prefixed: `src/render/shaders/gt7.wgsl:36-40` declares `PQ_M1`, `PQ_M2`, `PQ_C1`, `PQ_C2`, `PQ_C3`, and `scripts/cycles-reference/compare.py:55-56` the same five names, so the test is the one place the constants lose the word that says what they are. The full-word rule allows a textbook symbol in a comment only; `tests/conventions.rs:190-214` catches only the three shading dot spellings, not this. The lane's list of the domain's own words holds `pq` but not a bare symbol-and-digit, so the row is filed; if the triage reads the standard's symbols as the domain's own words, it is a kill. The fix is a rename in a test: it cannot move a pixel.
+
+#### L5-S14
+
+`src/render/shader_function_tests.rs:1630-1638`:
+
+```rust
+    // The near plane's distance over the depth along the view axis.
+    let near = f64::from(columns[3][2]);
+    let points = [0.0, 0.375, 640.5, 1279.875, 2559.625, 2560.0]
+        .into_iter()
+        .flat_map(|x| [0.0, 0.125, 720.5, 1439.875, 1440.0].map(|y| [x, y]));
+    let mut cases = Vec::new();
+    for [x, y] in points {
+        for distance in [0.1, 0.35, 2.0, 40.0, 900.0, 10_000.0] {
+            let depth = (near / distance) as f32;
+```
+
+`columns[3][2]` is `view_proj`'s column 3, row 2, the constant that a reverse-Z projection with no far plane puts in clip z: the near plane's distance, as `src/render/shaders/common.wgsl:44-47` says ("puts the near plane's distance in clip z and the depth along the view axis in clip w, so depth is the near distance over clip w"). The comment's noun phrase names a ratio, near over view depth, which is `depth` at :1638, not `near` at :1631, the line it heads. A reader of the local alone takes `near` for a depth value. Not load-bearing: the correct statement sits in the shared part's doc, and the test's own assertion against the f64 inverse at :1657-1673 would catch a wrong use. The fix moves or rewords a comment: it cannot move a pixel.
+
+#### L5-S15
+
+The test, `src/render/shader_function_tests.rs:1298` and its expression at :1314-1318:
+
+```rust
+fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
+    ...
+    let results = evaluate(
+        &context,
+        "vec4<f32>(normalize(tangent_space_normal(input.xy, input.z)), 0.0)",
+        &inputs,
+    );
+```
+
+The function, `src/render/shaders/shading.wgsl:156-160`, returns `vec3<f32>(x_and_y * scale, select(z, 1.0, scale == 0.0))`, whose length is `sqrt(scale² (x² + y²) + z²)`, not 1 for a scale other than 1; its doc at :152-154 says "which glTF normalises last: the lit pass does, once its orthonormal tangent frame has turned the result into World space". The test's `normalize(...)` is the harness's, and the oracle at :1324-1326 normalises its own f64 vector, so the assertions at :1327-1337 pin the direction of the function's result and nothing about its length: the "normalises" the name claims is a property no assertion pins, which the lane's definition of `drift` names. The test's doc at :1289-1291 does say who normalises, and the function's doc says the same, so a reader has the correct statement two places over: not load-bearing. The fix renames a test: it cannot move a pixel.
+
+### Notes for the verifier
+
+Not filed, since each is a near-miss under the lane's axes, an allowed form, or belongs to another lane; recorded so the next audit does not re-find them. By reader: A shading and the display, B geometry, culling and lights, C the shadow mask and the assembly, D the shader tests.
+
+
+**A.**
+
+1. `view_proj` in `common.wgsl` (lines 14, 44, 47, 49, 51, 52) is counted under the render section's `view_proj` row (its 23 WGSL sites); not re-filed.
+2. `tests/conventions.rs` is green at this commit: no `n_dot_v`-style name, no ticket number in a comment, no `println!`, no `Less` depth and no sRGB format exists in these files; the ticket-number rule explains why `shading.wgsl:182` and `main.wgsl:209` carry a figure and not a reference to where it was measured.
+3. `shading.wgsl:108-111`, "summed over the hemisphere gave a white metal seen head-on 1.1% more light than it received", is a measured figure like L5-S02's, but the property it motivates is pinned: `reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives` (`shader_function_tests.rs:290`) sums the white furnace at the roughness floor from 0°, 60° and 85° and asserts the white metal reflects at most 1 + 1e-3. The figure is stale by design (it describes the form the code no longer takes) and the fix it motivated is under test, so it was weighed and not filed; the verifier may narrow L5-S02 and L5-S03 the same way if the triage wants one row for the three figures.
+4. `main.wgsl:212-261`: the first directional light is shaded outside the loop with `select`-ed inputs, so `reflected_luminance` appears twice where one loop from 0 would serve. The duplicate exists for the measured branch cost L5-S03 cites; folding it back into the loop is a cost question (lane 3), and a branch for a `select` can change the image on the M4 Pro, so it is not a health refactor. Not filed.
+5. `main.wgsl:1-3`, "The main pass's entry points, the depth pre-pass's and the lit pass's": the surface normals pipeline (`vs_depth_normals`, `fs_surface_normals`) is the depth pre-pass's with shadow rays on (`main_pass.rs:116-130`) and `fs_depth` the lit pass's depth pipeline (`:135-146`), and phase two's depth pass reuses the pre-pass pipeline, so every entry point is one of the two the header names. Checked, clean.
+6. `MaterialData.emissive.w`: `src/assets/material.rs:72` documents it as `w=strength` and `material.rs:284` writes `1.0` there, but no part reads it (`grep -n "\.emissive" src/render/shaders/*.wgsl` finds `shading.wgsl:88`, `.rgb`, and `main.wgsl:302`, the `Surface` field). A field written and never read, whose misdescribing comment is in `material.rs`; `common.wgsl:139` carries no comment on it. Falls in assets.
+7. `hdr.wgsl:16-17`, "as every shader of the lit pass writes it": the lit pass has one colour-writing fragment entry, `fs_main`, and `fs_depth`, which writes none, so the plural is vacuously true. Not filed.
+8. `gt7.wgsl:47`, `let peak = GT7_PAPER_WHITE;`, is an alias with 4 reads in a function with no other caller of the constant; the sample takes the peak as a parameter, and the alias keeps the ported lines readable against it. Adapted code under the MIT notice; not filed.
+9. `bounds_min`, `bounds_max`, `box_min`, `box_max`, `dynamic_tlas_bounds_min`, `dynamic_tlas_bounds_max` (`common.wgsl:20-21, 74-75, 192-193`): `min` and `max` are WGSL's and glam's own function names and the render section judged the Rust twins clean (`uniforms.rs:62, 64`); weighed as the domain's spelling, not filed. If the verifier reads them as abbreviations of minimum and maximum, the sites are those 6 plus `culling.wgsl:120-128` and `shadow_mask.wgsl:108-112`, 14 in all.
+10. `PQ_M1`, `PQ_M2`, `PQ_C1`, `PQ_C2`, `PQ_C3` (`gt7.wgsl:36-40`) are BT.2100-3's own symbols m1, m2, c1, c2, c3, which the comment at lines 34-35 names as the source of the spelling, and the part is adapted code; `lms` (`:85, 90-93, 99, 105-107`) is the LMS cone space, `rgb` and `ictcp` colour spaces. All weighed as the domain's words.
+11. `point_light_position` (`common.wgsl:121-133`): all 4 callers pass `camera.anchor, camera.offset` (`froxel.wgsl:38`, `light_count.wgsl:54`, `shadow_mask.wgsl:296`, `main.wgsl:285`), the shape of "a parameter every caller passes the same value". The part is also assembled into `BEND` (`mod.rs:166`, bind group `BENDS` alone) and the oracle harness's `SHARED` (`mod.rs:175`, no bind groups), where no `camera` is declared, so the function cannot read the binding itself and the parameters are load-bearing. Not filed.
+12. `common.wgsl:144`, `};` after `MaterialData`: the one struct among the 17 parts closed with a semicolon (`grep -n "^};" src/render/shaders/*.wgsl`). WGSL accepts the empty declaration. One character; below the bar, recorded so the next audit sees it was read.
+13. `shading.wgsl:1-2`, "shared by every pass that lights a surface": one module, `MAIN`, includes the part; true as written. The part is a shared part for the oracle harness, which `mod.rs:5-6` says.
+14. The ν formula at `shading.wgsl:124-126` and `smith_visibility` match the quote of `gltf-2.0-specular-brdf` (the height-correlated form), while `gltf-2.0.1-sample-brdf`'s quote names the published 2.0.1's separable form, as the header at lines 4-7 says. Whether the specification source's form is the right one to implement is lane 1's; the comments describe the code they sit beside. Checked, clean.
+15. `main.wgsl:273` recomputes the view depth as `(camera.view_proj * vec4(..., 1.0)).w`, a full `mat4x4` product for one row; `culling.wgsl:131` takes the whole clip position and `froxel.wgsl:39-41` dots the rows directly. A cost, not a twin helper: falls in lane 3.
+16. `fs_main` (`main.wgsl:170-307`, 137 lines) is the longest function among these parts; the probe reads no WGSL, so nothing is filed on the cognitive complexity axis, and its three sections (textures and tangent frame, the directional lights, the point lights) are each commented. Recorded for the next probe that can read WGSL.
+17. `docs/audit/deviations.md` has no rows at this commit; `scripts/cycles-reference/DIFFERENCES.md`'s shader differences (ambient without visibility, ambient as E/π, specular antialiasing and Toksvig, MSAA, BC and mips) describe `ambient_luminance` and `specular_antialiased_roughness` as they are; nothing in them is read as a defect here.
+18. The 29 registry keys the seven parts cite each exist in `docs/references.toml` (`grep -c '^\["<key>"\]'` is 1 for every one) and their quotes match the code beside the citation: among them BT.2087's matrix (`display.wgsl:8-12`, columns against the quote's rows), BT.2100's five PQ constants, the ICtCp rows, the sRGB knee at 0.0031308, KHR_lights_punctual's window, glTF's normal scale and occlusion clauses, Tokuyoshi's σ = 0.5 and κ = 0.18.
+
+
+**B.**
+
+1. `visible_before` (`culling.wgsl:228-230`) has one caller (`:259`) and a one-line body, the lane's canonical over-engineering form. Not filed: the name carries the bit layout the comment explains, and inlining it at `:259` would put `extractBits(instance_visibility[slot / 32u], slot % 32u, 1u) == 1u` inside a three-term boolean. Deep-module rule over line count.
+2. `pixel_minimum` (`depth_pyramid.wgsl:29-34`) is called only by `pixel_minimum_within` (`:52`), and `shared_block_minimum` (`:56-61`) only at `:100`. Not filed: merging `pixel_minimum` into `pixel_minimum_within` saves 3 lines and moves the Metal unrolling comment under an edge test; `shared_block_minimum` names the step `reduce_depth`'s comment describes.
+3. `OverlappedTexels` (`depth_pyramid.wgsl:10-13`) exists to return two `vec2<u32>` from `overlapped_texels`, which has one caller (`:132`). WGSL's form for two return values; not filed.
+4. `froxel_slice_start` (`froxel_grid.wgsl:19-22`) sits in the shared grid part and only `froxel.wgsl` calls it (`:17-18`); `grep -rnw froxel_slice_start src`: 3 lines. Not filed: its inverse `froxel_slice` (`:25-28`), which `froxel_at` calls for three modules, sits beside it, and the pair is the grid's slicing in both directions; moving one to the pass part splits the definition for no caller's gain. The axis's "wider than needed" form is a function only its own part calls; this one another part calls.
+5. `froxel_slice` is called only within its own part (`froxel_at`, `:40`): a helper of a shared function, which the axis's rule does not mean to move. Not filed.
+6. `view_proj` appears in `culling.wgsl` (2 sites), `froxel.wgsl` (3) and `light_count.wgsl` (3); counted under the render section's `view_proj` row, not re-filed.
+7. Single-letter identifiers found by a sweep of the six parts with comments stripped: `.r` (a swizzle, `culling.wgsl:220-221`, `depth_pyramid.wgsl:117-118`), `u` (literal suffixes), `e` (`1e-4` at `culling.wgsl:165`), `w`, `x`, `y`, `z` (components). `num_workgroups` (`culling.wgsl:403`) is the WGSL builtin's spelling. None of the lane's abbreviation list appears. Allowed.
+8. `culling.wgsl:390-393`, `APPEND_WORKGROUP_SIZE = 32u`, justifies the size by a measurement ("wider workgroups wrote a dense scene's draw slower") nothing in the tree checks. Not a number in the comment's sense, and a cost reason; falls in lane 3 if re-measured.
+9. `culling.wgsl:160-165`, "ADR 0014's worst camera-relative error, 0.041 mm", matches `docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md:19` ("sum to 0.041 mm"); `COMPOSITION_ERROR = 1e-4` m is twice 0.041 mm rounded up to 0.1 mm as the comment says. Checked, accurate.
+10. `bend.wgsl:23-27`: the series `1 - s/6 (1 - s/20 (1 - s/42))` is `1 - s/6 + s^2/120 - s^3/5040`, the terms through angle^6; the next, angle^8 / 9!, at 0.5 rad is 0.5^8 / 362,880 = 1.08e-8, under the 1.1e-8 stated. `msl-4.1-fast-math` (`docs/references.toml:54`) and `msl-4.1-sin-fast-accuracy` (`:419`, "maximum absolute error is <= 2^-13") say what the comment claims. Checked, accurate.
+11. `culling.wgsl:1-7`'s draw claim (one indirect call per phase and depth pipeline, one of both phases for the lit pipeline) matches `main_pass.rs:262` (offset 0), `:296` (`PHASE_TWO_DRAW_OFFSET`), `:330` (`PHASE_TWO_DRAW_OFFSET`, into depth) and `:333` (offset 0). `:7-9` breaks "With the CULLING / Render switch on" across three short lines; layout, not an inaccuracy; not filed.
+12. With the `CULLING` switch off, phase two's `offset_slots` still gathers and writes visibility bits (`culling.wgsl:268-277`) that phase one never reads (`:259`, `!CULLING || visible_before(slot)`). `CULLING` is a pipeline constant, so no source branch is dead; a cost question, falls in lane 3.
+13. `FrameDraw` (`culling.wgsl:45-52`) and `LightCounts` (`common.wgsl:112-117`) are read back by the CPU (`readback.rs:399`, `:410`) through Rust twins (`culling_pass.rs:82-91`, `froxel_pass.rs:38-43`), but the twin test covers only structs the CPU writes (`shader_tests.rs:380-383`, "a struct only the GPU writes needs no Rust twin"), so their layouts are pinned by hand (`culling_pass.rs:89`, the `_padding` comment). Falls in lane 6.
+14. `froxel_at`, `froxel_slice` and `froxel_slice_start` sit in the shared `FROXEL_GRID` part, which is not in the `SHARED` module the oracle harness assembles (`mod.rs:175`: `COMMON, SHADING, HDR, GT7, DISPLAY`), so none has an oracle. The convention "a function under an oracle lives in a shared part" is not broken, as none is under one; whether one should be falls in lane 6.
+15. `MESHLET_MAX_TRIANGLES` is declared to WGSL at `mod.rs:240` and `grep -rn MESHLET_MAX_TRIANGLES src/render/shaders/*.wgsl` finds no part reading it. Filed as L5-S07.
+16. L5-S05's two forms agree only for a `view_proj` whose x, y and w rows are mutually orthogonal, which the engine's rigid view under `perspective_infinite_reverse_rh` gives; `position_at`'s oracle pins that case. Whether either form is right for a sheared or scaled view falls in lane 1; neither is wrong for the camera the engine builds.
+17. `DrawIndexedIndirect` and `DispatchIndirect` (`culling.wgsl:22-35`) mirror wgpu's `DrawIndexedIndirectArgs` and `DispatchIndirectArgs`; WGSL cannot import them, so the mirror is the only form. Not duplication of the lane's kind.
+18. `offset_slots` reads `instances[slot]` twice (`culling.wgsl:248-249`, once for `.mesh` in the condition, once whole). A load the compiler may merge; a cost question at most, falls in lane 3.
+
+
+**C.**
+
+1. `sample_offset` (`shadow_mask.wgsl:186` to `192`) has one caller, `sample_surface` at line 211, and selects among `SAMPLE_OFFSETS[0]` to `[3]` with three `select`s where `SAMPLE_OFFSETS[sample]` would read as one expression; `build_shadow_mask` indexes the array by literal at lines 419 to 422. No comment says why the select chain exists; naga's backends copy a `const` array to a local for a runtime index, so the chain is likely a cost choice. That is a GPU cost question (falls in lane 3) and the rewrite could change code generation, so it is not filed here.
+2. `position_at`, `octahedral_decode` and `segment_meets_box` live in `common.wgsl` and are called from `shadow_mask.wgsl` alone (`grep -lw` across the parts: `common.wgsl` and `shadow_mask.wgsl` each; 7, 5 and 2 sites with their definitions). Each is under an oracle (`shader_function_tests.rs:1618`, `:1682`, `:1865`), and a function under an oracle lives in a shared part by the module's own rule (`mod.rs:5` to `6`), so their place is right; the width of `common.wgsl` is judged in its own row above.
+3. The two marker parts, 17 and 7 lines, keep their own files and `ShaderModule` entries. Each binds a group of its own (`DYNAMIC_TLAS_MARKERS`, `BLAS_REFIT_MARKERS`, both index 3, both with `marker_result`), and the dynamic TLAS's marker binds only that TLAS because wgpu-core walks every bound TLAS's dependencies per Instance at each flush (`bind_groups.rs:99` to `106`, `shader_tests.rs:40` to `63`), so folding it into the shadow mask module, which binds both TLAS in group 2, would make each marker pass pay the static TLAS's walk; the refit marker is gated to Apple with its caller (`blas_refit.rs:285`). One module with two entry points would need one group holding the TLAS and the refit scratch, and the ray-query `enable` for a part that never queries. Not filed.
+4. The prologues of `trace_second_surfaces` (`shadow_mask.wgsl:486` to `495`) and `trace_shadow_edges` (`:636` to `644`) share eight lines: lane 0 loads the count, the entry index, `workgroupUniformLoad`, the early return, the entry's load and the pixel's decode. The early `return` cannot move into a helper and the decodes differ (bits 16 to 29 and bit 30 for a second surface, bits 16 and up for an edge), so a helper would serve half the block; weighed and not filed, beside L5-S09.
+5. The headers of `shadow_mask_pass.rs:8` to `11` (edges only, not the turned-sample case) and `bind_groups.rs:198` to `203` (`SHADOW_MASK_BUILD`'s doc names neither `directional_verdicts`, `shadow_edges` nor `shadow_edge_dispatch`) are the render module's comments: falls in render.
+6. `mod.rs:57` to `58` documents `COMMON` as "the structs more than one pass reads, the Anchor composition, the packed index and the vertex decode"; `common.wgsl:1` to `3` lists one more, "the position a depth target's depth places at a pixel", and the part also holds `segment_meets_box`, the octahedral codec, `point_light_position`, `FroxelList` and `LightCounts`. Incomplete, not wrong; a reader is not misled into wrong code. Not filed; a one-line fix if L5-S07 opens `mod.rs`.
+7. `assemble` declares every constant to every module whatever it reads (`SCAN_BLOCK_SIZE` reaches the tonemapping module, `DITHER_MASK_SIDE` the culling module), and every override to every module (`SHADOW_RAYS` is read by `main.wgsl` alone, 2 sites; `CULLING` by `culling.wgsl` alone, 5 sites). One block is the design the header states, every pipeline sets every override (`shadow_mask_pass.rs:142`), and naga drops an unread `const`. Not filed.
+8. `view_proj` at `shadow_mask.wgsl:212`, `216`, `261` and `419` to `422` is counted under the render section's `view_proj` row.
+9. Naming weighed and allowed: `lane` for `local_invocation_index` (a full word, the SIMD lane); `hit.t` (`RayIntersection`'s own field, wgpu's API name; the comment at line 81 writes "tmin and tmax" as the textbook symbols); `own` for the pixel's own verdict word; `group` and `groups` for the workgroup builtins; `point` at line 295 for a `LightData` that is a point light, a full word that names the light's kind rather than its role (`light` is taken by the uniform); `0xffu` for the cull mask, a literal. In `mod.rs`, `x` and `y` at line 271 bind coordinates.
+10. `shadow_mask.wgsl:261`, `let view_depth = camera.view_proj[3].z / depth;`, reads a view depth from the projection's fourth column, which holds for a camera-relative view with no translation (`common.wgsl:5` to `6`) and an infinite reverse-Z projection; whether every caller of `froxel_at` recovers depth the same way is a correctness reading: falls in lane 1.
+11. Comment numbers recomputed: sin 2° = 0.03489949670, sin 10° = 0.17364817767, cos 3° = 0.99862953475 (`shadow_mask.wgsl:72` to `78`); 2^-16 and 2^-5 (lines 33, 48, 59); the 256 at lines 32 and 56 is 2^-16 over 2^-24. `UNBOUNDED_RAY_DISTANCE` is f32's largest finite value. The six registry keys the part cites exist in `docs/references.toml` (`wachter-binder-2019-offset-error`, `d3d11.3-rasterizer-precision`, `vulkan-subpixel-precision-bits`, `nvidia-2022-rtx-best-practices-shadow-rays`, `lauritzen-2010-per-sample-scheduling`, `lauritzen-2010-edge-detection`); whether each says what the comment claims is lane 7's reading.
+12. `trace_shadow_edges:647` traces `turned_lights(own)`, every light the nearest sample turns from, where `list_shadow_edges:607` lists a pixel only for those another sample faces (`turned_lights_other_samples_face`). The comment at lines 624 to 629 describes the code as written, and a sample that also turns is hidden with no ray (`directional_hidden`), so the wider set costs no ray at the pixels listed. Not a Finding.
+13. `Part::path` is read only by `locate`, under `cfg(test)`, and carries `cfg_attr(not(test), allow(dead_code))` with a doc that says what it is for (`mod.rs:41` to `43`). A field kept for error messages in tests is not vestigial; not filed.
+14. `directional_hidden` (one caller, `shadow_mask.wgsl:673`) and `turned_lights_other_samples_face` (one caller, `:607`) each name one step of a dispatch in 5 and 29 lines; neither is an abbreviation of a line. Not filed; the former's duplicated body is L5-S10.
+15. Nothing in the three WGSL parts reaches `tests/conventions.rs`'s six rules, which are green at this commit; no row above re-finds one.
+16. The worktree was unavailable for the last greps; they ran in the main checkout, whose `src/` and `tests/` equal the frozen commit (`git diff --stat 8bc34eb1 HEAD -- src tests` is empty; the only differences are two scripts under `scripts/cycles-reference/` and `scripts/gallery.sh`, outside this module).
+
+
+**D.**
+
+1. `smith_visibility_matches_appendix_b_and_keeps_g_within_zero_to_one` (`shader_function_tests.rs:170`) asserts G ≤ 1 directly at :200 and G ≥ 0 only through the reference match at :198: `reference_visibility` is 0 or a positive reciprocal and every cosine in the cases is 0 or positive, so G lands within `RELATIVE_TOLERANCE × expected` of a non-negative value. The lower bound is pinned, indirectly; not filed.
+2. `type Case = (...)` at `shader_function_tests.rs:1874`, local to the segment test, shadows the file's `struct Case` at :2054, the camera-relative test's fixture. Two things of one name in one file, the alias in scope for 150 lines. Both are full words, so the naming axis as the lane names it does not hold it; weighed as clarity, not filed.
+3. `evaluate_cases`'s `vertices` parameter (`shader_function_tests.rs:2193`) is `&[]` in 8 of 9 calls and the cooked vertices in 1 (:1516). One caller exercises it, so it is not flexibility nothing exercises; the alternative, a second harness function, would duplicate 100 lines. Not filed.
+4. `SRGB_TOLERANCE` (:1049), `DISPLAY_RAMP_TOLERANCE` (:1167) and `FURNACE_SUM_TOLERANCE` (:487) each have one use. A literal beside its assertion would serve, but the file's convention is a named constant carrying the measured rationale in its doc, which every tolerance in the file follows. Not filed.
+5. Literals that a Rust constant could replace: BT.709's 0.2126, 0.7152, 0.0722 at :662-664 and again at :721 while `LUMINANCE_COEFFICIENTS` exists in `src/render/targets.rs`; ST 2084's fractions at :809-814 while `gt7.wgsl:36-40` holds the decimals; 0.04 at :25 and :1278 while `shading.wgsl:16` holds `DIELECTRIC_BASE_REFLECTANCE`. The header at :1-3 says the oracles are "written apart from the shader", so reading the engine's constants would defeat them. The two BT.709 sites could share one test-local constant; below a ticket's magnitude. Not filed.
+6. `Case` with its 4 methods and `sums_in_every_order` (:2054-2139, 86 lines) serve one test. They hold the oracle's logic (every f32 summation order of four terms, the f32 World-position control), not an abstraction over it. Not filed.
+7. `minimum_roughness` (:1465) reads `MINIMUM_ROUGHNESS` from the shader with a GPU dispatch of one invocation, called in 7 tests. `grep -rn MINIMUM_ROUGHNESS src --include='*.rs'` finds no Rust twin of the constant, so the alternative is a literal `0.04` duplicated from `shading.wgsl:22`. The dispatches' cost falls in lane 3; the design is sound. Not filed.
+8. Every oracle test creates its own headless `GpuContext` (`gpu_context`, 28 callers). Whether 28 device creations per run are a cost or a flake source falls in lane 3 or lane 6; not a health matter.
+9. The tolerances and the measured numbers their docs carry (`TOLERANCE`'s "within 2e-7 of theirs on the M4 Pro" at :12-13, `GT7_TOLERANCE`'s 7e-5 and 2.3e-4 at :1013-1018, `DIRECTION_TOLERANCE`'s 1.1e-5 at :1189-1193, `QUADRATURE_TOLERANCE`'s 7.1e-4 at :489-492) and whether each oracle is the right oracle fall in lane 1.
+10. The comment at `shader_function_tests.rs:1806`, "Vertices up to 128 m from their pivot, the most a cooked mesh holds", restates ADR 0014's consequence ("cooked meshes stay within 128 m of their pivot"). `grep -rn 'pivot' src/cook src/assets` and `grep -rn '\b128\b' src/cook` find no bound the cooker enforces (run on the main checkout, whose `src/cook` and `src/assets` are unchanged since the frozen commit, `git diff --stat` empty). The comment matches the ADR; whether the code matches the ADR falls in lane 7.
+11. Comment claims checked against the tree and found matching: `shader_tests.rs:40` "wgpu-core 30.0.1" against `Cargo.lock` (`version = "30.0.1"`); `GOLD` "as the pbr-sweep scene uses it" (:1179-1182) against `src/scenes/mod.rs:522` `SWEEP_BASE_COLOR = [1.0, 0.71, 0.29, 1.0]`; "the 2^-16 a shadow ray's origin leaves its surface by" (:1615) against `shadow_mask.wgsl:33` `SHADOW_RAY_OFFSET_SCALE = 1.52587890625e-5; // 2^-16`; "within 0.95° of it, the bound the shadow mask's margins take" (:1680) against `shadow_mask.wgsl:64`; "which the mask holds 16 times each" (:1055) against `tonemapping_pass.rs:17` `DITHER_MASK_SIDE = 64` (4096 texels over 256 levels) and its test at :185-199; `display-ramp.txt` "which the Cycles reference's port of it is checked against" (:1087-1088) against `scripts/cycles-reference/compare.py`, which reads the file; "top 26 bits ... low six" (:1548-1549) against `src/assets/cooked.rs:40` `MESHLET_MAX_VERTICES = 64` and `mod.rs:264` `ilog2()`; `gt7_curve`'s "towards 2.963, 1.19 times the peak" (:756) against `shoulder_limit` at `gt7.wgsl:55`, 2.5 × 1.18533 = 2.9633, so 1.19 is the two-decimal rounding; the `i16` impl of `ShaderScalar` (`shader_tests.rs:608-611`) against `CookedVertex::qtangent: [i16; 4]` (`src/render/bend_pass.rs:210`); `PRECISION_BAR`'s 0.043 mm (:1767-1769) against ADR 0014's precision bar and the arithmetic (tan 22.5° × 0.3 m × 2 / 1440 × 0.25 = 4.31e-5 m); the resolve doc's 0.395 and 25.04 (:684-685) against the formula at :719-730.
+12. `view_proj` at `shader_tests.rs:242` and `shader_function_tests.rs:1611`, :1614, :1628, :1629, :1657 are the 6 sites the render section's `view_proj` row counted for these two files; not re-filed.
+13. `point_light_luminance_attenuates_the_intensity_it_reflects`'s doc (:539-545) says the lights are "beside and above the normal" while its cases include a polar angle of 120° (:557), below the horizon. The reference handles it (N·L clamped at 0 at :601) and the doc of `reflected_luminance`'s test names that case. A loose span, not a wrong statement; not filed.
+14. Vestigial sweep: every function, constant, struct field and macro in both files has a caller (Interface widths). `Part::path`'s `#[cfg_attr(not(test), allow(dead_code))]` at `shaders/mod.rs:42` exists for `shader_tests.rs`'s error messages and `every_wgsl_file_is_a_part_of_some_module`; weighed in the assembly's notes, not vestigial.
+15. Functions of the shared parts with no oracle of their own (`point_light_position`, `rotate`, `decode_qtangent`, `unpack_qtangent`, `resolve_weighted` alone, `LARGEST_HALF`): `decode_vertex`'s oracle exercises the three QTangent functions and the resolve oracle both halves; `point_light_position` is a five-argument call of `camera_relative_position`. Whether any needs its own seam falls in lane 6.
+16. The harness kernel (:2160-2174) declares `test_vertices` at binding 2 for every test and `evaluate_cases` binds it only when `vertices` is non-empty (:2237-2262), which rests on wgpu's auto layout dropping a binding the expression never reads. The tests are green at the frozen commit, so the reliance holds; a comment saying so would help a reader who adds a vertex-reading expression without vertices. Below a ticket; not filed.
+17. The worktree at the frozen commit was unavailable after every file had been read in full and every count but one taken there. The remaining grep (Note 10) ran on the main checkout at `3368786d`, whose `src/cook`, `src/assets`, `src/render/shaders` and the two test files `git diff --stat` shows unchanged since the frozen commit.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 0 |
+| `drift` | 7 (L5-S01, L5-S02, L5-S03, L5-S11, L5-S12, L5-S14, L5-S15); load-bearing 0 |
+| `health` | 8 (L5-S04, L5-S05, L5-S06, L5-S07, L5-S08, L5-S09, L5-S10, L5-S13) |
+
+By axis: over-engineering 5 (L5-S05, L5-S06, L5-S08, L5-S09, L5-S10);
+vestigial 1 (L5-S07); cognitive complexity 0 (the probe ran clean under
+`src/render/` and reads no WGSL); naming 2 (L5-S04, L5-S13); module depth
+0; comment accuracy 7 (the `drift` rows), of which 3 carry a measured
+figure nothing in the tree checks (L5-S02, L5-S03, L5-S12). Of the
+`health` rows, 1 is in a test module only (L5-S13) and 7 in shipping
+code; of the `drift` rows, 2 are in a test module (L5-S14, L5-S15). Axis
+sweep: 19 file rows. Interface widths: 28 parts, types and surfaces, 152
+public items counted (81 in the shading and display parts, 17 in the
+geometry parts, 35 in the shadow mask and marker parts, 19 in `mod.rs`)
+and 51 private items in the two test modules. Files read in full: the 19
+of the module; read in full or in part for use counts, dispatch shapes
+and the twins the parts rely on: the passes, bind groups, uniforms and
+Instance layout of the render module, the material and cooked-vertex
+types, the ADRs named above, the registry, the performance notes and this
+report's render section.
+
 ## Killed
 
 Written by the report session.
