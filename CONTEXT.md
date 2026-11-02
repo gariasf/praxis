@@ -188,6 +188,10 @@ _Avoid_: Metrics, telemetry
 The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.
 _Avoid_: Benchmark result
 
+**Cycles Baseline**:
+The recorded distance of an exported Reference scene's capture from its Cycles render at a named commit, in two figures: the mean 8-bit difference of their display colours and the RMSE of their display-linear light, with the frame, resolution and Blender version that made them. The gallery with `PRAXIS_BLENDER` fails a scene whose run exceeds either figure by its tolerance; each scene has its own, as its known differences differ.
+_Avoid_: Image threshold, reference error
+
 **Bench record**:
 One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.
 _Avoid_: Benchmark result, sample, data point
