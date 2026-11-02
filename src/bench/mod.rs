@@ -3,8 +3,8 @@ mod provenance;
 mod report;
 
 pub use history::{
-    Publication, ReleaseBuild, check_experiment_name, import_baselines, publish,
-    publish_experiment, unrecorded_scenes,
+    Publication, ReleaseBuild, Suspect, bisect, check_experiment_name, import_baselines, publish,
+    publish_experiment, suspects, unrecorded_scenes,
 };
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;

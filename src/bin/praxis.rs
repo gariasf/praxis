@@ -78,6 +78,10 @@ enum Command {
     },
     ImportBaselines,
     UnrecordedScenes,
+    Suspects,
+    Bisect {
+        night: String,
+    },
     Compare {
         results: String,
         mode: CompareMode,
@@ -138,6 +142,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         } => publish(&results, release_build_seconds, experiment.as_deref()),
         Command::ImportBaselines => import_baselines(),
         Command::UnrecordedScenes => unrecorded_scenes(),
+        Command::Suspects => suspects(),
+        Command::Bisect { night } => bisect(&night),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -277,6 +283,14 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, subcommand] if command == "history" && subcommand == "unrecorded" => {
             Command::UnrecordedScenes
         }
+        [command, subcommand] if command == "history" && subcommand == "suspects" => {
+            Command::Suspects
+        }
+        [command, subcommand, night] if command == "history" && subcommand == "bisect" => {
+            Command::Bisect {
+                night: night.clone(),
+            }
+        }
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -297,7 +311,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -519,6 +533,35 @@ fn unrecorded_scenes() -> anyhow::Result<()> {
         &scenes,
     )? {
         writeln!(stdout, "{scene}")?;
+    }
+    Ok(())
+}
+
+/// Prints, one per line and oldest first, this machine's Suspects that got
+/// slower and have no Verdict yet, each with the record before it.
+fn suspects() -> anyhow::Result<()> {
+    let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
+    let mut stdout = std::io::stdout();
+    for suspect in praxis::bench::suspects(Path::new("."), &adapter.name, adapter.backend.to_str())?
+    {
+        writeln!(stdout, "{suspect}")?;
+    }
+    Ok(())
+}
+
+/// Takes the sweep's next step of re-benching and bisecting a Suspect on
+/// this machine, whose runs so far are in `night`'s directories, and
+/// prints the scene and commit to bench next into a new one, nothing once
+/// the night is done.
+fn bisect(night: &str) -> anyhow::Result<()> {
+    let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
+    if let Some((scene, commit)) = praxis::bench::bisect(
+        Path::new("."),
+        &adapter.name,
+        adapter.backend.to_str(),
+        Path::new(night),
+    )? {
+        writeln!(std::io::stdout(), "{scene} {commit}")?;
     }
     Ok(())
 }
@@ -918,6 +961,14 @@ mod tests {
             parse(&["history", "unrecorded"]).unwrap(),
             Command::UnrecordedScenes
         ));
+        assert!(matches!(
+            parse(&["history", "suspects"]).unwrap(),
+            Command::Suspects
+        ));
+        let Command::Bisect { night } = parse(&["history", "bisect", "night"]).unwrap() else {
+            panic!("history bisect parsed as another command");
+        };
+        assert_eq!(night, "night");
         assert!(parse(&["history"]).is_err());
     }
 
