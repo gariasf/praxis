@@ -54,7 +54,7 @@ desktop only: Windows, Linux, macOS
 | M0 | Verify command, goldens, benches, frame stats | done |
 | M1 | Frame foundations: f64 positions, reverse-Z, threading, fixed step | done |
 | M2 | Cooked assets | done |
-| M3 | Main pass: culling, MSAA, lighting, ray-traced shadows, HDR | in progress |
+| M3 | Main pass: culling, MSAA, lighting, ray-traced shadows, HDR | done |
 | M4 | Streamed world: LOD and streaming | |
 | M5 | Global illumination: ray-traced probes | |
 | M6 | World content | |
