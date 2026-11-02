@@ -207,6 +207,7 @@ impl BenchRecord {
 struct StoredRecord {
     /// When the measured commit was committed, which orders a Series.
     committed_unix_seconds: u64,
+    /// The adapter's name, one per Series.
     adapter: String,
     provenance: StoredProvenance,
     measured_frames: u32,
@@ -321,19 +322,27 @@ impl SeriesRecord for StoredRecord {
 
     fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_> {
         let mut rows: Vec<SeriesRow> = records.iter().map(SeriesRow::of).collect();
-        // lavapipe's times mean nothing, so none of its records is a suspect.
+        // A Series is one adapter's, and lavapipe's times mean nothing, so
+        // none of its records is a suspect.
         if records
             .first()
             .is_some_and(|record| !is_lavapipe(&record.adapter))
         {
+            let starts_line: Vec<bool> = rows
+                .iter()
+                .enumerate()
+                .map(|(index, row)| {
+                    (index > 0 && !rows[index - 1].same_definition(row))
+                        || row.source == Some(import::IMPORTED_SOURCE)
+                })
+                .collect();
             for (metric, median) in JUDGED_TIMINGS {
                 let points: Vec<suspects::Point> = rows
                     .iter()
-                    .enumerate()
-                    .map(|(index, row)| suspects::Point {
+                    .zip(&starts_line)
+                    .map(|(row, &starts_line)| suspects::Point {
                         median: median(row),
-                        starts_line: (index > 0 && !rows[index - 1].same_definition(row))
-                            || row.source == Some(import::IMPORTED_SOURCE),
+                        starts_line,
                     })
                     .collect();
                 for (row, shift) in rows.iter_mut().zip(suspects::suspects(&points)) {
@@ -1094,7 +1103,8 @@ impl<'record> SeriesRow<'record> {
     }
 
     /// Whether `later` measures what this row does: one Harness version, and
-    /// one scene content where both know it, as a chart's line runs.
+    /// one scene content where both know it, as a chart's line runs: the
+    /// twin of the bench page's `sameDefinition`.
     fn same_definition(&self, later: &Self) -> bool {
         self.harness_version == later.harness_version
             && (self.scene_content_hash.is_none()
@@ -1746,7 +1756,6 @@ mod tests {
         assert_eq!(fixture.read(&lavapipe_path), lavapipe_record);
     }
 
-    /// lavapipe's result of `checkout` in CI's configuration.
     #[test]
     fn a_series_marks_a_step_as_a_suspect_unless_a_baseline_or_lavapipe_takes_it() {
         let rows = |adapter: &str, step_source: Option<&str>| {
@@ -1791,6 +1800,7 @@ mod tests {
         assert_eq!(suspects(rows("llvmpipe (LLVM 20.1.2)", None)), unmarked);
     }
 
+    /// lavapipe's result of `checkout` in CI's configuration.
     fn lavapipe_result(checkout: &Path, p95_over_median: f64) -> Measurements {
         let ci_configuration = Configuration::CI_COUNTERS;
         Measurements {

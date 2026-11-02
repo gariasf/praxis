@@ -102,7 +102,9 @@ src/
                                  Bench records on `bench-history`;
                                  history/import.rs, `praxis history
                                  import`: the Baselines committed before
-                                 it, by Harness version era
+                                 it, by Harness version era;
+                                 history/suspects.rs, which Series
+                                 records are Suspects
   stats/                       # frame stats: CPU and GPU times, counts,
                                  GPU memory, counting allocator
   scenes/                      # Reference scenes: generated content,

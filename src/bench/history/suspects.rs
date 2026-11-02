@@ -12,52 +12,71 @@ const FEWEST_JUDGING_RECORDS: usize = 3;
 
 /// How many median absolute deviations of its window a median may sit from
 /// the window's median before it is a suspect.
-const DEVIATIONS: f64 = 4.0;
+const MEDIAN_ABSOLUTE_DEVIATIONS: f64 = 4.0;
 
 /// The smallest shift that makes a suspect, as a share of the window's
 /// median, so that a window of near-equal medians does not flag noise.
-const SMALLEST_SHIFT: f64 = 0.03;
+const SMALLEST_SHIFT_FRACTION: f64 = 0.03;
 
 /// One record's median of a metric, as a Series orders them.
 pub(super) struct Point {
     /// None when the record did not measure the metric.
     pub median: Option<f64>,
     /// Whether no record before it compares with it: its Harness version or
-    /// scene content changed, or a re-recorded Baseline accepted its level.
+    /// scene content changed, or it is an imported Baseline, which accepted
+    /// its level.
     pub starts_line: bool,
 }
 
 /// Each point's shift from the median of up to `WINDOW_RECORDS` medians
 /// before it on its line, as a share of that median, when it lies outside
-/// that median ± max(`DEVIATIONS` × their median absolute deviation,
-/// `SMALLEST_SHIFT` of it) and the measured point before it on its line did
-/// not lie outside on the same side; none for every other point. So a step
-/// is flagged where it starts, not again while the window's median still
-/// lags it, and a lone outlier stays in later windows, outvoted.
+/// that median ± max(`MEDIAN_ABSOLUTE_DEVIATIONS` × their median absolute
+/// deviation, `SMALLEST_SHIFT_FRACTION` of it); none for every other point, and none for a point
+/// that only continues the step before it: outside on the same side, and
+/// within the flagged point's tolerance of its median. So a step is flagged
+/// where it starts, not again while the window's median still lags it, a
+/// second step on the same side is flagged again, and a lone outlier stays in
+/// later windows, outvoted.
 pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
     let mut line = Vec::new();
-    let mut side_before = None;
+    // The step the points before continue: its side, median and tolerance.
+    let mut step: Option<(bool, f64, f64)> = None;
     points
         .iter()
         .map(|point| {
             if point.starts_line {
                 line.clear();
-                side_before = None;
+                step = None;
             }
             let median = point.median?;
             let window = &line[line.len().saturating_sub(WINDOW_RECORDS)..];
-            let shift = shift_outside(window, median);
+            let band = band(window);
             line.push(median);
-            let side = shift.map(|shift: f64| shift > 0.0);
-            let continues_step = side.is_some() && side == side_before;
-            side_before = side;
-            shift.filter(|_| !continues_step)
+            let Some((center, tolerance)) = band else {
+                step = None;
+                return None;
+            };
+            let shift = (median - center) / center;
+            if (median - center).abs() <= tolerance {
+                step = None;
+                return None;
+            }
+            let side = shift > 0.0;
+            let continues = step.is_some_and(|(step_side, step_median, step_tolerance)| {
+                step_side == side && (median - step_median).abs() <= step_tolerance
+            });
+            if continues {
+                return None;
+            }
+            step = Some((side, median, tolerance));
+            Some(shift)
         })
         .collect()
 }
 
-/// `median`'s shift from `window`'s median when it lies outside the window.
-fn shift_outside(window: &[f64], median: f64) -> Option<f64> {
+/// `window`'s median and how far from it a median may lie, when it holds
+/// enough records to judge.
+fn band(window: &[f64]) -> Option<(f64, f64)> {
     if window.len() < FEWEST_JUDGING_RECORDS {
         return None;
     }
@@ -66,8 +85,10 @@ fn shift_outside(window: &[f64], median: f64) -> Option<f64> {
         window.iter().map(|value| (value - center).abs()).collect(),
         0.5,
     );
-    let tolerance = (DEVIATIONS * deviation).max(SMALLEST_SHIFT * center);
-    ((median - center).abs() > tolerance).then(|| (median - center) / center)
+    Some((
+        center,
+        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(SMALLEST_SHIFT_FRACTION * center),
+    ))
 }
 
 #[cfg(test)]
@@ -114,6 +135,14 @@ mod tests {
         assert_eq!(flagged(&line(&medians)), [12]);
         let shift = shifts[12].unwrap();
         assert!((0.04..0.06).contains(&shift), "{shift}");
+    }
+
+    #[test]
+    fn a_second_step_on_the_same_side_is_flagged_again() {
+        let mut medians = NOISE.to_vec();
+        medians.extend(NOISE[..2].iter().map(|median| median * 1.05));
+        medians.extend(NOISE.iter().map(|median| median * 1.10));
+        assert_eq!(flagged(&line(&medians)), [12, 14]);
     }
 
     #[test]
