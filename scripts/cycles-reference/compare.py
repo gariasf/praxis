@@ -5,15 +5,24 @@ values in display-ramp.txt, within one 8-bit step.
 
     blender -b --factory-startup --python-exit-code 1 --python compare.py -- ramp
     ... -- compare <praxis png> <cycles exr> <cycles png> <difference png>
+           [--baseline <scene> <frame> <json> [--record]]
     ... -- crop <praxis png> <cycles png> <x> <y> <width> <height> <png>
 
 `compare` writes the Cycles render through the display transform and the
 difference: praxis's capture dimmed to a quarter, under red where praxis
 is brighter and blue where Cycles is, at four times the channel that
-differs most, so a change of hue shows too. `crop` writes praxis | Cycles | difference of a
-region, each pixel doubled.
+differs most, so a change of hue shows too; it prints the two figures of
+their distance, the mean 8-bit difference of their display colours and the
+RMSE of their display-linear light. With `--baseline`, it judges the figures
+against the scene's Cycles Baseline, `bench/cycles/<scene>.json`, and fails
+when either exceeds its recorded value by its tolerance; with `--record`, it
+writes that Baseline from this run instead. `crop` writes praxis | Cycles |
+difference of a region, each pixel doubled.
 """
+import argparse
+import json
 import os
+import subprocess
 import sys
 
 import bpy
@@ -73,6 +82,14 @@ LMS_TO_REC2020 = np.array([
     [-0.0259499, -0.0989137, 1.12486],
 ])
 EIGHT_BIT_STEP = 1.0 / 255.0
+# How far a run may exceed its Cycles Baseline before it fails. Three
+# captures and renders of every exported scene at one commit on the M4 Pro
+# spread each figure by under 0.000001 steps and 0.0000001 RMSE (the
+# captures repeat bit for bit; Cycles' Metal render differs by up to 0.005
+# on a dozen pixels and by float noise elsewhere), so these are ten times
+# the Baseline's own rounding.
+MEAN_DIFFERENCE_TOLERANCE_STEPS = 0.01
+LINEAR_RMSE_TOLERANCE = 0.0001
 
 
 def smoothstep(edge0, edge1, x):
@@ -133,6 +150,13 @@ def srgb_encode(display):
     return np.where(clamped <= 0.0031308, 12.92 * clamped, 1.055 * np.power(clamped, 1.0 / 2.4) - 0.055)
 
 
+def srgb_decode(encoded):
+    # The sRGB EOTF, the inverse of srgb_encode, with the knee's equality on
+    # the linear side [ref:khronos-dfs-srgb-eotf].
+    clamped = np.clip(encoded, 0.0, 1.0)
+    return np.where(clamped <= 0.04045, clamped / 12.92, np.power((clamped + 0.055) / 1.055, 2.4))
+
+
 def display(exposed):
     """sRGB-encoded display colour of exposed linear Rec. 709 colour, as the
     tonemapping pass writes it before its dither."""
@@ -182,19 +206,87 @@ def difference(praxis, cycles):
     return shown
 
 
+def figures(praxis, cycles, cycles_linear):
+    """How far praxis's capture is from the Cycles render through the
+    display transform, given sRGB-encoded and display-linear: the mean
+    difference of their sRGB-encoded display colours in 8-bit steps, and the
+    RMSE of their display-linear light."""
+    mean_steps = np.abs(praxis - cycles).mean() * 255.0
+    linear_rmse = np.sqrt(np.mean((srgb_decode(praxis) - cycles_linear) ** 2))
+    return mean_steps, linear_rmse
+
+
+def record_baseline(path, scene, frame, shape, mean_steps, linear_rmse):
+    """The scene's Cycles Baseline from this run: both figures at the
+    checked-out commit, with the frame, resolution and Blender that made them."""
+    repository = os.path.dirname(os.path.abspath(__file__))
+    commit = subprocess.run(["git", "-C", repository, "rev-parse", "HEAD"], capture_output=True, text=True,
+                            check=True).stdout.strip()
+    baseline = {
+        "scene": scene, "frame": frame, "width": shape[1], "height": shape[0], "commit": commit,
+        "blender": bpy.app.version_string,
+        "mean_difference_steps": round(mean_steps, 3), "linear_rmse": round(linear_rmse, 5),
+    }
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w") as file:
+        json.dump(baseline, file, indent=2)
+        file.write("\n")
+    print(f"ok    {scene} Baseline recorded: mean difference {mean_steps:.3f} 8-bit steps, "
+          f"linear RMSE {linear_rmse:.5f}, {path}")
+
+
+def judge_baseline(path, scene, frame, shape, mean_steps, linear_rmse):
+    """One line against the scene's Cycles Baseline; the process fails when
+    either figure exceeds its recorded value by its tolerance."""
+    with open(path) as file:
+        baseline = json.load(file)
+    baseline_steps, baseline_rmse = baseline["mean_difference_steps"], baseline["linear_rmse"]
+    summary = (f"{scene} mean difference {mean_steps:.3f} 8-bit steps (Baseline {baseline_steps:.3f}), "
+               f"linear RMSE {linear_rmse:.5f} (Baseline {baseline_rmse:.5f})")
+    recorded = (baseline["scene"], baseline["frame"], baseline["width"], baseline["height"])
+    if recorded != (scene, frame, shape[1], shape[0]):
+        sys.exit(f"FAIL  {summary}: ran frame {frame} at {shape[1]}x{shape[0]}, its Baseline is {recorded[0]} "
+                 f"frame {recorded[1]} at {recorded[2]}x{recorded[3]}")
+    exceeded = []
+    if mean_steps > baseline_steps + MEAN_DIFFERENCE_TOLERANCE_STEPS:
+        exceeded.append(f"mean difference past {baseline_steps + MEAN_DIFFERENCE_TOLERANCE_STEPS:.3f}")
+    if linear_rmse > baseline_rmse + LINEAR_RMSE_TOLERANCE:
+        exceeded.append(f"linear RMSE past {baseline_rmse + LINEAR_RMSE_TOLERANCE:.5f}")
+    if exceeded:
+        sys.exit(f"FAIL  {summary}: {', '.join(exceeded)}")
+    print(f"ok    {summary}")
+
+
+def compare_arguments(rest):
+    parser = argparse.ArgumentParser(prog="compare.py -- compare", add_help=False)
+    for name in ("praxis_path", "exr_path", "cycles_path", "difference_path"):
+        parser.add_argument(name)
+    parser.add_argument("--baseline", nargs=3, metavar=("SCENE", "FRAME", "JSON"))
+    parser.add_argument("--record", action="store_true")
+    return parser.parse_args(rest)
+
+
 if __name__ == "__main__":
     require_blender()
     check_ramp()
     command, *rest = arguments()
     if command == "compare":
-        praxis_path, exr_path, cycles_path, difference_path = rest
-        praxis, cycles = load(praxis_path), display(load(exr_path))
+        options = compare_arguments(rest)
+        praxis, cycles_linear = load(options.praxis_path), tonemap(load(options.exr_path))
+        cycles = srgb_encode(cycles_linear)
         if praxis.shape != cycles.shape:
-            sys.exit(f"FAIL  {praxis_path} is {praxis.shape[:2]}, the Cycles render {cycles.shape[:2]}")
-        save(cycles, cycles_path)
-        save(difference(praxis, cycles), difference_path)
-        steps = np.abs(praxis - cycles).mean() * 255.0
-        print(f"ok    mean difference {steps:.2f} 8-bit steps")
+            sys.exit(f"FAIL  {options.praxis_path} is {praxis.shape[:2]}, the Cycles render {cycles.shape[:2]}")
+        save(cycles, options.cycles_path)
+        save(difference(praxis, cycles), options.difference_path)
+        mean_steps, linear_rmse = figures(praxis, cycles, cycles_linear)
+        if options.baseline is None:
+            print(f"ok    mean difference {mean_steps:.3f} 8-bit steps, linear RMSE {linear_rmse:.5f}")
+        elif options.record:
+            scene, frame, path = options.baseline[0], int(options.baseline[1]), options.baseline[2]
+            record_baseline(path, scene, frame, praxis.shape, mean_steps, linear_rmse)
+        else:
+            scene, frame, path = options.baseline[0], int(options.baseline[1]), options.baseline[2]
+            judge_baseline(path, scene, frame, praxis.shape, mean_steps, linear_rmse)
     elif command == "crop":
         praxis_path, cycles_path, *region, output = rest
         x, y, width, height = (int(value) for value in region)

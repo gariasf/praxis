@@ -69,6 +69,10 @@ Budget ([0013](docs/adr/0013-reference-hardware-and-provisional-budgets.md)):
 60 fps at 2560×1440 on an M4 Pro, with 6 ms of CPU, 12 ms of GPU and 8 GB
 of GPU memory.
 
+Cycles Baselines live in `bench/cycles/<scene>.json`: each exported Reference
+scene's distance from its Cycles render at a named commit, which
+`scripts/gallery.sh` with `PRAXIS_BLENDER` judges a run against.
+
 ## Building
 
 - Rust 1.89 or newer
