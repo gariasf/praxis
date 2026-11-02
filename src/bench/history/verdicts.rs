@@ -224,13 +224,10 @@ pub(super) fn step(
     runs: &[Run],
     first_parent: &[Commit],
 ) -> (Option<Verdict>, Option<String>) {
-    let medians = |commit: &str| -> Vec<f64> {
-        runs.iter()
-            .filter(|run| run.commit == commit)
-            .map(|run| run.median)
-            .collect()
-    };
-    let (good_runs, bad_runs) = (medians(&night_start.good), medians(&night_start.bad));
+    let (good_runs, bad_runs) = (
+        medians(runs, &night_start.good),
+        medians(runs, &night_start.bad),
+    );
     if good_runs.len() < END_RUNS || bad_runs.len() < END_RUNS {
         let next = if good_runs.len() <= bad_runs.len() {
             &night_start.good
@@ -413,13 +410,7 @@ pub fn bisect(
             let commit = &pinned.commit.commit;
             for (metric, _) in JUDGED_TIMINGS {
                 let runs = night_runs(night, &verdict.scene, metric)?;
-                let medians = |commit: &str| -> Vec<f64> {
-                    runs.iter()
-                        .filter(|run| run.commit == commit)
-                        .map(|run| run.median)
-                        .collect()
-                };
-                let (good, bad) = (medians(&start.good), medians(&start.bad));
+                let (good, bad) = (medians(&runs, &start.good), medians(&runs, &start.bad));
                 if !good.is_empty() && !bad.is_empty() {
                     pinned.measured.medians.insert(
                         metric.to_owned(),
@@ -471,28 +462,37 @@ pub fn file_regressions(
     let mut filed = Vec::new();
     for index in 0..verdicts.len() {
         let verdict = &verdicts[index];
-        let issue = match filing(verdict, &verdicts) {
-            Filing::Done => continue,
+        let filing = filing(verdict, &verdicts);
+        if filing == Filing::Done {
+            continue;
+        }
+        let commit = verdict
+            .pinned
+            .as_ref()
+            .context("a Regression is pinned")?
+            .commit
+            .commit
+            .clone();
+        let issue = match filing {
             Filing::Shared(issue) => issue,
-            Filing::Open => {
-                let pinned = verdict.pinned.as_ref().context("a Regression is pinned")?;
+            _ => {
                 let subject = git(
                     repository,
-                    &["show", "--no-patch", "--format=%s", &pinned.commit.commit],
+                    &["show", "--no-patch", "--format=%s", &commit],
                     None,
                 )?;
                 let issue = issue(verdict, &key, &subject).context("a Regression is pinned")?;
-                open_issue(repository, &issue)?
+                // An issue opened by a night that then failed to record it.
+                match opened_issue(repository, &issue.title)? {
+                    Some(number) => number,
+                    None => open_issue(repository, &issue)?,
+                }
             }
         };
         let verdict = &mut verdicts[index];
         verdict.issue = Some(issue);
         record(repository, &key, verdict)?;
-        let commit = verdict
-            .pinned
-            .as_ref()
-            .map(|pinned| pinned.commit.commit.clone());
-        filed.push((verdict.scene.clone(), commit.unwrap_or_default(), issue));
+        filed.push((verdict.scene.clone(), commit, issue));
     }
     Ok(filed)
 }
@@ -500,26 +500,68 @@ pub fn file_regressions(
 /// Opens `issue` with `gh` in `repository`, labelled `TRIAGE_LABEL`, and
 /// returns its number.
 fn open_issue(repository: &Path, issue: &Issue) -> anyhow::Result<u64> {
-    let output = std::process::Command::new("gh")
-        .current_dir(repository)
-        .args(["issue", "create", "--label", TRIAGE_LABEL, "--title"])
-        .arg(&issue.title)
-        .arg("--body")
-        .arg(&issue.body)
-        .output()
-        .context("running gh")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "gh issue create: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
+    let url = gh(
+        repository,
+        &[
+            "issue",
+            "create",
+            "--label",
+            TRIAGE_LABEL,
+            "--title",
+            &issue.title,
+            "--body",
+            &issue.body,
+        ],
+    )?;
     // gh prints the new issue's URL, which ends in its number.
-    let url = String::from_utf8(output.stdout)?;
     url.trim()
         .rsplit('/')
         .next()
         .and_then(|number| number.parse().ok())
         .with_context(|| format!("an issue number at the end of {url:?}"))
+}
+
+/// The issue in `repository`'s GitHub repository, open or closed, titled
+/// exactly `title`, if any.
+fn opened_issue(repository: &Path, title: &str) -> anyhow::Result<Option<u64>> {
+    #[derive(serde::Deserialize)]
+    struct Listed {
+        number: u64,
+        title: String,
+    }
+    let listed: Vec<Listed> = serde_json::from_str(&gh(
+        repository,
+        &[
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--search",
+            &format!("\"{title}\" in:title"),
+            "--json",
+            "number,title",
+        ],
+    )?)?;
+    Ok(listed
+        .into_iter()
+        .find(|issue| issue.title == title)
+        .map(|issue| issue.number))
+}
+
+/// The standard output of `gh` with `arguments` in `repository`.
+fn gh(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
+    let output = std::process::Command::new("gh")
+        .current_dir(repository)
+        .args(arguments)
+        .output()
+        .context("running gh")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "gh {}: {}",
+        arguments.first().copied().unwrap_or_default(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 /// The source hashes of the commits the Verdicts in `directory` pinned:
@@ -650,19 +692,21 @@ pub(super) fn issue(verdict: &Verdict, adapter_key: &str, subject: &str) -> Opti
         measured,
         ..
     } = verdict.pinned.as_ref()?;
-    let short = &commit[..commit.len().min(8)];
+    let short_commit = &commit[..commit.len().min(8)];
     let pull_request = pull_request(subject);
     let title = match pull_request {
-        Some(number) => format!("Regression in {scene} on {adapter_key} from {short} (#{number})"),
-        None => format!("Regression in {scene} on {adapter_key} from {short}"),
+        Some(number) => {
+            format!("Regression in {scene} on {adapter_key} from {short_commit} (#{number})")
+        }
+        None => format!("Regression in {scene} on {adapter_key} from {short_commit}"),
     };
-    let pull_request = pull_request.map_or("none named in its subject".to_owned(), |number| {
+    let pull_request_line = pull_request.map_or("none named in its subject".to_owned(), |number| {
         format!("#{number}")
     });
     let mut body = format!(
         "The nightly sweep pinned a Regression that no re-recorded Baseline covers.\n\n\
          - Commit: {commit}, {subject}\n\
-         - PR: {pull_request}\n\
+         - PR: {pull_request_line}\n\
          - Series: `{scene}` on `{adapter_key}`\n\
          - Chart: {BENCH_PAGE}?machine={adapter_key}&scene={scene}\n\n\
          | Metric | Good end median | Bad end median | Shift |\n\
@@ -730,6 +774,14 @@ pub(super) fn filing(verdict: &Verdict, verdicts: &[Verdict]) -> Filing {
 /// The PR a squash merge's `subject` names at its end, as `(#<number>)`.
 fn pull_request(subject: &str) -> Option<u64> {
     subject.strip_suffix(')')?.rsplit_once("(#")?.1.parse().ok()
+}
+
+/// The medians of `runs` that benched `commit`.
+fn medians(runs: &[Run], commit: &str) -> Vec<f64> {
+    runs.iter()
+        .filter(|run| run.commit == commit)
+        .map(|run| run.median)
+        .collect()
 }
 
 fn mean(values: &[f64]) -> f64 {
