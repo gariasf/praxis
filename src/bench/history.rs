@@ -3,6 +3,7 @@
 //! reads, rebuilt in the same commit.
 
 mod import;
+mod suspects;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -70,6 +71,13 @@ renders on a shared runner's CPU, so the page draws only its counters and its
 binary's size, which load cannot change, and its build time, which a shared
 runner's load and cache hits move whatever a quiet test says. So its records
 join its Series from CI's configuration whether or not the runner was quiet.
+
+A Series row's `suspects` names each frame median, CPU or GPU, that makes its
+record a suspect, with its shift as a share of the median of up to 8 records
+before it on its line: it lies outside that median ± the larger of 4 median
+absolute deviations and 3%, and the record before it did not lie outside on the
+same side. A new Harness version or scene content, or an imported Baseline,
+starts a line. lavapipe's records are never suspects.
 
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
@@ -199,6 +207,7 @@ impl BenchRecord {
 struct StoredRecord {
     /// When the measured commit was committed, which orders a Series.
     committed_unix_seconds: u64,
+    adapter: String,
     provenance: StoredProvenance,
     measured_frames: u32,
     cpu_frame_microseconds: Option<Spread>,
@@ -301,7 +310,8 @@ trait SeriesRecord: serde::de::DeserializeOwned {
     /// Where its row sorts: in the order commits were made.
     fn order(&self) -> (u64, &str);
 
-    fn row(&self) -> impl serde::Serialize + '_;
+    /// The rows of `records`, which are in order.
+    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_>;
 }
 
 impl SeriesRecord for StoredRecord {
@@ -309,23 +319,63 @@ impl SeriesRecord for StoredRecord {
         (self.committed_unix_seconds, &self.provenance.commit)
     }
 
-    fn row(&self) -> impl serde::Serialize + '_ {
-        SeriesRow::of(self)
+    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_> {
+        let mut rows: Vec<SeriesRow> = records.iter().map(SeriesRow::of).collect();
+        // lavapipe's times mean nothing, so none of its records is a suspect.
+        if records
+            .first()
+            .is_some_and(|record| !is_lavapipe(&record.adapter))
+        {
+            for (metric, median) in JUDGED_TIMINGS {
+                let points: Vec<suspects::Point> = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(index, row)| suspects::Point {
+                        median: median(row),
+                        starts_line: (index > 0 && !rows[index - 1].same_definition(row))
+                            || row.source == Some(import::IMPORTED_SOURCE),
+                    })
+                    .collect();
+                for (row, shift) in rows.iter_mut().zip(suspects::suspects(&points)) {
+                    if let Some(shift) = shift {
+                        row.suspects.insert(metric, shift);
+                    }
+                }
+            }
+        }
+        rows
     }
 }
+
+/// A timing's median in a row.
+type MedianOf = fn(&SeriesRow) -> Option<f64>;
+
+/// The timings a Series' records are judged on for suspects, each with its
+/// median in a row.
+const JUDGED_TIMINGS: [(&str, MedianOf); 2] = [
+    ("cpu_frame_microseconds", |row| {
+        row.cpu_frame_microseconds.map(|spread| spread.median)
+    }),
+    ("gpu_frame_microseconds", |row| {
+        row.gpu_frame_microseconds.map(|spread| spread.median)
+    }),
+];
 
 impl SeriesRecord for StoredReleaseBuild {
     fn order(&self) -> (u64, &str) {
         (self.committed_unix_seconds, &self.checkout.commit)
     }
 
-    fn row(&self) -> impl serde::Serialize + '_ {
-        ReleaseBuildRow {
-            commit: &self.checkout.commit,
-            source_hash: &self.checkout.source_hash,
-            committed_unix_seconds: self.committed_unix_seconds,
-            build: &self.build,
-        }
+    fn rows(records: &[Self]) -> Vec<impl serde::Serialize + '_> {
+        records
+            .iter()
+            .map(|record| ReleaseBuildRow {
+                commit: &record.checkout.commit,
+                source_hash: &record.checkout.source_hash,
+                committed_unix_seconds: record.committed_unix_seconds,
+                build: &record.build,
+            })
+            .collect()
     }
 }
 
@@ -356,6 +406,9 @@ struct SeriesRow<'record> {
     measured_counters: BTreeMap<&'record str, u64>,
     aliasing_rmse: Option<u64>,
     aliasing_p99: Option<u64>,
+    /// Each judged timing whose median makes this record a suspect, with its
+    /// shift from the median of the records before it, as a share of that.
+    suspects: BTreeMap<&'static str, f64>,
 }
 
 /// What a publish did.
@@ -953,9 +1006,9 @@ impl<'repository> Worktree<'repository> {
             records.push(record);
         }
         records.sort_by(|left, right| left.order().cmp(&right.order()));
-        Ok(records
+        Ok(Record::rows(&records)
             .iter()
-            .map(|record| serde_json::to_string(&record.row()))
+            .map(serde_json::to_string)
             .collect::<Result<_, _>>()?)
     }
 
@@ -1036,7 +1089,17 @@ impl<'record> SeriesRow<'record> {
                 .collect(),
             aliasing_rmse: record.aliasing_rmse,
             aliasing_p99: record.aliasing_p99,
+            suspects: BTreeMap::new(),
         }
+    }
+
+    /// Whether `later` measures what this row does: one Harness version, and
+    /// one scene content where both know it, as a chart's line runs.
+    fn same_definition(&self, later: &Self) -> bool {
+        self.harness_version == later.harness_version
+            && (self.scene_content_hash.is_none()
+                || later.scene_content_hash.is_none()
+                || self.scene_content_hash == later.scene_content_hash)
     }
 }
 
@@ -1684,6 +1747,50 @@ mod tests {
     }
 
     /// lavapipe's result of `checkout` in CI's configuration.
+    #[test]
+    fn a_series_marks_a_step_as_a_suspect_unless_a_baseline_or_lavapipe_takes_it() {
+        let rows = |adapter: &str, step_source: Option<&str>| {
+            let records: Vec<StoredRecord> = [10_000.0, 10_050.0, 9_950.0, 10_020.0, 11_000.0]
+                .iter()
+                .enumerate()
+                .map(|(index, median)| {
+                    serde_json::from_value(serde_json::json!({
+                        "adapter": adapter,
+                        "committed_unix_seconds": index,
+                        "provenance": {
+                            "commit": format!("commit-{index}"),
+                            "source_hash": format!("source-{index}"),
+                            "harness_version": 10,
+                            "source": if index == 4 { step_source } else { None },
+                            "scene_content_hash": "content",
+                        },
+                        "measured_frames": 1800,
+                        "gpu_frame_microseconds": { "median": median, "p95": median },
+                    }))
+                    .unwrap()
+                })
+                .collect();
+            serde_json::to_value(StoredRecord::rows(&records)).unwrap()
+        };
+        let suspects = |rows: serde_json::Value| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["suspects"].clone())
+                .collect::<Vec<_>>()
+        };
+        let unmarked = vec![serde_json::json!({}); 5];
+        let mut stepped = unmarked.clone();
+        // 11,000 on the four medians before it, whose median is 10,000.
+        stepped[4] = serde_json::json!({ "gpu_frame_microseconds": 0.1 });
+        assert_eq!(suspects(rows("Apple M4 Pro", None)), stepped);
+        assert_eq!(
+            suspects(rows("Apple M4 Pro", Some(import::IMPORTED_SOURCE))),
+            unmarked
+        );
+        assert_eq!(suspects(rows("llvmpipe (LLVM 20.1.2)", None)), unmarked);
+    }
+
     fn lavapipe_result(checkout: &Path, p95_over_median: f64) -> Measurements {
         let ci_configuration = Configuration::CI_COUNTERS;
         Measurements {

@@ -66,7 +66,7 @@ const HARNESS_BREAKS: [(&str, &str); 9] = [
 ];
 
 /// What an imported record's provenance names as its source.
-const IMPORTED_SOURCE: &str = "baseline-commit";
+pub(super) const IMPORTED_SOURCE: &str = "baseline-commit";
 
 /// Imports every Baseline file each commit before `HISTORY_STARTED`
 /// changed into the remote's `bench-history` branch, and gives the records

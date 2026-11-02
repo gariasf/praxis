@@ -81,7 +81,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .how ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 4px; max-width: 760px; }
 .how svg { vertical-align: -2px; margin-right: 4px; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; min-width: 0; }
-.chart h4 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 6px; }
+.chart h4, #counter-table h4 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 6px; }
 .chart .subtitle { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); margin: -2px 0 6px; }
 .chart svg { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
 .empty { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); margin: 4px 0; }
@@ -93,6 +93,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 .harness-band { fill: var(--band); }
 .budget { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .content-break { stroke: var(--warm); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.suspect { fill: none; stroke-width: 2; }
 .tagged-line { stroke-width: 1.5; stroke-dasharray: 5 4; }
 .experiment-link { stroke-width: 1.5; stroke-dasharray: 2 3; }
 .milestone { stroke: var(--ink-soft); stroke-width: 1; opacity: 0.6; }
@@ -164,6 +165,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <ul>
     <li>Each point is one Bench record of <code>main</code>'s source, from the <a href="https://github.com/gariasf/praxis/tree/bench-history">bench-history</a> branch (<a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a>). Points are spaced by commit, not by date.</li>
     <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn beside the Series record of its merge base's source and compared with it.</li>
+    <li><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="7" class="suspect" stroke="var(--worse)"></circle><circle cx="9" cy="9" r="3.5" fill="var(--ink-soft)"></circle></svg>A suspect: a CPU or GPU frame median outside the median of up to 8 records before it on its line, ± the larger of 4 median absolute deviations and 3%. <span class="up">Red</span> when slower, <span class="down">green</span> when faster. Only a step's first record is marked, and a re-recorded Baseline starts a new line, so its step is none. lavapipe's times are not judged.</li>
     <li><svg width="22" height="12" aria-hidden="true"><rect width="22" height="12" class="harness-band"></rect></svg>Shaded bands are Harness versions. A metric's definition can change from one to the next, so lines break between bands and no change is measured across them. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="content-break"></line></svg>A scene whose content changed breaks its line the same way.</li>
     <li>Timing changes are coloured by <code>praxis compare</code>'s warn and fail ratios and noise floors: <span class="warn">amber</span> past +5%, <span class="up">red</span> past +10% when also past the noise floor (10 µs on the CPU, 20 µs on the GPU), <span class="down">green</span> past −5%; the rest stay grey as noise. Counter changes are exact, so every one is marked. Changes across a Harness version or scene content break stay grey.</li>
     <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440 at the newest Harness version, on the median as <code>praxis compare</code> judges them. Other machines are comparison adapters: their figures are not Budgets. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
@@ -252,7 +254,9 @@ const NAMED_PASS_COUNT = 6;
 const HIT_RADIUS_PIXELS = 24;
 const TIMINGS = ["cpu_frame_microseconds", "gpu_frame_microseconds", "gate_microseconds", "shadow_ray_microseconds", "dynamic_tlas_cpu_microseconds"];
 // Series row fields that are neither a timing nor a counter.
-const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "measured_frames", "measured_counters", "tags"]);
+const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "measured_frames", "measured_counters", "tags", "suspects"]);
+// How many of a Series' latest counter changes show before the rest fold.
+const SHOWN_COUNTER_CHANGES = 6;
 // Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
 const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations"];
 // `Configuration::REFERENCE`'s measured frames: only rows of that length show their measured counters, so no two counted different frames.
@@ -344,6 +348,8 @@ function rowOf(record) {
     aliasing_rmse: record.aliasing_rmse ?? null,
     aliasing_p99: record.aliasing_p99 ?? null,
     tags: record.tags ?? [],
+    // `praxis publish` judges only records on a Series.
+    suspects: {},
   };
   for (const timing of TIMINGS) row[timing] = record[timing] ?? null;
   // Tagged and Experiment records reach the page raw, so it reads the GPU frame's first name, which measured the same span, as the Series rows do.
@@ -519,6 +525,9 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]);
 }
 function isBaseline(row) { return row.source === "baseline-commit"; }
+/** A record's shift that made it a suspect on `metric`, as a share of the median before it; none when it is not one. */
+function suspectShift(point, metric) { return point.tagged || point.experiment ? null : point.row.suspects?.[metric] ?? null; }
+function suspectHtml(shift) { return `<span class="${shift > 0 ? "up" : "down"}">${shift > 0 ? "+" : "−"}${Math.abs(shift * 100).toFixed(1)}%</span> on the median before it`; }
 /** "Experiment", "tagged", "Baseline" or "Series": what a point's mark and labels say it is. */
 function kindOf(point) { return point.experiment ? "Experiment" : point.tagged ? "tagged" : isBaseline(point.row) ? "Baseline" : "Series"; }
 function shortCommit(row) { return escapeHtml(row.commit.slice(0, 8)); }
@@ -838,6 +847,8 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
       const x = axis.xOf(point);
       const y = yOf(value);
       markers += markerSvg(x, y, point, colour, point.path === state.selected?.path, frame.outside(value));
+      const shift = suspectShift(point, metric);
+      if (shift !== null) markers += `<circle cx="${x}" cy="${y}" r="8" class="suspect" stroke="var(${shift > 0 ? "--worse" : "--better"})"></circle>`;
       hitPoints.push({ x, y, point, colour, value });
     }
     for (const point of drawnExperiments.filter((candidate) => candidate.machine === line.machine)) {
@@ -859,6 +870,8 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
     const spread = hit.point.row[metric];
     const rows = [[hit.colour, machineName(hit.point.machine), formatValue(metric, hit.value)]];
     if (spread && typeof spread === "object") rows.push([null, "p95", formatValue(metric, spread.p95)]);
+    const shift = suspectShift(hit.point, metric);
+    if (shift !== null) rows.push([null, "Suspect", suspectHtml(shift)]);
     if (hit.point.experiment) rows.push([null, "vs its base", experimentChangeHtml(hit.point, metric, hit.value, valueOf(hit.point.previous.row))]);
     return pointTooltip(hit.point, rows);
   };
@@ -955,7 +968,24 @@ function counterTable(points) {
     <td class="text">${escapeHtml(labelOf(name))}</td>
     ${!COUNTERS.includes(name) ? cell(name, counted).replace("<td>", `<td colspan="${anyMeasured ? 2 : 1}" style="text-align: center">`) : `${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}`}
     <td class="text">${sparklineSvg(points, measured ? measuredValue(name) : countedValue(name))}</td></tr>`).join("")}</tbody></table>
-    <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`;
+    <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`
+    + counterChangesHtml(points);
+}
+
+/** Each record whose counter frames' counters differ from the record before it on its line, newest first, with its commit. */
+function counterChangesHtml(points) {
+  const changes = points.filter((point) => point.previous && !point.breakLabel).map((point) => ({
+    point,
+    moved: COUNTERS.filter((counter) => point.row[counter] !== undefined && point.previous.row[counter] !== undefined && point.row[counter] !== point.previous.row[counter]),
+  })).filter((change) => change.moved.length > 0).reverse();
+  if (changes.length === 0) return `<p class="empty">No counter frames' counter changed between two records on a line.</p>`;
+  const rowHtml = ({ point, moved }) => `<tr><td class="text">${commitLink(point.row, shortCommit(point.row))}</td><td class="text">${dateOf(point.row.committed_unix_seconds)}</td>`
+    + `<td class="text" style="white-space: normal">${moved.map((counter) => `${escapeHtml(labelOf(counter))} ${changeHtml(counter, point.row[counter], point.previous.row[counter])}`).join(", ")}</td></tr>`;
+  const header = `<thead><tr><th class="text">Commit</th><th class="text">Date</th><th class="text">Counter frames' change</th></tr></thead>`;
+  const shown = changes.slice(0, SHOWN_COUNTER_CHANGES);
+  const folded = changes.slice(SHOWN_COUNTER_CHANGES);
+  return `<h4>Counter changes</h4><table>${header}<tbody>${shown.map(rowHtml).join("")}</tbody></table>`
+    + (folded.length > 0 ? `<details><summary>${folded.length} earlier</summary><table>${header}<tbody>${folded.map(rowHtml).join("")}</tbody></table></details>` : "");
 }
 
 /* Hover and click */
@@ -1076,6 +1106,7 @@ async function select(point, scroll) {
       <dt>Pull request</dt><dd id="record-pull">looking it up…</dd>
       <dt>Kind</dt><dd>${point.experiment ? `Experiment ${escapeHtml(point.experiment.name)}, benched from a branch${experimentTags(point).length > 0 ? `: ${escapeHtml(experimentTags(point).join("; "))}` : ""}` : point.tagged ? `tagged: ${escapeHtml(row.tags.join("; "))}` : isBaseline(row) ? "a Baseline imported from main's history" : "on the Series"}</dd>
       ${row.harness_version === undefined ? "" : `<dt>Harness</dt><dd>version ${escapeHtml(row.harness_version)}</dd>`}
+      ${Object.keys(row.suspects ?? {}).length > 0 && !point.tagged && !point.experiment ? `<dt>Suspect</dt><dd>${Object.entries(row.suspects).map(([metric, shift]) => `${escapeHtml(labelOf(metric))} ${suspectHtml(shift)}`).join("; ")}</dd>` : ""}
       <dt>${point.experiment ? "Base" : "Previous"}</dt><dd>${previous ? `${commitLink(previous.row, shortCommit(previous.row))} · ${dateOf(previous.row.committed_unix_seconds)} · ${changeName(previous.row)}` : point.experiment ? baseMissing(point) : "none: the first record"}</dd>
     </dl>
     ${crossing}
