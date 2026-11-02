@@ -1,36 +1,52 @@
 # Audit lane 2, image quality
 
-Draft, prepared to the point of judgement. Every Reference scene captured at
-2560×1440 at the frozen commit `8bc34eb18fcfb79307193551e96619316aef566c`
-by `scripts/gallery.sh` with `PRAXIS_BLENDER`, `town` at its eight frames
-and `crowd` in both shadow forms; each exported scene beside its Cycles
-render with its difference image, its two distance figures recorded as the
-scene's first Cycles Baseline (`bench/cycles/<scene>.json`); the 3x
-box-filtered supersampled reference for the scenes where aliasing is the
-question (`town`, `minification`, `texture-wall`); and the candidate 2x
-crops below, each praxis | Cycles | difference, with the `DIFFERENCES.md`
-item that explains it or `none`. **No Finding is filed here.** The owner
-judges every crop in the judgement session; a crop the owner reads as a
-defect becomes a Finding of class `image` then, with this draft's row as
-its evidence.
+Every Reference scene captured at 2560×1440 at the frozen commit
+`8bc34eb18fcfb79307193551e96619316aef566c` by `scripts/gallery.sh` with
+`PRAXIS_BLENDER`, `town` at its eight frames and `crowd` in both shadow
+forms; each exported scene beside its Cycles render with its difference
+image, its two distance figures recorded as the scene's first Cycles
+Baseline (`bench/cycles/<scene>.json`); the 3x box-filtered supersampled
+reference for the scenes where aliasing is the question (`town`,
+`minification`, `texture-wall`); and the candidate 2x crops below, each
+praxis | Cycles | difference, with the `DIFFERENCES.md` item that explains
+it. The owner judged every crop on 2026-11-02, from a page showing each at
+2x and, where marked, at 4x, beside the verdict recommended for it; each
+verdict is the last column of its row.
 
 ## Summary
 
-At native resolution every difference between praxis and Cycles that a
-candidate crop shows reads as one of the five known differences in
-`scripts/cycles-reference/DIFFERENCES.md`, the ambient without sky
-visibility first: it is the whole of `town`'s shade gap, the owner's
-largest visible gap at the previous milestone's exit, and it reaches every
-scene with geometry that hides the sky. Three candidates sit at the edge of
-the list rather than inside it and are the ones to look at longest: the
-rim of a smooth metal sphere in `pbr-sweep` and the car bodies in `town`,
-where Cycles is the brighter one (its sky reflected at grazing, which
-praxis's Lambertian ambient has no lobe for), and a bright rim all round
-`orrery`'s planet that only praxis draws. Against the supersampled
-reference, `town` and `texture-wall` differ only along edges and wires, as
-4x MSAA against nine samples predicts; `minification` differs across its
-whole floor, where the specular antialiasing and Toksvig widening are
-resolution-dependent and the box filter itself leaks the checker's moiré.
+The owner accepted all 37 candidate crops, so this lane files no Finding:
+every difference from Cycles at native resolution is one of the known
+differences in `scripts/cycles-reference/DIFFERENCES.md`, after one of them
+was widened to cover praxis's ambient having no specular lobe (smooth metal
+and car paint darker than Cycles at grazing angles, where Cycles reflects
+its sky). The largest gap, the ambient light that reaches every surface
+whatever hides its sky, the whole of `town`'s shaded street, is tagged
+`ticketed at triage 1`, so the first triage weighs an interim sky-visibility
+term against waiting for ADR 0020's irradiance probes; the other four items
+are tagged deliberate, each until its trigger. The bright rim the draft
+flagged around `orrery`'s planet is not there at 4x: the crop's difference
+is the silhouette's MSAA speckle and the minified grid lines.
+
+## Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+
+| Verifier verdict | Findings |
+|---|---|
+| confirmed | 0 |
+| narrowed | 0 |
+| killed | 0 |
+
+| Owner's verdict on a candidate | Crops |
+|---|---|
+| accepted | 37 (C01 to C31, S01 to S06) |
+| defect | 0 |
+
+With no Finding filed there is nothing for the verifier to reopen; the
+verdicts above are the owner's, one per crop.
 
 ## Run
 
@@ -104,90 +120,115 @@ is), at `pending-artifacts/m3.5-lane-2/crops/<scene>-frame-<n>-<x>_<y>_160x90.pn
 `4x` marks a copy in `crops4x/` at point-sampled 4x. The pixel box is
 `x, y, width, height` in the 2560×1440 capture. The item is the heading in
 `scripts/cycles-reference/DIFFERENCES.md` that explains the crop, with a
-note where the match is partial; `none` where no item does. The 121-tile
+note where the match is partial, as the draft wrote it. The verdict is the
+owner's. The 121-tile
 ranked index these were chosen from is `candidates.md` beside them.
 
 ### Terminators
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C01 | far-coplanar 59 | 0, 0, 160, 90 | the brown sphere's terminator: praxis grades into a lit dark side, Cycles is black past it (the plane below hides the sky) | Ambient light without visibility |
-| C02 | normal-tangent 59 | 1600, 180, 160, 90 (4x) | a dome's terminator and its dark side: praxis lit, Cycles black; a one-pixel blue line along the dome's silhouette against the floor | Ambient light without visibility; 4x MSAA against supersampling |
-| C03 | pbr-sweep 59 | 1920, 900, 160, 90 | the rough metal sphere's shaded half: praxis brighter by a few steps everywhere only the ambient reaches | Ambient light as an ideal diffuse response |
-| C04 | shadows 59 | 1120, 810, 160, 90 (4x) | a checkered sphere's terminator: the same shapes; grid lines brighter in praxis where minified; a one-pixel line at the silhouette | BC compression and mips against source images; 4x MSAA against supersampling |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C01 | far-coplanar 59 | 0, 0, 160, 90 | the brown sphere's terminator: praxis grades into a lit dark side, Cycles is black past it (the plane below hides the sky) | Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C02 | normal-tangent 59 | 1600, 180, 160, 90 (4x) | a dome's terminator and its dark side: praxis lit, Cycles black; a one-pixel blue line along the dome's silhouette against the floor | Ambient light without visibility; 4x MSAA against supersampling | accepted: the item explains it; the item is ticketed at triage 1 |
+| C03 | pbr-sweep 59 | 1920, 900, 160, 90 | the rough metal sphere's shaded half: praxis brighter by a few steps everywhere only the ambient reaches | Ambient light as an ideal diffuse response | accepted: the item explains it |
+| C04 | shadows 59 | 1120, 810, 160, 90 (4x) | a checkered sphere's terminator: the same shapes; grid lines brighter in praxis where minified; a one-pixel line at the silhouette | BC compression and mips against source images; 4x MSAA against supersampling | accepted: the item explains it |
 
 ### Highlights
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C05 | helmet 59 | 480, 1080, 160, 90 (4x) | the three point lights on the chin's metal: praxis's highlights wider and softer, Cycles' tight with coloured speckle along the tubes | Highlights widened by specular antialiasing and Toksvig; the speckle is Cycles' sampling noise |
-| C06 | helmet 59 | 480, 1170, 160, 90 | the same lights lower on the chin; the metal between them grey in praxis, black in Cycles | Highlights widened; Ambient light without visibility (reflections of the helmet itself) |
-| C07 | pbr-sweep 59 | 480, 720, 160, 90 (4x) | a smooth metal sphere's highlight: praxis's halo wider; a black blob in Cycles where the sphere reflects its neighbour | Highlights widened; the reference is direct light only (a reflection of another surface is black) |
-| C08 | pbr-sweep 59 | 960, 810, 160, 90 (4x) | a rough sphere's red highlight: praxis's core wider, and a faint ring outside it where Cycles is brighter | Highlights widened (the item names a red ring; the blue ring outside it is the same lobe difference seen from the other side) |
-| C09 | orrery 59 | 1280, 450, 160, 90 (4x) | the lamps' highlights on the metal planet: wide soft halos in praxis, points in Cycles; a black band in Cycles where the planet reflects its ring | Highlights widened; direct light only |
-| C10 | orrery 59 | 800, 720, 160, 90 (4x) | a thin bright rim all round the planet's silhouette in praxis; Cycles has only the sun's crescent at the top | none listed as such. Nearest: Highlights widened, if the rim is the sun's grazing highlight spread by the specular antialiasing where the normal turns fastest. Worth the owner's eye |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C05 | helmet 59 | 480, 1080, 160, 90 (4x) | the three point lights on the chin's metal: praxis's highlights wider and softer, Cycles' tight with coloured speckle along the tubes | Highlights widened by specular antialiasing and Toksvig; the speckle is Cycles' sampling noise | accepted: the item explains it |
+| C06 | helmet 59 | 480, 1170, 160, 90 | the same lights lower on the chin; the metal between them grey in praxis, black in Cycles | Highlights widened; Ambient light without visibility (reflections of the helmet itself) | accepted: the item explains it |
+| C07 | pbr-sweep 59 | 480, 720, 160, 90 (4x) | a smooth metal sphere's highlight: praxis's halo wider; a black blob in Cycles where the sphere reflects its neighbour | Highlights widened; the reference is direct light only (a reflection of another surface is black) | accepted: the item explains it |
+| C08 | pbr-sweep 59 | 960, 810, 160, 90 (4x) | a rough sphere's red highlight: praxis's core wider, and a faint ring outside it where Cycles is brighter | Highlights widened (the item names a red ring; the blue ring outside it is the same lobe difference seen from the other side) | accepted: the item explains it |
+| C09 | orrery 59 | 1280, 450, 160, 90 (4x) | the lamps' highlights on the metal planet: wide soft halos in praxis, points in Cycles; a black band in Cycles where the planet reflects its ring | Highlights widened; direct light only | accepted: the item explains it |
+| C10 | orrery 59 | 800, 720, 160, 90 (4x) | a thin bright rim all round the planet's silhouette in praxis; Cycles has only the sun's crescent at the top | none listed as such. Nearest: Highlights widened, if the rim is the sun's grazing highlight spread by the specular antialiasing where the normal turns fastest. Worth the owner's eye | accepted: at 4x there is no rim; the difference is the silhouette's MSAA speckle and the minified grid lines (4x MSAA against supersampling; BC compression and mips against source images) |
 
 ### Silhouettes
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C11 | town 59 | 1120, 630, 160, 90 | the distant street: wires, roof lines and window edges as alternating red and blue one-pixel lines | 4x MSAA against supersampling |
-| C12 | town 500 | 1760, 900, 160, 90 (4x) | rooftop railings and clutter: every bar brighter in praxis, the clutter's undersides darker in Cycles | 4x MSAA against supersampling (bars thinner than a pixel); Ambient light without visibility |
-| C13 | town 500 | 0, 1260, 160, 90 (4x) | a railing against a shaded wall, with the roof's shadow band | 4x MSAA against supersampling; Ambient light without visibility |
-| C14 | pbr-sweep 59 | 640, 720, 160, 90 (4x) | a smooth metal sphere's rim: a band inside the silhouette where Cycles is brighter, and a blue one-pixel edge | none. Nearest: Ambient light as an ideal diffuse response, which predicts praxis brighter towards rims; here Cycles is brighter, its white sky reflected at grazing, a specular lobe praxis's ambient does not have. Worth the owner's eye |
-| C15 | far-coplanar 59 | 1280, 630, 160, 90 | the coplanar discs' edges: one-pixel coloured lines, no z-fighting in either | 4x MSAA against supersampling |
-| C16 | uv-grid 59 | 1120, 360, 160, 90 | the plane's far edge against the sky and the tile seams | 4x MSAA against supersampling; BC compression and mips against source images |
-| S01 | town 59 | 640, 450, 160, 90 (`crops-supersampled/`) | praxis against its 3x capture: a wire and a railing as coloured specks | 4x MSAA against supersampling |
-| S02 | town 59 | 1920, 990, 160, 90 (`crops-supersampled/`) | the near car's body against its 3x capture: within a step or two across the whole body | 4x MSAA against supersampling (the specular antialiasing's footprint) |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C11 | town 59 | 1120, 630, 160, 90 | the distant street: wires, roof lines and window edges as alternating red and blue one-pixel lines | 4x MSAA against supersampling | accepted: the item explains it |
+| C12 | town 500 | 1760, 900, 160, 90 (4x) | rooftop railings and clutter: every bar brighter in praxis, the clutter's undersides darker in Cycles | 4x MSAA against supersampling (bars thinner than a pixel); Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C13 | town 500 | 0, 1260, 160, 90 (4x) | a railing against a shaded wall, with the roof's shadow band | 4x MSAA against supersampling; Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C14 | pbr-sweep 59 | 640, 720, 160, 90 (4x) | a smooth metal sphere's rim: a band inside the silhouette where Cycles is brighter, and a blue one-pixel edge | none. Nearest: Ambient light as an ideal diffuse response, which predicts praxis brighter towards rims; here Cycles is brighter, its white sky reflected at grazing, a specular lobe praxis's ambient does not have. Worth the owner's eye | accepted under Ambient light as an ideal diffuse response, amended to name the missing specular lobe |
+| C15 | far-coplanar 59 | 1280, 630, 160, 90 | the coplanar discs' edges: one-pixel coloured lines, no z-fighting in either | 4x MSAA against supersampling | accepted: the item explains it |
+| C16 | uv-grid 59 | 1120, 360, 160, 90 | the plane's far edge against the sky and the tile seams | 4x MSAA against supersampling; BC compression and mips against source images | accepted: the item explains it |
+| S01 | town 59 | 640, 450, 160, 90 (`crops-supersampled/`) | praxis against its 3x capture: a wire and a railing as coloured specks | 4x MSAA against supersampling | accepted: the item explains it |
+| S02 | town 59 | 1920, 990, 160, 90 (`crops-supersampled/`) | the near car's body against its 3x capture: within a step or two across the whole body | 4x MSAA against supersampling (the specular antialiasing's footprint) | accepted: the item explains it |
 
 ### Shadow edges
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C17 | town 59 | 800, 540, 160, 90 | a lamp-lit wall with the tree's shadow and the lamp post: the shadow's edge the same in both; the wall noisy in Cycles; the post grey all over in praxis, dark with one bright line in Cycles | Ambient light without visibility; Ambient light as an ideal diffuse response (a metal post under praxis's ambient); the wall's speckle is Cycles' sampling noise |
-| C18 | town 300 | 640, 540, 160, 90 (4x) | the same wall and post from the next camera position | as C17 |
-| C19 | town 1800 | 480, 1350, 160, 90 | a lamp at a tree's base on a pink wall: the tree's shadow in lamp light, the wall brighter in praxis | Ambient light without visibility; Cycles' sampling noise |
-| C20 | town 700 | 160, 630, 160, 90 | a street between buildings from above: lamp pools with bright specks in Cycles, smooth in praxis; the street walls brighter in praxis | Cycles' sampling noise; Ambient light without visibility |
-| C21 | shadows 59 | 1120, 720, 160, 90 | a cast shadow's edge on the floor and the light grid's lines on the sphere | Ambient light without visibility (the penumbra's dark side); BC compression and mips against source images |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C17 | town 59 | 800, 540, 160, 90 | a lamp-lit wall with the tree's shadow and the lamp post: the shadow's edge the same in both; the wall noisy in Cycles; the post grey all over in praxis, dark with one bright line in Cycles | Ambient light without visibility; Ambient light as an ideal diffuse response (a metal post under praxis's ambient); the wall's speckle is Cycles' sampling noise | accepted: the item explains it; the item is ticketed at triage 1 |
+| C18 | town 300 | 640, 540, 160, 90 (4x) | the same wall and post from the next camera position | as C17 | accepted: the item explains it; the item is ticketed at triage 1 |
+| C19 | town 1800 | 480, 1350, 160, 90 | a lamp at a tree's base on a pink wall: the tree's shadow in lamp light, the wall brighter in praxis | Ambient light without visibility; Cycles' sampling noise | accepted: the item explains it; the item is ticketed at triage 1 |
+| C20 | town 700 | 160, 630, 160, 90 | a street between buildings from above: lamp pools with bright specks in Cycles, smooth in praxis; the street walls brighter in praxis | Cycles' sampling noise; Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C21 | shadows 59 | 1120, 720, 160, 90 | a cast shadow's edge on the floor and the light grid's lines on the sphere | Ambient light without visibility (the penumbra's dark side); BC compression and mips against source images | accepted: the item explains it; the item is ticketed at triage 1 |
 
 ### Shade
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C22 | town 59 | 0, 90, 160, 90 | a shaded wall: praxis uniformly brighter, the largest gap of the scene | Ambient light without visibility |
-| C23 | town 59 | 160, 810, 160, 90 | shaded pavement and a wall's foot | Ambient light without visibility |
-| C24 | town 59 | 960, 720, 160, 90 (4x) | bollards and parked cars: the bollards lit grey in praxis, dark in Cycles; the blue car's body brighter and noisy in Cycles | Ambient light without visibility (bollards); the car: none. Nearest: Ambient light as an ideal diffuse response, with the opposite sign, the paint reflecting Cycles' sky. Worth the owner's eye |
-| C25 | town 300 | 2240, 900, 160, 90 | a blue car beside a shaded wall | as C24 |
-| C26 | helmet 59 | 1920, 1170, 160, 90 | the grey housing's diffuse surfaces: praxis a few steps brighter everywhere | Ambient light as an ideal diffuse response |
-| C27 | normal-tangent 59 | 1600, 630, 160, 90 | a dome's lit side with its normal map: shading the same, praxis brighter in the shade | Ambient light without visibility |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C22 | town 59 | 0, 90, 160, 90 | a shaded wall: praxis uniformly brighter, the largest gap of the scene | Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C23 | town 59 | 160, 810, 160, 90 | shaded pavement and a wall's foot | Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
+| C24 | town 59 | 960, 720, 160, 90 (4x) | bollards and parked cars: the bollards lit grey in praxis, dark in Cycles; the blue car's body brighter and noisy in Cycles | Ambient light without visibility (bollards); the car: none. Nearest: Ambient light as an ideal diffuse response, with the opposite sign, the paint reflecting Cycles' sky. Worth the owner's eye | accepted: the bollards under Ambient light without visibility; the car under the amended Ambient light as an ideal diffuse response |
+| C25 | town 300 | 2240, 900, 160, 90 | a blue car beside a shaded wall | as C24 | accepted, as C24 |
+| C26 | helmet 59 | 1920, 1170, 160, 90 | the grey housing's diffuse surfaces: praxis a few steps brighter everywhere | Ambient light as an ideal diffuse response | accepted: the item explains it |
+| C27 | normal-tangent 59 | 1600, 630, 160, 90 | a dome's lit side with its normal map: shading the same, praxis brighter in the shade | Ambient light without visibility | accepted: the item explains it; the item is ticketed at triage 1 |
 
 ### Texture filtering
 
-| Id | Scene, frame | Pixel box | What the crop shows | Item |
-|---|---|---|---|---|
-| C28 | minification 59 | 1120, 630, 160, 90 | the floor at the sun's reflection: praxis's broad sheen against Cycles' streak; moiré beyond it | Highlights widened by specular antialiasing and Toksvig; BC compression and mips against source images |
-| C29 | minification 59 | 960, 540, 160, 90 | the far floor: praxis's smooth bands against Cycles' aliased checker | BC compression and mips against source images |
-| C30 | texture-wall 59 | 1120, 270, 160, 90 | tiles and their edges: within a step | BC compression and mips against source images |
-| C31 | uv-grid 59 | 1280, 540, 160, 90 | the tile seams: the dark lines lighter in praxis where minified | BC compression and mips against source images |
-| S03 | minification 59 | 1120, 630, 160, 90 (`crops-supersampled/`) | praxis against its 3x capture: red where the 1x sheen is wider, blue where the 3x capture keeps checker detail | Highlights widened; the box filter's own moiré leak |
-| S04 | minification 59 | 960, 540, 160, 90 (`crops-supersampled/`) | the far floor against its 3x capture: a faint red field | as S03 |
-| S05 | texture-wall 59 | 1120, 270, 160, 90 (`crops-supersampled/`) | tiles against their 3x capture: nothing past the edges | 4x MSAA against supersampling |
-| S06 | town 59 | 160, 540, 160, 90 (`crops-supersampled/`) | a shaded wall against its 3x capture: identical | none needed: no difference |
+| Id | Scene, frame | Pixel box | What the crop shows | Item | Verdict |
+|---|---|---|---|---|---|
+| C28 | minification 59 | 1120, 630, 160, 90 | the floor at the sun's reflection: praxis's broad sheen against Cycles' streak; moiré beyond it | Highlights widened by specular antialiasing and Toksvig; BC compression and mips against source images | accepted: the item explains it |
+| C29 | minification 59 | 960, 540, 160, 90 | the far floor: praxis's smooth bands against Cycles' aliased checker | BC compression and mips against source images | accepted: the item explains it |
+| C30 | texture-wall 59 | 1120, 270, 160, 90 | tiles and their edges: within a step | BC compression and mips against source images | accepted: the item explains it |
+| C31 | uv-grid 59 | 1280, 540, 160, 90 | the tile seams: the dark lines lighter in praxis where minified | BC compression and mips against source images | accepted: the item explains it |
+| S03 | minification 59 | 1120, 630, 160, 90 (`crops-supersampled/`) | praxis against its 3x capture: red where the 1x sheen is wider, blue where the 3x capture keeps checker detail | Highlights widened; the box filter's own moiré leak | accepted: the item explains it |
+| S04 | minification 59 | 960, 540, 160, 90 (`crops-supersampled/`) | the far floor against its 3x capture: a faint red field | as S03 | accepted: the item explains it |
+| S05 | texture-wall 59 | 1120, 270, 160, 90 (`crops-supersampled/`) | tiles against their 3x capture: nothing past the edges | 4x MSAA against supersampling | accepted: the item explains it |
+| S06 | town 59 | 160, 540, 160, 90 (`crops-supersampled/`) | a shaded wall against its 3x capture: identical | none needed: no difference | accepted: no difference |
 
-## For the judgement session
+## The owner's judgement
 
-1. The gap to look at first is the shade: C22, C17, C24, C12, with the
-   owner's note from the previous exit that Cycles' town shade looks far
-   better. The item that explains it names its own trigger (the probes).
-   Whether an interim sky-visibility term is worth a ticket before then is
-   the owner's call at the triage, not this draft's.
-2. The three edge-of-list crops, C10, C14 and C24's car, are where a
-   Finding could come from: each is a specular response to the sky or the
-   sun at grazing that praxis either lacks (C14, C24) or spreads (C10).
-3. Cycles' speckle in lamp-lit `town` surfaces (C17 to C20) is on the
+1. The shade (C22, C17, C23, C24, C12): accepted under Ambient light without
+   visibility, which is tagged `ticketed at triage 1`. The owner named this
+   gap the largest at the previous milestone's exit; the triage decides
+   between an interim sky-visibility term, traced with the shadow mask's
+   machinery, and waiting for ADR 0020's probes.
+2. The specular ambient (C14, C24's car, C25): Cycles is brighter on smooth
+   metal and car paint at grazing, its sky reflected; praxis's ambient is
+   Lambertian only. Accepted by amending Ambient light as an ideal diffuse
+   response to name the missing lobe, deliberate until the probes, rather
+   than filing a Finding.
+3. The orrery's rim (C10): accepted; the rim the draft described is not
+   there at 4x.
+4. Cycles' speckle in lamp-lit `town` surfaces (C17 to C20) is on the
    reference's side; a higher sample count for the point lights would clean
-   it, and the figures would move by it, so a change there re-records the
-   Baselines.
-4. The tolerance the Baselines are judged with is the one accepted when the
+   it and would move the figures, so such a change re-records the
+   Baselines. The Baselines are judged with the tolerance accepted when the
    mechanism landed: 0.01 steps of mean difference and 0.0001 of linear
    RMSE, against a measured run-to-run spread of under 1e-6 steps.
+
+## Findings
+
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+
+None: the owner accepted every candidate.
+
+## Killed
+
+None.
+
+## Tags in `DIFFERENCES.md`
+
+| Item | Tag |
+|---|---|
+| Ambient light without visibility | `ticketed at triage 1` |
+| Ambient light as an ideal diffuse response (amended: no specular lobe) | `deliberate until the irradiance probes (ADR 0020) land` |
+| Highlights widened by specular antialiasing and Toksvig | `deliberate until shading takes more than one sample per pixel` |
+| 4x MSAA against supersampling | `deliberate until ADR 0019's 4x MSAA is superseded` |
+| BC compression and mips against source images | `deliberate until ADR 0017's BC Textures are superseded` |
