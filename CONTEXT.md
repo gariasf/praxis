@@ -213,7 +213,7 @@ A Bench record on a Series whose CPU or GPU frame median sits outside the median
 _Avoid_: Alert, outlier, anomaly
 
 **Verdict**:
-What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared; a held one's bisect along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
+What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
 _Avoid_: Confirmation, bisect result
 
 **Budget**:

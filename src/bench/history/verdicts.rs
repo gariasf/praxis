@@ -177,18 +177,19 @@ pub(super) fn unjudged(scene: &str, rows: &[Row], verdicts: &[Verdict]) -> Vec<S
         .collect()
 }
 
-/// What a night does next for `night`, its Verdict as the night started,
+/// What a night does next for `night_start`, its Verdict as the night started,
 /// after `runs`, the night's runs so far in the order benched, along
 /// `first_parent`: `main`'s first-parent commits from the night's good
 /// end to its bad end. Until each end has `END_RUNS` runs, the next run
 /// is the end with fewer, the good end first, and nothing is judged.
-/// Then the Verdict is cleared unless the ends' mean medians hold the
-/// shift; held, each later run moves the good or bad end to its commit,
+/// Then a Suspect not yet judged is cleared unless the ends' mean medians
+/// hold the shift, and a held bisect waits for another night; held, each
+/// later run moves the good or bad end to its commit,
 /// by which end's median it lies nearer, and the bisect benches the next
 /// commit or pins one. Returns the Verdict once judged, and the commit to
 /// bench next, none once the night is done with this Suspect.
 pub(super) fn step(
-    night: &Verdict,
+    night_start: &Verdict,
     runs: &[Run],
     first_parent: &[Commit],
 ) -> (Option<Verdict>, Option<String>) {
@@ -198,26 +199,31 @@ pub(super) fn step(
             .map(|run| run.median)
             .collect()
     };
-    let (good_runs, bad_runs) = (medians(&night.good), medians(&night.bad));
+    let (good_runs, bad_runs) = (medians(&night_start.good), medians(&night_start.bad));
     if good_runs.len() < END_RUNS || bad_runs.len() < END_RUNS {
         let next = if good_runs.len() <= bad_runs.len() {
-            &night.good
+            &night_start.good
         } else {
-            &night.bad
+            &night_start.bad
         };
         return (None, Some(next.clone()));
     }
     let mean = |values: &[f64]| values.iter().sum::<f64>() / values.len() as f64;
     let (good_median, bad_median) = (mean(&good_runs), mean(&bad_runs));
-    let mut verdict = night.clone();
-    if !holds(night.shift, good_median, bad_median) {
+    let mut verdict = night_start.clone();
+    if !holds(night_start.shift, good_median, bad_median) {
+        // A bisect's held shift was judged once; a night whose ends do not
+        // show it judges no commit and leaves the Verdict for the next.
+        if night_start.state == Some(State::Held) {
+            return (None, None);
+        }
         verdict.state = Some(State::Cleared);
         return (Some(verdict), None);
     }
     verdict.state = Some(State::Held);
     for run in runs
         .iter()
-        .filter(|run| run.commit != night.good && run.commit != night.bad)
+        .filter(|run| run.commit != night_start.good && run.commit != night_start.bad)
     {
         if (run.median - bad_median).abs() < (run.median - good_median).abs() {
             verdict.bad.clone_from(&run.commit);
@@ -449,7 +455,7 @@ fn night_runs(night: &Path, verdict: &Verdict) -> anyhow::Result<Vec<Run>> {
         // Read loosely: an earlier commit's binary wrote it.
         let result: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
             .with_context(|| format!("parsing {}", path.display()))?;
-        let commit = result["provenance"]["checkout"]["commit"].as_str();
+        let commit = result["provenance"]["commit"].as_str();
         let median = result[&verdict.metric]["median"].as_f64();
         if let (Some(commit), Some(median)) = (commit, median) {
             runs.push(Run {
@@ -586,6 +592,53 @@ mod tests {
     }
 
     #[test]
+    fn a_nights_runs_are_read_from_the_results_the_bench_writes() {
+        let night_directory =
+            std::env::temp_dir().join(format!("praxis-night-{}", std::process::id()));
+        std::fs::remove_dir_all(&night_directory).ok();
+        let mut result = crate::bench::tests::baseline();
+        let checkout = crate::bench::Checkout {
+            source_hash: "1".to_owned(),
+            commit: "a".to_owned(),
+            dirty: false,
+            branch: "HEAD".to_owned(),
+        };
+        result.provenance = Some(crate::bench::tests::provenance(checkout, 1.01));
+        for (run, median) in [("002", 200.0), ("001", 100.0)] {
+            result.cpu_frame_microseconds.median = median;
+            let directory = night_directory.join(run);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                directory.join(format!("{}.json", result.scene)),
+                serde_json::to_string(&result).unwrap(),
+            )
+            .unwrap();
+        }
+        let verdict = Verdict {
+            scene: result.scene.clone(),
+            ..night()
+        };
+        let read = night_runs(&night_directory, &verdict).unwrap();
+        std::fs::remove_dir_all(&night_directory).ok();
+        assert_eq!(read, runs(&[("a", 100.0), ("a", 200.0)]));
+    }
+
+    #[test]
+    fn a_held_bisect_waits_for_a_night_whose_ends_show_its_shift() {
+        let held = Verdict {
+            state: Some(State::Held),
+            ..night()
+        };
+        let ends = runs(&[
+            ("a", 10_000.0),
+            ("d", 10_200.0),
+            ("a", 10_100.0),
+            ("d", 10_300.0),
+        ]);
+        assert_eq!(step(&held, &ends, &commits("abcd", "1234")), (None, None));
+    }
+
+    #[test]
     fn a_re_bench_that_does_not_hold_clears_the_suspect() {
         let ends = runs(&[
             ("a", 10_000.0),
@@ -626,6 +679,14 @@ mod tests {
             ("b", "c", None)
         );
         assert_eq!(verdict.pinned.unwrap().commit, commits("c", "3")[0]);
+    }
+
+    /// `commit` with its source as `row` names it.
+    fn row_commit(commit: &str) -> Commit {
+        Commit {
+            commit: commit.to_owned(),
+            source_hash: format!("source-{commit}"),
+        }
     }
 
     /// A Series row of `commit` with source `source_hash`, its suspects
@@ -684,14 +745,8 @@ mod tests {
             scene: "town".to_owned(),
             metric: cpu,
             shift: 0.05,
-            suspect: Commit {
-                commit: "e".to_owned(),
-                source_hash: "source-e".to_owned(),
-            },
-            predecessor: Commit {
-                commit: "b".to_owned(),
-                source_hash: "source-b".to_owned(),
-            },
+            suspect: row_commit("e"),
+            predecessor: row_commit("b"),
             committed_unix_seconds: 0,
         });
         assert_eq!(listed(&[verdict]), []);

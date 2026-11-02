@@ -130,7 +130,8 @@
       git worktree prune
       git worktree add --quiet --detach "$tree" "$1" || return 1
       (cd "$tree" && CARGO_TARGET_DIR="$build" cargo build --release --quiet) || return 1
-      # Git Bash names the Windows binary without its .exe.
+      # praxis.exe on Windows, which Git Bash runs as ./praxis; cargo's
+      # dependency file and debug symbols are not needed.
       cp "$build/release/praxis"* "$tree/" 2>/dev/null
       rm -f "$tree/praxis.d" "$tree/praxis.pdb"
       git ls-files --others --ignored --exclude-standard --directory -- assets |
@@ -169,7 +170,7 @@
       break
     }
   done
-  if [ "$runs" -gt 0 ]; then
+  if compgen -G "$night/[0-9]*/*.json" >/dev/null; then
     log "re-benched $runs runs of a Suspect into $night"
     # A night's runs publish together, each a file of its own.
     mkdir -p "$night/all"
@@ -179,7 +180,7 @@
     "$praxis" publish "$night/all" || log "praxis publish $night/all failed"
   fi
   # No bisect waits for a later night: its trees go.
-  if [ "$bisect_done" = 1 ] && [ -d target/sweep/trees ]; then
+  if [ "$bisect_done" = 1 ] && compgen -G "target/sweep/trees/*/" >/dev/null; then
     for tree in target/sweep/trees/*/; do git worktree remove --force "$tree"; done
     git worktree prune
   fi
