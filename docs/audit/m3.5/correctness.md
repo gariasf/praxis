@@ -452,6 +452,1017 @@ applicable 1. Spec stories: 39 checked, 28 hold in this module, 11 fall
 in shaders, cook with assets and scenes, or tooling. Registry keys: 42,
 all match.
 
+## cook, assets and scenes
+
+Scope: `src/cook/`, `src/assets/`, `src/scenes/` with `town.rs`,
+`src/components.rs`, `src/transform/`, `src/time/`, `src/threading.rs`
+and `assets/manifest.json`; 9,487 lines of code, every file read in full,
+with the tests that exercise them. Three readers at high effort shared the
+module by file, each with the lane brief verbatim: the cooker with the
+manifest and the cook tests; the Cooked cache reader, the pools and the
+compute pool; the Reference scenes, the components, the transforms and the
+fixed loop. Each reader's scope, clause verdicts, stories, registry keys,
+oracles and open issues are the three subsections below; their Findings
+are one table, numbered in order of class, then of file, and the two
+readers who filed the same drift of ADR 0018's status sentence share one
+Finding (L1-C06). ADRs read: 0011, 0017, 0018 and 0022 in full, and the
+clauses of 0002, 0003, 0006, 0008, 0009, 0013, 0014, 0016, 0019, 0020,
+0021 and 0023 that name cooking, Assets, Arenas, Meshlets, BLAS at load,
+Reference scenes, components, transforms or the fixed schedule. The one
+open issue this module weighed, a renamed Asset's old ID loading its stale
+Blob unwarned, is under the cook reader's and the assets reader's *Open
+issues read*. `deviations.md` holds no row at this commit. No `cargo`
+command was run: every oracle row gives the test's bound and, where the
+arithmetic allows, the analytic value, not a measured run.
+
+### cook, with the manifest and the cook tests
+
+Scope: `src/cook/mod.rs`, `mesh.rs`, `texture.rs`, `fetch.rs`, `export.rs`
+(3,297 lines), `tests/cook.rs` and `tests/asset_manifest.rs` (1,040),
+`assets/manifest.json` and `assets/ATTRIBUTION.md` (111); 4,448 lines,
+every file read in full. `src/assets/cooked.rs` (974 lines) was read in
+full as the writer's half of the Blob formats: its `to_blob` functions are
+what the cooker writes, and they are cited here for that; its reader's
+verdicts are the assets reader's. `docs/research/test-assets.md` was read
+for the asset policy, `CONTEXT.md` for Asset ID, Blob, Cook key and
+Resident tail. ADRs read: 0011, 0017, 0018 in full; 0008 and 0023 for the
+clauses that name the cook (Toksvig as cook-time specular anti-aliasing;
+the units `export-scene` writes); 0019 for the six-bit vertex index that
+sets the Meshlet limit. The `CLAUDE.md` review checklist's cook lines
+(cooked Blobs only, Asset IDs never source paths, the `cook` feature) were
+read as the operational form of ADR 0018. Where a claim rests on a crate's
+behaviour, the cargo registry sources were opened: `meshopt` 0.6.2's
+vendored meshoptimizer (`vendor/src/clusterizer.cpp`, `meshoptimizer.h`,
+`vertexcodec.cpp`), `intel_tex_2` 0.5.0 (`src/bc7.rs`, `bc5.rs`, `bc4.rs`)
+and `ktx2` 0.5.0. Every `where` is `path:line` at the frozen commit, under
+`src/cook/` unless given in full. `deviations.md` holds no row at this
+commit; `DIFFERENCES.md` describes images, none of which this module
+produces. The one open issue this reader weighed, a renamed Asset's old
+ID loading its stale Blob unwarned, is under *Open issues read*. No
+`cargo` command was run: the oracle column below gives each test's bound
+and, where the arithmetic allows, the analytic value, not a measured run.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0011 | "glTF (from Blender) is the authoring source; the runtime loads Blobs" | holds: the cooker alone opens glTF, through the `cook` feature's `gltf` dependency; the runtime reads the Cooked cache | `mod.rs:375-378`; `Cargo.toml:16`, `:41`; `src/state.rs:159-178` |
+| 0011 | "a development launch reaches glTF only through the cooker, which cooks what changed before the runtime loads Blobs" | holds: `cook_scene` runs before `PoolLoader` reads the cache; without `cook` nothing is cooked and the cache is read as is | `src/state.rs:159-178`; `mod.rs:124-133` |
+| 0011 | "Textures cook into KTX2, a standard container" | holds: `ktx2`'s header, level index and DFD serialisers; the round-trip test reads the Blob back through `ktx2::Reader` | `src/assets/cooked.rs:261-320`, `:841-852` |
+| 0018 | "each source file gets a 128-bit GUID, written once into its `assets/manifest.json` entry" | holds: eight entries, each a 32-hex GUID; the manifest test refuses a missing, short or shared GUID | `assets/manifest.json:4`, `:15`, `:26`, `:37`, `:48`, `:59`, `:70`, `:81`; `tests/asset_manifest.rs:176-186` |
+| 0018 | "An Asset ID is the first 128 bits of SHA-256 over (GUID, Asset kind, glTF name, Channel for a Texture)" | holds, in that order, each part tagged and length-prefixed; a `shasum` oracle pins one ID; a Texture's name is its image's, not the glTF `texture`'s (see *Notes for the verifier*) | `src/assets/cooked.rs:83-117`, `:792-800`; `mod.rs:380-384`, `:446`; `mesh.rs:369`, `:379` |
+| 0018 | "The glTF index replaces the name when the name is missing or not unique" | holds: `asset_names` per kind (images, materials, meshes); the cook seam names an unnamed Material by its index | `mod.rs:481-492`, `:380`, `:385`; `mesh.rs:338-339`; `tests/cook.rs:113`, `:215-216` |
+| 0018 | "A cooked Asset is a Blob named by the SHA-256 of its bytes, found through a cook index that maps Asset ID to Blob, and rebuilt when its Cook key changes" | holds: `blobs/<sha256>` and `index/<id>` holding hash and Cook key; `is_fresh` compares the key and requires the Blob present | `src/assets/cooked.rs:694-710`, `:745-755`; `mod.rs:332-336`, `:142`, `:150`, `:163` |
+| 0018 | "A glTF mesh renamed in Blender gets a new Asset ID" | holds by construction: the name is hashed | `src/assets/cooked.rs:100-109`; `mesh.rs:379` |
+| 0018 | "The cooker warns when an ID that something references no longer exists" | broken in part: only a Material's Textures and a Primitive's Material are checked, each against the never-pruned cache, and a Reference scene's references by name are not seen: L1-C01 | `mod.rs:190-196`, `:197-207`, `:340-353`; `src/assets/cooked.rs:703-710`, `:745-755`; `src/state.rs:202-203`; `src/scenes/mod.rs:580-582` |
+| 0018 | "Cook key: SHA-256 over what the Asset cooks from (a Texture's source image, a Mesh's decoded Primitives and their Material IDs, a Material's own Blob; by content ...)" | holds: Texture over source bytes or generated pixels; Mesh over every `Geometry` field, destructured so a new field fails to compile, and the Material ID; Material over its Blob; the seam re-cooks exactly the changed Material, and a touched embedded image exactly its two Textures | `texture.rs:119-141`; `mesh.rs:41-70`; `mod.rs:323-329`; `tests/cook.rs:232-247`, `:651-665` |
+| 0018 | "the Cook keys of its dependencies, every cook setting, the format version and the encoder versions" | holds: the normal Texture's key tagged `N`; `texture_zstd_level`, the one setting; `TEXTURE_FORMAT_VERSION`, `MESH_FORMAT_VERSION`, `MATERIAL_FORMAT_VERSION`; `intel_tex_2 0.5.0 basic`, `bevy_mikktspace 1.0.0`, `meshoptimizer 0.25`, vertex codec 0, zstd's version number, all matching `Cargo.lock` and the vendored header; a setting change re-cooks every Texture and no Material | `texture.rs:21`, `:121-131`; `mesh.rs:29-35`, `:43-49`; `mod.rs:325-326`; `Cargo.lock` (`intel_tex_2` 0.5.0, `bevy_mikktspace` 1.0.0, `meshopt` 0.6.2); `meshoptimizer.h:15`; `tests/cook.rs:387-415` |
+| 0018 | "The metallic-roughness Texture depends on the normal Texture (Toksvig)" | holds: `with_normal_texture` for glTF and procedural sources, the first Material's when several share the image; the key covers it | `mod.rs:436-443`, `:280-303`; `texture.rs:87-93`, `:128-131` |
+| 0018 | "Each dev launch recomputes the keys of the Assets it references ... and cooks only the stale ones" | holds: `cook_scene` reads the scene's source files by GUID and its procedural Assets; the seam shows a launch cooking its scene's sources and nothing else, then nothing | `mod.rs:124-133`, `:229-262`; `tests/cook.rs:610-649` |
+| 0018 | "The Cooked cache lives in git-ignored `cooked/` and is never evicted. Deleting it is always safe." | holds: `/cooked/` ignored; no code removes an index file or Blob; the seam deletes the cache and re-cooks | `src/assets/cooked.rs:653`; `.gitignore:22-23`; `tests/cook.rs:249-269` |
+| 0018 | "Each Blob starts with a magic and a format version (a Texture Blob is KTX2, with its format version in a key-value entry)" | holds for what the cooker writes: `PXMA` 2, `PXME` 2, `PXTXVERSION` = 2 as a little-endian u32 | `src/assets/cooked.rs:18-30`, `:154-155`, `:271-275`, `:541-542` |
+| 0018 | "A mismatch is refused with a re-cook message; there is no migration code" | falls in assets (the reader); the cook seam shows the message after a deleted cache | `src/assets/cooked.rs:639-650`; `tests/cook.rs:257-262` |
+| 0018 | "Engine data that no cook format holds exactly is compiled into the binary ... the 64² blue-noise dither mask ... The runtime still opens no source path" | holds, cook side: the manifest lists the PNG; `read_sources` cooks only `.gltf` and `.glb` entries, so no Texture Blob is made of it; the pinning test is the render reader's | `assets/manifest.json:79-89`; `mod.rs:241-243`; `assets/ATTRIBUTION.md:21` |
+| 0018 | "Textures are KTX2 with every level zstd-supercompressed, stored smallest mip first, so the Resident tail ... is one contiguous byte range" | holds: levels written in `rev()` order, each `zstd::bulk::compress`ed, `SupercompressionScheme::Zstandard`; the round-trip test checks the offsets fall with the level | `src/assets/cooked.rs:284-293`, `:303`, `:841-851` |
+| 0018 | "Rows are stored unpadded" | holds: `encode` writes `blocks_wide × block_rows × block_bytes`, concatenated in row order; `level_bytes` asserts it | `texture.rs:504-509`, `:546`, `:206`; `src/assets/cooked.rs:237-248` |
+| 0018 | "the loader re-pitches them to 256 bytes as it writes into the `StagingBelt`" | falls in assets (`src/assets/pools.rs`) | |
+| 0018 | "Formats per Channel, without RDO: albedo and emissive BC7 sRGB, normal BC5 (z rebuilt in the shader), metallic-roughness BC5 linear, occlusion BC4" | holds; `intel_tex_2` has no RDO path; the normal's x and y alone reach the encoder | `texture.rs:162-170`, `:421-423`, `:514-541`; `src/assets/cooked.rs:221-234` |
+| 0018 | "BC6H waits for HDR" | not applicable | |
+| 0018 | "The encoder is `intel_tex_2` at its basic profile" | holds: `opaque_basic_settings`, or `alpha_basic_settings` when any alpha is below 255; BC5 and BC4 take no profile | `texture.rs:492-503`, `:522`, `:531`, `:540`; `intel_tex_2-0.5.0/src/bc7.rs:114`, `:199` |
+| 0018 | "BC7 measured 44.7 to 57.2 dB ... 52.86 dB on SciFiHelmet's base colour" | holds as a floor: the seam asserts at least 44.0 dB on every BC7 Texture and prints each Channel's PSNR (see *Oracles*) | `tests/cook.rs:304-346` |
+| 0018 | "Mips: a 2×2 box filter in linear light, with normals renormalised per mip" | holds: sRGB decoded by the IEC 61966-2-1 EOTF into f32, each mip the mean of a 2×2 box, encoded back once; the normal Channel renormalised at every mip; mip 0 of albedo and emissive takes the source bytes without a round trip; the checker test shows 0.5 linear landing at 188 | `texture.rs:172-184`, `:195-204`, `:230-240`, `:301-307`, `:333-358`, `:384-391`, `:396-404`; `tests/cook.rs:348-371` |
+| 0018, 0008 | "Toksvig widens each mip's roughness from the normal Texture's variance: a cook-time, non-temporal answer to specular aliasing" | holds: the spread carries the unnormalised mean and the variance 1 − \|mean\|² down the normal Texture's chain (law of total variance, so agreeing normals keep zero); `widened_roughness` applies Toksvig's eq. 1 then the 2σ² widening of alpha²; a pure function of the two images, no history | `texture.rs:173-176`, `:188-194`, `:282-298`, `:314-327`, `:362-381`, `:443-468`; `tests/cook.rs:481-520` |
+| 0018 | "The cooker refuses a Texture whose size is not a multiple of 4 or exceeds 8192, rather than resizing it" | holds: `MAX_TEXTURE_SIDE = 8192`; tested at 6×4 and 8196×4 | `texture.rs:152-161`; `src/assets/cooked.rs:33`; `tests/cook.rs:373-385` |
+| 0018 | "Meshes: a 28-byte vertex (position `Float32x3`, UV `Float32x2`, normal, tangent and bitangent sign as a QTangent in `Snorm16x4`, its w kept non-zero so the sign survives)" | holds: `CookedVertex` asserted 28 bytes; w nudged up to one Snorm16 step before quantising, then negated for a negative bitangent sign, so it rounds to at least ±1 | `src/assets/cooked.rs:391-403`, `:47`; `mesh.rs:303-327` |
+| 0018 | "and u32 indices" | holds | `mesh.rs:146`; `src/assets/cooked.rs:493`, `:513` |
+| 0018 | "`meshopt` reorders for vertex cache, overdraw and fetch, then encodes, then zstd compresses" | holds, in that order: cache and overdraw per Primitive, fetch over the whole Mesh, `encode_vertex_buffer` and `encode_index_buffer`, zstd level 19 | `mesh.rs:147`, `:154`, `:97`; `src/assets/cooked.rs:512-513`, `:543`, `:501` |
+| 0018, 0019 | "Each Primitive's triangles are cut, in that order, into Meshlets of at most 64 vertices, because a packed index carries the vertex within its Meshlet in six bits, and at most 124 triangles" | holds: `MESHLET_MAX_VERTICES = 64`, `MESHLET_MAX_TRIANGLES = 124`, cut in index order after the fetch pass renumbers vertices without reordering triangles; the read-back test checks both limits on every Reference scene Mesh | `src/assets/cooked.rs:40`, `:44`; `mesh.rs:84`, `:96-103`, `:165-197`; test `mesh.rs:603-608` |
+| 0018 | "Each Meshlet is the longest run the limits allow, as meshoptimizer's scan builder cuts them" | holds for the longest run; drift on the second half: on a degenerate triangle the two cuts differ, which a code comment records and `deviations.md` does not: L1-C05 | `mesh.rs:158-164`, `:172-182`; `meshopt-0.6.2/vendor/src/clusterizer.cpp:368-370` |
+| 0018 | "A Meshlet is stored as one byte, its triangle count; the reader rebuilds its vertex remap and local triangles from its run of the index stream" | holds for what the cooker writes: a `u8` per Meshlet after the Primitives; the rebuild is the reader's and is exercised by the read-back test | `src/assets/cooked.rs:531-537`, `:600-612`; test `mesh.rs:655-685` |
+| 0018 | "SciFiHelmet's Mesh Blob is 322,850 bytes this way, 13.82 per triangle" | holds as a ceiling: 13.83 bytes per triangle over 23,358 triangles, skipped when the helmet is not fetched (322,850 / 23,358 = 13.8218) | `tests/cook.rs:677-681`, `:706-720` |
+| 0018 | "The Blob also holds the Mesh's bounding box for culling" | holds: the box around every cooked vertex and any box a Primitive adds (the bent figures' rest-shape envelope), six f32s after the counts; checked against the sources | `mesh.rs:104-116`; `src/assets/cooked.rs:522-524`; test `mesh.rs:632-652` |
+| 0018 | "per-Meshlet bounds and cones wait for per-Meshlet tests" | not applicable | |
+| 0018, 0017 | "Each Primitive stores its UV texel density" | deferred by the spec: `CookedPrimitive` has no such field and nothing under `src/` computes one; the spec moves ADR 0017's residency half, which the density serves, to M4 | `src/assets/cooked.rs:405-413`; `mesh.rs:86-91` |
+| 0018 | "A Material is its own Asset: PBR factors plus one Texture Asset ID per Channel. Primitives reference it by ID." | holds: ten factors and five IDs; each Primitive carries `Option<AssetId>`, none on glTF's default Material | `src/assets/cooked.rs:135-176`; `mod.rs:465-477`; `mesh.rs:366-369`; `src/assets/cooked.rs:410` |
+| 0018 | "A Chunk's edge is 256 m ... A v1 Chunk is a list of Placements" | deferred by the spec (M4: cooked Chunks and Placements) | |
+| 0018 | "The cooker lives in `src/cook/` behind the `praxis cook` command, with its encoder dependencies behind a default-on `cook` feature that a shipping build turns off" | holds: `default = ["cook"]`; `bevy_mikktspace`, `gltf`, `image`, `intel_tex_2` optional behind it; `pub mod cook` under the feature; CI's no-`cook` build checks none of the four links (tooling) | `Cargo.toml:15-16`, `:20`, `:24`, `:37-41`; `src/lib.rs:23-24`; `.github/workflows/ci.yml:115-122` |
+| 0018 | "Procedural Reference scenes cook too, under Asset IDs derived from the scene name" | holds: `AssetSource::Scene(name)` tagged `S`; `read_sources` cooks every scene's Materials, Textures and Meshes | `src/assets/cooked.rs:90-93`; `src/scenes/mod.rs:107-121`; `mod.rs:263-317` |
+| 0018 | "so Goldens test the cooked path ... CI cooks before the golden test" | falls in tooling; CI runs `cargo run -- cook` before `cargo test` | `.github/workflows/ci.yml:75-78` |
+| 0018 | "New dependencies ... `intel_tex_2`, `ktx2`, `meshopt`, `zstd`; `sha2` moves from dev-dependency to dependency" | holds: all five under `[dependencies]`, `sha2` with `default-features = false` | `Cargo.toml:23-27` |
+| 0018 | status: "the reader rebuilds their Meshlets (#192), which the renderer does not keep yet" | drift: the Mesh pool keeps them in three Meshlet Arenas, as ADR 0017's own amendment says: L1-C06 | `src/assets/pools.rs:76-78`, `:106-111`; `docs/adr/0018-...md:3` |
+| 0017 | "The cooked format (ADR 0011) stores each mip as a separately loadable byte range of the Texture's Blob, with the Resident tail as one range" | holds: one `LevelIndex` entry per mip with its own offset and lengths; smallest first, so the tail is contiguous | `src/assets/cooked.rs:277-293` |
+| 0017 | "and each Primitive's UV texel density (ADR 0018)" | deferred by the spec, as above | |
+| 0017 | "Textures ... loaded from cooked Blobs with their full mip chains" | holds, cook side: `mips = ilog2(max side) + 1`, every level encoded; the seam checks each Reference scene Texture has that many | `texture.rs:171`, `:178-208`; `tests/cook.rs:315-316` |
+| 0023 | "a `DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela ... ambient term gives illuminance in lux ... background ... cd/m²" | holds where `export-scene` writes them: the components' values copied under fields named `illuminance`, `intensity`, `ambient_illuminance`, `background_luminance`, documented with the key; the shadows export test reads 100,000 lx and 900,000 cd back | `export.rs:98-103`, `:112-121`, `:164-167`, `:226-244`; `src/components.rs:83-84`, `:99-100`; test `export.rs:1036-1060` |
+| 0023 | "Exposure is an EV100" | holds: the camera's `ev100` exported as is; the test expects 16.3466 for 100,000 lx to 1 | `export.rs:80-85`, `:214`; test `:1027-1033` |
+| 0023 | "Core glTF caps emissive at 1 cd/m² ... Brighter emissives need KHR_materials_emissive_strength, which the cooker does not read yet" | holds: `emissive_factor` alone is cooked | `mod.rs:465-477` |
+| 0023 | "Point lights fall off by inverse square inside KHR_lights_punctual's range window" | falls in shaders; the export writes `range` with the key | `export.rs:238-242` |
+| checklist | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path" | holds: the two glTF-backed scenes name their Meshes by `AssetId::new` with the file's GUID; `DEFAULT_MODEL` is a message string | `src/state.rs:35`, `:202-205`; `src/scenes/mod.rs:580-582` |
+| policy | "One manifest records path, source URL, SPDX licence expression, credit text, upstream version, and SHA-256 ... CI fails on an `assets/` file without an entry. Credits are collected in an attribution file. Files whose expression includes an `NC` term ... are marked dev-only" | holds: `deny_unknown_fields` entry with every field; unlisted, absent, mismatched, uncredited, blank and `-NC-` without `dev_only` each a problem, and each problem kind exercised; the three credits appear verbatim | `tests/asset_manifest.rs:13-34`, `:144-216`, `:46-110`; `assets/ATTRIBUTION.md:7`, `:13`, `:19` |
+| policy | "Pinned URL plus SHA-256, into a git-ignored cache; never committed" (Tier 3; SciFiHelmet fetched) | holds: `fetched: true` entries; a download whose SHA-256 differs is refused before anything is written; a file is written beside its place and renamed in; `/assets/SciFiHelmet/` ignored | `assets/manifest.json:11`, `:22`, `:33`, `:44`, `:55`, `:66`; `fetch.rs:102`, `:109-126`; `.gitignore:16-17`; tests `fetch.rs:222-279` |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| 4, Meshlets of at most 64 vertices into each Mesh Blob with meshopt | holds in substance: `meshopt` orders and encodes; the cut is the engine's scan in `meshopt_buildMeshletsScan`'s rule, since `meshopt` 0.6.2 binds that builder only as an `unsafe` extern, as ADR 0018 (amended) records | `mesh.rs:97`, `:147`, `:154`, `:165-197`; `meshopt-0.6.2/gen/bindings.rs:588`; `src/clusterize.rs:94`, `:137`, `:181` (the safe wrappers, none a scan) |
+| 6, the 28-byte vertex pulled from the Arena against the cooker's encoder | holds, cook side: `CookedVertex` is the layout the shader decodes; the decode oracle is the shaders section's | `src/assets/cooked.rs:391-403`; `mesh.rs:303-327` |
+| 7, each Primitive draws with its own Material | holds, cook side: the Material ID per Primitive in the Blob | `mesh.rs:81-91`; `src/assets/cooked.rs:525-530` |
+| 8, SciFiHelmet's cooked Mesh Blob measured once and kept as a ceiling | holds: 13.83 bytes per triangle, skipped when not fetched | `tests/cook.rs:677-681`, `:710-719` |
+| 46, `town` procedural at cook time, CI needs no fetch | holds, cook side: `Town` names no source file and its Meshes and Materials cook as procedural Assets; the generator is the scenes reader's | `src/scenes/mod.rs:126-139`; `mod.rs:263-317`; `src/scenes/town.rs:907`, `:924` |
+| Implementation decision, Meshlet cook: "gains each Meshlet's vertex remap and local triangles" | superseded by ADR 0018 as amended on 2026-10-19: one byte per Meshlet, the remap and local triangles rebuilt by the reader | `src/assets/cooked.rs:531-537`, `:425-484` |
+| Implementation decision, Meshlet cook: "plus a bounding volume per Mesh ... The format version bumps" | holds: `bounds` in the Blob; `MESH_FORMAT_VERSION = 2`, version 1 refused | `src/assets/cooked.rs:37`, `:522-524`, `:915-929` |
+| Testing decision, Cook: Meshlet validity (every triangle in exactly one Meshlet, at most 64 vertices, every Meshlet triangle mapping back to its Primitive's) | holds: `check_meshlets` walks each Primitive's index stream against its Meshlets' triangles, asserts none left over, the limits, and the corner-wise set equality with the source | `mesh.rs:591-653`; `:659-685` |
+| Testing decision, Cook: SciFiHelmet's bytes per triangle, skipped when not fetched | holds | `tests/cook.rs:710` |
+| Testing decision, prior art: the QTangent round trip | holds: 4 Snorm16 steps over 264 frames, both signs, and the near-half-turn cases | `mesh.rs:432-471` |
+
+#### Registry keys
+
+Every key cited in the module was read against its registry quote; the
+vendored meshoptimizer 0.25 and `intel_tex_2` 0.5.0 sources were opened
+where a quote is about a crate. All 13 cited in these files match. The
+four `ktx2-*` keys sit in `src/assets/cooked.rs`, on the writer this
+module calls, and were checked for that; `hoffman-2013-f0` and
+`bevy-lux-constants` are cited in `src/scenes/mod.rs`, not here, and are
+the scenes reader's; both were glanced at and match.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `mesh.rs:27` | `meshoptimizer-0.25-vertex-codec` | matches: `vertexcodec.cpp:125` `static int gEncodeVertexVersion = 0;` and `:1781` passes it from `meshopt_encodeVertexBuffer`; the Cook key names "vertex codec 0" |
+| `mesh.rs:162` | `meshoptimizer-0.25-scan-meshlets` | matches: `clusterizer.cpp:368-370` is the quoted `used_extra` and split condition, called per triangle from `meshopt_buildMeshletsScan` at `:1289`; `av`, `bv`, `cv` are references into `used[]`, so a repeated corner is counted twice, as the comment says; the code's cut differs there (L1-C05) |
+| `mesh.rs:258-259` | `gltf-2.0-texture-origin`, `gltf-2.0-normal-texture-convention` | matches: `v` is flipped to `1 − v` for MikkTSpace so the bitangent runs up the image, where glTF's normal Texture +Y points; the plane test shows tangent +X, bitangent −Z along decreasing `v` |
+| `mesh.rs:278` | `gltf-2.0-mikktspace-tangents` | matches: `bevy_mikktspace::generate_tangents` over positions, normals and `TEXCOORD_0`, always, since glTF `TANGENT` is not read (see *Notes for the verifier*) |
+| `mesh.rs:299`, `export.rs:617` | `gltf-2.0-tangent-bitangent` | matches: the frame's columns are the tangent, `normal × tangent`, the normal, with w's sign the bitangent sign; `tangent_frame` decodes w's sign back into the glTF tangent's w |
+| `texture.rs:397` | `khronos-dfs-srgb` | matches: `≤ 0.0031308 → × 12.92`, else `1.055 x^(1/2.4) − 0.055`; the decode at `:234-238` is its inverse at the 0.04045 knee |
+| `texture.rs:439` | `gltf-2.0-roughness-mapping` | matches: alpha² = roughness⁴ in `widened_roughness`, undone by `powf(0.25)` |
+| `texture.rs:448` | `toksvig-2004-variance` | matches: `(1 − \|mean\|)/\|mean\|` written as `variance / ((1 + mean_length) · mean_length)` with `variance = 1 − \|mean\|²`, algebraically eq. 1 and free of the cancellation |
+| `texture.rs:457`, `:459` | `kaplanyan-2016-ndf-filtering`, `tokuyoshi-2019-roughness-matrix` | matches: alpha'² = alpha² + 2σ² from eqs. 14 and 15; the 0.18 cap is named and not applied, with the reason, which the second quote's κ confirms is a cap on the derivative-estimated term; only alpha² is capped at 1 |
+| `export.rs:230`, `:238` | `khr-lights-punctual-units` | matches: `illuminance` on the directional entry, `intensity` in candela on the point entry, copied from components documented in lux and candela |
+| `export.rs:241` | `khr-lights-punctual-range` | matches in what the export writes: `range` in metres, the window itself being the shader's |
+| `src/assets/cooked.rs:26`, `:255-259` (writer) | `ktx2-level-order`, `ktx2-supercompression-per-level`, `ktx2-level-alignment`, `ktx2-key-value-alignment` | matches: levels written smallest first; each level compressed on its own; no padding between levels under scheme 2; `PXTXVERSION` plus NUL is 12 bytes, a multiple of the u32 value's 4, asserted at `:857-864` |
+| `src/scenes/mod.rs:471`, `:519` (scenes reader) | `bevy-lux-constants`, `hoffman-2013-f0` | match on a glance: `SUN_ILLUMINANCE = 100_000.0`; `SWEEP_BASE_COLOR = [1.0, 0.71, 0.29, 1.0]`, the quoted linear F0 of gold |
+
+#### Oracles
+
+Every cook oracle runs on the CPU in f32 (or f64 in the export test), so
+no WGSL accuracy floor applies. No test was run by this reader; the
+measured column gives the test's bound and, where the arithmetic allows,
+the analytic value the bound was set against.
+
+| Function | Test, constant | Literature number, key | Measured error | Verdict |
+|---|---|---|---|---|
+| `widened_roughness` (`texture.rs:443-468`) | `toksvig_widens_each_metallic_roughness_mip_by_its_normal_textures_variance`, `tests/cook.rs:481-520`; `ROUGHNESS_TOLERANCE = 0.01` (`:430`) on 8-bit roughness after BC5; red-capable: the widening must exceed 10 × tolerance at every mip above 0 (`:510`) | σ² = (1 − \|Nₐ\|)/\|Nₐ\| [`toksvig-2004-variance`]; α'² = α² + 2σ² [`kaplanyan-2016-ndf-filtering`]; α = roughness² [`gltf-2.0-roughness-mapping`] | within 0.01 at every texel of five mips when the test passes; the expected value is the composed formula with the analytic mean length cos(tilt)^m, so the test checks the implementation of the quotes, not the angle-for-slope step (see *Notes for the verifier*) | matches its sources |
+| `qtangent` (`mesh.rs:303-327`) | `qtangents_decode_to_their_frame_within_snorm16_precision`, `mesh.rs:452-471`; `4.0 * STEP`, `STEP = 1/32767 ≈ 3.05e-5`, so 1.22e-4 per component of the decoded normal and tangent, over 260 rotations about four axes and four near-half-turns, both signs | Snorm16 quantisation: half a step per component, two quaternion products per rotated axis, plus the one-step nudge on w (ADR 0018, "its w kept non-zero") | ≤ 1.22e-4 when the test passes; the bitangent sign exact | holds |
+| `cook` plane frame (`mesh.rs:122-156`) | `a_plane_has_its_uv_aligned_tangent_frame`, `mesh.rs:501-513`; `4.0 * STEP` | glTF's bitangent = cross(N, T) · w [`gltf-2.0-tangent-bitangent`]; +Y up in normal Textures [`gltf-2.0-normal-texture-convention`] | normal within 1.22e-4 of +Y, tangent of +X, sign +1 | holds |
+| `mesh_glb` and `tangent_frame` (`export.rs:616-722`) | `shadows_exports_its_constants_and_its_cooked_mesh`, `export.rs:1000-1161`; `4.0 * STEP` in f64 (`:993`) against the analytic sphere's and plane's normals, unit tangents perpendicular to them | the analytic sphere (normal out from the centre 1 m up) and plane (+Y, +X) | ≤ 1.22e-4 when the test passes | holds |
+| mip filter in linear light (`texture.rs:230-358`) | `a_black_and_white_checker_filters_in_linear_light`, `tests/cook.rs:348-371`; `abs_diff(188) <= 2` on mip 1 of an 8×8 checker | sRGB EOTF⁻¹ of 0.5: 1.055 · 0.5^(1/2.4) − 0.055 = 0.7354 → 187.5 of 255 [`khronos-dfs-srgb`]; an average of the encoded values would give 128 | analytic 187.5 against the asserted 188 ± 2: 0.5 of the bound before BC7's error | holds |
+| `encode`, BC7 (`texture.rs:479-547`) | `reference_scene_textures_cook_every_mip_and_keep_their_quality`, `tests/cook.rs:304-346`; `decibels >= 44.0` on every BC7 Texture of the seam's scenes, SciFiHelmet's when fetched; BC5 and BC4 PSNRs printed, not asserted | ADR 0018: BC7 44.7 to 57.2 dB on DamagedHelmet, 52.86 dB on SciFiHelmet's base colour; BC5 44.11, 42.71 and BC4 44.06 dB, which is why no BC5 or BC4 floor is asserted | printed to stderr per Texture at test time; not run here | holds as a floor |
+| `CookedMesh::to_blob` size (`src/assets/cooked.rs:511-545`) | `every_reference_scene_mesh_cooks_and_reads_back`, `tests/cook.rs:677-720`; `HELMET_MESH_BYTES_PER_TRIANGLE = 13.83` over `HELMET_TRIANGLES = 23_358` | ADR 0018: 322,850 bytes, 13.82 per triangle | ceiling 0.008 above the ADR's 13.8218 | holds |
+| `weld` (`mesh.rs:201-222`) | `sci_fi_helmet_welds_to_14085_vertices`, `mesh.rs:690-703`; exact | `docs/research/asset-compression-and-cooked-data.md:35`: "welded on position, UV and normal (14,085 vertices ...)" | exact count | holds |
+| `AssetId::new` (`src/assets/cooked.rs:83-117`, the reader's file) | `asset_id_is_truncated_sha256_of_its_encoding`, `:792-800`; exact | SHA-256 of the documented encoding by `shasum -a 256`, truncated to 128 bits | exact | holds |
+
+#### Open issues read
+
+| Issue | What the code shows | Needs hardware |
+|---|---|---|
+| #221, "A renamed Asset's old ID still loads its stale Blob, unwarned", weighed against ADR 0018's "A glTF mesh renamed in Blender gets a new Asset ID. The cooker warns when an ID that something references no longer exists." and "never evicted" | The first sentence holds: the name is in the hash (`src/assets/cooked.rs:100-109`, `mesh.rs:379`). "Never evicted" holds: `CookedCache::write` adds or replaces an index file and never removes one (`:745-755`), and no other code touches `index/`. The warning clause is implemented for two reference kinds only: a Material's Textures (`mod.rs:190-196`) and a Primitive's Material (`:197-207`, `:340-353`), each tested with `cache.entry(id).is_none()`, that is against the Cooked cache, not against what this cook produced, so a stale index entry satisfies it. The references the issue describes are not seen at all: a Reference scene names a glTF Mesh in code (`src/state.rs:202-203` `AssetName::Name("SciFiHelmet")`; `src/scenes/mod.rs:580-582` `"NormalTangentTest_low"`), `cook_scene` receives only the scene's source GUIDs (`mod.rs:130-131`), and `Sources` carries no list of the IDs a scene will load. After a rename the new Mesh cooks under its new ID, the old ID's index file stays, and `CookedCache::read` (`:713-727`) returns the old Blob to the loader with no staleness check; the cook report says `cooked: 1, unchanged: n` and nothing else. The clause is therefore broken in part, as the issue states; filed as L1-C01 so that the clause table has its exception, with the expectation that it inherits the issue's placement (fog, M4's charting, the owner's). What would close it in M4 is already sketched by the code: a cook knows every ID it wrote or found fresh (`CookReport`), so an index entry it neither wrote nor confirmed is a candidate for a warning or for pruning, once Chunks and Scenes give the cooker the full reference set. | No |
+
+### assets
+
+Scope: `src/assets/` and the compute pool: `src/assets/mod.rs`,
+`cooked.rs`, `loader.rs`, `material.rs`, `mesh.rs`, `pools.rs` and
+`src/threading.rs`; 2,742 lines, every file read in full, test modules
+included, with `tests/compute_pool.rs` (8 lines) and the blocks of
+`tests/cook.rs`, `tests/frame_stats.rs`, `tests/reference_scenes.rs` and
+`tests/conventions.rs` that exercise the Cooked cache and the pools. ADRs
+read in full: 0002, 0009, 0016, 0017, 0018, 0020, 0021; the clauses of
+0003, 0006, 0011, 0013, 0014, 0019, 0022 and 0023 that name cooking,
+Assets, Arenas, Meshlets, BLAS at load or the compute pool. The `CLAUDE.md`
+review checklist was read as the operational form of those clauses.
+`src/cook/mod.rs` and `src/cook/mesh.rs` were opened only where the
+reader's format or the open issue needed the writer's side;
+`src/render/renderer.rs`, `staging.rs`, `bind_groups.rs`, `src/gpu/mod.rs`
+and `src/render/shaders/main.wgsl`, `shading.wgsl` only where they consume
+what the pools hand over. The crate sources of `meshopt` 0.6.2,
+`offset-allocator` 0.2.0, `ktx2` 0.5.0 and `zstd` 0.14.2 were read in the
+cargo registry where a clause rests on their behaviour. Every `where` is
+`path:line` at the frozen commit, under `src/assets/` unless given in full.
+`deviations.md` holds no row at this commit. The one open issue this
+reader weighed, the renamed Asset's old ID, is under *Open issues read*.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0002 | "sub-allocations of one shared vertex buffer and one shared index buffer in the Mesh pool" | holds: one vertex Arena, one index Arena, each one `wgpu::Buffer`; the draw's indices are ADR 0019's packed indices and the Meshlet triangle Arena, and the index Arena feeds BLAS builds only (see *Notes for the verifier*) | `pools.rs:74-75`, `:98-105`, `:103-104`, `:433-440` |
+| 0002, 0017 | "fixed arenas ... implemented in #145 at a provisional 16 MiB each until the Budget split" | holds | `pools.rs:7-9` (`16 << 20`); `src/render/renderer.rs:340` |
+| 0006 | Handles are plain data | holds: `MeshHandle(u32)`, `MaterialHandle(u32)` | `mesh.rs:14-15`; `material.rs:31-39` |
+| 0009 | "`bevy_ecs` used on its own, not the Bevy engine" | holds: `bevy_ecs` and `bevy_tasks` 0.18.1 are the only `bevy_*` runtime dependencies | `Cargo.toml:17-18`; `src/threading.rs:5-7` |
+| 0011 | "a development launch reaches glTF only through the cooker, which cooks what changed before the runtime loads Blobs" | holds: the loader reads `CookedCache` only; the cook runs under `cfg(feature = "cook")` before it; `gltf` is an optional dependency of that feature | `loader.rs:57`, `:73`, `:84`; `material.rs:266`, `:306`; `src/state.rs:159-180`; `Cargo.toml:16` |
+| 0013, checklist | `gpu_memory_bytes` counts every pool buffer and texture; acceleration structures by the per-adapter estimate | holds: the five Arenas and the Mesh table; the SSBO and every Channel's Textures; BLAS bytes split by compacted and uncompacted triangles; all three summed by the Renderer | `pools.rs:471-477`, `:481-489`; `material.rs:228-236`; `src/render/renderer.rs:778-783`, `:793`; `tests/frame_stats.rs:80-83` |
+| 0013, checklist | per-frame GPU writes add to `uploaded_bytes` | not applicable to this module: the pools write at load through `LoadStaging`, which is not per-frame (see *Notes for the verifier*) | `pools.rs:265-291`; `material.rs:127-129`, `:250` |
+| 0014 | "cooked meshes stay within 128 m of their pivot"; positions f32 in mesh space | holds, reader side: `position: [f32; 3]` mesh-local, bounds mesh-local; the 128 m bound is the cooker's | `cooked.rs:391-403`, `:494-495`; `mesh.rs:27-29` |
+| 0016 | "the `ComputeTaskPool` is created with `available_parallelism() − 1` workers (at least 1)" | holds; tested | `src/threading.rs:12-22`; `tests/compute_pool.rs:4-8` |
+| 0016 | "the schedule stays `SingleThreaded`" | holds | `src/threading.rs:27-31` |
+| 0016 | "bevy_ecs's `multi_threaded` feature is on" | holds | `Cargo.toml:17-18` |
+| 0016 | "No QoS class is set" | holds: `TaskPoolBuilder` with threads and a name only | `src/threading.rs:17-20` |
+| 0016 | "Asset reads and decoding run on a separate IO pool outside the compute pool ... the main thread copies it into the `StagingBelt`" | deferred by the spec: no IO pool exists; the ADR says "the rest is planned" and the spec moves ADR 0017's residency half to M4; loads decode on the main thread at spawn | `loader.rs:57`, `:84`; `src/state.rs:174-180`; no `IoTaskPool` in `src/` |
+| 0016 | "Only the main thread submits, presents or polls" | holds: `compact_blases` submits and polls, called from `Renderer::upload` on the calling thread; the eight-thread test uses a device per thread under `cfg(test)` | `pools.rs:402`, `:421-422`; `src/render/renderer.rs:485-486`; `pools.rs:726-756` |
+| 0017 | "Each Channel is one partially bound texture binding array (`TEXTURE_BINDING_ARRAY`, `PARTIALLY_BOUND_BINDING_ARRAY`) in one bind group" | holds: five `TextureViewArray` resources in `MATERIALS`, each with `count` 13,107, bound with the views present | `material.rs:77-84`, `:362-387`; `src/render/bind_groups.rs:48-65`, `:634-647` |
+| 0017 | "a Layer is an index into its Channel's array, Layer 0 stays the neutral default" | holds in form: five 1x1 neutral Textures pushed first; the normal Channel's neutral is not a no-op: L1-C03 | `material.rs:156-160`, `:180-199`, `:267`, `:307-309` |
+| 0017 | "the fixed 8 Layers per Channel go" | holds: 65,536 / 5 = 13,107 per Channel | `material.rs:15-16`; `src/gpu/mod.rs:293` |
+| 0017 | "Residency changes are batched so that bind group is rebuilt at most once per frame" | holds: loads set `bind_group_is_stale`; `refresh_bind_group` rebuilds once, called once per `render` | `material.rs:311`, `:318-340`; `src/render/renderer.rs:582` |
+| 0017 | the gate: the rebuild's cost measured at the bound Textures' count | holds: the build is timed and logged with the Texture count | `material.rs:320`, `:329-338` |
+| 0017 | "sampled trilinear, the colour Channels at 16x anisotropy and the data Channels at 4x" | holds: two samplers, `Linear` on all three filters, `Repeat`, `anisotropy_clamp` 16 and 4; the shader samples albedo and emissive with `colour_sampler`, the rest with `data_sampler` | `material.rs:28-29`, `:201-202`, `:346-357`; `src/render/shaders/main.wgsl:173-178` |
+| 0017 | "Priority is computed on the CPU ... from distance and the Primitive's UV texel density (stored at cook time, per Primitive)" | deferred by the spec (ADR 0017's residency half to M4); no Blob field holds a density | `cooked.rs:406-413`, `:525-530`, `:565-580` |
+| 0017 | "Each texture's Resident tail ... never leaves ... evicted only below p − 1" | deferred by the spec: no eviction; every Texture loads whole | `material.rs:117-133` |
+| 0017 | "One vertex arena and one index arena, and the Meshlet arenas, each at most 2^31 − 1 bytes" | holds: asserted at creation; the floor's `max_buffer_size` is 2^31 − 1 | `pools.rs:540-545`; `src/gpu/mod.rs:300` |
+| 0017 | "sub-allocated with the `offset-allocator` crate" | holds: one `offset_allocator::Allocator` per Arena, in elements; `allocation_size` is the requested count, so `bytes_in_use` is exact (`offset-allocator-0.2.0/src/lib.rs:246`, `:486-491`) | `pools.rs:525-530`, `:553`, `:561-572` |
+| 0017 | "the Capability floor's 128 MiB `max_storage_buffer_binding_size` caps that arena" | holds: 16 MiB, pinned by a test against the floor | `pools.rs:9`; `src/gpu/mod.rs:756-760` |
+| 0017 | "No growth at runtime: a load that does not fit is refused and logged" | holds: Arena buffers created once; a Mesh past an Arena or the Mesh table returns `None` after an `error!`, every Arena as it was; tested | `pools.rs:188-194`, `:203-229`, `:503-521`, `:547-552`; test `:965-994` |
+| 0017 | "The CPU shadow of vertex and index data goes" | holds: a loaded `Mesh` keeps its vertex range and bounds only | `mesh.rs:3-12`; `pools.rs:298-302` |
+| 0017 | "Acceleration structures join the ledger: 94 bytes per BLAS triangle (45.5 compacted) ... `gpu_memory_bytes` counts them as estimates" | holds, pool side: triangles move from uncompacted to compacted as each BLAS is compacted; the per-adapter figures are the render section's | `pools.rs:71-73`, `:338-345`, `:416-418`, `:481-489`; test `:696-711` |
+| 0017 | "A `TRANSIENT_ATTACHMENT` counts as zero only when `transient_saves_memory` is `Some(true)`" | falls in tooling (`src/stats/`, `texture_bytes`); the pool passes the flag through | `material.rs:228-236` |
+| 0017 | "Streaming uploads go through a `StagingBelt`, never `Queue::write_texture`" | holds: every pool write goes through `LoadStaging`, a `StagingBelt` and one encoder; no `queue.write_texture` or `queue.write_buffer` in `src/` outside the per-frame path | `material.rs:128`, `:250`; `pools.rs:575-578`, `:287-291`; `src/render/staging.rs:171-173`, `:186-193`, `:198-251` |
+| 0017 | "the engine caps the bytes written into it per frame at the staging Budget, and an upload past the cap waits for a later frame" | deferred by the spec: loads happen at spawn, submitted whole before the first frame; no staging Budget is read | `src/render/staging.rs:274-279`; `src/render/renderer.rs:485` |
+| 0017 | "The cooked format stores each mip as a separately loadable byte range ... with the Resident tail as one range" | holds for the layout: the KTX2 level index gives each level its own range, written smallest mip first; reading by range is deferred with streaming | `cooked.rs:277-293`, `:367-381`; test `:841-852` |
+| 0018 | "An Asset ID is the first 128 bits of SHA-256 over (GUID, Asset kind, glTF name, Channel for a Texture)" | holds; the oracle recomputed outside the code matches (see *Oracles*) | `cooked.rs:79-117`; test `:792-800` |
+| 0018 | "The glTF index replaces the name when the name is missing or not unique" | holds in the encoding (`AssetName::Index`); the choice is the cooker's | `cooked.rs:67-73`, `:104-108` |
+| 0018 | "A cooked Asset is a Blob named by the SHA-256 of its bytes, found through a cook index that maps Asset ID to Blob" | holds: `blobs/<sha256>` and `index/<id>` holding hash and Cook key, one file per Asset, written whole and renamed into place | `cooked.rs:655-656`, `:694-700`, `:703-710`, `:744-755`, `:763-783` |
+| 0018 | "A glTF mesh renamed in Blender gets a new Asset ID. The cooker warns when an ID that something references no longer exists." | holds as written for an ID absent from the cache; the renamed Asset's old ID keeps its entry: see *Open issues read* | `cooked.rs:703-710`, `:745-755`; `src/cook/mod.rs:190-196`, `:344-352` |
+| 0018 | "The Cooked cache lives in git-ignored `cooked/` and is never evicted" | holds: no code removes a Blob or an index file | `cooked.rs:653`; `.gitignore:23`; `cooked.rs:744-755` |
+| 0018 | "The runtime loads Blobs only (ADR 0011). Each Blob starts with a magic and a format version (a Texture Blob is KTX2, with its format version in a key-value entry). A mismatch is refused with a re-cook message; there is no migration code." | holds: `PXMA` 2, `PXME` 2, `PXTXVERSION` 2; one `payload` check with no other branch; tested for each kind, M3's first Texture entry included | `cooked.rs:17-37`, `:178-179`, `:324-336`, `:548`, `:639-650`; tests `:804-824`, `:866-900`, `:918-929` |
+| 0018 | "Engine data that no cook format holds exactly is compiled into the binary ... the tonemapping pass's 64² blue-noise dither mask" | falls in render (`tonemapping_pass.rs:20-25`, test `:187-200`); no asset module holds it | |
+| 0018 | "The runtime still opens no source path" | holds: the only paths the module opens are `cooked/index/<id>` and `cooked/blobs/<hash>`; `ASSETS_DIRECTORY` is reached under `cfg(feature = "cook")` only; `DEFAULT_MODEL` names a path in an error message and an `exists()` check (see *Notes for the verifier*) | `cooked.rs:694-700`, `:704`, `:721`; `src/state.rs:159-172`, `:203-206`; `src/bin/praxis.rs:435` |
+| 0018 | "Textures are KTX2 with every level zstd-supercompressed, stored smallest mip first" | holds: the reader requires `Zstandard`, decompresses each level on its own; the writer orders levels `.rev()`, pinned by the test's descending offsets | `cooked.rs:284-292`, `:338-341`, `:367-381`; test `:841-851` |
+| 0018 | "Rows are stored unpadded, and the loader re-pitches them to 256 bytes as it writes into the `StagingBelt`" | holds: `levels` are "rows unpadded"; `LoadStaging::write_texture` re-pitches to `COPY_BYTES_PER_ROW_ALIGNMENT` into a belt slice | `cooked.rs:216-217`; `material.rs:127-129`; `src/render/staging.rs:195-251` |
+| 0018 | "Formats per Channel, without RDO: albedo and emissive BC7 sRGB, normal BC5, metallic-roughness BC5 linear, occlusion BC4" | holds, reader side: the three formats are the only ones a Texture Blob may hold; the per-Channel assignment falls in cook (the reader does not check a Blob's format against its Channel, see *Notes for the verifier*) | `cooked.rs:221-234`, `:342-350` |
+| 0018 | "The cooker refuses a Texture whose size is not a multiple of 4 or exceeds 8192" | falls in cook; the reader mirrors it, and requires the full mip chain | `cooked.rs:33`, `:354-366` |
+| 0018 | "a 28-byte vertex (position `Float32x3`, UV `Float32x2`, ... QTangent in `Snorm16x4`, its w kept non-zero)" | holds for the layout, asserted at compile time; the non-zero w is the cooker's, `QTANGENT_SMALLEST_W` declared here | `cooked.rs:45-47`, `:391-403` |
+| 0018 | "Meshlets of at most 64 vertices ... and at most 124 triangles" | holds: the reader refuses a run past either limit | `cooked.rs:38-44`, `:444-447`, `:458-461` |
+| 0018 | "Each Meshlet is the longest run the limits allow, as meshoptimizer's scan builder cuts them" | falls in cook (`src/cook/mesh.rs:162-181`) | |
+| 0018 | "A Meshlet is stored as one byte, its triangle count; the reader rebuilds its vertex remap and local triangles from its run of the index stream, which BLAS builds read" | holds: a byte per Meshlet after the Primitives; `CookedMeshlet::split` numbers vertices by first use with corners sorted, so the index codec's rotation changes nothing; the index Arena is `BLAS_INPUT` | `cooked.rs:503-509`, `:531-537`, `:582-585`, `:600-611`, `:426-484`; `pools.rs:103-105`, `:174-179`, `:307-313` |
+| 0018 | "The Blob also holds the Mesh's bounding box for culling" | holds: six f32 after the counts, into `MeshData` | `cooked.rs:494-495`, `:522-524`, `:559-562`; `pools.rs:257-264` |
+| 0018 | "the reader rebuilds their Meshlets (#192), which the renderer does not keep yet" | drift: the Mesh pool keeps them in three Meshlet Arenas: L1-C06 | `docs/adr/0018-...md:3`; `pools.rs:106-120`, `:272-286` |
+| 0018 | "Each Primitive stores its UV texel density" | deferred by the spec, as the ADR 0017 priority clause above; the Blob has no field for it | `cooked.rs:525-530` |
+| 0018 | "A Material is its own Asset: PBR factors plus one Texture Asset ID per Channel. Primitives reference it by ID." | holds: ten factors, five IDs; `CookedPrimitive::material: Option<AssetId>` | `cooked.rs:134-144`, `:147-149`, `:406-410` |
+| 0018 | Chunks and Placements | deferred by the spec (M4) | |
+| 0018 | "The cooker lives in `src/cook/` ... encoder dependencies behind a default-on `cook` feature" | holds for this module's split: `to_blob` and `write` under `cfg(feature = "cook")`, every `from_blob` and `read` unconditional | `cooked.rs:151`, `:260`, `:510`, `:744` |
+| 0018 | "Procedural Reference scenes cook too, under Asset IDs derived from the scene name, so Goldens test the cooked path" | holds, reader side: `AssetSource::Scene(name)` hashed with its own tag; the pbr-sweep sphere is read back from the cache by that ID | `cooked.rs:63-64`, `:89-93`; `tests/frame_stats.rs:156-162`; `src/scenes/mod.rs:113-115` |
+| 0018 | "New dependencies ... `ktx2` (Apache-2.0), `meshopt`, `zstd`; `sha2` moves from dev-dependency to dependency" | holds: `ktx2` 0.5.0, `meshopt` 0.6.2, `zstd` 0.14.2, `offset-allocator` 0.2.0, `sha2` 0.11 in `[dependencies]` | `Cargo.toml:23-28` |
+| 0019 | "a packed index carries the vertex within its Meshlet in six bits" | holds: `MESHLET_MAX_VERTICES = 64`, enforced on read | `cooked.rs:38-40`, `:458-461` |
+| 0019, spec "GPU tables" | "At Mesh load, the Mesh pool writes its Meshlets, each Primitive's Meshlet range and Material ID, and each Mesh's bounds into fixed-capacity GPU buffers. The vertex Arena becomes readable as a storage buffer in the vertex stage, and the Arenas become BLAS build inputs." | holds: `MeshletData` per Meshlet with its Primitive's Material ID or `NO_MATERIAL`; `MeshData` with the Mesh's Meshlet range and bounds at its Handle; vertex Arena `STORAGE | BLAS_INPUT`, index Arena `BLAS_INPUT`; the GPU-side layout read back by a test | `pools.rs:98-105`, `:121-126`, `:233-291`; `mesh.rs:20-44`; test `pools.rs:622-684`; `src/render/renderer.rs:365-374` |
+| 0020 | "each Mesh gets a compacted BLAS at load" | holds: `ALLOW_COMPACTION`, built in the load's encoder, compacted once that staging is submitted, the pool keeping the compacted BLAS | `pools.rs:315-329`, `:336`, `:343`, `:393-425`; `src/render/renderer.rs:485-486`; test `:692-718` |
+| 0020 | "The `crowd` Reference scene's figures, which the GPU bends each frame, have no BLAS" | holds: `MeshUse::Drawn` pushes `None` | `pools.rs:19-21`, `:303-306`; `loader.rs:64-66` |
+| 0020, spec story 28 | the refit form: "gives each figure a BLAS, refitted to its bent shape each frame through wgpu-hal on Metal" | holds, pool side: `REFITTED_BLAS_FLAGS = PREFER_FAST_TRACE | ALLOW_UPDATE`, never queued for compaction, kept with its build descriptor; a wgpu rebuild of the same BLASes exists for the oracle | `pools.rs:43-46`, `:314-323`, `:330-344`, `:349-383` |
+| 0020 | the TLAS-after-compaction ordering: "wgpu-core 30.0.1 records no barrier after `compact_blas`'s copy" | holds: `compact_blases` polls to completion before the static TLAS reads the BLASes; tested under GPU load | `pools.rs:385-392`, `:402`, `:421-424`; test `:720-756` |
+| 0021 | "Required features: `TEXTURE_BINDING_ARRAY`, `PARTIALLY_BOUND_BINDING_ARRAY` and `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING` (ADR 0017)" | holds | `src/gpu/mod.rs:263-265` |
+| 0021 | "`TEXTURE_COMPRESSION_BC` (ADR 0018 cooks BC only)" | holds: the three Blob formats are BC7, BC5, BC4 | `src/gpu/mod.rs:267`; `cooked.rs:221-234` |
+| 0021 | "`EXPERIMENTAL_RAY_QUERY`" covers `create_blas` and `BLAS_INPUT` | holds | `src/gpu/mod.rs:269`; `pools.rs:100`, `:315` |
+| 0021 | "The `ANISOTROPIC_FILTERING` downlevel flag is required too ... without the flag wgpu silently clamps every sampler's anisotropy to 1" | holds | `src/gpu/mod.rs:281`; `material.rs:343-357` |
+| 0021 | "`max_binding_array_elements_per_shader_stage` at least 65,536" | holds: the five Channels take 5 x 13,107 = 65,535 | `src/gpu/mod.rs:293`, `:301`; `material.rs:15-16` |
+| 0021 | "`max_buffer_size` at least 2^31 − 1 (ADR 0017 arenas)" | holds | `src/gpu/mod.rs:300`; `pools.rs:542-545` |
+| 0021 | "`VERTEX_STORAGE`: the vertex shader ... pulls its vertices from the vertex Arena through storage buffers" | holds: the vertex Arena is `STORAGE` | `src/gpu/mod.rs:284`; `pools.rs:98-102` |
+| 0023 | "Brighter emissives need KHR_materials_emissive_strength, which the cooker does not read yet" | holds: the Material's emissive strength is the constant 1.0 | `material.rs:284` |
+| checklist | "Pool lookups return `Option<&T>`" | holds | `pools.rs:429-431`, `:496-498` |
+| checklist | no `unwrap()` in `src/render/`'s hot path; `pools.rs` is exempt by the conventions test | holds: the `expect`s in `pools.rs` and `material.rs` outside tests are on constants (`"256 is not zero"` lives in `staging.rs`); `cooked.rs`'s are on slice lengths just checked | `cooked.rs:115`, `:568`, `:633`, `:643`; `tests/conventions.rs:339-342` |
+| checklist | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path" | holds: `AssetLoader` takes `AssetId` only | `loader.rs:9-33` |
+| checklist | "Streaming uploads go through the `StagingBelt` ... no GPU buffer grows at runtime, and a request past a buffer's capacity is refused and logged" | broken for the Material SSBO: a Material past 256 is logged and substituted by Material 0, not refused: L1-C04 | `material.rs:20`, `:241-247` |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| 4, the cooker builds Meshlets of at most 64 vertices into each Mesh Blob with meshopt | holds, reader side: the limits are refused on read; the build falls in cook | `cooked.rs:38-44`, `:444-461`; `src/cook/mesh.rs:101`, `:180-181` |
+| 6, the vertex shader reads the 28-byte vertex from the vertex Arena | holds, Rust side: `CookedVertex` is 28 bytes, the Arena's element; the decode oracle is the shaders section's | `cooked.rs:391-403`; `pools.rs:98-102`, `:359` |
+| 7, each Primitive draws with its own Material unless its Renderable overrides it; the loader's warning goes | holds: each Primitive's Material loaded once per Mesh, written as its Meshlets' `material_id`; a Primitive without one marks the Mesh `needs_material_handle`; the test asserts no `WARN` | `loader.rs:91-113`; `pools.rs:236-243`, `:299`; test `loader.rs:127-203` |
+| 8, SciFiHelmet's Mesh Blob bytes per triangle kept as a ceiling | falls in cook: `HELMET_MESH_BYTES_PER_TRIANGLE = 13.83` in `tests/cook.rs:677-681`; the reader's format is what it measures | `cooked.rs:503-545` |
+| 28, one compacted BLAS per Mesh built at load | holds; a refitted BLAS is built `ALLOW_UPDATE` and never compacted, as the refit needs | `pools.rs:44-46`, `:315-346`, `:393-425` |
+| 36, acceleration-structure bytes from measured per-backend sizes, labelled estimates | holds, pool side: `estimated_blas_bytes` by compacted and uncompacted triangles | `pools.rs:479-489`; `src/render/renderer.rs:788-795` |
+| 44, every GPU buffer M3 adds at a fixed provisional capacity, overflow counted and warned | holds for the Mesh table and the three Meshlet Arenas: fixed at creation, a Mesh past them refused with an `error!` and nothing written; the refusal is logged, not counted, as the Arena refusal test that predates M3 decided (see *Notes for the verifier*) | `pools.rs:12`, `:106-126`, `:188-229`; test `:965-994` |
+| 50, `crowd` with a Baseline and no Golden | holds, loader side: `bent_mesh`, `refitted_mesh` and `shadow_proxy` load the figure drawn-only, refitted, or traced-only without Materials | `loader.rs:21-32`, `:64-78`; `pools.rs:17-28`; `src/scenes/mod.rs:988-990`, `:1019-1024` |
+| 57, the crowd's BLAS refit through wgpu-hal against per-bone proxies | holds, pool side: `refitted_blases()` hands the build descriptors and Arena ranges to `blas_refit`; `rebuild_refitted_blases` is the oracle's wgpu rebuild | `pools.rs:349-383`; `src/render/blas_refit.rs:100-104`, `:178` |
+| Implementation decision, GPU tables | holds (clause row above) | `pools.rs:233-291` |
+| Testing decision, the Arena refusal test | holds: one vertex past the vertex Arena, then one index past the index Arena while the vertices fit, each refused with `gpu_memory_bytes` and `arena_bytes_in_use` unchanged, and the vertex given back | `pools.rs:964-994` |
+| Testing decision, the procedural scenes rendering without `assets/` | falls in tooling and scenes (`tests/reference_scenes.rs`); the reader side is the `AssetSource::Scene` ID | `cooked.rs:63-64`; `tests/reference_scenes.rs:58-61` |
+
+#### Registry keys
+
+Four keys are cited in the module, all in `cooked.rs`, all four KTX 2.0
+specification quotes; each was read against its registry entry and the
+`ktx2` 0.5.0 reader (`ktx2-0.5.0/src/lib.rs:243-249` reads levels through
+the level index; `:290-298` iterates the key-value data). All match.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `cooked.rs:26`, `:259`, `:856` | `ktx2-key-value-alignment` | matches: "the key length including its terminating NUL must be a multiple of the number of bytes in the number"; `PXTXVERSION` plus NUL is 12 bytes for a u32, and the test asserts both the key length and the value's offset are multiples of 4 (`:857-864`) |
+| `cooked.rs:255` | `ktx2-level-order` | matches: "Mip level data is ordered from the level with the smallest size images ... to that with the largest"; the writer appends levels in reverse (`:284-292`) and the test asserts the level index's offsets descend (`:841-851`); the reader takes each level by its index entry, so mip 0 comes first whatever the byte order |
+| `cooked.rs:256` | `ktx2-supercompression-per-level` | matches: "applied independently to each mip level"; one `zstd::bulk::compress` per level (`:285`), one `decompress` per level with its expected size as capacity (`:372`) |
+| `cooked.rs:257` | `ktx2-level-alignment` | matches: "required_alignment = ... 1 (supercompressionScheme ≠ 0)"; the writer concatenates compressed levels with no padding (`:285-292`) and the reader requires `Zstandard` (`:338-341`) |
+
+#### Oracles
+
+| Function | Test, constant | Literature number, key | Measured error | Verdict |
+|---|---|---|---|---|
+| `AssetId::new` (`cooked.rs:83-117`) | `asset_id_is_truncated_sha256_of_its_encoding` (`cooked.rs:792-800`), `397412b2d75d55daad25a42ab0cbbb05` | SHA-256 of the 35-byte encoding `G`, GUID `00..0f`, kind `01`, `N`, length 8 as u64 LE, `material`, truncated to 128 bits; no registry key (ADR 0018 names SHA-256; `sha2` 0.11 is the implementation); recomputed with `shasum -a 256` on the same bytes: `397412b2d75d55daad25a42ab0cbbb05` | 0 (bit-exact) | holds |
+
+The other tests in the module (Blob round trips, the Texture layout, the
+GPU tables read back, BLAS compaction) compare the code with itself or
+with the specification quotes above, not with a literature number, so
+they are not oracles in the lane's sense.
+
+#### Open issues read
+
+| Issue | What the code shows | Needs hardware |
+|---|---|---|
+| #221, a renamed Asset's old ID still loads its stale Blob, unwarned | As the issue says. The cook index is one file per Asset ID, `index/<id>` (`cooked.rs:698-700`), written by `write` and never removed by any code (`:744-755`; no `remove_file` in the module). `entry` resolves any ID whose index file and Blob exist (`:703-710`), and `read` returns that Blob with no check that a source still names the ID (`:713-727`). The cooker's two warnings fire only for an ID absent from the cache: a Material's Texture (`src/cook/mod.rs:190-196`) and a Primitive's Material (`:344-352`). So ADR 0018's "The cooker warns when an ID that something references no longer exists" holds for "exists" read as "has an entry", and after a rename the old ID still has one: the renamed Mesh is re-cooked under its new ID, the old ID's entry stays, and a scene or save still naming the old ID loads the stale Blob in silence; "never evicted" (ADR 0018) is what keeps it. No Finding filed: the owner has placed the issue at M4's charting as `fog`, and a Finding here would restate it. What a fix needs is on the cooker's side (an ID the cook no longer produces, warned about or tombstoned), not the reader's. | No |
+
+### scenes, components, transforms and the fixed loop
+
+Scope: `src/scenes/mod.rs` (1,351 lines), `src/scenes/town.rs` (1,296),
+`src/components.rs` (101), `src/transform/mod.rs` (327), `src/time/mod.rs`
+(283); 3,358 lines, every file read in full, test modules included. The
+tests that exercise them were read in full: `tests/reference_scenes.rs`,
+`tests/crowd.rs`, `tests/shadows.rs`, `tests/frame_stats.rs`, and
+`tests/goldens.rs` where it lists the scenes, the 100 km shift and `town`'s
+frames. `src/state.rs` was read where it builds the two schedules, spawns a
+scene, shifts it and propagates it (`:60-130`, `:250-345`) and in its test
+module (`:346-563`), which drives the fixed loop against an analytic orbit;
+`src/lib.rs:215-250` where it measures the frame delta; `src/capture/mod.rs`
+where it feeds a fixed delta (`:176-262`); `src/render/prepare.rs` only where
+it consumes `PreviousWorldTransform`, `Bend`, the lights and the blend weight
+(`:36-100`, `:296-322`, `:340-400`, `:515-612`), whose verdicts are the render
+section's; `src/camera/mod.rs` for `ev100_for_exposure`, `FIELD_OF_VIEW` and
+`fly_camera`; `src/environment/mod.rs`; `src/threading.rs:27-31`;
+`src/render/bend_pass.rs:187-206` for the `bent` oracle the scene tests call;
+`src/assets/loader.rs:24-78` for the three ways the crowd loads a Mesh. ADRs
+read in full: 0006, 0014, 0018, 0019, 0020, 0022, 0023; ADR 0003's and 0016's
+clauses on Frame data through the render section. The spec's stories 17,
+18, 25, 26, 27, 31 and 45 to 50 and its Reference scenes, DirectionalLight,
+Froxel and acceleration-structure Implementation decisions were checked.
+Every `where` is `path:line` at the frozen commit, from the repository root.
+`deviations.md` holds no row at this commit; `DIFFERENCES.md` describes
+images, none of which this module's code decides. Three component methods
+on `Transform`, `Bend` and `WorldTransform` are already filed as L1-R03 in
+the render section; they are cited, not filed again.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0022 | "Simulation advances in fixed Ticks of 1/64 s (15.625 ms)" | holds: `TICK = 15_625_000` ns, exact in binary, `TICK_SECONDS` its f64 | `src/time/mod.rs:20-24` |
+| 0022 | "`src/time/` runs the fixed schedule once per Tick, at most 4 per frame" | holds | `src/time/mod.rs:27`, `:53-63`, `:80-87` |
+| 0022 | "accumulated time past the cap is dropped, the game slows, and the dropped time is reported in frame stats" | holds: `advance` returns the Ticks past 4 as `dropped`, `run_ticks` hands it up, the recorder keeps it per frame; 250 ms drops 187.5 ms in the test | `src/time/mod.rs:56-62`, `:86`; `src/state.rs:256`; test `src/time/mod.rs:200-210` |
+| 0022 | "The frame delta is measured with `Instant` at frame start, before surface acquire ... and clamped to 250 ms" | holds: the window measures before `get_current_texture`; `MAX_FRAME_DELTA` 250 ms; a capture feeds each scene's fixed delta instead | `src/lib.rs:219-224`; `src/time/mod.rs:18`, `:33-35`; `src/scenes/mod.rs:370-387`; `src/capture/mod.rs:236`, `:260` |
+| 0022 | "Simulated time is an integer Tick counter; systems read a per-Tick delta derived from it, never an f32 sum of seconds" | holds: `tick: u64`; `spin` and `sway` set the state for the end of the running Tick from `(tick + 1) as f64 * TICK_SECONDS`, so nothing accumulates; `Time::delta_time` is per frame and read by `fly_camera` alone | `src/time/mod.rs:8-14`, `:42`; `src/scenes/mod.rs:662-670`, `:1060-1077`; `src/camera/mod.rs:99` |
+| 0022 | "an accumulator resource, a fixed schedule run once per Tick, and the blend weight α as a resource" | holds: `FixedTime { tick, blend_weight, accumulator }` | `src/time/mod.rs:37-47`, `:80-87` |
+| 0022 | "ambiguity detection is `Error`" | holds, tested: an unordered conflicting pair fails `initialize` | `src/time/mod.rs:69-76`; test `:113-125` |
+| 0022 | "Everything that changes game state runs in the fixed schedule ... Input sampling, the camera, the blend, prepare and presentation-only effects run once per frame" | holds: the fixed chain is record previous transforms, record previous curvatures, helmet spawn and despawn, `spin`, `sway`, `clear_just_pressed`, `reset_teleported`, propagate; the per-frame schedule holds `fly_camera` only; presses wait in `Input` for the next Tick, tested | `src/state.rs:318-342`; test `src/time/mod.rs:264-282` |
+| 0022 | "The camera's rotation reads the newest input every frame, outside the fixed loop" | holds: `fly_camera` in the per-frame schedule reads `Input` and `Time`; "its position follows whatever it is attached to, interpolated" is not applicable, no scene attaches the camera | `src/state.rs:320`; `src/camera/mod.rs:99-102` |
+| 0022 | "the helmet spawn and despawn run in it" | holds here; the systems' bodies fall in the helmet module | `src/state.rs:332-334` |
+| 0022 | "World transforms propagate at the end of every Tick" | holds: `propagate_world_transforms` closes the chain, and runs once at load so frames before the first Tick draw composed transforms | `src/state.rs:339-341`, `:104-108`; `src/transform/mod.rs:87-141` |
+| 0022 | "an entity the fixed schedule moves keeps its previous Tick's World transform in `PreviousWorldTransform`", children included | holds: `record_previous_world_transforms` opens each Tick; every orrery body, every town flock centre and bird, every crowd bone carries it; the refit-form figure carries it too (next row) | `src/transform/mod.rs:34-58`; `src/scenes/mod.rs:633-650`; `src/scenes/town.rs:791-807`; `src/scenes/mod.rs:1026-1034` |
+| 0022 | "Static Instances store nothing extra" | holds for every static Renderable (the town's 244,256 buildings, props and lamps, the shadows Mesh, the sweeps); the refit-form crowd figure carries `PreviousWorldTransform` though its Transform never changes, which ADR 0020 decides ("its Instance a Moving Instance") and the code says why (see *Notes for the verifier*) | `src/scenes/town.rs:770-788`; `src/scenes/mod.rs:1014-1023` |
+| 0022 | "prepare blends previous and current in f64" | holds: `WorldTransform::drawn` lerps `matrix3` and `translation` in f64; `Bend::drawn_curvature` lerps the curvature; consumers in the render section | `src/transform/mod.rs:16-31`; `src/components.rs:71-77`; `src/render/prepare.rs:383`, `:531`, `:555`, `:606` |
+| 0022 | "A spawned entity starts with previous equal to current ... so neither sweeps across the Game world" | holds in effect: a spawn carries `PreviousWorldTransform(None)`, drawn at its current transform until the first Tick records it; a `Bend` spawns with `previous_curvature == curvature`; tested at 100 km with a spawn inside a Tick | `src/transform/mod.rs:22-24`, `:37-39`; `src/scenes/mod.rs:637`, `:1001-1008`; `src/scenes/town.rs:797`, `:805`; test `src/state.rs:509-561` |
+| 0022 | "a teleport goes through an explicit marker that resets previous to current" | holds: `Teleported` drops the previous transform of the entity and its descendants before `propagate_world_transforms` and removes itself; no production system inserts the marker at this commit, so the State test alone exercises it (see *Notes for the verifier*) | `src/transform/mod.rs:43-48`, `:69-85`; `src/state.rs:337-339`, `:528`, `:540-561` |
+| 0022 | "Determinism: ... no system reads the wall clock, randomness comes from a seeded resource advanced per Tick, and no result depends on hash-map iteration order or on reduction order in a parallel iterator" | holds: `Instant::now` appears only in the window, the recorder, the renderer and the Material load, none in the fixed schedule; the fixed schedule has no randomness, so the seeded resource is not exercised: `town`'s choices are a hash of where each thing stands, taken at spawn; the schedule is single-threaded; queries iterate in table order, `placements` sorts its lamp corners stably, and the dirty list is sorted and deduplicated | `src/time/mod.rs:69-70`; `src/threading.rs:27-31`; `src/scenes/town.rs:255-270`, `:357-359`, `:399-403`; `src/transform/mod.rs:105-109` |
+| 0022 | "the same binary on the same machine, fed the same per-Tick inputs, reaches a bit-identical simulation state whatever the frame timing" | holds for the loop: 1,280 Ticks under 1 to 40 ms frames and 250 ms stalls bit-compare with steady 60 Hz | test `src/time/mod.rs:168-197` |
+| 0022 | "Nothing is guaranteed across platforms or builds: `sin` and its kin are not bit-stable" | not applicable: `spin` and `sway` use `sin` and `from_rotation_y`, no cross-platform claim is made | `src/scenes/mod.rs:667-668`, `:1050-1052` |
+| 0022 | "The `orrery` Reference scene shows it" | holds: five spheres, each a child of the last, spun per Tick, each carrying `PreviousWorldTransform`; its capture steps at 144 Hz so frames land between Ticks | `src/scenes/mod.rs:41-43`, `:627-653`, `:370-375` |
+| 0022 | "the step model must also stay judder-free at refresh rates that do not divide 64 Hz (120, 144, variable)" | holds in form: the orrery's capture steps at 144 Hz, the State test cycles 144, 60, 30 and 90 Hz frames against the analytic orbit within 10 µm; judder itself is a visual check | `src/scenes/mod.rs:375`; `src/state.rs:436-437`, `:446-459` |
+| 0022 | "The blend reads two simulation states, never screen-space history" | holds: `drawn` reads two components | `src/transform/mod.rs:21-31` |
+| 0022 | "Input latency ... ADR 0013's budget splits, judged at p95 once Input latency is measured" | falls in tooling (bench); not measured at this commit | |
+| 0022 | "A physics engine chosen in M7 steps once per Tick" | deferred by the ADR to M7 | |
+| 0006 | "Components hold data only: no closures, no `Box<dyn Trait>`, no behaviour methods" | holds for `MeshRef`, `MaterialRef`, `PointLight`, `DirectionalLight`, `PreviousWorldTransform`, `Teleported`, `Spin`, `Bone`; broken in letter for `Transform`, `Bend` and `WorldTransform`: L1-R03 (render section); `Sway::curvature` is a fourth method of the same kind, for L1-R03's magnitude (see *Notes for the verifier*) | `src/components.rs:43-47`, `:79-101`; `src/transform/mod.rs:40-48`; `src/scenes/mod.rs:655-660`, `:1046-1053`, `:1056-1059` |
+| 0006, checklist | "No GPU resources stored on ECS components" | holds: `MeshRef`, `MaterialRef` and `Bend::rest` hold Handles, indices into the Pools | `src/components.rs:43-47`, `:61` |
+| 0014 | "`Transform` holds translation as `DVec3` ... with rotation (`Quat`) and scale (`Vec3`) in f32, 64 bytes" | holds, asserted at compile time: 64 bytes, 16 aligned | `src/components.rs:9-18` |
+| 0014 | "A child's Transform composes with its ancestors' into a World transform in f64, recomputed only when it or an ancestor moved" | holds: `to_affine` lifts rotation and scale to f64, `propagate_world_transforms` recomputes dirty subtrees and nothing else, tested | `src/components.rs:34-40`; `src/transform/mod.rs:87-141`; tests `:221-239`, `:241-268` |
+| 0014 | "right-handed, +Y up (gravity along −Y) ... with cameras looking down −Z" | holds in this module: a `DirectionalLight` shines along its −Z, each scene's sun is `from_rotation_arc(NEG_Z, direction)`, ground planes face +Y, spins and flocks turn about +Y | `src/components.rs:94-95`; `src/scenes/mod.rs:436-439`, `:1193-1214`, `:664-669` |
+| 0014 | "Within 100 km of the origin ... simulated positions resolve to 0.1 mm" | holds: the five-deep chain at 100 km is exact to the bit against its closed form (see *Oracles*); the blended orbit at 100 km holds 10 µm | `src/transform/mod.rs:170-171`, `:194-219`; `src/state.rs:366-367`, `:446-459` |
+| 0014, spec | "`town` stays within about 2 km of that anchor, an f32 step of at most 0.24 mm" | holds: the town spans ±500 m, its ground ±550 m, flocks stay inside their 100 m cells, the camera starts at (2, 1.7, 445) and orbits at radius 480; the farthest ground corner from the load anchor is about 1.14 km | `src/scenes/town.rs:168-173`, `:240-248`, `:821-825`, `:960-962` |
+| 0014 | the 100 km check: "a point 0.3 m from the camera lands within 0.25 px ... of its exact camera-relative position" | holds on the scene side: `State::new` shifts every root Transform and the camera by the shift (children stay parent-relative), and the Goldens test shifts each scene by 1,563 whole 64 m cells; `town` and `shadows` are in its list | `src/state.rs:72`, `:99-103`; `tests/goldens.rs:33-43`, `:50-56`, `:216-223` |
+| 0018 | "Procedural Reference scenes cook too, under Asset IDs derived from the scene name, so Goldens test the cooked path" | holds: `material_id`, `mesh_id` and `texture_id` build from `AssetSource::Scene(self.name())`; every spawn loads through the loader by those IDs; a launch from an empty directory cooks into `cooked/index` | `src/scenes/mod.rs:106-122`, `:541`, `:632`; `src/scenes/town.rs:756-765`; `tests/reference_scenes.rs:58-61` |
+| 0018 | "The runtime ... references Assets by Asset ID, never by source path" | holds in this module: the glTF scenes name their source by manifest GUID; `source_files` exists only under the `cook` feature | `src/scenes/mod.rs:505-508`, `:580-582`, `:125-140` |
+| 0023 | "a `DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela" | holds: the fields say so; the sun is 100,000 lx, the coloured lights 900,000 cd, the lamps 2,000,000 cd, minification's 3 × 10⁷ cd | `src/components.rs:83-84`, `:99-100`; `src/scenes/mod.rs:473`, `:496-503`, `:686`; `src/scenes/town.rs:224-229` |
+| 0023 | "a Reference scene's ambient term gives illuminance in lux"; "emissive and background give luminance in cd/m²" | holds: `ambient_illuminance` 10,000 lx, `background_luminance` (10,000, 20,000, 30,000) cd/m² in every scene | `src/scenes/mod.rs:447-467`; `src/environment/mod.rs:3-12` |
+| 0023 | "Exposure is an EV100, which scales luminance by 1/(1.2 · 2^EV100)"; "each scene has an EV100" set by hand | holds: every scene's EV100 is `ev100_for_exposure(1 / 100,000)` = log₂(100,000 / 1.2) = 16.35, as the comment says | `src/scenes/mod.rs:351-368`, `:347`; `src/camera/mod.rs:11-16` |
+| 0023 | "every Reference scene's lights, ambient and background are in these units, under a sun of 100,000 lx" | holds: one `SUN_ILLUMINANCE` for every scene's sun and every other light is given against it | `src/scenes/mod.rs:418-445`, `:470-473` |
+| 0023, spec | "Point lights carry a range: authored, as in KHR_lights_punctual, or derived" | holds: every range is authored, 20 m, 18 m, 200 m, and the field is KHR_lights_punctual's `range`, here finite | `src/components.rs:85-87`; `src/scenes/mod.rs:500`, `:688`, `:867-870`; `src/scenes/town.rs:227` |
+| 0023, spec | "The sun and 1,024 point lights" in `town` | holds: `LAMP_COUNT = 1024` lamps at the lowest-ranked block corners, one light each, below the head and outside the Mesh | `src/scenes/town.rs:218-229`, `:357-364`, `:784-788`; `src/scenes/mod.rs:434` |
+| 0020 | "Direct light is one hard shadow ray per pixel per light" | drift: `PointLight::casts_shadow` lets a light take no ray, which no ADR or spec line admits; every Reference scene sets it `true`: L1-C07 | `src/components.rs:88-91`; `src/scenes/mod.rs:399`, `:501`; `src/scenes/town.rs:228` |
+| 0020 | "The `crowd` Reference scene's figures, which the GPU bends each frame, have no BLAS and cast their shadows through rigid per-bone shadow proxies, Moving Instances in that TLAS, the default form" | holds: `spawn_crowd` is the proxies form; each of 100 figures gets its own bent Mesh and 16 bone children with the proxy Mesh and `PreviousWorldTransform`; the proxy loads as traced, undrawn | `src/scenes/mod.rs:959-964`, `:989-993`, `:1024-1034`; `src/assets/loader.rs:30-32`, `:72-78` |
+| 0020 | "The crowd's refit Render switch instead gives each figure a BLAS ... its Instance a Moving Instance" | holds on the spawn side: `spawn_traced_crowd` loads each figure as `refitted_mesh` with `PreviousWorldTransform` and no proxies | `src/scenes/mod.rs:966-974`, `:1014-1023` |
+| 0020 | "a dynamic TLAS of Moving Instances rebuilt each frame and capped at 10k Instances" | holds: `town`'s flocks are asserted at compile time to equal `DYNAMIC_TLAS_CAPACITY`, 100 flocks of 100 birds | `src/scenes/town.rs:231-239` |
+| 0019 | "lit by every directional light and by the point lights of each pixel's Froxel ... from a light buffer of fixed capacity" | falls in render and shaders; the scenes supply at most 1,025 lights | `src/scenes/town.rs:220` |
+| 0019 | "on a Reference scene at 1440p with 4x MSAA, the opaque main pass takes more than 6 ms ... The clause fired on `town`" | falls in tooling (bench); the scene exists at the decided scale | `src/scenes/mod.rs:63-67` |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| 17, directional lights are components with a colour and an intensity, direction from the entity's World transform | holds: `DirectionalLight { color, intensity }`; each scene's sun is a `Transform` whose −Z is turned to the scene's direction, spawned with the light | `src/components.rs:94-101`; `src/scenes/mod.rs:418-445`; `src/state.rs:95` |
+| 18, the hard-coded light gone, no scene lit by a light it did not spawn | holds: `State::new` spawns `scene.sun()` and `scene.point_lights()`, `town` spawns its lamps' lights itself; `texture-wall` and `crowd` have no point light on purpose | `src/state.rs:94-98`; `src/scenes/mod.rs:389-416`; `src/scenes/town.rs:784-788` |
+| 25, ambient one constant irradiance per scene, background one constant radiance, in the decided units | holds | `src/scenes/mod.rs:447-467`; `src/environment/mod.rs:8-12` |
+| 26, 27, every light that reaches a pixel traces one ray; a ray skipped only where its light adds nothing | the trace falls in shaders; on the component side `casts_shadow` can skip a light that adds light, unused by any scene: L1-C07 | `src/components.rs:88-91` |
+| 31, an Instance is a Moving Instance exactly when its entity carries its previous World transform | holds on the spawn side: the orrery's bodies, the town's birds and the crowd's bones or refit figures carry it, nothing else does; classification in the render section | `src/scenes/mod.rs:637`, `:1020`, `:1033`; `src/scenes/town.rs:797`, `:805` |
+| 45, a dense Reference scene, `town`, at target scale | holds: 254,256 Instances of 19 Meshes and 9,994,190 triangles by the closed-form test; the M4 Pro Baseline's medians draw 137,730 Instances and 5,552,214 triangles after culling, over the spec's 100,000 and 5,000,000 | `src/scenes/town.rs:23-73`; `tests/frame_stats.rs:12-15`, `:313`; `bench/baselines/apple-m4-pro/town.json:80-81` |
+| 46, `town` procedural at cook time, counts exact, CI needs no fetch, joins the 100 km check | holds: `source_files` is empty for `town`, its Meshes and Materials come from `generators`, the counts are closed-form, and it is in the Goldens' list with the shift | `src/scenes/mod.rs:130-138`, `:229`, `:313`; `src/scenes/town.rs:869-1133`; `tests/goldens.rs:33-43`, `:216`; `tests/frame_stats.rs:313` |
+| 47, `town`'s camera path at street level, then over the rooftops, with no cuts | holds: 420 frames at 1.7 m up the avenue at X = 0 at 4 m/s, a cubic of 360 frames leaving at that speed and arriving at rest at (0, 260, 480) while the gaze turns from far up the avenue to the town's middle, then a circle of radius 480 eased in over 120 frames; position, speed and gaze are continuous at both joins (checked by hand: the street's end equals the cubic at progress 0, the cubic's end equals the circle at angle 0, the eased angle's rate reaches `ORBIT_SPEED` where the linear branch takes over) | `src/scenes/town.rs:812-867` |
+| 48, `town`'s Goldens at full density on Metal and software Vulkan, CI bench shortened to counters | holds for the Goldens: `tests/goldens/metal/town.png` and `tests/goldens/vulkan-cpu/town.png` exist and `town` takes the equivalence checks at eight frames; the CI bench's counters fall in tooling | `tests/goldens.rs:33-43`, `:296-307`; `tests/goldens/metal/town.png`; `tests/goldens/vulkan-cpu/town.png` |
+| 49, a small shadow scene with Goldens | holds: a sphere of radius 0.5 m, 1 m over a ground plane of ±8 m, one Mesh of two Primitives with their own Materials, under the sun and one white point light; Goldens on both keys; the analytic oracle in `tests/shadows.rs` copies its constants exactly (see *Oracles*) | `src/scenes/mod.rs:52-55`, `:293-301`, `:846-877`; `tests/goldens/metal/shadows.png` |
+| 50, `crowd` with a Baseline and no Golden | holds: not in the Goldens' list; `crowd.json` Baselines on all four adapters; 100 figures of 40 × 65 segments, 5,120 triangles each, bent on the GPU; its bent bounds hold every sway, tested | `tests/goldens.rs:33-43`; `bench/baselines/apple-m4-pro/crowd.json`; `src/scenes/mod.rs:882-894`, `:947-958`; test `:1323-1350` |
+| Implementation decision, `town`: "about 1 × 1 km with building blocks as occluders, street props of 12 to 200 triangles, and thin poles and wires that go sub-pixel at distance" | holds: 20 × 20 blocks 50 m apart over ±500 m; the box is 12 triangles and the car, the largest prop, 168 (two cuboids and four 10-sided wheels of 36), by the generators' closed forms (a closed cylinder of n sides is 4n − 4 triangles, a cone 2n − 2, a cuboid 12); wires are 15 mm tubes of 3 sides, railing posts 25 mm | `src/scenes/town.rs:171-174`, `:927-947`, `:1071-1075`, `:1046-1048`, `:1186-1198`, `:1203-1259`, `:1264-1295` |
+| Implementation decision, `town`: "About 250k Instances of 10 to 20 Meshes"; "10,000 Moving Instances circling in the fixed schedule" | holds: 254,256 Instances of 19 Meshes; 100 flock centres with `Spin` and 100 birds each as their children, all carrying `PreviousWorldTransform` | `src/scenes/town.rs:53-73`, `:231-239`, `:789-808`; `tests/frame_stats.rs:14`, `:313` |
+| Implementation decision, `town`: "with the scene reporting average lights per lit pixel" | falls in render (the light count pass) and tooling | |
+| Implementation decision, shadow scene: "A sphere over a plane under the sun and one point light" | holds | `src/scenes/mod.rs:293-301`, `:867-877` |
+| Implementation decision, `crowd`: "100 meshes of 5,120 triangles deformed on the GPU each frame"; two forms | holds: each figure loads its own Mesh (`bent_mesh` or `refitted_mesh` per figure) from one rest Mesh; the forms are `CrowdForm::Proxies` and `Refit`/`Rebuild`; their timing falls in render and tooling | `src/scenes/mod.rs:988`, `:1019`, `:1024`; `src/state.rs:87-90` |
+| Implementation decision, DirectionalLight: "A new component holding a colour and an intensity ... Each Reference scene spawns its own lights" | holds | `src/components.rs:96-101`; `src/state.rs:94-98` |
+| Implementation decision, acceleration structures: "An Instance is moving when its entity carries `PreviousWorldTransform`" | holds on the spawn side (story 31) | as story 31 |
+| Testing decision, prior art: "the procedural scenes rendering without `assets/`" | holds: four procedural scenes render identically twice from a directory with no `assets/`, and a glTF scene fails naming its manifest GUID | `tests/reference_scenes.rs:9-79` |
+
+#### Registry keys
+
+Two keys are cited in this module's files; both match their quotes. The
+light components cite ADR 0023 rather than a key; the ADR's keys are read
+against them.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `src/scenes/mod.rs:471` | `bevy-lux-constants` | matches: the quote gives `DIRECT_SUNLIGHT: f32 = 100_000.`, and `SUN_ILLUMINANCE = 100_000.0` lx at `:473` |
+| `src/scenes/mod.rs:519` | `hoffman-2013-f0` | matches: the quote gives gold's linear F0 as `1.00,0.71,0.29`, and `SWEEP_BASE_COLOR = [1.0, 0.71, 0.29, 1.0]` at `:522` |
+| `src/components.rs:83`, `:99` (cite ADR 0023) | `khr-lights-punctual-units` | matches: "`point` ... lights use luminous intensity in candela ... `directional` lights use illuminance in lux"; `PointLight::intensity` is documented in candela and `DirectionalLight::intensity` in lux, and every scene's values are in those units |
+| `src/components.rs:85-87` (names the extension's `range`) | `khr-lights-punctual-range` | matches in role: the quoted window is a function of `range` and distance; the field is that `range`, here required finite; the window itself is the shaders section's |
+
+#### Oracles
+
+| Function | Test, constant | Literature number, key | Measured error | Verdict |
+|---|---|---|---|---|
+| `propagate_world_transforms` (`src/transform/mod.rs:95-141`) | `a_five_deep_chain_matches_its_closed_form`, `assert_near` ≤ 1e-9 m at `ROOT` 100 km (`:170-171`, `:194-219`) | ADR 0014's bar: simulated positions resolve to 0.1 mm within 100 km; no registry key | 0 by analysis, not run: `CYCLE` = (0.5, 0.5, 0.5, 0.5) is exact in f32 and `DMat3::from_quat` of it is a permutation matrix, scale 2 keeps every entry dyadic, and each translation is `ROOT` plus a power of two under the same exponent (100000.1 + 8, 0.25 + 18, −3.3 + 4 are exact; −3.3 + 36 rounds once on both sides to the same f64) | holds; 1e-9 m is 10⁵ times inside the bar |
+| `WorldTransform::drawn` (`src/transform/mod.rs:21-31`) | `a_moving_entity_is_drawn_at_the_linear_blend_of_its_two_newest_ticks`, ≤ 1e-9 m and exact `matrix3` (`:289-308`) | ADR 0022: "prepare blends previous and current in f64" | 0: weight 0.25 of (4, −2, 8) is exact | holds |
+| the State's fixed loop with `record_previous_world_transforms`, `propagate_world_transforms` and `drawn` (`src/state.rs:318-342`) | `assert_drawn_at` ≤ 1e-5 m against the analytic `blend_on_orbit` at `PIVOT` 100 km, over 200 frames of 144, 60, 30 and 90 Hz (`src/state.rs:366-367`, `:433-459`, `:461-468`, `:540-561`); `drawn_curvature` ≤ 1e-4 (`:489-507`) | ADR 0014's 0.1 mm bar; ADR 0022's blend | bounded, not run: the pivot's rotation is an f32 `Quat` from an f64 angle, 2⁻²⁴ × 2π ≈ 3.7e-7 rad, which at `ORBIT_RADIUS` 2.5 m is 9.4e-7 m, a tenth of the constant; the pivot's translation is exact | holds; 10 µm is inside the bar |
+| `bone_transform` and `bent_middle` (`src/scenes/mod.rs:1084-1120`) | `each_bones_shadow_proxy_sits_on_the_bent_middle`, centre ≤ 1e-7 m, axes ≤ 1e-6, against the bend pass's `bent`, a 1,024-step midpoint sum (`:1268-1288`; `src/render/bend_pass.rs:187-206`) | the circular arc: chord h·sin(κh/2)/(κh/2) at half the turn; no registry key (geometry) | the oracle's own error bounds the gap: midpoint rule over h = 1.74375 m (bone 15) with |f''| = κ² = 0.1225 and N = 1,024 gives h³κ²/(24N²) = 2.6e-8 m, the comment's "about 3e-8 m", a quarter of the constant; the axes pass through an f32 `Quat`, about 1e-7 | holds |
+| `crowd_figure_bounds` (`src/scenes/mod.rs:952-957`) | `a_crowd_figure_bends_within_its_bounds`: containment, no tolerance, eight curvatures up to `CROWD_SWAY_CURVATURE` at two azimuths (`:1323-1350`) | the arc's lateral reach (1 − cos κh)/κ; no key | none to measure: a containment test | holds by its form; the GPU side falls in shaders |
+| `bone_transform` (`src/scenes/mod.rs:1084-1098`) | `each_bones_shadow_proxy_lies_inside_its_figure`: strict containment of 33 × 16 points per proxy in the spheroid (`:1293-1315`) | the figure's spheroid, radius 0.25 m, height 1.8 m | none: containment | holds by its form |
+| `FixedTime::advance` and `run_ticks` (`src/time/mod.rs:53-87`) | exact equalities: 250 ms drops 187,500 µs with weight 0; 100 ms drops 31,250 µs with weight 0.4; 600 frames of 16,666,667 ns run 640 Ticks; bit-identical positions over 1,280 Ticks under jitter (`:199-255`, `:168-197`) | ADR 0022: Ticks of 1/64 s, at most 4 per frame, 250 ms clamp | 0: integer nanosecond arithmetic; 600 × 16,666,667 ns = 10,000,000,200 ns = 640.00001 Ticks | holds |
+| the shadows scene's geometry and lights (`src/scenes/mod.rs:846-877`, `:293-301`) | `tests/shadows.rs`: `TOLERANCE = 1` 8-bit step outside a one-pixel band, each light's shadow over 4,000 judged pixels; its copies of the scene (`SPHERE_CENTRE` (0, 1, 0), radius 0.5, ground ±8, camera (0, 2.4, 3) at (0, 0.45, −0.4), 45° field, sun (0.5, −1, −0.3), point (1.5, 2.5, 1.0)) equal the scene's constants and `FIELD_OF_VIEW` | the test's own bound: the triangulated sphere lies within 2.1 mm of the true one, so outlines lie within 2.5 mm (a quarter pixel) under the sun and 11 mm (three quarters) under the point light | constants match line for line (`tests/shadows.rs:27-50`, `:68` against `src/scenes/mod.rs:849-870`, `src/camera/mod.rs:86`); the pixel verdict needs a GPU run, the tests' or tooling's | holds on the scene side |
+
+### Findings
+
+| id | claim | severity | where | evidence | expected |
+|---|---|---|---|---|---|
+| L1-C01 | The cooker warns of a dangling reference only for a Material's Textures and a Primitive's Material, checked against the never-pruned Cooked cache, and sees none of a Reference scene's references by name, so a renamed Asset's old ID resolves to its stale Blob without a warning. | `correctness`; one clause of ADR 0018 broken in part; two reference kinds of four (Material→Texture, Primitive→Material, scene→Mesh, scene→Material) covered; no visible defect until a source is renamed | `mod.rs:190-196`, `:197-207`, `:340-353`, `:130-131`; `src/assets/cooked.rs:703-710`, `:713-727`, `:745-755`; `src/state.rs:202-203`; `src/scenes/mod.rs:580-582` | block below | ADR 0018: "The cooker warns when an ID that something references no longer exists." |
+| L1-C02 | `CookedMesh::from_blob` sizes the decoded vertex allocation from the Blob's vertex count before anything checks that count, so a corrupt count allocates up to 2^32 x 28 bytes and aborts instead of returning the refusal the index count gets | `correctness`; one count, up to 2^32 vertices of 28 bytes | `cooked.rs:551`, `:586-587` | the code's own rule at `:588-592`: "a count past that is corrupt and must not size an allocation"; `meshopt-0.6.2/src/encoding.rs:82`: `let mut result: Vec<T> = vec![Default::default(); vertex_count];` before the FFI call | the vertex count is bounded by the encoded bytes before `decode_vertex_buffer` is called, as the index count is at `:588-593` |
+| L1-C03 | Layer 0 of the normal Channel decodes to a normal tilted 0.32° off the surface, not the "flat normal" the comment and ADR 0017's "neutral default" describe | `correctness`; x and y off by 1/255 (0.0039) each, a 0.318° tilt, on every Material without a normal Texture | `material.rs:187` | `(wgpu::TextureFormat::Rgba8Unorm, [128, 128, 255, 255])` decoded by `shading.wgsl:156-159` as `encoded * 2.0 - 1.0`: 128/255 x 2 − 1 = 1/255; the comment at `material.rs:156-159`: "the flat normal, x and y at 0.5 ... samples a no-op, and its factors pass through unchanged"; ADR 0017: "Layer 0 stays the neutral default" | a Layer 0 normal that decodes to exactly (0, 0, 1): 0.5 has no `Unorm8` code, so a signed format, a 16-bit code or a shader select on `DEFAULT_LAYER` |
+| L1-C04 | A Material past the SSBO's 256 is not refused: `insert` logs and returns `MaterialHandle(0)`, so the Renderable draws with Material 0 | `correctness`; one capacity, Materials past 256 | `material.rs:241-247` | `return MaterialHandle(0);` after `tracing::error!(... "material SSBO full; reusing material 0 ...")`; `CLAUDE.md` checklist: "a request past a buffer's capacity is refused and logged"; the Mesh pool's sibling refuses (`pools.rs:188-194`) | `load` and `insert` return an error or `None` and write nothing, as the Mesh pool does, counted as the spec's story 44 asks of capacities |
+| L1-C05 | On a degenerate triangle the engine's Meshlet cut counts the repeated corner once where meshoptimizer's scan builder counts it twice, so the two can cut differently, which ADR 0018's "as meshoptimizer's scan builder cuts them" denies and a code comment, not `deviations.md`, records. | `drift`; not load-bearing: any cut within the limits is valid, the Blob self-describes it and the reader checks the limits; affects only Meshes with degenerate triangles | `mesh.rs:158-164`, `:172-182`; `meshopt-0.6.2/vendor/src/clusterizer.cpp:362-370`; `docs/adr/0018-...md`, Consequences, Meshes bullet | block below | ADR 0018: "Each Meshlet is the longest run the limits allow, as meshoptimizer's scan builder cuts them"; `docs/audit/deviations.md`: "A Deviation lives here and nowhere else: not in a code comment" |
+| L1-C06 | ADR 0018's status sentence says the renderer does not keep the Meshlets the reader rebuilds, while the Mesh pool keeps them in three Meshlet Arenas, as ADR 0017's amendment of 2026-10-20 and ADR 0019 say. | `drift`; not load-bearing: ADRs 0017 and 0019 and `CONTEXT.md` state the current form; a reader of ADR 0018 alone is misled about M3's draw path | `docs/adr/0018-...md:3` ("which the renderer does not keep yet"); `src/assets/pools.rs:76-78`, `:106-111`; `docs/adr/0017-...md:3` ("three Meshlet arenas ... amended 2026-10-20") | block below | the spec's Implementation Decision, ADR status lines: "Each ticket that changes what an ADR's 'Planned; today …' sentence describes updates that sentence" |
+| L1-C07 | `PointLight::casts_shadow` lets a point light cast no shadow, taking no ray and no mask bit, which ADR 0020's "one hard shadow ray per pixel per light", story 27's "skipped only where its light adds nothing" and the spec's placement of "a per-light shadow opt-out" among the fog lines do not admit; no ADR records the decision. | `drift`; not load-bearing: every Reference scene sets it `true`, so every image follows the ADR; a reader of ADR 0020, story 27 or the spec's fog lines is misled about whether a light may opt out | `src/components.rs:88-91`; consumer `src/render/prepare.rs:550-561`; `src/scenes/mod.rs:399`, `:501`; `src/scenes/town.rs:228` | block below | ADR 0020 names the per-light opt-out as it names the 59-light cap, and the spec's fog line is struck; or the field waits for the scene that needs it |
+
+#### L1-C01
+
+Code, `mod.rs:190-196`:
+
+```rust
+for (id, _, material) in &sources.materials {
+    for texture in material.textures.iter().flatten() {
+        if cache.entry(*texture).is_none() {
+            tracing::warn!(material = %id, %texture, "Material samples a Texture the Cooked cache lacks");
+        }
+    }
+}
+```
+
+and `mod.rs:340-353`, `unresolved_materials`, which filters the
+`(Mesh, Material)` references on `cache.entry(*material).is_none()` and
+warns per unresolved pair. Both ask the Cooked cache, whose `entry`
+(`src/assets/cooked.rs:703-710`) returns any index file whose Blob exists,
+and whose `write` (`:745-755`) only ever adds or replaces an index file:
+
+```rust
+write_atomically(
+    &self.index_path(id),
+    format!("{hash} {cook_key}\n").as_bytes(),
+)
+```
+
+The references a Reference scene holds are in code, by name:
+`src/state.rs:202-203`
+
+```rust
+let source = AssetSource::File(SCI_FI_HELMET);
+let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"));
+```
+
+and `src/scenes/mod.rs:580-582` for `"NormalTangentTest_low"`. The cooker
+never sees them: `cook_scene` (`mod.rs:130-131`) passes
+`scene.source_files()`, the GUIDs, and `Sources` (`:92-101`) lists what the
+files define, not what the scene loads. ADR 0018: "A glTF mesh renamed in
+Blender gets a new Asset ID. The cooker warns when an ID that something
+references no longer exists." After the rename the Mesh cooks under its
+new ID, the old index file stays ("never evicted", which holds), and
+`CookedCache::read` (`:713-727`) hands the loader the old Blob. The seam's
+rename test (`tests/cook.rs:190-230`) renames the *file* with its GUID
+kept, which is the identity criterion, not this case; no test renames an
+Asset inside its source. Severity `correctness`: the ADR's promise of a
+warning is not kept for the reference kinds the ADR's own example (a mesh
+renamed in Blender) implies, and nothing is visible until a rename
+happens. This is the open issue's claim read against the code; see *Open
+issues read* for its placement.
+
+#### L1-C02
+
+Code, `cooked.rs:551` and `:586-593`:
+
+```rust
+let vertex_count = take_u32(rest)? as usize;
+...
+let vertex_bytes = take_u32(rest)? as usize;
+let vertices = meshopt::decode_vertex_buffer(take(rest, vertex_bytes)?, vertex_count)?;
+// The index codec spends at least a byte per triangle, so a count
+// past that is corrupt and must not size an allocation.
+anyhow::ensure!(
+    index_count / 3 <= rest.len(),
+    "Mesh Blob has more indices than its encoded bytes hold"
+);
+let indices: Vec<u32> = meshopt::decode_index_buffer(rest, index_count)?;
+```
+
+`meshopt-0.6.2/src/encoding.rs:78-91`:
+
+```rust
+pub fn decode_vertex_buffer<T: Clone + Default>(
+    encoded: &[u8],
+    vertex_count: usize,
+) -> Result<Vec<T>> {
+    let mut result: Vec<T> = vec![Default::default(); vertex_count];
+    let result_code = unsafe {
+        ffi::meshopt_decodeVertexBuffer(
+```
+
+The Rust wrapper allocates `vertex_count` elements before meshoptimizer
+sees the encoded bytes, so the C decoder's size check comes too late to
+stop the allocation. The index path guards exactly this: its comment
+states the rule, and its bound comes from the codec's minimum bytes per
+triangle. The vertex path, four lines earlier, applies no bound: a Blob
+whose vertex count is corrupt (a torn write that `write_atomically`
+prevents for the cooker's own files, a damaged disk, or an edited file)
+allocates `vertex_count * 28` bytes, up to 112 GiB, and an allocation
+failure aborts the process rather than surfacing as the `anyhow::Error`
+the rest of `from_blob` returns. ADR 0018 frames Blob reading as refusal
+with a message ("A mismatch is refused with a re-cook message"), and the
+code's own comment extends that to corrupt counts; the vertex count is
+the one count that escapes it. Severity `correctness`: the code disagrees
+with its stated rule and the crate's documented behaviour, with no
+visible defect on a healthy cache. Not reproduced by running, as the
+brief forbids; the two quotes carry the claim.
+
+#### L1-C03
+
+Code, `material.rs:184-191`:
+
+```rust
+MaterialChannel::Albedo | MaterialChannel::Emissive => {
+    (wgpu::TextureFormat::Rgba8UnormSrgb, [255; 4])
+}
+MaterialChannel::Normal => (wgpu::TextureFormat::Rgba8Unorm, [128, 128, 255, 255]),
+MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
+    (wgpu::TextureFormat::Rgba8Unorm, [255; 4])
+}
+```
+
+`material.rs:156-159`:
+
+```rust
+/// Layer 0 of every Channel holds a 1×1 neutral texture: white for
+/// albedo / metallic-roughness / occlusion / emissive, the flat normal,
+/// x and y at 0.5, for normal. A material without a channel points here,
+/// samples a no-op, and its factors pass through unchanged.
+```
+
+`src/render/shaders/shading.wgsl:156-160`:
+
+```wgsl
+fn tangent_space_normal(encoded: vec2<f32>, scale: f32) -> vec3<f32> {
+    let x_and_y = encoded * 2.0 - vec2<f32>(1.0);
+    let z = sqrt(max(1.0 - dot(x_and_y, x_and_y), 0.0));
+    return vec3<f32>(x_and_y * scale, select(z, 1.0, scale == 0.0));
+}
+```
+
+`main.wgsl:178` samples `normal_textures[material.layers.y]` for every
+Material, Layer 0 included, and `:188-190` rotates the result into world
+space and normalises it. `Unorm8` has no code for 0.5: 128 decodes to
+128/255 = 0.50196, so `x_and_y` is (1/255, 1/255) = (0.0039, 0.0039), the
+normal is (0.0039, 0.0039, 0.99998), and the shading normal of every
+Material without a normal Texture is tilted atan(√2 / 255) = 0.318°
+toward the tangent and bitangent, with `normal_scale` 1. The white
+neutrals are exact (255/255 = 1), so the other four Channels are the
+no-op the comment claims; the normal Channel is not. ADR 0017: "Layer 0
+stays the neutral default." The magnitude is one 8-bit step in each of x
+and y; its effect on `N·L` is at most sin(0.318°) ≈ 0.0056 of the light,
+so under one 8-bit step at most exposures, which is why the class is
+`correctness` and not `image`. The scenes without normal Textures
+(`pbr-sweep`, `town`, `shadow`, `crowd`, the ground planes) all shade
+through this Layer; a verifier with the M4 Pro can capture `pbr-sweep`
+with the neutral replaced by an exact (0, 0, 1) and difference the two
+to decide whether a pixel moves. Candidates for the fix: `Rgba8Snorm` with
+(0, 0, 127), whose 0 is exact and whose decode the shader would take as
+`encoded` already signed, or a `select` on `layers.y == DEFAULT_LAYER`
+that skips the perturbation; a fix ticket decides.
+
+#### L1-C04
+
+Code, `material.rs:240-254`:
+
+```rust
+pub fn insert(&mut self, staging: &mut LoadStaging, data: MaterialData) -> MaterialHandle {
+    if self.materials.len() as u64 >= MATERIAL_CAPACITY {
+        tracing::error!(
+            capacity = MATERIAL_CAPACITY,
+            "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY)"
+        );
+        return MaterialHandle(0);
+    }
+```
+
+`CLAUDE.md`, review checklist: "Streaming uploads go through the
+`StagingBelt`, never `Queue::write_texture`; no GPU buffer grows at
+runtime, and a request past a buffer's capacity is refused and logged."
+The SSBO does not grow and the overflow is logged; it is not refused.
+`load` (`material.rs:289`) returns `Ok(self.insert(...))`, so the loader
+and the scene receive a valid-looking `MaterialHandle(0)` for the 257th
+Material and every Renderable that holds it draws with whatever Material
+loaded first, a wrong image that nothing but the log reports. The Mesh
+pool's sibling path refuses (`pools.rs:188-194` returns `None`, and
+`loader.rs:59-61` turns it into an error), and the spec's stories 43 and
+44 ask the same of every fixed capacity: "refused and logged with nothing
+written", "any overflow counted and warned about". No Reference scene
+reaches 256 Materials at this commit (`tests/frame_stats.rs:82` sizes the
+SSBO at 256), so there is no visible defect; the class is `correctness`
+for the disagreement with the checklist's rule. The Texture Channel's
+full path (`material.rs:103-110`, `:307-309`) substitutes Layer 0 the same
+way, with its doc comment saying so ("or Layer 0 when the Channel is
+full"); it is noted under *Notes for the verifier* rather than filed,
+since ADR 0017's eviction replaces it and no ADR clause asks for refusal
+there.
+
+#### L1-C05
+
+Code, `mesh.rs:158-164` and `:172-182`:
+
+```rust
+/// Each Meshlet's triangle count when `triangles`, indexing `vertex_count`
+/// vertices, are cut in order into the longest runs the Meshlet limits
+/// allow, like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt`
+/// binds only as an `unsafe` call and which counts a degenerate triangle's
+/// repeated corner twice [ref:meshoptimizer-0.25-scan-meshlets].
+...
+let new_vertices = (0..3)
+    .filter(|&corner| {
+        !in_run[corners[corner] as usize]
+            && (corner == 0 || corners[corner] != corners[corner - 1])
+    })
+    .count();
+if counts
+    .last()
+    .is_none_or(|&count| count == MESHLET_MAX_TRIANGLES)
+    || run_vertices.len() + new_vertices > MESHLET_MAX_VERTICES
+```
+
+meshoptimizer 0.25, `clusterizer.cpp:362-370` (the registry's quote):
+
+```cpp
+short& av = used[a];
+short& bv = used[b];
+short& cv = used[c];
+...
+int used_extra = (av < 0) + (bv < 0) + (cv < 0);
+
+if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)
+```
+
+For a triangle `(a, a, c)`, `av` and `bv` alias `used[a]`, so `used_extra`
+counts the new vertex `a` twice, and at 62 vertices in the run with `a` and
+`c` new meshoptimizer starts a new Meshlet (62 + 3 > 64) where the code
+continues the run (62 + 2 ≤ 64). The code's `corners[corner] !=
+corners[corner - 1]` on the sorted corners is the deliberate difference.
+ADR 0018: "Each Meshlet is the longest run the limits allow, as
+meshoptimizer's scan builder cuts them": the first half is what the code
+does and the second is not, on this one case. `docs/audit/deviations.md`:
+"A Deviation lives here and nowhere else: not in a code comment, where no
+number may sit and nobody reads across the tree"; the comment at
+`mesh.rs:162` is where it lives today, and the table is empty. Severity
+`drift`: the Blob stores the counts the cut produced and the reader
+rebuilds from them (`src/assets/cooked.rs:430-484`), so either cut loads
+and draws; what is wrong is the ADR's equivalence and the row's absence.
+The fix is a `deviations.md` row at `mesh.rs:meshlet_triangle_counts`, or
+the ADR's clause narrowed to non-degenerate triangles.
+
+#### L1-C06
+
+`docs/adr/0018-...md:3`: "Partly implemented: ... the runtime loads
+Materials and Textures (#150) and Meshes (#151) from them by Asset ID; the
+reader rebuilds their Meshlets (#192), which the renderer does not keep
+yet." Code, `src/assets/pools.rs:76-78`:
+
+```rust
+meshlet_arena: Arena,
+meshlet_vertex_arena: Arena,
+meshlet_triangle_arena: Arena,
+```
+
+created at `:106-120` ("Meshlet Arena", sized by `MeshletData`), written
+with each loaded Mesh's Meshlets, Meshlet vertices and packed triangles at
+`:272-286`, and bound by `src/render/renderer.rs:365-374` as `meshlets`,
+`meshlet_vertices` and `meshlet_triangles` for the culling and main
+passes. ADR 0017,
+amended 2026-10-20: "and into three Meshlet arenas of the same size, for
+the Meshlets, their vertices and their triangles"; ADR 0019: "the cooker
+builds Meshlets of at most 64 vertices into each Mesh Blob, and the vertex
+shader reads the record for its Instance, Material and vertex base". The
+spec's Implementation Decision, ADR status lines: "Each ticket that changes
+what an ADR's 'Planned; today …' sentence describes updates that
+sentence." The draw-path ticket updated ADRs 0017 and 0019 and not ADR
+0018's status. Severity `drift`, not load-bearing: the other two ADRs and
+`CONTEXT.md`'s Meshlet entry carry the current form; the stale clause
+misleads only a reader of ADR 0018 alone. The fix is one clause: the
+Meshlets are kept in the Meshlet Arenas (ADR 0017) and drawn (ADR 0019).
+
+#### L1-C07
+
+Code, `src/components.rs:79-92`:
+
+```rust
+/// A point light at its entity's `Transform`.
+#[derive(Component, Clone, Copy)]
+pub struct PointLight {
+    pub color: glam::Vec3,
+    /// Luminous intensity, in candela (ADR 0023).
+    pub intensity: f32,
+    /// Metres from the light past which it adds nothing (KHR_lights_punctual's
+    /// `range`, which must be positive and here finite).
+    pub range: f32,
+    /// Whether it casts a shadow: one that casts none takes no shadow ray
+    /// and no place in the shadow mask, which then holds more of the lights
+    /// that cast one.
+    pub casts_shadow: bool,
+}
+```
+
+Consumer, `src/render/prepare.rs:550-561`: the point lights are listed
+"that cast a shadow, then those that cast none", and a light that casts none
+is written with `unshadowed_range: light.range`, which the shaders read as
+the range inside which no ray is traced and the light is unshadowed. ADR
+0020: "Direct light is one hard shadow ray per pixel per light"; "One hard
+shadow ray per pixel is traced toward each directional light ... skipped
+where the light adds nothing ... and one toward each point light that
+reaches the pixel, ending at the light". Spec story 27: "I want a shadow
+ray skipped only where its light adds nothing (N·L ≤ 0, or beyond its
+range), so that no ray is wasted and none is dropped". Spec, Out of Scope:
+"Fog lines: a per-light shadow opt-out". The field is the opt-out the spec
+fogged, landed by a later ticket whose intent the field's own comment
+states (more mask bits for the lights that cast a shadow); ADR 0020 names
+the 59-light cap and the edge rays as amendments but not this, and
+`deviations.md` has no row. Every Reference scene sets `casts_shadow:
+true` (`src/scenes/mod.rs:399`, `:501`; `src/scenes/town.rs:228`), so no
+Golden, Baseline or Cycles comparison sees the opt-out, and the rendered
+images follow the ADR; the Finding is the documents' silence against a
+documented code decision, as L1-R04 is for ADR 0003. Not `correctness`:
+the engine's behaviour on every scene is the ADR's. Magnitude: one field,
+one consumer, zero scenes.
+
+### Notes for the verifier
+
+#### cook, with the manifest and the cook tests
+
+Not filed, since each is a reading without a quoted clause it breaks, or
+belongs to another reader; recorded so the next audit does not re-find
+them.
+
+- A Texture's Asset ID hashes the *image's* name (`mod.rs:380-384`,
+  `image_names[texture.source().index()]`), where ADR 0018 says "glTF
+  name". A glTF `texture` is a sampler over an image, so two textures over
+  one image collapse to one Asset per Channel, which is the useful
+  reading; the ADR does not say which object's name. The function's doc
+  at `mod.rs:369-372` states the choice.
+- The Toksvig oracle's expected value (`tests/cook.rs:504-508`) is the
+  code's own two-quote composition with an analytic mean length, so it
+  checks the implementation, not the model. The substitution of Toksvig's
+  angular variance for Kaplanyan's slope variance (`texture.rs:459-461`,
+  "tan θ ≈ θ") is unchecked by any oracle: at the test's largest tilt
+  (four tilts of 10°, 40°) tan θ exceeds θ by 20%. ADR 0018 names Toksvig
+  and does not say how the variance widens GGX, so no clause is broken;
+  an owner who wants the model checked would set a reference widening
+  from a filtered GGX lobe, which is the shaders lane's kind of oracle.
+- `linearise`'s sRGB decode (`texture.rs:231-240`) has no direct oracle:
+  the checker test exercises the encode side, since 0 and 255 decode
+  exactly to 0 and 1. A one-line test of 0.5 encoded (188) against
+  the table's decode of 188 (0.5029) would close it.
+- The three encoder version strings in the Cook keys (`texture.rs:21`
+  `intel_tex_2 0.5.0 basic`; `mesh.rs:31` `bevy_mikktspace 1.0.0,
+  meshoptimizer 0.25`) are hand-pinned and match `Cargo.lock` and the
+  vendored `meshoptimizer.h:15` today; a dependency bump without the edit
+  would leave Blobs encoded by the old version fresh. A test pinning the
+  strings to `cargo metadata`'s versions would make the check mechanical.
+  The zstd version is in the Mesh key (`mesh.rs:32`) and not the Texture
+  key; neither changes decoded texels, so the asymmetry is harmless.
+- The glTF import refuses a Primitive without normals (`mesh.rs:354-357`),
+  reads `TEXCOORD_0` for every Channel (`:358-361`) whatever a texture's
+  `texCoord`, ignores `KHR_texture_transform`, and recomputes tangents
+  even where `TANGENT` is authored (`:124-129`). glTF 2.0 asks a client to
+  generate flat normals and to use authored tangents; the registry quote
+  `gltf-2.0-mikktspace-tangents` is for the case where tangents are
+  absent. No ADR clause or Reference asset is touched (every manifest
+  model has normals and one UV set), so this is importer scope, not a
+  defect; a Finding would need a source the code claims to follow.
+- A metallic-roughness image shared by two Materials with different normal
+  Textures is widened by the first Material's (`mod.rs:433-435`,
+  `:280-282`), since the Texture Asset is per image and Channel. The ADR
+  says only that the metallic-roughness Texture depends on the normal
+  Texture. The owner may want this in `deviations.md` or the ADR if such
+  content arrives.
+- `Level::reduce` drops the last row or column of an odd side
+  (`texture.rs:331-332`, "a 3-tap filter there if non-power-of-two
+  Textures show it"). ADR 0018's "2×2 box filter" is silent on
+  non-power-of-two sizes, which the multiple-of-4 rule admits (12 → 6 →
+  3 → 1). No Reference Texture is non-power-of-two.
+- The manifest test checks `-NC-` for `dev_only` (`tests/asset_manifest.rs:191-193`)
+  and not "a restrictive `LicenseRef-`" (`docs/research/test-assets.md`,
+  Sourcing strategy 4), which it cannot tell from `LicenseRef-LegalMark-*`
+  mechanically. No such entry exists.
+- The identity criterion's render half
+  (`tests/cook.rs:729-781`) needs a GPU adapter and skips without one; CI
+  runs it on lavapipe (tooling).
+- The PSNR floor (`tests/cook.rs:341-343`) is 44.0 dB where ADR 0018
+  reports 44.7 dB as DamagedHelmet's lowest BC7 Texture and 52.86 dB for
+  SciFiHelmet; the gap is the margin, and the BC5 and BC4 figures (42.71
+  to 44.11) are printed only. A re-measurement is the performance lane's.
+- `cook_scene` cooks every Asset of a referenced glTF file, not only the
+  Assets the scene loads (`mod.rs:229-257`), a superset of ADR 0018's
+  "the Assets it references"; the ADR's purpose, a quick dev launch,
+  holds since a file's Assets are the unit of change detection.
+
+#### assets
+
+Not filed, since each is a reading, needs a run, or belongs to another
+lane; recorded so the next audit does not re-find them.
+
+- L1-C03 could be `image`: a `pbr-sweep` or `shadow` capture on the M4
+  Pro with Layer 0's normal replaced by an exact (0, 0, 1), differenced
+  against the Golden, decides. The 0.318° tilt is arithmetic from the
+  quoted lines, not a measurement.
+- The Texture Channel's full path (`material.rs:103-110`, `:307-313`)
+  substitutes Layer 0 with an `error!` and, since the failed ID is not
+  recorded in `texture_layers`, decodes and logs again on each later
+  request for the same ID. 13,107 Textures per Channel is beyond every
+  scene; ADR 0017's eviction replaces the path. Not filed.
+- ADR 0002 says "one shared index buffer" for draws, BLAS and instancing;
+  since ADR 0019 the draw reads packed indices and the Meshlet triangle
+  Arena, and the index Arena is `BLAS_INPUT` only (`pools.rs:103-105`).
+  ADR 0002 records ADR 0017's amendment and not ADR 0019's split. The
+  render reader marked the clause as falling here; this reader reads it as holding
+  on its purpose (one buffer per kind, addressable by offset) with the
+  ADR's text behind, the same shape as the render section's L1-R04. Left
+  for the verifier to decide whether a `drift` Finding is wanted; the
+  evidence is the two lines above and ADR 0002 line 3.
+- `Arena::allocate(0)` is reached for every `MeshUse::Traced` Mesh (no
+  Meshlets) and `MeshUse::Drawn` Mesh (no index stream):
+  `offset-allocator-0.2.0/src/lib.rs:199-291` serves a zero-size request
+  by taking a node and returning the whole remainder, so it costs one of
+  the Arena's 131,072 allocation nodes (`:143-144`) and no bytes;
+  `MESH_CAPACITY` is 65,536, so the nodes cannot run out first. Not a
+  defect; noted because the refusal test covers nonzero counts only.
+- Load-time uploads through `LoadStaging` (`pools.rs:265-291`,
+  `material.rs:128`, `:250`) are not added to `uploaded_bytes`; the
+  checklist names per-frame writes, and these happen at spawn, before the
+  first frame. If the verifier reads the checklist as covering every GPU
+  write, the counter at `src/render/renderer.rs:548-551` is the place.
+- `CookedTexture::from_blob` (`cooked.rs:354-360`) requires `height > 0`
+  and both sides multiples of 4, so a width of 0 passes and would reach
+  `create_texture` as a validation error, not a refusal. The cooker cannot
+  produce it (`image` decodes no zero-width PNG), so it is unreachable
+  from a cooked file; a hand-edited Blob is the only path.
+- The reader does not check a Texture Blob's format against the Channel
+  it is loaded into (`cooked.rs:342-350` accepts any of the three;
+  `material.rs:307` pushes it into `channel`). The Asset ID carries the
+  Channel, so a cooked cache cannot mix them; ADR 0018's per-Channel
+  formats are enforced by the cooker alone (`src/cook/`).
+- `DEFAULT_MODEL` (`src/state.rs:35`) is a source path the runtime holds:
+  it is formatted into an error message (`:203-206`) and tested with
+  `exists()` by the bench's scene list (`src/bin/praxis.rs:435`) to warn
+  that the helmet is not fetched. Neither opens the file; "the runtime
+  still opens no source path" holds. A stricter reading (no source path
+  named at all) is the owner's.
+- `src/render/staging.rs:211-215` asserts that a level's bytes match its
+  row pitch rather than refusing; unreachable from `material.rs:127-129`
+  because `from_blob` checks every level's size first
+  (`cooked.rs:371-378`). Render section's file.
+- Story 44's "counted": a refused Mesh is logged (`pools.rs:214-228`) and
+  not counted in Frame stats; `arena_bytes_in_use` is reported
+  (`src/state.rs:306`). The Arena refusal test predates M3 and the spec
+  lists it as prior art, so this reader reads the story's counting as applying to
+  the per-frame buffers it names.
+- `MaterialPool::materials: Vec<MaterialData>` (`material.rs:142`) is a
+  CPU copy of the SSBO, read only by a test (`:446`) and for `len()`; ADR
+  0017's "CPU shadow ... goes" names vertex and index data only, so it is
+  not a clause break. A health lane may want the `Vec` replaced by a
+  count.
+- `tests/cook.rs:677-681` keeps SciFiHelmet's 13.83 bytes per triangle as
+  story 8's ceiling; re-measuring it against the Blob format at this
+  commit is the cook reader's.
+
+#### scenes, components, transforms and the fixed loop
+
+Not filed, since each is already filed elsewhere, needs a run or an owner's
+reading, or breaks no clause; recorded so the next audit does not re-find
+them.
+
+- `Sway::curvature(&self, seconds) -> f32` (`src/scenes/mod.rs:1046-1053`)
+  is a method on a component, called by the `sway` system (`:1070`) and the
+  crowd's spawn (`:1002`): the same letter of ADR 0006 that L1-R03 files
+  for `Transform::to_affine`, `Bend::drawn_curvature` and
+  `WorldTransform::{translation, drawn}`. L1-R03's magnitude is then four
+  components and four methods at six call sites, not three at four.
+- `Teleported` is inserted by no production system at this commit
+  (`grep -rn Teleported src` finds `src/transform/mod.rs` and the State
+  test at `src/state.rs:528` only), so `reset_teleported` runs every Tick
+  over an empty query and the clause is held by
+  `a_spawned_or_teleported_entity_is_never_drawn_between_its_old_and_new_place`
+  alone (`src/state.rs:540-561`). A mechanism without a user is not a
+  defect under this lane; the health lane may weigh it.
+- The refit-form crowd figure carries `PreviousWorldTransform` though the
+  fixed schedule never changes its Transform (`src/scenes/mod.rs:1014-1023`:
+  "A Moving Instance, so it joins the dynamic TLAS, rebuilt each frame over
+  its BLAS's bent bounds"). ADR 0020 decides it ("its Instance a Moving
+  Instance"); ADR 0022's "Static Instances store nothing extra" is not
+  broken, since the figure's BLAS changes each frame; `CONTEXT.md`'s
+  Moving Instance, "An Instance whose entity the fixed schedule moves", is
+  narrower than the code. A glossary reading for the docs lane.
+- The first Tick a scheduled `propagate_world_transforms` runs after
+  `State::new`'s `run_system_once` (`src/state.rs:104-108`) sees every
+  Transform as changed, since the schedule's system instance has its own
+  change ticks, and recomputes every World transform once, which marks
+  every `WorldTransform` changed for the next prepare. At 60 Hz the first
+  Tick lands in frame 0, whose prepare writes every Instance anyway, so
+  `tests/frame_stats.rs:337-343` sees 10,000 writes from frame 1; at a
+  frame delta under a Tick the full rewrite would land in a later frame.
+  No clause is broken; a cost note for the performance lane on `town`
+  (254,256 Instances) at refresh rates above 64 Hz.
+- `WorldTransform::drawn` lerps the rotation-scale matrix, so a rotation of
+  θ per Tick draws the entity shrunk by up to 1 − cos(θ/2) mid-Tick
+  (`src/transform/mod.rs:18-20`: "0.1% at 0.09 rad (5.8 rad/s)"; checked:
+  1 − cos(0.045) = 1.01e-3, 0.09 × 64 = 5.76 rad/s). The orrery's fastest
+  body, 4.5 rad/s, shrinks by 0.06%; `town`'s flocks, at most 0.6 rad/s,
+  by 0.001%. ADR 0022 names "a blend" without its form and cites no source
+  for it, so this is not a deviation from a source; whether the number
+  belongs in `deviations.md` rather than the comment is a triage reading
+  of `docs/audit/deviations.md`'s rule that a number sits in no comment.
+- Judder at 120 and 144 Hz (ADR 0022, "judder-free at refresh rates that
+  do not divide 64 Hz") is a visual check on the window; the capture path
+  proves only the orrery's 144 Hz frames land between Ticks.
+- The spec's "scene reporting average lights per lit pixel" for `town` is
+  the light count pass under a Render switch, the render and tooling
+  sections'.
+- `src/scenes/town.rs:222-223` says the lamp light gives "the sun's
+  illuminance 4.5 m away": 2,000,000 cd / 4.5² = 98,765 lx, 1.2% under;
+  "nearly as much on the ground below", 4.7 m down, is 90,539 lx. Prose
+  approximations in a comment, not filed.
+- The crowd's proxies must stay inside the figure unbent
+  (`each_bones_shadow_proxy_lies_inside_its_figure`) but no test places
+  them inside a bent figure; the proxies and the bend pass share
+  `bent_middle`'s arc, so a bent proxy follows the middle, while its width
+  is the unbent spheroid's. Whether a bent figure's own shadow rays leave
+  it clear of its proxies at the sway's most curvature is a GPU run on
+  `crowd` (the proxies form against the refit form, which `tests/crowd.rs`
+  compares only refit against rebuild).
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 4 (L1-C01, L1-C02, L1-C03, L1-C04) |
+| `drift` | 3 (L1-C05, L1-C06, L1-C07) |
+| `health` | 0 |
+
+Clause verdicts: 174 rows over the three readers (54, 74, 46); `holds`
+143, four of them with a Finding on the clause's form or on one half of
+its text (L1-C03, L1-C05, L1-C06, L1-C07); `broken` 3 (L1-C01 in part,
+L1-C04, and ADR 0006's letter as the render section's L1-R03, with a
+fourth component method noted for its magnitude); `drift` 3 rows, two of
+them the one Finding L1-C06 and one L1-C07; `superseded` 0; deferred by
+the spec or the ADR 10; falls in another module or lane 11; not
+applicable 4. Spec stories and decisions: 41 rows (10, 12, 19); 35 hold in
+this module, 1 is superseded by ADR 0018 as amended, 1 carries L1-C07 on
+its component side, 4 fall in render, tooling or the shaders. Registry
+keys: 21 rows (13, 4, 4), 19 distinct keys cited in the module's files,
+all match. Oracles: 18 rows (9, 1, 8), all hold; every measured error is 0
+or bounded by analysis inside the test's constant, none run. Open issues
+read: 1, filed as L1-C01 with the expectation that it inherits the
+issue's placement.
+
 ## tooling
 
 Scope: `src/bench/` with `history/` (`mod.rs`, `report.rs`,
