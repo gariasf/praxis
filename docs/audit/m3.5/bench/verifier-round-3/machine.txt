@@ -1,0 +1,7 @@
+round 3 start 2026-11-02T19:46:05Z
+load averages: { 18.70 14.91 9.06 }
+ -InternalBattery-0 (id=23199843)	100%; charged; 0:00 remaining present: true
+warn  gpu load  84%: bench only once it is quiet
+ok    processes no other praxis process
+ok    power     AC Power
+round 3 end 2026-11-02T19:49:45Z

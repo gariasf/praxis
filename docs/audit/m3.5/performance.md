@@ -7,20 +7,111 @@ on the Apple M4 Pro, as the verdict, and against its source's published
 cost, as a 2x profiling trigger only; the "revive when" fog lines of the
 ladder's map re-judged; and `town`'s remaining gap decomposed into named
 options with a cost estimate each. Two readers, one per module, each a
-section below; the lane's report session writes the Summary, the counts
-and the Killed section and runs the verifier over every quoted line.
+section below; the report session wrote the Summary, the counts, the
+verifier's re-run and the Killed section, and ran the verifier over
+every quoted line.
 Finding ids carry the module's letter so that sections written in
 parallel never collide: the dense scenes `L3-D<n>`, the rest `L3-L<n>`.
-The bench JSON of every round is under `docs/audit/m3.5/bench/`, each
-file stamped with its run's Provenance and quiet verdict.
+The bench JSON of every round, the readers' and the verifier's, is under
+`docs/audit/m3.5/bench/`, each file stamped with its run's Provenance
+and quiet verdict.
 
 ## Summary
 
-Written by the report session.
+Two readers benched all eleven Reference scenes at the frozen commit on
+the Apple M4 Pro and filed 11 Findings; the verifier re-ran every scene
+in four rounds of its own and confirmed 4, narrowed 6 and killed 1.
+Of the ten that stand, five are `budget`: `town`'s GPU frame is 8.0 ms
+over its 12 ms Budget, all of it shadow-ray time (the frame with rays off
+reads 9.1 ms) in a shadow mask pass within 2x of its ray floor, and its
+gate 2.6 to 2.7 ms over 6 ms with its geometry passes between their two
+vertex-fetch bounds, so fewer indices drawn (LOD) is the one option sized
+for the gate; texture-wall's frame and gate are 2.9 and 7.1 ms over,
+about 10 ms of the gate time no pass line covers beside its 10,005 bound
+Textures; and `town`'s dynamic TLAS CPU line crosses its 1.1 ms ceiling
+in every round taken under load. The other five are `health` (culling phase one at
+2.28 times its floor on `town`; Baselines whose pass levels make
+`compare` fail or warn on lines that did not move; CPU frame lines over
+their Baselines in rounds that all ran under Spotlight's indexing load,
+which no quiet run has yet settled), and of the 36 revive-when lines of
+the map 5 have fired, 31 wait and none is dead.
 
 ## Counts
 
-Written by the report session.
+After the verifier. Each module section's own text is its reader's,
+before the verifier; the verdicts sit in each Findings table's
+`verifier` column.
+
+| Severity class | `confirmed` | `narrowed` | `killed` | Findings |
+|---|---:|---:|---:|---:|
+| `image` | 0 | 0 | 0 | 0 |
+| `budget` | 2 (L3-D01, L3-D02) | 3 (L3-D03, L3-D05, L3-D06) | 0 | 5 |
+| `correctness` | 0 | 0 | 0 | 0 |
+| `drift` | 0 | 0 | 0 | 0 |
+| `health` | 2 (L3-D04, L3-D09) | 3 (L3-D08, L3-L01, L3-L02) | 1 (L3-D07) | 6 |
+| All | 4 | 6 | 1 | 11 |
+
+No verdict moved a Finding between classes. The revive-when lines are
+judged, not Findings: `fired` 5, `waiting` 31 and both offenders, `dead`
+none.
+
+## The verifier's re-run
+
+The verifier trusted no reader's figure. It re-read every quoted line
+from four rounds of its own, each round every Reference scene in one
+`praxis bench <dir> --no-publish` on a release build of the frozen commit
+in a worktree detached at it (`dirty: false` in all 44 Provenances),
+2560×1440 with 4x MSAA, 248 warm-up and 1,800 measured frames, rays on
+then off, aliasing counters included, under `caffeinate -dims`, each
+round waiting for preflight's `ok gpu load`. The rounds ran on 2026-11-02
+from 19:38 to 19:50 UTC back to back and the fourth from 20:20 to 20:24,
+on AC power with the battery charged, no other praxis process, and every
+peer session confirming by message beforehand that it ran nothing on the
+GPU and no cargo build; `--no-publish` left the Bench history unchanged.
+The JSON, with each round's `machine.txt`, is under
+`docs/audit/m3.5/bench/verifier-round-<n>/`.
+
+- **Load.** The one-minute load average read 12.7, 19.3, 18.7 and 14.7
+  at the four starts, with Spotlight's `mds` and `mdworker_shared` at
+  the top of `ps`, about 2.4 cores between them, after the session had
+  created two worktrees; the fourth round waited 30 minutes for a load under 3
+  and did not get one. So no round here or in the readers' sections
+  (3.0 to 17.0) is quiet by load average, and this re-run cannot settle
+  what L3-D03, L3-D04 and L3-L01 leave open about it: their CPU lines
+  reproduce under similar or heavier load, and read higher as the load
+  rises. A run on a machine with Spotlight idle is what settles them.
+- **GPU load.** Preflight read 0% before rounds 1, 2 and 4, and 84%
+  before round 3, whose eleven Provenances stamp 46% and mark every run
+  not quiet; what ran on the GPU then was not traced. Round 3's GPU
+  medians agree with the other three rounds' (`town`'s GPU frame within
+  0.3%), so it is kept and named wherever it matters. In rounds 1, 2 and
+  4, 32 of 33 runs are stamped quiet, texture-wall at p95 over median
+  1.019 to 1.049, which is what killed L3-D07.
+- **Agreement with the readers**, at the median of medians: GPU frame
+  within 0.1% on `town` and 1.2% on every light scene, gate within 1.2%
+  and 1.7%; texture-wall 3.0% lower on its GPU frame (14,870.5 against
+  15,337.4 µs) and 5.2% on its gate (13,112.7 against 13,830.3), outside
+  either side's round-to-round spread, which narrowed L3-D05 and L3-D06
+  to both sets of rounds' range.
+- **Floors** the Findings use were recomputed: culling phase one's
+  139.36 MB at 273 GB/s (`apple-m4-pro-bandwidth`) is 510.5 µs, as
+  L3-D09 says.
+- **Notes the verifier could not close.** Three architectural notes put
+  a pass over twice the only floor they compute, and stay notes because
+  the deciding measurement is not taken: `town`'s Froxel pass reads
+  604.4 µs against a 138 µs bandwidth floor (4.4x), but its line overlaps
+  culling phase one's, so the pass alone needs timing; `town`'s depth
+  pre-pass and lit pass read 2.45 and 2.50 times their every-vertex-once
+  floors (870 and 1,499 µs), a floor that assumes full Meshlets where
+  most of `town`'s Instances draw a Mesh of one Meshlet, so the cooked
+  Meshlets' vertex count or the constant-pull probe settles it; the
+  helmet's shadow mask pass is 3.26 times its floor at uv-grid's ray
+  rate, and no ray rate measured outside the scene on a BLAS of its size
+  exists. texture-wall's passes over twice their floors are L3-D08's.
+- **Corrected in the readers' text**: the dense section called its
+  round 3 the round with the lowest load, where its own run conditions
+  give round 3 the highest (17.0 against 3.0 and 3.2); the phrase is
+  removed.
 
 ## Dense scenes: `town` and texture-wall
 
@@ -69,17 +160,17 @@ Quiet verdicts from the Provenance in each file (`quiet`,
 | 3 | quiet, 1.011 | not quiet, 1.105 |
 
 texture-wall's three stamps come from the p95-over-median rule alone
-(1.06 in `src/bench/provenance.rs:29`): its GPU load, processes and power
+(1.06 in `src/bench/provenance.rs:30`): its GPU load, processes and power
 checks passed in every round. Its GPU frame p95 sits 7 to 11% over its
 median in these rounds at 2 to 9% GPU load, 5.4% in its Baseline run
 (16,839 against 15,975 µs) and 1.6 to 3.5 ms over it in four of the M2
 exit's six runs, so the stamp flips with the scene's own spread, not
-the machine's state: L3-D07.
+the machine's state: L3-D07, which the verifier's re-run killed (see
+Killed).
 
 ### `town`
 
-Round 3 as `praxis report` prints it, the round with the lowest load and
-the tightest p95s; the other rounds' tables are in the bench JSON and
+Round 3 as `praxis report` prints it, the round with the tightest p95s; the other rounds' tables are in the bench JSON and
 agree as the rounds table below shows.
 
 **town** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
@@ -312,17 +403,16 @@ the scene's two Findings are the frame and the gate.
 
 ### Findings
 
-| id | claim | severity | where | evidence | expected |
-|---|---|---|---|---|---|
-| L3-D01 | `town`'s GPU frame breaches its 12 ms Budget by 8.0 ms at the frozen commit | `budget`, 7,988 µs over at the median of three rounds (7,984 to 8,075) | scene `town`; `bench/budgets.json`, `gpu_frame_microseconds` | three quiet rounds, GPU frame medians 19,983.7, 19,987.8 and 20,075.1 µs (p95 20,210 to 20,874), `docs/audit/m3.5/bench/round-{1,2,3}/town.json`; shadow-ray time 10,750 to 10,858 of it, the frame with rays off 9,130.0 to 9,240.3 (the GPU frame less shadow-ray time, per round) | ≤ 12,000 µs (ADR 0013) |
-| L3-D02 | `town`'s gate breaches ADR 0019's 6 ms by 2.7 ms with rays off | `budget`, 2,702 µs over (2,603 to 2,713) | scene `town`; `bench/budgets.json`, `gate_microseconds` | gate medians 8,603.3, 8,702.2 and 8,713.1 µs, same files; its passes: culling 1,341, depth pre-pass 2,142, pyramid 222, phase two's depth 56, lit 3,764 (Froxel 601 beside culling) | ≤ 6,000 µs (ADR 0019); the owner accepted the breach until LOD, which has not landed |
-| L3-D03 | `town`'s dynamic TLAS CPU line is over its 1.1 ms ceiling in every round | `budget`, 92.5 µs over at the median of medians (71.4 to 103.0) | scene `town`; `bench/budgets.json`, `dynamic_tlas_cpu_microseconds`; `src/render/acceleration_structures.rs:356` (`record`, the build's recording) and `src/render/renderer.rs:70` (`dynamic_tlas_submit`) | medians 1,171.4, 1,192.5 and 1,203.0 µs, p95 1,321 to 1,396, same files; its Baseline reads 1,097.4; the note of 2026-10-30 on `town`'s CPU frame read 934 to 987 quiet and 1,100 to 1,260 under load, and found the line to be wgpu-core's per-Instance dependency walk and record allocation | ≤ 1,100 µs (ADR 0020's ceiling in `bench/budgets.json`) |
-| L3-D04 | `town`'s CPU frame reads 20 to 22% over its Baseline at the median in every round, and over 6 ms at p95, which `compare` reports but does not judge | `health`, 944 to 1,058 µs over its Baseline median; p95 121 to 418 µs over the Budget the medians (207 to 321 under) do not breach | scene `town`; `bench/budgets.json`, `cpu_frame_microseconds` | medians 5,679.2, 5,709.8 and 5,793.1 µs against a Baseline of 4,734.8; p95 6,121.0, 6,151.0 and 6,418.2 against 6,000; the five-minute load average was 8 to 16 during the rounds from Spotlight indexing, which the preflight checks do not see, so the magnitude needs a re-run on a machine without it; `compare` fails the line against its Baseline in every round | within 5% of its Baseline median; medians count for the Budget (`src/bench/mod.rs:629-630`) |
-| L3-D05 | texture-wall's GPU frame breaches its 12 ms Budget by 3.3 ms | `budget`, 3,337 µs over (3,304 to 3,465) | scene texture-wall; `bench/budgets.json`, `gpu_frame_microseconds` | GPU frame medians 15,304.0, 15,337.4 and 15,465.0 µs, `docs/audit/m3.5/bench/round-{1,2,3}/texture-wall.json`; GPU load 2 to 9%, AC power, no other praxis process; stamped not quiet by the p95 rule alone (L3-D07) | ≤ 12,000 µs |
-| L3-D06 | texture-wall's gate breaches 6 ms by 7.8 ms; of its 13.8 ms, about 11.0 ms is a stretch no pass times, between culling phase two's end and the lit pass's start, in a scene of 200 triangles and 10,005 bound Textures | `budget`, 7,830 µs over (7,530 to 7,885) | scene texture-wall; `bench/budgets.json`, `gate_microseconds`; the material bind group that binds every Texture, `src/render/renderer.rs:278` and `:636` (`MATERIALS`) | gate medians 13,530.1, 13,830.3 and 13,884.9 µs; the gate's timed passes sum to 2,850 µs; the RTX 2070 SUPER Baselines give 514 (Vulkan) and 502 µs (DX12) for the same scene | ≤ 6,000 µs; a floor under 1 µs for the scene's geometry |
-| L3-D07 | The quiet stamp marks every texture-wall run not quiet on a quiet machine, because its GPU frame p95 is 7 to 11% over its median by the scene's own nature | `health`, 3 runs of 1 scene; every Series record of texture-wall on this machine | `src/bench/provenance.rs:29` (`QUIET_P95_OVER_MEDIAN = 1.06`) and `:130-141` (`is_quiet`) | `gpu_frame_p95_over_median` 1.092, 1.072 and 1.105 with `gpu_load_percent` 9, 3 and 2, `other_processes` empty and AC power, in the three texture-wall files; `town` in the same rounds 1.040, 1.043 and 1.011; texture-wall's own Baseline run has 1.054 (under the rule) and the M2 exit saw p95 jumps of 1.6 to 3.5 ms in four of six runs | a stamp that reads the machine's state, not a scene's spread; a per-scene threshold or a rule on the lines the machine moves |
-| L3-D08 | texture-wall's Baseline holds the fast of its two pass levels, so every run on the slow level, all three here, fails seven pass rows in `compare` and warns on two while its GPU frame reads 4% under the Baseline | `health`, 7 pass rows failed and 2 warned per run, 1 scene | `bench/baselines/apple-m4-pro/texture-wall.json` (`depth_prepass` median 398.6, the fast level); `src/bench/mod.rs:135` (`FAIL_RATIO`), `:143` (the 20 µs noise floor) and `:710` (the pass-row compare) | `praxis compare` on each round: `depth_prepass` 725.8 to 726.2 against 398.6 (+82%), `depth_pyramid_pass` 886.2 to 886.5 against 490.5, `tonemapping_pass` 1,480.7 to 1,480.8 against 811.2, `lit_pass` 1,030.8 to 1,032.5 against 607.2, `shadow_mask_pass` 4,961.4 to 4,964.1 against 2,973.2, both culling phases +65 to +72%; `froxel_pass` (+14.2 µs) and `phase_two_depth_pass` (+12.3 µs) warn under the 20 µs noise floor; the GPU frame 15,304 to 15,465 against 15,975; the pyramid and tonemapping do `town`'s exact work in 4.0 and 4.6 times its lines | pass rows judged at the level a run lands on, or a Baseline at the slow level as the M3 exit kept, until the bound-Textures fix settles the levels |
-| L3-D09 | culling phase one's line reads over twice its bandwidth floor on `town` | `health`, 654 µs over its 510 µs floor (2.28x); 1,164 µs a frame | `src/render/culling_pass.rs:284-320` (`record`, phase one's four dispatches); `src/render/shaders/culling.wgsl:401` (`append_triangles`) | medians 1,148.5, 1,164.3 and 1,165.1 µs against 139.3 MB / 273 GB/s = 510 µs (the arithmetic above); the stage split of 2026-10-30 summed its stages to 886 µs (1.74x) with 685 of them the 66.6 MB of packed-index writes (1.7x their own floor), and found the line to include time beside the Froxel pass, which the bench starts beside it | within 2x of its floor; or the line counting the pass alone, as the render passes' lines do since the note of 2026-10-30 |
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L3-D01 | `town`'s GPU frame breaches its 12 ms Budget by 8.0 ms at the frozen commit | `budget`, 7,988 µs over at the median of three rounds (7,984 to 8,075) | scene `town`; `bench/budgets.json`, `gpu_frame_microseconds` | three quiet rounds, GPU frame medians 19,983.7, 19,987.8 and 20,075.1 µs (p95 20,210 to 20,874), `docs/audit/m3.5/bench/round-{1,2,3}/town.json`; shadow-ray time 10,750 to 10,858 of it, the frame with rays off 9,130.0 to 9,240.3 (the GPU frame less shadow-ray time, per round) | ≤ 12,000 µs (ADR 0013) | `confirmed`: `town`'s GPU frame reads 19,937.8 to 19,993.2 µs in all four rounds, 7,963 µs over 12,000 at the median of medians, within 0.3% of the reader's 7,988. | |
+| L3-D02 | `town`'s gate breaches ADR 0019's 6 ms by 2.7 ms with rays off | `budget`, 2,702 µs over (2,603 to 2,713) | scene `town`; `bench/budgets.json`, `gate_microseconds` | gate medians 8,603.3, 8,702.2 and 8,713.1 µs, same files; its passes: culling 1,341, depth pre-pass 2,142, pyramid 222, phase two's depth 56, lit 3,764 (Froxel 601 beside culling) | ≤ 6,000 µs (ADR 0019); the owner accepted the breach until LOD, which has not landed | `confirmed`: `town`'s gate reads 8,583.2 to 8,636.5 µs in all four rounds, 2,599 µs over 6,000 at the median of medians, within 4% of the reader's 2,702, and the ranges overlap. | |
+| L3-D03 | `town`'s dynamic TLAS CPU line is over its 1.1 ms ceiling in every round | `budget`, 92.5 µs over at the median of medians (71.4 to 103.0) | scene `town`; `bench/budgets.json`, `dynamic_tlas_cpu_microseconds`; `src/render/acceleration_structures.rs:356` (`record`, the build's recording) and `src/render/renderer.rs:70` (`dynamic_tlas_submit`) | medians 1,171.4, 1,192.5 and 1,203.0 µs, p95 1,321 to 1,396, same files; its Baseline reads 1,097.4; the note of 2026-10-30 on `town`'s CPU frame read 934 to 987 quiet and 1,100 to 1,260 under load, and found the line to be wgpu-core's per-Instance dependency walk and record allocation | ≤ 1,100 µs (ADR 0020's ceiling in `bench/budgets.json`) | `narrowed`: `town`'s dynamic TLAS CPU line is over ADR 0013's 1.1 ms ceiling in every round taken under Spotlight load, by 71 to 218 µs (93 µs at the readers' median of medians, 193 at the verifier's) as the load rises; whether it breaches on a quiet machine is open, as its Baseline reads 1,097.4 and the note of 2026-10-30 read 934 to 987 quiet. The breach holds in all four rounds, but at 1,277.2 to 1,318.2 µs (193 µs over at the median of medians, about twice the reader's 92.5) under heavier load, and the ceiling is in ADR 0013, not ADR 0020. | |
+| L3-D04 | `town`'s CPU frame reads 20 to 22% over its Baseline at the median in every round, and over 6 ms at p95, which `compare` reports but does not judge | `health`, 944 to 1,058 µs over its Baseline median; p95 121 to 418 µs over the Budget the medians (207 to 321 under) do not breach | scene `town`; `bench/budgets.json`, `cpu_frame_microseconds` | medians 5,679.2, 5,709.8 and 5,793.1 µs against a Baseline of 4,734.8; p95 6,121.0, 6,151.0 and 6,418.2 against 6,000; the five-minute load average was 8 to 16 during the rounds from Spotlight indexing, which the preflight checks do not see, so the magnitude needs a re-run on a machine without it; `compare` fails the line against its Baseline in every round | within 5% of its Baseline median; medians count for the Budget (`src/bench/mod.rs:629-630`) | `confirmed`: Under similar or heavier load the CPU frame reads 5,706.2 to 5,861.1 µs, 1.205 to 1.238 times its Baseline, with `compare` failing it in every round and p95 over 6,000 in every round (6,083.9 to 6,318.0); the load caveat the Finding states still applies. | |
+| L3-D05 | texture-wall's GPU frame breaches its 12 ms Budget by 3.3 ms | `budget`, 3,337 µs over (3,304 to 3,465) | scene texture-wall; `bench/budgets.json`, `gpu_frame_microseconds` | GPU frame medians 15,304.0, 15,337.4 and 15,465.0 µs, `docs/audit/m3.5/bench/round-{1,2,3}/texture-wall.json`; GPU load 2 to 9%, AC power, no other praxis process; stamped not quiet by the p95 rule alone (L3-D07) | ≤ 12,000 µs | `narrowed`: texture-wall's GPU frame breaches its 12 ms Budget in every round, by 2.7 to 3.5 ms across the seven rounds (2,870 µs at the median of the verifier's four, 3,337 at the readers' three). The breach holds in all four rounds, but at 14,699.6 to 14,972.3 µs, 2,870 µs over at the median of medians, 14% under the reader's 3,337, and the two sets of rounds do not overlap. | |
+| L3-D06 | texture-wall's gate breaches 6 ms by 7.8 ms; of its 13.8 ms, about 11.0 ms is a stretch no pass times, between culling phase two's end and the lit pass's start, in a scene of 200 triangles and 10,005 bound Textures | `budget`, 7,830 µs over (7,530 to 7,885) | scene texture-wall; `bench/budgets.json`, `gate_microseconds`; the material bind group that binds every Texture, `src/render/renderer.rs:278` and `:636` (`MATERIALS`) | gate medians 13,530.1, 13,830.3 and 13,884.9 µs; the gate's timed passes sum to 2,850 µs; the RTX 2070 SUPER Baselines give 514 (Vulkan) and 502 µs (DX12) for the same scene | ≤ 6,000 µs; a floor under 1 µs for the scene's geometry | `narrowed`: texture-wall's gate breaches 6 ms by 7.1 to 7.9 ms across the seven rounds (7,113 µs at the median of the verifier's four); its rays-on pass lines up to the lit pass sum to 2,852 µs, which leaves about 10.2 to 10.4 ms of its 13.1 ms that no pass line covers, in a scene of 200 triangles and 10,005 bound Textures. The note of 2026-10-30 places that time between culling phase two's end and the lit pass's start. The breach holds in all four rounds, but by 7,113 µs at the median of medians (9% under the reader's 7,830); my medians leave about 10.3 ms that no pass line covers, not 11.0; and the pass lines it subtracts come from the rays-on frames, not the rays-off frames the gate times. | |
+| L3-D08 | texture-wall's Baseline holds the fast of its two pass levels, so every run on the slow level, all three here, fails seven pass rows in `compare` and warns on two while its GPU frame reads 4% under the Baseline | `health`, 7 pass rows failed and 2 warned per run, 1 scene | `bench/baselines/apple-m4-pro/texture-wall.json` (`depth_prepass` median 398.6, the fast level); `src/bench/mod.rs:135` (`FAIL_RATIO`), `:143` (the 20 µs noise floor) and `:710` (the pass-row compare) | `praxis compare` on each round: `depth_prepass` 725.8 to 726.2 against 398.6 (+82%), `depth_pyramid_pass` 886.2 to 886.5 against 490.5, `tonemapping_pass` 1,480.7 to 1,480.8 against 811.2, `lit_pass` 1,030.8 to 1,032.5 against 607.2, `shadow_mask_pass` 4,961.4 to 4,964.1 against 2,973.2, both culling phases +65 to +72%; `froxel_pass` (+14.2 µs) and `phase_two_depth_pass` (+12.3 µs) warn under the 20 µs noise floor; the GPU frame 15,304 to 15,465 against 15,975; the pyramid and tonemapping do `town`'s exact work in 4.0 and 4.6 times its lines | pass rows judged at the level a run lands on, or a Baseline at the slow level as the M3 exit kept, until the bound-Textures fix settles the levels | `narrowed`: texture-wall's Baseline holds the faster of its two pass levels, so every run on the slow level (all seven here) fails seven pass rows in `compare` and warns on two, while its GPU frame reads 3 to 8% under the Baseline. `compare` fails the same seven texture-wall pass rows and warns on the same two in all four rounds. But the GPU frame reads 6.3 to 8.0% under its Baseline, not 4%, and the pass-row compare is `src/bench/mod.rs:706-715` (line 710 is the noise-floor assignment). | |
+| L3-D09 | culling phase one's line reads over twice its bandwidth floor on `town` | `health`, 654 µs over its 510 µs floor (2.28x); 1,164 µs a frame | `src/render/culling_pass.rs:284-320` (`record`, phase one's four dispatches); `src/render/shaders/culling.wgsl:401` (`append_triangles`) | medians 1,148.5, 1,164.3 and 1,165.1 µs against 139.3 MB / 273 GB/s = 510 µs (the arithmetic above); the stage split of 2026-10-30 summed its stages to 886 µs (1.74x) with 685 of them the 66.6 MB of packed-index writes (1.7x their own floor), and found the line to include time beside the Froxel pass, which the bench starts beside it | within 2x of its floor; or the line counting the pass alone, as the render passes' lines do since the note of 2026-10-30 | `confirmed`: Culling phase one reads 1,154.5 to 1,167.2 µs (1,163.3 at the median of medians); I recomputed the floor at 139.36 MB / 273,000 = 510.5 µs, so the ratio is 2.28 as the reader says. | |
 
 ### Architectural notes
 
@@ -499,8 +589,8 @@ median agrees within 0.97%, its gate within 1.01% and every pass line
 over 20 µs within 4.5%, so the medians stand and the stamps record
 the p95s' spread; far-coplanar is stamped not quiet in 3 of 4 rounds at
 1.067 to 1.126 against 1.010 in its Baseline run. This is L3-D07's
-defect on nine more scenes, and is written up as evidence for it under
-Findings, not as a Finding of its own.
+defect on nine more scenes, and is written up as evidence for it, not
+as a Finding of its own; it now sits with L3-D07 under Killed.
 
 ### Against the Budgets and the Baselines
 
@@ -1257,18 +1347,10 @@ median of medians; p95s over the rounds):
 
 ### Findings
 
-| id | claim | severity | where | evidence | expected |
-|---|---|---|---|---|---|
-| L3-L01 | The light scenes' CPU frame lines fail `compare` against their Baselines in every round on 5 scenes, 1.10 to 1.65 times them, while every GPU line is within 1.6% and the lines are at most 13% of the 6 ms Budget; whether the machine or the code moved them is not settled | `health`, 5, 8, 6 and 6 CPU lines failed in rounds 1 to 4 | `src/bench/mod.rs:135-139` (`FAIL_RATIO` 1.10, `CPU_NOISE_FLOOR_MICROSECONDS` 10); `bench/baselines/apple-m4-pro/*.json`, which carry no Provenance, so not the load they were recorded under | the table above; one-minute load averages 3.7 to 7.3 at the rounds' starts with two of this ticket's sub-readers and peer sessions reading files; L3-D04 saw `town`'s line 20 to 22% over its Baseline under Spotlight's load | the CPU lines within 5% of their Baselines in a re-run at a one-minute load under 2, or Baselines that carry the load they were recorded under so `compare` can tell the two apart |
-| L3-L02 | Culling phase one's fixed cost holds one level in every run here and another in some Baselines: 27.1 to 28.8 µs in all 12 runs of the two-to-four-triangle scenes, whose Baselines hold 24.2, 24.2 and 28.5 for the same work, so `compare` warns on whichever scenes' Baselines caught the other level | `health`, 4 scenes warned in every round, about 4 µs a frame | `bench/baselines/apple-m4-pro/{uv-grid,normal-tangent,far-coplanar,shadows}.json` (`culling_phase_one`); `src/render/culling_pass.rs:284-320` (`record`, the four dispatches); `src/bench/mod.rs:143` (the 20 µs noise floor that keeps it a warning) | uv-grid 27.4, 27.5, 28.3, 27.1 against 24.2; normal-tangent 40.7, 40.3, 40.8, 40.2 against 37.7; far-coplanar 28.8, 28.0, 28.5, 28.4 against 24.2; shadows 33.4, 33.3, 33.4, 33.6 against 28.6; helmet, pbr-sweep, orrery, minification and crowd within 4.4% of theirs; the commits since the Baselines touch `src/bench/` and `src/bin/` only; the note of 2026-10-30 on the depth pyramid and culling read uv-grid's phase one at 28.8 | Baselines recorded in one bench run on a quiet machine, so a fixed cost the scenes share holds one level across them |
-
-**Evidence for L3-D07** (the quiet stamp reads a scene's spread, not the
-machine's state), from this section's runs: 14 of 36 light-scene runs
-stamped not quiet at `gpu_frame_p95_over_median` 1.062 to 1.207, with
-`gpu_load_percent` 0 to 1, no other praxis process and AC power, in rounds
-whose GPU frame medians agree within 0.97%; far-coplanar not quiet in 3 of
-4 rounds; the Bench history then keeps one quiet round per scene and
-drops the rest.
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L3-L01 | The light scenes' CPU frame lines fail `compare` against their Baselines in every round on 5 scenes, 1.10 to 1.65 times them, while every GPU line is within 1.6% and the lines are at most 13% of the 6 ms Budget; whether the machine or the code moved them is not settled | `health`, 5, 8, 6 and 6 CPU lines failed in rounds 1 to 4 | `src/bench/mod.rs:135-139` (`FAIL_RATIO` 1.10, `CPU_NOISE_FLOOR_MICROSECONDS` 10); `bench/baselines/apple-m4-pro/*.json`, which carry no Provenance, so not the load they were recorded under | the table above; one-minute load averages 3.7 to 7.3 at the rounds' starts with two of this ticket's sub-readers and peer sessions reading files; L3-D04 saw `town`'s line 20 to 22% over its Baseline under Spotlight's load | the CPU lines within 5% of their Baselines in a re-run at a one-minute load under 2, or Baselines that carry the load they were recorded under so `compare` can tell the two apart | `narrowed`: The light scenes' CPU frame lines fail `compare` against their Baselines in every round under Spotlight load: on 5 scenes at 1.10 to 1.65 times them in the readers' rounds (one-minute load 3.7 to 7.3), and on 8 at 1.19 to 2.25 times in the verifier's (12.7 to 19.3). Every GPU frame is within 2.0% of its Baseline, and the lines are at most 17% of the 6 ms Budget. The rise with load points at the machine, but no quiet re-run has settled whether the machine or the code moved them. Under heavier load the CPU frame fails `compare` on 8 light scenes in every round, not 5, at 1.19 to 2.25 times the Baseline. The GPU frames are within 2.0% and the lines reach 17% of the Budget, and the lines grow with the load. | |
+| L3-L02 | Culling phase one's fixed cost holds one level in every run here and another in some Baselines: 27.1 to 28.8 µs in all 12 runs of the two-to-four-triangle scenes, whose Baselines hold 24.2, 24.2 and 28.5 for the same work, so `compare` warns on whichever scenes' Baselines caught the other level | `health`, 4 scenes warned in every round, about 4 µs a frame | `bench/baselines/apple-m4-pro/{uv-grid,normal-tangent,far-coplanar,shadows}.json` (`culling_phase_one`); `src/render/culling_pass.rs:284-320` (`record`, the four dispatches); `src/bench/mod.rs:143` (the 20 µs noise floor that keeps it a warning) | uv-grid 27.4, 27.5, 28.3, 27.1 against 24.2; normal-tangent 40.7, 40.3, 40.8, 40.2 against 37.7; far-coplanar 28.8, 28.0, 28.5, 28.4 against 24.2; shadows 33.4, 33.3, 33.4, 33.6 against 28.6; helmet, pbr-sweep, orrery, minification and crowd within 4.4% of theirs; the commits since the Baselines touch `src/bench/` and `src/bin/` only; the note of 2026-10-30 on the depth pyramid and culling read uv-grid's phase one at 28.8 | Baselines recorded in one bench run on a quiet machine, so a fixed cost the scenes share holds one level across them | `narrowed`: Culling phase one's fixed cost on the small light scenes takes one of two levels about 3 to 4 µs apart, from run to run at the same commit: uv-grid 24.0 or 26.9 to 28.3 µs, far-coplanar 23.9 or 27.5 to 28.8, normal-tangent 36.8 or 39.9 to 40.8. So `compare` warns on whichever scenes land above their Baseline's level, 2 to 4 scenes a round, about 4 µs a frame. The two levels are real, but they flip from run to run at the frozen commit (far-coplanar 23.9 in round 1, uv-grid 24.0 in round 4, normal-tangent 36.8 in round 1), not only between runs and Baselines. Only shadows is warned in every one of my rounds (2, 4, 4 and 3 scenes warned in rounds 1 to 4). | |
 
 ### Architectural notes
 
@@ -1382,3 +1464,28 @@ map's to act on: it revives the work or moves the trigger.
 | R36 | Toksvig widening and the normal scale | `waiting` | Every asset's `normalTexture.scale` is 1 (SciFiHelmet's one Material, NormalTangentTest's one Material); the only other scale is a unit test's (`src/assets/material.rs:430`, 0.5). |
 | Offender: bound Textures | 10,005 bound Textures cost 1.1 to 1.8 ms of CPU a frame | `waiting` | Ordered with the survey "State of the art: bindless residency cost on Metal and wgpu" when M4 is charted. No M4 milestone; the survey has no ticket (`gh issue list --state all --search "bindless residency"`: none), and `docs/research/gpu-memory-residency-streaming.md:79` calls Metal's per-Texture `useResource` cost "not measured". The cost persists at the frozen commit: L3-D05 and L3-D06. |
 | Offender: fixed Arenas | The fixed Arenas are most of every scene's GPU memory | `waiting` | Ordered at M4's split of the 8 GB Budget; no M4 milestone; `bench/budgets.json` holds one `gpu_memory_bytes`. `src/assets/pools.rs:9` sets 16 MiB. The highest `arena_bytes_in_use` of any Baseline is the crowd's 11,325,896 B (67.5% of one Arena), the same in this section's rounds; no ticket names a refusal. |
+
+## Killed
+
+The verifier re-ran each of these and found the claim not to hold; each stays here, with the reader's evidence, so the next audit does not re-find it. Its id stays retired.
+
+| id | claim | severity | where | evidence | killed because |
+|---|---|---|---|---|---|
+| L3-D07 | The quiet stamp marks every texture-wall run not quiet on a quiet machine, because its GPU frame p95 is 7 to 11% over its median by the scene's own nature | `health`, 3 runs of 1 scene; every Series record of texture-wall on this machine | `src/bench/provenance.rs:30` (`QUIET_P95_OVER_MEDIAN = 1.06`) and `:130-141` (`is_quiet`) | `gpu_frame_p95_over_median` 1.092, 1.072 and 1.105 with `gpu_load_percent` 9, 3 and 2, `other_processes` empty and AC power, in the three texture-wall files; `town` in the same rounds 1.040, 1.043 and 1.011; texture-wall's own Baseline run has 1.054 (under the rule) and the M2 exit saw p95 jumps of 1.6 to 3.5 ms in four of six runs | It does not reproduce: in my three rounds at GPU load 0, texture-wall reads p95/median 1.043, 1.049 and 1.019 and is stamped quiet, and the only round stamped not quiet (round 3, 1.126) had a measured 46% GPU load, so the stamp tracked the machine, not the scene. |
+
+**Evidence for L3-D07** (the quiet stamp reads a scene's spread, not the
+machine's state), from the light section's runs: 14 of 36 light-scene runs
+stamped not quiet at `gpu_frame_p95_over_median` 1.062 to 1.207, with
+`gpu_load_percent` 0 to 1, no other praxis process and AC power, in rounds
+whose GPU frame medians agree within 0.97%; far-coplanar not quiet in 3 of
+4 rounds; the Bench history then keeps one quiet round per scene and
+drops the rest.
+
+What the kill leaves open: the light section's rounds stamped 14 of 36
+runs not quiet while the bench's GPU load read 0 to 1% at each start,
+and preflight read 99% seconds before two of those rounds; the verifier's
+rounds at 0% stamped 32 of 33 runs quiet, and its round at 46% stamped
+all eleven not quiet. The stamp reads the GPU load once, when `praxis
+bench` starts (`BenchStart::read`, `src/bench/provenance.rs:74-89`), for
+every scene it then runs; a later audit that sees stamps flip with the load at 0% reads the
+load across the run before filing it again.
