@@ -41,11 +41,17 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
 - `docs/references.toml` — the external sources the engine relies on,
   each with its section and a verbatim quote; code, ADRs and notes cite
   its keys (`[ref:<key>]`) beside the prose citation.
-- `docs/guides/` — the field guides: explainers of the concepts tickets
-  introduced, which GitHub Pages serves from `main`. Read when you need
-  one of those concepts; `docs/agents/workflow.md` says when to write one.
+- `docs/guides/` — the field guides: the engine's reference, a page per
+  mechanism, and until each page exists the volumes that explained the
+  concepts tickets introduced, which GitHub Pages serves from `main`. Read
+  when you need one of those concepts; `docs/agents/workflow.md` says when
+  to write or rewrite one.
 - `docs/bench/` — the page that draws the Bench history's Series from
   `bench-history` in the browser (ADR 0024), on Pages beside the guides.
+- `docs/audit/` — the audits: `deviations.md`, where the code should not
+  match the literature and why, read before judging code against a
+  source; `<milestone>/<lane>.md`, each Audit lane's report.
+  `docs/agents/audit.md` says how a lane runs.
 - `ROADMAP.md` — long-range vision: target shape, design principles,
   scripting plan. Decisions are ADRs; the order of work is the ladder.
 
@@ -62,6 +68,10 @@ GitHub Issues for this repo, via the `gh` CLI. See `docs/agents/issue-tracker.md
 ### Triage labels
 
 Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`); each label string equals its role name. `fog` marks a ticket placed at a later milestone's charting, off the triage queue and the frontier. See `docs/agents/triage-labels.md`.
+
+### Audit
+
+An Audit lane of a Consolidation milestone, and the standing form of a milestone exit's visual audit and source check: shared brief, parallel read-only readers, adversarial verifier, report, triage. See `docs/agents/audit.md`.
 
 ### Domain docs
 
@@ -244,6 +254,10 @@ When a feature folder grows past one file, split into
   semantic review (`docs/agents/workflow.md`, Review).
 - A bug-fix is not a refactor and a feature is not a cleanup. Do what
   the ticket says; its acceptance criteria are the ceiling.
+- The one licence to refactor is an audit's code-health fix ticket, with
+  proof of unchanged behaviour in its PR: Goldens bit-exact, counters
+  equal, timings within noise. One that changes an image is a defect
+  ticket instead.
 - Don't add comments, docstrings, or type annotations to code you
   didn't change.
 - Reviews flag correctness, safety, and budget regressions.
