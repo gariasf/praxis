@@ -28,19 +28,28 @@ pub(super) struct Point {
     pub starts_line: bool,
 }
 
+/// A flagged step: the Suspect that started it.
+struct Step {
+    /// Its place on the line.
+    position: usize,
+    slower: bool,
+    median: f64,
+    tolerance: f64,
+}
+
 /// Each point's shift from the median of up to `WINDOW_RECORDS` medians
 /// before it on its line, as a share of that median, when it lies outside
 /// that median ± max(`MEDIAN_ABSOLUTE_DEVIATIONS` × their median absolute
-/// deviation, `SMALLEST_SHIFT_FRACTION` of it); none for every other point, and none for a point
-/// that only continues the step before it: outside on the same side, and
-/// within the flagged point's tolerance of its median. So a step is flagged
-/// where it starts, not again while the window's median still lags it, a
-/// second step on the same side is flagged again, and a lone outlier stays in
-/// later windows, outvoted.
+/// deviation, `SMALLEST_SHIFT_FRACTION` of it); none for every other point,
+/// and none for a point that only continues a step flagged among those
+/// medians: outside on the same side, and within that Suspect's tolerance of
+/// its median. So a step is flagged where it starts, not again while the
+/// window's median still lags it, even after a noisy record falls back inside;
+/// a second step on the same side is flagged again; and a lone outlier stays
+/// in later windows, outvoted.
 pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
     let mut line = Vec::new();
-    // The step the points before continue: its side, median and tolerance.
-    let mut step: Option<(bool, f64, f64)> = None;
+    let mut step: Option<Step> = None;
     points
         .iter()
         .map(|point| {
@@ -49,27 +58,30 @@ pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
                 step = None;
             }
             let median = point.median?;
-            let window = &line[line.len().saturating_sub(WINDOW_RECORDS)..];
+            let position = line.len();
+            let window = &line[position.saturating_sub(WINDOW_RECORDS)..];
             let band = band(window);
             line.push(median);
-            let Some((center, tolerance)) = band else {
-                step = None;
-                return None;
-            };
-            let shift = (median - center) / center;
+            let (center, tolerance) = band?;
             if (median - center).abs() <= tolerance {
-                step = None;
                 return None;
             }
-            let side = shift > 0.0;
-            let continues = step.is_some_and(|(step_side, step_median, step_tolerance)| {
-                step_side == side && (median - step_median).abs() <= step_tolerance
+            let slower = median > center;
+            let continues = step.as_ref().is_some_and(|step| {
+                position - step.position <= WINDOW_RECORDS
+                    && step.slower == slower
+                    && (median - step.median).abs() <= step.tolerance
             });
             if continues {
                 return None;
             }
-            step = Some((side, median, tolerance));
-            Some(shift)
+            step = Some(Step {
+                position,
+                slower,
+                median,
+                tolerance,
+            });
+            Some((median - center) / center)
         })
         .collect()
 }
@@ -143,6 +155,14 @@ mod tests {
         medians.extend(NOISE[..2].iter().map(|median| median * 1.05));
         medians.extend(NOISE.iter().map(|median| median * 1.10));
         assert_eq!(flagged(&line(&medians)), [12, 14]);
+    }
+
+    #[test]
+    fn a_step_is_flagged_once_when_a_noisy_record_falls_back_inside_the_band() {
+        let mut medians = NOISE.to_vec();
+        // 10,250 sits inside its band; 10,450 outside again, on the step.
+        medians.extend([10_500.0, 10_250.0, 10_450.0]);
+        assert_eq!(flagged(&line(&medians)), [12]);
     }
 
     #[test]
