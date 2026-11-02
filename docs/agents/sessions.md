@@ -7,6 +7,7 @@ Which skill starts which kind of session, and when. The owner types the slash co
 | Build a ticket (most sessions) | `/implement #<n>`, or "Work the frontier per docs/agents/workflow.md Session start" | local `/code-review`, draft PR, ready when CI is green | agent merges |
 | Decide a map ticket | `/wayfinder #<map>`; name a ticket or take the first frontier one | resolution comment, ticket closed, map updated, ADR PR if hard to reverse | next ticket, new session |
 | Research ticket | "Resolve #<n>" (the agent uses `research`) | cited note under `docs/research/`, resolution on the map | none |
+| Audit a lane (Consolidation milestone) | `/audit <lane>`, or "Audit lane <n> per docs/agents/audit.md" | parallel readers' Findings, verifier's verdicts, report PR at `docs/audit/<milestone>/<lane>.md` | triage with the owner places each Finding |
 | New feature or next milestone | `/grill-with-docs <idea>`, then `/to-spec`, then `/to-tickets`, in one window | CONTEXT.md and ADR PR, spec issue, ticket issues | `/clear`, then build |
 | Question that needs running code | `/handoff`, then `/prototype`, then `/handoff` back | prototype branch and the answer | resume grilling |
 | Broken or slow | "diagnose: <symptom>" (the agent runs `diagnosing-bugs`) | red loop, regression test at a real seam, fix PR | agent merges |

@@ -2,7 +2,9 @@
 
 What praxis does not do yet, or does on purpose, and how each shows beside
 its Cycles render, so that neither an audit nor a review reads it as a
-defect. Anything else a Cycles difference image shows is a finding.
+defect. Anything else a Cycles difference image shows is a finding. This
+is the image half of the engine's Deviations; the rest, where the code
+should not match the literature and why, is `docs/audit/deviations.md`.
 
 Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
 `PRAXIS_BLENDER` set, at 2x. The difference is praxis's capture dimmed to a

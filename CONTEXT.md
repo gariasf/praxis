@@ -223,3 +223,23 @@ _Avoid_: Target, threshold
 **Capability floor**:
 The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.
 _Avoid_: Minimum spec, requirements, baseline
+
+**Consolidation milestone**:
+A milestone on the ladder that implements no ADR: it audits everything on `main` that the milestones before it built, along fixed Audit lanes, re-verifies the ADRs they implemented, fixes or places every Finding, and closes by its exit criteria like any other milestone. `M3.5` is the first.
+_Avoid_: Cleanup milestone, hardening, tech-debt sprint
+
+**Audit lane**:
+One axis of a Consolidation milestone's audit, with its own brief: what it checks, the kind of evidence a Finding must carry, its tolerance, its default Severity class and how it splits by module. Read-only readers file its Findings, an adversarial verifier reopens each one, and its report lands at `docs/audit/<milestone>/<lane>.md`.
+_Avoid_: Audit area, workstream, track (a track runs beside the ladder)
+
+**Finding**:
+One defect at one location, filed by an Audit lane's reader in eight fields: id (`<lane>-<n>`), claim (one falsifiable sentence), severity (a Severity class plus the magnitude in its unit), where (`path:line` at the frozen commit, a doc heading, or scene, frame and pixel box), evidence (in the lane's kind), expected (what the source, ADR, spec story, Budget or convention says), verifier (confirmed, narrowed or killed, with one reason) and placement (fix, fog or wontfix). The reader fills the first six, the verifier the seventh, the triage the eighth; a killed Finding stays on record so the next audit does not re-find it.
+_Avoid_: Issue (a ticket), observation, note
+
+**Severity class**:
+Which of five ranked kinds a Finding is: image (a defect a viewer sees at native resolution), budget (a Budget or gate breached), correctness (code disagrees with its ADR, spec story or source, with no visible defect), drift (a doc, comment, rule or reference says what the code does not) or health (over-engineering, vestigial code, naming, module depth). The triage ranks by class, then by magnitude within the class; there is no score.
+_Avoid_: Priority, score, P0
+
+**Deviation**:
+A place where the code should not match the literature, recorded in `docs/audit/deviations.md` with its source key, why, and the trigger that revisits it; `scripts/cycles-reference/DIFFERENCES.md` holds the image half. Never a code comment or a `docs/references.toml` field. A reader who finds the code matching an entry files no Finding; one who finds an entry wrong files a Finding against the entry.
+_Avoid_: Known issue, exception, hack
