@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 
 use super::{
-    Publication, README, RELEASE_BUILD, adapter_key, fetch_main, git, push, remote_tip, source_hash,
+    BRANCH, JUDGED_TIMINGS, Publication, README, RELEASE_BUILD, adapter_key, fetch_main, git, push,
+    remote_tip, source_hash,
 };
 use crate::bench::baseline_directory;
 
@@ -48,6 +49,31 @@ pub(super) struct Pinned {
     /// Whether the commit changed the scene's Baseline for the adapter, so
     /// re-recorded it at the new level.
     pub covered_by_baseline: bool,
+    /// What the night that pinned it measured.
+    pub measured: Measured,
+}
+
+/// The ends of the night that pinned a commit, and their mean medians by
+/// judged timing.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(super) struct Measured {
+    pub good: String,
+    pub bad: String,
+    pub medians: BTreeMap<String, Ends>,
+}
+
+/// A night's mean medians of one timing at its good and bad ends.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(super) struct Ends {
+    pub good_median: f64,
+    pub bad_median: f64,
+}
+
+impl Ends {
+    /// How much slower the bad end ran, as a share of the good end's median.
+    fn shift(self) -> f64 {
+        (self.bad_median - self.good_median) / self.good_median
+    }
 }
 
 /// A Verdict file: one Suspect of one Series, and what the sweep found.
@@ -68,6 +94,10 @@ pub(super) struct Verdict {
     /// The first commit known to run at the Suspect's level.
     pub bad: String,
     pub pinned: Option<Pinned>,
+    /// The `needs-triage` issue a pinned Regression opened, or shares with
+    /// another Verdict of its scene pinned to its commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue: Option<u64>,
 }
 
 impl Verdict {
@@ -83,6 +113,7 @@ impl Verdict {
             predecessor: suspect.predecessor,
             state: None,
             pinned: None,
+            issue: None,
         }
     }
 }
@@ -208,7 +239,6 @@ pub(super) fn step(
         };
         return (None, Some(next.clone()));
     }
-    let mean = |values: &[f64]| values.iter().sum::<f64>() / values.len() as f64;
     let (good_median, bad_median) = (mean(&good_runs), mean(&bad_runs));
     let mut verdict = night_start.clone();
     if !holds(night_start.shift, good_median, bad_median) {
@@ -244,6 +274,18 @@ pub(super) fn step(
             verdict.pinned = Some(Pinned {
                 commit: pinned.clone(),
                 covered_by_baseline: false,
+                measured: Measured {
+                    good: night_start.good.clone(),
+                    bad: night_start.bad.clone(),
+                    medians: [(
+                        night_start.metric.clone(),
+                        Ends {
+                            good_median,
+                            bad_median,
+                        },
+                    )]
+                    .into(),
+                },
             });
             (Some(verdict), None)
         }
@@ -355,7 +397,11 @@ pub fn bisect(
         start
     };
     let first_parent = first_parent(repository, &start.good, &start.bad)?;
-    let (verdict, next) = step(&start, &night_runs(night, &start)?, &first_parent);
+    let (verdict, next) = step(
+        &start,
+        &night_runs(night, &start.scene, &start.metric)?,
+        &first_parent,
+    );
     if let Some(mut verdict) = verdict {
         if let Some(pinned) = &mut verdict.pinned {
             // Git names paths with `/` on every platform.
@@ -365,6 +411,25 @@ pub fn bisect(
                 .chain([format!("{}.json", verdict.scene)])
                 .collect();
             let commit = &pinned.commit.commit;
+            for (metric, _) in JUDGED_TIMINGS {
+                let runs = night_runs(night, &verdict.scene, metric)?;
+                let medians = |commit: &str| -> Vec<f64> {
+                    runs.iter()
+                        .filter(|run| run.commit == commit)
+                        .map(|run| run.median)
+                        .collect()
+                };
+                let (good, bad) = (medians(&start.good), medians(&start.bad));
+                if !good.is_empty() && !bad.is_empty() {
+                    pinned.measured.medians.insert(
+                        metric.to_owned(),
+                        Ends {
+                            good_median: mean(&good),
+                            bad_median: mean(&bad),
+                        },
+                    );
+                }
+            }
             pinned.covered_by_baseline = !git(
                 repository,
                 &[
@@ -382,6 +447,79 @@ pub fn bisect(
         record(repository, &key, &verdict)?;
     }
     Ok(next.map(|commit| (start.scene, commit)))
+}
+
+/// The label a Regression's issue opens with.
+const TRIAGE_LABEL: &str = "needs-triage";
+
+/// Opens one `needs-triage` issue, with `gh` in `repository`, per scene
+/// and commit the Verdicts of `adapter` on `backend` pinned that no
+/// re-recorded Baseline covers, and records each issue's number on its
+/// Verdicts on the remote's `bench-history`, so a later run opens none.
+/// Returns each Verdict's scene, pinned commit and issue, opened or shared.
+pub fn file_regressions(
+    repository: &Path,
+    adapter: &str,
+    backend: &str,
+) -> anyhow::Result<Vec<(String, String, u64)>> {
+    let Some(tip) = remote_tip(repository)? else {
+        return Ok(Vec::new());
+    };
+    fetch_main(repository)?;
+    let key = adapter_key(adapter, Some(backend));
+    let mut verdicts = stored(repository, &tip, &format!("{VERDICTS}/{key}"))?;
+    let mut filed = Vec::new();
+    for index in 0..verdicts.len() {
+        let verdict = &verdicts[index];
+        let issue = match filing(verdict, &verdicts) {
+            Filing::Done => continue,
+            Filing::Shared(issue) => issue,
+            Filing::Open => {
+                let pinned = verdict.pinned.as_ref().context("a Regression is pinned")?;
+                let subject = git(
+                    repository,
+                    &["show", "--no-patch", "--format=%s", &pinned.commit.commit],
+                    None,
+                )?;
+                let issue = issue(verdict, &key, &subject).context("a Regression is pinned")?;
+                open_issue(repository, &issue)?
+            }
+        };
+        let verdict = &mut verdicts[index];
+        verdict.issue = Some(issue);
+        record(repository, &key, verdict)?;
+        let commit = verdict
+            .pinned
+            .as_ref()
+            .map(|pinned| pinned.commit.commit.clone());
+        filed.push((verdict.scene.clone(), commit.unwrap_or_default(), issue));
+    }
+    Ok(filed)
+}
+
+/// Opens `issue` with `gh` in `repository`, labelled `TRIAGE_LABEL`, and
+/// returns its number.
+fn open_issue(repository: &Path, issue: &Issue) -> anyhow::Result<u64> {
+    let output = std::process::Command::new("gh")
+        .current_dir(repository)
+        .args(["issue", "create", "--label", TRIAGE_LABEL, "--title"])
+        .arg(&issue.title)
+        .arg("--body")
+        .arg(&issue.body)
+        .output()
+        .context("running gh")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "gh issue create: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    // gh prints the new issue's URL, which ends in its number.
+    let url = String::from_utf8(output.stdout)?;
+    url.trim()
+        .rsplit('/')
+        .next()
+        .and_then(|number| number.parse().ok())
+        .with_context(|| format!("an issue number at the end of {url:?}"))
 }
 
 /// The source hashes of the commits the Verdicts in `directory` pinned:
@@ -439,16 +577,16 @@ fn first_parent(repository: &Path, good: &str, bad: &str) -> anyhow::Result<Vec<
         .collect()
 }
 
-/// The runs in `night`'s directories, in name order, of `verdict`'s scene:
-/// the commit each benched and its median of the Verdict's metric.
-fn night_runs(night: &Path, verdict: &Verdict) -> anyhow::Result<Vec<Run>> {
+/// The runs in `night`'s directories, in name order, of `scene`: the
+/// commit each benched and its median of `metric`.
+fn night_runs(night: &Path, scene: &str, metric: &str) -> anyhow::Result<Vec<Run>> {
     let mut directories: Vec<PathBuf> = std::fs::read_dir(night)?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<std::io::Result<_>>()?;
     directories.sort();
     let mut runs = Vec::new();
     for directory in directories {
-        let path = directory.join(format!("{}.json", verdict.scene));
+        let path = directory.join(format!("{scene}.json"));
         if !path.exists() {
             continue;
         }
@@ -456,7 +594,7 @@ fn night_runs(night: &Path, verdict: &Verdict) -> anyhow::Result<Vec<Run>> {
         let result: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
             .with_context(|| format!("parsing {}", path.display()))?;
         let commit = result["provenance"]["commit"].as_str();
-        let median = result[&verdict.metric]["median"].as_f64();
+        let median = result[metric]["median"].as_f64();
         if let (Some(commit), Some(median)) = (commit, median) {
             runs.push(Run {
                 commit: commit.to_owned(),
@@ -488,6 +626,114 @@ fn record(repository: &Path, adapter_key: &str, verdict: &Verdict) -> anyhow::Re
         Ok(Publication::default())
     })?;
     Ok(())
+}
+
+/// The bench page, which draws a machine's Series of a scene.
+const BENCH_PAGE: &str = "https://gariasf.github.io/praxis/bench/";
+
+/// A `needs-triage` issue's title and body.
+#[derive(Debug, PartialEq)]
+pub(super) struct Issue {
+    pub title: String,
+    pub body: String,
+}
+
+/// The issue `verdict`'s Regression opens on the Series of `adapter_key`,
+/// its pinned commit's subject `subject`: the commit and its PR, the
+/// Series and its chart, and each judged timing the night measured slower
+/// at its bad end, the Verdict's always and any other by
+/// `SMALLEST_HELD_SHIFT`. None unless the Verdict is pinned.
+pub(super) fn issue(verdict: &Verdict, adapter_key: &str, subject: &str) -> Option<Issue> {
+    let scene = &verdict.scene;
+    let Pinned {
+        commit: Commit { commit, .. },
+        measured,
+        ..
+    } = verdict.pinned.as_ref()?;
+    let short = &commit[..commit.len().min(8)];
+    let pull_request = pull_request(subject);
+    let title = match pull_request {
+        Some(number) => format!("Regression in {scene} on {adapter_key} from {short} (#{number})"),
+        None => format!("Regression in {scene} on {adapter_key} from {short}"),
+    };
+    let pull_request = pull_request.map_or("none named in its subject".to_owned(), |number| {
+        format!("#{number}")
+    });
+    let mut body = format!(
+        "The nightly sweep pinned a Regression that no re-recorded Baseline covers.\n\n\
+         - Commit: {commit}, {subject}\n\
+         - PR: {pull_request}\n\
+         - Series: `{scene}` on `{adapter_key}`\n\
+         - Chart: {BENCH_PAGE}?machine={adapter_key}&scene={scene}\n\n\
+         | Metric | Good end median | Bad end median | Shift |\n\
+         |---|---|---|---|\n"
+    );
+    for (metric, ends) in measured
+        .medians
+        .iter()
+        .filter(|(metric, ends)| **metric == verdict.metric || ends.shift() >= SMALLEST_HELD_SHIFT)
+    {
+        body += &format!(
+            "| `{metric}` | {:.1} | {:.1} | {:+.1}% |\n",
+            ends.good_median,
+            ends.bad_median,
+            ends.shift() * 100.0
+        );
+    }
+    body += &format!(
+        "\nMeasured the night it was pinned, from {END_RUNS} interleaved runs of each \
+         end: {} (good) and {} (bad). The Suspect was {}, marked {:+.1}% on `{}` \
+         after {}. Its Verdict is `{VERDICTS}/{adapter_key}/{scene}/{}.json` on \
+         `{BRANCH}`.\n",
+        measured.good,
+        measured.bad,
+        verdict.suspect.commit,
+        verdict.shift * 100.0,
+        verdict.metric,
+        verdict.predecessor.commit,
+        verdict.suspect.source_hash,
+    );
+    Some(Issue { title, body })
+}
+
+/// What a Verdict's Regression needs of its issue.
+#[derive(Debug, PartialEq)]
+pub(super) enum Filing {
+    /// No Regression, or its issue is already recorded.
+    Done,
+    /// Another Verdict of its scene pinned to its commit opened this issue.
+    Shared(u64),
+    /// No issue names it yet.
+    Open,
+}
+
+/// What `verdict` needs, beside `verdicts`, the others of its adapter and
+/// backend: a pinned commit no re-recorded Baseline covers needs an issue,
+/// one per scene and commit.
+pub(super) fn filing(verdict: &Verdict, verdicts: &[Verdict]) -> Filing {
+    let Some(pinned) = &verdict.pinned else {
+        return Filing::Done;
+    };
+    if pinned.covered_by_baseline || verdict.issue.is_some() {
+        return Filing::Done;
+    }
+    verdicts
+        .iter()
+        .filter(|other| other.scene == verdict.scene)
+        .filter(|other| {
+            other.pinned.as_ref().map(|pinned| &pinned.commit.commit) == Some(&pinned.commit.commit)
+        })
+        .find_map(|other| other.issue)
+        .map_or(Filing::Open, Filing::Shared)
+}
+
+/// The PR a squash merge's `subject` names at its end, as `(#<number>)`.
+fn pull_request(subject: &str) -> Option<u64> {
+    subject.strip_suffix(')')?.rsplit_once("(#")?.1.parse().ok()
+}
+
+fn mean(values: &[f64]) -> f64 {
+    values.iter().sum::<f64>() / values.len() as f64
 }
 
 /// Whether a re-bench holds a Suspect marked `shift` slower: the bad end's
@@ -618,7 +864,7 @@ mod tests {
             scene: result.scene.clone(),
             ..night()
         };
-        let read = night_runs(&night_directory, &verdict).unwrap();
+        let read = night_runs(&night_directory, &verdict.scene, &verdict.metric).unwrap();
         std::fs::remove_dir_all(&night_directory).ok();
         assert_eq!(read, runs(&[("a", 100.0), ("a", 200.0)]));
     }
@@ -678,7 +924,20 @@ mod tests {
             (verdict.good.as_str(), verdict.bad.as_str(), next),
             ("b", "c", None)
         );
-        assert_eq!(verdict.pinned.unwrap().commit, commits("c", "3")[0]);
+        let pinned = verdict.pinned.unwrap();
+        assert_eq!(pinned.commit, commits("c", "3")[0]);
+        // Measured at the night's ends, not where the bisect moved them.
+        assert_eq!(
+            (pinned.measured.good, pinned.measured.bad),
+            ("a".to_owned(), "d".to_owned())
+        );
+        assert_eq!(
+            pinned.measured.medians["cpu_frame_microseconds"],
+            Ends {
+                good_median: 10_050.0,
+                bad_median: 11_050.0
+            }
+        );
     }
 
     /// `commit` with its source as `row` names it.
@@ -750,5 +1009,111 @@ mod tests {
             committed_unix_seconds: 0,
         });
         assert_eq!(listed(&[verdict]), []);
+    }
+
+    /// `night`'s Verdict pinned to `c`, uncovered, measured on its CPU frame
+    /// 10% and its GPU frame 1% slower.
+    fn regression() -> Verdict {
+        let mut verdict = night();
+        verdict.state = Some(State::Held);
+        verdict.pinned = Some(Pinned {
+            commit: Commit {
+                commit: "c0ffee1234".to_owned(),
+                source_hash: "3".to_owned(),
+            },
+            covered_by_baseline: false,
+            measured: Measured {
+                good: "b".to_owned(),
+                bad: "d".to_owned(),
+                medians: [
+                    (
+                        "cpu_frame_microseconds".to_owned(),
+                        Ends {
+                            good_median: 10_000.0,
+                            bad_median: 11_000.0,
+                        },
+                    ),
+                    (
+                        "gpu_frame_microseconds".to_owned(),
+                        Ends {
+                            good_median: 8_000.0,
+                            bad_median: 8_080.0,
+                        },
+                    ),
+                ]
+                .into(),
+            },
+        });
+        verdict
+    }
+
+    #[test]
+    fn a_regressions_issue_names_its_commit_pr_series_delta_and_chart() {
+        let issue = issue(
+            &regression(),
+            "apple-m4-pro-metal",
+            "Spin the orrery twice (#412)",
+        )
+        .unwrap();
+        assert_eq!(
+            issue.title,
+            "Regression in town on apple-m4-pro-metal from c0ffee12 (#412)"
+        );
+        assert_eq!(
+            issue.body,
+            "The nightly sweep pinned a Regression that no re-recorded Baseline covers.
+
+- Commit: c0ffee1234, Spin the orrery twice (#412)
+- PR: #412
+- Series: `town` on `apple-m4-pro-metal`
+- Chart: https://gariasf.github.io/praxis/bench/?machine=apple-m4-pro-metal&scene=town
+
+| Metric | Good end median | Bad end median | Shift |
+|---|---|---|---|
+| `cpu_frame_microseconds` | 10000.0 | 11000.0 | +10.0% |
+
+Measured the night it was pinned, from 2 interleaved runs of each end: b \
+(good) and d (bad). The Suspect was d, marked +10.0% on \
+`cpu_frame_microseconds` after a. Its Verdict is \
+`verdicts/apple-m4-pro-metal/town/4.json` on `bench-history`.
+"
+        );
+    }
+
+    #[test]
+    fn a_commit_with_no_pr_in_its_subject_is_named_alone() {
+        let issue = issue(&regression(), "apple-m4-pro-metal", "Spin the orrery").unwrap();
+        assert_eq!(
+            issue.title,
+            "Regression in town on apple-m4-pro-metal from c0ffee12"
+        );
+        assert!(issue.body.contains("- PR: none named in its subject\n"));
+    }
+
+    #[test]
+    fn one_issue_opens_per_scene_and_pinned_commit_unless_a_baseline_covers_it() {
+        let open = regression();
+        assert_eq!(filing(&open, &[]), Filing::Open);
+        let filed = Verdict {
+            issue: Some(7),
+            ..regression()
+        };
+        assert_eq!(filing(&filed, &[]), Filing::Done);
+        // Another Suspect of the scene pinned to the same commit shares its issue.
+        assert_eq!(
+            filing(&open, std::slice::from_ref(&filed)),
+            Filing::Shared(7)
+        );
+        // Another scene's issue names only that scene.
+        let elsewhere = Verdict {
+            scene: "crowd".to_owned(),
+            ..filed
+        };
+        assert_eq!(filing(&open, &[elsewhere]), Filing::Open);
+        let mut covered = regression();
+        covered.pinned.as_mut().unwrap().covered_by_baseline = true;
+        assert_eq!(filing(&covered, &[]), Filing::Done);
+        // Held but not pinned yet, or cleared: no Regression.
+        assert_eq!(filing(&night(), &[]), Filing::Done);
     }
 }
