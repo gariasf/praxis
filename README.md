@@ -32,6 +32,13 @@ binary's size, which load cannot change, and its build time, which a shared
 runner's load and cache hits move whatever a quiet test says. So its records
 join its Series from CI's configuration whether or not the runner was quiet.
 
+A Series row's `suspects` names each frame median, CPU or GPU, that makes its
+record a suspect, with its shift as a share of the median of up to 8 records
+before it on its line: it lies outside that median ± the larger of 4 median
+absolute deviations and 3%, unless it only continues a suspect among those 8:
+on the same side, within that suspect's tolerance of its median. A new Harness
+version or scene content, or an imported Baseline, starts a line. lavapipe's records are never suspects.
+
 A record in `records/` holds its key against a tagged one. Otherwise a record
 whose path exists replaces it only when its GPU frame p95 over its median is
 lower, and a lavapipe or release build record never does: a source publishes
