@@ -36,25 +36,32 @@ cd "$(dirname "$0")/.." || exit 1
 gallery=target/tmp/gallery
 logs="$gallery/logs"
 size=2560x1440
+baseline_failures=0
 # The Goldens test's GOLDEN_FRAME and TOWN_FRAMES (tests/goldens.rs).
 golden_frame=59
 town_frames=(59 300 500 700 900 1200 1500 1800)
 
 [[ -z "$against" || "$against/" != "$(pwd)/$gallery/"* ]] ||
   { echo "copy the earlier gallery out of $gallery first" >&2; exit 1; }
+[[ -z "${PRAXIS_RECORD_CYCLES_BASELINES:-}" || -n "${PRAXIS_BLENDER:-}" ]] ||
+  { echo "PRAXIS_RECORD_CYCLES_BASELINES needs PRAXIS_BLENDER: Cycles Baselines come from its renders" >&2; exit 1; }
 cargo build --release --quiet
 rm -rf "$gallery"
 mkdir -p "$logs"
 
-# blender <log> <script> <argument>...: a Cycles reference script, its
-# output appended to <log>, whose tail a failure prints.
-blender() {
+# run_blender <log> <script> <argument>...: a Cycles reference script, its
+# output appended to <log>; blender is the same, exiting on a failure after
+# printing the log's tail.
+run_blender() {
   local log="$1" script="$2"
   shift 2
-  if ! "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 \
-    --python "scripts/cycles-reference/$script" -- "$@" >>"$log" 2>&1; then
-    printf 'FAIL  %s  full log: %s\n' "$script" "$log"
-    tail -n 20 "$log"
+  "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 \
+    --python "scripts/cycles-reference/$script" -- "$@" >>"$log" 2>&1
+}
+blender() {
+  if ! run_blender "$@"; then
+    printf 'FAIL  %s  full log: %s\n' "$2" "$1"
+    tail -n 20 "$1"
     exit 1
   fi
 }
@@ -74,25 +81,26 @@ fi
 # reference <image name> <scene> <frame>: the Cycles render of a capture,
 # and its difference from it.
 reference() {
-  local name="$1-frame-$3"
+  local scene="$2" frame="$3" name="$1-frame-$3"
   local export="$gallery/cycles/$name" log="$logs/$name-cycles.log"
-  if ! target/release/praxis export-scene "$2" "$export" --frame "$3" >"$log" 2>&1; then
+  if ! target/release/praxis export-scene "$scene" "$export" --frame "$frame" >"$log" 2>&1; then
     printf 'FAIL  %s  full log: %s\n' "$name-cycles.png" "$log"
     tail -n 20 "$log"
     exit 1
   fi
   blender "$log" render.py "$export" "$export/cycles.exr" "$size"
   # The scene's Cycles Baseline, judged or recorded at the Goldens' frame.
-  local baseline_path="bench/cycles/$2.json" baseline=()
-  if [[ "$3" == "$golden_frame" && -n "${PRAXIS_RECORD_CYCLES_BASELINES:-}" ]]; then
-    baseline=(--baseline "$2" "$3" "$baseline_path" --record)
-  elif [[ "$3" == "$golden_frame" && -f "$baseline_path" ]]; then
-    baseline=(--baseline "$2" "$3" "$baseline_path")
+  local baseline_path="bench/cycles/$scene.json" baseline=()
+  if [[ "$frame" == "$golden_frame" ]]; then
+    if [[ -n "${PRAXIS_RECORD_CYCLES_BASELINES:-}" ]]; then
+      baseline=(--baseline "$scene" "$frame" "$baseline_path" --record)
+    elif [[ -f "$baseline_path" ]]; then
+      baseline=(--baseline "$scene" "$frame" "$baseline_path")
+    fi
   fi
-  if ! "$PRAXIS_BLENDER" -b --factory-startup --python-exit-code 1 \
-    --python scripts/cycles-reference/compare.py -- compare "$gallery/$name.png" \
-    "$export/cycles.exr" "$gallery/$name-cycles.png" "$gallery/$name-cycles-difference.png" \
-    ${baseline[@]+"${baseline[@]}"} >>"$log" 2>&1; then
+  if ! run_blender "$log" compare.py compare "$gallery/$name.png" "$export/cycles.exr" \
+    "$gallery/$name-cycles.png" "$gallery/$name-cycles-difference.png" \
+    ${baseline[@]+"${baseline[@]}"}; then
     if grep -q '^FAIL  .*Baseline' "$log"; then
       printf 'FAIL  %-34s %s\n' "$name-cycles.png" "$(grep '^FAIL  .*Baseline' "$log" | sed 's/^FAIL *//')"
       baseline_failures=$((baseline_failures + 1))
@@ -104,7 +112,6 @@ reference() {
   fi
   printf 'ok    %-34s %s\n' "$name-cycles.png" "$(grep '^ok ' "$log" | tail -n 1 | sed 's/^ok *//')"
 }
-baseline_failures=0
 
 # capture <image name> <scene> <frame> [<capture flag>...]
 capture() {
