@@ -301,6 +301,14 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
         <a class="read" href="waiting-on-the-gpu.html" aria-label="Read Waiting on the GPU Explained">Read</a>
       </div>
     </li>
+    <li class="guide">
+      <div>
+        <h3><a href="bench-history.html">Bench History Explained</a></h3>
+        <p class="meta">Observability track · ticket #435 · PR #487</p>
+        <p class="summary">Follows how Praxis keeps every bench run as a Bench record on the <code>bench-history</code> branch and finds where a frame time stepped. A record is keyed by a hash of the five paths that can change a measurement, so a docs-only commit inherits its record; a Harness version names what the metrics mean, and its ten versions so far break the charts' lines; only quiet, clean runs of <code>main</code> form a Series. Each publish marks a Suspect where a CPU or GPU frame median leaves the median of the 8 records before it, ± 4 median absolute deviations or 3%, once per step. It covers why the median and its absolute deviation resist one bad run, what the detector cannot see, and what #485 and #486 add. With a live demo.</p>
+        <a class="read" href="bench-history.html" aria-label="Read Bench History Explained">Read</a>
+      </div>
+    </li>
   </ol>
 </section>
 
