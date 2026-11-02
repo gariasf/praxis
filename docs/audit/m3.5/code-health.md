@@ -1257,6 +1257,712 @@ Instance layout of the render module, the material and cooked-vertex
 types, the ADRs named above, the registry, the performance notes and this
 report's render section.
 
+## cook, assets and scenes
+
+Scope: `src/cook/` (`mod.rs`, `fetch.rs`, `export.rs`, `mesh.rs`,
+`texture.rs`), `src/assets/` (`mod.rs`, `mesh.rs`, `material.rs`,
+`loader.rs`, `cooked.rs`, `pools.rs`), `src/scenes/` (`mod.rs`, `town.rs`),
+`src/components.rs`, `src/transform/mod.rs`, `src/time/mod.rs`,
+`src/threading.rs` and `assets/manifest.json`; 9,397 lines of Rust. The
+lane's coverage floor outside `src/render` is every fifth file in path
+order, a wrong sample opening its module; this section read every file in
+full with its test module instead, so the sweep table is the record of
+coverage. Five readers at high effort shared the module by file, each
+with the lane brief verbatim: the cooker's pipeline (settings, report,
+fetch and the scene exporter); the mesh and texture encoders with the
+asset types, the material pool and the loader; the Cooked cache, the mesh
+pool and the manifest; the Reference scenes with `town`; and the ECS
+components, the transform systems, the fixed schedule and the compute
+pool. Each swept its files along the six axes and recorded the sweep.
+The cognitive complexity probe,
+`cargo clippy --all-targets -- -W clippy::cognitive_complexity`, ran once
+at the frozen commit and named two functions in this module, both tests
+in the scene exporter, filed on that axis below; its third hit falls in
+tooling. Every `where` is `path:line` at the frozen commit, given in full.
+`deviations.md` holds no row at this commit; `DIFFERENCES.md` was read for
+what is not a Finding. `tests/conventions.rs` was read for the rules
+already mechanical, and none of its catches is re-filed. The ADRs whose
+clauses fall here, 0011, 0017, 0018 and 0022, were read for the
+comment-accuracy axis. Each Finding's evidence block says whether the fix
+it implies can move a pixel or change a Blob's content hash.
+
+### Axis sweep
+
+| File | Over-engineering | Vestigial | Cognitive complexity | Naming | Module depth | Comments |
+|---|---|---|---|---|---|---|
+| `src/cook/mod.rs` | clean: `CookSettings` has one field, varied by the cook seam test (`tests/cook.rs:398`); `read_manifest`'s `may_be_absent` takes both values (`mod.rs:236`, `fetch.rs:27,64`, `export.rs:387`); `Sources` has every field read; the data URI branch at `mod.rs:400` is defensive handling of a glTF form, not a dead branch | L5-C04 (`SCENE_FORMAT_VERSION` re-export at `mod.rs:17`); L5-C05 (`CookReport::unresolved_materials`); `ManifestEntry`'s five fields all read (`fetch.rs:35-114`, `mod.rs:244`) | none in this file (probe ran clean) | clean: `pbr` (`mod.rs:357,466`) is the glossary's own word (PBR factors); `info` and `uri` are the `gltf` crate's own names; `guid`, `url`, `json`, `id` are domain words | clean: 18 public items, each with a caller outside the module but `SCENE_FORMAT_VERSION` (L5-C04); `texture_sources` has test callers only, a seam (Notes 4) | clean: `is_fresh`'s "its Blob present" (`mod.rs:331`) matches `CookedCache::entry` (`cooked.rs:706` tests `blob_path(blob).exists()`); the thread comment at `mod.rs:169-171` matches `chunks(threads)` and `div_ceil`; "read twice" at `mod.rs:456` matches the two `texture_source` calls |
+| `src/cook/fetch.rs` | clean: `Fetch`'s two variants are both constructed (`fetch.rs:103,127`) and both matched (`src/bin/praxis.rs:396-397`); `fetch_entries`'s `download` parameter is the test seam three tests use; `fetch_for_launch_with` has one shipping caller and three test callers | clean: `directory_of`, `sha256_hex`, `download` each have shipping callers | none in this file (probe ran clean) | clean: `partial`, `actual`, `fetches`, `scene_files`; the test helper's `test: &str` parameter names its role | clean: 4 public items, `fetch` and `absent_fetched` each with one shipping caller, `fetch_for_launch` `pub(super)` with one | clean: the curl comment at `fetch.rs:132-135` matches the arguments (`--connect-timeout 30`, `--speed-limit 1000`, `--speed-time 60`); the "written beside its place and renamed" doc at `fetch.rs:91-93` matches `fetch.rs:120-126`; `docs/research/test-assets.md` exists |
+| `src/cook/export.rs` | L5-C03 (a third QTangent decoder); `MeshSource` and `TextureFile` variants all constructed (`export.rs:381,452` and `368,424,426`), `Embedded` reached by NormalTangentTest's glb (`assets/manifest.json:69`, exported by `every_reference_scene_but_crowd_exports_whole`); `AssetRecorder` is the trait's second implementor | clean: `name_text`, `file_name`, `channel_name`, `Exported::write` each called; `check_references`, `scratch`, `read_scene`, `floats`, `assert_near` each used by two or more tests | L5-C01 (`export.rs:773`, 33 over 25), L5-C02 (`export.rs:1001`, 39 over 25) | clean: `bin` (`export.rs:657`) is glTF's own BIN chunk and the `Glb` struct's field it fills (Notes 6); `glb` is the format's name; `uvs`, `suns`, `ev100` allowed; `[x, y, z, sign]` at `export.rs:1133` are coordinates | clean: 2 public items; `export_scene` has one shipping caller (`src/bin/praxis.rs:795`) | clean: "As prepare" at `export.rs:96,137` matches `src/render/prepare.rs:535,370`; `tangent_frame`'s doc (`export.rs:616-618`) matches `common.wgsl:252-258,275-278`; `SCENE_FORMAT_VERSION` 1 matches `scripts/cycles-reference/render.py:27,377`; the glTF constants at `export.rs:633-636` are the specification's values; the three `khr-lights-punctual-*` and `gltf-2.0-tangent-bitangent` keys exist in `docs/references.toml:133,139,707` and say what the comments claim |
+| `src/cook/mesh.rs` | clean (`SourcePrimitive` is used in 4 files; `TangentGeometry` is the adapter `bevy_mikktspace::Geometry` requires; `Level`-style helpers all have 2 or more callers) | clean (every constant and function has a caller; `tests::sample_rotations` is used by `src/render/shader_function_tests.rs:1480`) | none (probe ran clean) | clean (`u`, `v` at lines 205, 261 and 576 are UV components weighed as coordinates; `T` at line 538 is a generic; `remap` is meshopt's API name) | L5-C07, L5-C08 | clean (meshopt 0.6.2 vendors meshoptimizer 0.25, `bevy_mikktspace` 1.0.0 and overdraw 1.05 checked against `Cargo.lock` and the vendored header; the scan-builder comment weighed, see Notes 8) |
+| `src/cook/texture.rs` | L5-C06 | clean (`SourceImage`'s two variants are both constructed, at `src/cook/mod.rs:277` and `:417`; `TextureSource: Clone` is exercised by `src/cook/mod.rs:294`) | none (probe ran clean) | clean (`x`, `y` are texel coordinates; `data` at line 507 is a word; `bc7_settings` names the API's type) | clean (`decode` is `pub` for `tests/cook.rs:318`; the `pub` fields `id`, `channel`, `name` are read there and in `src/cook/mod.rs`) | clean (`intel_tex_2 0.5.0` matches `Cargo.lock`; "PNG or JPEG" at line 46 holds by feature unification, see Notes 6) |
+| `src/assets/mesh.rs` | clean | clean (all four types and every field have readers: `needs_material_handle` at `src/render/prepare.rs:367`, `vertices` at `prepare.rs:598-610`, `bounds` at `src/render/acceleration_structures.rs:333`, the two GPU structs in `src/render/shader_tests.rs:276-284` and their WGSL twins) | none (probe ran clean) | clean | L5-C12 | clean (`Mesh`'s "as prepare needs it" is narrow, `bounds` is read by the acceleration structures too; not load-bearing, Notes 10) |
+| `src/assets/material.rs` | clean (`insert`, `MaterialData` and `DEFAULT_LAYER` are `pub` for `src/render/renderer.rs`'s tests, Notes 3) | clean (`materials: Vec<MaterialData>` is read by shipping code for its length only, Notes 4) | none (probe ran clean) | clean (no abbreviation in an identifier; `SSBO`, `MR` and `AO` appear in comments and one message only) | L5-C10 | L5-C13 (13,107, `material_ref.0.index()`, the 126 µs and `MATERIALS`' binding names checked against their sources) |
+| `src/assets/loader.rs` | clean (`AssetLoader` has two implementors, `PoolLoader` at line 45 and `AssetRecorder` at `src/cook/export.rs:294`, and 20 `dyn AssetLoader` sites) | clean (all six trait methods are called from `src/scenes/mod.rs`, `src/scenes/town.rs` or `src/state.rs`) | none (probe ran clean) | clean | L5-C09, L5-C11 | clean (each method's doc matches its `MeshUse` variant's at `src/assets/pools.rs:19-27`) |
+| `src/assets/mod.rs` | clean | clean (the `Mesh` and `MeshUse` re-exports are used only inside `assets`, Notes 11) | none (probe ran clean) | clean | clean (`assets` is a private module of `src/lib.rs:18`, so `pub` and `pub(crate)` reach the same code) | clean (no comments) |
+| `src/assets/cooked.rs` | clean (every variant of `AssetKind`, `AssetSource` and `AssetName` is constructed outside the file; `CookedCache::new`'s `impl Into<PathBuf>` takes `&str`, `&PathBuf` and `PathBuf` across its 22 callers; `CookedMeshlet::split`'s `impl IntoIterator` takes arrays and iterators across its 4 callers; the three `to_blob`/`from_blob` pairs share `payload` where their framing agrees and differ where KTX2 and meshopt differ) | clean (all 12 `pub(crate)` constants have at least one reader outside the file; `pub use super::MaterialChannel` is imported through `crate::cooked` by `src/cook/mod.rs:24` and `src/cook/texture.rs:9`) | none in this section (probe ran clean) | L5-C16 (the Channel count as a literal `5`); otherwise clean (`id`, `uv`, `hex`, `fmt`, `dfd`, `kvd`, `sgd` weighed below) | clean (`pub` items are crate-external through `pub use assets::cooked` at `src/lib.rs:38`, and `tests/cook.rs` calls `read`, `material`, `texture`, `mesh`, `write` and `new`) | clean (the layout, order and size claims at `cooked.rs:38-47`, `80-82`, `147-149`, `391`, `503-509`, `829`, `874-877` each checked against the code or the ADR) |
+| `src/assets/pools.rs` | L5-C15 (`allocate_all<const N>` with one instantiation); `load` beside `load_for` weighed and not filed | L5-C14 (a test re-implements `gpu_context`); `MESH_CAPACITY` is `pub` with no reader outside the file, weighed below | none in this section (probe ran clean) | clean (`N` and `T` are type parameters; `x`, `y` are coordinates; `blas`, `tlas`, `u32_bytes`, `texels` weighed below) | clean but for `MESH_CAPACITY` (17 methods, each with a caller outside the file; the six test helpers each used by two or more test modules) | L5-C17 ("a BLAS per Mesh"); the figures at `pools.rs:596`, `733-734`, `982-983` recomputed and found right; `wgpu-core 30.0.1` at `pools.rs:388` matches `Cargo.lock` |
+| `assets/manifest.json` | clean (`dev_only` false on every entry is policy the manifest test enforces, weighed below) | clean (SciFiHelmet's six files load in `src/state.rs`, NormalTangentTest in `src/scenes/mod.rs:580`, the blue-noise mask is compiled into `src/render/tonemapping_pass.rs` and pinned to the file by its test) | none in this section (probe ran clean) | clean | clean | clean |
+| `src/scenes/mod.rs` | L5-C18, L5-C19 (two `match` expressions whose eleven arms are one or-pattern returning one value; the other eight per-scene matches each have two or more distinct arms) | clean (every private constant is read, which the compiler's dead-code lint also guarantees; the three `pub` items the crate exports, `ALL`, `name` and `from_name`, each have callers in `src/bin/praxis.rs`; `Geometry` derives `Clone` that nothing calls, see note 1) | none in this section (probe ran clean) | clean (the single letters are `u`/`v` as the components of a UV, `x`/`y`/`z` as coordinates, `i` nowhere; `tau` is the constant's own name; see note 2) | L5-C20, L5-C21, L5-C22 (the spawn surface is eleven free functions plus four helpers exported for one caller; `ScenePrimitive` is converted to `SourcePrimitive` the same way at both consumers; four spawns repeat one body) | L5-C23 (one camera angle a moved target left stale); every other figure re-derived from the code beside it and found right, see note 7 |
+| `src/scenes/town.rs` | clean (`TownRenderable::new` and `cube` are both used at many sites; `Choice` has every variant constructed; `Block`'s and `Flock`'s fields are all read; `TownMesh`/`BoxMaterial` share a shape, see note 4) | clean (all 53 private constants are read; the eighteen `MATERIALS` rows are each named by a Mesh or a `BoxMaterial`) | none in this section (probe ran clean) | clean (`min`/`max` in `cuboid` are glam's own spelling; `x`/`z` are wheel coordinates; see note 2) | clean (four `pub(crate)` items, `spawn_town`, `camera_at`, `materials`, `meshes`, each with one caller in `src/scenes/mod.rs` or `src/state.rs`) | clean (every count, distance, angle and intensity in a comment re-derived: lamps 1,024, birds 10,000, "about 250,000" against the pinned 254,256, 4.5 m, 18 m, flock height clear of roofs, 4 m/s, see note 7) |
+| `src/components.rs` | clean (every field of `Transform`, `Bend`, `PointLight` and `DirectionalLight` is read in prepare or the scenes; `Transform::IDENTITY` has 2 callers, `from_translation` 7 files, `to_affine` 2) | clean (no constant or field unread; `MaterialRef` is constructed in state, the scenes and the exporter) | none in this section (probe ran clean) | clean (`rest`, `azimuth`, `curvature`, `casts_shadow`, `intensity`, `range`: full words; `x`, `y`, `z` only in comments) | clean (components hold `MeshHandle`, `MaterialHandle` and scalars, no GPU resource; the three methods are pure functions of their fields, ADR 0006) | clean (the 64-byte claim is asserted at `components.rs:17`; the spawn rule "previous curvature equal to its curvature" holds at `scenes/mod.rs:1006`) |
+| `src/transform/mod.rs` | clean (the `Moved` alias has one use, 2 lines, weighed under Notes 3; `drawn` has 7 shipping callers) | clean, with one note (`Teleported` is inserted by no shipping system, Notes 1) | none in this section (probe ran clean) | clean (`moved`, `unparented`, `dirty`, `stack`, `composed`, `jumped`; `θ` sits in a comment only) | clean (3 public items on `WorldTransform`; `translation()` beside the public field weighed under Notes 4; `record_previous_curvatures` acting on `Bend` weighed under Notes 5) | clean (the shrink figure at `transform/mod.rs:19-20` recomputes: 1 − cos(0.045) = 0.00101, 0.09 rad × 64 Hz = 5.76 rad/s) |
+| `src/time/mod.rs` | clean (`clamp_frame_delta` wraps one `min` for one caller, weighed under Notes 6) | clean (`MAX_FRAME_DELTA` and `MAX_TICKS_PER_FRAME` are read only in their own file, by shipping code, Notes 7) | none in this section (probe ran clean) | clean (`due`, `ticks`, `remainder`, `dropped`, `accumulator`; `α` in a comment only; test locals `seed`, `frame`, `steady`, `jittery`) | clean (`FixedTime` exposes 2 fields and hides `advance` and the accumulator; `fixed_schedule` and `run_ticks` have one shipping caller each, which is the orchestrator) | clean (`delta_time`'s "Injected through `State::update`" holds through `Simulation::simulate` at `state.rs:124`, called from `State::update` at `state.rs:256`) |
+| `src/threading.rs` | L5-C24 | L5-C24 | none in this section (probe ran clean) | clean (`cores`, `workers`) | clean (2 functions; `single_threaded_schedule` has 2 callers) | clean (the doc at `threading.rs:24-26` matches `bevy_ecs` 0.18's default executor under the `multi_threaded` feature, ADR 0016) |
+
+### Interface widths
+
+| Type | Public items | Callers outside the file | Wider than needed | Where |
+|---|---|---|---|---|
+| `CookSettings` | 1 field (`texture_zstd_level`), `Default` | shipping: `src/state.rs:167`, `src/bin/praxis.rs:378`, both `CookSettings::default()`; `src/cook/texture.rs:119,147,563` read the field; `tests/cook.rs:30,394,398,634`, one varying the field | no: one field, the ADR's hook for settings in the Cook key; weighed in Notes 1 | `src/cook/mod.rs:30` |
+| `CookReport` | 4 fields | `cooked` and `unchanged`: `src/bin/praxis.rs:383-384`, `tests/cook.rs` 8 sites; `absent_sources`: `src/state.rs:170`; `unresolved_materials`: `tests/cook.rs:689` only | yes, one field with no shipping reader (L5-C05) | `src/cook/mod.rs:45` |
+| `cook`, `cook_scene`, `texture_sources`, `ASSETS_DIRECTORY` | 4 | `cook`: `src/bin/praxis.rs:374`, `tests/cook.rs:30,395,401`; `cook_scene`: `src/state.rs:163`, `tests/cook.rs:635`; `texture_sources`: `tests/cook.rs:311,405`, no shipping caller; `ASSETS_DIRECTORY`: 5 sites in `state.rs`, `bin/praxis.rs`, `preflight/mod.rs` | no: `texture_sources` is a test seam (Notes 4) | `src/cook/mod.rs:105-224` |
+| `Fetch`, `fetch`, `absent_fetched` | enum of 2 variants, 2 functions | `fetch` and both variants: `src/bin/praxis.rs:394-397`; `absent_fetched`: `src/preflight/mod.rs:238` | no | `src/cook/fetch.rs:15-43` |
+| `export_scene`, `SCENE_FORMAT_VERSION` | 2 | `export_scene`: `src/bin/praxis.rs:795`; `SCENE_FORMAT_VERSION`: none outside `export.rs` (its reader is `render.py`'s own constant) | yes, the re-export (L5-C04) | `src/cook/export.rs:31,40` |
+| `LoadedImage`, `TextureSource` re-exports | 2 names (`mod.rs:19`) | `LoadedImage`: `src/scenes/mod.rs` 7 sites; `TextureSource`: named outside `src/cook/` nowhere, but it is the return type of `texture_sources`, so it must be `pub` | no | `src/cook/mod.rs:19` |
+| `pub(crate) mod mesh` | 1 | `src/render/shader_function_tests.rs:1480` (`qtangent`, `tests::sample_rotations`), `src/cook/export.rs:15,514,1095` | no | `src/cook/mod.rs:7` |
+| Mesh encoder (`src/cook/mesh.rs`) | 8: `SourcePrimitive`, `encoder_settings`, `cook_key`, `cook`, `weld`, `qtangent`, `gltf_meshes`, `tests::sample_rotations` | `src/cook/mod.rs` (`cook`, `cook_key` twice, `gltf_meshes`, `SourcePrimitive`), `src/cook/export.rs` (`cook` twice, `SourcePrimitive` three times), `src/render/shader_function_tests.rs` (`qtangent`, `sample_rotations`); `weld` and `encoder_settings` have none | yes: two items visible past the file with no caller past it | L5-C07, L5-C08 |
+| Texture encoder (`src/cook/texture.rs`) | 11: `LoadedImage` with 3 fields; `TextureSource` with `id`, `channel`, `name`, `encoded`, `generated`, `with_normal_texture`, `cook_key`, `cook`, `decode` | `src/cook/mod.rs` (every method but `decode`), `src/scenes/mod.rs` (6 `LoadedImage` sites), `src/cook/export.rs` (1), `tests/cook.rs` (`decode`, the three fields) | one parameter: `cook_key`'s `format_version`, which the one shipping caller fixes | L5-C06 |
+| `Mesh`, `MeshHandle`, `MeshData`, `MeshletData` (`src/assets/mesh.rs`) | 18: 4 types, 14 fields | `src/assets/pools.rs`, `src/render/prepare.rs`, `src/render/acceleration_structures.rs`, `src/render/bend_pass.rs`, `src/render/shader_tests.rs`, `src/render/bind_groups.rs`, `src/components.rs`; 32 `MeshHandle` mentions outside `assets` | no, but `MeshHandle` is read as `.0.0` at 5 sites while its sibling has a getter | L5-C12 |
+| `MaterialPool` and its types (`src/assets/material.rs`) | 18: `MaterialPool` 9 (`new`, `gpu_memory_bytes`, `insert`, `load`, `load_texture`, `refresh_bind_group`, `DEFAULT_LAYER`, `bind_group_layout`, `bind_group`); `MaterialHandle` 2 (`pub u32`, `index`); `MaterialChannel::ALL` 1; `MaterialData` 5 fields; `TEXTURES_PER_CHANNEL` 1 | shipping: `src/render/renderer.rs:261,278,582,636,769` (`new`, `bind_group_layout`, `refresh_bind_group`, `bind_group`, `gpu_memory_bytes`), `src/assets/loader.rs:47,52` (`load`, `load_texture`), `src/render/bind_groups.rs:644` (`TEXTURES_PER_CHANNEL`), `src/cook` (`ALL` twice); `index` 14 sites. Tests only: `insert` 6, `DEFAULT_LAYER` 12, `MaterialData` 6, all in `renderer.rs` | not for shipping callers plus tests; `insert` and `DEFAULT_LAYER` reach outside the file for tests alone (Notes 3) | none filed |
+| `AssetLoader` and `PoolLoader` (`src/assets/loader.rs`) | 11: 6 trait methods, 5 `PoolLoader` fields | `src/state.rs:7,65,77,174,201`, `src/scenes/mod.rs` (13 `dyn AssetLoader` signatures, 15 method calls), `src/scenes/town.rs:756,760,764`, `src/cook/export.rs:294` (second implementor) | no | none filed |
+| `assets` module root (`src/assets/mod.rs`) | 12 re-exports over 5 modules | every module but `assets` imports through `crate::assets::`, except 13 test-helper and twin imports that name `assets::pools::` or `assets::material::` directly | no (`Mesh` and `MeshUse` re-exports have no user outside `assets`, Notes 11) | none filed |
+| The 12 `pub(crate)` constants of the Cooked formats | 12 | each 1 to 7 sites: `MATERIAL_MAGIC` 1, `MATERIAL_FORMAT_VERSION` 1, `TEXTURE_VERSION_KEY` 1, `TEXTURE_FORMAT_VERSION` 2 shipping and 3 test, `MAX_TEXTURE_SIDE` 2 shipping and 1 test, `MESH_MAGIC` 1, `MESH_FORMAT_VERSION` 1, `MESHLET_MAX_VERTICES` 7 across 5 files, `MESHLET_MAX_TRIANGLES` 3, `QTANGENT_SMALLEST_W` 4 across 2 files and a WGSL part, `COOKED_CACHE_DIRECTORY` 4, `CookedMesh::ZSTD_LEVEL` 1 | no | `src/assets/cooked.rs:18-47`, `501`, `653` |
+| `AssetId`, `AssetKind`, `AssetSource`, `AssetName` | 4 types, 1 constructor, 7 variants | `AssetId::new` 20 sites across 8 files; every variant constructed outside the file (`File` 11, `Scene` 6, `Name` 14, `Index` 4, `Mesh` 8, `Material` 6, `Texture` 6) | no | `src/assets/cooked.rs:52-118` |
+| `CookedMaterial` | 6 fields, `to_blob`, `from_blob`, `PAYLOAD_BYTES` (private) | `to_blob` 4 shipping sites in `src/cook/mod.rs` and 3 test sites; `from_blob` only through `CookedCache::material`; fields read by `src/assets/material.rs`, `src/cook/mod.rs`, `src/cook/export.rs` | no | `src/assets/cooked.rs:135-207` |
+| `CookedTexture` | 4 fields, `to_blob(zstd_level)`, `from_blob`; `level_bytes` beside it | `to_blob` 1 shipping site (`src/cook/texture.rs:215`) and 1 test site; `from_blob` only through `CookedCache::texture`; `level_bytes` 1 outside site (a `debug_assert_eq!` in `src/cook/texture.rs:206`) | no | `src/assets/cooked.rs:212-389` |
+| `CookedVertex`, `CookedPrimitive`, `CookedMeshlet`, `CookedMesh` | 13 fields, `CookedMeshlet::split`, `CookedMesh::to_blob`, `CookedMesh::from_blob` | `split` 4 sites across 3 files; `to_blob` 1 shipping site (`src/cook/mesh.rs`) and 3 test sites; `from_blob` only through `CookedCache::mesh`; the types are built by the cooker, the Reference scenes, the bend pass and 6 test modules | no | `src/assets/cooked.rs:394-620` |
+| `CookedCache` and `IndexEntry` | `new`, `content_hash`, `read`, `material`, `texture`, `mesh` (`pub`); `entry`, `write` (`pub(crate)`); `IndexEntry` with 2 fields; `hex` | `new` 22 sites; `content_hash` 1 (`src/state.rs:195`); `read` 2 (`tests/cook.rs:286`, `715`); `material` 9; `texture` 9; `mesh` 7; `entry` 3 (`src/cook/mod.rs:192`, `334`, `347`); `write` 3 shipping and 4 test; `hex` 4 | no | `src/assets/cooked.rs:657-760` |
+| `MeshPool` | `new`, `load`, `load_for`, `rebuild_refitted_blases`, `refitted_blases`, `compact_blases`, `blas`, `vertex_arena`, `index_arena`, `mesh_table`, `meshlet_arena`, `meshlet_vertex_arena`, `meshlet_triangle_arena`, `gpu_memory_bytes`, `estimated_blas_bytes`, `arena_bytes_in_use`, `get` (17) | `new` 4; `load` 1 shipping (`src/assets/loader.rs:60`) and 9 test; `load_for` 2 (`loader.rs:76`, `87`); `rebuild_refitted_blases` 1; `refitted_blases` 2; `compact_blases` 1 shipping and 1 test; `blas` 2; `vertex_arena` 5; `index_arena` 2; `mesh_table` 1; `meshlet_arena` 1; `meshlet_vertex_arena` 1; `meshlet_triangle_arena` 1; `gpu_memory_bytes` 1; `estimated_blas_bytes` 1; `arena_bytes_in_use` 1; `get` 6 | no | `src/assets/pools.rs:82-499` |
+| `MeshUse`, `MeshBlas`, `REFITTED_BLAS_FLAGS`, `ARENA_CAPACITY_BYTES`, `MESH_CAPACITY` | 4 variants, 4 fields, 3 constants | `Drawn`, `Traced`, `Refitted` 1 each in `src/assets/loader.rs`, `DrawnAndTraced` only through `load`; `MeshBlas`'s 4 fields read in `src/render/blas_refit.rs:324-335`; `REFITTED_BLAS_FLAGS` 2 in `blas_refit.rs`; `ARENA_CAPACITY_BYTES` 6 across 5 files; `MESH_CAPACITY` 0 | `MESH_CAPACITY` is `pub` with no reader outside the file (`grep -rn "MESH_CAPACITY" src tests` finds `pools.rs:12`, `123`, `188`, `190` only); `assets` is a private module, so the spelling reaches no more code than no modifier would | `src/assets/pools.rs:12` |
+| `Arena` (private) | `new`, `allocate`, `free`, `write`, `longest_free_range`, 4 fields | none; `free` is reached only by `allocate_all`'s rollback at `pools.rs:516` | no | `src/assets/pools.rs:525-584` |
+| The test helpers `pools::tests` | `mesh`, `triangle_about_x`, `trace_down`, `read_storage`, `gpu_context`, `logged` (6, `pub(crate)`) | `mesh` 2 modules (`src/render/prepare.rs`, `src/render/acceleration_structures.rs`); `triangle_about_x` 1 module, 1 site, plus 3 in-file tests; `trace_down` 1 module, 3 sites, plus 1 in-file; `read_storage` 3 modules, 9 sites; `gpu_context` 3 modules (`tonemapping_pass`, `depth_pyramid_pass`, `shadow_mask_pass`); `logged` 4 modules, 11 sites | no | `src/assets/pools.rs:587-1021` |
+| `ReferenceScene` (enum, `pub`, re-exported from `src/lib.rs`) | 15: `ALL`, `name`, `from_name` (`pub`); `material_id`, `mesh_id`, `texture_id`, `source_files`, `materials`, `textures`, `meshes`, `camera_at`, `frame_delta`, `point_lights`, `sun`, `environment` (`pub(crate)`); `ev100` private | 11 files: `src/bin/praxis.rs`, `src/state.rs`, `src/capture/mod.rs`, `src/bench/mod.rs`, `src/cook/mod.rs`, `src/cook/export.rs`, `src/cook/mesh.rs`, `tests/cook.rs`, `tests/frame_stats.rs`, `tests/goldens.rs`, `tests/reference_scenes.rs`; every public item has at least one caller outside `src/scenes/` | No for what it has; too narrow for what it lacks: the one per-scene behaviour not behind it is the spawn (L5-C20) | `src/scenes/mod.rs:70-468` |
+| The spawn surface: `spawn_pbr_sweep`, `spawn_uv_grid`, `spawn_normal_tangent`, `spawn_far_coplanar`, `spawn_orrery`, `spawn_minification`, `spawn_texture_wall`, `spawn_shadows`, `spawn_crowd`, `spawn_traced_crowd`, `spawn_town` | 11 `pub(crate)` functions of one signature | 1 site: `src/state.rs:78-91`, a `match scene` to a function pointer | Yes: eleven items for one `match` that re-does what the enum's other methods do inside the module (L5-C20) | `src/scenes/mod.rs:537-974`, `src/scenes/town.rs:756` |
+| The helmet spawn's helpers: `SCI_FI_HELMET`, `SWEEP_METALLIC`, `SWEEP_ROUGHNESS`, `sweep_material_name` | 4 `pub(crate)` items | 1 site: `src/state.rs:202,214-217` (`State::spawn_helmet_scene`) | Yes: exported so that one scene's spawn can live outside the module (L5-C20) | `src/scenes/mod.rs:506,526-527,533` |
+| The fixed-schedule systems: `Spin` (1 `pub(crate)` field), `spin`, `Sway` (private field), `sway`, `Bone` (private field) | 5 `pub(crate)` items | 1 site: `src/state.rs:335-336` adds `spin` and `sway` to the fixed schedule; `Spin` is constructed only inside `src/scenes/` | No | `src/scenes/mod.rs:657-670,1041-1077` |
+| The geometry surface: `Geometry` (5 `pub(crate)` fields), `ScenePrimitive`, `ground_plane` | 7 `pub(crate)` items | `src/cook/mesh.rs:15,53,122,201,215,370,393,475,483,503` (`Geometry`, `ground_plane` in its tests); `ScenePrimitive` reaches `src/cook/mod.rs:304-313` and `src/cook/export.rs:371-377` only through `meshes()` | `ScenePrimitive` yes: both consumers map it to `SourcePrimitive` the same way (L5-C21) | `src/scenes/mod.rs:1125-1138,1196` |
+| `town.rs`'s surface: `spawn_town`, `camera_at`, `materials`, `meshes` | 4 `pub(crate)` items | `spawn_town`: `src/state.rs:91` through the re-export at `src/scenes/mod.rs:22`; `camera_at`, `materials`, `meshes`: one call each in `src/scenes/mod.rs:229,313,344` | No | `src/scenes/town.rs:756,830,870` |
+| `Transform` | 6: 3 fields, `IDENTITY`, `from_translation`, `to_affine` (`pub(crate)`) | `from_translation` in 7 files (`grep -rnF from_translation src tests`, 24 lines); `IDENTITY` in `scenes/mod.rs` and `prepare.rs`; `to_affine` at `transform/mod.rs:134` and `scenes/mod.rs:1307` (a test) | no | `src/components.rs:11-41` |
+| `MeshRef`, `MaterialRef` | 1 field each | `MeshRef` in 7 files, 40 lines; `MaterialRef` in 5 files, 19 lines | no | `src/components.rs:44-47` |
+| `Bend` | 5: 4 fields, `drawn_curvature` | 5 files (prepare, scenes, state, bend_pass, loader); `drawn_curvature` at `prepare.rs:606` and `state.rs:503` (a test) | no | `src/components.rs:60-77` |
+| `PointLight`, `DirectionalLight` | 4 and 2 fields | 4 and 3 files; `casts_shadow` read at 13 lines, `range` at 6 | no | `src/components.rs:81-101` |
+| `WorldTransform` | 3: the public `DAffine3`, `translation()`, `drawn()` | `drawn` at 7 shipping sites (`prepare.rs:383,531,555`, `export.rs:95,114,148`) and `state.rs:455` (a test); `translation()` at `prepare.rs:385,556`, `export.rs:115` and 3 test sites; `.0.matrix3` read directly at `prepare.rs:384` | marginal: a getter beside a public field (Notes 4); removing it is 3 lines against 6 rewritten call sites | `src/transform/mod.rs:9-32` |
+| `PreviousWorldTransform` | 1: the public `Option<DAffine3>` | constructed `::default()` at 5 shipping sites (`scenes/mod.rs:637,1020,1032`, `town.rs:797,805`) and 8 test sites; read by prepare and the exporter | no | `src/transform/mod.rs:41` |
+| `Teleported` | 0 (a marker) | inserted at `state.rs:528` only, inside a test; read by `reset_teleported` | no shipping writer (Notes 1) | `src/transform/mod.rs:48` |
+| transform systems | 4 functions | all 4 in the fixed schedule at `state.rs:330-339`; `propagate_world_transforms` also at `state.rs:107`, `renderer.rs:1835` and `prepare.rs:694` (tests) | no | `src/transform/mod.rs:52-141` |
+| `Time` | 1 field | written at `state.rs:124`, read at `camera/mod.rs:102` | no | `src/time/mod.rs:9-14` |
+| time constants | 5: `MAX_FRAME_DELTA`, `TICK`, `TICK_SECONDS`, `MAX_TICKS_PER_FRAME`, `SIXTY_HERTZ` | `TICK_SECONDS` at `scenes/mod.rs:665,1068` and `state.rs:377,393` (tests); `TICK` at `state.rs:442-443` (tests); `SIXTY_HERTZ` at `bench/mod.rs:454` and `scenes/mod.rs:385`; `MAX_FRAME_DELTA` and `MAX_TICKS_PER_FRAME` none (`grep -rn MAX_FRAME_DELTA src tests`: 2 lines, both in the file) | no: two `pub` items with no outside reader sit in a private module (`lib.rs:35`), where `pub` and `pub(crate)` reach the same code | `src/time/mod.rs:18-30` |
+| `clamp_frame_delta` | 1 function | `lib.rs:223` | no (Notes 6) | `src/time/mod.rs:33` |
+| `FixedTime` | 2 fields (`tick`, `blend_weight`); `advance` and `accumulator` private | `blend_weight` read at `prepare.rs:308`, `export.rs:77`; `tick` read at `scenes/mod.rs:665,1068`; both written only by `run_ticks` in shipping code, and set directly by tests at `prepare.rs:1071,1316` | no | `src/time/mod.rs:40-64` |
+| `fixed_schedule`, `run_ticks` | 2 functions | `state.rs:318` and `state.rs:123`, plus state and export tests | no | `src/time/mod.rs:69-87` |
+| `init_compute_pool` | 1 function, re-exported at `lib.rs:47` | `state.rs:144`; `tests/compute_pool.rs:6` | yes: a pool nothing dispatches to, and a crate-level re-export whose only caller outside the crate is the test that counts its threads (L5-C24) | `src/threading.rs:12-22` |
+| `single_threaded_schedule` | 1 function (`pub(crate)`) | `state.rs:317`, `time/mod.rs:70` | no | `src/threading.rs:27-31` |
+
+### Findings
+
+| id | claim | severity | where | evidence | expected |
+|---|---|---|---|---|---|
+| L5-C01 | The test `helmet_exports_the_textured_helmet_its_sweep_and_lights` is over clippy's cognitive complexity threshold. | health; 33 over a threshold of 25 | `src/cook/export.rs:773` | block below | A test the probe passes: three helpers, one shared with L5-C02 |
+| L5-C02 | The test `shadows_exports_its_constants_and_its_cooked_mesh` is over clippy's cognitive complexity threshold. | health; 39 over a threshold of 25 | `src/cook/export.rs:1001` | block below | A test the probe passes: the glb read-back and the per-vertex frame check as helpers, the sun and environment asserts shared with L5-C01 |
+| L5-C03 | The QTangent is decoded by three Rust functions of the same shape, one in the exporter, when the encoder module that defines the encoding could define its decode once. | health; 3 copies, 24 lines | `src/cook/export.rs:619` | block below | `CLAUDE.md`, prefer deep modules behind small interfaces: `cook/mesh.rs` owns `qtangent` (`mesh.rs:303`) and should own its inverse, which the exporter and both tests call |
+| L5-C04 | `SCENE_FORMAT_VERSION` is re-exported from the crate's public `cook` module and read by nothing outside `export.rs`. | health; 1 line, 0 callers | `src/cook/mod.rs:17` | `grep -rn SCENE_FORMAT_VERSION . --exclude-dir=target --exclude-dir=.git`: `src/cook/export.rs:31,160`, `src/cook/mod.rs:17`, `scripts/cycles-reference/render.py:27,377`; `render.py` carries its own constant, so no Rust reader exists | A private `const` in `export.rs`; `pub use export::export_scene` alone at `mod.rs:17` |
+| L5-C05 | `CookReport::unresolved_materials` is filled by every cook and read by no shipping code; the warning at `mod.rs:350` already reports each entry. | health; 1 field, 0 shipping readers, 1 test reader | `src/cook/mod.rs:50` | block below | A report field has a caller that acts on it (`absent_sources` has `state.rs:170`); the smaller form is the warning alone, or the test asserting on the cache it already reads |
+| L5-C06 | `TextureSource::cook_key` takes a `format_version` parameter that its one shipping caller always passes as `TEXTURE_FORMAT_VERSION`; only the file's own test varies it, while the Mesh key reads its constant inside. | health; 1 parameter, 1 shipping call site | `src/cook/texture.rs:119` | block below | A parameter every caller passes the same value is flexibility nothing exercises; read `TEXTURE_FORMAT_VERSION` inside `cook_key` as `src/cook/mesh.rs:44` reads `MESH_FORMAT_VERSION`, and let the test pin the key's dependence on the version another way. |
+| L5-C07 | `weld` is `pub(crate)` with no caller outside `src/cook/mesh.rs`. | health; 1 line, 0 outside call sites | `src/cook/mesh.rs:201` | block below | A `pub` only its own module uses is a wider interface than its callers need; make it private. |
+| L5-C08 | `encoder_settings` is `pub(super)` with no caller outside `src/cook/mesh.rs`. | health; 1 line, 0 outside call sites | `src/cook/mesh.rs:29` | block below | As L5-C07: private. |
+| L5-C09 | `PoolLoader::mesh` repeats `mesh_for`'s body with `MeshPool::load` in place of `load_for`, which the pool documents as the same load for a drawn and traced Mesh. | health; 6 lines | `src/assets/loader.rs:56-62` | block below | `bent_mesh` and `refitted_mesh` are one line each through `mesh_for`; `mesh` should be `self.mesh_for(id, MeshUse::DrawnAndTraced)`. |
+| L5-C10 | The material pool's test hand-rolls the nine-line headless-context-or-skip match that `pools::tests::gpu_context` already provides to the crate. | health; 9 lines | `src/assets/material.rs:401-409` | block below | Tests in `src/render/` call `crate::assets::pools::tests::gpu_context()` and return on `None`; this one should too. |
+| L5-C11 | The loader's test hand-rolls the same nine-line match as L5-C10. | health; 9 lines | `src/assets/loader.rs:128-136` | block below | As L5-C10. |
+| L5-C12 | The two Handle newtypes are read two ways: `MaterialHandle` has both a `pub u32` field and an `index()` getter whose doc comment names `.0.0` as the worse spelling, while `MeshHandle` beside it has only the field and is read `.0.0` at five sites. | health; 5 `.0.0` sites against 14 `index()` sites | `src/assets/mesh.rs:15` | block below | One convention for sibling Handles: either both carry `index()` or neither does. |
+| L5-C13 | The comment on `MaterialData::emissive` says its `w` is the emissive strength, but `load` writes a constant 1.0 there and no shader reads it. | drift; load-bearing | `src/assets/material.rs:72` | block below | A comment says what the code does; the field is padding, as `metallic_roughness`'s `w` is labelled, or strength is implemented and read. |
+| L5-C14 | The test `a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing` re-implements the module's own `gpu_context` helper inline, nine lines above its call sites in three other modules | health; 9 lines, 1 site | `src/assets/pools.rs:966-974` | block below | The test opens with `let Some(context) = gpu_context() else { return; };` as the module's three other GPU tests do (`pools.rs:623`, `693`, `727`) |
+| L5-C15 | `allocate_all` is generic over a const `N` that has one instantiation, `N = 5`, at its one call site | health; 1 call site, 21 lines | `src/assets/pools.rs:503-521` | block below | A function over `[&mut Arena; 5]` and `[usize; 5]`, or a method on `MeshPool` over its `arenas()` array; `CLAUDE.md`, How agents work here: prefer deep modules behind small interfaces |
+| L5-C16 | The number of Channels is the literal `5` in 11 shipping sites and 3 test sites across the crate, with no named constant; `MaterialChannel::ALL` is itself typed `[Self; 5]` | health; 14 sites across 7 files | `src/assets/cooked.rs:143` | block below | One name for the count (`MaterialChannel::ALL.len()` where a `const` context allows it, or a `MaterialChannel::COUNT`), so that adding a Channel changes one line; `CLAUDE.md`, Code conventions: identifiers are full words, and a number that recurs is an identifier without one |
+| L5-C17 | `MeshPool`'s doc comment says the pool holds "a BLAS per Mesh", but `blases` is `Vec<Option<wgpu::Blas>>` and a Mesh loaded as `MeshUse::Drawn` has none | drift; not load-bearing | `src/assets/pools.rs:57-59` | block below | "a BLAS per Mesh that rays trace", as the field's own comment at `pools.rs:63-64` already says |
+| L5-C18 | `ReferenceScene::ev100` matches all eleven variants in one or-pattern to one expression, so the `match` and the `self` it takes decide nothing | health; 12 lines | `src/scenes/mod.rs:354-368` | block below | `CLAUDE.md`, How agents work here: no flexibility nothing exercises. A three-line function, or the expression inlined at its one caller (`camera_at`, `mod.rs:347`) |
+| L5-C19 | `ReferenceScene::environment` matches all eleven variants in one or-pattern to one `Environment` value, so the `match` decides nothing | health; 12 lines | `src/scenes/mod.rs:450-467` | block below | As L5-C18: a function that returns the value, six lines |
+| L5-C20 | The spawn is the one per-scene behaviour not behind `ReferenceScene`: eleven `pub(crate)` spawn functions and four helper items are exported for one `match` in `src/state.rs` that re-dispatches on the enum, and the helmet's spawn lives in that file | health; 15 exported items, 1 call site, 2 wrapper functions | `src/scenes/mod.rs:537-974` and `src/scenes/town.rs:756`; the caller at `src/state.rs:78-91` and `src/state.rs:201-243` falls in tooling | block below | `CLAUDE.md`, How agents work here: deep modules behind small interfaces. One `ReferenceScene::spawn(self, crowd_form, world, loader)` holding the `match`, the spawn functions private, the four helpers private, `spawn_crowd` and `spawn_traced_crowd` deleted |
+| L5-C21 | `ScenePrimitive` names a Primitive's Material by `&'static str` where `SourcePrimitive` names it by `AssetId`, and both consumers of `meshes()` convert one to the other with the same six-line `map` | health; 2 call sites, 14 lines | `src/scenes/mod.rs:1125`; the two conversions at `src/cook/mod.rs:304-313` and `src/cook/export.rs:371-377` fall in the cooker's pipeline | block below | One shape: `meshes()` resolves `scene.material_id(name)` itself, since it has `self`, and returns `Vec<(&'static str, Vec<SourcePrimitive>)>`; `ScenePrimitive` goes |
+| L5-C22 | Four spawn functions have one body: load one Mesh by its Asset ID and spawn it at `Transform::IDENTITY` | health; 4 functions, 30 lines | `src/scenes/mod.rs:566-570,576-585,705-712,873-877` | block below | One function taking the `AssetId`; with L5-C20 each becomes a one-line `match` arm |
+| L5-C23 | The crowd camera's doc comment says it looks down "about 28°" at the crowd's middle; the camera and target it sits beside look down 26.9°, and 28° is the angle to a target at ground level, before the target rose to 0.6 m | drift; not load-bearing | `src/scenes/mod.rs:921-924` | block below | The comment's figure matches the constants beside it: "about 27°", or the figure dropped |
+| L5-C24 | `init_compute_pool` spawns a process-global pool of `cores − 1` worker threads at every `State::new`, and no code in the crate dispatches work to it. | health; 31 lines, 1 test file, 1 dependency, 0 users | `src/threading.rs:12-22` | block below | ADR 0016's own rule, "builds nothing before measurement asks for it": create the pool where the first system or scoped task uses it, with the same `cores − 1` count the ADR fixes; until then the orchestrator calls nothing and `tests/compute_pool.rs` goes with it |
+
+
+#### L5-C01
+
+The probe's line, from `cargo clippy --all-targets -- -W clippy::cognitive_complexity` at the frozen commit:
+
+```
+warning: the function has a cognitive complexity of (33/25)
+   --> src/cook/export.rs:773:8
+773 |     fn helmet_exports_the_textured_helmet_its_sweep_and_lights() {
+```
+
+The test body (`export.rs:773-891`) runs four groups of assertions in one function: the renderable count and the textured helmet (`787-799`), the ten sweep copies in a nested `for` over rows and columns with four asserts each (`800-827`), the helmet Mesh and its four Texture files (`829-851`), and the point lights, sun and environment (`853-888`). The nested loops and the `for` over the light table carry most of the branching.
+
+The split: `assert_sweep_copies(&scene, renderables)` for `800-827`; `assert_helmet_textures(&scene)` for `829-851`; `assert_sun_and_environment(&scene)` for `870-888`, whose nineteen lines are repeated verbatim in `shadows_exports_its_constants_and_its_cooked_mesh` at `export.rs:1035-1054` (the same `dvec3(0.5, -1.0, -0.3)` direction, `[1.0; 3]` colour, `100_000.0` illuminance, `[10_000.0; 3]` ambient and `[10_000.0, 20_000.0, 30_000.0]` background, with the same tolerances), so one helper serves both tests.
+
+The fix moves no pixel and changes no Blob: the test writes `scene.json` to a scratch directory under `std::env::temp_dir()` (`export.rs:734-739`) and reads it back; it touches no Golden, no Cooked cache and no cooked format.
+
+#### L5-C02
+
+The probe's line:
+
+```
+warning: the function has a cognitive complexity of (39/25)
+    --> src/cook/export.rs:1001:8
+1001 |     fn shadows_exports_its_constants_and_its_cooked_mesh() {
+```
+
+The test body (`export.rs:1001-1161`) runs five groups: the camera (`1006-1033`), the environment and lights (`1035-1061`, the sun and environment part shared with L5-C01), the Renderable (`1063-1069`), the two Materials in a `for` (`1071-1087`), and the glb read-back (`1089-1159`): a `for` over Primitives, inside it five reader collections and two equality asserts, then a `for` over every index with an `if index == 0` for the expected normal, four asserts and a second `if index == 0` for the ground's tangent. The two nested loops with their conditionals are the bulk of the 39.
+
+The split: `assert_sun_and_environment(&scene)` (L5-C01's helper) for `1035-1054`; `assert_primitive_matches_cooked(&reader, &cooked, cooked_primitive)` for `1106-1128`, which pins indices, positions and UVs against the cooked Mesh; `assert_tangent_frame(position, normal, tangent, sign, is_ground)` for `1131-1157`, which checks one vertex's decoded frame against the analytic sphere and plane within `4.0 * STEP`. The outer `for` then holds one call per Primitive and one per vertex.
+
+The fix moves no pixel and changes no Blob: the test exports to a scratch directory and reads the glb back through the `gltf` crate; `cook::mesh::cook` is called, not changed, and nothing writes to the Cooked cache.
+
+#### L5-C03
+
+The three decoders:
+
+`src/cook/export.rs:619-626`, shipping, f32, the frame the exporter writes into each glb:
+
+```rust
+fn tangent_frame(qtangent: [i16; 4]) -> ([f32; 3], [f32; 4]) {
+    let components = qtangent.map(|component| (f32::from(component) / i16::MAX as f32).max(-1.0));
+    let rotation = glam::Quat::from_array(components).normalize();
+    let bitangent_sign = if rotation.w < 0.0 { -1.0 } else { 1.0 };
+    let normal = rotation * glam::Vec3::Z;
+    let tangent = rotation * glam::Vec3::X;
+```
+
+`src/cook/mesh.rs:423-428`, under `#[cfg(test)]`, f32, returning `rotation.w.signum()` for the sign:
+
+```rust
+    fn decode(qtangent: [i16; 4]) -> (Vec3, Vec3, f32) {
+        let rotation =
+            Quat::from_array(qtangent.map(|component| (component as f32 * STEP).max(-1.0)))
+                .normalize();
+        (rotation * Vec3::Z, rotation * Vec3::X, rotation.w.signum())
+```
+
+`src/render/bend_pass.rs:210-216`, under `#[cfg(test)]` (the module at `bend_pass.rs:122`), f64:
+
+```rust
+    fn tangent_frame(qtangent: [i16; 4]) -> (glam::DVec3, glam::DVec3, f64) {
+        let components =
+            qtangent.map(|component| (f64::from(component) / f64::from(i16::MAX)).max(-1.0));
+        let rotation = glam::DQuat::from_array(components).normalize();
+        let sign = if rotation.w < 0.0 { -1.0 } else { 1.0 };
+        (rotation * glam::DVec3::Z, rotation * glam::DVec3::X, sign)
+```
+
+`grep -rn "fn tangent_frame\|fn decode(qtangent" src`: 3 definitions. `grep -rn "fn qtangent" src`: 1, at `src/cook/mesh.rs:303`, `pub(crate)`, which `src/render/shader_function_tests.rs:1480` already imports from the encoder module. Each copy documents itself as "decoded as the shader will" (`mesh.rs:421-422`), "as the main pass decodes it" (`bend_pass.rs:208-209`) or "as the shaders decode it" (`export.rs:617`): three statements of the same contract with the WGSL `decode_qtangent` at `common.wgsl:252-258`, each of which drifts alone if that contract changes.
+
+The smaller form: one `pub(crate) fn decode_qtangent(qtangent: [i16; 4]) -> ([f32; 3], [f32; 4])` in `src/cook/mesh.rs` beside `qtangent`, with `export.rs`'s exact arithmetic, called from the exporter and from the `mesh.rs` test; the `bend_pass.rs` test converts the result to f64 (its tolerances are Snorm16 steps, `bend_pass.rs:224`, so the f32 decode followed by widening is within them, which a run of that test confirms). The two test copies fall in the encoders and in render; the Finding's site is the shipping copy.
+
+Pixels: no Golden reads the exporter. If the shared function keeps `export.rs:620-625`'s f32 operations in order, every exported glb is byte-identical and the Cycles references in `bench/cycles/` are unchanged; no Blob is written by the exporter, so no content hash moves. A fix that instead adopted the f64 form would move the glb's tangents by at most one f32 rounding and would need the Cycles Baselines re-judged.
+
+#### L5-C05
+
+The field and its filling:
+
+```rust
+    /// Each Mesh and the Material one of its Primitives names that is not
+    /// in the Cooked cache.
+    pub unresolved_materials: Vec<(AssetId, AssetId)>,
+```
+
+(`src/cook/mod.rs:48-50`), filled at `mod.rs:197-207` by collecting every `(Mesh, Material)` reference across `sources.meshes` and at `mod.rs:338-353` by `unresolved_materials`, which filters those whose Material the cache lacks and warns for each (`mod.rs:350`, "a Primitive names a Material the Cooked cache lacks").
+
+Readers: `grep -rn "unresolved_materials" src tests`: `src/cook/mod.rs:50,207,340,504` (the definition, the fill, the function and its unit test) and `tests/cook.rs:689` (`assert_eq!(report.unresolved_materials, [])` in `every_reference_scene_mesh_cooks_and_reads_back`). The binary prints `cooked` and `unchanged` only (`src/bin/praxis.rs:380-385`); the dev launch reads `absent_sources` only (`src/state.rs:163-170`). Of the report's four fields, this is the one with no shipping reader; the Material-samples-a-missing-Texture case beside it (`mod.rs:190-196`) is a warning with no report field, so the two "the cache lacks it" cases are already shaped differently.
+
+The smaller form: the function warns and returns nothing, the collection at `197-207` folds into it, and the field goes (about 12 lines); the seam test at `tests/cook.rs:689` then asserts what it already can, that each Mesh's Materials read back from the cache (`tests/cook.rs:691-700` reads them by ID). Or the field stays, as the one way a test observes the warning without capturing `tracing`; the verifier weighs which. No pixel or Blob moves either way: the report shapes no cooked bytes.
+
+#### L5-C06
+
+`src/cook/texture.rs:119`:
+
+```rust
+pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(TEXTURE_VERSION_KEY);
+    hasher.update(format_version.to_le_bytes());
+```
+
+Callers: `grep -rn "cook_key(" src tests` finds one shipping call, `src/cook/mod.rs:162`: `let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);`, and the two in the file's own test, `src/cook/texture.rs:565-566`, which pass `TEXTURE_FORMAT_VERSION` and `TEXTURE_FORMAT_VERSION + 1` to assert the keys differ. `grep -rn "TEXTURE_FORMAT_VERSION" src tests` shows no other value is ever passed. The Mesh encoder does the same job without the parameter: `src/cook/mesh.rs:43-44` hashes `MESH_MAGIC` and `MESH_FORMAT_VERSION.to_le_bytes()` directly, and its own key test (`src/cook/mesh.rs:391`) does not vary the version. The parameter exists for one test. Dropping it hashes the same bytes, so every Texture's Cook key stays the same, nothing re-cooks and no pixel moves. The test would then pin the version's part of the key by comparing against a key computed without the version's bytes, or go, since `the_cook_key_covers_every_part_a_mesh_cooks_from` already sets the precedent of not pinning the version.
+
+#### L5-C07
+
+`src/cook/mesh.rs:201`: `pub(crate) fn weld(geometry: &Geometry) -> Geometry {`.
+
+`grep -rnw "weld" src tests | grep -v "^src/cook/mesh.rs"` finds one hit, a prose mention in a comment at `tests/frame_stats.rs:153` ("which the cook's weld drops"). Inside the file it has three callers: `cook_primitive` at line 123 and the tests at lines 494 and 701. `qtangent` beside it is `pub(crate)` for a real outside caller (`src/render/shader_function_tests.rs:1503`), and `cook` for `src/cook/export.rs:514,1095`; `weld` has none. A visibility change moves no pixel and changes no Blob.
+
+#### L5-C08
+
+`src/cook/mesh.rs:29`: `pub(super) fn encoder_settings() -> String {`.
+
+`grep -rn "encoder_settings(" src tests | grep -v "^src/cook/mesh.rs"` finds nothing. Its one caller is `cook_key` at `src/cook/mesh.rs:49`. The string it returns is part of every Mesh Cook key, so the function must stay; only its visibility is wider than its callers. No pixel, no Blob changes.
+
+#### L5-C09
+
+`src/assets/loader.rs:56-62`:
+
+```rust
+fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+    let mesh = self.cache.mesh(id)?;
+    let materials = self.materials(id, &mesh)?;
+    self.mesh_pool
+        .load(self.staging, &mesh, &materials)
+        .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+}
+```
+
+and `src/assets/loader.rs:83-89`:
+
+```rust
+fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
+    let mesh = self.cache.mesh(id)?;
+    let materials = self.materials(id, &mesh)?;
+    self.mesh_pool
+        .load_for(self.staging, &mesh, &materials, mesh_use)
+        .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+}
+```
+
+The pool documents `load` at `src/assets/pools.rs:130` as "Loads `mesh` to be drawn and traced, as `load_for` loads it", and `MeshUse::DrawnAndTraced` is the variant at `src/assets/pools.rs:18`. `bent_mesh` (line 64) and `refitted_mesh` (line 68) already go through `mesh_for`; `mesh` is the one sibling that does not. The same pool call runs either way, so Goldens, counters and the Mesh table are unchanged; the fix moves no pixel and changes no Blob. Whether `MeshPool::load` itself should exist beside `load_for` is the Cooked cache and the Pools section's question; this Finding is the loader's copy of the shape.
+
+#### L5-C10
+
+`src/assets/material.rs:401-409`:
+
+```rust
+let context = match pollster::block_on(GpuContext::headless()) {
+    Ok(context) => context,
+    Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+        // Not `eprintln!`, which libtest captures from passing tests.
+        writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+        return;
+    }
+    Err(error) => panic!("headless GPU context failed: {error:#}"),
+};
+```
+
+`src/assets/pools.rs:950-962` defines `pub(crate) fn gpu_context() -> Option<GpuContext>` with this exact match, and `grep -rn "pools::tests::gpu_context" src` shows `src/render/tonemapping_pass.rs:180`, `src/render/shadow_mask_pass.rs:407` and `src/render/depth_pyramid_pass.rs:132` using it. The material pool's test is in the same `assets` module and already imports `crate::gpu::GpuContext` (line 395). A test refactor moves no pixel. `grep -rln "skipped: no GPU adapter" src tests` lists 18 files with the hand-rolled form; the ones outside the encoders and the asset types fall in render, tooling or the Cooked cache and the Pools section (`src/assets/pools.rs:966` itself).
+
+#### L5-C11
+
+`src/assets/loader.rs:128-136` is the same nine lines as L5-C10, in a test that already imports `crate::assets::pools::tests::logged` (line 122), so the helper's module is in reach. Test only; no pixel.
+
+#### L5-C12
+
+`src/assets/mesh.rs:15`: `pub struct MeshHandle(pub u32);` with no methods. `src/assets/material.rs:32-40`:
+
+```rust
+pub struct MaterialHandle(pub u32);
+
+impl MaterialHandle {
+    /// Index into the material SSBO. Reads better than `.0` at call sites that
+    /// unwrap a wrapping newtype (e.g. `material_ref.0.index()`).
+    pub fn index(self) -> u32 {
+        self.0
+    }
+}
+```
+
+`grep -rn "\.0\.0\b" src` finds the spelling the comment calls worse at five sites, all reads of `MeshHandle` through `MeshRef`: `src/render/prepare.rs:360,395,592,600` and `src/cook/export.rs:131`. `MaterialHandle::index()` has 14 call sites (`src/render/renderer.rs` 10, `src/render/prepare.rs:393`, `src/cook/export.rs:134`, `src/assets/pools.rs:669`, `src/assets/loader.rs:201`; the `.index()` at `src/cook/mesh.rs:368` and `src/cook/export.rs:428` are gltf's API). Both newtypes keep the field `pub` because every constructor is a struct literal (`MaterialHandle(5)` at `src/render/prepare.rs:654`, `MeshHandle(...)` in the pool). The getter and the field are both public on one sibling and the field alone on the other, so a reader learns two spellings for one idea. Either spelling is a refactor of reads; no pixel moves.
+
+#### L5-C13
+
+`src/assets/material.rs:69-75`:
+
+```rust
+pub struct MaterialData {
+    pub base_color: [f32; 4],
+    pub metallic_roughness: [f32; 4], // x=metallic, y=roughness, z=normal scale, w=pad
+    pub emissive: [f32; 4],           // xyz=color, w=strength
+    pub layers: [u32; 4],             // x=albedo, y=normal, z=MR, w=AO
+    pub extra: [u32; 4],              // x=emissive Layer, yzw=pad
+}
+```
+
+The one writer is `load` at `src/assets/material.rs:284`: `emissive: [red, green, blue, 1.0],` with the 1.0 a literal, not a Material property (`CookedMaterial` has `emissive: [f32; 3]` and no strength, as the test at line 425-432 shows). `grep -rn "emissive" src/render/shaders/*.wgsl` finds every read: `src/render/shaders/shading.wgsl:88` `emissive * material.emissive.rgb` and `src/render/shaders/main.wgsl:177`, which samples the emissive Texture's `.rgb`; nothing reads `.w` or `.a`. The WGSL twin at `src/render/shaders/common.wgsl:139` declares `emissive: vec4<f32>` with no comment on `w`, so the Rust comment is the only claim that `w` is a strength. Load-bearing: a reader who sets `w` to scale an emissive Material writes code with no effect, and the glTF emissive strength extension, if it is ever cooked, would look done here. The smaller form is `w=pad` and a 0.0, which changes bytes the shader never reads, so no pixel moves; the Golden captures and counters stay.
+
+#### L5-C14
+
+`src/assets/pools.rs:952-962` defines the helper the whole crate's GPU tests import:
+
+```rust
+    pub(crate) fn gpu_context() -> Option<GpuContext> {
+        match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => Some(context),
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                None
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        }
+    }
+```
+
+`src/assets/pools.rs:964-974`, in the same `mod tests`, opens the next test with the same match written out:
+
+```rust
+    #[test]
+    fn a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                // Not `eprintln!`, which libtest captures from passing tests.
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+```
+
+`grep -n "gpu_context()" src/assets/pools.rs` finds the helper called at `pools.rs:623`, `693`, `727` and `731`; this test alone does not call it. `grep -rn "pools::tests::.*gpu_context" src` finds 3 importing modules (`src/render/tonemapping_pass.rs:180`, `src/render/depth_pyramid_pass.rs:132`, `src/render/shadow_mask_pass.rs:407`). The fix replaces lines 966-974 with the `let Some(context) = gpu_context() else { return; };` form of `pools.rs:623-625`. A test's refactor moves no pixel and changes no Blob.
+
+#### L5-C15
+
+`src/assets/pools.rs:503-506`:
+
+```rust
+fn allocate_all<const N: usize>(
+    mut arenas: [&mut Arena; N],
+    counts: [usize; N],
+) -> Option<[offset_allocator::Allocation; N]> {
+```
+
+`grep -rn "allocate_all" src tests` finds the definition and one call, `src/assets/pools.rs:203`, whose arrays are the pool's five Arenas and five counts (`pools.rs:180-186`, `204-211`). `MeshPool::arenas()` at `pools.rs:460` already returns `[&Arena; 5]`, so the count has a fixed home in the same file. The generic lets the compiler check the two arrays agree in length, which a `5` in both signatures does as well; the `Vec::with_capacity(N)` and `try_into().ok()` at `pools.rs:507` and `520` exist to turn a `Vec` back into an array of generic length and would go with it. Over-engineering by the module's own test: a generic with one instantiation. The fix is a signature change; it allocates the same ranges in the same order, so it moves no pixel and changes no Blob.
+
+#### L5-C16
+
+`src/assets/cooked.rs:143`, `149` and `193`:
+
+```rust
+    pub textures: [Option<AssetId>; 5],
+    ...
+    const PAYLOAD_BYTES: usize = 10 * 4 + 5 * 16;
+    ...
+        let mut textures = [None; 5];
+```
+
+The count is the number of `MaterialChannel` variants, which `src/assets/material.rs:56` spells `pub const ALL: [Self; 5]`. `grep -rn "; 5\]" src | grep -v "ALL"` finds the same literal standing for the Channel count at `src/assets/cooked.rs:143`, `193`, `src/assets/material.rs:144`, `267`, `366`, `src/cook/mod.rs:356`, `422`, `465`, `src/cook/export.rs:414`, `src/scenes/town.rs:917` (shipping) and `src/assets/material.rs:424`, `src/assets/loader.rs:146` (tests); with `cooked.rs:149`'s `5 * 16` and `material.rs:56`'s own `[Self; 5]`, 14 sites in 7 files. `grep -rn "CHANNEL_COUNT\|ALL.len()" src` finds `ALL.len()` once, at `material.rs:16`, as the divisor of `TEXTURES_PER_CHANNEL`; nothing names the count for the arrays. The Material Blob's layout (`cooked.rs:147-149`, "16 bytes per Channel") is sized by the same number, so a sixth Channel would need every site found by hand. The site filed is the Cooked format's, the one the others mirror; the sites in `src/assets/material.rs` and `src/cook/` fall in the encoders and the asset types and in the cooker's pipeline, `town.rs:917` in the Reference scenes. A named constant equal to 5 changes no Blob byte, no Cook key and no pixel.
+
+#### L5-C17
+
+`src/assets/pools.rs:57-59`:
+
+```rust
+/// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
+/// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
+/// and a BLAS per Mesh, which rays trace (ADR 0020).
+```
+
+beside `src/assets/pools.rs:63-65`:
+
+```rust
+    /// Each Mesh's BLAS, at its Handle's index, built at load from its
+    /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
+    blases: Vec<Option<wgpu::Blas>>,
+```
+
+and `pools.rs:303-306`, where a Mesh whose `MeshUse` is not traced pushes `None`. `src/assets/loader.rs:65` loads every bent Mesh as `MeshUse::Drawn`, so the `crowd` scene's figures have no BLAS. The type's comment keeps the form the pool had before `MeshUse::Drawn` existed. Not load-bearing: the field's comment four lines down corrects it before a reader writes code against it. A comment change moves no pixel.
+
+#### L5-C18
+
+`src/scenes/mod.rs:354-368`:
+
+```rust
+fn ev100(self) -> f32 {
+    match self {
+        Self::Helmet
+        | Self::PbrSweep
+        | Self::UvGrid
+        | Self::NormalTangent
+        | Self::FarCoplanar
+        | Self::Orrery
+        | Self::Minification
+        | Self::TextureWall
+        | Self::Shadows
+        | Self::Crowd
+        | Self::Town => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+    }
+}
+```
+
+One or-pattern over every variant is a `match` with one arm: `self` is bound and never read into a decision. The doc comment above it (`mod.rs:351-353`) says the value is the same for every scene on purpose ("Each scene exposes the sun's illuminance to 1"), so the branching carries nothing a reader needs. Callers: one, `camera_at` at `mod.rs:347` (`grep -n 'ev100()' src/scenes/mod.rs`: 1 call). The smaller form is `fn ev100(self) -> f32 { ev100_for_exposure(1.0 / SUN_ILLUMINANCE) }`, or the expression at the one call site; a scene that one day differs adds its arm then. The fix moves no pixel: the value is unchanged. It changes no Cook key or camera path.
+
+#### L5-C19
+
+`src/scenes/mod.rs:450-467`:
+
+```rust
+pub(crate) fn environment(self) -> Environment {
+    match self {
+        Self::Helmet
+        | Self::PbrSweep
+        ...
+        | Self::Town => Environment {
+            ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
+            background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
+        },
+    }
+}
+```
+
+The same shape as L5-C18: eleven variants in one arm. Its doc comment (`mod.rs:447-449`) describes one environment for every scene. Caller: one, `src/state.rs:94`. The eight other per-scene methods (`materials`, `textures`, `meshes`, `camera_at`, `frame_delta`, `point_lights`, `sun`, `source_files`) each have two or more distinct arms, so they are judged clean; only these two have none. Fix moves no pixel.
+
+#### L5-C20
+
+`ReferenceScene` holds every per-scene behaviour as a method on the enum (`mod.rs:86-467`: the name, the Asset IDs, the cooked content, the camera path, the frame delta, the lights, the sun, the environment), except the spawn. The spawn is eleven `pub(crate)` free functions of one signature, `fn(&mut World, &mut dyn AssetLoader) -> anyhow::Result<()>`, at `mod.rs:537,566,576,600,631,705,801,873,962,969` and `town.rs:756`, re-exported for exactly one caller, which re-does the dispatch the enum's other methods do inside the module:
+
+`src/state.rs:78-91`:
+
+```rust
+let spawn: fn(&mut World, &mut dyn AssetLoader) -> anyhow::Result<()> = match scene {
+    ReferenceScene::Helmet => State::spawn_helmet_scene,
+    ReferenceScene::PbrSweep => spawn_pbr_sweep,
+    ...
+    ReferenceScene::Crowd => match crowd_form {
+        CrowdForm::Proxies => spawn_crowd,
+        CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
+    },
+    ReferenceScene::Town => spawn_town,
+};
+```
+
+`grep -rn 'spawn_\(pbr_sweep\|uv_grid\|normal_tangent\|far_coplanar\|orrery\|minification\|texture_wall\|shadows\|crowd\|traced_crowd\|town\)\b' src tests | grep -v '^src/scenes/'`: 14 lines, all in `src/state.rs:18-20` (the `use`) and `src/state.rs:79-91` (the `match`). No test and no other module calls a spawn function.
+
+Because the caller holds the dispatch, the helmet scene's spawn lives in the caller, `State::spawn_helmet_scene` at `src/state.rs:201-243`, and the scenes module exports four items so it can be built there: `SCI_FI_HELMET` (`mod.rs:506`), `SWEEP_METALLIC` and `SWEEP_ROUGHNESS` (`mod.rs:526-527`) and `sweep_material_name` (`mod.rs:533`). `grep -rn 'SWEEP_METALLIC\|SWEEP_ROUGHNESS\|sweep_material_name\|SCI_FI_HELMET' src tests | grep -v '^src/scenes/'`: 5 lines, all in `src/state.rs:18,21,202,214-217`.
+
+Because the dispatch needs a function pointer per arm, the crowd needs two wrappers that pass a constant to a third function: `spawn_crowd` (`mod.rs:962-964`, passes `CrowdForm::Proxies`) and `spawn_traced_crowd` (`mod.rs:969-974`, passes `CrowdForm::Refit`) around `spawn_crowd_as` (`mod.rs:978`). With the dispatch inside the module the arm is `Self::Crowd => spawn_crowd_as(world, loader, crowd_form)`, and the two wrappers go.
+
+The smaller form: `pub(crate) fn spawn(self, crowd_form: CrowdForm, world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()>` on `ReferenceScene`, holding the `match`; the eleven spawn functions become private; `spawn_helmet_scene` moves into the module beside its constants (it inserts the `HelmetAssets` resource, `src/state.rs:242`, so the move adds a dependency from `src/scenes/` on `src/helmet/`, as it already depends on `src/render/` for `CrowdForm` and on `src/camera/`); the four helpers become private. The module's interface shrinks by 15 items to 1 and `src/state.rs` loses 14 lines of `match`. The fix moves no pixel: the same functions run in the same order with the same arguments; no Cook key or camera path changes. Caller `src/state.rs:78-91` falls in tooling.
+
+#### L5-C21
+
+`src/scenes/mod.rs:1125`:
+
+```rust
+pub(crate) type ScenePrimitive = (Geometry, Option<&'static str>);
+```
+
+`src/cook/mesh.rs:18`:
+
+```rust
+pub(crate) type SourcePrimitive = (Geometry, Option<AssetId>);
+```
+
+Two tuple types over the same `Geometry`, differing only in whether the Material is a name or its Asset ID. `ReferenceScene::meshes` (`mod.rs:275`) returns the first; both of its consumers immediately turn it into the second with the same code:
+
+`src/cook/mod.rs:304-313`:
+
+```rust
+for (name, primitives) in scene.meshes() {
+    let id = scene.mesh_id(name);
+    let primitives: Vec<_> = primitives
+        .into_iter()
+        .map(|(geometry, material)| {
+            let material = material.map(|material| scene.material_id(material));
+            (geometry, material)
+        })
+        .collect();
+```
+
+`src/cook/export.rs:371-377`:
+
+```rust
+for (name, primitives) in scene.meshes() {
+    let primitives: Vec<SourcePrimitive> = primitives
+        .into_iter()
+        .map(|(geometry, material)| {
+            (geometry, material.map(|name| scene.material_id(name)))
+        })
+        .collect();
+```
+
+`grep -rn 'ScenePrimitive' src tests`: 4 lines, the alias at `mod.rs:1125`, the return types at `mod.rs:275` and `town.rs:924`, and the `use` at `town.rs:882`; no consumer keeps a `ScenePrimitive`. `grep -rn '\.meshes()' src tests | grep 'scene\.'`: 4 call sites (`cook/mod.rs:304`, `cook/export.rs:371,1096`, `cook/mesh.rs:664`), the two above converting, the two in tests reading `Geometry` only. `meshes` has `self` and `material_id` is its own method, so it can resolve the names itself. The smaller form: `meshes` returns `Vec<(&'static str, Vec<SourcePrimitive>)>` with `self.material_id(name)` applied where each `Some("…")` is written (`mod.rs:279,284,287,299,308` and inside `town.rs:926`'s `of` closure, which would take the scene), `ScenePrimitive` goes, and the two consumers drop their `map`. The alias `SourcePrimitive` can live in either module; `src/cook/mesh.rs` already imports `scenes::Geometry` (`mesh.rs:15`). The fix moves no pixel and changes no Blob: the Asset IDs reaching `mesh::cook_key` (`mesh.rs:41`) are the same values from the same `material_id` calls. The two conversion sites fall in the cooker's pipeline.
+
+#### L5-C22
+
+Four spawn functions with one body, load one Mesh and spawn it at the origin:
+
+`src/scenes/mod.rs:566-570`:
+
+```rust
+pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+    let plane = loader.mesh(ReferenceScene::UvGrid.mesh_id("plane"))?;
+    world.spawn((Transform::IDENTITY, MeshRef(plane)));
+    Ok(())
+}
+```
+
+`src/scenes/mod.rs:576-585` (`spawn_normal_tangent`: `loader.mesh(AssetId::new(source, AssetKind::Mesh, name))?` then the same `spawn`), `src/scenes/mod.rs:705-712` (`spawn_minification`: `loader.mesh(ReferenceScene::Minification.mesh_id("ground"))?` then the same `spawn`), `src/scenes/mod.rs:873-877` (`spawn_shadows`: `loader.mesh(ReferenceScene::Shadows.mesh_id("sphere-over-plane"))?` then the same `spawn`). The ground in `spawn_crowd_as` (`mod.rs:984-985`) is a fifth site of the two lines. Their doc comments (`mod.rs:565,575,704,872`) also say the same sentence four ways ("The … draws with the Material its Primitive names"). One `fn spawn_mesh(world, loader, id: AssetId) -> anyhow::Result<()>` serves all five; under L5-C20 the four become arms `Self::UvGrid => spawn_mesh(world, loader, self.mesh_id("plane"))`. 30 lines become about 10. The fix moves no pixel: the same Mesh is loaded and spawned with the same components.
+
+#### L5-C23
+
+`src/scenes/mod.rs:921-924`:
+
+```rust
+/// Above the crowd and back from it, looking down about 28° at its middle,
+/// so every figure stays in view and none hides another whole.
+const CROWD_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 11.0, 20.0);
+const CROWD_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.6, -0.5);
+```
+
+From (0, 11, 20) to (0, 0.6, −0.5) the camera drops 10.4 m over 20.5 m: atan(10.4 / 20.5) = atan(0.507) = 26.9°. To a target at ground level, (0, 0, −0.5), the drop is 11 m: atan(11 / 20.5) = 28.2°, the comment's figure. So the comment was written for a target on the ground and the target's `y` rose to 0.6 (the figures' middles are 0.9 m up) without the figure following. The two other camera comments that quote an angle agree with their constants: `MINIFICATION_CAMERA` (`mod.rs:678-681`, "about 8.5°": atan(1.2 / 8) = 8.5°) and `TEXTURE_WALL_CAMERA` (`mod.rs:786-788`, "about 60°": atan(12 / 7) = 59.7°). Not load-bearing: nothing computes from the angle, and a reader changing the camera would recompute it. The expected form is a figure that matches, "about 27°", or no figure. A comment change moves no pixel.
+
+#### L5-C24
+
+The code, `src/threading.rs:12-22`:
+
+```rust
+pub fn init_compute_pool() -> &'static ComputeTaskPool {
+    ComputeTaskPool::get_or_init(|| {
+        let cores = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+        let workers = cores.saturating_sub(1).max(1);
+        tracing::debug!(workers, cores, "compute pool");
+        TaskPoolBuilder::new()
+            .num_threads(workers)
+            .thread_name("Compute Task Pool".to_string())
+            .build()
+    })
+}
+```
+
+Called once per State at `src/state.rs:144`, inside `State::new`, so every window, capture, bench run and every integration test that builds a State starts `cores − 1` threads (11 on the M4 Pro) that then idle until the process exits.
+
+Who uses the pool: `grep -rn "ComputeTaskPool\|par_iter\|bevy_tasks" src tests` returns 5 lines, all in `src/threading.rs` and `tests/compute_pool.rs`; `grep -rn "\.scope(" src` finds only `recorder.systems.scope` (a stats timer, not a task scope) and tracing spans. No `par_iter`, no `ComputeTaskPool::get`, no scoped task anywhere. The two schedules the pool could serve both run on the single-threaded executor (`src/threading.rs:27-31`, pinned by `simulation_schedules_run_single_threaded` at `src/state.rs:358`), which never touches a task pool.
+
+What the pool costs: the threads themselves, `cores − 1` of them per process, their stacks, and the `bevy_tasks` dependency (`Cargo.toml:18`) that exists for this one function. `bevy_ecs`'s `multi_threaded` feature (`Cargo.toml:17`) is on for `par_iter`, which nothing calls either; the Cargo side falls in tooling.
+
+What reads it: `tests/compute_pool.rs:4-8` asserts `pool.thread_num() == (cores - 1).max(1)`, the one observable property, and the re-export `pub use threading::init_compute_pool` at `src/lib.rs:47` exists so that test can call it. ADR 0016 records the state as built: "the `ComputeTaskPool` is created with `available_parallelism() − 1` workers (at least 1) and the schedule stays `SingleThreaded`; no system uses the pool yet, and the rest is planned". The ADR's reason for the explicit creation is to avoid `TaskPool::default`'s `cores` threads beside the main thread; that reason applies at the moment a pool is first needed, not before.
+
+The smaller form: delete `init_compute_pool`, its call at `state.rs:144`, the re-export at `lib.rs:47` and `tests/compute_pool.rs`, and make `single_threaded_schedule` the file's whole content (or fold it into `time/mod.rs`, its other caller being `state.rs`); when the first `par_iter` or scoped task lands, create the pool beside it with the ADR's count. Alternatively, place it as fog with the trigger "the first system that dispatches to the compute pool", which ADR 0016 itself names as the next step. Either way the fix moves no pixel and changes no Blob: nothing in the frame reads the pool, so Goldens stay bit-exact and counters equal; CPU frame timings stay within noise, since the idle threads do no work in the frame.
+
+### Notes for the verifier
+
+Not filed, since each is a near-miss under the lane's axes, an allowed form, or belongs to another lane; recorded so the next audit does not re-find them. By reader: A the cooker's pipeline, B the encoders and the asset types, C the Cooked cache and the Pools, D the Reference scenes, E the ECS and the schedule.
+
+
+**A.**
+
+1. `CookSettings` (`src/cook/mod.rs:30`) was weighed as "an option every caller sets the same way" and not filed: both shipping callers pass `CookSettings::default()` (`src/state.rs:167`, `src/bin/praxis.rs:378`), and the only variation is `tests/cook.rs:398-399`, which raises `texture_zstd_level` by one to prove the Cook key re-cooks every Texture and no Material. The struct is one field with a `Default`, ADR 0018's "every cook setting" is hashed through it at `texture.rs:124`, and the level is used at `texture.rs:215`; folding it into a constant would save about 15 lines and remove a parameter from `cook` and `cook_scene` at 7 sites while losing the seam test's lever. Judged minimal already; the next audit need not re-weigh it unless a second field appears that nothing varies.
+2. The probe's line for `helmet_exports_the_textured_helmet_its_sweep_and_lights` reads `(33/25)`; any figure of 27 for that test elsewhere is not the probe's, and the Finding quotes the probe.
+3. `AssetRecorder` (`src/cook/export.rs:289-321`) is the second implementor of `AssetLoader` beside `PoolLoader` (`grep -rn "impl AssetLoader" src`: 2), so the trait is not a trait with one implementor; recorded for the encoders.
+4. `texture_sources` (`src/cook/mod.rs:219`) and `TextureSource::decode` (`src/cook/texture.rs:96`, among the encoders) have no shipping caller outside the module: `tests/cook.rs:311,318,405` are their callers. Both are the cook seam's observation points (`docs/agents/workflow.md`, "Tests live at pre-agreed seams"), so neither is filed as vestigial.
+5. `Exported::write` (`src/cook/export.rs:597`) has one caller, the glb at `export.rs:515`, while the PNG write at `export.rs:561-571` creates its directory and writes through `image::save_buffer_with_format` itself. Two write shapes for two formats; not filed, as the PNG encoder needs the `image` call and `write` would only replace the `create_dir_all` line.
+6. Abbreviations weighed and allowed: `bin` (`export.rs:657,666,704,719`) names glTF's BIN chunk and fills `gltf::binary::Glb`'s `bin` field, a crate's own field name; `glb` and `uri` are the format's own words; `pbr` (`mod.rs:357,466`) is `CONTEXT.md`'s "PBR factors"; `info` (`mod.rs:359,361,365`) is the `gltf` crate's `texture::Info` and a word in its own right; `uvs`, `suns`, `ev100`, `guid`, `sha256`, `url`, `json`.
+7. The data URI branch at `src/cook/mod.rs:400-403` is reached by no manifest source at the frozen commit (`assets/manifest.json` lists one `.gltf` with external images and one `.glb` with buffer-view images); it is the cooker's handling of a glTF form the specification allows, so it is defensive, not dead, and not filed.
+8. `CookReport`'s doc comment (`src/cook/mod.rs:43`, "The Asset IDs one cook wrote, and those it found up to date") names two of its four fields; the other two carry their own docs at `mod.rs:48-51`. Not filed as drift: it says nothing the code does not do.
+9. Lane 1 (correctness) owns, if anyone does, whether `read_sources`' Toksvig dependency at `mod.rs:283-297` (the first Material's normal Texture when several sample the same metallic-roughness image) matches ADR 0018's "the first Material's" clause; the code matches the ADR as read, so nothing is passed on.
+10. The test module of `src/cook/mod.rs` pins two things the shipping code does (`unresolved_materials` on an empty cache; every scene's `source_files` in the manifest); `fetch.rs`'s three tests pin `fetch_entries` and `fetch_for_launch_with` through the `download` seam; `export.rs`'s five tests pin the exporter against the scenes and the cooker. None pins nothing.
+
+
+**B.**
+
+1. `AssetLoader` (`src/assets/loader.rs:9`) is not a trait with one implementor: `PoolLoader` at `src/assets/loader.rs:45` and `AssetRecorder` at `src/cook/export.rs:294` implement it, and `grep -rnw "AssetLoader" src` finds 20 `&mut dyn AssetLoader` sites across `src/state.rs`, `src/scenes/mod.rs` and `src/scenes/town.rs`. Not filed.
+2. `SourcePrimitive` (`src/cook/mesh.rs:18`) is used in `src/cook/mod.rs:99` and `src/cook/export.rs:15,326,372` beside its own file; a type alias with four files of readers is not an abstraction with one use. Not filed. Whether it and `src/scenes/mod.rs`'s `ScenePrimitive` are two names for one shape is the Reference scenes section's question.
+3. `MaterialPool::insert` (`src/assets/material.rs:240`), `MaterialPool::DEFAULT_LAYER` (line 160) and `MaterialData` (line 69) have shipping callers only inside `src/assets/material.rs` (`load` at line 289 and 267); every outside caller (`insert` 6, `DEFAULT_LAYER` 12, `MaterialData` 6) is in `src/render/renderer.rs`'s test module, which builds a white Material without a Cooked cache. The width serves tests, so not filed; a verifier who counts tests as callers finds it exact, one who does not finds three `pub` items for tests alone.
+4. `MaterialPool.materials: Vec<MaterialData>` (`src/assets/material.rs:142`) is read by shipping code for `.len()` only (lines 241, 248); the test at lines 446 and 452 reads entries. A count would serve shipping code, and the Vec holds at most 256 entries of 80 bytes. Not filed as vestigial because the test reads it; near miss.
+5. `MaterialPool::gpu_memory_bytes` is called from `src/render/renderer.rs:769`; every method of the pool has a shipping caller.
+6. `src/cook/texture.rs:46` says an encoded image is "PNG or JPEG". Praxis's own `image` dependency (`Cargo.toml:15`) enables `png` only, but `gltf` 1.4.1's `import` feature (its `Cargo.toml`, `import = ["base64", "image", "urlencoding"]`, `image` with `jpeg` and `png`) unifies into the same `image` build, and `Cargo.lock` lists `zune-jpeg` under `image`. JPEG decodes, so the comment is true, but it rests on another crate's feature list rather than Praxis's. A dependency note for lane 7 or the tooling, not a comment defect here.
+7. `src/assets/material.rs:22-27` quotes a measurement, "saves 126 µs of minification's lit pass", and cites `docs/performance.md`, where line 2768 records "data 4x 126 µs" against the Golden commit it names. The figure matches its record. A number in a shipping comment with its source is weighed and not filed; the verifier may hold otherwise under the axis's "nothing in the tree re-measures" clause.
+8. `src/cook/mesh.rs:158-164` describes `meshlet_triangle_counts` as "like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt` binds only as an `unsafe` call and which counts a degenerate triangle's repeated corner twice" (registry key `meshoptimizer-0.25-scan-meshlets`, whose quote is `used_extra = (av < 0) + (bv < 0) + (cv < 0)`). The code at lines 170-177 sorts the corners and counts a repeated one once. Read as two reasons not to call meshoptimizer, the comment is accurate; read as "the code does what meshoptimizer does", it is not. Whether the cut positions must match meshoptimizer's on a degenerate triangle is a correctness question (falls in lane 1); the comment is left as a near miss, and a verifier who reads it the second way may file it as `drift`, not load-bearing.
+9. `src/assets/material.rs:137-140` says the fragment shader "looks up `materials[instance.material_id]`"; `src/render/shaders/main.wgsl:172` reads `materials[in.material_id]`, the Instance's Material ID carried as a fragment input. A paraphrase, not load-bearing; not filed.
+10. `src/assets/mesh.rs:1-2` says `Mesh` is "as prepare needs it"; `bounds` is read by `src/render/acceleration_structures.rs:333` as well as `needs_material_handle` and `vertices` by `src/render/prepare.rs`. Narrow but not misleading; not filed.
+11. `src/assets/mod.rs:9-10` re-exports `Mesh` and `MeshUse`, which no module outside `assets` imports (`grep -rn "crate::assets" src tests | grep -v "^src/assets/"` lists neither); their users are `src/assets/pools.rs:2` and `src/assets/loader.rs:3`. Inside a private module a re-export costs one name; not filed.
+12. `src/cook/mesh.rs:67` hashes the Material ID with `to_be_bytes` while every other part of the key uses `to_le_bytes` (lines 44, 46). Harmless to the key's stability, but a change would re-cook every Mesh (new Cook keys) while moving no pixel. Not a health axis item; noted for whoever next touches the key.
+13. `TextureSource::encoded` and `TextureSource::generated` (`src/cook/texture.rs:53,69`) have one caller each (`src/cook/mod.rs:417,277`) and differ only in the `SourceImage` variant they wrap. One constructor taking a `SourceImage` would serve, but `SourceImage` is private to the file and the two are four lines each; not filed.
+14. `TextureSource::decode` (`src/cook/texture.rs:96`) clones a generated image's pixels on every call, and `cook` calls it for the Texture and again for its normal Texture. A cost, not a health item; falls in lane 3.
+15. `src/cook/mesh.rs:201-221`, `weld` returns `bounds: None`; `cook` reads the added bounds from the source Primitives (lines 108-111), not the welded ones, so nothing is lost. Correct; noted so no later reader files it.
+16. Allowed abbreviations weighed: `u`, `v` as UV components (`src/cook/mesh.rs:205,261,576`), `x`, `y` as texel coordinates throughout `src/cook/texture.rs`, `T` as a generic parameter (`src/cook/mesh.rs:538`), `remap` and `bc7` as meshopt's and intel_tex_2's own names, `uv`, `uvs`, `rgba`, `id`, `guid`, `hex` and `gltf` as the domain's words.
+17. `#[link(name = "stdc++")] unsafe extern "C" {}` at `src/cook/texture.rs:16-18` is the one `unsafe` in these files, with its reason stated in the comment above it (a prebuilt library linked without its runtime on Linux). Not a health item.
+18. The repeated hand-rolled GPU skip (L5-C10, L5-C11) also appears at `src/assets/pools.rs:966`, in the file that defines the helper (falls in the Cooked cache and the Pools section), and in 15 further files under `src/render/`, `src/capture/`, `src/gpu/` and `tests/` (falls in render and tooling).
+
+
+**C.**
+
+1. `MESH_CAPACITY` (`src/assets/pools.rs:12`) is `pub` and has no reader outside `pools.rs` (`grep -rn "MESH_CAPACITY" src tests`: 4 hits, all in the file). `assets` is a private module (`src/lib.rs:18`), so `pub` reaches no more code than no modifier would; a mixed `pub` spelling inside a private module is not a Finding on its own, so it is recorded in the interface table and not filed.
+2. `MeshPool::load` (`pools.rs:131`) is a one-line wrapper over `load_for` with `MeshUse::DrawnAndTraced`, its one shipping caller `src/assets/loader.rs:60` and nine test callers. Not filed: the wrapper is what lets tests not name the default. The near-miss is in the loader: `PoolLoader::mesh` at `loader.rs:56-61` repeats the body of `PoolLoader::mesh_for` at `loader.rs:83-89` instead of calling `self.mesh_for(id, MeshUse::DrawnAndTraced)`; filed from the loader as L5-C09.
+3. `gpu_context` is written out four times in the crate: `src/assets/pools.rs:952` (the `pub(crate)` one three render modules import), `src/render/renderer.rs:2578` (`pub(crate)`, which `renderer.rs`'s own tests call 22 times), `src/render/shader_function_tests.rs:2143` and `tests/crowd.rs:19`, each the same eleven lines. L5-C14 files the inline copy in the Cooked cache and the Pools; the other three fall in render and in tooling (`tests/crowd.rs` cannot reach a `pub(crate)` helper, so it would need a `pub` seam in `src/gpu/` or `src/capture/`).
+4. `CookedTexture::to_blob` takes its zstd level as a parameter, which the one shipping caller reads from `CookSettings::texture_zstd_level` (`src/cook/texture.rs:215`, default `zstd::DEFAULT_COMPRESSION_LEVEL` at `src/cook/mod.rs:38`), while `CookedMesh::to_blob` hard-codes `CookedMesh::ZSTD_LEVEL = 19` (`cooked.rs:501`). Two formats, two conventions for the same knob. Whether `texture_zstd_level` is an option every caller sets the same way is `CookSettings`'s question; weighed for the cooker's pipeline and recorded there.
+5. The three `to_blob`/`from_blob` pairs were weighed. The Material and Mesh Blobs share the magic-and-version framing through `payload` (`cooked.rs:639`); the Texture Blob is KTX2 and carries its version in a key-value entry, so it cannot share it. The bodies differ in substance (raw f32s; KTX2 with per-level zstd; meshopt codecs inside one zstd frame), so no one function would serve. Not filed.
+6. Naming weighed and allowed: `id` (domain word), `uv` (domain word), `hex` (`cooked.rs:758`, the word for a hexadecimal string, used as such by four cook modules), `fmt` (`std::fmt` and the `Display::fmt` method, the API's spelling), `dfd_byte_offset`, `kvd_byte_offset`, `sgd_byte_offset` (`cooked.rs:305-310`, `ktx2::Index`'s own field names), `blas`, `tlas` (domain words), `u32_bytes` (`pools.rs:88`, a unit-carrying name), `texels`, `mips` (domain words), `x` in `let vertex = |x| ...` at `pools.rs:631` and `[x, y]` at `pools.rs:782` (coordinates), the type parameters `N` and `T` (`pools.rs:503`, `884`, `997`; the rule names arguments, parameters, locals, fields and lambda bindings, not type parameters), and the WGSL in `trace_down` and `read_storage` (`tlas`, `tags`, `hit`, `ray`, `copy`, `source`: full words or domain words).
+7. Figures in comments recomputed and found right: `pools.rs:596` "four 28-byte vertices, or 28 indices" (112 bytes; `CookedVertex` is 28 by the assert at `cooked.rs:403`); `pools.rs:733-734` "eight pools of full Arenas would take 660 MiB" (five 16 MiB Arenas plus a 65,536 by 40-byte Mesh table is 82.5 MiB; eight is 660); `pools.rs:982-983` and `991` against `CAPACITY`; `cooked.rs:829` the BC4 block counts; `cooked.rs:874-877` the 13-to-16 and 20-byte entry sizes and the `[60..64]` header offset (KTX2's `kvdByteLength`). `pools.rs:388` names `wgpu-core 30.0.1`; `Cargo.lock` pins `wgpu-core 30.0.1`.
+8. ADR claims in comments checked: `cooked.rs:31-33` (refused rather than resized, ADR 0018's Mips clause), `cooked.rs:38-44` (64 vertices for six bits, 124 triangles, ADR 0018's Meshes clause and ADR 0019), `cooked.rs:80-82` (source, kind, name, Channel: ADR 0018's order), `cooked.rs:391` (28 bytes, ADR 0018), `pools.rs:7-8` (the split of the 8 GB Budget: `bench/budgets.json` still holds one `gpu_memory_bytes`, and ADR 0017 says M4 sets the per-kind sizes, so "until" is still true), `pools.rs:540-541` (2^31 - 1 on DX12 and non-NVIDIA Linux and Android Vulkan, ADR 0017's Arena clause). All match.
+9. `assets/manifest.json`'s `dev_only` is `false` on all eight entries and is read only by `tests/asset_manifest.rs:191`, which requires it on a non-commercial licence; the cooker's `ManifestEntry` (`src/cook/mod.rs:58-69`) does not deserialise it, and nothing keeps a dev-only file out of a build, which `docs/research/test-assets.md` paragraph 4 says is the field's purpose. With no dev-only entry there is nothing unexercised in the code today; the gap between the policy document and the code falls in lane 7. `version` is likewise read only by the test (non-empty check at `tests/asset_manifest.rs:170`), as the policy's provenance record.
+10. Cosmetic, not an axis: two doc comments carry an uneven wrap left by an edit, `cooked.rs:81` (a line past the comment column) and `pools.rs:145-146` (a long line then a four-word one). `rustfmt` does not rewrap comments.
+11. `CookedCache::read` is `pub` and its only callers outside the file are two integration tests (`tests/cook.rs:286`, `715`), reached through `pub use assets::cooked` at `src/lib.rs:38`; `material`, `texture` and `mesh` are the shipping readers. The `pub` is needed for those tests and was not filed; whether the tests should read raw Blob bytes is lane 6's question.
+12. `Arena::free` (`pools.rs:568`) is reached only by `allocate_all`'s rollback; Meshes never unload at this commit. Not vestigial: the rollback runs on every refused Mesh and `a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing` pins it. A capacity's fitness and whether unloading will need it fall in lane 4.
+13. `IndexEntry::cook_key` carries `#[cfg_attr(not(feature = "cook"), allow(dead_code))]` with the comment "Read by the cooker only" (`cooked.rs:666-668`); `grep -rn "cook_key" src/cook/mod.rs` confirms the cooker reads it at `src/cook/mod.rs:334-336` and nothing else does. Accurate.
+
+
+**D.**
+
+1. `Geometry` derives `Clone` (`src/scenes/mod.rs:1129`) and no `.clone()` of a `Geometry` exists in the crate (`grep -rn '\.clone()' src/scenes src/cook`: the hits are on `String`, `TextureSource`, `Vec3` iterators and a glTF blob). Not filed: a derive is a token, not an item, and `Default` beside it is used (`mod.rs:1153`, `town.rs:1142,1190,1204,1265`). The next audit can drop it with L5-C21's edit.
+2. Allowed short names weighed and passed: `u`/`v` in `uv_sphere` (`mod.rs:1155,1158`) and `cylinder` (`town.rs:1214-1215`) are the components of a UV, a domain word; `x`/`y` texel coordinates (`mod.rs:731,749-750,1231-1232`), `x`/`z` wheel coordinates (`town.rs:928`) and the `(x, y, z)` axis vectors (`town.rs:1189`) are coordinates; `min`/`max` as `cuboid`'s corners (`town.rs:1187`) are glam's own spelling (`Vec3::min`, `Vec3::max`) and are not on the abbreviation list; `tau` (`mod.rs:1049`) binds `std::f64::consts::TAU` under its own name; `bone.0` (`mod.rs:1073`) reads a newtype's one field; `of` (`town.rs:926`) is a word, though it says little, and is used 21 times in one table. The abbreviation grep over both files (`buf|len|idx|tex|desc|cmd|enc|src|dst|pos|num|cnt|tmp|ret|err|ctx|res|attr|coord|dim|fmt|cfg|prim|mat|tri|vert|img|rot|dir|vel|col|px|rad|deg|ptr|val|arr|param|elem|seg|lat|lon|cam|geo|norm`) hit only `vec!` macros, `.len()`, `cfg` attributes and the `min`/`max` above.
+3. Near miss, not filed: `spawn_texture_wall` (`mod.rs:813-821`) and `spawn_crowd_as` (`mod.rs:993-997`) place a centred 10 by 10 grid from an index, a column count and a spacing with the same four lines; `Block::new` (`town.rs:388`) and `flocks` (`town.rs:696`) have the same one-line `offset` closure with a different pitch. Two sites each; a shared helper saves about six lines net. Filed nothing; a fix ticket for L5-C20 or L5-C22 may fold the first pair in.
+4. Near miss, not filed: `TownMesh` (`town.rs:25-107`) and `BoxMaterial` (`town.rs:112-158`) have the same shape: an enum, an `ALL` array in discriminant order, a `name` method and a `const _` that asserts the order. Two sites; a macro or trait would cost more than the 50 lines it saves, and the shape is the crate's idiom for an enum that indexes a `Vec` of Handles.
+5. Not filed: `point_lights` (`mod.rs:402-407`) keeps `Self::Town => &[]` as its own arm beside `Self::TextureWall | Self::Crowd => &[]` to carry a comment that its doc comment (`mod.rs:390`) already says ("town's stand in its lamps, which its spawn places"). Two lines; a comment repeated, not wrong.
+6. Not filed: the `Crowd` variant's doc (`mod.rs:56-62`, "Their Meshes have no BLAS … each casts its shadow through rigid shadow proxies") describes the default `CrowdForm::Proxies` (`src/render/renderer.rs:105-106,146`); under `Refit` or `Rebuild` the figures do have BLASes (`mod.rs:1014-1023`). The doc describes the scene as it ships, and `spawn_traced_crowd`'s doc (`mod.rs:966-968`) says the other form. Judged accurate.
+7. Figures in shipping comments re-derived and found right (so the next audit need not): 40 by 65 segments make 2 × 40 × 65 − 2 × 40 = 5,120 triangles (`mod.rs:889-890`); 12 by 8 make 168 (`mod.rs:898-899`); 0.35 rad/m × 1.8 m = 0.63 rad = 36° (`mod.rs:909-910`); 1.8 m / 16 bones = 0.1125 m, half 0.05625 m (`mod.rs:1263-1264`); π(3 − √5) = 2.39996 (`mod.rs:914-915`); the orrery's 60 captured frames (`src/capture/mod.rs:99`, one `update` per frame at `mod.rs:258-260`) at 1/144 s total 416.67 ms = 26.667 Ticks, two thirds of the way (`mod.rs:370-372`); "about 250,000 Instances" (`mod.rs:63-64`) against `TOWN_INSTANCES = 254_256` pinned at `tests/frame_stats.rs:14`; atan(300 / 2000) = 8.5° and 0.01 / tan(8.5°) = 6.7 cm (`mod.rs:589-590`); sqrt(300) = 17.3 m (`mod.rs:685`); the light at (0, 1, 16) to the floor's far corners (±50, 0, −50) is 82.8 m (`mod.rs:687`); the mirror point of a 1 m light seen from 1.2 m over 30 m sits 16.4 m out (`mod.rs:682-683`); 99 × 101 = 9,999 (`mod.rs:778`); 20 × SUN / 4.47² = SUN and 20 / 4.85² = 0.85 on the ground (`town.rs:222-223`); the tallest roof plant tops out at 6 × 3.2 + 3.5 + 0.15 = 22.85 m, under the lowest bird at 30 − 4 = 26 m (`town.rs:234`); 4 / 60 m per frame at 60 Hz is 4 m/s (`town.rs:820-822`); `FLOCK_STRAY` = 50 − 30 = 20 m keeps a 30 m flock in a 100 m cell (`town.rs:246-248`); the lamp's light at y = 4.7 sits under its head at y = 4.85 to 5.05 (`town.rs:218-221,1055-1056`); the uv sphere's `u` starts at +Z and grows towards +X (`mod.rs:1148-1149,1160-1164`); `ORRERY_ORBIT_RADIUS` is in the parent's diameters because the parent's local radius is 0.5 (`mod.rs:622-623`); the model's bounds −1.2 to 0.95 have middle −0.125 (`mod.rs:572-573`). The path the `bent_middle` doc cites, `src/render/shaders/bend.wgsl` (`mod.rs:1102`), exists. The `Helmet` variant's "local runs only" (`mod.rs:28`) holds: neither CI workflow fetches it (`grep -rli 'helmet\|fetch' .github/workflows`: no hit) and `tests/frame_stats.rs:286-290` skips it when absent.
+8. Not filed: `name`'s doc comment (`mod.rs:85`, "The name the capture command selects the scene by") names one of its callers; the bench, the cooker, the exporter, the Goldens and the Cooked cache's `AssetSource::Scene` also key on it (`src/bench/mod.rs:530`, `src/cook/mod.rs:276`, `src/cook/export.rs:161`, `tests/goldens.rs:333`, `mod.rs:108`). Narrow, not wrong.
+9. Not filed: `spawn_crowd_as`'s `form` parameter (`mod.rs:981`) never carries `CrowdForm::Rebuild`, since `spawn_traced_crowd` passes `Refit` for both (`mod.rs:973`) and `src/state.rs:89` maps `Rebuild` to it; the arm `CrowdForm::Refit | CrowdForm::Rebuild => None` (`mod.rs:991`) is a pattern, not a branch, and the renderer, not the spawn, tells the two apart. L5-C20's form passes `crowd_form` straight through and the wrappers go.
+10. Nothing for lane 1 found: `spin` (`mod.rs:664-670`) and `sway` (`mod.rs:1063-1077`) set state from `fixed_time.tick` and `TICK_SECONDS`, read no wall clock, and `spawn_crowd_as` and `spawn_town` give every entity they move a `PreviousWorldTransform` (`mod.rs:1020,1032`; `town.rs:797,805`), as ADR 0022 says; the orrery's `Spin` bodies too (`mod.rs:637`).
+11. Lane 6, not filed here: the test module (`mod.rs:1246-1351`) pins `bone_transform` against the bend pass's oracle, each proxy inside its figure, and the figure inside its culling box; no test pins `uv_sphere`'s triangle count or `cylinder`'s winding, which `tests/frame_stats.rs:282-283` and the Goldens cover indirectly.
+12. Style, not filed: `mod.rs:38` is a doc line of 118 columns that `rustfmt` leaves; the constants mix `COLORS` (`mod.rs:596,857,918`, after glTF's `base_color`) with `COLOURED_LIGHTS` and `centre` (`mod.rs:477,605`), a spelling choice, not an abbreviation.
+13. L5-C20's fix is a judgement for the triage: moving `spawn_helmet_scene` into `src/scenes/` makes the scenes module depend on `src/helmet/` for `HelmetAssets`; the alternative that keeps the dependency direction, a `spawn` method with the helmet arm calling back into `state`, keeps one of the fifteen items exported. Either way the proof of unchanged behaviour is Goldens bit-exact and `tests/frame_stats.rs`'s Instance counts equal.
+
+
+**E.**
+
+1. `Teleported` (`src/transform/mod.rs:48`) is inserted by no shipping system: `grep -rn Teleported src tests` finds its definition, its reader `reset_teleported` (`transform/mod.rs:73,83`) and one insertion at `state.rs:528`, inside a test. `reset_teleported` runs every Tick over an empty query (`state.rs:338`). Not filed: ADR 0022 names the marker as the teleport mechanism ("a teleport goes through an explicit marker that resets previous to current") and `CLAUDE.md`'s review checklist requires a jump to insert it; the component is the designed hook for the first game-state system that jumps, its cost per Tick is one empty query, and a Finding against it would be placed wontfix on the ADR. Recorded here so the next audit does not re-find it.
+2. `Transform` holds no `WorldTransform` author: `#[require(WorldTransform)]` at `components.rs:10` gives a spawned entity the identity until the first propagation, and `Simulation::new` propagates once before the first frame (`state.rs:106-108`). The doc "never authored" at `transform/mod.rs:7` holds for shipping code; tests construct it directly (`transform/mod.rs:291`). Clean.
+3. The `Moved` type alias (`transform/mod.rs:88`) has one use, at line 96. Not filed: 2 lines, it names the filter the doc comment above the system refers to, and inlining it lengthens the parameter list clippy already allows past its argument limit (`transform/mod.rs:94`).
+4. `WorldTransform::translation()` (`transform/mod.rs:12-14`) is a getter beside a public field, one of the width smells weighed. Not filed: 3 lines; its 6 callers would each become `.0.translation`, which is no smaller and reads worse at `prepare.rs:385` where the result of `drawn` is read.
+5. `record_previous_curvatures` (`transform/mod.rs:63-67`) lives in the transform module but acts on `Bend`, a component the components module declares, so `transform` imports `Bend` (`transform/mod.rs:3`) while `components` imports `WorldTransform` (`components.rs:4`). Not filed: 5 lines, and its doc says why it sits beside `record_previous_world_transforms` (the same Tick-start role). A future bend module would take it with `Bend` and `drawn_curvature`.
+6. `clamp_frame_delta` (`time/mod.rs:33-35`) is one `min` for one caller (`lib.rs:223`). Not filed: it keeps `MAX_FRAME_DELTA` and the clamp's name in the module that owns the Tick, and exporting the constant instead is the same line count.
+7. `MAX_FRAME_DELTA` and `MAX_TICKS_PER_FRAME` (`time/mod.rs:18,27`) are `pub` with no reader outside their file, beside `SIXTY_HERTZ` at `pub(crate)`. Not filed: `mod time;` is private (`lib.rs:35`), so the spellings reach the same code, which the module appendix rules out as a Finding on its own. Both are read by shipping code in the file (`time/mod.rs:34,56`), so neither is vestigial.
+8. `bevy_ecs`'s `multi_threaded` feature and the `bevy_tasks` dependency (`Cargo.toml:17-18`) serve only L5-C24's pool; the dependency question falls in tooling and is an owner decision under `CLAUDE.md`'s Stack.
+9. The doc of `simulation_schedules` at `state.rs:313-315` reads "The State's one schedule: its systems, timed by `recorder`, on the single-threaded executor. The schedule run once per frame and the fixed schedule run once per Tick." for a function returning two schedules; the first sentence is stale. Falls in tooling (`state.rs` is outside the module); severity would be drift, not load-bearing.
+10. `a_press_in_a_frame_that_runs_no_tick_is_consumed_by_the_next_tick` (`time/mod.rs:265-282`) builds its own `(count_presses, clear_just_pressed).chain()` schedule, so it pins the order the test wrote, not the orchestrator's at `state.rs:337`; of the shipping code in `time/mod.rs` it exercises only that zero Ticks run no system, which `a_frame_shorter_than_a_tick_runs_none_and_keeps_its_time` (`time/mod.rs:243`) already pins. Whether the orchestrator's order needs its own seam falls in lane 6.
+11. `despawning_a_parent_despawns_its_subtree` (`transform/mod.rs:311-326`) relies on `bevy_ecs`'s linked despawn of `ChildOf` descendants; it does exercise the despawned-entity branch at `transform/mod.rs:128-133` through `RemovedComponents<ChildOf>`, so it pins shipping code. Clean.
+12. The components carry no GPU resource (`MeshHandle`, `MaterialHandle` are Pool indices, `CONTEXT.md` Handle) and no behaviour beyond pure functions of their fields (`to_affine`, `drawn_curvature`), matching ADR 0006; `Transform`'s size and alignment are asserted at `components.rs:17-18` against the doc at `components.rs:7`. Clean on the GPU-free rule.
+13. `Time` (`time/mod.rs:9-14`) has no `///` doc and its one field is documented with `//`. Not filed: the comment is accurate, and the rule "Don't add comments to code you didn't change" means a fix ticket would not carry it alone.
+14. Abbreviations weighed and allowed: `θ` (`transform/mod.rs:19`) and `α` (`time/mod.rs:44`) as textbook symbols in comments, which the full-word rule permits; `uv`-free and `id`-free files; `x`, `y`, `z` as coordinates in comments and test oracles only.
+15. Comment figures recomputed and found right: `transform/mod.rs:19-20` (1 − cos(θ/2) at θ = 0.09 rad is 0.00101, and 0.09 rad per 1/64 s is 5.76 rad/s, written 5.8); `time/mod.rs:21` (15,625,000 ns is 1/64 s); the test at `time/mod.rs:206-208` (250 ms is 16 Ticks, 12 dropped is 187,500 µs) and `time/mod.rs:217-222` (100 ms is 6.4 Ticks, 2 dropped is 31,250 µs, 0.4 carried).
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 0 |
+| `drift` | 3 (L5-C13, L5-C17, L5-C23); load-bearing 1 (L5-C13) |
+| `health` | 21 (L5-C01 to L5-C12, L5-C14 to L5-C16, L5-C18 to L5-C22, L5-C24) |
+
+By axis: over-engineering 11 (L5-C03, L5-C06, L5-C09, L5-C10, L5-C11,
+L5-C14, L5-C15, L5-C18, L5-C19, L5-C21, L5-C22); vestigial 3 (L5-C04,
+L5-C05, L5-C24); cognitive complexity 2 (L5-C01, L5-C02, the probe's two
+hits in this module, both tests); naming 1 (L5-C16, a count with no
+name); module depth 4 (L5-C07, L5-C08, L5-C12, L5-C20); comment accuracy
+3 (the `drift` rows). Of the `health` rows, 5 are in test modules only
+(L5-C01, L5-C02, L5-C10, L5-C11, L5-C14) and 16 in shipping code. No
+implied fix moves a pixel or changes a Blob's content hash, so every
+`health` row carries the refactor licence and none is a defect. Axis
+sweep: 18 file rows. Interface widths: 44 types and module surfaces, 290
+public items counted. Files read in full: the 18 of the module (17 Rust
+files, 9,397 lines, and `assets/manifest.json`); read in part for use
+counts: `src/lib.rs`, `src/state.rs`, `src/bin/praxis.rs`, `src/helmet/`,
+`src/preflight/`, `src/capture/`, `src/render/` (prepare, the renderer,
+the acceleration structures, the bend pass, the shader function tests),
+`tests/`, `scripts/cycles-reference/render.py`, `scripts/gallery.sh`,
+`docs/references.toml` and the ADRs the module cites.
+
 ## Killed
 
 Written by the report session.
