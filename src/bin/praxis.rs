@@ -82,6 +82,7 @@ enum Command {
     Bisect {
         night: String,
     },
+    Regressions,
     Compare {
         results: String,
         mode: CompareMode,
@@ -144,6 +145,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::UnrecordedScenes => unrecorded_scenes(),
         Command::Suspects => suspects(),
         Command::Bisect { night } => bisect(&night),
+        Command::Regressions => regressions(),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
     }
@@ -286,6 +288,9 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, subcommand] if command == "history" && subcommand == "suspects" => {
             Command::Suspects
         }
+        [command, subcommand] if command == "history" && subcommand == "regressions" => {
+            Command::Regressions
+        }
         [command, subcommand, night] if command == "history" && subcommand == "bisect" => {
             Command::Bisect {
                 night: night.clone(),
@@ -311,7 +316,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
              `export-scene <scene> <directory> [--frame <n>]`, \
              `difference <expected png> <actual png> <difference png>`, \
              `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
             ReferenceScene::ALL.map(ReferenceScene::name)
         ),
@@ -562,6 +567,20 @@ fn bisect(night: &str) -> anyhow::Result<()> {
         Path::new(night),
     )? {
         writeln!(std::io::stdout(), "{scene} {commit}")?;
+    }
+    Ok(())
+}
+
+/// Opens one `needs-triage` issue per Regression this machine's Verdicts
+/// pinned that no re-recorded Baseline covers, and prints each Verdict's
+/// scene, commit and issue.
+fn regressions() -> anyhow::Result<()> {
+    let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
+    let mut stdout = std::io::stdout();
+    for (scene, commit, issue) in
+        praxis::bench::file_regressions(Path::new("."), &adapter.name, adapter.backend.to_str())?
+    {
+        writeln!(stdout, "{scene} {commit} #{issue}")?;
     }
     Ok(())
 }
@@ -969,6 +988,10 @@ mod tests {
             panic!("history bisect parsed as another command");
         };
         assert_eq!(night, "night");
+        assert!(matches!(
+            parse(&["history", "regressions"]).unwrap(),
+            Command::Regressions
+        ));
         assert!(parse(&["history"]).is_err());
     }
 

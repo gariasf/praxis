@@ -5,7 +5,10 @@
 # record before it, and bisects the commits between when the shift holds,
 # each commit from a release binary built in a worktree of its own under
 # target/sweep/trees, which a later night's bisect reuses. The records
-# publish to `bench-history`, and each night's Verdict lands there too. It runs in a
+# publish to `bench-history`, and each night's Verdict lands there too. A
+# commit a bisect pinned that no re-recorded Baseline covers opens one
+# `needs-triage` issue per scene through `gh`, which must be installed and
+# logged in (`gh auth login`); the Verdict records it. It runs in a
 # clone of its own, which it moves to `main` each night, and appends what
 # it did to target/sweep/sweep.log there. On the Mac the clone sits outside
 # ~/Documents, ~/Desktop and ~/Downloads, which macOS keeps from a launchd
@@ -184,6 +187,10 @@
     for tree in target/sweep/trees/*/; do git worktree remove --force "$tree"; done
     git worktree prune
   fi
+
+  # Every night, so one whose `gh` failed is tried again; the issue's number
+  # on the Verdict keeps a later night from opening it twice.
+  "$praxis" history regressions || log "praxis history regressions failed"
 
   [ -z "$scenes" ] && log "main's source has a record on every Series here"
   results="target/sweep/$(date '+%Y%m%dT%H%M%S')"

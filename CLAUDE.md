@@ -208,7 +208,9 @@ scripts/cycles-reference/      # the Cycles reference, Blender 5.2's Python:
                                  on purpose or not yet
 scripts/sweep.sh               # the nightly sweep: re-benches a slower
                                  Suspect beside the record before it and
-                                 bisects it (`praxis history bisect`), then
+                                 bisects it (`praxis history bisect`), opens
+                                 a needs-triage issue per pinned Regression
+                                 (`praxis history regressions`), then
                                  benches main's scenes lacking a record on a
                                  Series here, on a quiet machine; beside it
                                  its launchd
