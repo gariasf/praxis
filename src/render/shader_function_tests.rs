@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use crate::assets::MaterialPool;
+use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
@@ -1344,15 +1344,17 @@ fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
 
 /// Layer 0 of the normal Channel, which every Material without a normal
 /// Texture samples, decodes to the flat normal exactly at every normal
-/// scale, glTF's default of 1 included. Its texel is binary16, decoded here
-/// as the sampler decodes it, and 0.5 has an exact code there.
+/// scale, glTF's default of 1 included. The texel the pool uploads there is
+/// binary16, decoded here as the sampler decodes binary16, and 0.5 has an
+/// exact code in it.
 #[test]
 fn the_neutral_normal_layer_decodes_to_the_flat_normal_exactly() {
     let Some(context) = gpu_context() else {
         return;
     };
-    let [x, y, ..] = MaterialPool::FLAT_NORMAL_TEXEL;
-    let x_and_y = f32::from_bits(u32::from(x) | u32::from(y) << 16);
+    let neutral = MaterialPool::neutral_texture(MaterialChannel::Normal);
+    assert_eq!(neutral.format, wgpu::TextureFormat::Rgba16Float);
+    let x_and_y = f32::from_le_bytes(neutral.levels[0][..4].try_into().unwrap());
     let inputs = [0.0, 0.5, 1.0, 2.0].map(|scale| [x_and_y, scale, 0.0, 0.0]);
     let results = evaluate(
         &context,

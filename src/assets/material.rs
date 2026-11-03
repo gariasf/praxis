@@ -163,7 +163,33 @@ impl MaterialPool {
     /// as binary16. 0.5 has no `Unorm8` code (128 decodes to 0.502, a tilt
     /// of 0.32°), so the shader's `encoded * 2.0 - 1.0` gives exactly 0 only
     /// from a float format.
-    pub(crate) const FLAT_NORMAL_TEXEL: [u16; 4] = [0x3800, 0x3800, 0x3C00, 0x3C00];
+    const FLAT_NORMAL_TEXEL: [u16; 4] = [0x3800, 0x3800, 0x3C00, 0x3C00];
+
+    /// The neutral default `channel` holds in Layer 0 (see DEFAULT_LAYER):
+    /// colour Channels are sRGB, data Channels linear.
+    pub(crate) fn neutral_texture(channel: MaterialChannel) -> CookedTexture {
+        let (format, texel) = match channel {
+            MaterialChannel::Albedo | MaterialChannel::Emissive => {
+                (wgpu::TextureFormat::Rgba8UnormSrgb, vec![255; 4])
+            }
+            MaterialChannel::Normal => (
+                wgpu::TextureFormat::Rgba16Float,
+                Self::FLAT_NORMAL_TEXEL
+                    .iter()
+                    .flat_map(|half| half.to_le_bytes())
+                    .collect(),
+            ),
+            MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
+                (wgpu::TextureFormat::Rgba8Unorm, vec![255; 4])
+            }
+        };
+        CookedTexture {
+            format,
+            width: 1,
+            height: 1,
+            levels: vec![texel],
+        }
+    }
 
     pub fn new(device: &wgpu::Device, staging: &mut LoadStaging) -> Self {
         let materials_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -183,31 +209,8 @@ impl MaterialPool {
         ]
         .map(ChannelTextures::new);
 
-        // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER):
-        // colour Channels are sRGB, data Channels linear.
         for channel in MaterialChannel::ALL {
-            let (format, texel) = match channel {
-                MaterialChannel::Albedo | MaterialChannel::Emissive => {
-                    (wgpu::TextureFormat::Rgba8UnormSrgb, vec![255; 4])
-                }
-                MaterialChannel::Normal => (
-                    wgpu::TextureFormat::Rgba16Float,
-                    Self::FLAT_NORMAL_TEXEL
-                        .iter()
-                        .flat_map(|half| half.to_le_bytes())
-                        .collect(),
-                ),
-                MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
-                    (wgpu::TextureFormat::Rgba8Unorm, vec![255; 4])
-                }
-            };
-            let neutral = CookedTexture {
-                format,
-                width: 1,
-                height: 1,
-                levels: vec![texel],
-            };
-            channels[channel as usize].push(device, staging, &neutral);
+            channels[channel as usize].push(device, staging, &Self::neutral_texture(channel));
         }
 
         let colour_sampler = trilinear_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
@@ -477,8 +480,9 @@ mod tests {
         std::fs::remove_dir_all(&directory).ok();
     }
 
-    /// The SSBO holds 256 Materials; the 257th gets no Handle, so nothing
-    /// draws with another Material in its place, and the refusal is logged.
+    /// The SSBO holds `MATERIAL_CAPACITY` Materials; the next gets no
+    /// Handle, so nothing draws with another Material in its place, and the
+    /// refusal is logged.
     #[test]
     fn a_material_past_capacity_is_refused_and_logged() {
         let Some(context) = gpu_context() else {
@@ -493,14 +497,14 @@ mod tests {
             layers: [MaterialPool::DEFAULT_LAYER; 4],
             extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
         };
-        for index in 0..256 {
+        for index in 0..MATERIAL_CAPACITY as u32 {
             let handle = pool.insert(&mut staging, material);
             assert!(handle.is_some_and(|handle| handle.index() == index));
         }
         let (handle, log) = logged(|| pool.insert(&mut staging, material));
-        assert!(handle.is_none(), "Material 257 got a Handle");
+        assert!(handle.is_none(), "a Material past capacity got a Handle");
         assert!(log.contains("WARN"), "not a warning: {log:?}");
         assert!(log.contains("Material refused"), "not logged: {log:?}");
-        assert_eq!(pool.materials.len(), 256);
+        assert_eq!(pool.materials.len() as u64, MATERIAL_CAPACITY);
     }
 }

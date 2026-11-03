@@ -495,6 +495,11 @@ pub struct CookedMesh {
     pub bounds: [[f32; 3]; 2],
 }
 
+/// The vertices in each block of meshopt's vertex codec, for a vertex of
+/// 28 bytes: 8192 bytes over its size, rounded down to a multiple of 16 and
+/// capped at 256 [ref:meshoptimizer-0.25-vertex-block].
+const VERTEX_CODEC_BLOCK_VERTICES: usize = 256;
+
 impl CookedMesh {
     /// The zstd level the cooker compresses at; part of the Cook key.
     #[cfg(feature = "cook")]
@@ -587,11 +592,12 @@ impl CookedMesh {
         let encoded_vertices = take(rest, vertex_bytes)?;
         // meshopt's decoder allocates every vertex before it reads a byte,
         // and its codec spends at least a control byte per 4 bytes of vertex
-        // on each block of up to 256 vertices of 28 bytes
-        // [ref:meshoptimizer-0.25-vertex-block], so a count past that is
-        // corrupt and must not size an allocation.
+        // on each block of vertices [ref:meshoptimizer-0.25-vertex-block],
+        // so a count past that is corrupt and must not size an allocation:
+        // at most 1,024 decoded bytes per encoded byte, not 112 GiB.
         anyhow::ensure!(
-            vertex_count.div_ceil(256) * (size_of::<CookedVertex>() / 4) <= encoded_vertices.len(),
+            vertex_count.div_ceil(VERTEX_CODEC_BLOCK_VERTICES) * (size_of::<CookedVertex>() / 4)
+                <= encoded_vertices.len(),
             "Mesh Blob has more vertices than its encoded bytes hold"
         );
         let vertices = meshopt::decode_vertex_buffer(encoded_vertices, vertex_count)?;
