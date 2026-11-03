@@ -117,7 +117,6 @@ pub fn export_scene(
             color: light.color.to_array(),
             intensity: light.intensity,
             range: light.range,
-            casts_shadow: light.casts_shadow,
         })
         .collect();
     let mut renderables = Vec::new();
@@ -240,7 +239,6 @@ struct PointLightEntry {
     /// Metres past which it adds nothing, KHR_lights_punctual's
     /// [ref:khr-lights-punctual-range].
     range: f32,
-    casts_shadow: bool,
 }
 
 #[derive(Serialize)]
@@ -1058,7 +1056,6 @@ mod tests {
         assert_eq!(floats(&lights[0]["color"]), [1.0; 3]);
         assert_eq!(lights[0]["intensity"], 900_000.0);
         assert_eq!(lights[0]["range"], 20.0);
-        assert_eq!(lights[0]["casts_shadow"], true);
 
         let renderables = scene["renderables"].as_array().unwrap();
         assert_eq!(renderables.len(), 1);

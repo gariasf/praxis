@@ -92,7 +92,7 @@ def link(scene, name, data):
     return instance
 
 
-def point_light(scene, location, color, intensity, light_range, casts_shadow):
+def point_light(scene, location, color, intensity, light_range):
     """A point light of radius 0 and luminous intensity `intensity` ×
     `color`, at `location` in Blender's axes, under KHR_lights_punctual's
     range window, clamp(1 − (distance / range)⁴, 0, 1)
@@ -103,7 +103,6 @@ def point_light(scene, location, color, intensity, light_range, casts_shadow):
     light.color = color
     light.shadow_soft_size = 0.0
     light.use_soft_falloff = False
-    light.use_shadow = casts_shadow
     nodes, links = light.node_tree.nodes, light.node_tree.links
     path = nodes.new("ShaderNodeLightPath")
     ratio = nodes.new("ShaderNodeMath")
@@ -401,7 +400,7 @@ def build(directory, width, height, samples):
         sun(scene, Vector(to_blender(light["direction"])), light["color"], light["illuminance"] * exposure)
     for light in exported["point_lights"]:
         location = Vector(to_blender(np.array(light["position"]) - origin))
-        point_light(scene, location, light["color"], light["intensity"] * exposure, light["range"], light["casts_shadow"])
+        point_light(scene, location, light["color"], light["intensity"] * exposure, light["range"])
 
     builder = MaterialBuilder(directory, exposure)
     materials = {name: builder.build(name, entry) for name, entry in exported["materials"].items()}

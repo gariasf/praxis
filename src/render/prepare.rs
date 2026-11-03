@@ -132,8 +132,17 @@ pub struct MovingInstance {
     pub instance: usize,
 }
 
+/// The Instance of a slot that draws nothing: a freed slot's, or a skipped
+/// Renderable's.
+fn no_mesh_instance() -> InstanceData {
+    InstanceData {
+        mesh: NO_MESH,
+        ..bytemuck::Zeroable::zeroed()
+    }
+}
+
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable or is not drawn; a slot freed in an earlier frame is taken
+/// Renderable (ADR 0003); a slot freed in an earlier frame is taken
 /// again before a fresh one, and once all `INSTANCE_CAPACITY` are taken a
 /// Renderable is refused one.
 #[derive(Default)]
@@ -196,8 +205,11 @@ pub struct FramePreparer {
     changed_renderable_query: ChangedRenderableQuery,
     instance_slots: InstanceSlots,
     /// Renderables the last `prepare` skipped or refused a slot, so wrote no
-    /// Instance for: visited again, changed or not.
+    /// Instance with a Mesh for: visited again, changed or not.
     unwritten: bevy_ecs::entity::EntityHashSet,
+    /// Renderables the last `prepare` skipped, whose slots hold an Instance
+    /// with no Mesh.
+    skipped: bevy_ecs::entity::EntityHashSet,
     /// Set by `rewrite_all_instances` until the next `prepare`.
     rewrite_every_instance: bool,
     renderables_refused: u32,
@@ -224,6 +236,7 @@ impl FramePreparer {
             changed_renderable_query: world.query_filtered(),
             instance_slots: InstanceSlots::default(),
             unwritten: bevy_ecs::entity::EntityHashSet::default(),
+            skipped: bevy_ecs::entity::EntityHashSet::default(),
             rewrite_every_instance: false,
             renderables_refused: 0,
             moving_instances_left_out: 0,
@@ -243,7 +256,8 @@ impl FramePreparer {
     /// (ADR 0022). A Renderable draws each Primitive of its Mesh with its
     /// Material Handle, else with the Material the Primitive names; one whose
     /// Mesh is not in `mesh_pool`, or that has no Material Handle where a
-    /// Primitive names no Material, is skipped and frees its slot. One that
+    /// Primitive names no Material, is skipped: it keeps its slot, which holds
+    /// an Instance with no Mesh until the Renderable is drawn. One that
     /// finds the Instance buffer full is refused, warned about once and
     /// counted every frame, and neither written nor drawn until a slot frees.
     /// An Instance is a Moving Instance while its entity carries its previous
@@ -276,6 +290,7 @@ impl FramePreparer {
             changed_renderable_query,
             instance_slots,
             unwritten,
+            skipped,
             rewrite_every_instance,
             renderables_refused,
             moving_instances_left_out,
@@ -352,32 +367,42 @@ impl FramePreparer {
             .chain(world.removed::<PreviousWorldTransform>())
             .collect();
         let retried = std::mem::take(unwritten);
+        let skipped_before = std::mem::take(skipped);
         let mut visit = |(entity, current, previous, mesh_ref, material_ref): RenderableItem<
             '_,
         >| {
-            let Some(mesh) = mesh_pool.get(mesh_ref.0) else {
-                tracing::warn!(
-                    handle = mesh_ref.0.0,
-                    "MeshHandle not in pool, skipping entity"
-                );
-                instance_slots.free(entity);
-                unwritten.insert(entity);
-                return;
+            let drawn = match mesh_pool.get(mesh_ref.0) {
+                None => {
+                    tracing::warn!(
+                        handle = mesh_ref.0.0,
+                        "MeshHandle not in pool, skipping entity"
+                    );
+                    false
+                }
+                Some(mesh) if material_ref.is_none() && mesh.needs_material_handle => {
+                    tracing::warn!(
+                        ?entity,
+                        "Renderable has no Material Handle and a Primitive of its Mesh names no Material, skipping it"
+                    );
+                    false
+                }
+                Some(_) => true,
             };
-            if material_ref.is_none() && mesh.needs_material_handle {
-                tracing::warn!(
-                    ?entity,
-                    "Renderable has no Material Handle and a Primitive of its Mesh names no Material, skipping it"
-                );
-                instance_slots.free(entity);
-                unwritten.insert(entity);
-                return;
-            }
             let Some(slot) = instance_slots.get_or_take(entity) else {
                 *renderables_refused += 1;
                 unwritten.insert(entity);
                 return;
             };
+            if !drawn {
+                // Its slot draws nothing until its Mesh does; an Instance with
+                // no Mesh written there before stays.
+                if *rewrite_every_instance || !skipped_before.contains(&entity) {
+                    frame.write_instance(slot, no_mesh_instance(), false);
+                }
+                skipped.insert(entity);
+                unwritten.insert(entity);
+                return;
+            }
             // Each Renderable visited is new, changed, blended, retried or lost
             // a component, or every Instance is written again.
             let transform = current.drawn(previous, blend_weight);
@@ -425,11 +450,7 @@ impl FramePreparer {
             &[]
         };
         for &slot in instance_slots.freed.iter().chain(rewritten_free_slots) {
-            let freed = InstanceData {
-                mesh: NO_MESH,
-                ..bytemuck::Zeroable::zeroed()
-            };
-            frame.write_instance(slot, freed, false);
+            frame.write_instance(slot, no_mesh_instance(), false);
         }
         instance_slots.free.append(&mut instance_slots.freed);
         frame.instance_slot_count = instance_slots.end;
@@ -511,11 +532,10 @@ impl FramePreparer {
 }
 
 /// Fills `lights` with every directional light, shining along its entity's
-/// forward axis, then every point light that casts a shadow, then every one
-/// that casts none, at its World position as an Anchor plus an offset (ADR
-/// 0014), each blended between its two newest Ticks, up to `LIGHT_CAPACITY`.
-/// Returns how many are directional, and sets `overflowed` to how many the
-/// light buffer had no room for.
+/// forward axis, then every point light, at its World position as an Anchor
+/// plus an offset (ADR 0014), each blended between its two newest Ticks, up
+/// to `LIGHT_CAPACITY`. Returns how many are directional, and sets
+/// `overflowed` to how many the light buffer had no room for.
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
@@ -539,33 +559,25 @@ fn prepare_lights(
                     ..LightData::default()
                 })
             });
+    let mut point_lights = point_light_query
+        .iter(world)
+        .map(|(current, previous, light)| {
+            let transform = current.drawn(previous, blend_weight);
+            let (anchor, offset) = anchor_and_offset(transform.translation());
+            LightData {
+                anchor,
+                range: light.range,
+                offset,
+                intensity: (light.color * light.intensity).to_array(),
+                ..LightData::default()
+            }
+        });
     let capacity = LIGHT_CAPACITY as usize;
     lights.clear();
     lights.extend(directional_lights.by_ref().take(capacity));
     let directional_light_count = lights.len() as u32;
-    *overflowed = directional_lights.count() as u32;
-    // The point lights that cast a shadow, then those that cast none, so
-    // the shadow mask's bits, which follow the lights in buffer order, go
-    // to the first.
-    for casts_shadow in [true, false] {
-        let mut point_lights = point_light_query
-            .iter(world)
-            .filter(|(.., light)| light.casts_shadow == casts_shadow)
-            .map(|(current, previous, light)| {
-                let transform = current.drawn(previous, blend_weight);
-                let (anchor, offset) = anchor_and_offset(transform.translation());
-                LightData {
-                    anchor,
-                    range: light.range,
-                    offset,
-                    unshadowed_range: if casts_shadow { 0.0 } else { light.range },
-                    intensity: (light.color * light.intensity).to_array(),
-                    ..LightData::default()
-                }
-            });
-        lights.extend(point_lights.by_ref().take(capacity - lights.len()));
-        *overflowed += point_lights.count() as u32;
-    }
+    lights.extend(point_lights.by_ref().take(capacity - lights.len()));
+    *overflowed = (directional_lights.count() + point_lights.count()) as u32;
     directional_light_count
 }
 
@@ -1007,29 +1019,57 @@ mod tests {
     }
 
     #[test]
-    fn a_renderable_skipped_for_a_mesh_not_in_the_pool_is_written_once_it_loads() {
+    fn a_renderable_whose_mesh_is_not_in_the_pool_keeps_its_slot_and_draws_there_once_it_loads() {
         let Some(mut frames) = Frames::new() else {
             return;
         };
+        // The slots the next frame writes, in slot order, and whether each
+        // Instance names a Mesh.
+        let written = |frames: &mut Frames| -> Vec<(u32, bool)> {
+            let slots = frames.prepare();
+            let instances = &frames.preparer.frame().instances;
+            let mut slots_and_meshes: Vec<(u32, bool)> = slots
+                .into_iter()
+                .zip(instances.iter().map(|instance| instance.mesh != NO_MESH))
+                .collect();
+            slots_and_meshes.sort_unstable();
+            slots_and_meshes
+        };
+        frames.spawn(0.0);
+        let switched = frames.spawn(1.0);
+        assert_eq!(written(&mut frames), [(0, true), (1, true)]);
+
         // The handle the pool's next load returns.
         let unloaded = MeshHandle(frames.mesh.0 + 1);
+        // A Renderable whose Mesh is not in the pool keeps its slot, which is
+        // written once an Instance with no Mesh; so is a new one's slot.
+        frames.world.entity_mut(switched).insert(MeshRef(unloaded));
+        assert_eq!(written(&mut frames), [(1, false)]);
         frames.world.spawn((Transform::IDENTITY, MeshRef(unloaded)));
+        assert_eq!(written(&mut frames), [(2, false)]);
         for _ in 0..2 {
-            assert!(frames.prepare().is_empty());
+            assert!(written(&mut frames).is_empty());
         }
-        // Unchanged since, it is written as soon as its Mesh is in the pool.
-        let loaded = frames
-            .mesh_pool
-            .load(
-                &mut frames.staging,
-                &mesh(3, vec![0, 1, 2]),
-                &[Some(MESH_MATERIAL)],
-            )
-            .expect("a triangle fits");
+        // Neither slot is free for another Renderable to take.
+        frames.spawn(3.0);
+        assert_eq!(written(&mut frames), [(3, true)]);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 4);
+        // Every Instance written again writes theirs again with no Mesh.
+        frames.preparer.rewrite_all_instances();
+        assert_eq!(
+            written(&mut frames),
+            [(0, true), (1, false), (2, false), (3, true)]
+        );
+
+        // Unchanged since, both draw in their slots as soon as their Mesh is
+        // in the pool.
+        let loaded = load(&mut frames, 3);
         assert!(loaded == unloaded, "the pool loaded a different handle");
-        assert_eq!(frames.prepare(), [0]);
-        assert_eq!(frames.preparer.frame().instances[0].mesh, unloaded.0);
-        assert!(frames.prepare().is_empty());
+        assert_eq!(written(&mut frames), [(1, true), (2, true)]);
+        let instances = &frames.preparer.frame().instances;
+        assert!(instances.iter().all(|instance| instance.mesh == unloaded.0));
+        assert!(written(&mut frames).is_empty());
+        assert_eq!(frames.preparer.frame().instance_slot_count, 4);
     }
 
     /// Loads a Mesh of a triangle over the first three of `vertex_count`
@@ -1197,7 +1237,6 @@ mod tests {
             color: glam::vec3(1.0, 0.5, 0.25),
             intensity: 4.0,
             range: 3.0,
-            casts_shadow: true,
         };
         let position = glam::dvec3(100_000.25, 2.0, -64.5);
         frames
@@ -1229,34 +1268,6 @@ mod tests {
         );
     }
 
-    /// Point lights spawned casting a shadow and casting none in turn: the
-    /// light buffer holds those that cast one first, then the others, each
-    /// kind in the order it was spawned, the others with all of their range
-    /// unshadowed.
-    #[test]
-    fn point_lights_that_cast_no_shadow_follow_those_that_cast_one() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
-        for (intensity, casts_shadow) in [(1.0, true), (2.0, false), (3.0, true), (4.0, false)] {
-            let point_light = PointLight {
-                color: glam::Vec3::ONE,
-                intensity,
-                range: 1.0,
-                casts_shadow,
-            };
-            frames.world.spawn((Transform::IDENTITY, point_light));
-        }
-        frames.prepare();
-        let frame = frames.preparer.frame();
-        let lights: Vec<(f32, f32)> = frame
-            .lights
-            .iter()
-            .map(|light| (light.intensity[0], light.unshadowed_range))
-            .collect();
-        assert_eq!(lights, [(1.0, 0.0), (3.0, 0.0), (2.0, 1.0), (4.0, 1.0)]);
-    }
-
     /// One directional light and one point light more than the light buffer
     /// holds: the directional light and all but two point lights are drawn,
     /// and the two are counted every frame and warned about once, until
@@ -1275,7 +1286,6 @@ mod tests {
             color: glam::Vec3::ONE,
             intensity: 1.0,
             range: 1.0,
-            casts_shadow: true,
         };
         let point_lights: Vec<Entity> = (0..LIGHT_CAPACITY + 1)
             .map(|index| {
