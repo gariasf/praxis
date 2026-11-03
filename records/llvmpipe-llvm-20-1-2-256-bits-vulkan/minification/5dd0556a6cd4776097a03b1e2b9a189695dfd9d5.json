@@ -1,0 +1,117 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793743944,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 404281140,
+    "heap_allocations": 341,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "triangles_drawn": 2,
+    "uploaded_bytes": 272
+  },
+  "cpu_frame_microseconds": {
+    "median": 315920.59,
+    "p95": 318491.683
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.572,
+    "p95": 0.99
+  },
+  "gate_microseconds": {
+    "median": 300044.819,
+    "p95": 302415.75999999995
+  },
+  "gpu_frame_microseconds": {
+    "median": 315900.55,
+    "p95": 318404.83200000005
+  },
+  "gpu_memory_bytes": 404281140,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 701.697,
+      "p95": 781.117
+    },
+    "culling_phase_two": {
+      "median": 281.704,
+      "p95": 319.111
+    },
+    "depth_prepass": {
+      "median": 1346.91,
+      "p95": 1454.1
+    },
+    "depth_pyramid_pass": {
+      "median": 2606.9869999999996,
+      "p95": 3535.796
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 306.34,
+      "p95": 432.943
+    },
+    "lit_pass": {
+      "median": 295980.854,
+      "p95": 297720.59
+    },
+    "phase_two_depth_pass": {
+      "median": 100.502,
+      "p95": 128.112
+    },
+    "shadow_mask_pass": {
+      "median": 9704.101,
+      "p95": 11196.335
+    },
+    "tonemapping_pass": {
+      "median": 3898.228,
+      "p95": 4592.604
+    }
+  },
+  "heap_allocations": 341,
+  "height": 360,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "measured_frames": 64,
+  "profile": "release",
+  "provenance": {
+    "branch": "main",
+    "commit": "afaf426d630071a135ace3d7f0fb11187a3497a6",
+    "dirty": false,
+    "driver": "llvmpipe",
+    "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)",
+    "gpu_frame_p95_over_median": 1.007927437923106,
+    "gpu_load_percent": null,
+    "harness_version": 10,
+    "other_processes": [],
+    "quiet": true,
+    "scene_content_hash": "6d4e984f4e33e937e599760f3da8fc920ef5c00abe53e03b89d5b3abc4fa7a88",
+    "source_hash": "5dd0556a6cd4776097a03b1e2b9a189695dfd9d5",
+    "started_unix_seconds": 1793744100
+  },
+  "scene": "minification",
+  "shadow_ray_microseconds": {
+    "median": 12018.843999999985,
+    "p95": 15226.670000000042
+  },
+  "triangles_drawn": 2,
+  "uploaded_bytes": 272,
+  "width": 640
+}
