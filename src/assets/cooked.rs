@@ -584,7 +584,17 @@ impl CookedMesh {
             .map(|meshlet_count| take(rest, meshlet_count))
             .collect::<anyhow::Result<_>>()?;
         let vertex_bytes = take_u32(rest)? as usize;
-        let vertices = meshopt::decode_vertex_buffer(take(rest, vertex_bytes)?, vertex_count)?;
+        let encoded_vertices = take(rest, vertex_bytes)?;
+        // meshopt's decoder allocates every vertex before it reads a byte,
+        // and its codec spends at least a control byte per 4 bytes of vertex
+        // on each block of up to 256 vertices of 28 bytes
+        // [ref:meshoptimizer-0.25-vertex-block], so a count past that is
+        // corrupt and must not size an allocation.
+        anyhow::ensure!(
+            vertex_count.div_ceil(256) * (size_of::<CookedVertex>() / 4) <= encoded_vertices.len(),
+            "Mesh Blob has more vertices than its encoded bytes hold"
+        );
+        let vertices = meshopt::decode_vertex_buffer(encoded_vertices, vertex_count)?;
         // The index codec spends at least a byte per triangle, so a count
         // past that is corrupt and must not size an allocation.
         anyhow::ensure!(
@@ -945,6 +955,26 @@ mod tests {
         corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
         let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
         assert!(error.contains("not whole triangles"), "{error}");
+    }
+
+    /// A vertex count of 2^32 - 1 would size a decoded allocation of
+    /// 112 GiB; it is refused before anything allocates for it.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn mesh_blob_with_more_vertices_than_its_bytes_hold_is_refused() {
+        let mesh = CookedMesh {
+            vertices: vec![CookedVertex::default(); 3],
+            indices: vec![0, 1, 2],
+            primitives: Vec::new(),
+            bounds: [[0.0; 3]; 2],
+        };
+        let blob = mesh.to_blob().unwrap();
+        let mut payload = zstd::decode_all(&blob[8..]).unwrap();
+        payload[0..4].copy_from_slice(&u32::MAX.to_le_bytes());
+        let mut corrupt = blob[..8].to_vec();
+        corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
+        let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
+        assert!(error.contains("more vertices than"), "{error}");
     }
 
     #[cfg(feature = "cook")]

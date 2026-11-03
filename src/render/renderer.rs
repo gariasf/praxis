@@ -1229,16 +1229,19 @@ pub(crate) mod tests {
         // keep the first frame's Anchor.
         let images = |switches, occluders: &[Occluder]| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
-            let white = renderer.material_pool.insert(
-                &mut renderer.load_staging,
-                MaterialData {
-                    base_color: [1.0; 4],
-                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                    emissive: [0.0, 0.0, 0.0, 1.0],
-                    layers: [MaterialPool::DEFAULT_LAYER; 4],
-                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-                },
-            );
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
             let quad = load_quad(&mut renderer);
             // A square of `size` metres facing the camera at `distance` ahead
             // of it, which is behind it when negative.
@@ -1367,16 +1370,19 @@ pub(crate) mod tests {
                 SIZE,
                 RenderSwitches::default(),
             );
-            let white = renderer.material_pool.insert(
-                &mut renderer.load_staging,
-                MaterialData {
-                    base_color: [1.0; 4],
-                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                    emissive: [0.0, 0.0, 0.0, 1.0],
-                    layers: [MaterialPool::DEFAULT_LAYER; 4],
-                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-                },
-            );
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
             let quad = load_quad(&mut renderer);
             // A square of `size` metres facing +Z at `distance` ahead of the
             // camera, which looks down -Z, or behind it when negative.
@@ -1439,16 +1445,19 @@ pub(crate) mod tests {
             SIZE,
             RenderSwitches::default(),
         );
-        let white = renderer.material_pool.insert(
-            &mut renderer.load_staging,
-            MaterialData {
-                base_color: [1.0; 4],
-                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                emissive: [0.0, 0.0, 0.0, 1.0],
-                layers: [MaterialPool::DEFAULT_LAYER; 4],
-                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-            },
-        );
+        let white = renderer
+            .material_pool
+            .insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [1.0; 4],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [0.0, 0.0, 0.0, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            )
+            .expect("a Material fits");
         let quad = load_quad(&mut renderer);
         // The quad, facing +Z, toward the camera, which looks down -Z, until
         // turned; its normal turns with it, as scaling it in its own plane
@@ -1791,16 +1800,19 @@ pub(crate) mod tests {
             .collect();
         let image_with = |switches| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
-            let white = renderer.material_pool.insert(
-                &mut renderer.load_staging,
-                MaterialData {
-                    base_color: [1.0; 4],
-                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                    emissive: [0.0, 0.0, 0.0, 1.0],
-                    layers: [MaterialPool::DEFAULT_LAYER; 4],
-                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-                },
-            );
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
             let quad = load_quad(&mut renderer);
             let wall = InstanceData {
                 rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
@@ -1873,16 +1885,19 @@ pub(crate) mod tests {
         let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
         let counts_with = |switches, lights: &[([f32; 3], f32)]| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
-            let white = renderer.material_pool.insert(
-                &mut renderer.load_staging,
-                MaterialData {
-                    base_color: [1.0; 4],
-                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                    emissive: [0.0, 0.0, 0.0, 1.0],
-                    layers: [MaterialPool::DEFAULT_LAYER; 4],
-                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-                },
-            );
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
             let quad = load_quad(&mut renderer);
             // Its right edge on the view's axis, between two columns of
             // pixels.
@@ -2525,16 +2540,19 @@ pub(crate) mod tests {
     /// reaches the target.
     fn emissive_material(renderer: &mut Renderer, emissive: [f32; 3]) -> MaterialHandle {
         let [red, green, blue] = emissive;
-        renderer.material_pool.insert(
-            &mut renderer.load_staging,
-            MaterialData {
-                base_color: [0.0, 0.0, 0.0, 1.0],
-                metallic_roughness: [0.0, 1.0, 0.0, 0.0],
-                emissive: [red, green, blue, 1.0],
-                layers: [MaterialPool::DEFAULT_LAYER; 4],
-                extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
-            },
-        )
+        renderer
+            .material_pool
+            .insert(
+                &mut renderer.load_staging,
+                MaterialData {
+                    base_color: [0.0, 0.0, 0.0, 1.0],
+                    metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                    emissive: [red, green, blue, 1.0],
+                    layers: [MaterialPool::DEFAULT_LAYER; 4],
+                    extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                },
+            )
+            .expect("a Material fits")
     }
 
     /// Loads a Mesh of a triangle 0.6 wide about each of `centres`, each its

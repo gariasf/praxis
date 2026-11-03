@@ -81,7 +81,7 @@
   "triangles_drawn": 7774,
   "instances_overflowed": 0,
   "uploaded_bytes": 384,
-  "gpu_memory_bytes": 639908546,
+  "gpu_memory_bytes": 639908550,
   "arena_bytes_in_use": 258368,
   "heap_allocations": 327,
   "counter_frames": {
@@ -94,7 +94,7 @@
     "triangles_drawn": 7774,
     "instances_overflowed": 0,
     "uploaded_bytes": 384,
-    "gpu_memory_bytes": 639908546,
+    "gpu_memory_bytes": 639908550,
     "arena_bytes_in_use": 258368,
     "heap_allocations": 327
   }

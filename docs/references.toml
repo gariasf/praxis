@@ -798,6 +798,16 @@ section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), the default vertex 
 quote = '''static int gEncodeVertexVersion = 0; [...] return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel, meshopt::gEncodeVertexVersion);'''
 checked = 2026-10-26
 
+["meshoptimizer-0.25-vertex-block"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L701-L713"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), getVertexBlockSize (L140-L147) and decodeVertexBlock's control bytes (L711-L713); codec 0 spends a header byte per byte of vertex instead (decodeBytes, L648-L650)"
+quote = '''size_t result = (kVertexBlockSizeBytes / vertex_size) & ~(kByteGroupSize - 1);
+
+	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize; [...] size_t control_size = version == 0 ? 0 : vertex_size / 4;
+	if (size_t(data_end - data) < control_size)
+		return NULL;'''
+checked = 2026-11-03
+
 ["reuse-3.3-globbing"]
 url = "https://reuse.software/spec-3.3/"
 section = "REUSE Specification 3.3, REUSE.toml, path globbing and multiple tables"
