@@ -66,12 +66,12 @@ def main():
     # illuminance that gives the plane.
     cases = [
         ("point at 1 m", lambda scene: render.point_light(
-            scene, Vector((0, 0, 1)), white, 1.0, render.UNBOUNDED_RANGE, True), 1.0),
+            scene, Vector((0, 0, 1)), white, 1.0, render.UNBOUNDED_RANGE), 1.0),
         ("point at 10 m", lambda scene: render.point_light(
-            scene, Vector((0, 0, 10)), white, 1.0, render.UNBOUNDED_RANGE, True), 1.0 / 100.0),
+            scene, Vector((0, 0, 10)), white, 1.0, render.UNBOUNDED_RANGE), 1.0 / 100.0),
         # KHR_lights_punctual's window, 1 − (10 / 20)⁴ = 0.9375.
         ("point at 10 m of range 20 m", lambda scene: render.point_light(
-            scene, Vector((0, 0, 10)), white, 1.0, 20.0, True), 0.9375 / 100.0),
+            scene, Vector((0, 0, 10)), white, 1.0, 20.0), 0.9375 / 100.0),
         ("sun head-on", lambda scene: render.sun(scene, Vector((0, 0, -1)), white, 1.0), 1.0),
         ("ambient", lambda scene: render.world(scene, white, (0.0, 0.0, 0.0)), 1.0),
     ]
