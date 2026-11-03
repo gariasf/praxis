@@ -20,7 +20,7 @@ reflection of another surface is black in Cycles.
 
 ## Ambient light without visibility
 
-Tag: `ticketed at triage 1`.
+Tag: `deliberate until ADR 0020's irradiance probes land`.
 
 praxis's ambient, a stand-in for ADR 0020's irradiance probes, reaches every
 surface at full strength, darkened only by a Material's occlusion texture.
