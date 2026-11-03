@@ -77,8 +77,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.estimated_acceleration_structure_bytes,
         acceleration_structure_bytes
     );
-    // The acceleration structures, five 1×1 RGBA8 neutral Textures, one per
-    // Channel (the spheres sample no other), the Mesh pool's five 16 MiB
+    // The acceleration structures, five 1×1 neutral Textures, one per
+    // Channel (the spheres sample no other), RGBA8 but the normal Channel's
+    // RGBA16F, the Mesh pool's five 16 MiB
     // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
     // of 80 bytes, the camera and light uniforms, the light buffer of 4,096
     // lights of 48 bytes, 524,288 Instances of 128
@@ -112,7 +113,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert_eq!(
         last.gpu_memory_bytes,
         acceleration_structure_bytes
-            + 5 * 4
+            + 4 * 4
+            + 8
             + 5 * 16 * MEBIBYTE
             + 65_536 * 40
             + 256 * 80

@@ -159,6 +159,38 @@ impl MaterialPool {
     /// samples a no-op, and its factors pass through unchanged.
     pub const DEFAULT_LAYER: u32 = 0;
 
+    /// The normal Channel's Layer 0 texel, `Rgba16Float`: 0.5, 0.5, 1 and 1
+    /// as binary16. 0.5 has no `Unorm8` code (128 decodes to 0.502, a tilt
+    /// of 0.32°), so the shader's `encoded * 2.0 - 1.0` gives exactly 0 only
+    /// from a float format.
+    const FLAT_NORMAL_TEXEL: [u16; 4] = [0x3800, 0x3800, 0x3C00, 0x3C00];
+
+    /// The neutral default `channel` holds in Layer 0 (see DEFAULT_LAYER):
+    /// colour Channels are sRGB, data Channels linear.
+    pub(crate) fn neutral_texture(channel: MaterialChannel) -> CookedTexture {
+        let (format, texel) = match channel {
+            MaterialChannel::Albedo | MaterialChannel::Emissive => {
+                (wgpu::TextureFormat::Rgba8UnormSrgb, vec![255; 4])
+            }
+            MaterialChannel::Normal => (
+                wgpu::TextureFormat::Rgba16Float,
+                Self::FLAT_NORMAL_TEXEL
+                    .iter()
+                    .flat_map(|half| half.to_le_bytes())
+                    .collect(),
+            ),
+            MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
+                (wgpu::TextureFormat::Rgba8Unorm, vec![255; 4])
+            }
+        };
+        CookedTexture {
+            format,
+            width: 1,
+            height: 1,
+            levels: vec![texel],
+        }
+    }
+
     pub fn new(device: &wgpu::Device, staging: &mut LoadStaging) -> Self {
         let materials_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("materials_buffer"),
@@ -177,25 +209,8 @@ impl MaterialPool {
         ]
         .map(ChannelTextures::new);
 
-        // Neutral defaults into Layer 0 of every Channel (see DEFAULT_LAYER):
-        // colour Channels are sRGB, data Channels linear.
         for channel in MaterialChannel::ALL {
-            let (format, pixel) = match channel {
-                MaterialChannel::Albedo | MaterialChannel::Emissive => {
-                    (wgpu::TextureFormat::Rgba8UnormSrgb, [255; 4])
-                }
-                MaterialChannel::Normal => (wgpu::TextureFormat::Rgba8Unorm, [128, 128, 255, 255]),
-                MaterialChannel::MetallicRoughness | MaterialChannel::Occlusion => {
-                    (wgpu::TextureFormat::Rgba8Unorm, [255; 4])
-                }
-            };
-            let neutral = CookedTexture {
-                format,
-                width: 1,
-                height: 1,
-                levels: vec![pixel.to_vec()],
-            };
-            channels[channel as usize].push(device, staging, &neutral);
+            channels[channel as usize].push(device, staging, &Self::neutral_texture(channel));
         }
 
         let colour_sampler = trilinear_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
@@ -236,26 +251,31 @@ impl MaterialPool {
     }
 
     /// Registers a material in the SSBO through `staging`, returning its
-    /// handle.
-    pub fn insert(&mut self, staging: &mut LoadStaging, data: MaterialData) -> MaterialHandle {
+    /// handle, or `None`, logged, when the SSBO is full.
+    pub fn insert(
+        &mut self,
+        staging: &mut LoadStaging,
+        data: MaterialData,
+    ) -> Option<MaterialHandle> {
         if self.materials.len() as u64 >= MATERIAL_CAPACITY {
-            tracing::error!(
+            tracing::warn!(
                 capacity = MATERIAL_CAPACITY,
-                "material SSBO full; reusing material 0 (raise MATERIAL_CAPACITY)"
+                "Material refused: the Material SSBO is full"
             );
-            return MaterialHandle(0);
+            return None;
         }
         let handle = MaterialHandle(self.materials.len() as u32);
         let offset = handle.0 as u64 * std::mem::size_of::<MaterialData>() as u64;
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         self.materials.push(data);
         tracing::debug!(handle = handle.0, "material registered");
-        handle
+        Some(handle)
     }
 
     /// Loads the Material `id` from `cache`, and each Texture it samples once
-    /// per Asset ID, written through `staging`, and returns its Handle. A
-    /// Channel the Material lacks samples Layer 0, as does one already full.
+    /// per Asset ID, written through `staging`, and returns its Handle, or
+    /// the SSBO's refusal when it is full. A Channel the Material lacks
+    /// samples Layer 0, as does one already full.
     pub fn load(
         &mut self,
         device: &wgpu::Device,
@@ -285,8 +305,11 @@ impl MaterialPool {
             layers: [layers[0], layers[1], layers[2], layers[3]],
             extra: [layers[4], 0, 0, 0],
         };
+        let handle = self
+            .insert(staging, data)
+            .with_context(|| format!("the Material pool refused Material {id}"))?;
         tracing::debug!(material = %id, ?layers, "Material loaded");
-        Ok(self.insert(staging, data))
+        Ok(handle)
     }
 
     /// Loads the Texture `id` from `cache` into `channel` once per Asset ID,
@@ -391,6 +414,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::CookedMaterial;
     use crate::gpu::GpuContext;
 
@@ -454,5 +478,33 @@ mod tests {
                 .all(|material| material.metallic_roughness[2] == 0.5)
         );
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// The SSBO holds `MATERIAL_CAPACITY` Materials; the next gets no
+    /// Handle, so nothing draws with another Material in its place, and the
+    /// refusal is logged.
+    #[test]
+    fn a_material_past_capacity_is_refused_and_logged() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(&context.device, &mut staging);
+        let material = MaterialData {
+            base_color: [1.0; 4],
+            metallic_roughness: [0.0, 1.0, 1.0, 0.0],
+            emissive: [0.0, 0.0, 0.0, 1.0],
+            layers: [MaterialPool::DEFAULT_LAYER; 4],
+            extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+        };
+        for index in 0..MATERIAL_CAPACITY as u32 {
+            let handle = pool.insert(&mut staging, material);
+            assert!(handle.is_some_and(|handle| handle.index() == index));
+        }
+        let (handle, log) = logged(|| pool.insert(&mut staging, material));
+        assert!(handle.is_none(), "a Material past capacity got a Handle");
+        assert!(log.contains("WARN"), "not a warning: {log:?}");
+        assert!(log.contains("Material refused"), "not logged: {log:?}");
+        assert_eq!(pool.materials.len() as u64, MATERIAL_CAPACITY);
     }
 }

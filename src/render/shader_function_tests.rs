@@ -4,6 +4,7 @@
 
 use std::io::Write;
 
+use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
@@ -1339,6 +1340,28 @@ fn tangent_space_normal_scales_x_and_y_and_normalises_as_gltf_writes_it() {
     }
     // Encodings at or past the unit circle are among the cases.
     assert!(without_z > 0);
+}
+
+/// Layer 0 of the normal Channel, which every Material without a normal
+/// Texture samples, decodes to the flat normal exactly at every normal
+/// scale, glTF's default of 1 included. The texel the pool uploads there is
+/// binary16, decoded here as the sampler decodes binary16, and 0.5 has an
+/// exact code in it.
+#[test]
+fn the_neutral_normal_layer_decodes_to_the_flat_normal_exactly() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let neutral = MaterialPool::neutral_texture(MaterialChannel::Normal);
+    assert_eq!(neutral.format, wgpu::TextureFormat::Rgba16Float);
+    let x_and_y = f32::from_le_bytes(neutral.levels[0][..4].try_into().unwrap());
+    let inputs = [0.0, 0.5, 1.0, 2.0].map(|scale| [x_and_y, scale, 0.0, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(tangent_space_normal(unpack2x16float(bitcast<u32>(input.x)), input.y), 0.0)",
+        &inputs,
+    );
+    assert_eq!(results, [[0.0, 0.0, 1.0, 0.0]; 4]);
 }
 
 /// Roughness widens for the shading normal's screen-space derivatives as
