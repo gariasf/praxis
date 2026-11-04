@@ -15,9 +15,9 @@ use crate::capture::{GOLDEN_DIRECTORY, golden_key};
 pub(crate) const BUSY_GPU_PERCENT: u32 = 10;
 
 /// The one-minute load average above which a bench's CPU times would be
-/// someone else's: on the M4 Pro, at 3.7 to 19.3 the light scenes' failing
-/// CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU
-/// frames held within 2%.
+/// someone else's: on the M4 Pro, under a higher load, the light scenes' CPU
+/// frame lines failed against their Baselines while their GPU frames held
+/// (measured: `docs/performance.md`, Measurements behind the code).
 pub(crate) const BUSY_LOAD_AVERAGE: f64 = 2.0;
 
 /// Names listed per line before the rest are counted.
