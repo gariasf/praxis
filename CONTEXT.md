@@ -109,7 +109,7 @@ A cell of the view frustum, bounded in screen space and depth, that holds the li
 _Avoid_: Cluster, light cluster, tile
 
 **Shadow mask**:
-A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where a directional light's bit at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.
+A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where the bit of one of the first seven directional lights at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.
 _Avoid_: Shadow map, shadow buffer, visibility buffer
 
 **Surface normals**:
@@ -117,7 +117,7 @@ Two normals per sample of the depth target, its triangle's own and the one inter
 _Avoid_: G-buffer, normal buffer
 
 **Meshlet**:
-A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit and can cull as one.
+A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).
 _Avoid_: Cluster, chunk
 
 **Temporal class**:
@@ -201,7 +201,7 @@ Every Bench record kept, from sessions, CI and the machines' own runs, including
 _Avoid_: Metrics database, telemetry
 
 **Series**:
-One metric's Bench records for one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.
+The Bench records of one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order, each holding every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.
 _Avoid_: Trend, timeline
 
 **Harness version**:
@@ -213,19 +213,19 @@ Bench records taken from a branch under a name, kept beside the Series and compa
 _Avoid_: Branch run, trial
 
 **Suspect**:
-A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, or imported or re-recorded Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
+A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
 _Avoid_: Alert, outlier, anomaly
 
 **Verdict**:
 What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
-_Avoid_: Confirmation, bisect result
+_Avoid_: Confirmation, bisect result; the code's other `Verdict`s are compare's (warn or fail of one metric) and preflight's (ok, note, warn or fail of one check)
 
 **Regression**:
 A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one `needs-triage` issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.
 _Avoid_: Slowdown, perf bug
 
 **Budget**:
-A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.
+A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019's gate, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget is to split into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, at sizes M4 sets (ADRs 0013, 0017); today it is one number, and each kind's capacity is provisional. Counters such as draw calls and bytes uploaded are held to their Baselines instead.
 _Avoid_: Target, threshold
 
 **Capability floor**:
@@ -242,7 +242,7 @@ _Avoid_: Audit area, workstream, track (a track runs beside the ladder)
 
 **Finding**:
 One defect at one location, filed by an Audit lane's reader in eight fields: id (`<lane>-<n>`), claim (one falsifiable sentence), severity (a Severity class plus the magnitude in its unit), where (`path:line` at the frozen commit, a doc heading, or scene, frame and pixel box), evidence (in the lane's kind), expected (what the source, ADR, spec story, Budget or convention says), verifier (confirmed, narrowed or killed, with one reason) and placement (fix, fog or wontfix). The reader fills the first six, the verifier the seventh, the triage the eighth; a killed Finding stays on record so the next audit does not re-find it.
-_Avoid_: Issue (a ticket), observation, note
+_Avoid_: Issue (a ticket), observation, note; the code's other `Finding` is compare's: one metric past its Baseline or Budget
 
 **Severity class**:
 Which of five ranked kinds a Finding is: image (a defect a viewer sees at native resolution), budget (a Budget or gate breached), correctness (code disagrees with its ADR, spec story or source, with no visible defect), drift (a doc, comment, rule or reference says what the code does not) or health (over-engineering, vestigial code, naming, module depth). The triage ranks by class, then by magnitude within the class; there is no score.
