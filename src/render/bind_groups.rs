@@ -547,6 +547,29 @@ pub fn pipeline_layout(
     })
 }
 
+/// A compute pipeline running `entry_point` of `module` under `layout`,
+/// labelled by its entry point, with `constants` overriding the module's
+/// pipeline-overridable constants.
+pub fn compute_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    module: &wgpu::ShaderModule,
+    entry_point: &str,
+    constants: &[(&str, f64)],
+) -> wgpu::ComputePipeline {
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some(entry_point),
+        layout: Some(layout),
+        module,
+        entry_point: Some(entry_point),
+        compilation_options: wgpu::PipelineCompilationOptions {
+            constants,
+            ..wgpu::PipelineCompilationOptions::default()
+        },
+        cache: None,
+    })
+}
+
 /// A uniform buffer, which the CPU writes.
 pub(crate) const fn uniform(
     name: &'static str,

@@ -14,7 +14,9 @@
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::INSTANCE_CAPACITY;
-use crate::render::bind_groups::{BindGroupDefinition, FRAME_DRAW, pipeline_layout};
+use crate::render::bind_groups::{
+    BindGroupDefinition, FRAME_DRAW, compute_pipeline, pipeline_layout,
+};
 use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
@@ -244,19 +246,8 @@ impl CullingPass {
                 .into_iter()
                 .chain([("PHASE_TWO", f64::from(u8::from(phase_two)))])
                 .collect();
-            let pipeline = |entry_point| {
-                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some(entry_point),
-                    layout: Some(&layout),
-                    module: &shader,
-                    entry_point: Some(entry_point),
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &constants,
-                        ..wgpu::PipelineCompilationOptions::default()
-                    },
-                    cache: None,
-                })
-            };
+            let pipeline =
+                |entry_point| compute_pipeline(device, &layout, &shader, entry_point, &constants);
             PhasePipelines {
                 offset_slots: pipeline("offset_slots"),
                 offset_blocks: pipeline("offset_blocks"),

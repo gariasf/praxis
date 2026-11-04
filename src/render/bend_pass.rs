@@ -6,7 +6,7 @@
 //! too. The main pass then pulls the bent Mesh's vertices from the vertex
 //! Arena as it pulls any Mesh's.
 
-use crate::render::bind_groups::{BENDS, pipeline_layout};
+use crate::render::bind_groups::{BENDS, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
 
 /// The bend pass's label, and its name in frame stats.
@@ -66,18 +66,9 @@ impl BendPass {
             ],
         );
         let shader = device.create_shader_module(shaders::BEND.descriptor());
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("bend_vertices"),
-            layout: Some(&pipeline_layout(
-                device,
-                "Bend Pass Pipeline Layout",
-                &[(&BENDS, &layout)],
-            )),
-            module: &shader,
-            entry_point: Some("bend_vertices"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
+        let groups = [(&BENDS, &layout)];
+        let pipeline_layout = pipeline_layout(device, "Bend Pass Pipeline Layout", &groups);
+        let pipeline = compute_pipeline(device, &pipeline_layout, &shader, "bend_vertices", &[]);
         BendPass {
             pipeline,
             bind_group,
