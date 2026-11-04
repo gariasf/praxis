@@ -211,18 +211,9 @@ pub(crate) struct FrameRecorder {
     started: Instant,
     allocations_at_start: u64,
     stages: Vec<(&'static str, Duration)>,
-    frame_time: Duration,
-    heap_allocations: u64,
-    pub(crate) draw_calls: u32,
-    pub(crate) uploaded_bytes: u64,
-    pub(crate) instances_written: u32,
-    pub(crate) renderables_refused: u32,
-    pub(crate) lights_overflowed: u32,
-    pub(crate) static_instances_left_out: u32,
-    pub(crate) moving_instances_left_out: u32,
-    pub(crate) bends_left_out: u32,
-    pub(crate) dropped_time: Duration,
-    pub(crate) gpu_readbacks_skipped: u32,
+    /// The frame's counters and CPU frame time; `stats` adds the CPU times
+    /// of its systems and stages.
+    pub(crate) counters: FrameStats,
 }
 
 impl FrameRecorder {
@@ -232,18 +223,7 @@ impl FrameRecorder {
             started: Instant::now(),
             allocations_at_start: 0,
             stages: Vec::new(),
-            frame_time: Duration::ZERO,
-            heap_allocations: 0,
-            draw_calls: 0,
-            uploaded_bytes: 0,
-            instances_written: 0,
-            renderables_refused: 0,
-            lights_overflowed: 0,
-            static_instances_left_out: 0,
-            moving_instances_left_out: 0,
-            bends_left_out: 0,
-            dropped_time: Duration::ZERO,
-            gpu_readbacks_skipped: 0,
+            counters: FrameStats::default(),
         }
     }
 
@@ -251,16 +231,7 @@ impl FrameRecorder {
     pub(crate) fn begin(&mut self) {
         self.systems.reset();
         self.stages.clear();
-        self.draw_calls = 0;
-        self.uploaded_bytes = 0;
-        self.instances_written = 0;
-        self.renderables_refused = 0;
-        self.lights_overflowed = 0;
-        self.static_instances_left_out = 0;
-        self.moving_instances_left_out = 0;
-        self.bends_left_out = 0;
-        self.dropped_time = Duration::ZERO;
-        self.gpu_readbacks_skipped = 0;
+        self.counters = FrameStats::default();
         self.allocations_at_start = thread_allocations();
         self.started = Instant::now();
     }
@@ -279,8 +250,8 @@ impl FrameRecorder {
 
     /// Ends the frame `begin` started.
     pub(crate) fn end(&mut self) {
-        self.frame_time = self.started.elapsed();
-        self.heap_allocations = thread_allocations() - self.allocations_at_start;
+        self.counters.cpu_frame_time = self.started.elapsed();
+        self.counters.heap_allocations = thread_allocations() - self.allocations_at_start;
     }
 
     /// The stats of the last frame measured.
@@ -296,19 +267,7 @@ impl FrameRecorder {
                 .into_iter()
                 .chain(stage_times)
                 .collect(),
-            cpu_frame_time: self.frame_time,
-            draw_calls: self.draw_calls,
-            uploaded_bytes: self.uploaded_bytes,
-            instances_written: self.instances_written,
-            renderables_refused: self.renderables_refused,
-            lights_overflowed: self.lights_overflowed,
-            static_instances_left_out: self.static_instances_left_out,
-            moving_instances_left_out: self.moving_instances_left_out,
-            bends_left_out: self.bends_left_out,
-            heap_allocations: self.heap_allocations,
-            dropped_time: self.dropped_time,
-            gpu_readbacks_skipped: self.gpu_readbacks_skipped,
-            ..FrameStats::default()
+            ..self.counters.clone()
         }
     }
 }

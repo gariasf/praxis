@@ -495,7 +495,7 @@ impl Renderer {
         let mut encoder = create_frame_encoder(&self.device);
         self.static_tlas
             .update(frame, &self.mesh_pool, &mut encoder);
-        recorder.static_instances_left_out = self.static_tlas.instances_left_out();
+        recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
         // Shadow rays start in the static TLAS's frame, whose Anchor the
         // first Frame data's camera set, and the dynamic TLAS shares it. Its
         // fill counts as its recording, not as the upload.
@@ -551,13 +551,13 @@ impl Renderer {
         let uploaded_bytes = self
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
-        recorder.uploaded_bytes += uploaded_bytes;
+        recorder.counters.uploaded_bytes += uploaded_bytes;
         // 0 bytes: the staging slot failed to map, as logged, and the
         // frame's writes never land.
         if uploaded_bytes == 0 {
             self.lost_instance_writes |= !frame.instances.is_empty();
         } else {
-            recorder.instances_written += frame.instances.len() as u32;
+            recorder.counters.instances_written += frame.instances.len() as u32;
             self.uploaded_instance_slot_count = frame.instance_slot_count;
         }
         self.frame_encoder = Some(encoder);
@@ -612,7 +612,7 @@ impl Renderer {
             self.dynamic_tlas
                 .record(&self.device, bracket)
                 .map(|(commands, uploaded_bytes)| {
-                    recorder.uploaded_bytes += uploaded_bytes;
+                    recorder.counters.uploaded_bytes += uploaded_bytes;
                     commands
                 });
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
@@ -694,7 +694,7 @@ impl Renderer {
         // pass or the lit pass phase two's into depth, then the lit pass both
         // phases', each with one indirect call; the tonemapping pass draws
         // one triangle.
-        recorder.draw_calls += 4;
+        recorder.counters.draw_calls += 4;
         // A frame whose refit went untimed spans its build's submission
         // from the bend pass, so its build is not counted apart.
         let refit_untimed = bent && self.blas_refit.is_some() && !blas_refitted;
@@ -868,7 +868,7 @@ pub(crate) mod tests {
         let frame = triangle_frame(&mut renderer);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 4);
+        assert_eq!(recorder.counters.draw_calls, 4);
         assert!(shows(image.get_pixel(SIZE / 2, SIZE / 2).0, RED));
         // The Frame data's background, exposed (0.1, 0.2, 0.3), as GT7 shows
         // it in tests/capture.rs.
@@ -943,7 +943,7 @@ pub(crate) mod tests {
         ]);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.draw_calls, 4);
+        assert_eq!(recorder.counters.draw_calls, 4);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
         let expected = [RED, GREEN, BLUE, BLUE];
         assert!(
@@ -977,7 +977,7 @@ pub(crate) mod tests {
             (
                 gpu.instances_drawn,
                 gpu.triangles_drawn,
-                recorder.draw_calls,
+                recorder.counters.draw_calls,
             )
         };
 

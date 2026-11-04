@@ -232,14 +232,14 @@ impl GpuStatsReadback {
                 } else {
                     // Its timestamps may not be written yet.
                     self.slots[index].state = SlotState::Free;
-                    recorder.gpu_readbacks_skipped += 1;
+                    recorder.counters.gpu_readbacks_skipped += 1;
                 }
             }
         }
 
         let index = slot_index(self.frame);
         if !self.read(index) {
-            recorder.gpu_readbacks_skipped += 1;
+            recorder.counters.gpu_readbacks_skipped += 1;
             return None;
         }
         self.slots[index].state = SlotState::Recorded { frame: self.frame };
@@ -998,7 +998,7 @@ mod tests {
                 wait.expect("the frame completes");
             }
             let read: Vec<u64> = readback.read_back().iter().map(|gpu| gpu.frame).collect();
-            (timed, recorder.gpu_readbacks_skipped, read)
+            (timed, recorder.counters.gpu_readbacks_skipped, read)
         };
 
         let mut never_completes = new_ring();
