@@ -636,10 +636,15 @@ impl Renderer {
             (&MATERIALS, &self.material_pool.bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
         ];
+        let depth_bind_groups = [
+            (&FRAME, &self.frame_bind_group),
+            (&MATERIALS, &self.material_pool.probe_depth_bind_group),
+            (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
+        ];
         self.main_pass.record_depth_prepass(
             &mut encoder,
             &self.render_targets,
-            &bind_groups,
+            &depth_bind_groups,
             self.culling_pass.packed_indices(),
             self.culling_pass.frame_draw(),
             timestamps.map(|timestamps| timestamps.render_pass(DEPTH_PREPASS)),
@@ -659,7 +664,7 @@ impl Renderer {
             self.main_pass.record_phase_two_depth(
                 &mut encoder,
                 &self.render_targets,
-                &bind_groups,
+                &depth_bind_groups,
                 self.culling_pass.packed_indices(),
                 self.culling_pass.frame_draw(),
                 timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),

@@ -148,6 +148,8 @@ pub struct MaterialPool {
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    /// Probe: the bind group the depth passes bind.
+    pub probe_depth_bind_group: wgpu::BindGroup,
     /// Set when a load adds a Texture the bind group lacks.
     bind_group_is_stale: bool,
 }
@@ -218,6 +220,15 @@ impl MaterialPool {
 
         let bind_group_layout = MATERIALS.layout(device);
         let bind_group = create_bind_group(
+            &Default::default(),
+            device,
+            &bind_group_layout,
+            &materials_buffer,
+            &channels,
+            &colour_sampler,
+            &data_sampler,
+        );
+        let probe_depth_bind_group = create_bind_group_distinct(probe_distinct("PRAXIS_PROBE_DISTINCT_DEPTH"), &Default::default(),
             device,
             &bind_group_layout,
             &materials_buffer,
@@ -235,6 +246,7 @@ impl MaterialPool {
             data_sampler,
             bind_group_layout,
             bind_group,
+            probe_depth_bind_group,
             bind_group_is_stale: false,
         }
     }
@@ -341,7 +353,23 @@ impl MaterialPool {
     pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
         if std::mem::take(&mut self.bind_group_is_stale) {
             let started = Instant::now();
+            let sampled: std::collections::HashSet<u32> = self
+                .materials
+                .iter()
+                .flat_map(|material| material.layers.into_iter().chain([material.extra[0]]))
+                .collect();
             self.bind_group = create_bind_group(
+                &sampled,
+                device,
+                &self.bind_group_layout,
+                &self.materials_buffer,
+                &self.channels,
+                &self.colour_sampler,
+                &self.data_sampler,
+            );
+            self.probe_depth_bind_group = create_bind_group_distinct(
+                probe_distinct("PRAXIS_PROBE_DISTINCT_DEPTH"),
+                &sampled,
                 device,
                 &self.bind_group_layout,
                 &self.materials_buffer,
@@ -382,7 +410,36 @@ fn trilinear_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgp
 /// The material bind group (`MATERIALS`): the SSBO, each Channel's
 /// Textures, and the colour and data Channels' samplers. Bind groups are
 /// snapshots, so a new Texture needs a new one.
+fn probe_distinct(name: &str) -> usize {
+    std::env::var(name).ok().and_then(|value| value.parse().ok()).unwrap_or(usize::MAX)
+}
+
 fn create_bind_group(
+    sampled: &std::collections::HashSet<u32>,
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    materials_buffer: &wgpu::Buffer,
+    channels: &[ChannelTextures; 5],
+    colour_sampler: &wgpu::Sampler,
+    data_sampler: &wgpu::Sampler,
+) -> wgpu::BindGroup {
+    create_bind_group_distinct(
+        probe_distinct("PRAXIS_PROBE_DISTINCT_LIT"),
+        sampled,
+        device,
+        layout,
+        materials_buffer,
+        channels,
+        colour_sampler,
+        data_sampler,
+    )
+}
+
+/// Probe: views past `distinct` in each Channel repeat its Layer 0,
+/// but with `PRAXIS_PROBE_KEEP_SAMPLED` set, those `sampled` names.
+fn create_bind_group_distinct(
+    distinct: usize,
+    sampled: &std::collections::HashSet<u32>,
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     materials_buffer: &wgpu::Buffer,
@@ -392,7 +449,18 @@ fn create_bind_group(
 ) -> wgpu::BindGroup {
     let views: Vec<Vec<&wgpu::TextureView>> = channels
         .iter()
-        .map(|channel| channel.views.iter().collect())
+        .map(|channel| {
+            channel
+                .views
+                .iter()
+                .enumerate()
+                .map(|(index, view)| {
+                    let keep = std::env::var_os("PRAXIS_PROBE_KEEP_SAMPLED").is_some()
+                        && sampled.contains(&(index as u32));
+                    if index < distinct || keep { view } else { &channel.views[0] }
+                })
+                .collect()
+        })
         .collect();
     let channel_resources = channels.iter().zip(&views).map(|(channel, channel_views)| {
         let resource = wgpu::BindingResource::TextureViewArray(channel_views);

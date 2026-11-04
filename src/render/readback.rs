@@ -326,6 +326,7 @@ impl GpuStatsReadback {
         for index in slots {
             self.read(index);
         }
+        probe_dump();
         Ok(())
     }
 
@@ -434,6 +435,7 @@ impl GpuStatsReadback {
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );
+                        PROBE_TICKS.lock().unwrap().push((frame, ticks, self.nanoseconds_per_tick));
                         // The dynamic TLAS's build runs alongside the frame
                         // before it, which hides most of it, so it counts
                         // from the end of that frame's last pass.
@@ -669,6 +671,53 @@ fn frame_times(
         gate_time: time(ticks[2 * culling_phase_one], gate_end),
         last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
     }
+}
+
+type ProbeFrame = (u64, [u64; QUERIES_PER_FRAME], f64);
+static PROBE_TICKS: std::sync::Mutex<Vec<ProbeFrame>> = std::sync::Mutex::new(Vec::new());
+
+/// Probe: every frame's raw timestamps, in ns from the frame's culling
+/// phase one start, to `PRAXIS_PROBE_DUMP` (a new file per flush).
+fn probe_dump() {
+    let mut frames = std::mem::take(&mut *PROBE_TICKS.lock().unwrap());
+    let Some(path) = std::env::var_os("PRAXIS_PROBE_DUMP") else {
+        return;
+    };
+    frames.sort_by_key(|(frame, _, _)| *frame);
+    let culling = 2 * pass_position(CullingPhase::One.label());
+    let mut csv = format!(
+        "frame,culling_start_ns,{}\n",
+        TIMED_PASSES
+            .iter()
+            .flat_map(|pass| [format!("{pass}_start"), format!("{pass}_end")])
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    for (frame, ticks, nanoseconds_per_tick) in &frames {
+        let origin = ticks[culling] as i64;
+        let relative = ticks
+            .iter()
+            .map(|&tick| {
+                if tick == 0 {
+                    String::new()
+                } else {
+                    format!("{:.0}", (tick as i64 - origin) as f64 * nanoseconds_per_tick)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        csv += &format!("{frame},{:.0},{relative}\n", origin as f64 * nanoseconds_per_tick);
+    }
+    let mut path = std::path::PathBuf::from(path);
+    let mut index = 0;
+    while path.exists() {
+        index += 1;
+        path.set_file_name(format!(
+            "{}.{index}.csv",
+            path.file_stem().unwrap().to_string_lossy().split('.').next().unwrap()
+        ));
+    }
+    std::fs::write(&path, csv).unwrap();
 }
 
 /// Where `pass` is in `TIMED_PASSES`.

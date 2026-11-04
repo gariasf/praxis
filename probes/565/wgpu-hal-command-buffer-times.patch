@@ -1,0 +1,74 @@
+--- /Users/guillem.arias/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-hal-30.0.1/src/metal/mod.rs	2006-07-24 03:21:28
++++ /Users/guillem.arias/Documents/gariasf/praxis/pending-artifacts/565/wgpu-hal/src/metal/mod.rs	2026-11-04 13:12:19
+@@ -736,7 +736,23 @@
+ 
+             let extra_command_buffer = {
+                 let fence_sync = Arc::clone(&signal_fence.sync);
+-                let block = block2::RcBlock::new(move |_cmd_buf| {
++                let commit_seconds = probe_uptime_seconds();
++                let block = block2::RcBlock::new(move |cmd_buf: core::ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
++                    if let Some(path) = std::env::var_os("PRAXIS_PROBE_COMMAND_BUFFERS") {
++                        let raw = unsafe { cmd_buf.as_ref() };
++                        let line = format!(
++                            "{:.9},{:.9},{:.9},{:.9},{:.9}\n",
++                            commit_seconds,
++                            { let value: f64 = unsafe { objc2::msg_send![raw, kernelStartTime] }; value },
++                            { let value: f64 = unsafe { objc2::msg_send![raw, kernelEndTime] }; value },
++                            { let value: f64 = unsafe { objc2::msg_send![raw, GPUStartTime] }; value },
++                            { let value: f64 = unsafe { objc2::msg_send![raw, GPUEndTime] }; value }
++                        );
++                        use std::io::Write;
++                        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
++                            let _ = file.write_all(line.as_bytes());
++                        }
++                    }
+                     *fence_sync.0.lock() = signal_value;
+                     fence_sync.1.notify_all();
+                 });
+@@ -781,7 +797,31 @@
+                 }
+             };
+ 
+-            for cmd_buffer in command_buffers {
++            let probe_count = command_buffers.len();
++            for (probe_index, cmd_buffer) in command_buffers.iter().enumerate() {
++                if let Some(path) = std::env::var_os("PRAXIS_PROBE_ALL_COMMAND_BUFFERS") {
++                    let commit_seconds = probe_uptime_seconds();
++                    let block = block2::RcBlock::new(move |cmd_buf: core::ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
++                        let raw = unsafe { cmd_buf.as_ref() };
++                        let times: [f64; 4] = unsafe {
++                            [
++                                objc2::msg_send![raw, kernelStartTime],
++                                objc2::msg_send![raw, kernelEndTime],
++                                objc2::msg_send![raw, GPUStartTime],
++                                objc2::msg_send![raw, GPUEndTime],
++                            ]
++                        };
++                        let line = format!(
++                            "{probe_index},{probe_count},{commit_seconds:.9},{:.9},{:.9},{:.9},{:.9}\n",
++                            times[0], times[1], times[2], times[3]
++                        );
++                        use std::io::Write;
++                        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
++                            let _ = file.write_all(line.as_bytes());
++                        }
++                    });
++                    unsafe { cmd_buffer.raw.addCompletedHandler(block2::RcBlock::as_ptr(&block)) };
++                }
+                 cmd_buffer.raw.commit();
+                 // One command buffer per `end_encoding` call moves from the
+                 // "created but not yet submitted" bucket into the submitted
+@@ -1407,4 +1447,13 @@
+     Ios,
+     Tvos,
+     VisionOs,
++}
++
++/// Probe: CLOCK_UPTIME_RAW in seconds, Metal's host time base.
++fn probe_uptime_seconds() -> f64 {
++    unsafe extern "C" {
++        fn clock_gettime_nsec_np(clock: u32) -> u64;
++    }
++    // CLOCK_UPTIME_RAW is 8 in <time.h>.
++    unsafe { clock_gettime_nsec_np(8) as f64 * 1e-9 }
+ }
