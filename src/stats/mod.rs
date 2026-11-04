@@ -81,6 +81,12 @@ pub struct GpuFrameStats {
     /// ADR 0019's gate: from the start of culling phase one to the latest
     /// end of the passes up to the lit pass.
     pub gate_time: Duration,
+    /// How long after the latest end of the passes from culling phase one
+    /// up to the lit pass it started, none when it starts beside them: on
+    /// Metal, the kernel's scheduling of its command buffer, which takes
+    /// longer the more Textures the material bind group holds
+    /// (`docs/performance.md`).
+    pub lit_pass_wait: Duration,
     /// The Instances the frame's draw held, and their triangles.
     pub instances_drawn: u32,
     pub triangles_drawn: u32,

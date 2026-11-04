@@ -170,6 +170,12 @@ pub struct Measurements {
     /// Each frame's GPU frame with shadow rays on, less the same frame's
     /// with them off.
     pub shadow_ray_microseconds: Spread,
+    /// The lit pass's wait (Frame stats), with shadow rays off, as the
+    /// gate: with the span of the passes before it and the lit pass's own
+    /// time it makes up the gate. Absent from Baselines recorded before
+    /// results carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lit_pass_wait_microseconds: Option<Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     #[serde(flatten)]
@@ -579,6 +585,12 @@ fn measure(
                 })
                 .collect(),
         ),
+        lit_pass_wait_microseconds: Some(spread(
+            measured_without_rays
+                .iter()
+                .map(|gpu| microseconds(gpu.lit_pass_wait))
+                .collect(),
+        )),
         gpu_pass_microseconds,
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
@@ -616,6 +628,13 @@ impl std::fmt::Display for Measurements {
             self.shadow_ray_microseconds.median,
             self.shadow_ray_microseconds.p95
         )?;
+        if let Some(wait) = self.lit_pass_wait_microseconds {
+            write!(
+                formatter,
+                " lit_pass_wait_us median={:.1} p95={:.1}",
+                wait.median, wait.p95
+            )?;
+        }
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
@@ -994,6 +1013,7 @@ mod tests {
                 median: 500.0,
                 p95: 600.0,
             },
+            lit_pass_wait_microseconds: None,
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
                 .map(|(pass, median)| {
@@ -1490,6 +1510,7 @@ mod tests {
                         pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
                         frame_time: Duration::from_micros(300),
                         gate_time: Duration::from_micros(150),
+                        lit_pass_wait: Duration::from_micros(40),
                         instances_drawn: if counted { 5 } else { 77 },
                         triangles_drawn: if counted { 15 } else { 231 },
                         phase_two_triangles_drawn: 0,
@@ -1509,7 +1530,8 @@ mod tests {
     }
 
     /// `frames`, with shadow rays off: a GPU frame of 250 µs in the measured
-    /// frames, of 900 µs in the warm-up, and a gate of 140 µs.
+    /// frames, of 900 µs in the warm-up, a gate of 140 µs and a lit pass's
+    /// wait of 90 µs.
     fn frames_without_rays(configuration: Configuration) -> Vec<FrameStats> {
         let mut frames = frames(configuration);
         for (frame, stats) in frames.iter_mut().enumerate() {
@@ -1517,6 +1539,7 @@ mod tests {
             let warming_up = frame < configuration.warm_up_frames as usize;
             gpu.frame_time = Duration::from_micros(if warming_up { 900 } else { 250 });
             gpu.gate_time = Duration::from_micros(140);
+            gpu.lit_pass_wait = Duration::from_micros(90);
         }
         frames
     }
@@ -1552,8 +1575,16 @@ mod tests {
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
-        // Both lines read the measured frames alone, the gate with rays off.
+        // Both lines read the measured frames alone, the gate and the lit
+        // pass's wait with rays off.
         assert_eq!(reference.gate_microseconds.median, 140.0);
+        assert_eq!(
+            reference.lit_pass_wait_microseconds,
+            Some(Spread {
+                median: 90.0,
+                p95: 90.0
+            })
+        );
         assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
         assert!(

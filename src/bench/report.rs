@@ -58,31 +58,37 @@ pub fn report(
     let frame_times = [
         (
             "CPU frame",
-            current.cpu_frame_microseconds,
+            Some(current.cpu_frame_microseconds),
             times_baseline.map(|baseline| baseline.cpu_frame_microseconds),
             Some(budgets.cpu_frame_microseconds),
         ),
         (
             "Dynamic TLAS, CPU",
-            current.dynamic_tlas_cpu_microseconds,
+            Some(current.dynamic_tlas_cpu_microseconds),
             times_baseline.map(|baseline| baseline.dynamic_tlas_cpu_microseconds),
             Some(budgets.dynamic_tlas_cpu_microseconds),
         ),
         (
             "GPU frame",
-            current.gpu_frame_microseconds,
+            Some(current.gpu_frame_microseconds),
             times_baseline.map(|baseline| baseline.gpu_frame_microseconds),
             Some(budgets.gpu_frame_microseconds),
         ),
         (
             "Gate, rays off",
-            current.gate_microseconds,
+            Some(current.gate_microseconds),
             times_baseline.map(|baseline| baseline.gate_microseconds),
             Some(budgets.gate_microseconds),
         ),
         (
+            "Lit pass's wait, rays off",
+            current.lit_pass_wait_microseconds,
+            times_baseline.and_then(|baseline| baseline.lit_pass_wait_microseconds),
+            None,
+        ),
+        (
             "Shadow-ray time",
-            current.shadow_ray_microseconds,
+            Some(current.shadow_ray_microseconds),
             times_baseline.map(|baseline| baseline.shadow_ray_microseconds),
             None,
         ),
@@ -94,9 +100,12 @@ pub fn report(
         let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
         (format!("`{pass}`"), time, baseline_time, budget)
     });
+    // A line older results lack has no row.
     let times = frame_times
-        .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
         .into_iter()
+        .filter_map(|(name, time, baseline_time, budget)| {
+            Some((name.to_owned(), time?, baseline_time, budget))
+        })
         .chain(pass_times);
     for (name, time, baseline_time, budget) in times {
         let compared = match baseline_time {
@@ -253,6 +262,7 @@ mod tests {
             gpu_frame_microseconds: gpu,
             gate_microseconds: gate,
             shadow_ray_microseconds: spread(-3.2, 40.5),
+            lit_pass_wait_microseconds: None,
             gpu_pass_microseconds: passes
                 .into_iter()
                 .map(|(pass, time)| (pass.to_owned(), time))
@@ -267,18 +277,23 @@ mod tests {
         }
     }
 
+    /// With the lit pass's wait, which its Baseline, recorded before
+    /// results carried it, lacks.
     fn current() -> Measurements {
-        measurements(
-            spread(190.0, 262.3),
-            spread(4208.6, 5204.5),
-            spread(2950.0, 3010.4),
-            [
-                ("culling_phase_one", spread(166.3, 169.8)),
-                ("dynamic_tlas_build", spread(48.7, 462.9)),
-                ("lit_pass", spread(755.8, 768.1)),
-            ],
-            COUNTERS,
-        )
+        Measurements {
+            lit_pass_wait_microseconds: Some(spread(1204.5, 1391.0)),
+            ..measurements(
+                spread(190.0, 262.3),
+                spread(4208.6, 5204.5),
+                spread(2950.0, 3010.4),
+                [
+                    ("culling_phase_one", spread(166.3, 169.8)),
+                    ("dynamic_tlas_build", spread(48.7, 462.9)),
+                    ("lit_pass", spread(755.8, 768.1)),
+                ],
+                COUNTERS,
+            )
+        }
     }
 
     fn baseline() -> Measurements {
@@ -313,6 +328,7 @@ mod tests {
 | Dynamic TLAS, CPU | 0.0 | 0.1 | 0.0 | 0.1 | +0.0 | — | 1,100.0 |
 | GPU frame | 4,208.6 | 5,204.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
 | Gate, rays off | 2,950.0 | 3,010.4 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
+| Lit pass's wait, rays off | 1,204.5 | 1,391.0 | — | — | — | — | — |
 | Shadow-ray time | -3.2 | 40.5 | -3.2 | 40.5 | +0.0 | — | — |
 | `culling_phase_one` | 166.3 | 169.8 | 160.0 | 170.0 | +6.3 | 1.039 | — |
 | `dynamic_tlas_build` | 48.7 | 462.9 | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |

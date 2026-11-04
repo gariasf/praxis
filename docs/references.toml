@@ -3862,6 +3862,12 @@ section = "Apple Developer Documentation, Metal, MTLHazardTrackingMode.tracked, 
 quote = '''Metal tracks memory dependencies for resources you create with this option. When at least one command writes to a tracked resource, the framework takes the following actions: Delay write operations until all previous read operations finish Prevent subsequent commands from running until write operations finish'''
 checked = 2026-10-30
 
+["apple-metal-command-buffer-kernel-time"]
+url = "https://developer.apple.com/documentation/metal/mtlcommandbuffer/kernelstarttime"
+section = "Apple Developer Documentation, Metal, MTLCommandBuffer, kernelStartTime, and kernelEndTime beside it"
+quote = '''The host time, in seconds, when the CPU begins to schedule the command buffer. [...] The kernel start and end times remain 0.0 until the GPU driver (on the CPU) schedules the command buffer to run on the GPU.'''
+checked = 2026-11-04
+
 ["apple-metal-fence-per-stage"]
 url = "https://developer.apple.com/documentation/metal/mtlfence"
 section = "Apple Developer Documentation, Metal, MTLFence, Overview"
