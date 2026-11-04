@@ -12,7 +12,7 @@ use std::process::Command;
 
 /// The volumes that narrated how each mechanism was built, each kept, and
 /// passed over by the page checks, until the page that absorbs it lands.
-const VOLUMES: [&str; 27] = [
+const VOLUMES: &[&str] = &[
     "acceleration-structures.html",
     "anisotropy.html",
     "bench-history.html",
@@ -320,11 +320,12 @@ fn git(arguments: &[&str]) -> (bool, Vec<u8>) {
     (output.status.success(), output.stdout)
 }
 
-/// Every identifier on `main`: in the path of each file git tracks, and in
-/// the text of each outside `docs/` and Markdown, whose prose may name what
+/// Every identifier the tree holds, as `main` will once it merges: in the
+/// path of each file git tracks, and in the text of each outside `docs/` and
+/// Markdown, whose prose may name what
 /// the code no longer holds. This file is left out, as its fixtures plant
 /// names that are not.
-fn identifiers_on_main() -> BTreeSet<String> {
+fn identifiers_in_the_tree() -> BTreeSet<String> {
     let (listed, paths) = git(&["ls-files", "-z"]);
     assert!(listed, "git ls-files failed");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -356,7 +357,7 @@ fn every_link_between_the_field_guides_lands() {
 fn every_page_describes_main_names_what_it_holds_and_no_ticket() {
     let (_, pages) = guides();
     let on_main = |commit: &str| git(&["merge-base", "--is-ancestor", commit, "origin/main"]).0;
-    let problems = page_problems(&pages, &VOLUMES, &identifiers_on_main(), on_main);
+    let problems = page_problems(&pages, VOLUMES, &identifiers_in_the_tree(), on_main);
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 

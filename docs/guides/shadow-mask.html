@@ -238,7 +238,7 @@ pass.dispatch_workgroups_indirect(&amp;self.shadow_edge_dispatch, 0);</code></pr
   <p class="code-source"><code>shadow_mask.wgsl</code>.</p>
   <p><code>position_at</code>, in the common part, inverts the projection for one point: the view-projection matrix holds no translation, since positions reach the GPU relative to the camera, and its reverse-Z projection with no far plane puts the near distance in clip z and the view depth in clip w, so a sample's view depth is the near distance over its stored depth, and its position is that depth along the view axis plus its normalised device coordinates along the scaled right and up axes. The point is taken at the sample's own offset within the pixel, not at the pixel's centre, so it lies on the triangle that sample shows rather than on that triangle's plane extended past an edge.</p>
   <p>The pixel's width at the surface is the distance to the point one pixel to the right at the same depth. It scales two things below: the second-surface test and the ray origin's offset.</p>
-  <p>The surface normals target holds, per sample, the triangle's own normal and the interpolated one as two 8-bit octahedral coordinates each, written by the depth passes' fragment shader from the screen-space derivatives of the position and from the vertex normals. Decoded, each lies within 0.95&deg; of the normal it encodes where the store rounds to the nearest step, as Metal's does, and within about twice that where a backend may round a Unorm store to either neighbour; the margins in the constants table are sized for that error.</p>
+  <p>The surface normals target holds, per sample, the triangle's own normal and the interpolated one as two 8-bit octahedral coordinates each, written by the depth passes' fragment shader from the screen-space derivatives of the position and from the vertex normals. Decoded, each lies within 0.95&deg; of the normal it encodes where the store rounds to the nearest step, as Metal's does, and within about twice that where a backend may round a Unorm store to either neighbour; the margins in the constants table are sized for that error. The fragment shader also reads its one flat input, the Material ID, to no effect, which keeps the Apple M4 Pro from merging the fragments of nearby triangles that share indices under MSAA, so each sample's normals are those of the triangle the lit pass shades there (<a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a>).</p>
 </section>
 
 <section class="part prose" id="word">
@@ -347,7 +347,10 @@ if second_samples != 0u {
     if entry % group_size == 0u {
         let groups = entry / group_size + 1u;
         atomicMax(&amp;second_surface_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
-        atomicMax(&amp;second_surface_dispatch[1], (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION);
+        atomicMax(
+        &amp;second_surface_dispatch[1],
+        (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION
+    );
         atomicStore(&amp;second_surface_dispatch[2], 1u);
     }
 }</code></pre>
