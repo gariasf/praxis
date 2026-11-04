@@ -26,7 +26,7 @@ const VOLUMES: &[&str] = &[
     "froxel-lights.html",
     "gpu-ordering.html",
     "hdr-pipeline.html",
-    "instance-buffer.html",
+    "instance-buffer-explained.html",
     "instance-culling.html",
     "lit-pass-explained.html",
     "meshlet-culling.html",
