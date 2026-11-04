@@ -28,6 +28,173 @@ its commit.
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 
+## texture-wall's untimed stretch is the kernel scheduling the lit pass's command buffer (2026-11-04, #565)
+
+**Verdict.** The roughly 11 ms of texture-wall's gate that no pass timed is
+the time the kernel's GPU driver, on the CPU, spends scheduling the Metal
+command buffer that holds the lit pass
+[ref:apple-metal-command-buffer-kernel-time]: 15.3 ms a frame at the
+median (p5 14.5, p95 16.6 ms), from 2.5 ms before culling phase one
+starts, against 2 to 27 µs for each of the frame's other command buffers.
+The lit pass starts as that scheduling ends: 195 µs after it at the
+median, from 461 µs before to 240 µs after (p5 to p95), over 1,800
+rays-off frames. The
+cost grows with the distinct Textures in the lit pass's material bind
+group, each of which wgpu-hal passes to `useResource`
+[ref:wgpu-hal-30-metal-use-resource], and grows faster than their count.
+It does not depend on which Textures the quads sample, and the depth
+passes, which bind the same group, add nothing. Bind the lit pass's group
+with one distinct Texture and the gate reads 620 to 629 µs, against
+13.8 to 14.3 ms with all 10,005. The RTX 2070 SUPER's Baselines read 502
+to 514 µs.
+The work is CPU work in the kernel, so it grows when the machine is
+loaded: one run at a load average of 151 read a 41.5 ms gate. The bench
+now reports the stretch as the lit pass's wait. The shadow mask pass's
+dynamic-query code is not the offender: the shadow mask pass does not run
+in the gate's frames. The cause is #183's, unfixed here.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, AC power, release
+builds of `bbadbcce` with measurement patches, not committed. One patch
+wrote each frame's raw timestamps. One set environment switches that
+made the views past a count in each Channel's binding array repeat its
+Layer 0, for the lit pass's bind group and the depth passes' apart,
+optionally keeping the 100 Layers the quads sample. Each Layer has one
+view, and wgpu-hal keys `useResource` by view object, so repeating Layer
+0's view removes a distinct Texture
+[ref:wgpu-hal-30-metal-resources-to-use-by-view].
+A patched wgpu-hal 30.0.1 wrote each Metal command buffer's commit time,
+`kernelStartTime`, `kernelEndTime`, `GPUStartTime` and `GPUEndTime` from
+a completed handler. Those host times are in mach time
+[ref:apple-metal-command-buffer-gpu-time], and so are the GPU timestamps
+here: culling phase one's start timestamp falls on its command buffer's
+`GPUStartTime`, within 0.04 µs, in all 1,800 rays-off frames. Each run was `praxis bench <dir> --skip-aliasing
+--no-publish texture-wall` at 2560×1440 with 4x MSAA, 248 warm-up and
+1,800 measured frames, rays on then off. Variants were interleaved over
+two to four rounds, at one-minute load averages of 4 to 66 from
+Spotlight indexing and peer builds, with no other praxis process. Each
+figure below is a run's median, taken from its results by the probes'
+scripts. The gate is rays off. The first round's
+all-Textures run, at a five-minute load average of 74, read a 14,914 µs
+gate and a 26,099 µs GPU frame, and is left out of the table.
+
+### The lit pass's command buffer waits in the kernel
+
+wgpu submits a texture-wall frame as 20 Metal command buffers with rays
+off and 25 with rays on. The CPU commits them all 12.8 ms before the
+frame's first pass starts on the GPU, because the frames ahead are still
+being scheduled. The kernel then schedules each buffer in order. Each
+row below is the median over 1,800 rays-off frames, in µs from culling
+phase one's start:
+
+| Command buffer | Kernel start | Kernel end | Kernel span | GPU start | GPU end |
+|---|---:|---:|---:|---:|---:|
+| 10, the depth pre-pass | −2,522 | −2,504 | 16 | 106 | 516 |
+| 15, ending with culling phase two | −2,481 | −2,469 | 12 | 105 | 1,479 |
+| 16, the lit pass | −2,467 | 12,922 | 15,282 | 12,933 | 13,960 |
+| 18, the tonemapping pass | 12,930 | 12,955 | 24 | 13,103 | 15,453 |
+| 16, with one distinct Texture in its group | 58 | 71 | 13 | 391 | 661 |
+
+With rays on, the lit pass's buffer (21) takes 15,116 µs, the phase two
+depth pass's 13 µs and the shadow mask pass's 9 µs. The shadow mask
+pass runs inside the wait, which leaves 6.1 ms of it. The kernel
+schedules one frame's buffers in about 15.3 ms, and frames start
+15.6 ms apart, so it paces the frame, not the GPU's passes. `time -l`
+agrees. A full run used 68.5 s of system time in 72.9 s of wall time.
+The run binding one distinct Texture used 4.2 s in 12.4 s. The extra
+64 s over about 4,100 frames comes to 15.7 ms of kernel time a frame.
+Of the 660 samples `sample` took over 5 s, 339 find Metal's
+`com.Metal.CommandQueueDispatch` thread in
+`IOGPUCommandQueueSubmitCommandBuffers`, in a call into the kernel.
+
+### Which Textures cost it
+
+| Variant: distinct Textures bound | Rounds | Gate, µs | GPU frame, µs | CPU frame, µs |
+|---|---:|---|---|---|
+| All 10,005, every pass | 3 | 13,793.0–14,267.6 | 15,396.2–15,654.3 | 2,266.7–2,428.5 |
+| The lit pass's group 1, the depth passes' all | 4 | 619.6–629.4 | 2,303.5–2,308.4 | 390.8–470.2 |
+| The depth passes' group 1, the lit pass's all | 2 | 13,431.7–13,774.0 | 15,358.7–15,784.8 | 2,379.1–2,436.1 |
+| Both 1 | 2 | 631.6–775.5 | 2,308.0–2,310.8 | 391.4–486.9 |
+| Both 1, the 100 sampled Layers kept | 2 | 626.2–629.5 | 2,306.8–2,315.7 | 467.0–536.5 |
+| Both 2,500, sampled kept | 2 | 1,030.8–1,098.6 | 2,306.8–2,308.0 | 747.5–779.8 |
+| Both 5,000, sampled kept | 2 | 3,660.8–3,728.7 | 4,632.5–4,689.9 | 1,296.5–1,299.9 |
+| Both 7,500, sampled kept | 2 | 7,622.2–7,626.3 | 9,345.1–9,377.5 | 1,833.2–1,849.4 |
+| Both 2,500, sampled not kept | 2 | 894.0–960.3 | 2,302.3–2,304.3 | 541.4–567.5 |
+| Both 5,000, sampled not kept | 2 | 2,683.1–3,662.1 | 4,277.0–4,599.8 | 966.6–1,278.8 |
+| Both 7,500, sampled not kept | 2 | 7,590.4–7,658.7 | 9,069.2–10,088.1 | 1,652.9–2,262.3 |
+
+- **Bound, not sampled.** Keeping all 100 sampled Layers distinct changes
+  nothing: the cost belongs to the Textures the group binds and the
+  fragment shader never reads. The runs that did not keep them, which
+  bind fewer distinct Textures at each count, read 0.1 ms lower at 2,500
+  and within 0.04 ms of the kept runs at 7,500, while the 5,000 run moved
+  by 1 ms between its rounds.
+- **Not linear.** Past one distinct Texture, the gate adds about 0.4 ms
+  for the first 2,500, 2.6 more for the next 2,500, 3.9 more for the
+  next, and 6.2 to 6.6 more for the last 2,505. Why is the driver's, and
+  nothing here reads inside it.
+- **Only the lit pass's encoder.** The depth pre-pass and phase two's
+  depth pass bind the same group, and wgpu-hal calls `useResource` for
+  the same 10,005 Textures on their encoders. Their buffers schedule in
+  13 to 16 µs. What sets the lit pass's encoder apart for the driver is
+  not visible from here.
+- **The passes' two levels.** With the wait gone, every pass reads
+  below `town`'s line for the same work: the depth pyramid 204 µs
+  against 885 µs, culling phase one 26 against 85. So the slow level of
+  L3-D08 comes with the wait. That fits a GPU that idles for 11 ms of
+  every 15.6 and clocks down, but no clock was read: Metal exposes none.
+- **The CPU frame.** wgpu-hal's per-Texture `useResource` on the main
+  thread also falls, from 2.3 to 2.4 ms to 0.4 to 0.5 ms, as #153
+  measured.
+
+### The lit pass's wait
+
+Frame stats now hold the lit pass's wait: the lit pass's start less the
+latest end of the passes from culling phase one up to it, zero when it
+starts beside them. `praxis bench` measures it in the rays-off frames, as
+it does the gate. It also measures each pass the gate spans in those
+frames, because the pass rows come from the rays-on frames, and the two
+halves of a run can sit on different levels of L3-D08. Its line carries
+`lit_pass_wait_us`, its results carry both, and `praxis report` prints
+them as a table under the times, with their medians' sum beside the gate.
+Baselines recorded before them lack both, so `compare` judges neither
+yet. The Froxel pass runs beside culling phase one, so the sum counts its
+11 to 26 µs twice.
+
+Three runs of `praxis bench <dir> --skip-aliasing --no-publish
+texture-wall` on this branch, back to back from 12:37 to 12:42 UTC. None
+was stamped quiet. Preflight read a GPU load of 16, 47 and 88% at the
+rounds' starts and the bench's Provenance 24, 12 and 37%, from
+WindowServer, with load averages of 5 to 17 and no other praxis process.
+Each round's gate table as `praxis report` prints it, its medians in µs
+set side by side by script:
+
+| Line | Round 1 | Round 2 | Round 3 |
+|---|---:|---:|---:|
+| `culling_phase_one` | 84.9 | 44.8 | 85.0 |
+| `culling_phase_two` | 66.5 | 31.8 | 66.4 |
+| `depth_prepass` | 410.0 | 185.9 | 410.0 |
+| `depth_pyramid_pass` | 884.4 | 437.4 | 884.4 |
+| `froxel_pass` | 19.2 | 11.0 | 19.1 |
+| `lit_pass` | 993.2 | 586.7 | 992.5 |
+| Lit pass's wait | 11,599.6 | 14,055.3 | 11,667.7 |
+| Their medians' sum | 14,057.9 | 15,353.0 | 14,125.0 |
+| Gate | 14,089.5 | 15,379.0 | 14,241.2 |
+
+In each round the lines' medians sum to within 0.2, 0.2 and 0.8% of the
+gate. Round 2's passes landed on their fast level, 1.1 ms less in all,
+while its wait grew by 2.4 ms, so its gate read 1.3 ms more: the wait
+moves the gate, not the passes. The wait is 82 to 91% of the gate in
+every round.
+
+### What it means for the offender
+
+texture-wall's breaches of its 12 ms GPU frame (L3-D05) and 6 ms gate
+(L3-D06) are this scheduling. Every timed pass fits in 0.63 ms of gate
+once it is gone. The fix is #183's, with M4's residency charting. The
+probes and the scripts that read them are on
+`prototype/565-kernel-scheduling-probes`. Nothing here changes the
+Channels, the bind group or the Budgets.
+
 ## The turned point lights' search out of `build_shadow_mask`: no faster (2026-10-31, #440)
 
 **Verdict.** Moving #425's facing-sample search out of the kernel that

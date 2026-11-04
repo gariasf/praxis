@@ -18,11 +18,14 @@ use anyhow::Context;
 use crate::capture::{FrameWait, capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+use crate::render::culling_pass::CullingPhase;
+use crate::render::main_pass::LIT_PASS;
+use crate::render::renderer::SHADOW_RAY_PASSES;
 use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
-use crate::stats::FrameStats;
+use crate::stats::{FrameStats, GpuFrameStats};
 use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
@@ -173,6 +176,18 @@ pub struct Measurements {
     /// Each frame's GPU frame with shadow rays on, less the same frame's
     /// with them off.
     pub shadow_ray_microseconds: Spread,
+    /// The lit pass's wait (Frame stats), with shadow rays off, as the
+    /// gate: with the span of the passes before it and the lit pass's own
+    /// time it makes up the gate. Absent from Baselines recorded before
+    /// results carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lit_pass_wait_microseconds: Option<Spread>,
+    /// Each pass the gate spans with shadow rays off, from culling phase
+    /// one to the lit pass, its own GPU time in those frames: with the lit
+    /// pass's wait they make up the gate. Absent from Baselines recorded
+    /// before results carried them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub gate_pass_microseconds: BTreeMap<String, Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     #[serde(flatten)]
@@ -520,16 +535,27 @@ fn measure(
     let (measured, measured_gpu) = (&frames[warm_up_frames..], &gpu_frames[warm_up_frames..]);
     let measured_without_rays = &gpu_frames_without_rays[warm_up_frames..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
-    let gpu_pass_microseconds = TIMED_PASSES
-        .iter()
-        .enumerate()
-        .map(|(pass, &name)| {
-            let times = measured_gpu
-                .iter()
-                .map(|gpu| microseconds(gpu.pass_times[pass].1));
-            (name.to_owned(), spread(times.collect()))
-        })
+    let pass_spreads = |frames: &[GpuFrameStats], passes: &[usize]| {
+        passes
+            .iter()
+            .map(|&pass| {
+                let times = frames
+                    .iter()
+                    .map(|gpu| microseconds(gpu.pass_times[pass].1));
+                (TIMED_PASSES[pass].to_owned(), spread(times.collect()))
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    let every_pass: Vec<usize> = (0..TIMED_PASSES.len()).collect();
+    let gpu_pass_microseconds = pass_spreads(measured_gpu, &every_pass);
+    let position_of = |name: &str| {
+        let position = TIMED_PASSES.iter().position(|&pass| pass == name);
+        position.expect("the gate's first and last passes are timed")
+    };
+    let gate_passes: Vec<usize> = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
+        .filter(|&pass| !SHADOW_RAY_PASSES.contains(&TIMED_PASSES[pass]))
         .collect();
+    let gate_pass_microseconds = pass_spreads(measured_without_rays, &gate_passes);
     Ok(Measurements {
         scene: scene.name().to_owned(),
         adapter,
@@ -582,6 +608,13 @@ fn measure(
                 })
                 .collect(),
         ),
+        lit_pass_wait_microseconds: Some(spread(
+            measured_without_rays
+                .iter()
+                .map(|gpu| microseconds(gpu.lit_pass_wait))
+                .collect(),
+        )),
+        gate_pass_microseconds,
         gpu_pass_microseconds,
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
@@ -596,8 +629,8 @@ fn measure(
 }
 
 /// One line, `key=value` pairs after the scene name: medians and p95s of
-/// the CPU and GPU frame, the gate and shadow-ray time, each pass's median,
-/// then the counters.
+/// the CPU and GPU frame, the gate, shadow-ray time and the lit pass's
+/// wait, each pass's median, then the counters.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
@@ -619,6 +652,13 @@ impl std::fmt::Display for Measurements {
             self.shadow_ray_microseconds.median,
             self.shadow_ray_microseconds.p95
         )?;
+        if let Some(wait) = self.lit_pass_wait_microseconds {
+            write!(
+                formatter,
+                " lit_pass_wait_us median={:.1} p95={:.1}",
+                wait.median, wait.p95
+            )?;
+        }
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
@@ -997,6 +1037,8 @@ mod tests {
                 median: 500.0,
                 p95: 600.0,
             },
+            lit_pass_wait_microseconds: None,
+            gate_pass_microseconds: BTreeMap::new(),
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
                 .map(|(pass, median)| {
@@ -1493,6 +1535,7 @@ mod tests {
                         pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
                         frame_time: Duration::from_micros(300),
                         gate_time: Duration::from_micros(150),
+                        lit_pass_wait: Duration::from_micros(40),
                         instances_drawn: if counted { 5 } else { 77 },
                         triangles_drawn: if counted { 15 } else { 231 },
                         phase_two_triangles_drawn: 0,
@@ -1512,7 +1555,8 @@ mod tests {
     }
 
     /// `frames`, with shadow rays off: a GPU frame of 250 µs in the measured
-    /// frames, of 900 µs in the warm-up, and a gate of 140 µs.
+    /// frames, of 900 µs in the warm-up, a gate of 140 µs and a lit pass's
+    /// wait of 90 µs.
     fn frames_without_rays(configuration: Configuration) -> Vec<FrameStats> {
         let mut frames = frames(configuration);
         for (frame, stats) in frames.iter_mut().enumerate() {
@@ -1520,6 +1564,7 @@ mod tests {
             let warming_up = frame < configuration.warm_up_frames as usize;
             gpu.frame_time = Duration::from_micros(if warming_up { 900 } else { 250 });
             gpu.gate_time = Duration::from_micros(140);
+            gpu.lit_pass_wait = Duration::from_micros(90);
         }
         frames
     }
@@ -1555,10 +1600,35 @@ mod tests {
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
-        // Both lines read the measured frames alone, the gate with rays off.
+        // Both lines read the measured frames alone, the gate and the lit
+        // pass's wait with rays off.
         assert_eq!(reference.gate_microseconds.median, 140.0);
+        assert_eq!(
+            reference.lit_pass_wait_microseconds,
+            Some(Spread {
+                median: 90.0,
+                p95: 90.0
+            })
+        );
         assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
+        // The gate's passes with shadow rays off: culling phase one to the
+        // lit pass, less the passes only shadow rays run.
+        assert_eq!(
+            reference
+                .gate_pass_microseconds
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "culling_phase_one",
+                "culling_phase_two",
+                "depth_prepass",
+                "depth_pyramid_pass",
+                "froxel_pass",
+                "lit_pass"
+            ]
+        );
         assert!(
             reference
                 .gpu_pass_microseconds

@@ -445,6 +445,7 @@ impl GpuStatsReadback {
                             pass_times,
                             frame_time,
                             gate_time,
+                            lit_pass_wait,
                             last_pass_end,
                         } = frame_times(
                             &ticks,
@@ -459,6 +460,7 @@ impl GpuStatsReadback {
                             pass_times,
                             frame_time,
                             gate_time,
+                            lit_pass_wait,
                             instances_drawn: draw.instances_drawn,
                             triangles_drawn: draw.triangles_drawn(),
                             phase_two_triangles_drawn: draw.phase_two_triangles_drawn(),
@@ -560,6 +562,7 @@ struct FrameTimes {
     pass_times: [(&'static str, Duration); TIMED_PASSES.len()],
     frame_time: Duration,
     gate_time: Duration,
+    lit_pass_wait: Duration,
     /// The tick the frame's last pass ended at.
     last_pass_end: u64,
 }
@@ -570,9 +573,11 @@ struct FrameTimes {
 /// build, plus the span of each submission's passes, so neither the waits
 /// between submissions nor what a submission records before its first pass
 /// counts; ADR 0019's gate, from the start of culling phase one to the
-/// latest end of the passes up to the lit pass; and the tick its last pass
-/// ended at. The build, in a submission before the frame's passes, starts no
-/// earlier than `build_floor`; the passes `untimed` names take no time.
+/// latest end of the passes up to the lit pass; the lit pass's wait, from
+/// the latest end of the passes from culling phase one up to it to its
+/// start; and the tick its last pass ended at. The build, in a submission
+/// before the frame's passes, starts no earlier than `build_floor`; the
+/// passes `untimed` names take no time.
 fn frame_times(
     ticks: &[u64; QUERIES_PER_FRAME],
     shape: FrameShape,
@@ -662,11 +667,13 @@ fn frame_times(
         (TIMED_PASSES[pass], taken)
     });
     let culling_phase_one = pass_position(CullingPhase::One.label());
-    let (_, gate_end) = bounds(culling_phase_one..pass_position(LIT_PASS) + 1);
+    let (_, gate_end) = bounds(culling_phase_one..lit_pass + 1);
+    let (_, before_lit_end) = bounds(culling_phase_one..lit_pass);
     FrameTimes {
         pass_times,
         frame_time,
         gate_time: time(ticks[2 * culling_phase_one], gate_end),
+        lit_pass_wait: time(before_lit_end, ticks[2 * lit_pass]),
         last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
     }
 }
@@ -832,6 +839,41 @@ mod tests {
         ticks[2 * pass_position(FROXEL_PASS)] = culling_start - 30;
         let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
         assert_eq!(times.gate_time, microseconds(lit_end - culling_start));
+    }
+
+    /// The lit pass's wait runs from the latest end of the passes from
+    /// culling phase one up to it to its start, so with the passes before
+    /// it and its own time it makes up the gate; passes that did not run
+    /// bound nothing, and a lit pass that starts beside the passes before
+    /// it waits for none of them.
+    #[test]
+    fn the_lit_pass_waits_from_the_latest_end_before_it() {
+        let mut ticks = spread_ticks();
+        let microseconds = Duration::from_micros;
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
+        let culling_two_end = ticks[2 * pass_position(CullingPhase::Two.label()) + 1];
+        let lit_pass = pass_position(LIT_PASS);
+        ticks[2 * lit_pass] = culling_two_end + 12_000;
+        ticks[2 * lit_pass + 1] = culling_two_end + 12_500;
+        // A stale end from an earlier frame's shadow mask pass.
+        ticks[2 * pass_position(SHADOW_MASK_PASS) + 1] = culling_two_end + 20_000;
+        let mut untimed = [false; TIMED_PASSES.len()];
+        for pass in SHADOW_RAY_PASSES {
+            untimed[pass_position(pass)] = true;
+        }
+
+        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        assert_eq!(times.lit_pass_wait, microseconds(12_000));
+        assert_eq!(
+            times.gate_time,
+            microseconds(culling_two_end - culling_start) + microseconds(12_000 + 500)
+        );
+
+        let untimed = [false; TIMED_PASSES.len()];
+        ticks[2 * lit_pass] = culling_two_end + 19_000;
+        ticks[2 * lit_pass + 1] = culling_two_end + 21_000;
+        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        assert_eq!(times.lit_pass_wait, Duration::ZERO);
     }
 
     /// Metal starts the lit pass's vertex work beside the shadow mask pass

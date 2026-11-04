@@ -118,6 +118,36 @@ pub fn report(
         )?;
     }
 
+    if let Some(wait) = current.lit_pass_wait_microseconds {
+        report.push_str(
+            "\n| Gate, rays off, µs | Median | p95 |\n\
+             |---|---:|---:|\n",
+        );
+        let passes = current
+            .gate_pass_microseconds
+            .iter()
+            .map(|(pass, &time)| (format!("`{pass}`"), time));
+        let lines = passes.chain([("Lit pass's wait".to_owned(), wait)]);
+        let mut sum = 0.0;
+        for (name, time) in lines {
+            sum += time.median;
+            writeln!(
+                report,
+                "| {name} | {} | {} |",
+                grouped(time.median, 1),
+                grouped(time.p95, 1)
+            )?;
+        }
+        let gate = current.gate_microseconds;
+        writeln!(report, "| Their medians' sum | {} | — |", grouped(sum, 1))?;
+        writeln!(
+            report,
+            "| Gate | {} | {} |",
+            grouped(gate.median, 1),
+            grouped(gate.p95, 1)
+        )?;
+    }
+
     report.push_str(
         "\n| Counter | Value | Baseline | Δ | Ratio | Budget |\n\
          |---|---:|---:|---:|---:|---:|\n",
@@ -206,6 +236,8 @@ fn ratio(current: f64, baseline: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::bench::{Aliasing, CounterFrames, Counters, Spread};
 
@@ -253,6 +285,8 @@ mod tests {
             gpu_frame_microseconds: gpu,
             gate_microseconds: gate,
             shadow_ray_microseconds: spread(-3.2, 40.5),
+            lit_pass_wait_microseconds: None,
+            gate_pass_microseconds: BTreeMap::new(),
             gpu_pass_microseconds: passes
                 .into_iter()
                 .map(|(pass, time)| (pass.to_owned(), time))
@@ -267,18 +301,30 @@ mod tests {
         }
     }
 
+    /// With the gate's lines, which its Baseline, recorded before results
+    /// carried them, lacks.
     fn current() -> Measurements {
-        measurements(
-            spread(190.0, 262.3),
-            spread(4208.6, 5204.5),
-            spread(2950.0, 3010.4),
-            [
-                ("culling_phase_one", spread(166.3, 169.8)),
-                ("dynamic_tlas_build", spread(48.7, 462.9)),
-                ("lit_pass", spread(755.8, 768.1)),
-            ],
-            COUNTERS,
-        )
+        Measurements {
+            lit_pass_wait_microseconds: Some(spread(1204.5, 1391.0)),
+            gate_pass_microseconds: [
+                ("culling_phase_one", spread(170.1, 175.0)),
+                ("lit_pass", spread(1575.4, 1600.2)),
+            ]
+            .into_iter()
+            .map(|(pass, time)| (pass.to_owned(), time))
+            .collect(),
+            ..measurements(
+                spread(190.0, 262.3),
+                spread(4208.6, 5204.5),
+                spread(2950.0, 3010.4),
+                [
+                    ("culling_phase_one", spread(166.3, 169.8)),
+                    ("dynamic_tlas_build", spread(48.7, 462.9)),
+                    ("lit_pass", spread(755.8, 768.1)),
+                ],
+                COUNTERS,
+            )
+        }
     }
 
     fn baseline() -> Measurements {
@@ -317,6 +363,14 @@ mod tests {
 | `culling_phase_one` | 166.3 | 169.8 | 160.0 | 170.0 | +6.3 | 1.039 | — |
 | `dynamic_tlas_build` | 48.7 | 462.9 | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | 800.0 | 810.0 | -44.2 | 0.945 | — |
+
+| Gate, rays off, µs | Median | p95 |
+|---|---:|---:|
+| `culling_phase_one` | 170.1 | 175.0 |
+| `lit_pass` | 1,575.4 | 1,600.2 |
+| Lit pass's wait | 1,204.5 | 1,391.0 |
+| Their medians' sum | 2,950.0 | — |
+| Gate | 2,950.0 | 3,010.4 |
 
 | Counter | Value | Baseline | Δ | Ratio | Budget |
 |---|---:|---:|---:|---:|---:|
@@ -357,6 +411,7 @@ mod tests {
                  frames 8..72",
                 "| CPU frame | 190.0 | 262.3 | — | — | — | — | 6,000.0 |",
                 "| `lit_pass` | 755.8 | 768.1 | — | — | — | — | — |",
+                "| `lit_pass` | 1,575.4 | 1,600.2 |",
                 "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
             ]
         );

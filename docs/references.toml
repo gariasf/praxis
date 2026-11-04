@@ -961,6 +961,18 @@ for (resource, use_info) in group.resources_to_use.iter() {
 encoder.useResource_usage_stages('''
 checked = 2026-10-26
 
+["wgpu-hal-30-metal-resources-to-use-by-view"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L1041-L1047"
+section = "wgpu-hal 30.0.1, Metal Device::create_bind_group, a binding array of Textures: each view's entry in the bind group's resources_to_use, which set_bind_group passes to useResource"
+quote = '''for (idx, tex) in textures.iter().enumerate() {
+resource_ids[idx] = tex.view.raw.gpuResourceID();
+
+let use_info = bg
+.resources_to_use
+.entry(tex.view.as_raw().cast())
+.or_default();'''
+checked = 2026-11-04
+
 ["polyhaven-asset-license"]
 url = "https://polyhaven.com/license"
 section = "Asset License"
@@ -3862,6 +3874,18 @@ url = "https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/tra
 section = "Apple Developer Documentation, Metal, MTLHazardTrackingMode.tracked, Discussion"
 quote = '''Metal tracks memory dependencies for resources you create with this option. When at least one command writes to a tracked resource, the framework takes the following actions: Delay write operations until all previous read operations finish Prevent subsequent commands from running until write operations finish'''
 checked = 2026-10-30
+
+["apple-metal-command-buffer-kernel-time"]
+url = "https://developer.apple.com/documentation/metal/mtlcommandbuffer/kernelstarttime"
+section = "Apple Developer Documentation, Metal, MTLCommandBuffer, kernelStartTime, and kernelEndTime beside it"
+quote = '''The host time, in seconds, when the CPU begins to schedule the command buffer. [...] You can calculate how much time the kernel spends scheduling a command buffer by subtracting this value from kernelEndTime. The kernel start and end times remain 0.0 until the GPU driver (on the CPU) schedules the command buffer to run on the GPU.'''
+checked = 2026-11-04
+
+["apple-metal-command-buffer-gpu-time"]
+url = "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpustarttime"
+section = "Apple Developer Documentation, Metal, MTLCommandBuffer, gpuStartTime"
+quote = '''The host time, in seconds, when the GPU starts command buffer execution. [...] Both values are relative to system mach time.'''
+checked = 2026-11-04
 
 ["apple-metal-fence-per-stage"]
 url = "https://developer.apple.com/documentation/metal/mtlfence"
