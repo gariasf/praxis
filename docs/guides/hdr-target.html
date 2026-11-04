@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>HDR Target</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/targets.rs</code> &middot; <code>hdr.wgsl</code></div>
+  <h1>The HDR target</h1>
+  <p class="definition">The single-sample <code>Rgba16Float</code> target that the lit pass's 4x MSAA colour resolves into, holding each pixel's exposed colour, clamped to fp16's range and weighted by 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;its luminance) so that the hardware's plain average of the samples comes out as an average weighted the way a display shows them; the tonemapping pass reads it and undoes the weighting.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the target rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="lit-pass.html">Lit Pass</a> for the shading whose colour the target stores, <a href="hdr-pipeline.html">HDR Pipeline Explained</a> for the light units and the EV100 exposure, <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> for a pixel's samples and its fragments.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Created</dt><dd>By <code>RenderTargets::new</code> with every other size-dependent target, at the frame's size, and again on every resize; the tonemapping pass then rebuilds the bind group that reads it.</dd>
+      <dt>Written</dt><dd>By the lit pass, as the resolve target of the multisampled colour: a transient 4x <code>HDR_FORMAT</code> attachment, cleared to the scene's background exposed and weighted, drawn into by the lit pass's fragment shaders, resolved into the HDR target when the pass ends, and its samples discarded.</dd>
+      <dt>Read</dt><dd>By the tonemapping pass, one texel per pixel with <code>textureLoad</code>, through group 3, tonemapping input.</dd>
+      <dt>Format</dt><dd><code>HDR_FORMAT</code>, <code>Rgba16Float</code>, for both the target and the multisampled colour, which the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> checks renders and resolves at 4x.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/hdr.wgsl</code>, a part of the main pass's module and the tonemapping pass's: <code>LARGEST_HALF</code>, <code>relative_luminance</code>, <code>resolve_weighted</code> and <code>resolve_unweighted</code>.</dd>
+      <dt>Counted</dt><dd>In the render targets' GPU memory: 8 bytes a pixel for the target, and 32 for the multisampled colour where a transient attachment takes memory, none where the adapter reports that it saves it.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#exposed">1 &middot; Exposed, then clamped</a>
+    <a href="#weighted">2 &middot; Weighted for the resolve</a>
+    <a href="#attachment">3 &middot; The attachment and the target</a>
+    <a href="#unweighted">4 &middot; Undone in the tonemapping pass</a>
+    <a href="#tests">5 &middot; How it is tested</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#why">7 &middot; Why this way</a>
+    <a href="#limits">8 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="exposed">
+  <div class="part-mark">1 &middot; <code>fs_main</code>, <code>src/render/shaders/main.wgsl</code></div>
+  <h2>Exposed, then clamped</h2>
+  <p class="key-idea">Light is shaded in f32 in photometric units, whose range fp16 cannot hold. The lit pass multiplies by the camera's exposure before anything is stored, then clamps to fp16's largest finite value, so every backend stores the same number.</p>
+  <p>Luminance leaves the shading in cd/m&sup2;. Under the Reference scenes' sun of 100,000 lx, a dielectric's sun glint at roughness 0.04 peaks at 1.24&times;10<sup>8</sup> cd/m&sup2;, 10.9 stops past fp16's 65504. The exposure, <code>camera.exposure</code>, is 1&nbsp;/&nbsp;(1.2&nbsp;&middot;&nbsp;2<sup>EV100</sup>); every Reference scene sets its EV100 so that the sun's illuminance exposes to 1, which makes the exposure 10<sup>&minus;5</sup>. The glint then stores as 1,240 and a white surface in full sun as about 0.32.</p>
+<pre class="code"><code>    <span class="comment">// Pre-exposed in f32 and clamped to fp16's range before the HDR target
+    // stores it (ADR 0023), weighted for the resolve.</span>
+    let exposed = min(luminance * camera.exposure, vec3&lt;f32&gt;(LARGEST_HALF));
+    return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
+  <p class="code-source">The tail of the lit pass's shading, <code>main.wgsl</code>.</p>
+  <p>The clamp is the same for every path that writes the attachment. A shader that overflows fp16 on write gets infinity on Vulkan, which may store it, while the Apple M4 Pro saturates to 65504; and an infinite sample can turn into black patches. The background is exposed on the CPU, in prepare, from the Environment's background luminance, and <code>RenderTargets::color_attachment</code> clamps it to the same 65504 before it weights it as the shaders do.</p>
+</section>
+
+<section class="part prose" id="weighted">
+  <div class="part-mark">2 &middot; <code>resolve_weighted</code></div>
+  <h2>Weighted for the resolve</h2>
+  <p class="key-idea">The hardware resolves 4x MSAA by a plain average. Over exposed colour, one bright sample swamps an edge pixel and it tone maps to white. Each sample is stored divided by one plus its luminance instead, so the hardware's plain average, undone, is an average that weights each sample by 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y).</p>
+<pre class="code"><code>fn relative_luminance(color: vec3&lt;f32&gt;) -&gt; f32 {
+    return dot(color, LUMINANCE_COEFFICIENTS);
+}
+
+fn resolve_weighted(color: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    return color / (1.0 + relative_luminance(color));
+}</code></pre>
+  <p class="code-source"><code>hdr.wgsl</code>. <code>LUMINANCE_COEFFICIENTS</code>, ITU-R BT.709-6's 0.2126, 0.7152 and 0.0722, is declared into the WGSL from <code>targets.rs</code>.</p>
+  <p>Y is linear in the colour, so the plain average of c&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y) has luminance equal to the average of Y&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y), and one minus that is the average of 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y). Dividing the stored average by it leaves the weighted mean:</p>
+  <div class="formula">stored   = c / (1 + Y(c))
+resolved = average(stored) / (1 &minus; Y(average(stored)))
+         = &Sigma; w&#7522; c&#7522; / &Sigma; w&#7522;,    w&#7522; = 1 / (1 + Y&#7522;)</div>
+  <p>A thin wire of exposed 100 that covers one of a pixel's four samples, over a background of 0.05, averages to 25.04 by the box, past white once tone mapped; weighted, the same four samples resolve to 0.395, close to what the background around the wire shows. A stored luminance, Y&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y), stays below 1, but the stored colour still needs fp16: a saturated colour's channels can pass 1, and every bright sample's luminance is stored just under 1, where only fine steps tell one from another.</p>
+</section>
+
+<section class="part prose" id="attachment">
+  <div class="part-mark">3 &middot; <code>RenderTargets::new</code> &middot; <code>color_attachment</code></div>
+  <h2>The attachment and the target</h2>
+  <p class="key-idea">The four samples live only inside the lit pass: the multisampled colour is a transient attachment whose samples are discarded once the pass has resolved them, so on a tile-based GPU they need never reach memory. Only the resolved target, one texel per pixel, outlives the pass.</p>
+<pre class="code"><code>color: target(
+    "Multisampled Colour Texture",
+    HDR_FORMAT,
+    SAMPLE_COUNT,
+    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT_ATTACHMENT,
+),
+hdr: target(
+    "HDR Texture",
+    HDR_FORMAT,
+    1,
+    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+),</code></pre>
+  <p class="code-source"><code>RenderTargets::new</code>, <code>targets.rs</code>.</p>
+  <p>The lit pass takes the multisampled colour as its one colour attachment from <code>color_attachment</code>, which clears it to the background, clamped and weighted, names the HDR target as its resolve target and discards its samples, as a transient attachment's must be.</p>
+<pre class="code"><code>let [red, green, blue] =
+    [clear.r, clear.g, clear.b].map(|channel| channel.min(largest_half));
+let coefficients = LUMINANCE_COEFFICIENTS.map(f64::from);
+let luminance = coefficients[0] * red + coefficients[1] * green + coefficients[2] * blue;
+let weight = 1.0 / (1.0 + luminance);
+wgpu::RenderPassColorAttachment {
+    view: &amp;self.color,
+    resolve_target: Some(&amp;self.hdr),
+    depth_slice: None,
+    ops: wgpu::Operations {
+        load: wgpu::LoadOp::Clear(wgpu::Color {
+            r: red * weight,
+            g: green * weight,
+            b: blue * weight,
+            a: clear.a,
+        }),
+        store: wgpu::StoreOp::Discard,
+    },
+}</code></pre>
+  <p class="code-source"><code>RenderTargets::color_attachment</code>, <code>targets.rs</code>.</p>
+  <p>Both are created at the frame's size by <code>RenderTargets::new</code>, which a resize calls again. A bind group is a snapshot of the views it was built with, so the tonemapping pass builds the group that reads the target in one function, at creation and again after every resize.</p>
+</section>
+
+<section class="part prose" id="unweighted">
+  <div class="part-mark">4 &middot; <code>resolve_unweighted</code> &middot; <code>fs_tonemap</code></div>
+  <h2>Undone in the tonemapping pass</h2>
+  <p class="key-idea">The tonemapping pass loads each pixel's resolved texel and divides by one minus its luminance, which turns the hardware's plain average back into exposed colour averaged by weight.</p>
+<pre class="code"><code>fn resolve_unweighted(weighted: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    let complement = max(1.0 - relative_luminance(weighted), 1.0 / LARGEST_HALF);
+    return min(weighted / complement, vec3&lt;f32&gt;(LARGEST_HALF));
+}</code></pre>
+  <p class="code-source"><code>hdr.wgsl</code>.</p>
+  <p>Rounding can bring a resolved luminance to 1 or past it, where the division would give infinity or a negative colour, so the complement is held at 1&nbsp;/&nbsp;65504 at least and the result clamped to 65504 again. From here the colour is exposed colour, as the lit pass computed it, and the tonemapping pass maps it for display (<a href="tonemapping-pass.html">The tonemapping pass</a>).</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">5 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">An oracle in f64 holds the weighting and its inverse; the pass tests and the capture test clear the attachment and read what the tonemapping pass shows of it; the Goldens hold every Reference scene's image through it.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance</code></td><td><code>shader_function_tests.rs</code></td><td>a box average of weighted samples, undone, equals the 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;Y) weighted mean: 100 over three of 0.05 resolves to 0.395, four equal samples to their colour, and a weighted luminance at or past 1 to 65504, not infinity</td></tr>
+      <tr><td><code>the_pass_shows_each_pixel_of_the_hdr_target_as_gt7_maps_it</code></td><td><code>tonemapping_pass.rs</code></td><td>a lit pass that only clears through <code>color_attachment</code>, weighting its colour, then the tonemapping pass: each exposed colour shows as GT7 maps it, within a step</td></tr>
+      <tr><td><code>capture_draws_the_scene_over_the_tonemapped_background</code></td><td><code>tests/capture.rs</code></td><td>the background, exposed (0.1, 0.2, 0.3), cleared and weighted, shows at its sRGB codes</td></tr>
+      <tr><td><code>a_resized_renderer_draws_as_one_created_at_its_new_size</code></td><td><code>renderer.rs</code></td><td>after a resize, the targets and the groups that read them are rebuilt: the frame equals one from a Renderer created at that size</td></tr>
+      <tr><td><code>the_m4_pro_meets_the_floor</code></td><td><code>src/gpu/mod.rs</code></td><td>the M4 Pro's recorded features, limits and formats meet the floor, among them 4x rendering and resolving in the HDR colour's format</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every Reference scene's frame through the weighted resolve matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">6 &middot; <code>gpu_memory_bytes</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The target is memory, not a pass: 8 bytes a pixel, and four times that again for the samples wherever a transient attachment takes memory. Its time is spread over the passes around it, too small to see in their Baselines: the weighting is a division in the lit pass and its inverse one in the tonemapping pass.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th><th class="n">At 2560&times;1440</th></tr></thead>
+    <tbody>
+      <tr><td>the HDR target</td><td><code>Rgba16Float</code></td><td class="n">8</td><td class="n">29,491,200</td></tr>
+      <tr><td>the multisampled colour, 4 samples</td><td><code>Rgba16Float</code>, 4x MSAA, transient</td><td class="n">32, or none</td><td class="n">117,964,800, or none</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>targets.rs</code> and <code>texture_bytes</code>, <code>src/stats/mod.rs</code>, at the commit above: the multisampled colour counts as none in <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the shadow mask had no bit for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span>' GPU memory where the adapter reports that a transient attachment saves memory. The tonemapping pass's own time, which includes reading the target, is on its page.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">7 &middot; ADRs 0008, 0019, 0021, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>Pre-exposure, then fp16.</b> ADR 0023 makes light photometric, so values span more stops than fp16 holds. Shading in f32 and storing only the exposed result is the practice of engines with physical light units; it keeps an 8-byte target where storing luminance itself would need f32 and twice the memory.</p>
+  <p><b>The clamp on every path.</b> Overflow is where the backends disagree: Vulkan's conversion rules allow infinity, the M4 Pro saturates, and Metal's specification leaves it open. Unreal traces black patches on reflective surfaces to an overflowing colour buffer. A clamp to 65504 before every write makes every adapter store the same number.</p>
+  <p><b><code>Rgba16Float</code> over a packed float format.</b> A format of three small unsigned floats in 32 bits halves the memory, but its 5- and 6-bit mantissas shift hue, and the weighting needs precision just under 1: there, the inverse of the largest stored luminance caps near 2,000 in fp16 and near 127 in 11-bit floats.</p>
+  <p><b>The weighted resolve over the box.</b> A plain box resolve of exposed colour is physically an average of light, but tone mapped it turns bright sub-pixel detail into white stair steps. Karis's reversible weighting makes the hardware's own resolve behave like an average after tone mapping, at a division per sample, and keeps ADR 0019's 4x MSAA memoryless.</p>
+  <p><b>The hardware resolve over a shader resolve.</b> Storing the samples and resolving them in a shader would allow any filter, at 117,964,800 bytes more at 1440p and with the samples reaching memory, which ADR 0019's memoryless 4x rules out.</p>
+  <p><b>A fixed EV100 per scene.</b> ADR 0023 has each Reference scene set its exposure by hand, which keeps Goldens exact; histogram adaptation waits for a scene that needs it. ADR 0008 keeps screen-space history out of the frame, so nothing about the target carries from one frame to the next.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">8</div>
+  <h2>Limits</h2>
+  <p><b>Sub-pixel highlights lose energy.</b> A glint that covers one sample counts for less than its quarter of the pixel, since its weight is the smallest of the four.</p>
+  <p><b>Blending happens in the weighted space.</b> A fragment that blends over another blends their weighted colours, which darkens a 50% blend; no Reference scene blends yet, and transparency will have to blend before weighting or in a pass of its own.</p>
+  <p><b>Three channels, Rec. 709 primaries.</b> The target holds colour in the scene's primaries and the luminance weights are Rec. 709's; a wider-gamut working space would change both.</p>
+  <p><b>SDR only downstream.</b> The target holds values past display white, but nothing reads it for an HDR display: the tonemapping pass maps it to SDR.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the target rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://graphicrants.blogspot.com/2013/12/tone-mapping.html">Karis, Tone mapping, Graphic Rants, 2013</a></dt><dd>the reversible weighting by 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;luminance) that makes a box resolve average as after tone mapping; <code>karis-2013-weighted-average</code></dd>
+    <dt><a href="https://www.w3.org/TR/2026/CRD-WGSL-20261021/#floating-point-types">WGSL, &sect;6.2.4 Floating Point Types</a></dt><dd>fp16's largest finite value, 65504; <code>wgsl-f16-largest</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/fundamentals.adoc#fundamentals-fp-conversion">Vulkan specification, Floating-Point Format Conversions</a></dt><dd>a value past a format's range may convert to infinity; <code>vulkan-fp-conversion</code></dd>
+    <dt><a href="https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=85">Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, SIGGRAPH 2014</a></dt><dd>the EV100 exposure and its 1.2 (&sect;5.1.2), and an fp16 light buffer with exposure pre-applied, past whose 65504 values turn infinite (&sect;5.2); <code>frostbite-2014-exposure</code>, <code>frostbite-2014-fp16</code></dd>
+    <dt><a href="https://web.archive.org/web/20260302051755/https://dev.epicgames.com/documentation/en-us/unreal-engine/using-physical-lighting-units-in-unreal-engine">Unreal Engine documentation, Using Physical Lighting Units</a></dt><dd>black patches on reflective surfaces from an overflowing colour buffer, which ADR 0023 cites</dd>
+    <dt><a href="https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6">ITU-R BT.709-6, item 3.2</a></dt><dd>the luminance weights the weighting uses; <code>bt709-6-luma</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The target came with the move to photometric light in the third milestone: first an fp16 target behind a clamp-only pass, then the weighted resolve, after a plain one whitened bright edges, then the tonemapping pass it feeds. The development narrative, with each step's measurements and the operator survey, is in the notebook's volumes until the pages absorb them: <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="hdr-pipeline.html">HDR Pipeline Explained</a>. This page describes the target as it is; the volumes describe how it got here.</p>
+  <footer class="sources">Written from <code>src/render/targets.rs</code>, <code>src/render/shaders/hdr.wgsl</code>, <code>main.wgsl</code>, <code>tonemapping.wgsl</code>, <code>src/render/main_pass.rs</code>, <code>src/render/prepare.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, ADRs 0008, 0019, 0021 and 0023, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="specular-antialiasing.html">Previous: Specular Antialiasing Explained</a><a href="index.html">All field guides</a><a href="tonemapping-pass.html">Next: The tonemapping pass</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
