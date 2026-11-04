@@ -347,7 +347,7 @@ mask = textureLoad(shadow_mask, vec2&lt;u32&gt;(in.clip_position.xy), 0).rg;</co
 pub const SHADOW_MASK_SURFACES: u32 = 2;</code></pre>
     <ul class="keypoints" style="margin-top: 16px">
       <li><b>Layer 0</b> holds the nearest sample's surface, as the single layer did before. Every pixel writes it.</li>
-      <li><b>Layer 1</b> holds a second surface's word, written only at pixels that have one. Each word is still an <code>Rg32Uint</code> pair: 59 light bits and, in the second half's top bits, the slice of the <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span> whose lights the bits follow (<a href="froxel-lights.html">Froxel Lights Explained</a>).</li>
+      <li><b>Layer 1</b> holds a second surface's word, written only at pixels that have one. Each word is still an <code>Rg32Uint</code> pair: 59 light bits and, in the second half's top bits, the slice of the <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span> whose lights the bits follow (<a href="froxel-pass.html">The Froxel pass</a>).</li>
       <li><b><code>shadow_mask_samples</code></b>, an <code>R32Uint</code> target, holds four bits per pixel: which samples show the second surface.</li>
     </ul>
     <p>All three live in <code>RenderTargets</code> with the list of chapter 6, so they are rebuilt on resize together with the bind groups that read them.</p>

@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/tonemapping_pass.rs</code></div>
   <h1>The tonemapping pass</h1>
   <p class="definition">The frame's last timed pass: one triangle over the target that reads each pixel's exposed colour from the <a href="hdr-target.html">HDR target</a>, undoes the resolve's weighting, maps it through GT7's tone curve to display colour, encodes it as sRGB in the shader and adds two steps of triangular blue-noise dither before the 8-bit target rounds it.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="hdr-target.html">The HDR target</a> for what the pass reads, <a href="hdr-pipeline.html">HDR Pipeline Explained</a> for the light units and the EV100 exposure that set where mid-grey lands.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="hdr-target.html">The HDR target</a> for what the pass reads, <a href="light-units.html">Light units</a> for the light units and the EV100 exposure that set where mid-grey lands.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -403,11 +403,11 @@ const DITHER_MASK: &amp;[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
     <dt><a href="https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/reading/Lipshitz_1992.pdf#page=18">Lipshitz, Wannamaker and Vanderkooy, Quantization and Dither: A Theoretical Survey, 1992</a></dt><dd>triangular dither of two steps peak to peak removes noise modulation with the least added noise; <code>lipshitz-1992-triangular-dither</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The pass came with the move to photometric light in the third milestone, in steps measured against each other: a clamp-only pass over a new fp16 target, then the weighted resolve, GT7, the shader's own sRGB encoding and the dither, after a survey of operators, targets, dithers, displays and bloom chose each. The development narrative, with each step's measurements, the operator sweep and the live demos, is in the notebook's volumes until the pages absorb them: <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="hdr-pipeline.html">HDR Pipeline Explained</a>. This page describes the pass as it is; the volumes describe how it got here.</p>
+  <p class="note">The pass came with the move to photometric light in the third milestone, in steps measured against each other: a clamp-only pass over a new fp16 target, then the weighted resolve, GT7, the shader's own sRGB encoding and the dither, after a survey of operators, targets, dithers, displays and bloom chose each. The volumes that narrated each step, with its measurements, the operator sweep and the live demos, are retired: this page, <a href="hdr-target.html">The HDR target</a> and <a href="light-units.html">Light units</a> describe the chain as it is.</p>
   <footer class="sources">Written from <code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>, <code>hdr.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/gpu/mod.rs</code>, the tests named above, ADRs 0008, 0018, 0021 and 0023, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
 </section>
 
-<nav class="series" aria-label="Praxis field guides"><a href="hdr-target.html">Previous: The HDR target</a><a href="index.html">All field guides</a><a href="tonemapping-pass-explained.html">Next: Tonemapping Pass Explained</a></nav>
+<nav class="series" aria-label="Praxis field guides"><a href="hdr-target.html">Previous: The HDR target</a><a href="index.html">All field guides</a><a href="town.html">Next: Town Explained</a></nav>
 </div>
 </div>
 <div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
