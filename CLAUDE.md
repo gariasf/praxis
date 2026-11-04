@@ -335,7 +335,7 @@ When reviewing changes, check for:
       (ADR 0023)
 - [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`); a
       `mat3x3` or `array<vec3>` field is padded per column or element
-      on the Rust side (the test compares sizes, not strides)
+      on the Rust side (the twin test compares each field's strides)
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
 - [ ] Texture formats match between creation and surface config, and
