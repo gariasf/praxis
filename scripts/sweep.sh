@@ -5,7 +5,8 @@
 # record before it, and bisects the commits between when the shift holds,
 # each commit from a release binary built in a worktree of its own under
 # target/sweep/trees, which a later night's bisect reuses. The records
-# publish to `bench-history`, and each night's Verdict lands there too. A
+# publish to `bench-history`, and each night's Verdict lands there too, as
+# does a Baseline re-recorded since the night before. A
 # commit a bisect pinned that no re-recorded Baseline covers opens one
 # `needs-triage` issue per scene through `gh`, which must be installed and
 # logged in (`gh auth login`); the Verdict records it. It runs in a
@@ -77,6 +78,9 @@
 
   cargo build --release --quiet || fail "cargo build --release"
   praxis=target/release/praxis
+  # A Baseline re-recorded since the last night becomes its source's record,
+  # which starts a line, before the night reads which scenes lack one.
+  "$praxis" history import || log "praxis history import failed"
   scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
 
@@ -145,9 +149,13 @@
     printf '%s\n' "$tree"
   }
 
+  # The commit that added `bench --no-publish`: a binary of a commit before
+  # it refuses the flag, and publishes nothing without it.
+  no_publish_added=3c6b9d92
   start=$SECONDS
   # One Suspect a night: its ends interleaved, then the bisect's commits,
-  # as `history bisect` names them.
+  # as `history bisect` names them. Each run's directory names its commit
+  # in a file, for a binary too old to stamp its results with provenance.
   night="$PWD/target/sweep/bisect-$(date '+%Y%m%dT%H%M%S')"
   runs=0
   bisect_done=0
@@ -168,19 +176,32 @@
     }
     runs=$((runs + 1))
     run="$night/$(printf '%03d' "$runs")"
-    (cd "$tree" && ./praxis bench "$run" --no-publish "$scene") || {
+    mkdir -p "$run" && printf '%s\n' "$commit" >"$run/commit"
+    publish_flag=--no-publish
+    if ! git merge-base --is-ancestor "$no_publish_added" "$commit"; then
+      publish_flag=
+      log "re-bench of $scene at $commit without --no-publish: its binary predates the flag and publishes nothing"
+    fi
+    (cd "$tree" && ./praxis bench "$run" $publish_flag "$scene") || {
       log "re-bench of $scene at $commit failed"
       break
     }
   done
   if compgen -G "$night/[0-9]*/*.json" >/dev/null; then
     log "re-benched $runs runs of a Suspect into $night"
-    # A night's runs publish together, each a file of its own.
+    # A night's runs publish together, each a file of its own, but for an
+    # old binary's, which carry no provenance to make a record of.
     mkdir -p "$night/all"
     for result in "$night"/[0-9]*/*.json; do
+      if ! grep -q '"provenance"' "$result"; then
+        log "not published, no provenance: $result"
+        continue
+      fi
       cp "$result" "$night/all/$(basename "$(dirname "$result")")-$(basename "$result")"
     done
-    "$praxis" publish "$night/all" || log "praxis publish $night/all failed"
+    if compgen -G "$night/all/*.json" >/dev/null; then
+      "$praxis" publish "$night/all" || log "praxis publish $night/all failed"
+    fi
   fi
   # No bisect waits for a later night: its trees go.
   if [ "$bisect_done" = 1 ] && compgen -G "target/sweep/trees/*/" >/dev/null; then

@@ -619,8 +619,13 @@ fn first_parent(repository: &Path, good: &str, bad: &str) -> anyhow::Result<Vec<
         .collect()
 }
 
+/// The file in a night's run directory naming the commit it benched, for
+/// a binary too old to stamp its results with provenance.
+pub(super) const RUN_COMMIT_FILE: &str = "commit";
+
 /// The runs in `night`'s directories, in name order, of `scene`: the
-/// commit each benched and its median of `metric`.
+/// commit each benched, as its provenance or else its `RUN_COMMIT_FILE`
+/// names it, and its median of `metric`.
 fn night_runs(night: &Path, scene: &str, metric: &str) -> anyhow::Result<Vec<Run>> {
     let mut directories: Vec<PathBuf> = std::fs::read_dir(night)?
         .map(|entry| entry.map(|entry| entry.path()))
@@ -635,13 +640,15 @@ fn night_runs(night: &Path, scene: &str, metric: &str) -> anyhow::Result<Vec<Run
         // Read loosely: an earlier commit's binary wrote it.
         let result: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
             .with_context(|| format!("parsing {}", path.display()))?;
-        let commit = result["provenance"]["commit"].as_str();
+        let commit = match result["provenance"]["commit"].as_str() {
+            Some(commit) => Some(commit.to_owned()),
+            None => std::fs::read_to_string(directory.join(RUN_COMMIT_FILE))
+                .ok()
+                .map(|commit| commit.trim().to_owned()),
+        };
         let median = result[metric]["median"].as_f64();
         if let (Some(commit), Some(median)) = (commit, median) {
-            runs.push(Run {
-                commit: commit.to_owned(),
-                median,
-            });
+            runs.push(Run { commit, median });
         }
     }
     Ok(runs)
@@ -919,6 +926,31 @@ mod tests {
         let read = night_runs(&night_directory, &verdict.scene, &verdict.metric).unwrap();
         std::fs::remove_dir_all(&night_directory).ok();
         assert_eq!(read, runs(&[("a", 100.0), ("a", 200.0)]));
+    }
+
+    /// A binary older than the bench's provenance stamps no commit, so the
+    /// sweep names it beside the result.
+    #[test]
+    fn a_run_without_provenance_is_of_the_commit_the_sweep_named() {
+        let night_directory =
+            std::env::temp_dir().join(format!("praxis-unstamped-night-{}", std::process::id()));
+        std::fs::remove_dir_all(&night_directory).ok();
+        let result = crate::bench::tests::baseline();
+        for (run, commit) in [("001", Some("a")), ("002", None)] {
+            let directory = night_directory.join(run);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                directory.join(format!("{}.json", result.scene)),
+                serde_json::to_string(&result).unwrap(),
+            )
+            .unwrap();
+            if let Some(commit) = commit {
+                std::fs::write(directory.join(RUN_COMMIT_FILE), format!("{commit}\n")).unwrap();
+            }
+        }
+        let read = night_runs(&night_directory, &result.scene, "cpu_frame_microseconds").unwrap();
+        std::fs::remove_dir_all(&night_directory).ok();
+        assert_eq!(read, runs(&[("a", 1000.0)]));
     }
 
     #[test]

@@ -241,6 +241,26 @@ pub fn source_hash(repository: &Path, revision: &str) -> anyhow::Result<String> 
     git(repository, &["mktree"], Some(&entries))
 }
 
+/// The Harness version `commit` defined: its `HARNESS_VERSION`, as this
+/// file held it then.
+pub(super) fn harness_version_at(repository: &Path, commit: &str) -> anyhow::Result<u32> {
+    let file = git(
+        repository,
+        &["show", &format!("{commit}:src/bench/provenance.rs")],
+        None,
+    )?;
+    harness_version_in(&file).with_context(|| format!("{commit} defines no HARNESS_VERSION"))
+}
+
+/// The `HARNESS_VERSION` a version of this file defines.
+fn harness_version_in(file: &str) -> Option<u32> {
+    file.lines()
+        .find_map(|line| line.strip_prefix("pub const HARNESS_VERSION: u32 = "))?
+        .strip_suffix(';')?
+        .parse()
+        .ok()
+}
+
 /// The trimmed output of git with `arguments` in `repository`, given
 /// `input` on its standard input.
 pub(super) fn git(
@@ -352,6 +372,15 @@ mod tests {
         std::fs::write(file, contents).unwrap();
         git(repository, &["add", "--all"], None).unwrap();
         git(repository, &["commit", "--quiet", "--message", path], None).unwrap();
+    }
+
+    #[test]
+    fn the_harness_version_is_read_from_this_file_as_a_commit_holds_it() {
+        assert_eq!(
+            harness_version_in(include_str!("provenance.rs")),
+            Some(HARNESS_VERSION)
+        );
+        assert_eq!(harness_version_in("pub const OTHER: u32 = 3;"), None);
     }
 
     #[test]

@@ -627,7 +627,8 @@ impl std::fmt::Display for Measurements {
 }
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count;
-/// p95s are reported only, as they move with one slow frame. Runs that
+/// p95s are reported only, as they move with one slow frame, but for the
+/// CPU frame's, which its Budget bounds too (ADR 0013). Runs that
 /// measured as many frames compare their measured frames' counters; runs of
 /// other lengths compare their counter frames', and only with
 /// `CompareMode::Ci`, as their times cover other frames.
@@ -694,6 +695,17 @@ pub fn compare(
         cpu,
         budgets.cpu_frame_microseconds,
     );
+    // ADR 0013 bounds the CPU frame at the p95 as well as the median.
+    let earlier = findings.len();
+    check_budget(
+        &mut findings,
+        "cpu_frame_microseconds",
+        current.cpu_frame_microseconds.p95,
+        budgets.cpu_frame_microseconds,
+    );
+    for finding in &mut findings[earlier..] {
+        finding.detail = format!("p95 {}", finding.detail);
+    }
     let passes = &current.gpu_pass_microseconds;
     let baseline_passes = &baseline.gpu_pass_microseconds;
     anyhow::ensure!(
@@ -1121,6 +1133,23 @@ mod tests {
         assert_eq!(
             verdicts(&current, &over_budget, CompareMode::Local),
             [("cpu_frame_microseconds", Verdict::Fail)]
+        );
+    }
+
+    /// The CPU frame answers to its 6 ms Budget at the p95 too, though its
+    /// Baseline compares medians alone.
+    #[test]
+    fn a_cpu_frame_p95_over_budget_fails_with_its_median_within() {
+        let mut slow_tail = baseline();
+        slow_tail.cpu_frame_microseconds.p95 = 6210.0;
+        let findings = compare(&slow_tail, &slow_tail, &BUDGETS, CompareMode::Local).unwrap();
+        assert_eq!(
+            findings,
+            [Finding {
+                metric: "cpu_frame_microseconds",
+                verdict: Verdict::Fail,
+                detail: "p95 6210.0 over Budget 6000.0".to_owned(),
+            }]
         );
     }
 

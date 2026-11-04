@@ -213,7 +213,7 @@ Bench records taken from a branch under a name, kept beside the Series and compa
 _Avoid_: Branch run, trial
 
 **Suspect**:
-A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
+A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, or imported or re-recorded Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
 _Avoid_: Alert, outlier, anomaly
 
 **Verdict**:

@@ -79,8 +79,8 @@ record a suspect, with its shift as a share of the median of up to 8 records
 before it on its line: it lies outside that median ± the larger of 4 median
 absolute deviations and 3%, unless it only continues a suspect among those 8:
 on the same side, within that suspect's tolerance of its median. A new Harness
-version or scene content, an imported Baseline, or a commit a Verdict pinned
-starts a line. lavapipe's records are never suspects.
+version or scene content, an imported or re-recorded Baseline, or a commit a
+Verdict pinned starts a line. lavapipe's records are never suspects.
 
 - `verdicts/<adapter>-<backend>/<scene>/<source hash>.json`: what the sweep
   found of the slower suspect of that source: the night re-benched it and the
@@ -115,7 +115,9 @@ quiet unchecked. Each import rewrites the records an earlier one wrote, with
 the tags the rules of its day give them. A record holds what the bench
 measured then, so a metric added later is absent from it: its Series row
 holds null for a time, Aliasing figure or scene content hash it lacks, and
-leaves out a counter or pass it lacks.
+leaves out a counter or pass it lacks. A Baseline `main` re-recorded since
+is a record the same way, its `provenance.source` `baseline-rerecorded` and its
+Harness version the one its commit defined; the sweep imports each night.
 ";
 
 /// A Bench record to publish: the file the branch keeps under its key, and
@@ -255,8 +257,8 @@ struct StoredProvenance {
     commit: String,
     source_hash: String,
     harness_version: u32,
-    /// `baseline-commit` for an imported Baseline; none for a bench's
-    /// result.
+    /// `baseline-commit` for an imported Baseline, `baseline-rerecorded`
+    /// for one re-recorded since; none for a bench's result.
     source: Option<String>,
     /// None for an imported Baseline.
     scene_content_hash: Option<String>,
@@ -358,7 +360,10 @@ impl SeriesRecord for StoredRecord {
                 .enumerate()
                 .map(|(index, row)| {
                     (index > 0 && !rows[index - 1].same_definition(row))
-                        || row.source == Some(import::IMPORTED_SOURCE)
+                        || matches!(
+                            row.source,
+                            Some(import::IMPORTED_SOURCE | import::RERECORDED_SOURCE)
+                        )
                         || line_starts.contains(row.source_hash)
                 })
                 .collect();
@@ -1792,6 +1797,40 @@ mod tests {
     }
 
     #[test]
+    fn a_baseline_re_recorded_after_the_history_started_is_marked_as_one() {
+        let fixture = Fixture::new("re-recorded");
+        let checkout = &fixture.checkout;
+        commit(checkout, "src/history.rs", "// the history starts");
+        let history_started = git(checkout, &["rev-parse", "HEAD"], None).unwrap();
+        commit(
+            checkout,
+            "src/bench/provenance.rs",
+            "pub const HARNESS_VERSION: u32 = 7;\n",
+        );
+        commit(
+            checkout,
+            "bench/baselines/apple-m4-pro/pbr-sweep.json",
+            r#"{"scene": "pbr-sweep", "adapter": "Apple M4 Pro", "backend": "metal",
+            "profile": "release", "width": 2560, "height": 1440, "measured_frames": 1800,
+            "cpu_frame_microseconds": {"median": 30.0, "p95": 40.0}}"#,
+        );
+        // Unpushed, a Baseline is not yet `main`'s.
+        let unpushed = import::import_up_to(checkout, &history_started, &[]).unwrap();
+        assert_eq!(unpushed.on_series + unpushed.tagged, 0);
+        git(checkout, &["push", "--quiet", "origin", "main"], None).unwrap();
+
+        let publication = import::import_up_to(checkout, &history_started, &[]).unwrap();
+        assert_eq!((publication.on_series, publication.tagged), (1, 0));
+        let series = fixture.read("series/apple-m4-pro-metal/pbr-sweep.json");
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&series).unwrap();
+        let summary: Vec<_> = rows
+            .iter()
+            .map(|row| (row["source"].as_str(), row["harness_version"].as_u64()))
+            .collect();
+        assert_eq!(summary, [(Some("baseline-rerecorded"), Some(7))]);
+    }
+
+    #[test]
     fn a_series_marks_a_step_as_a_suspect_unless_a_baseline_a_pinned_commit_or_lavapipe_takes_it() {
         let rows = |adapter: &str, step_source: Option<&str>, line_starts: &[&str]| {
             let records: Vec<StoredRecord> = [10_000.0, 10_050.0, 9_950.0, 10_020.0, 11_000.0]
@@ -1834,6 +1873,10 @@ mod tests {
         assert_eq!(suspects(rows("Apple M4 Pro", None, &[])), stepped);
         assert_eq!(
             suspects(rows("Apple M4 Pro", Some(import::IMPORTED_SOURCE), &[])),
+            unmarked
+        );
+        assert_eq!(
+            suspects(rows("Apple M4 Pro", Some(import::RERECORDED_SOURCE), &[])),
             unmarked
         );
         // A bisect pinned the step's commit: its line starts there.
