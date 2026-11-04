@@ -42,22 +42,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      engine: ${{ steps.list.outputs.engine }}
+      engine_changed: ${{ steps.classify.outputs.engine_changed }}
     steps:
       # The merge commit and its first parent, the base it merges into.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      # Without renames, a file moved out of `docs/` lists both its paths.
-      - name: List
-        id: list
+      # Without renames, a file moved out of `docs/` lists both its paths;
+      # unquoted, a non-ASCII docs path still reads as docs.
+      - name: Whether anything but docs changed
+        id: classify
         run: |
-          changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
-          if grep -qvE '^(docs/|[^/]*\.md$)' <<< "$changed"; then
-            echo engine=true >> "$GITHUB_OUTPUT"
+          changed_paths=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)
+          echo "$changed_paths"
+          if grep -qvE '^(docs/|[^/]*\.md$)' <<< "$changed_paths"; then
+            echo engine_changed=true >> "$GITHUB_OUTPUT"
           else
-            echo engine=false >> "$GITHUB_OUTPUT"
+            echo engine_changed=false >> "$GITHUB_OUTPUT"
           fi
 
   check:
@@ -88,7 +90,7 @@ jobs:
     # Not a required check until two green weeks.
     name: Goldens (software Vulkan)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -128,7 +130,7 @@ jobs:
     # `cooked/` with `assets/` absent.
     name: Goldens from a shipping build (software Vulkan)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -178,7 +180,7 @@ jobs:
   software-bench:
     name: Bench counters (software Vulkan)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
+    if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
