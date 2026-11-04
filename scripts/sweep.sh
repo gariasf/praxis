@@ -177,11 +177,18 @@
     runs=$((runs + 1))
     run="$night/$(printf '%03d' "$runs")"
     mkdir -p "$run" && printf '%s\n' "$commit" >"$run/commit"
-    publish_flag=--no-publish
-    if ! git merge-base --is-ancestor "$no_publish_added" "$commit"; then
-      publish_flag=
-      log "re-bench of $scene at $commit without --no-publish: its binary predates the flag and publishes nothing"
-    fi
+    git merge-base --is-ancestor "$no_publish_added" "$commit"
+    case $? in
+      0) publish_flag=--no-publish ;;
+      1)
+        publish_flag=
+        log "re-bench of $scene at $commit without --no-publish: its binary predates the flag and publishes nothing"
+        ;;
+      *)
+        log "no ancestry of $commit known"
+        break
+        ;;
+    esac
     (cd "$tree" && ./praxis bench "$run" $publish_flag "$scene") || {
       log "re-bench of $scene at $commit failed"
       break

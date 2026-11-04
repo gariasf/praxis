@@ -73,6 +73,12 @@ pub(super) const IMPORTED_SOURCE: &str = "baseline-commit";
 /// `HISTORY_STARTED` names as its source.
 pub(super) const RERECORDED_SOURCE: &str = "baseline-rerecorded";
 
+/// Whether a record's provenance `source` names a Baseline, imported or
+/// re-recorded.
+pub(super) fn is_baseline_source(source: &str) -> bool {
+    [IMPORTED_SOURCE, RERECORDED_SOURCE].contains(&source)
+}
+
 /// Imports every Baseline file each commit on the remote's `main` changed
 /// into its `bench-history` branch, those after `HISTORY_STARTED` marked as
 /// re-recorded, and gives the records a bench published before the import
@@ -102,10 +108,7 @@ pub(super) fn import_up_to(
     // The version of the method in force when the history started, which
     // records published before the import name 1.
     let started_harness_version = breaks.len() as u32 + 1;
-    let message = format!(
-        "Import {} Baselines committed before the Bench history",
-        records.len()
-    );
+    let message = format!("Import {} Baselines committed to main", records.len());
     push(repository, &message, |worktree| {
         let restamped = worktree.restamp(started_harness_version)?;
         worktree.remove_imported()?;
@@ -201,7 +204,12 @@ fn baseline_records(
         None,
     )?;
     for commit in rerecorded.lines() {
-        let harness_version = harness_version_at(repository, commit)?;
+        // Version 1 named the method in force until the import numbered the
+        // eras before it, as `restamp` reads it.
+        let harness_version = match harness_version_at(repository, commit)? {
+            1 => breaks.len() as u32 + 1,
+            version => version,
+        };
         records.extend(commit_records(
             repository,
             commit,
@@ -398,9 +406,9 @@ impl Worktree<'_> {
     /// places.
     fn remove_imported(&self) -> anyhow::Result<()> {
         for (path, file) in self.measured_records()? {
-            if [IMPORTED_SOURCE, RERECORDED_SOURCE]
-                .iter()
-                .any(|source| file["provenance"]["source"] == *source)
+            if file["provenance"]["source"]
+                .as_str()
+                .is_some_and(is_baseline_source)
             {
                 std::fs::remove_file(&path)
                     .with_context(|| format!("removing {}", path.display()))?;

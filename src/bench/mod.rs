@@ -628,7 +628,7 @@ impl std::fmt::Display for Measurements {
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count;
 /// p95s are reported only, as they move with one slow frame, but for the
-/// CPU frame's, which its Budget bounds too (ADR 0013). Runs that
+/// CPU frame's, which its Budget bounds too. Runs that
 /// measured as many frames compare their measured frames' counters; runs of
 /// other lengths compare their counter frames', and only with
 /// `CompareMode::Ci`, as their times cover other frames.
@@ -695,7 +695,7 @@ pub fn compare(
         cpu,
         budgets.cpu_frame_microseconds,
     );
-    // ADR 0013 bounds the CPU frame at the p95 as well as the median.
+    // The CPU frame's Budget bounds its p95 as well as its median.
     let earlier = findings.len();
     check_budget(
         &mut findings,

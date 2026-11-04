@@ -118,6 +118,8 @@ holds null for a time, Aliasing figure or scene content hash it lacks, and
 leaves out a counter or pass it lacks. A Baseline `main` re-recorded since
 is a record the same way, its `provenance.source` `baseline-rerecorded` and its
 Harness version the one its commit defined; the sweep imports each night.
+Its mark stays with its key: a quieter record of its source that holds the key
+in its place carries `rerecorded_baseline`, and starts the line in its place.
 ";
 
 /// A Bench record to publish: the file the branch keeps under its key, and
@@ -244,6 +246,11 @@ struct StoredRecord {
     counter_frames: Option<StoredCounterFrames>,
     aliasing_rmse: Option<u64>,
     aliasing_p99: Option<u64>,
+    /// Whether it holds the key of a re-recorded Baseline it was quieter
+    /// than, or that was quieter than it: the Baseline's mark stays with
+    /// its key.
+    #[serde(default)]
+    rerecorded_baseline: bool,
     /// Every field not named above, the measured frames' counters among
     /// them under their names in `Counters::NAMES`: a map, as a record
     /// holds only the counters its bench counted.
@@ -281,6 +288,20 @@ impl StoredRecord {
             .gpu_frame_p95_over_median
             .unwrap_or(f64::INFINITY)
     }
+}
+
+/// The field a record holds, true, when it holds the key of a re-recorded
+/// Baseline's source in its place.
+const RERECORDED_BASELINE: &str = "rerecorded_baseline";
+
+/// Whether the record `file` marks a re-recorded Baseline: it is one, or
+/// holds its key in its place.
+fn marks_rerecorded_baseline(file: &serde_json::Map<String, serde_json::Value>) -> bool {
+    file.get(RERECORDED_BASELINE) == Some(&true.into())
+        || file
+            .get("provenance")
+            .and_then(|provenance| provenance.get("source"))
+            .is_some_and(|source| source == import::RERECORDED_SOURCE)
 }
 
 /// Whether `adapter` is lavapipe, whose GPU times mean nothing: its Series
@@ -360,10 +381,8 @@ impl SeriesRecord for StoredRecord {
                 .enumerate()
                 .map(|(index, row)| {
                     (index > 0 && !rows[index - 1].same_definition(row))
-                        || matches!(
-                            row.source,
-                            Some(import::IMPORTED_SOURCE | import::RERECORDED_SOURCE)
-                        )
+                        || row.source.is_some_and(import::is_baseline_source)
+                        || row.rerecorded_baseline
                         || line_starts.contains(row.source_hash)
                 })
                 .collect();
@@ -432,6 +451,9 @@ struct SeriesRow<'record> {
     committed_unix_seconds: u64,
     harness_version: u32,
     source: Option<&'record str>,
+    /// Whether a re-recorded Baseline's mark passed to its record.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    rerecorded_baseline: bool,
     scene_content_hash: Option<&'record str>,
     cpu_frame_microseconds: Option<Spread>,
     dynamic_tlas_cpu_microseconds: Option<Spread>,
@@ -963,8 +985,18 @@ impl<'repository> Worktree<'repository> {
                 continue;
             }
             let path = self.directory.join(&relative_path);
-            let contents = serde_json::to_string_pretty(&record.file)? + "\n";
+            let mut file = record.file.clone();
+            let mut contents = serde_json::to_string_pretty(&file)? + "\n";
             if let Ok(json) = std::fs::read(&path) {
+                let mut existing: serde_json::Map<String, serde_json::Value> =
+                    serde_json::from_slice(&json)
+                        .with_context(|| format!("parsing {}", relative_path.display()))?;
+                // A re-recorded Baseline starts its Series' line whichever
+                // record of its source holds the key.
+                if marks_rerecorded_baseline(&existing) && !marks_rerecorded_baseline(&file) {
+                    file.insert(RERECORDED_BASELINE.to_owned(), true.into());
+                    contents = serde_json::to_string_pretty(&file)? + "\n";
+                }
                 // serde_json may parse a float back a bit off what it wrote,
                 // so the same record is found by its contents.
                 let stays = json == contents.as_bytes()
@@ -974,6 +1006,10 @@ impl<'repository> Worktree<'repository> {
                             .with_context(|| format!("parsing {}", relative_path.display()))?
                             .p95_over_median();
                 if stays {
+                    if marks_rerecorded_baseline(&file) && !marks_rerecorded_baseline(&existing) {
+                        existing.insert(RERECORDED_BASELINE.to_owned(), true.into());
+                        std::fs::write(&path, serde_json::to_string_pretty(&existing)? + "\n")?;
+                    }
                     tracing::info!(
                         record = %relative_path.display(),
                         publishes_once = record.publishes_once,
@@ -1111,6 +1147,7 @@ impl<'record> SeriesRow<'record> {
             committed_unix_seconds: record.committed_unix_seconds,
             harness_version: provenance.harness_version,
             source: provenance.source.as_deref(),
+            rerecorded_baseline: record.rerecorded_baseline,
             scene_content_hash: provenance.scene_content_hash.as_deref(),
             cpu_frame_microseconds: record.cpu_frame_microseconds,
             dynamic_tlas_cpu_microseconds: record.dynamic_tlas_cpu_microseconds,
@@ -1796,9 +1833,11 @@ mod tests {
         assert_eq!(fixture.read(&lavapipe_path), lavapipe_record);
     }
 
-    #[test]
-    fn a_baseline_re_recorded_after_the_history_started_is_marked_as_one() {
-        let fixture = Fixture::new("re-recorded");
+    /// A fixture whose `main` re-recorded pbr-sweep's M4 Pro Baseline, with
+    /// no GPU frame spread, after the commit it returns, which starts the
+    /// history; the re-record is pushed when `pushed`.
+    fn re_recorded(name: &str, pushed: bool) -> (Fixture, String) {
+        let fixture = Fixture::new(name);
         let checkout = &fixture.checkout;
         commit(checkout, "src/history.rs", "// the history starts");
         let history_started = git(checkout, &["rev-parse", "HEAD"], None).unwrap();
@@ -1814,6 +1853,31 @@ mod tests {
             "profile": "release", "width": 2560, "height": 1440, "measured_frames": 1800,
             "cpu_frame_microseconds": {"median": 30.0, "p95": 40.0}}"#,
         );
+        if pushed {
+            git(checkout, &["push", "--quiet", "origin", "main"], None).unwrap();
+        }
+        (fixture, history_started)
+    }
+
+    /// The Series rows' sources, Harness versions and re-recorded marks.
+    fn marks(fixture: &Fixture) -> Vec<(Option<String>, Option<u64>, bool)> {
+        let series = fixture.read("series/apple-m4-pro-metal/pbr-sweep.json");
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&series).unwrap();
+        rows.iter()
+            .map(|row| {
+                (
+                    row["source"].as_str().map(str::to_owned),
+                    row["harness_version"].as_u64(),
+                    row["rerecorded_baseline"] == true,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_baseline_re_recorded_after_the_history_started_is_marked_as_one() {
+        let (fixture, history_started) = re_recorded("re-recorded", false);
+        let checkout = &fixture.checkout;
         // Unpushed, a Baseline is not yet `main`'s.
         let unpushed = import::import_up_to(checkout, &history_started, &[]).unwrap();
         assert_eq!(unpushed.on_series + unpushed.tagged, 0);
@@ -1821,13 +1885,35 @@ mod tests {
 
         let publication = import::import_up_to(checkout, &history_started, &[]).unwrap();
         assert_eq!((publication.on_series, publication.tagged), (1, 0));
-        let series = fixture.read("series/apple-m4-pro-metal/pbr-sweep.json");
-        let rows: Vec<serde_json::Value> = serde_json::from_str(&series).unwrap();
-        let summary: Vec<_> = rows
-            .iter()
-            .map(|row| (row["source"].as_str(), row["harness_version"].as_u64()))
-            .collect();
-        assert_eq!(summary, [(Some("baseline-rerecorded"), Some(7))]);
+        assert_eq!(
+            marks(&fixture),
+            [(Some("baseline-rerecorded".to_owned()), Some(7), false)]
+        );
+    }
+
+    /// A Baseline without a spread is never quieter than a bench of its
+    /// source: whichever comes first, the bench holds the key, and the mark.
+    #[test]
+    fn a_re_recorded_baselines_mark_stays_with_its_key_whichever_record_holds_it() {
+        let bench_after = |fixture: &Fixture| {
+            let bench = result(&fixture.checkout, "Apple M4 Pro", 1.01);
+            publish(&fixture.checkout, &[bench], None).unwrap()
+        };
+        let carried = [(None, Some(1), true)];
+
+        let (fixture, history_started) = re_recorded("mark-replaced", true);
+        import::import_up_to(&fixture.checkout, &history_started, &[]).unwrap();
+        assert_eq!(bench_after(&fixture).on_series, 1);
+        assert_eq!(marks(&fixture), carried);
+        // The next night's import changes nothing.
+        let again = import::import_up_to(&fixture.checkout, &history_started, &[]).unwrap();
+        assert_eq!((again.dropped, again.commit), (1, None));
+
+        let (fixture, history_started) = re_recorded("mark-kept", true);
+        bench_after(&fixture);
+        let import = import::import_up_to(&fixture.checkout, &history_started, &[]).unwrap();
+        assert_eq!(import.dropped, 1);
+        assert_eq!(marks(&fixture), carried);
     }
 
     #[test]

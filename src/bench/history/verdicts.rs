@@ -621,7 +621,7 @@ fn first_parent(repository: &Path, good: &str, bad: &str) -> anyhow::Result<Vec<
 
 /// The file in a night's run directory naming the commit it benched, for
 /// a binary too old to stamp its results with provenance.
-pub(super) const RUN_COMMIT_FILE: &str = "commit";
+const RUN_COMMIT_FILE: &str = "commit";
 
 /// The runs in `night`'s directories, in name order, of `scene`: the
 /// commit each benched, as its provenance or else its `RUN_COMMIT_FILE`
