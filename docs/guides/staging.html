@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Staging</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/staging.rs</code></div>
+  <h1>Staging</h1>
+  <p class="definition">How the frame's bytes reach GPU buffers: <code>FrameStaging</code> writes each frame's uploads, the camera and light uniforms, the lights, the bends and the changed <span class="concept" data-term="Instance" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span>, into the next of three mapped staging buffers in a fixed turn and records their copies into the frame's encoder ahead of its passes, while <code>LoadStaging</code> carries a Scene's loads through a <code>StagingBelt</code> that is dropped with the submission that copies them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to the frame's staging, the uniforms, what <code>Renderer::upload</code> writes or the load path's staging rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="prepare.html">Prepare</a> for the <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> this step uploads, <a href="instance-buffer.html">The Instance buffer</a> for the slots the Instance copies land in, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for frames in flight and what the CPU waits on.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Called</dt><dd><code>Renderer::upload</code>, once a frame, after prepare and before <code>Renderer::render</code>, which records the frame's passes into the same encoder and submits it. <code>LoadStaging</code> while a Scene loads; its copies are submitted at the head of the next <code>upload</code>.</dd>
+      <dt>Reads</dt><dd>Frame data: the camera, the light uniform, the lights, the bends, the Instances with their writes, and the Instance slot count; the static TLAS's Anchor and the dynamic TLAS's box, which <code>upload</code> folds into the camera uniform.</dd>
+      <dt>Writes</dt><dd>Six GPU buffers, by copies from a staging slot: the camera buffer, the light uniform buffer, the light buffer, the bend buffer, the Instance buffer and the Instance slot count buffer. At load: the Mesh pool's <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span> and tables, the Material buffer and each <span class="concept" data-term="Texture" data-tip="One Channel&#x27;s image with its mips. A Layer refers to one Texture.">Texture</span>'s mips, and the BLAS builds that read them.</dd>
+      <dt>Buffers</dt><dd><code>SLOT_COUNT</code> slots, <code>FRAMES_IN_FLIGHT</code> plus one, three, each <code>MAP_WRITE</code> and <code>COPY_SRC</code>, all of one size that grows on demand up to the bound. The load path's belt allocates in chunks of <code>LOAD_CHUNK_BYTES</code>, 1 MiB.</dd>
+      <dt>Counted</dt><dd>In <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS&#x27;s build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before&#x27;s last pass, which hides the rest of it, plus, for each submission of the frame&#x27;s passes, the span from the earliest start of its passes to their latest end), ADR 0019&#x27;s gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass&#x27;s wait (from the latest end of the passes before it, culling phase one&#x27;s onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span>: <code>uploaded_bytes</code>, the bytes the frame's slot carried plus the dynamic TLAS's instance records; <code>instances_written</code>; the slots in <code>gpu_memory_bytes</code>, the load path's belt not; the CPU stage <code>upload</code>.</dd>
+      <dt>Where in the code</dt><dd><code>src/render/staging.rs</code>, <code>src/render/uniforms.rs</code>, <code>Renderer::new</code> and <code>Renderer::upload</code> in <code>src/render/renderer.rs</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#upload">1 &middot; One upload a frame</a>
+    <a href="#uniforms">2 &middot; What a frame writes</a>
+    <a href="#bound">3 &middot; The bound</a>
+    <a href="#turn">4 &middot; The turn and the late map</a>
+    <a href="#copies">5 &middot; Filling a slot</a>
+    <a href="#counted">6 &middot; Counting the bytes</a>
+    <a href="#load">7 &middot; The load path</a>
+    <a href="#tests">8 &middot; How it is tested</a>
+    <a href="#cost">9 &middot; What it costs</a>
+    <a href="#why">10 &middot; Why this way</a>
+    <a href="#limits">11 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="upload">
+  <div class="part-mark">1 &middot; <code>Renderer::upload</code></div>
+  <h2>One upload a frame, at the head of its commands</h2>
+  <p class="key-idea">Every byte the CPU writes into the frame's GPU buffers goes through one call, all but the TLAS instance records, which wgpu stages itself: <code>upload</code> gathers the frame's writes into one iterator, <code>FrameStaging::write</code> copies them into one staging slot and records a copy per write into the frame's encoder, and <code>render</code> then records the passes after those copies, so every pass reads this frame's data.</p>
+  <p class="order-label">What <code>upload</code> does, in order</p>
+  <ol class="pass-order">
+    <li>submit the loads staged since the last frame</li><li>compact their BLASes</li><li>prepare the dynamic TLAS's encoder</li><li>create the frame's encoder</li><li>static TLAS rebuild, if the frame changes it</li><li>fill the dynamic TLAS</li><li class="focus">staging copies</li><li>then <code>render</code>'s passes</li>
+  </ol>
+  <p>The loads go first, in a submission of their own, so a Mesh or Texture loaded since the last frame is on the GPU before any copy or draw of this one. The frame's encoder then takes the static TLAS's rebuild, when the frame's Instance writes change a static Instance, and after it the copies. The dynamic TLAS is filled before the copies because its fill returns the box that holds its entries, which the camera uniform carries; its build goes in a command buffer of its own, which <code>render</code> records and submits ahead of the frame's.</p>
+<pre class="code"><code>let camera = CameraUniform {
+    tlas_anchor,
+    // Prepare lists no more than the dynamic TLAS holds.
+    dynamic_tlas_entries: frame.moving_instances.len() as u32,
+    dynamic_tlas_bounds_min,
+    dynamic_tlas_bounds_max,
+    ..frame.camera
+};
+<span class="comment">// … the Instance writes, a copy per run of slots; the slot count, if it
+// changed; the lights and the bends, each where the frame has some …</span>
+let uploads = [
+    (&amp;self.camera_buffer, 0, bytemuck::bytes_of(&amp;camera)),
+    (
+        &amp;self.light_uniform_buffer,
+        0,
+        bytemuck::bytes_of(&amp;frame.light),
+    ),
+]
+.into_iter()
+.chain(light_upload)
+.chain(bend_upload)
+.chain(instance_uploads)
+.chain(slot_count_upload);
+let uploaded_bytes = self
+    .frame_staging
+    .write(&amp;self.device, &amp;mut encoder, uploads);
+recorder.counters.uploaded_bytes += uploaded_bytes;
+// 0 bytes: the staging slot failed to map, as logged, and the
+// frame's writes never land.
+if uploaded_bytes == 0 {
+    self.lost_instance_writes |= !frame.instances.is_empty();
+} else {
+    recorder.counters.instances_written += frame.instances.len() as u32;
+    self.uploaded_instance_slot_count = frame.instance_slot_count;
+}
+self.frame_encoder = Some(encoder);
+recorder.stage("upload", started);</code></pre>
+  <p class="code-source"><code>Renderer::upload</code>, <code>src/render/renderer.rs</code>, the construction of the optional uploads elided.</p>
+  <p>The two uniforms are written every frame. The light buffer is written whenever the frame has lights, which every Reference scene does, since each has a sun; the bends whenever any Mesh is bent; the Instances only for the slots prepare wrote, a copy per run of consecutive slots; and the slot count only when it changed, which in a scene that spawns and despawns nothing is on its first frame alone. A frame where only the camera moves therefore writes no Instance at all (ADR 0003).</p>
+</section>
+
+<section class="part prose" id="uniforms">
+  <div class="part-mark">2 &middot; <code>src/render/uniforms.rs</code></div>
+  <h2>What a frame writes</h2>
+  <p class="key-idea">Two small uniforms are rewritten whole every frame, the camera's 144 bytes and the lights' 32; everything else is an array written as far as the frame fills it: 48 bytes a light, 20 a bend, 128 an Instance.</p>
+<pre class="code"><code>/// The light buffer's counts, its directional lights first, and the scene's
+/// ambient illuminance.
+#[repr(C)]
+#[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightUniform {
+    pub ambient_illuminance: [f32; 4], // rgb = the scene's ambient illuminance, w = unused
+    pub directional_light_count: u32,
+    pub point_light_count: u32,
+    pub _pad: [u32; 2],
+}
+
+<span class="comment">// … LightData, a light's 48 bytes …</span>
+
+#[repr(C)]
+#[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    /// Projection times the view rotation: positions reach it relative to
+    /// the camera (ADR 0014).
+    pub view_proj: [[f32; 4]; 4],
+    /// The camera's position as an anchor plus offset (`anchor_and_offset`),
+    /// from which the shader composes Instances relative to the camera.
+    pub anchor: [i32; 3],
+    /// What the lit pass scales luminance by (`Camera::exposure`).
+    pub exposure: f32,
+    pub offset: [f32; 3],
+    pub _pad_offset: u32,
+    /// The Anchor whose corner is the origin of the static TLAS's frame
+    /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
+    /// camera's Anchor in the first Frame data.
+    pub tlas_anchor: [i32; 3],
+    /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
+    pub dynamic_tlas_entries: u32,
+    /// A box in the TLAS's frame that holds every triangle of the dynamic
+    /// TLAS's entries, its lowest corner then its highest: shadow rays that
+    /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
+    pub dynamic_tlas_bounds_min: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_min: u32,
+    pub dynamic_tlas_bounds_max: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_max: u32,
+}</code></pre>
+  <p class="code-source"><code>LightUniform</code> and <code>CameraUniform</code>, <code>src/render/uniforms.rs</code>.</p>
+  <p><code>CameraUniform</code> is 144 bytes: the 64-byte view-projection matrix, then five rows of 16 bytes, each a 12-byte vector followed by a 4-byte value (<code>exposure</code>, <code>dynamic_tlas_entries</code>) or padding. Prepare fills the matrix, the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell&#x27;s corner, never as one f32 position.">Anchor</span> and offset and the exposure; <code>upload</code> fills the rest from the two TLAS, as quoted above. <code>LightUniform</code> is 32 bytes: the ambient illuminance as a 16-byte vector, the two light counts and 8 bytes of padding. The Rust-only padding fields start with <code>_</code>, and a test holds both structs field by field against their WGSL twins.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Target buffer</th><th>What the frame copies into it</th><th class="n">Bytes</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>camera buffer</td><td><code>CameraUniform</code></td><td class="n">144</td><td>every frame</td></tr>
+      <tr><td>light uniform buffer</td><td><code>LightUniform</code></td><td class="n">32</td><td>every frame</td></tr>
+      <tr><td>light buffer</td><td>a <code>LightData</code> per light, directional lights first</td><td class="n">48 each</td><td>every frame with lights</td></tr>
+      <tr><td>bend buffer</td><td>a <code>BendData</code> per bent Mesh</td><td class="n">20 each</td><td>every frame with <span class="concept" data-term="Bend" data-tip="The GPU&#x27;s stand-in for skinning until M7: each frame a compute pass rewrites a Renderable&#x27;s own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">bends</span></td></tr>
+      <tr><td>Instance buffer</td><td>an <code>InstanceData</code> per slot prepare wrote, a copy per run</td><td class="n">128 each</td><td>new and changed Renderables, and every <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instance</span>, every frame</td></tr>
+      <tr><td>Instance slot count buffer</td><td>a <code>u32</code></td><td class="n">4</td><td>when it changed</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Sizes from <code>src/render/uniforms.rs</code>, <code>src/render/bend_pass.rs</code>, <code>src/render/instance.rs</code> and <code>src/render/culling_pass.rs</code> at the commit above. The light buffer's layout and order are the Froxel pass's subject; the Instance's is the <a href="instance-buffer.html">Instance buffer</a>'s.</p>
+</section>
+
+<section class="part prose" id="bound">
+  <div class="part-mark">3 &middot; <code>FrameStaging::new</code></div>
+  <h2>The bound: every buffer <code>upload</code> writes, in full</h2>
+  <p class="key-idea">A slot grows on demand to the next power of two of what a frame needs, and never past the most one frame can upload, which is the six target buffers' sizes summed: 67,387,572 bytes. A frame that asks for more is a bug, and the write asserts.</p>
+<pre class="code"><code>// The most a frame uploads: every buffer `upload` writes, in full.
+let frame_staging = FrameStaging::new(
+    [
+        &amp;camera_buffer,
+        &amp;light_uniform_buffer,
+        &amp;light_buffer,
+        &amp;instance_buffer,
+        culling_pass.instance_slot_count(),
+        bend_pass.bends(),
+    ]
+    .iter()
+    .map(|buffer| buffer.size())
+    .sum(),
+);</code></pre>
+  <p class="code-source"><code>Renderer::new</code>, <code>src/render/renderer.rs</code>.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Buffer</th><th>Its size</th><th class="n">Bytes</th></tr></thead>
+    <tbody>
+      <tr><td>camera buffer</td><td><code>CameraUniform</code></td><td class="n">144</td></tr>
+      <tr><td>light uniform buffer</td><td><code>LightUniform</code></td><td class="n">32</td></tr>
+      <tr><td>light buffer</td><td><code>LIGHT_CAPACITY</code> &times; <code>LightData</code>, 4,096 &times; 48</td><td class="n">196,608</td></tr>
+      <tr><td>Instance buffer</td><td><code>INSTANCE_CAPACITY</code> &times; <code>InstanceData</code>, 2<sup>19</sup> &times; 128</td><td class="n">67,108,864</td></tr>
+      <tr><td>Instance slot count buffer</td><td>a <code>u32</code></td><td class="n">4</td></tr>
+      <tr><td>bend buffer</td><td><code>BEND_CAPACITY</code> &times; <code>BendData</code>, 4,096 &times; 20</td><td class="n">81,920</td></tr>
+      <tr class="focus"><td>the bound</td><td>their sum</td><td class="n">67,387,572</td></tr>
+    </tbody>
+  </table>
+  </div>
+<pre class="code"><code>let needed: u64 = uploads
+    .clone()
+    .map(|(_, _, bytes)| bytes.len() as u64)
+    .sum();
+if needed == 0 {
+    return 0;
+}
+assert!(
+    needed &lt;= self.max_slot_size,
+    "a frame uploads {needed} bytes, more than the {} its staging is bounded by",
+    self.max_slot_size
+);
+if needed &gt; self.slot_size {
+    self.resize(device, needed.next_power_of_two().min(self.max_slot_size));
+}</code></pre>
+  <p class="code-source"><code>FrameStaging::write</code>, <code>src/render/staging.rs</code>.</p>
+  <p>Growth replaces all three slots at once with new ones of the new size, created mapped; a replaced slot still in flight lives until the GPU is done with it, and dropping one whose map is pending fails that map, which <code>mark_mapped</code> leaves unset. Slots never shrink. <code>pbr-sweep</code>'s first frame uploads 1,700 bytes, its ten Instances, the slot count and the frame's usual 416, so in a capture of it the slots grow once, to 2,048 bytes each, 6,144 bytes of <code>gpu_memory_bytes</code>, and every later frame fits. The largest power of two under the bound is 2<sup>26</sup>, 67,108,864 bytes, so a frame that needs more than that, such as one that writes every slot of the Instance buffer, gets slots of exactly the bound rather than of 2<sup>27</sup>.</p>
+</section>
+
+<section class="part prose" id="turn">
+  <div class="part-mark">4 &middot; <code>FrameStaging::write</code> &middot; <code>StagingSlot::request_map</code></div>
+  <h2>The turn and the late map</h2>
+  <p class="key-idea">Each write fills slot N and requests the map of slot N+1, the one written <code>FRAMES_IN_FLIGHT</code> writes ago, so, once the caller has waited for that frame, as the bench does, the map's completion lands in a frame's own submission and the frame's heap allocations do not depend on the GPU's timing. A slot not yet mapped when its turn comes is waited for: if the CPU laps the GPU, it waits.</p>
+<pre class="code"><code>/// Slots the per-frame uploads cycle through: the frames in flight, plus the
+/// one being written. A fixed count keeps `gpu_memory_bytes` the same on
+/// every run.
+const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
+
+/// Staging memory for the per-frame uploads, reused every frame, where
+/// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
+/// slots grow on demand, never past the most one frame uploads. Each frame
+/// fills the next slot in turn, copies it into its targets, and requests the
+/// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
+/// before. The fixed turn keeps the frame's heap allocations the same on
+/// every run: wgpu grows an encoder's tracking by each buffer's tracker
+/// index, so which slot a frame takes changes its allocation count. So does
+/// the late map, for the reason the GPU stats readback maps late: the bench
+/// has waited for the frame that copied from the slot, so the frame's own
+/// submission maps it, whatever the GPU's timing
+/// [ref:wgpu-30-handle-mapping].
+pub struct FrameStaging {
+    slots: Vec&lt;StagingSlot&gt;,
+    slot_size: u64,
+    /// The most one frame uploads, which no slot grows past.
+    max_slot_size: u64,
+    next_slot: usize,
+}
+
+struct StagingSlot {
+    buffer: wgpu::Buffer,
+    /// Set by the map callback once `buffer` is mapped for writing again.
+    is_mapped: Arc&lt;AtomicBool&gt;,
+    /// Whether its map was requested since it was last written.
+    map_requested: bool,
+}</code></pre>
+  <p class="code-source"><code>SLOT_COUNT</code>, <code>FrameStaging</code> and <code>StagingSlot</code>, <code>src/render/staging.rs</code>.</p>
+  <p>With <code>FRAMES_IN_FLIGHT</code> at 2 there are three slots, and the frames take them in a fixed turn, 0, 1, 2, 0 and so on, never whichever happens to be mapped. The turn is fixed because wgpu grows an encoder's tracking by each buffer's tracker index: a frame that took a different slot would allocate a different number of times.</p>
+<pre class="code"><code>let index = self.next_slot;
+self.next_slot = (self.next_slot + 1) % SLOT_COUNT;
+self.slots[self.next_slot].request_map();
+let slot = &amp;mut self.slots[index];
+if !slot.is_mapped.load(Ordering::Acquire) {
+    // Every slot is in flight: wait for the GPU to finish this one.
+    slot.request_map();
+    if let Err(error) = device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for a frame staging slot failed");
+    }
+    if !slot.is_mapped.load(Ordering::Acquire) {
+        // Its map failed, so the buffer is unmapped: map it again.
+        tracing::error!("frame staging slot not mapped; skipping the frame's uploads");
+        slot.map_requested = false;
+        slot.request_map();
+        return 0;
+    }
+}</code></pre>
+  <p class="code-source"><code>FrameStaging::write</code>, <code>src/render/staging.rs</code>.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Write</th><th class="n">Fills slot</th><th class="n">Requests the map of slot</th><th>Which that slot last held</th></tr></thead>
+    <tbody>
+      <tr><td>n</td><td class="n">n mod 3</td><td class="n">(n + 1) mod 3</td><td>write n &minus; 2, two writes before</td></tr>
+      <tr><td>4</td><td class="n">1</td><td class="n">2</td><td>write 2</td></tr>
+      <tr><td>5</td><td class="n">2</td><td class="n">0</td><td>write 3</td></tr>
+      <tr><td>6</td><td class="n">0</td><td class="n">1</td><td>write 4</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>A slot is not asked to map again as soon as it is unmapped. Its map is requested one write before its turn, two writes after the frame that copied from it. By then the bench has waited for that frame, so the buffer is ready to map when the request is made, and wgpu-core maps it in the next maintenance, which is this frame's own first submission: in a frame with Moving Instances, the dynamic TLAS build's. wgpu-core allocates the list of map callbacks in each maintenance that finds buffers ready to map. Were the map requested early, the GPU's finishing time would decide which submission or poll found it ready, in this frame or between two, and so which frame paid that allocation. The GPU stats readback maps late for the same reason.</p>
+  <p>The wait is the rare case. When the slot whose turn it is has not mapped, the write requests its map, if that was not done, and blocks in <code>device.poll</code> until the GPU finishes. If the slot is still unmapped after that, its map failed: the write logs an error, requests the map again for a later turn, and returns 0 bytes, skipping the frame's uploads. <code>map_requested</code> keeps a slot from being asked twice between two writes, since wgpu refuses a second map of a buffer whose map is pending.</p>
+<pre class="code"><code>impl StagingSlot {
+    /// Requests the map of its buffer for writing, unless it is mapped or
+    /// its map was requested since it was last written.
+    fn request_map(&amp;mut self) {
+        if !self.map_requested &amp;&amp; !self.is_mapped.load(Ordering::Acquire) {
+            self.map_requested = true;
+            self.buffer
+                .map_async(wgpu::MapMode::Write, .., mark_mapped(&amp;self.is_mapped));
+        }
+    }
+}
+
+<span class="comment">// … LoadStaging …</span>
+
+/// A map callback that sets `is_mapped` on success. A failure leaves it unset
+/// for `write` to report; dropping a slot whose map is pending, as `resize`
+/// does, fails it too.
+fn mark_mapped(
+    is_mapped: &amp;Arc&lt;AtomicBool&gt;,
+) -&gt; impl FnOnce(Result&lt;(), wgpu::BufferAsyncError&gt;) + use&lt;&gt; {
+    let is_mapped = is_mapped.clone();
+    move |result| {
+        if result.is_ok() {
+            is_mapped.store(true, Ordering::Release);
+        }
+    }
+}</code></pre>
+  <p class="code-source"><code>StagingSlot::request_map</code> and <code>mark_mapped</code>, <code>src/render/staging.rs</code>.</p>
+</section>
+
+<section class="part prose" id="copies">
+  <div class="part-mark">5 &middot; <code>FrameStaging::write</code></div>
+  <h2>Filling a slot and recording the copies</h2>
+  <p class="key-idea">The writes are packed end to end from the slot's start, each followed by its copy into its target, then the slot is unmapped and handed to the GPU. An empty <code>transition_resources</code> first sizes the encoder's buffer tracking to every buffer at once.</p>
+<pre class="code"><code>{
+    let Ok(mut mapped) = slot.buffer.slice(..).get_mapped_range_mut() else {
+        tracing::error!("frame staging slot not mapped; skipping the frame's uploads");
+        return 0;
+    };
+    // An empty transition sizes the encoder's buffer tracking to
+    // every buffer at once. The copies alone grow it buffer by buffer
+    // in tracker-index order, which depends on what earlier States
+    // created and dropped, so the frame's heap allocations would too.
+    encoder.transition_resources(std::iter::empty(), std::iter::empty());
+    let mut offset = 0;
+    for (target, target_offset, bytes) in uploads {
+        let size = bytes.len() as u64;
+        debug_assert!(size.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT));
+        mapped
+            .slice(offset as usize..(offset + size) as usize)
+            .copy_from_slice(bytes);
+        encoder.copy_buffer_to_buffer(&amp;slot.buffer, offset, target, target_offset, size);
+        offset += size;
+    }
+}
+slot.buffer.unmap();
+slot.is_mapped.store(false, Ordering::Release);
+slot.map_requested = false;
+needed</code></pre>
+  <p class="code-source"><code>FrameStaging::write</code>, <code>src/render/staging.rs</code>.</p>
+  <p>The empty transition is the companion of the fixed turn. Each <code>copy_buffer_to_buffer</code> makes the encoder track its two buffers, and copies alone grow that tracking buffer by buffer in tracker-index order. Which indices a frame's buffers hold depends on what earlier states of the engine created and dropped, so the tracking would grow in a different number of steps from one run to the next, and the frame's heap allocation count with it. A transition of no buffers and no textures sizes the tracking to every buffer at once, before any copy.</p>
+  <p>Every write's length is a multiple of <code>COPY_BUFFER_ALIGNMENT</code>, 4 bytes, as the debug assertion checks: each struct the frame uploads is a whole number of 4-byte fields. The copies are recorded before any pass, and the slot is unmapped before the frame is submitted, since wgpu refuses to submit work that uses a mapped buffer.</p>
+</section>
+
+<section class="part prose" id="counted">
+  <div class="part-mark">6 &middot; <code>uploaded_bytes</code></div>
+  <h2>Counting the bytes</h2>
+  <p class="key-idea"><code>uploaded_bytes</code> is what the frame's slot carried plus what the dynamic TLAS's build uploads, its instance records. A write that returns 0 means the frame's uploads were lost, and the next prepare writes every Instance again.</p>
+  <p><code>FrameStaging::write</code> returns the bytes it packed, which <code>upload</code> adds to the frame's counters. <code>render</code> adds a second term: when the dynamic TLAS records a build, it returns the bytes that build uploads, one backend instance record per entry its fill placed, which wgpu-core converts each entry to and stages itself. On Metal a record is a <code>MTLIndirectAccelerationStructureInstanceDescriptor</code>, 72 bytes; on Vulkan and DX12 it is 64. So a frame's count is, exactly:</p>
+  <div class="bits">144 + 32                       the two uniforms
++ 48 &times; lights               where the frame has lights
++ 20 &times; bends                where it has bends
++ 128 &times; Instances written   a copy per run of slots
++ 4                            when the slot count changed
++ 72 &times; dynamic TLAS entries  on Metal; 64 elsewhere</div>
+<pre class="code"><code>/// Bytes the frame's uploads wrote to GPU buffers: the camera and light
+/// uniforms, the light buffer, the bends, the Instances it wrote, the
+/// Instance slot count when it changed, and the dynamic TLAS's instances
+/// its build uploads. Pools upload only while a Scene loads.
+pub uploaded_bytes: u64,</code></pre>
+  <p class="code-source"><code>FrameStats</code>, <code>src/stats/mod.rs</code>.</p>
+  <p>When the write returns 0 with Instances queued, those writes never landed, and the slots on the GPU hold what an earlier frame wrote. <code>upload</code> then sets <code>lost_instance_writes</code>; the next frame's update takes it through <code>take_lost_instance_writes</code> and calls <code>rewrite_all_instances</code> before prepare, so that frame writes every slot once. Only a frame whose write succeeded adds its Instances to <code>instances_written</code> and records the slot count as uploaded.</p>
+</section>
+
+<section class="part prose" id="load">
+  <div class="part-mark">7 &middot; <code>LoadStaging</code></div>
+  <h2>The load path</h2>
+  <p class="key-idea">Loads use a <code>StagingBelt</code> and one encoder that live only until <code>submit</code>: the belt goes with the submission, so load staging never stays resident and never counts in <code>gpu_memory_bytes</code>. Its bound is in time, not in bytes.</p>
+<pre class="code"><code>/// The `StagingBelt`'s allocation unit at load: a larger write gets a chunk
+/// of its own.
+const LOAD_CHUNK_BYTES: u64 = 1 &lt;&lt; 20;
+
+/// Staging for load-time uploads (ADR 0017): each write goes through a
+/// `StagingBelt` into a copy on one encoder, with the BLAS builds that read
+/// them, which `submit` sends ahead of the next frame's. The belt goes with
+/// it, so its staging buffers live only until the GPU has run the copies and
+/// never count in `gpu_memory_bytes`.
+pub struct LoadStaging {
+    device: wgpu::Device,
+    pending: Option&lt;(wgpu::util::StagingBelt, wgpu::CommandEncoder)&gt;,
+}
+
+impl LoadStaging {
+    pub fn new(device: wgpu::Device) -&gt; Self {
+        Self {
+            device,
+            pending: None,
+        }
+    }
+
+    /// Records a copy of `bytes` to `target` at `offset`; the length and the
+    /// offset are multiples of `wgpu::COPY_BUFFER_ALIGNMENT`.
+    pub fn write(&amp;mut self, target: &amp;wgpu::Buffer, offset: wgpu::BufferAddress, bytes: &amp;[u8]) {
+        let Some(size) = wgpu::BufferSize::new(bytes.len() as u64) else {
+            return;
+        };
+        let (belt, encoder) = self.pending();
+        belt.write_buffer(encoder, target, offset, size)
+            .copy_from_slice(bytes);
+    }</code></pre>
+  <p class="code-source"><code>LoadStaging</code>, <code>src/render/staging.rs</code>.</p>
+  <p>The Mesh pool writes each Mesh's vertices, indices, Meshlets and table entry through <code>write</code> into its Arenas, and records the BLAS build of a traced Mesh through <code>build_blas</code>, after the copies it reads. The Material pool and the tonemapping pass write their buffers and Textures the same way. <code>write_texture</code> copies a mip's rows of blocks into the belt at a pitch of <code>COPY_BYTES_PER_ROW_ALIGNMENT</code>, 256 bytes, which a buffer-to-texture copy requires, so the cooked mip needs no padding of its own; a mip smaller than a block copies one whole block.</p>
+<pre class="code"><code>/// Submits the copies recorded since the last call, if any.
+pub fn submit(&amp;mut self, queue: &amp;wgpu::Queue) {
+    if let Some((mut belt, encoder)) = self.pending.take() {
+        belt.finish();
+        queue.submit(std::iter::once(encoder.finish()));
+    }
+}</code></pre>
+  <p class="code-source"><code>LoadStaging::submit</code>, <code>src/render/staging.rs</code>.</p>
+  <p>The belt's chunk size, <code>LOAD_CHUNK_BYTES</code>, 1 MiB, is only its allocation unit: a write larger than every free chunk gets a chunk of its own. Nothing caps the bytes one load stages, so a Scene's whole load can sit in the belt until <code>upload</code> submits it at the head of the next frame, after which the belt is dropped and its buffers are freed once the GPU has run the copies. <code>upload</code> then compacts the new BLASes before the static TLAS takes them.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">8 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The frame stats tests hold <code>uploaded_bytes</code> to its closed form on real Reference scenes, frame by frame; one test renders the orrery twice with the GPU retired at different times and requires the same heap allocations; and the belt's re-pitched mips are read back byte for byte.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td><code>pbr-sweep</code>'s first frame uploads 10 &times; 128 + 144 + 32 + 5 &times; 48 + 4 bytes, its last 144 + 32 + 5 &times; 48</td></tr>
+      <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>every frame of the orrery uploads the uniforms, five lights, five Instances and five dynamic TLAS records of the backend's size, plus the slot count on the first</td></tr>
+      <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>after the first frame each scene writes exactly its Moving Instances, and every <code>town</code> frame after the first uploads 144 + 32 + 1,025 &times; 48 + 10,000 &times; (128 + the record)</td></tr>
+      <tr><td><code>camera_motion_writes_no_instances</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> and <code>uv-grid</code>, whose cameras move every frame, only the first frame writes Instances</td></tr>
+      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery's per-frame heap allocations, after a warm-up, are the same whether the GPU's work is retired by a poll between frames or left for the frames' own submissions</td></tr>
+      <tr><td><code>every_mip_reads_back_as_written</code></td><td><code>src/render/staging.rs</code></td><td>a buffer write and every mip of a BC5 Texture through the belt read back as written: 256-byte row pitch, mips smaller than a block</td></tr>
+      <tr><td><code>structs_shared_with_the_cpu_match_their_rust_twins</code></td><td><code>src/render/shader_tests.rs</code></td><td><code>CameraUniform</code> and <code>LightUniform</code>, among others, field by field against the WGSL structs that read them</td></tr>
+      <tr><td><code>rewriting_all_instances_writes_every_slot_once</code></td><td><code>src/render/prepare.rs</code></td><td>the recovery after a lost upload writes every slot once, then nothing</td></tr>
+      <tr><td><code>a_counter_fails_on_any_increase</code></td><td><code>src/bench/mod.rs</code></td><td><code>praxis compare</code> fails a <code>heap_allocations</code> one above its Baseline, as it does any counter</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor, the allocation test on hardware adapters only.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">9 &middot; <code>bench/baselines/apple-m4-pro</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">In steady state a scene uploads its uniforms and lights every frame and, beyond those, only what moves: the Moving Instances with their dynamic TLAS records, and the bends. Eight scenes upload a few hundred bytes a frame; the three with motion upload from 1,416 to 2,049,376.</p>
+  <p>Medians from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI&#x27;s lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> of the Apple M4 Pro, release builds at 2560&times;1440 with 4x MSAA, medians over 1,800 measured frames; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. Every scene has a sun, which the light counts below include.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th class="n"><code>uploaded_bytes</code></th><th>Made of</th><th class="n"><code>heap_allocations</code></th><th class="n">CPU frame, &micro;s</th></tr></thead>
+    <tbody>
+      <tr><td><code>texture-wall</code></td><td class="n">224</td><td>176 + 1 light &times; 48</td><td class="n">350</td><td class="n">2,138.5</td></tr>
+      <tr><td><code>minification</code></td><td class="n">272</td><td>176 + 2 lights &times; 48</td><td class="n">345</td><td class="n">192.7</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">272</td><td>176 + 2 lights &times; 48</td><td class="n">345</td><td class="n">265.9</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">416</td><td>176 + 5 lights &times; 48</td><td class="n">345</td><td class="n">184.0</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">416</td><td>176 + 5 lights &times; 48</td><td class="n">345</td><td class="n">208.6</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">416</td><td>176 + 5 lights &times; 48</td><td class="n">345</td><td class="n">185.8</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">416</td><td>176 + 5 lights &times; 48</td><td class="n">347</td><td class="n">181.6</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">416</td><td>176 + 5 lights &times; 48</td><td class="n">347</td><td class="n">186.1</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">1,416</td><td>176 + 5 lights &times; 48 + 5 Moving Instances &times; (128 + 72)</td><td class="n">455</td><td class="n">358.8</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">322,224</td><td>176 + 1 light &times; 48 + 100 bends &times; 20 + 1,600 shadow proxies &times; (128 + 72)</td><td class="n">2,099</td><td class="n">744.5</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">2,049,376</td><td>176 + 1,025 lights &times; 48 + 10,000 birds &times; (128 + 72)</td><td class="n">10,498</td><td class="n">4,734.8</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>uploaded_bytes</code>, <code>heap_allocations</code> and <code>cpu_frame_microseconds</code>'s median from <code>bench/baselines/apple-m4-pro/&lt;scene&gt;.json</code> at the commit above, the CPU frame to three decimals. 176 is the two uniforms, 144 + 32; 72 is Metal's dynamic TLAS record. Each breakdown is the closed form of section 6 with the scene's lights from <code>src/scenes/mod.rs</code> and <code>src/scenes/town.rs</code>, its Moving Instances and its bends; <code>crowd</code>'s figures are bent but do not move, so only their shadow proxies are written. The CPU frame is the whole frame's, not this step's, and <code>heap_allocations</code> counts the whole frame's allocations too; the fixed turn and the late map are what let it repeat exactly.</p>
+  <p>The staging slots' memory is three times the slot size, which the largest frame a run has uploaded sets, usually its first. In <code>pbr-sweep</code> that is 3 &times; 2,048 bytes.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">10 &middot; ADRs 0003, 0013, 0016, 0017</div>
+  <h2>Why this way</h2>
+  <p><b>Owned slots, not <code>Queue::write_buffer</code>.</b> wgpu's own documentation says that on native platforms each <code>write_buffer</code> stages through a new allocation released after the next submission, and suggests a belt or buffers created, mapped and unmapped by hand to avoid short-lived allocations. ADR 0017 sends uploads through staging the engine owns; for the per-frame uploads the engine takes the second suggestion, so a frame allocates no staging memory once its slots have grown.</p>
+  <p><b>A fixed count of fixed-size slots, not a belt, for the frame.</b> A belt allocates more chunks on demand, so its memory would vary with what frames happened to need. Three slots of one size keep <code>gpu_memory_bytes</code> the same on every run, and ADR 0013 counts that sum against the GPU memory Budget.</p>
+  <p><b>Three slots for two frames in flight.</b> ADR 0016 keeps the surface's frame latency at 2 and has the main thread alone submit, so two frames may be on the GPU while the CPU fills the third slot; wgpu completes a map only after the last submission using the buffer finishes, so the ring decides whether the CPU waits, never whether a write is safe.</p>
+  <p><b>A fixed turn and a late map.</b> The bench's <code>heap_allocations</code> counter fails on any increase over its Baseline, so it has to repeat run to run. Taking whichever slot is mapped, or requesting a map as soon as a slot is unmapped, would tie the count to the GPU's timing; the turn and the late map tie it to the frame number alone.</p>
+  <p><b>Bounded by what a frame can write.</b> The Instance buffer has a fixed capacity and never grows (ADR 0003), and so do the light and bend buffers, so the most a frame can upload is known at creation. Bounding the slots there keeps growth from rounding a full Instance upload up to the next power of two, three times over.</p>
+  <p><b>Only what changed.</b> ADR 0003 has prepare write only the slots of new Renderables and of those whose World transform, Mesh or Material changed, plus every Moving Instance, so camera motion writes no Instance and a static scene's frame carries only its uniforms and lights.</p>
+  <p><b>A belt for loads.</b> Loads are large, rare and of no fixed size, the case a belt is for; dropping it with each submission keeps load staging out of resident memory. ADR 0017 also has streaming uploads go through a belt, never <code>Queue::write_texture</code>, which stages each call afresh.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">11</div>
+  <h2>Limits</h2>
+  <p><b>The slots never shrink.</b> One frame that writes every Instance slot leaves three slots of 67,387,572 bytes, 202,162,716 bytes of staging, for the rest of the run.</p>
+  <p><b>One frame's uploads succeed or fail together.</b> A failed map skips every write of the frame, the uniforms included, so that frame draws with the last frame's camera and lights, and the next writes every Instance again.</p>
+  <p><b>The wait blocks the main thread.</b> When the CPU laps the GPU the write polls until the GPU has finished all the work submitted to it, the frame that held the slot among it; nothing else runs meanwhile.</p>
+  <p><b>No cap on a load.</b> ADR 0017 caps the bytes streaming writes into the belt each frame at the staging Budget, so an upload past the cap waits for a later frame; streaming is not built, and <code>LoadStaging</code> stages a whole load at once, however large.</p>
+  <p><b>What <code>uploaded_bytes</code> leaves out.</b> The static TLAS's instance records, which wgpu-core stages when a frame rebuilds it, and the load path's bytes are not counted; the counter is the frame's slot and the dynamic TLAS's build.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the mechanism rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413">wgpu-core 30.0.1, device/life.rs, the lifetime tracker's handle_mapping</a></dt><dd>each maintenance that finds buffers ready to map allocates their callbacks' list, which is why the late map puts that allocation in the frame's own submission; <code>wgpu-30-handle-mapping</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L235-L252">wgpu-core 30.0.1, TLAS instance staging</a></dt><dd>each filled TLAS entry is converted to the backend's record and staged by wgpu-core, the bytes the dynamic TLAS adds to <code>uploaded_bytes</code>; <code>wgpu-30-tlas-instance-staging</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">Apple, <code>MTLIndirectAccelerationStructureInstanceDescriptor</code></a>, with Vulkan's <code>VkAccelerationStructureInstanceKHR</code> and D3D12's <code>D3D12_RAYTRACING_INSTANCE_DESC</code></dt><dd>the record's size, 72 bytes on Metal and 64 on the others; <code>metal-indirect-instance-descriptor</code>, <code>vulkan-acceleration-structure-instance</code>, <code>d3d12-raytracing-instance-desc</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/queue.rs#L171-L175">wgpu 30.0.1, <code>Queue::write_buffer</code></a></dt><dd>on native platforms its staging memory is a new allocation, released after the next submission; a belt or buffers mapped by hand avoid short-lived allocations</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/util/belt.rs#L56-L57">wgpu 30.0.1, <code>StagingBelt::new</code></a></dt><dd>the chunk size is the belt's allocation unit, and a larger write gets a buffer of its own; <code>wgpu-30-staging-belt-chunk-size</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The per-frame uploads left <code>Queue::write_buffer</code> for reused staging slots in the engine's first weeks, and soon after went to the Instance buffer as one copy per run of written slots, while Meshes and then Textures began loading through the belt. The slots were bounded at the most a frame can write when the Instance buffer took its fixed capacity, and the load encoder took the BLAS builds when every Mesh gained one. The light buffer, the bends, the slot count and the dynamic TLAS's records joined the uploads as their mechanisms landed. Last came the fixed turn, the late map and the empty transition, which made a frame's heap allocations independent of the GPU's timing. <a href="instance-buffer-explained.html">Instance Buffer Explained</a> narrates the slots and their bound, and <a href="dynamic-tlas.html">Dynamic TLAS Explained</a> the records the TLAS uploads. This page describes the mechanism as it is; the volumes describe how it got here.</p>
+  <footer class="sources">Written from <code>src/render/staging.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/stats/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/scenes/town.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0016 and 0017, the committed Baselines, and the sources above, all at <code>main</code> b3d764b4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="prepare.html">Previous: Prepare</a><a href="index.html">All field guides</a><a href="instance-buffer.html">Next: The Instance buffer</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

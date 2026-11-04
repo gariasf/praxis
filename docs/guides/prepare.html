@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Prepare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/prepare.rs</code></div>
+  <h1>Prepare</h1>
+  <p class="definition">Once a frame, after the Ticks, prepare reads the <span class="concept" data-term="ECS World" data-tip="The container of entities, components and resources. A code concept, never the playable space.">ECS World</span> into <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>: an owned value holding the camera, the Environment, the lights, the <span class="concept" data-term="Instance" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> whose slots this frame writes, the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span> for the dynamic TLAS and the bends for the bend pass, which the Renderer uploads and draws without reading the World.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to prepare or to what Frame data holds rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="index.html">the frame overview</a> for where prepare sits among the passes, <a href="instance-buffer.html">The Instance buffer</a> for what a slot holds.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Called</dt><dd>By <code>State::update</code>, once a frame, after the Ticks and the frame's own schedule and before <code>Renderer::upload</code>, as <code>FramePreparer::prepare</code>. It ends the World's change window, so it is the frame's last read of the World.</dd>
+      <dt>Reads</dt><dd>The <code>Camera</code>, <code>Environment</code> and <code>FixedTime</code> resources; each directional and point light's <span class="concept" data-term="World transform" data-tip="Where an entity sits in a Game world: its Transform composed with every ancestor&#x27;s, in f64. Derived from the hierarchy, never authored.">World transform</span>; each light's previous World transform; each <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s World transform, Mesh Handle, Material Handle and previous World transform; each <code>Bend</code>; from the Mesh pool, whether a Mesh is loaded, whether it needs a Material Handle and where its vertices lie in the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>; the target's aspect ratio.</dd>
+      <dt>Writes</dt><dd><code>FrameData</code>, which it keeps and refills: the camera and light uniforms, the background colour, the lights, the Instances this frame writes in runs of consecutive slots, <code>instance_slot_count</code>, the Moving Instances and the bends. Across frames it keeps the slot table, its queries and the Frame data's memory.</dd>
+      <dt>Buffers</dt><dd>None of its own. <code>Renderer::upload</code> copies Frame data into the camera and light uniforms, the light buffer, the bend pass's bends, the Instance buffer and the culling pass's <code>instance_slot_count</code>, and reads it for the static TLAS's entries and the dynamic TLAS's fill.</dd>
+      <dt>Counted</dt><dd><code>prepare_frame</code> in CPU time, which also holds the check for lost writes before it; <code>renderables_refused</code>, <code>lights_overflowed</code>, <code>moving_instances_left_out</code> and <code>bends_left_out</code> in every frame. Upload counts <code>instances_written</code> and <code>uploaded_bytes</code>.</dd>
+      <dt>Where in the code</dt><dd><code>src/render/prepare.rs</code>: <code>FrameData</code>, <code>FramePreparer</code>, the slot table <code>InstanceSlots</code>, <code>prepare_lights</code> and <code>prepare_bends</code>. Its caller is in <code>src/state.rs</code>, its consumer in <code>src/render/renderer.rs</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; The frame</a>
+    <a href="#camera">2 &middot; Camera and Environment</a>
+    <a href="#lights">3 &middot; The lights</a>
+    <a href="#slots">4 &middot; Slots</a>
+    <a href="#changes">5 &middot; Change detection</a>
+    <a href="#refusal">6 &middot; Refusal</a>
+    <a href="#runs">7 &middot; Runs of slots</a>
+    <a href="#moving">8 &middot; Moving Instances</a>
+    <a href="#bends">9 &middot; The bends</a>
+    <a href="#tests">10 &middot; How it is tested</a>
+    <a href="#cost">11 &middot; What it costs</a>
+    <a href="#why">12 &middot; Why this way</a>
+    <a href="#limits">13 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>State::update</code>, <code>src/state.rs</code></div>
+  <h2>The frame, end to end</h2>
+  <p class="key-idea">Praxis renders by pulling. Each frame the State runs the simulation, prepare reads the ECS World into Frame data, and upload copies Frame data to the GPU. The Renderer reads Frame data only, never the World (ADR 0004).</p>
+  <p class="order-label">One frame on the main thread, in order</p>
+  <ol class="pass-order">
+    <li>the Ticks the frame delta completes</li><li>the frame's schedule</li><li class="focus">prepare</li><li class="warm">upload</li><li>render</li>
+  </ol>
+<pre class="code"><code>pub fn update(&amp;mut self, frame_delta: Duration) {
+    self.recorder.begin();
+    self.recorder.counters.dropped_time = self.simulation.simulate(frame_delta);
+
+    let started = Instant::now();
+    // Writes a failed upload lost are written again, with every Instance.
+    if self.renderer.take_lost_instance_writes() {
+        self.preparer.rewrite_all_instances();
+    }
+    let frame = self.preparer.prepare(
+        &amp;mut self.simulation.world,
+        &amp;self.renderer.mesh_pool,
+        self.renderer.aspect_ratio(),
+    );
+    self.recorder.stage("prepare_frame", started);
+
+    self.renderer.upload(frame, &amp;mut self.recorder);
+    self.recorder.counters.renderables_refused = self.preparer.renderables_refused();
+    self.recorder.counters.lights_overflowed = self.preparer.lights_overflowed();
+    self.recorder.counters.moving_instances_left_out =
+        self.preparer.moving_instances_left_out();
+    self.recorder.counters.bends_left_out = self.preparer.bends_left_out();
+}</code></pre>
+  <p class="code-source"><code>State::update</code>, <code>src/state.rs</code>. <code>render</code>, which follows, draws the same Frame data through <code>FramePreparer::frame</code>.</p>
+  <p>The simulation runs the fixed schedule once per <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Tick</span> the frame delta completes, then the frame's own schedule, which moves the camera. Prepare then reads what they left. It blends whatever the fixed schedule moves between its two newest Ticks, by the blend weight <code>FixedTime</code> holds (ADR 0022), and composes nothing camera-relative: positions leave it as an <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell&#x27;s corner, never as one f32 position.">Anchor</span> and an f32 offset (ADR 0014).</p>
+<pre class="code"><code>/// Everything the renderer draws in one frame, owned, so it holds no borrow
+/// into the ECS World and can cross to another thread (ADRs 0004, 0016). It
+/// lists no draws: the GPU builds the frame's draw from the Instances.
+#[derive(Default)]
+pub struct FrameData {
+    pub camera: CameraUniform,
+    pub light: LightUniform,
+    /// The light buffer's lights, directional lights first, at most
+    /// `LIGHT_CAPACITY`.
+    pub lights: Vec&lt;LightData&gt;,
+    /// The colour the lit pass clears to: the scene's background luminance,
+    /// pre-exposed as the lit pass exposes what it draws.
+    pub background: wgpu::Color,
+    /// Slots the Instance buffer holds: one past the highest any Renderable
+    /// has taken. The GPU draws each, but a freed one.
+    pub instance_slot_count: u32,
+    /// The Instances this frame writes, in `instance_writes` order; every
+    /// other slot keeps what an earlier frame wrote (ADR 0003).
+    pub instances: Vec&lt;InstanceData&gt;,
+    pub instance_writes: Vec&lt;InstanceWrite&gt;,
+    /// The Moving Instances the dynamic TLAS holds, at most
+    /// `DYNAMIC_TLAS_CAPACITY`, those in the lowest slots, in no order. Each
+    /// is written every frame, so each is among `instances`.
+    pub moving_instances: Vec&lt;MovingInstance&gt;,
+    /// The Meshes the GPU bends this frame (`Bend`), at most
+    /// `BEND_CAPACITY`, in the order of their ranges of the vertex Arena.
+    pub bends: Vec&lt;BendData&gt;,
+}
+
+const _: () = {
+    const fn assert_send_static&lt;T: Send + 'static&gt;() {}
+    assert_send_static::&lt;FrameData&gt;()
+};</code></pre>
+  <p class="code-source"><code>FrameData</code>, <code>src/render/prepare.rs</code>. The constant at the end fails the build if Frame data ever holds a borrow or anything that cannot cross threads.</p>
+  <p>Frame data is owned, so it holds no borrow into the World, and a render thread, if one is ever split off, receives it through a channel (ADR 0016). It lists no draws: the GPU builds the frame's draw from the Instance buffer, so Frame data carries only the slots this frame changes, beside what every frame sends whole. <code>FramePreparer</code> keeps one Frame data and refills it, so its vectors keep their memory from frame to frame.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Field</th><th>What upload and render do with it</th></tr></thead>
+    <tbody>
+      <tr><td><code>camera</code></td><td>the camera uniform, 144 bytes, once upload adds the static TLAS's Anchor, the dynamic TLAS's entry count and the box that holds its triangles</td></tr>
+      <tr><td><code>light</code></td><td>the light uniform, 32 bytes: the ambient illuminance and the two light counts</td></tr>
+      <tr><td><code>lights</code></td><td>the light buffer, 48 bytes a light, when there is any</td></tr>
+      <tr><td><code>background</code></td><td>the lit pass's clear colour</td></tr>
+      <tr><td><code>instance_slot_count</code></td><td>the culling pass's slot count, 4 bytes, in a frame where it changed</td></tr>
+      <tr><td><code>instances</code>, <code>instance_writes</code></td><td>the Instance buffer, one copy per write of 128 bytes a slot; the static TLAS's entries, in <code>StaticTlas::update</code></td></tr>
+      <tr><td><code>moving_instances</code></td><td>the dynamic TLAS's entries, in <code>DynamicTlas::fill</code></td></tr>
+      <tr><td><code>bends</code></td><td>the bend pass's bends, 20 bytes each, when there is any; render records the pass over them</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Sizes from <code>CameraUniform</code>, <code>LightUniform</code>, <code>LightData</code>, <code>InstanceData</code> and <code>BendData</code> at the commit above; <code>tests/frame_stats.rs</code> checks a frame's uploaded bytes against the same sums.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it caps</th></tr></thead>
+    <tbody>
+      <tr><td><code>INSTANCE_CAPACITY</code></td><td class="n">524,288</td><td>slots in the Instance buffer, 64 MiB of 128-byte Instances; past it a Renderable is refused</td></tr>
+      <tr><td><code>DYNAMIC_TLAS_CAPACITY</code></td><td class="n">10,000</td><td>Moving Instances the dynamic TLAS holds; past it the highest slots cast no shadow</td></tr>
+      <tr><td><code>LIGHT_CAPACITY</code></td><td class="n">4,096</td><td>lights in the light buffer, directional lights first; past it lights are not drawn</td></tr>
+      <tr><td><code>BEND_CAPACITY</code></td><td class="n">4,096</td><td>bends the bend pass applies; past it the Meshes highest in the vertex Arena keep the shape they last took</td></tr>
+      <tr><td><code>NO_MESH</code></td><td class="n"><code>u32::MAX</code></td><td>the Mesh of a slot that draws nothing: freed, or held by a skipped Renderable</td></tr>
+      <tr><td><code>NO_MATERIAL</code></td><td class="n"><code>u32::MAX</code></td><td>the Material ID of an Instance that overrides none of its Mesh's Materials</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>instance.rs</code>, <code>acceleration_structures.rs</code>, <code>uniforms.rs</code> and <code>bend_pass.rs</code> at the commit above. Each capacity is provisional until ADR 0013's split of the 8 GB Budget sizes it, and each is counted in Frame stats when reached.</p>
+</section>
+
+<section class="part prose" id="camera">
+  <div class="part-mark">2 &middot; <code>FramePreparer::prepare</code></div>
+  <h2>The camera and the Environment</h2>
+  <p class="key-idea">The camera reaches Frame data as a view-projection with no translation, its position as an Anchor and an offset, and its exposure. The Environment, the light of a Scene's surroundings, reaches it as the lit pass's clear colour, pre-exposed, and as the ambient illuminance in the light uniform.</p>
+<pre class="code"><code>let camera = world.resource::&lt;Camera&gt;();
+let camera_position = camera.position;
+let view_proj = projection_matrix(aspect_ratio) * camera.view_matrix();
+let (anchor, offset) = anchor_and_offset(camera_position);
+let exposure = camera.exposure();
+frame.camera = CameraUniform {
+    view_proj: view_proj.to_cols_array_2d(),
+    anchor,
+    exposure,
+    offset,
+    ..CameraUniform::default()
+};
+let environment = *world.resource::&lt;Environment&gt;();
+let background = environment.background_luminance * exposure;
+frame.background = wgpu::Color {
+    r: background.x.into(),
+    g: background.y.into(),
+    b: background.z.into(),
+    a: 1.0,
+};</code></pre>
+  <p class="code-source"><code>FramePreparer::prepare</code>, <code>src/render/prepare.rs</code>.</p>
+  <p><code>Camera::view_matrix</code> looks from the origin along the camera's forward axis, so the view-projection rotates and projects but does not translate: every position reaches the GPU relative to the camera, which the shaders compose from the two Anchors and offsets (ADR 0014). The camera uniform's TLAS fields stay at their defaults here; upload fills them.</p>
+  <p>The <code>Environment</code> resource holds two of ADR 0023's quantities: the ambient illuminance every surface receives from all around, and the luminance of the background, seen wherever nothing is drawn. Its default is dark, and every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> sets the same one, scaled to the sun. Prepare reads it in every frame. The background becomes a <code>wgpu::Color</code> multiplied by the camera's exposure, as the lit pass exposes what it draws, and the targets module clamps it to fp16's largest finite value and weights it for the resolve when the lit pass clears to it. The ambient illuminance goes into <code>LightUniform</code> unexposed, beside the light counts (section 3), and the lit pass exposes it with the luminance it adds to.</p>
+</section>
+
+<section class="part prose" id="lights">
+  <div class="part-mark">3 &middot; <code>prepare_lights</code></div>
+  <h2>The lights</h2>
+  <p class="key-idea">In every frame prepare lists every directional light, then every point light, each blended between its two newest Ticks, up to the light buffer's capacity; what does not fit is counted and not drawn.</p>
+<pre class="code"><code>let capacity = LIGHT_CAPACITY as usize;
+lights.clear();
+lights.extend(directional_lights.by_ref().take(capacity));
+let directional_light_count = lights.len() as u32;
+lights.extend(point_lights.by_ref().take(capacity - lights.len()));
+*overflowed = (directional_lights.count() + point_lights.count()) as u32;
+directional_light_count</code></pre>
+  <p class="code-source"><code>prepare_lights</code>, <code>src/render/prepare.rs</code>.</p>
+  <p>A directional light shines along its entity's forward axis, the World transform's rotation and scale applied to &minus;Z and normalised; one scaled to nothing has no direction left and is not drawn, nor counted. Its <code>offset</code> carries that direction, its Anchor stays 0. A point light's position is split into an Anchor and an offset, as an Instance's is, with its range beside it. Each light's intensity is its colour times its lux or its candela (ADR 0023). Directional lights take their places first, so a full buffer leaves out point lights before any sun. The light buffer's layout, and what the Froxel pass and the lit pass read from it, belong to the Froxel pages.</p>
+<pre class="code"><code>frame.light = LightUniform {
+    ambient_illuminance: environment.ambient_illuminance.extend(0.0).to_array(),
+    directional_light_count,
+    point_light_count: frame.lights.len() as u32 - directional_light_count,
+    ..LightUniform::default()
+};
+if *lights_overflowed &gt; 0 &amp;&amp; !*warned_of_overflowed_lights {
+    tracing::warn!(
+        lights_overflowed = *lights_overflowed,
+        capacity = LIGHT_CAPACITY,
+        "Lights past the light buffer's capacity are not drawn"
+    );
+}
+*warned_of_overflowed_lights = *lights_overflowed &gt; 0;</code></pre>
+  <p class="code-source"><code>FramePreparer::prepare</code>. The warning fires in the first frame lights overflow, and again only after a frame in which all of them fit; <code>lights_overflowed</code> counts them in every frame.</p>
+</section>
+
+<section class="part prose" id="slots">
+  <div class="part-mark">4 &middot; <code>InstanceSlots</code></div>
+  <h2>Slots, and the free list</h2>
+  <p class="key-idea">Each Renderable keeps one slot of the Instance buffer for as long as it is a Renderable (ADR 0003). A slot it leaves is written an Instance with no Mesh, which the GPU skips, and is handed out again from the next frame, the most recently freed first.</p>
+<pre class="code"><code>/// Each Renderable's slot in the Instance buffer, kept until it stops being a
+/// Renderable (ADR 0003); a slot freed in an earlier frame is taken
+/// again before a fresh one, and once all `INSTANCE_CAPACITY` are taken a
+/// Renderable is refused one.
+#[derive(Default)]
+struct InstanceSlots {
+    by_entity: bevy_ecs::entity::EntityHashMap&lt;u32&gt;,
+    free: Vec&lt;u32&gt;,
+    /// Slots freed this frame, which take an Instance with no Mesh before
+    /// they join `free`.
+    freed: Vec&lt;u32&gt;,
+    /// One past the highest slot taken.
+    end: u32,
+    /// Renderables refused a slot and not yet given one, each warned about
+    /// once.
+    refused: bevy_ecs::entity::EntityHashSet,
+}
+
+impl InstanceSlots {
+    /// `entity`'s slot, taking one if it has none; None when none is left,
+    /// warned about the first time `entity` is refused.
+    fn get_or_take(&amp;mut self, entity: Entity) -&gt; Option&lt;u32&gt; {
+        if let Some(&amp;slot) = self.by_entity.get(&amp;entity) {
+            return Some(slot);
+        }
+        let fresh = (self.end &lt; INSTANCE_CAPACITY).then_some(self.end);
+        let Some(slot) = self.free.pop().or(fresh) else {
+            if self.refused.insert(entity) {
+                tracing::warn!(
+                    ?entity,
+                    capacity = INSTANCE_CAPACITY,
+                    "Renderable refused: the Instance buffer is full"
+                );
+            }
+            return None;
+        };
+        self.end = self.end.max(slot + 1);
+        self.by_entity.insert(entity, slot);
+        self.refused.remove(&amp;entity);
+        Some(slot)
+    }
+
+    fn free(&amp;mut self, entity: Entity) {
+        self.refused.remove(&amp;entity);
+        if let Some(slot) = self.by_entity.remove(&amp;entity) {
+            self.freed.push(slot);
+        }
+    }
+}</code></pre>
+  <p class="code-source">The slot table, <code>src/render/prepare.rs</code>.</p>
+  <h3>Slots persist</h3>
+  <p>Prepare's Renderables are the entities with a <code>WorldTransform</code> and a <code>MeshRef</code>, the Mesh Handle; a <code>MaterialRef</code> and a <code>PreviousWorldTransform</code> are optional. A slot stays its Renderable's until the entity stops matching that query: it is despawned, or loses its Mesh Handle or its World transform. <code>Transform</code> brings a <code>WorldTransform</code> with it through <code>#[require(WorldTransform)]</code>, and removing the Transform leaves the World transform in place, so an entity that loses only its Transform keeps its slot, by construction.</p>
+  <p>Prepare frees a slot when the World reports that an entity lost its World transform or its Mesh Handle since the last prepare and the entity is no longer a Renderable; one that lost a component and regained it in the same window keeps its slot.</p>
+<pre class="code"><code>let renderables = renderable_query.query(world);
+// Slots of entities that stopped being Renderables are freed before new
+// Renderables take slots.
+for entity in world
+    .removed::&lt;WorldTransform&gt;()
+    .chain(world.removed::&lt;MeshRef&gt;())
+{
+    if !renderables.contains(entity) {
+        instance_slots.free(entity);
+    }
+}</code></pre>
+  <h3>The free list</h3>
+  <p><code>get_or_take</code> pops <code>free</code>, so a new Renderable takes the most recently freed slot, and takes a fresh one, one past the highest ever taken, only when the list is empty. A slot freed in this frame goes to <code>freed</code> instead, so no Renderable can take it in the frame it frees. At the end of the visits it is written an Instance with no Mesh, so the GPU stops drawing whatever it held, and only then joins <code>free</code>:</p>
+<pre class="code"><code>// A slot freed this frame, or every free slot when every Instance is
+// written again, takes an Instance with no Mesh, so the GPU no longer
+// draws it; Renderables may take it from the next frame.
+let rewritten_free_slots = if *rewrite_every_instance {
+    instance_slots.free.as_slice()
+} else {
+    &amp;[]
+};
+for &amp;slot in instance_slots.freed.iter().chain(rewritten_free_slots) {
+    frame.write_instance(slot, no_mesh_instance(), false);
+}
+instance_slots.free.append(&amp;mut instance_slots.freed);
+frame.instance_slot_count = instance_slots.end;</code></pre>
+  <p class="code-source"><code>FramePreparer::prepare</code>. With every Instance written again (section 6), every free slot is written an Instance with no Mesh too.</p>
+  <p>Slot numbers stay dense, and a Renderable's slot never moves while it lives. <code>instance_slot_count</code> is <code>end</code>, one past the highest slot ever taken: the culling pass visits every slot below it, and passes over those that name <code>NO_MESH</code>.</p>
+</section>
+
+<section class="part prose" id="changes">
+  <div class="part-mark">5 &middot; <code>ChangedRenderableQuery</code></div>
+  <h2>Change detection: which slots are written</h2>
+  <p class="key-idea">A slot is written only when what it holds changes: a Renderable that is new, whose World transform, Mesh or Material changed, that is blended every frame, or that lost its Material Handle or its previous World transform. Prepare finds them with query filters on bevy_ecs's change ticks, and ends the window they cover with <code>World::clear_trackers</code>.</p>
+<pre class="code"><code>/// The Renderables whose World transform, Mesh or Material changed since the
+/// last `prepare`, new ones included, and the blended ones, which move every
+/// frame. Of those prepare has written, only these and those that lost their
+/// Material Handle or previous World transform are written again.
+type ChangedRenderableQuery = RenderableQuery&lt;
+    Or&lt;(
+        Changed&lt;WorldTransform&gt;,
+        Changed&lt;MeshRef&gt;,
+        Changed&lt;MaterialRef&gt;,
+        With&lt;PreviousWorldTransform&gt;,
+    )&gt;,
+&gt;;</code></pre>
+  <p class="code-source"><code>src/render/prepare.rs</code>.</p>
+  <p>Every component carries the tick it last changed at. <code>Changed&lt;T&gt;</code> admits an entity whose <code>T</code> was added or mutably dereferenced since the World's last change tick, which prepare's <code>clear_trackers</code> moves at the end of every frame, whether or not the changed query ran, so a new Renderable is admitted by the components it was spawned with, and a moved parent's child is admitted because propagation rewrote its World transform. <code>With&lt;PreviousWorldTransform&gt;</code> admits every entity the fixed schedule moves, whatever changed, since each is drawn somewhere new in every frame. A camera that moves changes no Instance: the camera's position travels in its own uniform.</p>
+  <p>A removal is not a change, so the World's removal lists bring in the rest. A Renderable that lost its Material Handle now draws with its Mesh's Materials, and one that lost its previous World transform is now static and must reach the static TLAS; both are written again.</p>
+<pre class="code"><code>if *rewrite_every_instance {
+    renderables.iter().for_each(&amp;mut visit);
+} else {
+    // An unchanged Renderable keeps its Instance, unless the last
+    // prepare skipped or refused it, or it lost its Material Handle or
+    // previous World transform.
+    let changed_renderables = changed_renderable_query.query(world);
+    changed_renderables.iter().for_each(&amp;mut visit);
+    let lost = lost_material_handle_or_previous_transform
+        .iter()
+        .filter(|entity| !retried.contains(*entity));
+    for &amp;entity in retried.iter().chain(lost) {
+        if !changed_renderables.contains(entity)
+            &amp;&amp; let Ok(renderable) = renderables.get(entity)
+        {
+            visit(renderable);
+        }
+    }
+}</code></pre>
+  <p class="code-source"><code>FramePreparer::prepare</code>. <code>visit</code> takes the Renderable's slot and writes its Instance; <code>retried</code> are the Renderables the last prepare skipped or refused.</p>
+  <p>Inside <code>visit</code>, a Renderable is skipped when its Mesh is not in the Mesh pool, or when it has no Material Handle and a Primitive of its Mesh names no Material. A skipped Renderable still takes its slot, which is written an Instance with no Mesh once, in the first frame it is skipped; it is visited again in every frame, changed or not, and draws there as soon as its Mesh loads. A drawn one is written with its World transform blended by the frame's blend weight, in f64, and split into an Anchor and an offset, its rotation and scale and their inverse transpose padded per column for WGSL.</p>
+<pre class="code"><code>*rewrite_every_instance = false;
+// Ends the window in which prepare sees changes and removals, and
+// drains the removals, which otherwise pile up.
+world.clear_trackers();
+frame</code></pre>
+  <p class="code-source">The end of <code>FramePreparer::prepare</code>.</p>
+  <p>bevy_ecs used without the full Bevy engine has to close each change window itself. <code>World::clear_trackers</code> moves the World's last change tick on and drains the removal lists, which would otherwise grow. Prepare calls it last, so any World read after prepare in the same frame would miss what changed before it: prepare is the frame's last read of the World, and it runs once per frame.</p>
+</section>
+
+<section class="part prose" id="refusal">
+  <div class="part-mark">6 &middot; <code>get_or_take</code> &middot; <code>rewrite_all_instances</code></div>
+  <h2>Refusal, and writing every Instance again</h2>
+  <p class="key-idea">The Instance buffer never grows. When all 524,288 slots are taken, a new Renderable is refused visibly, by four rules, and it keeps being retried, so it takes the next slot that frees.</p>
+  <ol>
+    <li><b>No slot.</b> No Instance is written for it and nothing draws it; every other Renderable renders as before.</li>
+    <li><b>Warned about once</b>, in the first frame it is refused: <code>Renderable refused: the Instance buffer is full</code>, with the entity and the capacity. The <code>refused</code> set remembers it until it takes a slot or stops being a Renderable.</li>
+    <li><b>Counted in every frame</b>, as <code>renderables_refused</code>, which prepare resets at the start of each frame and the State copies into Frame stats.</li>
+    <li><b>Retried in every frame</b>: a refused Renderable joins <code>unwritten</code>, which the next prepare visits whether it changed or not. It takes the first slot that frees, from the frame after the slot frees.</li>
+  </ol>
+  <p>When a frame's staging slot fails to map, the GPU never receives that frame's writes. Upload then reports the lost writes, if the frame had any Instances, and the State calls <code>rewrite_all_instances</code> before the next prepare, which visits every Renderable and writes each into the slot it already keeps, with every free slot written an Instance with no Mesh. The slot table stays as it is, so no slot moves, a refused Renderable stays refused and is not warned about again, and every Renderable that held a slot still holds it.</p>
+</section>
+
+<section class="part prose" id="runs">
+  <div class="part-mark">7 &middot; <code>FrameData::write_instance</code> &middot; <code>Renderer::upload</code></div>
+  <h2>Runs of consecutive slots, one copy each</h2>
+  <p class="key-idea">Prepare queues each Instance it writes onto the last write when its slot follows that write's last slot and both are of the same kind, Moving or static, so a run of consecutive slots goes to the GPU as one copy.</p>
+<pre class="code"><code>impl FrameData {
+    /// Queues `instance` for `slot`, a Moving Instance or not, in the last
+    /// write when `slot` follows it and it is of the same kind, and lists it
+    /// among the Moving Instances if it is one.
+    fn write_instance(&amp;mut self, slot: u32, instance: InstanceData, moving: bool) {
+        let index = self.instances.len();
+        self.instances.push(instance);
+        if moving {
+            self.moving_instances.push(MovingInstance {
+                slot,
+                instance: index,
+            });
+        }
+        match self.instance_writes.last_mut() {
+            Some(write)
+                if write.moving == moving
+                    &amp;&amp; write.first_slot + write.instances.len() as u32 == slot =&gt;
+            {
+                write.instances.end += 1;
+            }
+            _ =&gt; self.instance_writes.push(InstanceWrite {
+                first_slot: slot,
+                instances: index..index + 1,
+                moving,
+            }),
+        }
+    }
+}
+
+/// Instances for consecutive slots from `first_slot`, one copy on the GPU.
+pub struct InstanceWrite {
+    pub first_slot: u32,
+    /// The Instances' range in `FrameData::instances`.
+    pub instances: Range&lt;usize&gt;,
+    /// Whether they are Moving Instances, which the static TLAS leaves out.
+    pub moving: bool,
+}
+
+/// A Moving Instance the dynamic TLAS holds: its slot, and its Instance's
+/// index in `FrameData::instances`.
+pub struct MovingInstance {
+    pub slot: u32,
+    pub instance: usize,
+}</code></pre>
+  <p class="code-source"><code>src/render/prepare.rs</code>.</p>
+  <p>Writes queue in the order prepare visits the Renderables, which is the World's order, not slot order: a run forms where consecutive slots are visited one after the other, as when a scene's Renderables spawn together and take slots in the order they are visited. A run also splits where a Moving Instance meets a static one, since the static TLAS reads each write's <code>moving</code> flag and leaves Moving Instances out of its entries.</p>
+<pre class="code"><code>let instance_size = std::mem::size_of::&lt;InstanceData&gt;() as wgpu::BufferAddress;
+let instance_uploads = frame.instance_writes.iter().map(|write| {
+    (
+        &amp;self.instance_buffer,
+        u64::from(write.first_slot) * instance_size,
+        bytemuck::cast_slice(&amp;frame.instances[write.instances.clone()]),
+    )
+});
+let slot_count_upload = (frame.instance_slot_count != self.uploaded_instance_slot_count)
+    .then(|| {
+        let buffer = self.culling_pass.instance_slot_count();
+        (buffer, 0, bytemuck::bytes_of(&amp;frame.instance_slot_count))
+    });</code></pre>
+  <p class="code-source"><code>Renderer::upload</code>, <code>src/render/renderer.rs</code>. Each run becomes one write into the frame's staging, which <a href="staging.html">Staging</a> describes, at its first slot's offset of 128 bytes a slot; the slot count is written only when it changed since the last upload that landed.</p>
+</section>
+
+<section class="part prose" id="moving">
+  <div class="part-mark">8 &middot; <code>moving_instances</code></div>
+  <h2>The Moving Instances and their cap</h2>
+  <p class="key-idea">An Instance is a Moving Instance while its entity carries <code>PreviousWorldTransform</code>. It is written in every frame, flagged moving, and listed for the dynamic TLAS; past the dynamic TLAS's 10,000 entries, the lowest slots keep their place.</p>
+  <p>The fixed schedule keeps an entity's previous World transform exactly when it moves that entity, children included, so frames can draw it between Ticks (ADR 0022). Prepare reads the component's presence as the classification; no other component marks a Moving Instance. Its value is <code>None</code> from a spawn or a teleport until the next Tick, and the Instance counts as moving all the same.</p>
+  <p><b>Gaining the component.</b> From that frame on the Renderable is admitted by the changed query in every frame, and <code>write_instance</code> lists its slot and the index of its Instance among the Moving Instances. The static TLAS clears the slot's entry when a moving write reaches it.</p>
+  <p><b>Losing it.</b> The removal makes prepare write the Instance once more in that frame, unflagged, so the static TLAS takes it. Without that write the slot's last write would stay the moving one: the static TLAS would keep its entry clear and the dynamic TLAS, which lists only this frame's Moving Instances, would drop it, and it would cast no shadow until something rewrote it.</p>
+<pre class="code"><code>// Past the dynamic TLAS's capacity, the lowest slots keep their place.
+let capacity = DYNAMIC_TLAS_CAPACITY as usize;
+*moving_instances_left_out = frame.moving_instances.len().saturating_sub(capacity) as u32;
+if *moving_instances_left_out &gt; 0 {
+    frame
+        .moving_instances
+        .select_nth_unstable_by_key(capacity, |moving| moving.slot);
+    frame.moving_instances.truncate(capacity);
+    if !*warned_of_moving_instances_left_out {
+        tracing::warn!(
+            left_out = *moving_instances_left_out,
+            capacity,
+            "Moving Instances left out of the dynamic TLAS, past its capacity: those in the highest slots cast no shadow"
+        );
+    }
+}
+*warned_of_moving_instances_left_out = *moving_instances_left_out &gt; 0;</code></pre>
+  <p class="code-source">The cap, <code>FramePreparer::prepare</code>. <code>select_nth_unstable_by_key</code> moves the lowest 10,000 slots ahead of the index, in no order and in linear time, with no full sort; <code>truncate</code> drops the rest.</p>
+  <p>The rule keeps the lowest slots rather than the first Moving Instances prepare meets, because the World's order moves and slots do not. bevy_ecs stores each archetype's entities in a table, appends an entity that spawns or changes archetype at its new table's end, and fills a removed entity's row with the table's last entity, so iteration order shifts whenever entities spawn, despawn or change components, even for one Tick, as a teleport's <code>Teleported</code> marker does. A slot changes only when its Renderable stops being one. So a Moving Instance does not lose its shadow because some other entity changed.</p>
+  <p>Those left out are still drawn, since their Instances are written, and their writes are still flagged moving, so the static TLAS leaves them out too: they cast no shadow. <code>moving_instances_left_out</code> counts them in every frame; the warning fires in the first frame that leaves any out, and again only after a frame that left none out. The <a href="dynamic-tlas.html">Dynamic TLAS</a> volume describes what the TLAS does with the list.</p>
+</section>
+
+<section class="part prose" id="bends">
+  <div class="part-mark">9 &middot; <code>prepare_bends</code></div>
+  <h2>The bends</h2>
+  <p class="key-idea">Every Renderable with a <code>Bend</code> becomes one <code>BendData</code> in every frame, its curvature blended between the two newest Ticks, in the order of the bent Meshes' ranges of the vertex Arena; bends that could not be applied, would race or do not fit are left out.</p>
+  <p>A <span class="concept" data-term="Bend" data-tip="The GPU&#x27;s stand-in for skinning until M7: each frame a compute pass rewrites a Renderable&#x27;s own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">Bend</span> names its rest Mesh, an azimuth and a curvature with the previous Tick's beside it. Prepare draws <code>drawn_curvature</code>, the blend by the frame's blend weight; the azimuth is drawn as set. Each bend becomes the start of the rest Mesh's vertices, the start of the bent Mesh's, their count, the azimuth and the curvature. Three rules keep the list safe to hand to one dispatch:</p>
+  <ol>
+    <li><b>Both Meshes loaded, with as many vertices.</b> Otherwise the bend is warned about and the Mesh is not bent.</li>
+    <li><b>No races.</b> The pass writes each bent Mesh while it reads each rest Mesh, so of two bends of one Mesh one is kept, and a bend whose rest Mesh is a Mesh that some bend writes, its own included, is dropped; one warning counts the dropped.</li>
+    <li><b>A fixed order and a fixed capacity.</b> The list is sorted by where each bent Mesh's vertices start, so it does not depend on how the World stores the entities, and past <code>BEND_CAPACITY</code> the bends of the Meshes highest in the Arena are left out, counted in every frame as <code>bends_left_out</code> and warned about once while it lasts.</li>
+  </ol>
+<pre class="code"><code>bends.sort_unstable_by_key(|bend| bend.first_vertex);
+let listed = bends.len();
+bends.dedup_by_key(|bend| bend.first_vertex);
+let mut index = 0;
+while index &lt; bends.len() {
+    let rest = bends[index].rest_first_vertex;
+    if bends
+        .binary_search_by_key(&amp;rest, |bend| bend.first_vertex)
+        .is_ok()
+    {
+        bends.remove(index);
+    } else {
+        index += 1;
+    }
+}
+if bends.len() &lt; listed {
+    tracing::warn!(
+        dropped = listed - bends.len(),
+        "Bends that would race are dropped: a Mesh two Renderables bend is bent once, and one bent from a Mesh a bend writes is not bent"
+    );
+}
+let capacity = BEND_CAPACITY as usize;
+*left_out = bends.len().saturating_sub(capacity) as u32;
+bends.truncate(capacity);</code></pre>
+  <p class="code-source"><code>prepare_bends</code>, <code>src/render/prepare.rs</code>. The search for a rest Mesh among the bent ones is a binary search, since the list is sorted by the bent Meshes' starts.</p>
+  <p>A bend is game state, so the fixed schedule sets the curvature once per Tick and <code>record_previous_curvatures</code> keeps the one before; prepare only blends. The <a href="crowd-shadows.html">Crowd Shadows</a> volume describes the bend pass that reads the list and the scene that uses it.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">10 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The seam is <code>FramePreparer::prepare</code>: a World goes in, and slots, Instance writes, Moving Instances, bends, lights and counts come out. The tests in <code>prepare.rs</code> drive a real World through a real Mesh pool, frame by frame as the State does, at the real capacities.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>renderables_keep_their_slots_and_freed_slots_are_taken_again</code></td><td><code>prepare.rs</code></td><td>three spawns write slots 0 to 2 in one copy; a despawned slot is written with <code>NO_MESH</code> and taken again by the next spawn; a slot freed in a frame goes to no Renderable until the next</td></tr>
+      <tr><td><code>a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees</code></td><td><code>prepare.rs</code></td><td>524,288 Renderables and one more: the last is refused over three frames, warned about once, counted each frame; writing every Instance again keeps every slot; it takes slot 7 the frame after slot 7 frees</td></tr>
+      <tr><td><code>a_changed_transform_or_material_writes_exactly_its_slot</code></td><td><code>prepare.rs</code></td><td>a moved parent writes its child's slot too; a changed Material writes one slot; a blended Renderable is written every frame, in a write of its own beside a static neighbour</td></tr>
+      <tr><td><code>an_instance_is_moving_while_its_entity_carries_its_previous_world_transform</code></td><td><code>prepare.rs</code></td><td>gaining the component lists the Instance; losing it writes the slot once more, unflagged, and lists it no longer</td></tr>
+      <tr><td><code>the_moving_instance_in_the_highest_slot_past_the_dynamic_tlas_capacity_is_left_out</code></td><td><code>prepare.rs</code></td><td>10,001 Moving Instances: the highest slot is left out, counted, warned about once, and still left out after a newcomer takes slot 3 and sits last in the World's order</td></tr>
+      <tr><td><code>an_instance_names_its_mesh_and_draws_with_its_material_handle_else_its_meshs</code></td><td><code>prepare.rs</code></td><td>each Instance's Mesh and Material ID through gaining, changing and losing a Material Handle; a Mesh with a Primitive that names no Material draws nothing</td></tr>
+      <tr><td><code>a_renderable_whose_mesh_is_not_in_the_pool_keeps_its_slot_and_draws_there_once_it_loads</code></td><td><code>prepare.rs</code></td><td>a skipped Renderable's slot is written with no Mesh once, stays its own, and draws as soon as the Mesh loads, with no change to the Renderable</td></tr>
+      <tr><td><code>rewriting_all_instances_writes_every_slot_once</code></td><td><code>prepare.rs</code></td><td>after <code>rewrite_all_instances</code> the next frame writes every slot once, and the frame after writes none</td></tr>
+      <tr><td><code>each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks</code></td><td><code>prepare.rs</code></td><td>seven Renderables, two bends: listed in Arena order, blended, with the unloaded, mismatched, duplicated and racing bends warned about or dropped</td></tr>
+      <tr><td><code>the_bend_of_the_highest_mesh_past_the_bend_capacity_is_left_out</code></td><td><code>prepare.rs</code></td><td>4,097 bends: the highest Mesh's is left out, counted each frame, warned about once</td></tr>
+      <tr><td><code>every_light_is_drawn_directional_lights_first_point_lights_anchored</code></td><td><code>prepare.rs</code></td><td>directional lights first, intensities as colour times lux or candela, and a point light at (100,000.25, 2, &minus;64.5) as Anchor (1562, 0, &minus;2) and offset (32.25, 2, 63.5)</td></tr>
+      <tr><td><code>lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once</code></td><td><code>prepare.rs</code></td><td>a sun and 4,097 point lights: the buffer holds the sun and 4,095, two are counted each frame, one warning, and all fit once two are despawned</td></tr>
+      <tr><td><code>a_directional_light_shines_along_its_forward_axis_blended_between_ticks</code></td><td><code>prepare.rs</code></td><td>a quarter turn, half a Tick on, shines half way down</td></tr>
+      <tr><td><code>a_directional_light_scaled_to_nothing_is_not_drawn</code>, <code>a_scene_without_a_directional_light_puts_none_in_frame_data</code></td><td><code>prepare.rs</code></td><td>no direction, no light; no sun, no directional light</td></tr>
+      <tr><td><code>a_despawned_renderables_freed_slot_draws_nothing</code></td><td><code>renderer.rs</code></td><td>through the Renderer: a despawned Renderable's slot, which still holds its last Instance, draws nothing from the next frame</td></tr>
+      <tr><td><code>camera_motion_writes_no_instances</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> and <code>uv-grid</code>, whose cameras move, the first frame writes every Instance and no later frame writes one</td></tr>
+      <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>every frame uploads the uniforms, five lights, five Instances and their five TLAS entries, plus the slot count on the first, to the byte</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above. The tests in <code>prepare.rs</code> need a GPU only for the Mesh pool and say so when there is none; the refusal test spawns all 524,288 Renderables, one constant for the app, the tests, the bench and CI.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">11 &middot; <code>bench/baselines/apple-m4-pro</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The Baselines time the CPU frame whole, and prepare is one part of it, beside the simulation, upload, the passes' recording and the submission. Frame stats name a <code>prepare_frame</code> stage, but the bench keeps no time for it alone. What prepare decides shows in the counters: a frame with no change uploads only the uniforms and the lights, while Moving Instances and bends are uploaded in every frame.</p>
+  <p>Medians from the committed Apple M4 Pro <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI&#x27;s lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 over 1,800 measured frames: the CPU frame in microseconds, as <code>praxis report</code> prints it, and the counters, each its own median over those frames, from each file's top-level keys.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th class="n">CPU frame</th><th class="n"><code>instances_drawn</code></th><th class="n"><code>uploaded_bytes</code></th><th class="n"><code>heap_allocations</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>crowd</code></td><td class="n">744.5</td><td class="n">101</td><td class="n">322,224</td><td class="n">2,099</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">185.8</td><td class="n">2</td><td class="n">416</td><td class="n">345</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">186.1</td><td class="n">11</td><td class="n">416</td><td class="n">347</td></tr>
+      <tr><td><code>minification</code></td><td class="n">192.7</td><td class="n">1</td><td class="n">272</td><td class="n">345</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">208.6</td><td class="n">1</td><td class="n">416</td><td class="n">345</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">358.8</td><td class="n">5</td><td class="n">1,416</td><td class="n">455</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">181.6</td><td class="n">10</td><td class="n">416</td><td class="n">347</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">265.9</td><td class="n">1</td><td class="n">272</td><td class="n">345</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">2,138.5</td><td class="n">100</td><td class="n">224</td><td class="n">350</td></tr>
+      <tr><td><code>town</code></td><td class="n">4,734.8</td><td class="n">137,730</td><td class="n">2,049,376</td><td class="n">10,498</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">184.0</td><td class="n">1</td><td class="n">416</td><td class="n">345</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro/&lt;scene&gt;.json</code> at the commit above, keys <code>cpu_frame_microseconds.median</code>, <code>instances_drawn</code>, <code>uploaded_bytes</code> and <code>heap_allocations</code>. Every scene's CPU frame is under its <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#x27;s gate, the dynamic TLAS&#x27;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget is to split into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, at sizes M4 sets (ADRs 0013, 0017); today it is one number, and each kind&#x27;s capacity is provisional. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span> (<code>bench/budgets.json</code>). <code>instances_drawn</code> is the GPU's count, read back, of the Instances its culled draw drew; <code>heap_allocations</code> counts the whole frame's.</p>
+  <p>The uploaded bytes add up from Frame data. A frame that writes no Instance uploads the camera uniform's 144 bytes, the light uniform's 32 and 48 bytes a light: 224 with a sun alone, 272 with a sun and one point light, 416 with a sun and four. The orrery's five spheres are Moving Instances, so each frame adds their five 128-byte Instances and five 72-byte Metal TLAS entries: 1,416. In <code>town</code>, 10,000 birds, exactly the dynamic TLAS's capacity, add 10,000 times 200 bytes, and the sun and 1,024 street lamps 1,025 lights: 2,000,000 + 49,200 + 176 = 2,049,376. In <code>crowd</code>, 1,600 shadow proxies, 16 for each of 100 figures, add 320,000, the sun 48, and the 100 figures' bends 20 bytes each: 320,000 + 2,000 + 48 + 176 = 322,224. The TLAS entries are the dynamic TLAS's share, not prepare's; the RTX 2070 SUPER's Baselines, whose backends' entries are 64 bytes, upload 8 bytes fewer per Moving Instance and otherwise the same, so they are left out.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">12 &middot; ADRs 0003, 0004, 0014, 0016, 0022</div>
+  <h2>Why this way</h2>
+  <p><b>Pull, into owned data.</b> ADR 0004 keeps the Renderer from reading the World mid-frame: prepare builds Frame data and the Renderer consumes only that. Since the Instance buffer persists, every Frame data must reach the Renderer, in order. ADR 0016 makes Frame data an owned, <code>Send</code> value with no borrow into the World, which a compile-time assertion holds, so moving rendering to its own thread becomes a channel send, and the Renderer is tested headless with no World at all.</p>
+  <p><b>Slots that persist, written when they change.</b> ADR 0003 keeps every Instance in one buffer, a slot per Renderable, updated incrementally, the shape GPU-driven culling and the TLAS builds consume. With ADR 0014's Anchor and offset per Instance, a camera that moves changes no Instance, so a frame where nothing in the scene changes writes none.</p>
+  <p><b>Change ticks the World already keeps.</b> Prepare keeps no copy of last frame's Instances to compare against: the tick bevy_ecs stamps on each component says what changed, and the removal lists say what left. The price is that the change window is prepare's to close, which pins prepare as the frame's last World read.</p>
+  <p><b>A fixed capacity that refuses.</b> A buffer that grows has to be copied mid-frame into a larger one, and every bind group that names it rebuilt. ADR 0003 fixes the Instance buffer at 524,288 slots instead: its memory is known at startup and its bind groups are built once. What does not fit is refused visibly, warned about, counted and retried, never dropped in silence.</p>
+  <p><b>A freed slot is emptied and waits a frame.</b> ADR 0003's amendment writes a freed slot an Instance with no Mesh, which the GPU passes over, rather than leaving its last Instance there to draw, and hands the slot out again only from the next frame.</p>
+  <p><b>Moving by component, capped by slot.</b> ADR 0022's blend moves a Moving Instance in every frame, between Ticks too, so it is rewritten in every frame, and the component the blend reads already marks it. The dynamic TLAS that holds them has a fixed capacity, and the lowest slots keep their place because an entity's slot changes only when it stops or starts being a Renderable, while the World's order changes whenever entities change components.</p>
+  <p><b>The blend in prepare, in f64.</b> ADR 0022 runs everything that changes game state in the fixed schedule and draws a blend of the two newest Ticks, so the simulation does not depend on the frame rate. The blend runs once a frame, where prepare composes what it draws, and in f64, before ADR 0014's split into an Anchor and an f32 offset.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">13</div>
+  <h2>Limits</h2>
+  <p><b>Every Renderable visited.</b> <code>Changed&lt;T&gt;</code> is not an archetype filter, so the changed query reads every Renderable's change ticks even in a frame where none changed; only the writes are saved, not the walk.</p>
+  <p><b>The slot count never shrinks.</b> <code>end</code> is the highest slot ever taken, plus one. Despawning the Renderables in the highest slots leaves the culling pass visiting their empty slots until new Renderables take them.</p>
+  <p><b>Runs follow the World's order.</b> Writes merge only when consecutive slots are visited one after another, so changes scattered across the World become many small copies.</p>
+  <p><b>Lights and bends are rebuilt whole.</b> Every frame lists and uploads every light and every bend, changed or not. Past the light buffer's capacity, which point lights are left out follows the World's order, which moves, unlike the Moving Instances' rule.</p>
+  <p><b>Repeated warnings.</b> A skipped Renderable is visited, and warned about, in every frame until it draws; a dropped or unloaded bend, or one whose two Meshes differ in vertex count, is warned about in every frame it lasts. Only refusal and the three capacities warn once.</p>
+  <p><b>Two bends of one Mesh.</b> One is kept, but the list's sort is unstable, so which one is not specified.</p>
+  <p><b>One thread.</b> Prepare iterates on the main thread, and ADR 0016's compute pool lends it no workers.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources prepare rests on, each with what it settles here. <code>prepare.rs</code> cites no key of the engine's registry, <code>docs/references.toml</code>, so none is named.</p>
+  <dl class="reading">
+    <dt><a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/query/struct.Changed.html">bevy_ecs 0.18.1, <code>Changed</code></a> and <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/world/struct.World.html">World</a></dt><dd>components carry change ticks; <code>Changed</code> admits a component added or mutably dereferenced since the last run it is given, which outside a system is the World's last change tick, and is not an archetype filter; <code>World::removed</code> lists the entities that lost a component since <code>World::clear_trackers</code>, which a standalone bevy_ecs must call itself</dd>
+    <dt><a href="https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/storage/table/mod.rs">bevy_ecs 0.18.1, storage/table/mod.rs</a></dt><dd>rows appended at a table's end and a removed row filled by the table's last entity: why the World's order moves, and why the Moving Instances' cap keeps slots and the bends sort by Arena offset</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">Prepare began as the frame's one pull from the World, with the slot table and change detection that made camera motion free. The Instance buffer then stopped growing and gained refusal; freed slots took an Instance with no Mesh and waited a frame, and the draws left Frame data once the GPU built its own. The lights moved into a light buffer with anchored point lights, the Environment replaced constants in the shaders, the blend between Ticks arrived with the fixed schedule, then the Moving Instance list and its cap with the dynamic TLAS, and the bends with the crowd; change detection moved from per-item tests into query filters. The volumes narrate it: <a href="instance-buffer-explained.html">Instance Buffer Explained</a>, <a href="instance-culling.html">Instance Culling</a>, <a href="froxel-lights.html">Froxel Lights</a>, <a href="lit-pass-explained.html">Lit Pass</a>, <a href="dynamic-tlas.html">Dynamic TLAS</a> and <a href="crowd-shadows.html">Crowd Shadows</a>. This page describes the mechanism as it is; the volumes describe how it got here.</p>
+  <footer class="sources">Written from <code>src/render/prepare.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/instance.rs</code>, <code>src/render/bend_pass.rs</code>, <code>src/components.rs</code>, <code>src/transform/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0004, 0014, 0016 and 0022, the committed Baselines, and the sources above, all at <code>main</code> b3d764b4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="gpu-ordering.html">Previous: GPU Ordering Explained</a><a href="index.html">All field guides</a><a href="staging.html">Next: Staging</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
