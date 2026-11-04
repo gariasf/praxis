@@ -630,7 +630,10 @@ impl<T: ShaderScalar, const LENGTH: usize> ShaderScalar for [T; LENGTH] {
     const SCALAR: naga::Scalar = T::SCALAR;
 
     /// An element narrower than the scalar WGSL reads it as is packed, so
-    /// its stride is the scalar's: an `[i16; 4]` is read as two u32s.
+    /// by convention its stride is the scalar's: an `[i16; 4]` is read as
+    /// two u32s, and reports 4 where Rust's stride is 2. A nested pair such
+    /// as `[[i16; 2]; 2]` would report `[4, 4]` against `array<u32, 2>`'s
+    /// `[4]`, so it fails until this learns to pack it.
     fn strides() -> Vec<usize> {
         let stride = size_of::<T>().max(usize::from(T::SCALAR.width));
         [stride].into_iter().chain(T::strides()).collect()
