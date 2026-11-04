@@ -258,7 +258,7 @@ queue.submit(std::iter::once(encoder.finish()));</code></pre>
     bounds.unwrap_or_default().map(&lt;[f32; 3]&gt;::from)
 }</code></pre>
   <p class="code-source"><code>DynamicTlas::fill</code>, <code>src/render/acceleration_structures.rs</code>.</p>
-  <p>An entry needs both the Mesh's BLAS and the Mesh itself, whose bounds the box takes; a Mesh with neither in the pool leaves its entry empty, and it casts no shadow. The clearing loop matters: a Moving Instance that despawns drops off the list, and without the loop its entry would keep its last transform and go on casting its shadow from there.</p>
+  <p>An entry needs both the Mesh's BLAS and the Mesh itself, whose bounds the box takes; a Mesh missing either, its BLAS or its place in the pool, leaves its entry empty, and it casts no shadow. The clearing loop matters: a Moving Instance that despawns drops off the list, and without the loop its entry would keep its last transform and go on casting its shadow from there.</p>
   <p>The fill records nothing. It leaves the bytes the build will upload for <code>record</code>, or none when this fill and the one before both held nothing, which is how an empty TLAS is built once more in the frame it empties and then not again.</p>
 <pre class="code"><code>fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
     let [x_axis, y_axis, z_axis] = instance.rotation_scale;
@@ -471,7 +471,7 @@ fn mark_dynamic_tlas() {
   <footer class="sources">Written from <code>src/render/acceleration_structures.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>common.wgsl</code>, <code>dynamic_tlas_marker.wgsl</code>, <code>src/bench/mod.rs</code>, <code>bench/budgets.json</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0014, 0016, 0020 and 0022, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
 </section>
 
-<nav class="series" aria-label="Praxis field guides"><a href="instance-buffer.html">Previous: Instance Buffer Explained</a><a href="index.html">All field guides</a><a href="bend-pass.html">Next: The bend pass</a></nav>
+<nav class="series" aria-label="Praxis field guides"><a href="instance-buffer-explained.html">Previous: Instance Buffer Explained</a><a href="index.html">All field guides</a><a href="bend-pass.html">Next: The bend pass</a></nav>
 </div>
 </div>
 <div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>

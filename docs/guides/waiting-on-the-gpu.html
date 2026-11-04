@@ -263,7 +263,7 @@ details.check p { margin: 0; }
       <li>What nine runs of <code>town</code> ruled in and out: the clock, blocking, migration, priority and QoS</li>
       <li>Why the bench spin-waits while the window blocks, and what M3's CPU ceilings measure</li>
     </ul>
-    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html#frame">Frame Timing Explained</a>, for frames in flight and the CPU and GPU frame; optionally <a href="town.html">Town Explained</a>, for the scene measured here, and <a href="dynamic-tlas.html">Dynamic TLAS Explained</a>, for the dynamic TLAS's CPU line.</p>
+    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html#frame">Frame Timing Explained</a>, for frames in flight and the CPU and GPU frame; optionally <a href="town.html">Town Explained</a>, for the scene measured here, and <a href="dynamic-tlas.html">The dynamic TLAS</a>, for the dynamic TLAS's CPU line.</p>
     <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 958ed4e9 (PR #400, 2026-10-30). <b>Since then:</b> PR #401 (515c33be, docs only) recorded in <code>docs/performance.md</code> why queued <code>town</code> frames keep their pass overlap; no code this guide describes changed, as of main at 515c33be.</p>
   </aside>
   <p class="lede">Every CPU stage of <code>town</code>, the dense <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>, read 20 to 40% slower once the GPU became the longer half of the frame, stages that touch no acceleration structure alike. The dynamic TLAS's CPU line read over its 1.1 ms ceiling and the CPU frame over M3's 6 ms. This volume follows ticket #381's search for the cause: where the main thread waits, how Apple silicon sets a core's clock, how to read that clock without counters, what nine runs ruled in and out, and what PR #400 changed. Two live demos show a frame's timeline under each way of waiting, and the nine runs' stages against the clock.</p>
@@ -596,7 +596,7 @@ let wait = match context.adapter.get_info().device_type {
       <ul>
         <li><a href="frame-timing.html">Frame Timing Explained</a> <span>frames in flight, and the CPU and GPU frame</span></li>
         <li><a href="town.html">Town Explained</a> <span>the scene these runs measured</span></li>
-        <li><a href="dynamic-tlas.html">Dynamic TLAS Explained</a> <span>the build whose CPU line has the 1.1 ms ceiling</span></li>
+        <li><a href="dynamic-tlas.html">The dynamic TLAS</a> <span>the build whose CPU line has the 1.1 ms ceiling</span></li>
       </ul>
     </article>
     <article>
