@@ -15,10 +15,10 @@ use crate::capture::{GOLDEN_DIRECTORY, golden_key};
 pub(crate) const BUSY_GPU_PERCENT: u32 = 10;
 
 /// The one-minute load average above which a bench's CPU times would be
-/// someone else's: on the M4 Pro, at 3.7 to 19.3 the light scenes' CPU
-/// frames read 1.10 to 2.25 times their Baselines while their GPU frames
-/// held within 2%.
-const BUSY_LOAD_AVERAGE: f64 = 2.0;
+/// someone else's: on the M4 Pro, at 3.7 to 19.3 the light scenes' failing
+/// CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU
+/// frames held within 2%.
+pub(crate) const BUSY_LOAD_AVERAGE: f64 = 2.0;
 
 /// Names listed per line before the rest are counted.
 const LISTED_NAMES: usize = 4;
@@ -369,9 +369,11 @@ pub(crate) fn one_minute_load_average() -> Option<f64> {
 /// On macOS and Linux, whether other work loads the CPU, which spoils a
 /// bench's CPU times though not its GPU times.
 fn cpu_load() -> Option<Check> {
-    (!cfg!(windows)).then(|| load_check(one_minute_load_average()))
+    cfg!(any(target_os = "macos", target_os = "linux"))
+        .then(|| load_check(one_minute_load_average()))
 }
 
+/// The CPU load check from a one-minute load average.
 fn load_check(load_average: Option<f64>) -> Check {
     match load_average {
         Some(load) if load > BUSY_LOAD_AVERAGE => Check::new(

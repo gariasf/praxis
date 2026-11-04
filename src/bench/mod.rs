@@ -766,21 +766,21 @@ pub fn compare(
     }
     // CPU times move with the machine's load where GPU times hold, so a
     // failed CPU line says what load each run started under.
-    let loads = format!(
+    let load_averages = format!(
         "one-minute load average {}, its Baseline's {}",
         load_average(current),
         load_average(baseline)
     );
     for finding in &mut findings {
-        if finding.verdict == Verdict::Fail && CPU_TIMES.contains(&finding.metric) {
-            finding.detail = format!("{}; {loads}", finding.detail);
+        if finding.verdict == Verdict::Fail && CPU_TIME_METRICS.contains(&finding.metric) {
+            finding.detail = format!("{}; {load_averages}", finding.detail);
         }
     }
     Ok(findings)
 }
 
 /// The metrics that time the CPU.
-const CPU_TIMES: [&str; 2] = ["cpu_frame_microseconds", "dynamic_tlas_cpu_microseconds"];
+const CPU_TIME_METRICS: [&str; 2] = ["cpu_frame_microseconds", "dynamic_tlas_cpu_microseconds"];
 
 /// The one-minute load average `measurements` started under, or `unknown`.
 fn load_average(measurements: &Measurements) -> String {
@@ -1079,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    fn provenance_round_trips_with_or_without_a_load_average_and_every_baseline_parses() {
+    fn provenance_round_trips_with_or_without_a_load_average() {
         let mut current = Measurements {
             provenance: Some(provenance(
                 Checkout {
@@ -1106,6 +1106,10 @@ mod tests {
             .expect("a record from before the load average");
         current.provenance.as_mut().unwrap().one_minute_load_average = None;
         assert_eq!(parsed, current);
+    }
+
+    #[test]
+    fn every_committed_baseline_parses() {
         for entry in std::fs::read_dir(BASELINE_DIRECTORY).expect("Baselines") {
             for baseline in std::fs::read_dir(entry.unwrap().path()).unwrap() {
                 let path = baseline.unwrap().path();
@@ -1216,7 +1220,9 @@ mod tests {
             [Finding {
                 metric: "cpu_frame_microseconds",
                 verdict: Verdict::Fail,
-                detail: "p95 6210.0 over Budget 6000.0".to_owned(),
+                detail: "p95 6210.0 over Budget 6000.0; \
+                         one-minute load average unknown, its Baseline's unknown"
+                    .to_owned(),
             }]
         );
     }

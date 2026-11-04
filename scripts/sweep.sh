@@ -56,7 +56,7 @@
   exec >>target/sweep/sweep.log 2>&1
 
   # Runs start until this many seconds of building, benching, and waiting
-  # for the GPU between runs have passed, the rest left to the next night:
+  # for the machine between runs have passed, the rest left to the next night:
   # about twice a full pass of the Reference scenes on the slower machine
   # (219 s on the M4 Pro, 155 s on the RTX 2070 SUPER, both measured
   # 2026-10-31).
@@ -84,15 +84,27 @@
   scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
 
+  # Whether preflight warns of what the pattern $1 matches. Its output is
+  # read whole, as preflight exits nonzero on a FAIL line and grep would
+  # stop reading it.
+  preflight_warns() {
+    local checks
+    checks=$("$praxis" preflight 2>/dev/null)
+    grep -q "^warn *$1" <<<"$checks"
+  }
+  # The build and cook above raise the one-minute load average, which falls
+  # by a factor of e a minute, so a few minutes pass before it is under
+  # preflight's threshold again.
+  load_wait_start=$SECONDS
+  while preflight_warns 'cpu load' && [ $((SECONDS - load_wait_start)) -lt 300 ]; do
+    sleep 5
+  done
+
   # A FAIL line, such as a scene without a Golden here, spoils no bench, and
-  # one that does, such as no adapter, fails the bench itself. The CPU load
-  # holds off nothing here: the sweep's own build and cook raise the
-  # one-minute load average, which takes minutes to fall; quiet judges what
-  # spoils GPU times; and each record carries the load it started under.
+  # one that does, such as no adapter, fails the bench itself.
   preflight=$("$praxis" preflight)
   [ -n "$preflight" ] || fail "praxis preflight printed nothing"
-  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | grep -v '^warn *cpu load' |
-    sed 's/  */ /g')
+  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | sed 's/  */ /g')
   if [ -n "$warnings" ]; then
     log "skipped, the machine is not quiet:"
     printf '%s\n' "$warnings"
@@ -103,26 +115,21 @@
   # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
   # to 1 s [ref:nvidia-smi-utilization-sample-period], and on the RTX 2070
   # SUPER it still read 67% a third of a second after a scene's bench
-  # exited. So each scene waits for preflight to see the GPU idle, and a
-  # GPU still busy after a minute ends the night. Its output is read whole,
-  # as preflight exits nonzero on a FAIL line and grep would stop reading
-  # it; the sweep's first preflight above has already logged its errors.
-  gpu_busy() {
-    local checks
-    checks=$("$praxis" preflight 2>/dev/null)
-    grep -q '^warn *gpu load' <<<"$checks"
-  }
-  # Whether the next run, $1, may start: within the time cap, once the GPU
-  # is idle; it logs why not.
+  # exited. A scene's bench also raises the one-minute load average. So
+  # each scene waits for preflight to see the GPU idle and the CPU load
+  # under its threshold, and either still busy after a minute ends the night.
+  machine_busy() { preflight_warns '[cg]pu load'; }
+  # Whether the next run, $1, may start: within the time cap, once the
+  # machine is idle; it logs why not.
   may_start() {
     if [ $((SECONDS - start)) -ge "$cap_seconds" ]; then
       log "time cap of ${cap_seconds}s reached; left for the next night: $1 and after"
       return 1
     fi
     local wait_start=$SECONDS
-    while gpu_busy; do
+    while machine_busy; do
       if [ $((SECONDS - wait_start)) -ge 60 ]; then
-        log "skipped, the GPU is still busy after a minute; left for the next night: $1 and after"
+        log "skipped, the GPU or CPU is still busy after a minute; left for the next night: $1 and after"
         return 1
       fi
       sleep 1
