@@ -271,9 +271,9 @@ impl DynamicTlas {
             ],
         );
         let shader = device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor());
-        let layouts = [(&DYNAMIC_TLAS_MARKERS, &layout)];
+        let groups = [(&DYNAMIC_TLAS_MARKERS, &layout)];
         let label = "Dynamic TLAS Marker Pipeline Layout";
-        let pipeline_layout = pipeline_layout(device, label, &layouts);
+        let pipeline_layout = pipeline_layout(device, label, &groups);
         let marker_pipeline =
             compute_pipeline(device, &pipeline_layout, &shader, "mark_dynamic_tlas", &[]);
         Self {

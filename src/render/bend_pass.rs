@@ -66,8 +66,8 @@ impl BendPass {
             ],
         );
         let shader = device.create_shader_module(shaders::BEND.descriptor());
-        let layouts = [(&BENDS, &layout)];
-        let pipeline_layout = pipeline_layout(device, "Bend Pass Pipeline Layout", &layouts);
+        let groups = [(&BENDS, &layout)];
+        let pipeline_layout = pipeline_layout(device, "Bend Pass Pipeline Layout", &groups);
         let pipeline = compute_pipeline(device, &pipeline_layout, &shader, "bend_vertices", &[]);
         BendPass {
             pipeline,

@@ -92,8 +92,8 @@ impl FroxelPass {
             ],
         );
         let shader = device.create_shader_module(shaders::FROXEL.descriptor());
-        let layouts = [(&FROXEL_LISTS, &layout)];
-        let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &layouts);
+        let groups = [(&FROXEL_LISTS, &layout)];
+        let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &groups);
         let pipeline =
             compute_pipeline(device, &pipeline_layout, &shader, "build_froxel_lists", &[]);
         FroxelPass {

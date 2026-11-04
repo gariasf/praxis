@@ -403,9 +403,9 @@ mod metal {
         pub(super) fn new(device: &wgpu::Device) -> Self {
             let layout = BLAS_REFIT_MARKERS.layout(device);
             let shader = device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor());
-            let layouts = [(&BLAS_REFIT_MARKERS, &layout)];
+            let groups = [(&BLAS_REFIT_MARKERS, &layout)];
             let label = "BLAS Refit Marker Pipeline Layout";
-            let pipeline_layout = pipeline_layout(device, label, &layouts);
+            let pipeline_layout = pipeline_layout(device, label, &groups);
             let pipeline =
                 compute_pipeline(device, &pipeline_layout, &shader, "mark_blas_refit", &[]);
             let result = device.create_buffer(&wgpu::BufferDescriptor {

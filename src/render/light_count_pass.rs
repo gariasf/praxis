@@ -49,8 +49,8 @@ impl LightCountPass {
     ) -> LightCountPass {
         let layout = LIGHT_COUNT_INPUT.layout(device);
         let shader = device.create_shader_module(shaders::LIGHT_COUNT.descriptor());
-        let layouts = [(&LIGHT_COUNT_INPUT, &layout)];
-        let pipeline_layout = pipeline_layout(device, "Light Count Pass Pipeline Layout", &layouts);
+        let groups = [(&LIGHT_COUNT_INPUT, &layout)];
+        let pipeline_layout = pipeline_layout(device, "Light Count Pass Pipeline Layout", &groups);
         let pipeline =
             compute_pipeline(device, &pipeline_layout, &shader, "count_point_lights", &[]);
         let buffers = LightCountBuffers {
