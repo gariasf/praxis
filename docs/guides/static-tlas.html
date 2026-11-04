@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Static TLAS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame's upload &middot; <code>src/render/acceleration_structures.rs</code></div>
+  <h1>The static TLAS</h1>
+  <p class="definition">A <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> over every static <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span>, each in the entry of its slot and tagged with it, placed in a frame whose origin is the corner of the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> in the first Frame data; built in that frame's upload and rebuilt only in a frame that writes or frees a static Instance, it is the first structure every shadow ray queries.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the static TLAS rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="blas.html">A BLAS per Mesh</a> for the structures its entries place, <a href="instance-buffer.html">Instance Buffer Explained</a> for the slots and writes it follows. <a href="dynamic-tlas.html">The dynamic TLAS</a> holds the Instances it leaves out; <a href="shadow-mask.html">the shadow mask pass</a> traces against both.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>In every frame's <code>Renderer::upload</code>, after the loads' BLASes are compacted and before the dynamic TLAS's fill. It records a build in the first frame, and in a frame whose Instance writes change one of its entries.</dd>
+      <dt>Reads</dt><dd>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>instance_writes</code> and the <code>instances</code> they cover; each static Instance's BLAS, from <code>MeshPool::blas</code>; the camera's Anchor, in the first Frame data only.</dd>
+      <dt>Writes</dt><dd>Its entries, one per slot up to <code>STATIC_TLAS_CAPACITY</code>; the Anchor of its frame, which the camera uniform carries to the GPU as <code>tlas_anchor</code> and the dynamic TLAS shares; the set of slots it leaves out.</dd>
+      <dt>Builds</dt><dd>One <code>build_acceleration_structures</code> of the TLAS alone, recorded into the frame's encoder ahead of the frame's copies and passes, in a frame that changes it.</dd>
+      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>, built once since the TLAS is rebuilt in place.</dd>
+      <dt>Shader</dt><dd>Queried in <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>.</dd>
+      <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; its estimate at full capacity in <code>estimated_acceleration_structure_bytes</code>, and so in <code>gpu_memory_bytes</code>; its recording in the <code>upload</code> stage. No GPU pass time is taken of its build.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#entries">2 &middot; An entry per slot</a>
+    <a href="#anchor">3 &middot; A frame anchored at load</a>
+    <a href="#rebuild">4 &middot; When it rebuilds</a>
+    <a href="#capacity">5 &middot; Capacity and what it leaves out</a>
+    <a href="#rays">6 &middot; What the rays read</a>
+    <a href="#tests">7 &middot; How it is tested</a>
+    <a href="#cost">8 &middot; What it costs</a>
+    <a href="#why">9 &middot; Why this way</a>
+    <a href="#limits">10 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>Renderer::upload</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The static TLAS is updated at the head of the frame's encoder, after the frame's loads have been built and compacted and before anything else the frame records, so the shadow mask pass later in the same command buffer reads it built.</p>
+<pre class="code"><code>// Loads staged since the last frame land before its copies and
+// draws, and their BLASes are compacted before the static TLAS
+// takes them.
+self.load_staging.submit(&amp;self.queue);
+self.mesh_pool.compact_blases(&amp;self.queue);
+// Before the frame's encoder, as `prepare_encoder` says; it counts
+// as the dynamic TLAS's recording.
+let preparing = Instant::now();
+self.dynamic_tlas.prepare_encoder(&amp;self.device);
+let prepare_time = recorder.stage(DYNAMIC_TLAS_RECORDING, preparing);
+let mut encoder = create_frame_encoder(&amp;self.device);
+self.static_tlas
+    .update(frame, &amp;self.mesh_pool, &amp;mut encoder);
+recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
+// Shadow rays start in the static TLAS's frame, whose Anchor the
+// first Frame data's camera set, and the dynamic TLAS shares it. Its
+// fill counts as its recording, not as the upload.
+let tlas_anchor = self.static_tlas.anchor();</code></pre>
+  <p class="code-source"><code>Renderer::upload</code>, <code>src/render/renderer.rs</code>; the dynamic TLAS's encoder and fill are <a href="dynamic-tlas.html">the dynamic TLAS</a>'s.</p>
+  <p><code>Renderer::new</code> creates it empty with <code>STATIC_TLAS_CAPACITY</code> slots. Each frame's upload first submits the loads staged since the last frame and, when they loaded Meshes, waits for their BLASes to be built and compacted (<a href="blas.html#compaction">A BLAS per Mesh, Compaction</a>); only then does <code>StaticTlas::update</code> take the frame's Instance writes and record a build into the new frame encoder, which <code>render</code> later fills with the frame's copies and passes and submits. The update also hands Frame stats the count of Instances it left out, and its Anchor goes into the camera uniform, which shadow rays start from.</p>
+</section>
+
+<section class="part prose" id="entries">
+  <div class="part-mark">2 &middot; <code>StaticTlas::update</code> &middot; <code>tlas_instance</code></div>
+  <h2>An entry per slot</h2>
+  <p class="key-idea">An Instance's slot is its entry's index and its entry's tag. A static Instance whose Mesh has a BLAS fills its slot's entry; a Moving Instance, a freed slot and a Mesh no ray traces leave it empty.</p>
+<pre class="code"><code>/// The static TLAS (ADR 0020): each static Instance in its slot's entry,
+/// tagged with its slot, in a frame whose origin is the corner of the
+/// camera's Anchor in the first Frame data it takes, never re-anchored in M3.
+/// It is built from that Frame data, empty or
+/// not, so rays can always query it, and rebuilt in a frame that changes a
+/// static Instance or frees one's slot.
+pub struct StaticTlas {
+    tlas: wgpu::Tlas,
+    anchor: Option&lt;[i32; 3]&gt;,
+    /// Slots past its capacity that hold a static Instance.
+    left_out: HashSet&lt;u32&gt;,
+}
+
+impl StaticTlas {
+    /// An empty static TLAS of `capacity` slots.
+    pub fn new(device: &amp;wgpu::Device, capacity: u32) -&gt; Self {
+        Self {
+            tlas: device.create_tlas(&amp;wgpu::CreateTlasDescriptor {
+                label: Some("Static TLAS"),
+                max_instances: capacity,
+                // Rebuilt only when its Instances change, traced every frame.
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            }),
+            anchor: None,
+            left_out: HashSet::new(),
+        }
+    }</code></pre>
+  <p class="code-source"><code>StaticTlas</code> and <code>StaticTlas::new</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+<pre class="code"><code>/// Takes `frame`'s Instance writes, each static one's BLAS from
+/// `mesh_pool`, and records its build into `encoder` for the first Frame
+/// data and when they change a static Instance or free one's slot.
+/// Returns whether it did.
+pub fn update(
+    &amp;mut self,
+    frame: &amp;FrameData,
+    mesh_pool: &amp;MeshPool,
+    encoder: &amp;mut wgpu::CommandEncoder,
+) -&gt; bool {
+    let mut changed = self.anchor.is_none();
+    let anchor = *self.anchor.get_or_insert(frame.camera.anchor);
+    let was_leaving_out = !self.left_out.is_empty();
+    for write in &amp;frame.instance_writes {
+        let instances = &amp;frame.instances[write.instances.clone()];
+        for (slot, instance) in (write.first_slot..).zip(instances) {
+            // A freed slot's Instance has no Mesh, so no BLAS.
+            let blas = (!write.moving)
+                .then(|| mesh_pool.blas(MeshHandle(instance.mesh)))
+                .flatten();
+            let Some(entry) = self.tlas.get_mut_single(slot as usize) else {
+                if blas.is_some() {
+                    self.left_out.insert(slot);
+                } else {
+                    self.left_out.remove(&amp;slot);
+                }
+                continue;
+            };
+            *entry = match blas {
+                Some(blas) =&gt; Some(tlas_instance(
+                    blas,
+                    anchored_transform(instance, anchor),
+                    slot,
+                )),
+                None if entry.is_none() =&gt; continue,
+                None =&gt; None,
+            };
+            changed = true;
+        }
+    }
+    if !was_leaving_out &amp;&amp; !self.left_out.is_empty() {
+        tracing::warn!(
+            left_out = self.left_out.len(),
+            capacity = self.tlas.get().len(),
+            "Static Instances left out of the static TLAS: their slots are past its capacity, so they cast no shadow"
+        );
+    }
+    if changed {
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;self.tlas));
+    }
+    changed
+}</code></pre>
+  <p class="code-source"><code>StaticTlas::update</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p>Prepare writes Instances in runs of consecutive slots, each run an <code>InstanceWrite</code> flagged <code>moving</code> where its Instances are <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, and splits a run where the flag changes. The update walks every written slot. A static Instance's entry gets its Mesh's BLAS; a Moving Instance gets none, so a static Instance that starts to move empties its entry the frame it does. A freed slot is written an Instance whose Mesh is <code>NO_MESH</code>, which has no BLAS, and a Mesh loaded <code>MeshUse::Drawn</code> has none either, so both empty the entry.</p>
+<pre class="code"><code>/// An Instance's entry in a TLAS: `blas`, placed by `transform`
+/// (`anchored_transform`) and tagged with its `slot`.
+fn tlas_instance(blas: &amp;wgpu::Blas, transform: [f32; 12], slot: u32) -&gt; wgpu::TlasInstance {
+    // Every ray's cull mask.
+    wgpu::TlasInstance::new(blas, transform, slot, 0xff)
+}</code></pre>
+  <p class="code-source"><code>tlas_instance</code>, <code>src/render/acceleration_structures.rs</code>, which the dynamic TLAS's entries share.</p>
+  <p>Each entry is a <code>wgpu::TlasInstance</code> of the BLAS, a transform, custom data and a mask. The custom data is the slot, which a hit returns to the shader as <code>instance_custom_data</code>, so a hit can name the Instance it struck; the shadow mask pass's rays need only whether they hit, and read it nowhere. wgpu-core rejects custom data of 2<sup>24</sup> or more at build time, and every slot under the capacity fits. The mask is <code>0xff</code>: a ray's 8-bit cull mask counts an entry only where the two share a bit, and the shadow rays pass <code>0xffu</code>, so every ray sees every entry.</p>
+</section>
+
+<section class="part prose" id="anchor">
+  <div class="part-mark">3 &middot; <code>anchored_transform</code></div>
+  <h2>A frame anchored at load</h2>
+  <p class="key-idea">An entry's transform is twelve f32, so the TLAS owns a frame of its own, as ADR 0014 requires of any subsystem that computes in f32: its origin is the corner of the camera's Anchor in the first Frame data it takes, and each entry's translation is composed from that corner in f64 and rounded to f32 once.</p>
+<pre class="code"><code>/// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
+/// its translation from `anchor`'s corner composed in f64, so only the f32
+/// result rounds (ADR 0014).
+fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
+    let [x_axis, y_axis, z_axis] = instance.rotation_scale;
+    let row = |axis: usize| {
+        let cells = i64::from(instance.anchor[axis]) - i64::from(anchor[axis]);
+        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(instance.offset[axis]);
+        [x_axis[axis], y_axis[axis], z_axis[axis], translation as f32]
+    };
+    bytemuck::cast([0, 1, 2].map(row))
+}</code></pre>
+  <p class="code-source"><code>anchored_transform</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <div class="formula">translation = (Instance Anchor &minus; TLAS Anchor) &times; 64 m + Instance offset</div>
+  <p>The difference of the two Anchors is exact in integers, and the Instance's offset from its own cell's corner is under 64 m, so the only rounding that grows with distance is the final one, to f32, of the distance from the TLAS's origin. The rows come out as the 3&times;4 matrix <code>[R | t]</code>, row-major, as wgpu takes them: each row is one axis's components of the rotation and scale columns, then that axis's translation.</p>
+  <p>The anchor is set by the first update and never moved, and <code>StaticTlas::anchor</code> returns it, zero before that update. The camera uniform carries it to the GPU as <code>tlas_anchor</code>; the shadow mask pass composes each ray's origin into this frame, and the dynamic TLAS places its entries in the same frame, so one ray is traced against both (<a href="shadow-mask.html#ray">the shadow mask pass, One ray</a>).</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>A coordinate, distance from the origin</th><th class="n">f32 step there</th><th class="n">Largest rounding</th></tr></thead>
+    <tbody>
+      <tr><td>an Instance's offset in its cell, under 64 m</td><td class="n">2<sup>&minus;18</sup> m, 3.8 &micro;m</td><td class="n">1.9 &micro;m</td></tr>
+      <tr><td>an entry 1,024 to 2,048 m from the TLAS's origin</td><td class="n">2<sup>&minus;13</sup> m, 0.122 mm</td><td class="n">0.061 mm</td></tr>
+      <tr class="focus"><td>the same point 100 km from the World origin, as one f32</td><td class="n">2<sup>&minus;7</sup> m, 7.81 mm</td><td class="n">3.91 mm</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The step of an f32 at distance d is 2<sup>&lfloor;log<sub>2</sub> d&rfloor; &minus; 23</sup> m, and rounding is off by at most half of it. ADR 0014's precision bar for a drawn point near the camera is 0.043 mm; its 100 km check renders every Reference scene that has a Golden shifted 100 km from the World origin, shadows included, and requires the Golden.</p>
+</section>
+
+<section class="part prose" id="rebuild">
+  <div class="part-mark">4 &middot; <code>changed</code></div>
+  <h2>When it rebuilds</h2>
+  <p class="key-idea">wgpu 30 cannot update a TLAS in place, so every change is a full rebuild, and the static TLAS rebuilds only in a frame that changes one of its entries: the first frame, a static Instance written, or a static Instance's entry emptied.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>In a frame that</th><th>The entry</th><th>Rebuilt</th></tr></thead>
+    <tbody>
+      <tr class="focus"><td>is the first Frame data, whatever it holds</td><td>&mdash;</td><td>yes: <code>changed</code> starts true while there is no anchor</td></tr>
+      <tr><td>writes a static Instance whose Mesh has a BLAS: spawned, moved, given another Mesh or Material, or written again unchanged, as when every Instance is rewritten after lost uploads</td><td>filled</td><td>yes</td></tr>
+      <tr><td>frees a static Instance's slot, makes it a Moving Instance, or gives it a Mesh with no BLAS</td><td>emptied</td><td>yes</td></tr>
+      <tr><td>writes a Moving Instance, or frees its slot</td><td>already empty</td><td>no</td></tr>
+      <tr><td>writes a static Instance at or past the capacity</td><td>none: counted as left out</td><td>no</td></tr>
+      <tr><td>writes no Instance, as when only the camera moves</td><td>&mdash;</td><td>no</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The first Frame data always builds it, even with no static Instance, since wgpu-core refuses a pass that uses a TLAS never built, and the shadow mask pass binds it from the first frame. Any write of a static Instance rebuilds, whether or not its data changed. The update returns whether it recorded a build.</p>
+</section>
+
+<section class="part prose" id="capacity">
+  <div class="part-mark">5 &middot; <code>STATIC_TLAS_CAPACITY</code></div>
+  <h2>Capacity and what it leaves out</h2>
+  <p class="key-idea">The capacity is fixed at creation and every rebuild walks all of it, filled or not, so it is sized to the largest planned scene and no larger. Since entries are indexed by slot, it caps slot numbers: a static Instance in a slot past it casts no shadow, and is counted and warned about.</p>
+<pre class="code"><code>/// Slots the static TLAS covers: a static Instance in a higher slot is left
+/// out, so it casts no shadow, and is counted and warned about. Sized for
+/// the 250k Instances M3 plans `town` with, no larger: in wgpu a TLAS
+/// rebuild's CPU time grows with its capacity, filled or not.
+/// Provisional until ADR 0013's split of the 8 GB Budget sizes it.
+pub const STATIC_TLAS_CAPACITY: u32 = 1 &lt;&lt; 18;</code></pre>
+  <p class="code-source"><code>STATIC_TLAS_CAPACITY</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p>In wgpu 30 a TLAS holds one optional entry per slot of its capacity from its creation, and recording a build maps every one of them, filled or not, into what wgpu-core builds from; wgpu-core sizes the structure and its buffer of entries by capacity too. So 2<sup>18</sup> = 262,144 slots, sized for the 250,000 Instances <code>town</code> was planned with: its 254,256 Instances, as <code>tests/frame_stats.rs</code> counts them, its 10,000 Moving ones among them, all take slots below the capacity, with 7,888 to spare. Prepare takes a slot freed in an earlier frame before a fresh one, so slot numbers grow only when none is waiting.</p>
+  <p>A static Instance written to a slot past the capacity joins the left-out set, and a write with no BLAS to such a slot leaves it; Frame stats read the set's size as <code>static_instances_left_out</code>, shown on the counts line. The frame whose update takes the set from empty to holding one warns once, "Static Instances left out of the static TLAS: their slots are past its capacity, so they cast no shadow", with the count and the capacity; the next warning waits until the set has emptied and filled again.</p>
+</section>
+
+<section class="part prose" id="rays">
+  <div class="part-mark">6 &middot; <code>SHADOW_RAY_SCENE</code> &middot; <code>first_intersection</code></div>
+  <h2>What the rays read</h2>
+  <p class="key-idea">The shadow mask pass binds the static TLAS once, since a rebuild writes it in place, and queries it first for every ray, before the dynamic TLAS.</p>
+<pre class="code"><code>/// Group 2 of the shadow mask pass, built once since its TLAS are rebuilt in
+/// place: the static and dynamic TLAS it traces shadow rays against (ADR
+/// 0020). No other pass binds them, but the dynamic TLAS's markers bind the
+/// dynamic one: at submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one
+/// BLAS per Instance it holds, for each flush of a group holding it, at
+/// least once per pass that binds one
+/// [ref:wgpu-30-tlas-dependency-per-instance] [ref:wgpu-30-use-tlas-per-flush]
+/// [ref:wgpu-30-submit-tlas-dependencies].
+pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
+    index: 2,
+    label: "Shadow Ray Scene Bind Group",
+    bindings: &amp;[
+        acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
+        acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
+    ],
+};</code></pre>
+  <p class="code-source"><code>SHADOW_RAY_SCENE</code>, <code>src/render/bind_groups.rs</code>.</p>
+<pre class="code"><code>let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
+let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
+    device,
+    &amp;shadow_ray_scene_layout,
+    [
+        ("static_tlas", static_tlas.binding()),
+        ("dynamic_tlas", dynamic_tlas.binding()),
+    ],
+);</code></pre>
+  <p class="code-source"><code>ShadowMaskPass::new</code>, <code>src/render/shadow_mask_pass.rs</code>: the group, built once from <code>StaticTlas::binding</code>.</p>
+<pre class="code"><code>fn first_intersection(flags: u32, origin: vec3&lt;f32&gt;, direction: vec3&lt;f32&gt;, start_distance: f32, end_distance: f32) -&gt; RayIntersection {
+    // Opaque, so one rayQueryProceed completes a traversal.
+    var query: ray_query;
+    rayQueryInitialize(&amp;query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, end_distance, origin, direction));
+    rayQueryProceed(&amp;query);
+    let static_hit = rayQueryGetCommittedIntersection(&amp;query);</code></pre>
+  <p class="code-source">The head of <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>; the dynamic query after it is <a href="shadow-mask.html#ray">the shadow mask pass</a>'s.</p>
+  <p>Every BLAS's triangles are opaque and the ray forces opacity, so one <code>rayQueryProceed</code> completes the traversal and the committed intersection is the static TLAS's answer. A static hit settles a ray that asks for any hit; otherwise the dynamic TLAS is queried only up to the static hit. Where rays start, how far they go and what a hit means is <a href="shadow-mask.html#ray">the shadow mask pass</a>'s.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">Ray queries against the static TLAS itself pin its entries, tags, transforms 100 km out and rebuild rule; a capacity of 2 pins what it leaves out; an eight-device stress test pins the wait that keeps its build from reading an unfinished BLAS; Renderer tests and Goldens see its shadows.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>the_static_tlas_holds_each_static_instance_in_its_slot_from_the_load_anchor</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>the first Frame data builds it with only a Moving Instance, and the same frame again does not; with the anchor at cell [1562, 0, &minus;3], 99,968 m out, a turned and doubled static Instance and an unturned one take entries 0 and 2, tagged 0 and 2, with the rows expected, and rays hit them where they lie and not where a transposed rotation would put them, nor the Moving Instance; a frame that writes only the Moving Instance after the camera moves does not rebuild and keeps the anchor; a static spawn and a free each rebuild; freeing the Moving Instance's slot does not</td></tr>
+      <tr><td><code>static_instances_past_its_capacity_are_left_out_counted_and_warned_about_once</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>at a capacity of 2, static Instances in slots 0 to 3 leave 2 out, freeing slot 3 leaves 1, rewriting slot 2 leaves 1, two entries are held, and one warning is logged</td></tr>
+      <tr class="focus"><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>the regression test for the load path: eight threads, each with its own device, load a triangle, compact it and build a TLAS of it 25 times, and every ray hits, so a TLAS built after <code>compact_blases</code> returns reads the finished copy</td></tr>
+      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>src/render/renderer.rs</code></td><td>a static square shadows the floor's middle through the static TLAS, and shadows alike as a Moving Instance through the dynamic one</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td><code>estimated_acceleration_structure_bytes</code> counts the static TLAS at its 2<sup>18</sup> slots by the adapter's bytes per entry</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s frame, at the origin and shifted 100 km from it, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, its static shadows included</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; the GPU tests return early, saying so, where no adapter is found.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">8 &middot; <code>bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The static TLAS's cost is memory, counted at full capacity whatever it holds: 9.9% to 11.4% of each scene's GPU memory on the Apple M4 Pro, 7.2% to 8.1% on the RTX 2070 SUPER. Its CPU cost is a rebuild's, paid in the first frame and in frames that change a static Instance.</p>
+  <p>Each scene's <code>gpu_memory_bytes</code> from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, at 2560&times;1440 with 4x MSAA, beside the static TLAS's estimate, 2<sup>18</sup> slots at the adapter's bytes per entry: the M4 Pro's 288.5 and NVIDIA's 238.2, wgpu-core's buffer of entries included. CI's lavapipe Baselines, at 640&times;360, are left out; lavapipe's figure is 240 bytes per entry.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>gpu_memory_bytes</code></th><th class="n">Static TLAS</th><th class="n">Share</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,385,447</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,625,381</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,625,381</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">683,925,801</td><td class="n">75,628,544</td><td class="n">11.1%</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">787,821,023</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">787,821,023</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,389,964</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,629,931</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,629,931</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">683,213,657</td><td class="n">75,628,544</td><td class="n">11.1%</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">787,362,898</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">787,362,898</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">668,878,951</td><td class="n">75,628,544</td><td class="n">11.3%</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">773,154,875</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">773,154,875</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,547,207</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,823,131</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,823,131</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,286,519</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,562,443</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,562,443</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">668,982,396</td><td class="n">75,628,544</td><td class="n">11.3%</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">773,222,363</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">773,222,363</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,812,599</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">768,088,523</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">768,088,523</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">664,077,523</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">768,350,709</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">768,350,709</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">764,009,624</td><td class="n">75,628,544</td><td class="n">9.9%</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">868,263,022</td><td class="n">62,442,701</td><td class="n">7.2%</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">868,263,022</td><td class="n">62,442,701</td><td class="n">7.2%</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, and <code>AccelerationStructureBytes</code>, at the commit above, by a script. Both NVIDIA rows use NVIDIA's figures, which the estimate picks by vendor on any backend.</p>
+  <p>No Baseline times a rebuild. A rebuild records in the <code>upload</code> stage of its frame, which Baselines fold into the CPU frame without a field of its own, and the first frame's build, which every scene makes, comes before the 248 warm-up frames a bench skips. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">9 &middot; ADRs 0013, 0014, 0016, 0020</div>
+  <h2>Why this way</h2>
+  <p><b>Two TLAS, split by motion.</b> ADR 0020 splits the near field into a static TLAS, rebuilt only when its static Instances change, and a dynamic TLAS of Moving Instances, rebuilt each frame and capped at 10,000 Instances. One TLAS over everything would rebuild over every static Instance whenever anything moved, since wgpu-core 30.0.1 has no TLAS update, only rebuilds.</p>
+  <p><b>Indexed by slot.</b> An Instance keeps its slot while it is one, so an entry needs no index of its own and a write names the entry it changes. The frame's shaders do not read it; a test's query reads it back to name the Instance a ray hit.</p>
+  <p><b>Anchored at load, never re-anchored.</b> ADR 0014 forbids f32 World positions on the GPU and names ray-tracing acceleration structures among the subsystems that convert into a local frame they own; ADR 0020 anchors this one at scene load and never re-anchors it until Chunk streaming decides re-anchoring together with the TLAS's radius. Measured from that corner, a scene's entries round to f32 as near ones do, so the 100 km check holds for shadows.</p>
+  <p><b>A capacity sized to the plan.</b> Every rebuild walks the full capacity, filled or not, so a larger one costs every static spawn in every scene; 2<sup>18</sup> holds <code>town</code>, provisional until ADR 0013's split of the 8 GB Budget sizes it.</p>
+  <p><b>A CPU wait before the build, at load.</b> Nothing on the GPU orders the build after the compaction copies of the BLASes it reads, so <code>compact_blases</code> waits for them on the main thread, which alone submits and polls under ADR 0016. A wait once, at load, costs one frame; the per-frame refit, which could not pay that every frame, orders its writes on the GPU instead (<a href="blas-refit.html">the BLAS refit</a>).</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">10</div>
+  <h2>Limits</h2>
+  <p><b>A CPU wait in each frame that loads Meshes.</b> Before its update, the upload waits on the main thread for the GPU to build and then to compact the frame's new BLASes, since wgpu-core 30.0.1 records no barrier after a compaction copy on any backend and wgpu-hal 30.0.1 records none on Metal. A Mesh whose BLAS lost that race would cast no shadow until the next rebuild, which, where nothing static changes, never comes. Today every Mesh loads before the first frame, so the first frame alone waits; Meshes streamed during play would make every load frame wait, until a wgpu release orders the copy on every backend, a version change that is the owner's call.</p>
+  <p><b>A rebuild walks every slot.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> slots, on the CPU in the frame that does it.</p>
+  <p><b>Slots past the capacity.</b> A static Instance there casts no shadow, even when fewer than 2<sup>18</sup> Instances are static, since Moving Instances and freed slots hold slot numbers too.</p>
+  <p><b>Memory at full capacity.</b> The estimate, and wgpu-core's allocation, are for every slot, so the smallest scene pays what <code>town</code> does.</p>
+  <p><b>One frame, fixed at load.</b> The origin never moves, so an entry far from where the camera stood at load rounds to f32 more coarsely: from 2,048 m out its step is 0.244 mm.</p>
+  <p><b>A pinned wgpu.</b> No update in place and no barrier after compaction are wgpu 30.0.1's; each holds while the pin does.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the mechanism rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code and its ADR cite.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L336-L341">wgpu-core 30.0.1, TLAS descriptors in <code>build_acceleration_structures</code></a></dt><dd>a TLAS update is always passed down as a build: no refit; <code>wgpu-30-tlas-rebuild-only</code>, which ADR 0020 cites</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L269-L271">wgpu-core 30.0.1, the TLAS build's dependencies</a>, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174">each flush of a group that holds a TLAS</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577">their walk at submit</a></dt><dd>what binding the TLAS in a pass costs at submit, one BLAS per entry it holds; <code>wgpu-30-tlas-dependency-per-instance</code>, <code>wgpu-30-use-tlas-per-flush</code>, <code>wgpu-30-submit-tlas-dependencies</code>, which <code>SHADOW_RAY_SCENE</code> cites</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs">wgpu 30.0.1, <code>Tlas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs">its creation</a></dt><dd>one optional entry per slot of capacity from creation, each mapped when a build is recorded</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>why the build must not run before the compaction copies on Metal; <code>wgpu-issue-9215</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The static TLAS arrived on 2026-10-20, together with the BLAS per Mesh, anchored at load and rebuilt only when a static Instance changes; its first build in every scene, empty or not, came when the orrery, whose bodies all move, showed it could stay unbuilt. Shadow rays then came to read it, and the dynamic TLAS took the Moving Instances beside it. On 2026-10-23 a test that sometimes missed a triangle showed the build could read a BLAS whose compaction had not finished, and the upload has waited for the copies since. The notebook's volumes tell that development with its measurements: <a href="gpu-ordering.html">GPU Ordering Explained</a>, <a href="shadow-rays.html">Shadow Rays Explained</a> and <a href="town.html">Town Explained</a>, whose Instances the capacity was sized for. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/shadow_mask_pass.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0014, 0016 and 0020, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="blas.html">Previous: The BLAS</a><a href="index.html">All field guides</a><a href="gpu-ordering.html">Next: GPU Ordering Explained</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

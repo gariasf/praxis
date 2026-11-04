@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>A BLAS per Mesh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/assets/pools.rs</code></div>
+  <h1>A BLAS per Mesh</h1>
+  <p class="definition">Each <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span> that rays trace gets a <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, which a TLAS's entries place in the world. A ray that enters an entry walks its BLAS down to the triangles it meets.">BLAS</span> when it loads, built on the GPU from where the Mesh already lies in the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>, then compacted into a tighter copy, which the CPU waits for before any <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> is built from it; a Mesh loaded to be refitted keeps its BLAS uncompacted, and one only drawn gets none.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the Mesh pool's BLASes rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="gpu-ordering.html">GPU Ordering Explained</a> for why a GPU read of what other GPU work writes needs something to order the two. <a href="static-tlas.html">The static TLAS</a> and <a href="dynamic-tlas.html">the dynamic TLAS</a> place these BLASes; <a href="blas-refit.html">the BLAS refit</a> updates the refitted ones.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>The build at load, in <code>MeshPool::load_for</code>, for a Mesh whose <code>MeshUse</code> has rays trace it. The compaction in the next frame's <code>Renderer::upload</code>, through <code>MeshPool::compact_blases</code>, before the static TLAS takes the BLASes. Every Mesh loads in <code>State::new</code>, before the first frame, so only the first frame compacts.</dd>
+      <dt>Reads</dt><dd>The Mesh's range of the vertex Arena, of which the build sees each vertex's position alone, and its range of the index Arena, which holds a Mesh's cooked index stream only where rays trace it.</dd>
+      <dt>Writes</dt><dd>One <code>wgpu::Blas</code> per traced Mesh, kept at its Handle's index in the Mesh pool and returned by <code>MeshPool::blas</code>; for a refitted Mesh, also a <code>MeshBlas</code>, the BLAS with the build's sizes and ranges, which each refit repeats.</dd>
+      <dt>Builds</dt><dd>One <code>build_acceleration_structures</code> call per traced Mesh, recorded into the load encoder after the copies that fill its Arena ranges; one compaction copy per compacted BLAS, which wgpu queues in its pending writes.</dd>
+      <dt>Bind groups</dt><dd>None: no pass binds a BLAS. A TLAS entry names one, and a ray reaches it through the TLAS.</dd>
+      <dt>Shader</dt><dd>None.</dd>
+      <dt>Counted</dt><dd>In <code>estimated_acceleration_structure_bytes</code>, and so in <code>gpu_memory_bytes</code>: each BLAS's triangles at the adapter's bytes per triangle, compacted or as built. The compaction's two CPU waits count in the <code>upload</code> stage of the frame that runs them. No GPU pass time is taken of the builds or the copies.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#use">1 &middot; What a Mesh is loaded for</a>
+    <a href="#build">2 &middot; The build, from the Arenas</a>
+    <a href="#flags">3 &middot; Flags and opaque triangles</a>
+    <a href="#compaction">4 &middot; Compaction and its two waits</a>
+    <a href="#bytes">5 &middot; Counting bytes</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="use">
+  <div class="part-mark">1 &middot; <code>MeshUse</code></div>
+  <h2>What a Mesh is loaded for</h2>
+  <p class="key-idea">A Mesh is loaded for a use: drawn, traced, both, or drawn and traced through a BLAS the GPU updates each frame. Only a traced Mesh gets a BLAS and the index stream it is built from; only a drawn one gets Meshlets.</p>
+<pre class="code"><code>/// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
+/// trace it through its BLAS, or both.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MeshUse {
+    DrawnAndTraced,
+    /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
+    /// shape, would cast another shape's shadow.
+    Drawn,
+    /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
+    /// Meshlets and needs no Material.
+    Traced,
+    /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
+    /// frame from its bent shape: built to allow updates, never compacted.
+    Refitted,
+}
+
+impl MeshUse {
+    /// Whether the main pass draws it, so it needs Meshlets.
+    fn drawn(self) -&gt; bool {
+        self != MeshUse::Traced
+    }
+
+    /// Whether rays trace it, so it needs a BLAS and the index stream the
+    /// BLAS is built from.
+    fn traced(self) -&gt; bool {
+        self != MeshUse::Drawn
+    }
+}
+
+/// The flags a refitted Mesh's BLAS is built with, which its refits repeat.
+pub const REFITTED_BLAS_FLAGS: wgpu::AccelerationStructureFlags =
+    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+        .union(wgpu::AccelerationStructureFlags::ALLOW_UPDATE);</code></pre>
+  <p class="code-source"><code>MeshUse</code> and <code>REFITTED_BLAS_FLAGS</code>, <code>src/assets/pools.rs</code>.</p>
+  <p>A BLAS is built from the vertices a Mesh holds when it loads. A Mesh the GPU <span class="concept" data-term="Bend" data-tip="The GPU's stand-in for skinning until M7: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">bends</span> changes shape every frame, so a BLAS of its rest shape would cast a shadow of a shape it no longer has. Such a Mesh is either drawn alone, with its shadow cast by <span class="concept" data-term="Shadow proxy" data-tip="A Mesh that rays trace and no pass draws, standing in for part of a Renderable whose own BLAS would not hold the shape it is drawn in, such as a bent figure's bone.">shadow proxies</span>, or loaded as refitted, its BLAS brought to the bent shape each frame. <code>MeshPool::load</code> keeps the default, <code>MeshUse::DrawnAndTraced</code>; the asset loader names the rest.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th><code>MeshUse</code></th><th>Loaded by</th><th>Meshlets</th><th>Index stream</th><th>BLAS flags</th><th>Compacted</th></tr></thead>
+    <tbody>
+      <tr><td><code>DrawnAndTraced</code></td><td><code>AssetLoader::mesh</code>: every Reference scene's Meshes but the crowd's figures and proxy</td><td>yes</td><td>yes</td><td><code>PREFER_FAST_TRACE | ALLOW_COMPACTION</code></td><td>yes</td></tr>
+      <tr><td><code>Drawn</code></td><td><code>AssetLoader::bent_mesh</code>: the crowd's rest Mesh, and each figure's Mesh in the default form, <code>CrowdForm::Proxies</code></td><td>yes</td><td>no</td><td>no BLAS</td><td>&mdash;</td></tr>
+      <tr><td><code>Traced</code></td><td><code>AssetLoader::shadow_proxy</code>: the crowd's proxy, with no Material</td><td>no</td><td>yes</td><td><code>PREFER_FAST_TRACE | ALLOW_COMPACTION</code></td><td>yes</td></tr>
+      <tr><td><code>Refitted</code></td><td><code>AssetLoader::refitted_mesh</code>: each figure's Mesh in <code>CrowdForm::Refit</code> and <code>CrowdForm::Rebuild</code></td><td>yes</td><td>yes</td><td><code>REFITTED_BLAS_FLAGS</code>: <code>PREFER_FAST_TRACE | ALLOW_UPDATE</code></td><td>never</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code> and <code>spawn_crowd_as</code> in <code>src/scenes/mod.rs</code> at the commit above. The crowd's form is the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span>; <a href="blas-refit.html">the BLAS refit</a> and <a href="bend-pass.html">the bend pass</a> cover the two refitted forms and the bend.</p>
+  <p>A Mesh loaded drawn alone still takes its vertices and Meshlets, which the main pass draws, but no range of the index Arena and no BLAS: its slot in the pool's BLAS list holds none, so <code>MeshPool::blas</code> returns None and neither TLAS gives its Instances an entry. A Mesh loaded traced alone takes no Meshlet ranges, so the culling pass finds nothing of it to draw.</p>
+</section>
+
+<section class="part prose" id="build">
+  <div class="part-mark">2 &middot; <code>MeshPool::load_for</code> &middot; <code>LoadStaging::build_blas</code></div>
+  <h2>The build, from the Arenas</h2>
+  <p class="key-idea">The BLAS is built from the Mesh where it already lies: its positions in the vertex Arena, its indices in the index Arena, read in place by the GPU after the copies that put them there, with no transform and no second copy of the geometry.</p>
+  <p>Once the Mesh has its Arena ranges and its writes are staged, <code>load_for</code> creates the BLAS, describes its one geometry, and records its build. A Mesh no ray traces returns before any of it.</p>
+<pre class="code"><code>if !mesh_use.traced() {
+    self.blases.push(None);
+    return Some(handle);
+}
+let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
+    vertex_format: wgpu::VertexFormat::Float32x3,
+    vertex_count: mesh.vertices.len() as u32,
+    index_format: Some(wgpu::IndexFormat::Uint32),
+    index_count: Some(mesh.indices.len() as u32),
+    flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+};
+let refitted = mesh_use == MeshUse::Refitted;
+let blas = self.device.create_blas(
+    &amp;wgpu::CreateBlasDescriptor {
+        label: Some("Mesh BLAS"),
+        flags: if refitted {
+            REFITTED_BLAS_FLAGS
+        } else {
+            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+        },
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+    },
+    wgpu::BlasGeometrySizeDescriptors::Triangles {
+        descriptors: vec![geometry.clone()],
+    },
+);
+let mesh_blas = MeshBlas {
+    blas,
+    geometry,
+    first_vertex: vertices.offset,
+    first_index: indices.offset,
+};
+staging.build_blas(&amp;self.blas_build_entry(&amp;mesh_blas));
+
+let blas_triangles = mesh.indices.len() as u64 / 3;
+self.blases.push(Some(mesh_blas.blas.clone()));
+if refitted {
+    self.refitted_blases.push(mesh_blas);
+} else {
+    self.awaiting_compaction.push((handle, blas_triangles));
+}
+self.uncompacted_blas_triangles += blas_triangles;
+Some(handle)</code></pre>
+  <p class="code-source">The end of <code>MeshPool::load_for</code>, <code>src/assets/pools.rs</code>.</p>
+<pre class="code"><code>/// The build of `blas` from its ranges of the vertex and index Arenas:
+/// the position leads each vertex, and the cooked indices count from the
+/// Mesh's first vertex.
+fn blas_build_entry&lt;'a&gt;(&amp;'a self, blas: &amp;'a MeshBlas) -&gt; wgpu::BlasBuildEntry&lt;'a&gt; {
+    wgpu::BlasBuildEntry {
+        blas: &amp;blas.blas,
+        geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
+            size: &amp;blas.geometry,
+            vertex_buffer: &amp;self.vertex_arena.buffer,
+            first_vertex: blas.first_vertex,
+            vertex_stride: size_of::&lt;CookedVertex&gt;() as u64,
+            index_buffer: Some(self.index_arena()),
+            first_index: Some(blas.first_index),
+            transform_buffer: None,
+            transform_buffer_offset: None,
+        }]),
+    }
+}</code></pre>
+  <p class="code-source"><code>MeshPool::blas_build_entry</code>, <code>src/assets/pools.rs</code>, which <code>rebuild_refitted_blases</code> also builds from.</p>
+  <p>A cooked vertex is 28 bytes, a position of three f32, a uv of two f32 and a QTangent of four i16, as <code>CookedVertex</code> asserts. The build reads <code>Float32x3</code> at a 28-byte stride, so it sees each vertex's leading 12 bytes, the position, and nothing else. <code>first_vertex</code> is the Mesh's offset into the vertex Arena in vertices, which wgpu-core multiplies by the stride; <code>first_index</code> skips the indices before the Mesh's range. The cooked indices count from the Mesh's own first vertex, so with that offset they land on the Mesh's positions.</p>
+<pre class="code"><code>/// Records `entry`'s BLAS build after the copies recorded so far, so it
+/// reads what they write.
+pub fn build_blas(&amp;mut self, entry: &amp;wgpu::BlasBuildEntry&lt;'_&gt;) {
+    let (_, encoder) = self.pending();
+    encoder.build_acceleration_structures(std::iter::once(entry), std::iter::empty());
+}</code></pre>
+  <p class="code-source"><code>LoadStaging::build_blas</code>, <code>src/render/staging.rs</code>.</p>
+  <p><code>LoadStaging</code> holds one encoder for everything a load writes: each Arena write goes through its <code>StagingBelt</code> into a copy on that encoder, and each BLAS build is recorded on the same encoder after them. <code>LoadStaging::submit</code> sends the encoder ahead of the next frame's. The builds need two buffer usages: the vertex Arena is created <code>STORAGE | BLAS_INPUT</code>, since the vertex shader pulls from it and builds read it, and the index Arena <code>BLAS_INPUT</code> alone, since no pass draws from it; <code>Arena::new</code> adds <code>COPY_DST</code> to both, for the copies that fill them.</p>
+  <p>For the memory estimate the BLAS counts its triangles from the Mesh's index stream, a third of its length; Meshlets play no part in it. They count as uncompacted until compaction moves them.</p>
+</section>
+
+<section class="part prose" id="flags">
+  <div class="part-mark">3 &middot; <code>AccelerationStructureFlags</code> &middot; <code>OPAQUE</code></div>
+  <h2>Flags and opaque triangles</h2>
+  <p class="key-idea">A BLAS built once and traced every frame asks the driver to spend build time on fast tracing, and allows compaction; one refitted every frame allows updates instead. Every triangle is opaque, so a hit counts the moment traversal finds it.</p>
+  <p><code>PREFER_FAST_TRACE</code> suits geometry that is built once and traced at every lit pixel of every frame. <code>ALLOW_COMPACTION</code> is what lets the copy in the next section run: wgpu-core refuses to compact a BLAS created without it. A refitted Mesh's BLAS is created with <code>REFITTED_BLAS_FLAGS</code>, <code>PREFER_FAST_TRACE</code> with <code>ALLOW_UPDATE</code> in place of compaction, and each refit repeats those flags; wgpu documents a compacted BLAS as one that "may not be rebuilt or compacted", so a BLAS the frame rewrites cannot be one.</p>
+  <p>The geometry is flagged <code>AccelerationStructureGeometryFlags::OPAQUE</code>: no triangle has an alpha test. wgpu-types 30.0.1's doc for the flag recommends it, saying that BLASes without it will not have hits, since naga has no candidate intersections. The shadow mask pass's queries also pass <code>RAY_FLAG_FORCE_OPAQUE</code>, so one <code>rayQueryProceed</code> completes a traversal (<a href="shadow-mask.html#ray">the shadow mask pass, One ray</a>).</p>
+</section>
+
+<section class="part prose" id="compaction">
+  <div class="part-mark">4 &middot; <code>MeshPool::compact_blases</code></div>
+  <h2>Compaction and its two waits</h2>
+  <p class="key-idea">A BLAS's compacted size is known only once it is built, so compaction waits on the CPU for the builds, records a copy of each into a tighter allocation, and waits again for the copies: nothing on the GPU orders a TLAS build after them.</p>
+<pre class="code"><code>/// Compacts the BLASes of the Meshes loaded since the last call, once
+/// the staging their builds were recorded into is submitted: it waits
+/// for the GPU to build them, then to compact them. Nothing else orders
+/// a TLAS build after the copies: wgpu-core 30.0.1 records no barrier
+/// after `compact_blas`'s copy on any backend, and Metal has no
+/// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
+/// its compacted BLAS, or the one built where compaction failed, as
+/// logged.
+pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
+    if self.awaiting_compaction.is_empty() {
+        return;
+    }
+    for &amp;(handle, _) in &amp;self.awaiting_compaction {
+        if let Some(blas) = &amp;self.blases[handle.0 as usize] {
+            blas.prepare_compaction_async(|_| {});
+        }
+    }
+    if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for BLAS builds failed");
+    }
+    for (handle, triangles) in self.awaiting_compaction.drain(..) {
+        let Some(blas) = &amp;mut self.blases[handle.0 as usize] else {
+            continue;
+        };
+        if !blas.ready_for_compaction() {
+            tracing::warn!(
+                mesh = handle.0,
+                "BLAS not compacted: not ready after its build"
+            );
+            continue;
+        }
+        *blas = queue.compact_blas(blas);
+        self.uncompacted_blas_triangles -= triangles;
+        self.compacted_blas_triangles += triangles;
+    }
+    // The copies wait in the queue's pending writes until a submit.
+    queue.submit(std::iter::empty());
+    if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for BLAS compaction failed");
+    }
+}</code></pre>
+  <p class="code-source"><code>MeshPool::compact_blases</code>, <code>src/assets/pools.rs</code>.</p>
+  <ol class="keypoints">
+    <li><b>Ask for each compacted size.</b> <code>prepare_compaction_async</code> on each BLAS loaded since the last call; wgpu answers once the GPU has built it.</li>
+    <li><b>Wait for the builds.</b> <code>device.poll(PollType::wait_indefinitely())</code> blocks the calling thread, the main thread, until the GPU has finished every submission, the load encoder with its builds among them, and so has answered.</li>
+    <li><b>Replace each ready BLAS with its copy.</b> <code>queue.compact_blas</code> returns the compacted BLAS at once and records the copy into the queue's pending writes; the Mesh's triangles move from the uncompacted count to the compacted one. A BLAS that is not ready keeps its built form, counted as built, and a warning names its Mesh.</li>
+    <li><b>Send the copies.</b> Pending writes reach the GPU only with a submission, and a poll waits only for what was submitted, so an empty <code>queue.submit</code> sends them as a submission of their own.</li>
+    <li><b>Wait for the copies.</b> A second poll blocks until the GPU has written every compacted BLAS.</li>
+  </ol>
+  <p>The second wait is there because nothing else orders the copies before the TLAS builds that read them. wgpu-core 30.0.1 records no barrier after <code>compact_blas</code>'s copy on any backend, and wgpu-hal 30.0.1's Metal backend records no barrier at all; and a GPU queue orders when its work starts, not when it finishes. Without the wait a TLAS built in the next submission could read a BLAS whose copy had not finished, and the Mesh would cast no shadow until that TLAS was next rebuilt. <a href="gpu-ordering.html">GPU Ordering Explained</a> follows the race to its cause.</p>
+<pre class="code"><code>// Loads staged since the last frame land before its copies and
+// draws, and their BLASes are compacted before the static TLAS
+// takes them.
+self.load_staging.submit(&amp;self.queue);
+self.mesh_pool.compact_blases(&amp;self.queue);</code></pre>
+  <p class="code-source">The start of <code>Renderer::upload</code>, <code>src/render/renderer.rs</code>.</p>
+  <p>The waits run where the BLASes are first needed: at the head of the upload of the first frame after the loads, which submits the load encoder and compacts before the static TLAS's update records its build into the frame's encoder. Since every Mesh loads in <code>State::new</code>, that is the first frame, and every later frame finds nothing awaiting compaction and returns at once. Both waits block the main thread, which records and submits the frame, for the whole of the load's GPU work, the Textures' copies included, since a poll waits for every submission. Refitted BLASes take no part: they are never compacted, and how a frame orders their updates before the dynamic TLAS's build is <a href="blas-refit.html">the BLAS refit</a>'s. <a href="static-tlas.html#limits">The static TLAS's Limits</a> count the wait among its own.</p>
+</section>
+
+<section class="part prose" id="bytes">
+  <div class="part-mark">5 &middot; <code>AccelerationStructureBytes</code></div>
+  <h2>Counting bytes</h2>
+  <p class="key-idea">wgpu 30 reports no acceleration structure's size, so the engine counts BLASes by an estimate: triangles times bytes per triangle measured once on each kind of adapter, compacted or as built, labelled as an estimate in Frame stats and added into GPU memory.</p>
+<pre class="code"><code>/// What acceleration structures take in GPU memory, as measured on one
+/// adapter: estimates, since wgpu exposes no acceleration-structure size,
+/// until M4 sets exact ones.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AccelerationStructureBytes {
+    pub per_blas_triangle: f64,
+    pub per_compacted_blas_triangle: f64,
+    /// Per Instance a TLAS can hold, wgpu-core's buffer of them included.
+    pub per_tlas_instance: f64,
+}</code></pre>
+<pre class="code"><code>/// The estimate for `adapter`: NVIDIA's on an NVIDIA GPU, on any
+/// backend; lavapipe's on any other Vulkan adapter, software or not;
+/// and the M4 Pro's on any other, as the Budgets' reference machine
+/// (ADR 0013).
+pub fn estimate(adapter: &amp;wgpu::AdapterInfo) -&gt; Self {
+    if adapter.vendor == NVIDIA_VENDOR {
+        Self::NVIDIA
+    } else if adapter.backend == wgpu::Backend::Vulkan {
+        Self::LAVAPIPE
+    } else {
+        Self::M4_PRO
+    }
+}
+
+/// Bytes of BLASes of `compacted_triangles` compacted and
+/// `uncompacted_triangles` not.
+pub fn blases(&amp;self, compacted_triangles: u64, uncompacted_triangles: u64) -&gt; u64 {
+    (compacted_triangles as f64 * self.per_compacted_blas_triangle
+        + uncompacted_triangles as f64 * self.per_blas_triangle)
+        .round() as u64
+}</code></pre>
+  <p class="code-source"><code>AccelerationStructureBytes</code>, its <code>estimate</code> and its <code>blases</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p>The Renderer picks its estimate once, from the adapter, when it is created. An NVIDIA GPU, on Vulkan or DX12, gets figures measured on an RTX 2070 SUPER; any other Vulkan adapter gets lavapipe's; every other adapter, as on Metal, gets the Apple M4 Pro's, the reference machine of ADR 0013. The vendor test reads the PCI vendor ID, which Vulkan and DXGI both report. How each set was measured is in its doc comment: Metal's <code>currentAllocatedSize</code> around creating 2.1 million triangles of BLAS for the M4 Pro, recorded in <code>docs/research/global-illumination-and-lighting.md</code>; wgpu's allocator report around building and compacting BLASes of 2,048 to 131,072 triangles for lavapipe and the RTX 2070 SUPER, recorded for the latter in <code>docs/performance.md</code>. lavapipe's compaction leaves a BLAS as large as it was.</p>
+  <p><code>MeshPool::estimated_blas_bytes</code> applies the estimate to the pool's two triangle counts, and <code>Renderer::estimated_acceleration_structure_bytes</code> adds the static and dynamic TLAS at their capacities. <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself.">Frame stats</span> carry the sum as <code>estimated_acceleration_structure_bytes</code>, a name that says what it is, and add it into <code>gpu_memory_bytes</code>. For scale, <code>pbr-sweep</code>'s sphere, one Mesh of 2,208 triangles shared by every sphere, counts 100,464 bytes compacted on the M4 Pro, 64,474 on an NVIDIA GPU and 229,632 on lavapipe.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">A ray query through a one-entry TLAS proves each compacted BLAS holds its Mesh from its own Arena ranges; an eight-device stress test pins the compaction wait; Frame stats pin the estimate per adapter; the crowd's tests and Goldens cover the other uses.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted</code></td><td><code>src/assets/pools.rs</code></td><td>a triangle loaded after a degenerate one, so its ranges start past the Arenas' first elements, is hit by a ray down through it and missed by two beside it, through a TLAS of its compacted BLAS alone, tagged 7; its estimate moves from the built to the compacted figure</td></tr>
+      <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>eight threads, each with its own device and a pool of 4 KiB Arenas, load and trace a triangle 25 times each, and every trace hits: a TLAS built once <code>compact_blases</code> returns reads the finished copy while other work loads the GPU</td></tr>
+      <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a Mesh one vertex past the vertex Arena, or one index past the index Arena, is refused and logged, and leaves the pool's memory and ranges as they were</td></tr>
+      <tr><td><code>the_estimate_follows_the_adapter</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>an NVIDIA GPU on Vulkan and on DX12 gets NVIDIA's figures, lavapipe under Mesa's vendor ID gets lavapipe's, an Apple GPU on Metal the M4 Pro's</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td><code>estimated_acceleration_structure_bytes</code> equals the sphere's 2,208 triangles compacted plus both TLAS at capacity, by the adapter's figures, each rounded to a whole byte</td></tr>
+      <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>on Metal, the crowd's figures loaded as <code>MeshUse::Refitted</code> cast through their refitted BLASes the shadows their rebuilt ones cast; off Metal, the refit form is refused</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, in its default form, is drawn from Meshes loaded <code>Drawn</code> and shadowed by a Mesh loaded <code>Traced</code>; every other Reference scene's shadows come from compacted BLASes</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; the GPU tests return early, saying so, where no adapter is found.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>AccelerationStructureBytes</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">A BLAS costs GPU memory in proportion to its triangles, and compaction takes it to under half of its built size on the M4 Pro and on NVIDIA. Its other cost, the CPU waiting for the builds and copies, falls in a load frame, which no Baseline measures.</p>
+  <p>The figures the engine counts by, per triangle, from <code>src/render/acceleration_structures.rs</code>:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Figures</th><th>Chosen for</th><th class="n">Bytes per triangle, built</th><th class="n">Compacted</th><th class="n">Compacted share</th></tr></thead>
+    <tbody>
+      <tr><td><code>M4_PRO</code></td><td>any adapter that is neither NVIDIA nor on Vulkan; measured on the Apple M4 Pro, Metal</td><td class="n">94</td><td class="n">45.5</td><td class="n">48%</td></tr>
+      <tr><td><code>NVIDIA</code></td><td>an NVIDIA GPU on any backend; measured on the RTX 2070 SUPER, Vulkan</td><td class="n">70.7</td><td class="n">29.2</td><td class="n">41%</td></tr>
+      <tr><td><code>LAVAPIPE</code></td><td>any other Vulkan adapter; measured on lavapipe</td><td class="n">104</td><td class="n">104</td><td class="n">100%</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Generated from the three constants at the commit above; the share is compacted over built.</p>
+  <p>No Baseline field isolates the BLASes. The committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> record <code>gpu_memory_bytes</code>, which holds each scene's BLAS estimate among everything else the engine allocates, but not <code>estimated_acceleration_structure_bytes</code>, which the stats log line prints beside it; <a href="static-tlas.html#cost">the static TLAS's cost table</a> gives each scene's <code>gpu_memory_bytes</code> with the static TLAS's share of it. Nor does any Baseline time the compaction's waits: a bench takes its counters from frame 8 and its timings after 248 warm-up frames, and the waits run in frame 0.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADRs 0013, 0016, 0017, 0020</div>
+  <h2>Why this way</h2>
+  <p><b>A BLAS per Mesh, at load.</b> ADR 0020 gives each Mesh rays trace a BLAS at load, compacted unless it is loaded to be refitted or rebuilt each frame, and places it through TLAS entries, one per Instance: a Mesh's triangles are built into one structure however many Instances share it, as <code>helmet</code>'s and <code>pbr-sweep</code>'s do.</p>
+  <p><b>Built from the Arenas in place.</b> ADR 0017 keeps geometry in fixed Arenas that a Pool sub-allocates; the build reads the Mesh's ranges there, so the geometry exists once on the GPU and no staging copy is kept for it. Keeping the index stream only for traced Meshes leaves the index Arena to the Meshes that need it.</p>
+  <p><b>No BLAS for a bent Mesh drawn alone.</b> Its BLAS, built from its rest shape, would cast another shape's shadow; the default crowd form casts the figures' shadows through rigid proxies instead, and the refitted form updates a BLAS each frame, which a compacted BLAS cannot be.</p>
+  <p><b>Compaction.</b> A BLAS built once is traced for the rest of the run, so a one-time copy at load buys back over half its memory on the M4 Pro and on NVIDIA, the adapters Budgets and comparisons are judged on.</p>
+  <p><b>A CPU wait, not ordering on the GPU.</b> The compaction runs once, at load, where a stall of the main thread, the one thread that submits and polls under ADR 0016, costs one frame. Ordering the copies before the TLAS builds on the GPU would need wgpu to record a barrier after the copy, which wgpu-core 30.0.1 does not on any backend, or Metal shared events through wgpu-hal, the route the per-frame refit takes because a wait in every frame could not pay; a wgpu version that orders the copy is a dependency change and the owner's call.</p>
+  <p><b>An estimate, not a size.</b> wgpu 30 exposes no acceleration structure's size, yet ADR 0013's GPU memory Budget and ADR 0017's split of it by kind need acceleration structures counted. Figures measured once per kind of adapter, named an estimate wherever they appear, count them until exact sizes can be read.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>A CPU wait per load.</b> The frame after a load blocks the main thread twice for the load's whole GPU work. Today that is the first frame alone; Meshes streamed during play would stall each frame that loads them, until wgpu orders the copy on every backend.</p>
+  <p><b>Estimates, by kind of adapter.</b> An AMD or Intel GPU on Vulkan is counted with lavapipe's figures, and any adapter neither NVIDIA nor on Vulkan with the M4 Pro's; none of the figures is read back from the driver.</p>
+  <p><b>Compaction can fail.</b> One that is not ready after its build keeps its built size, counted as built, with a warning.</p>
+  <p><b>Opaque only.</b> No triangle has an alpha test, so a cutout Material would cast a solid shadow.</p>
+  <p><b>Never freed.</b> The Mesh pool has no unload: a BLAS lives as long as the pool, with the Arena ranges it was built from.</p>
+  <p><b>One build per Mesh.</b> Each Mesh's build is its own <code>build_acceleration_structures</code> call on the load encoder; builds are not batched across Meshes.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the mechanism rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs">wgpu 30.0.1, <code>Blas::prepare_compaction_async</code> and <code>Blas::ready_for_compaction</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/queue.rs">wgpu 30.0.1, <code>Queue::compact_blas</code></a></dt><dd>compaction's two steps, the poll that guarantees the callback, and the compacted BLAS that "may not be rebuilt or compacted"</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs">wgpu-core 30.0.1, <code>device/queue.rs</code></a></dt><dd>the compaction copy recorded into the queue's pending writes, which go ahead of the next submission; and the refusal of a BLAS that is not ready</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs">wgpu-types 30.0.1, ray_tracing.rs</a></dt><dd>what <code>PREFER_FAST_TRACE</code>, <code>ALLOW_COMPACTION</code>, <code>ALLOW_UPDATE</code> and the geometry's <code>OPAQUE</code> flag ask for</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215, Metal BLAS to TLAS builds need synchronisation</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592">wgpu-hal 30.0.1, Metal's empty barriers</a></dt><dd>why nothing on the GPU orders a TLAS build after the copies, the upstream bug <code>compact_blases</code> names; the registry holds them as <code>wgpu-issue-9215</code> and <code>wgpu-30-metal-barriers-empty</code></dd>
+    <dt><a href="https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a73099715/pci.ids#L10357">The PCI ID Repository, vendor 10de</a>, <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/devsandqueues.adoc#L155-L157">Vulkan, VkPhysicalDeviceProperties::vendorID</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/ns-dxgi1_2-dxgi_adapter_desc2">DXGI_ADAPTER_DESC2</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194">wgpu-hal 30.0.1's DX12 adapter</a></dt><dd>the vendor ID the estimate reads, on Vulkan and on DX12; <code>pci-vendor-id-nvidia</code>, <code>vulkan-vendorid-pci</code>, <code>dxgi-adapter-desc2-vendorid</code>, <code>wgpu-30-dx12-vendor-id</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml">Vulkan registry, <code>VK_VENDOR_ID_MESA</code></a> and <a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886">Mesa 25.2.8, lavapipe's vendor ID</a></dt><dd>the vendor ID the estimate's test gives lavapipe; <code>vulkan-vendor-id-mesa</code>, <code>lavapipe-vendor-id-mesa</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The Mesh pool gained a compacted BLAS per Mesh on 2026-10-20, with the memory estimate, measured then on the M4 Pro and lavapipe and since 2026-10-26 chosen by adapter, with an RTX 2070 SUPER's figures for NVIDIA. The wait for the compaction's copies followed on 2026-10-23, once a test that traced a triangle sometimes missed it under load and the race proved to be the engine's own. The crowd brought the uses: a Mesh drawn alone with no BLAS, and a shadow proxy traced alone, then on 2026-10-26 the refitted Mesh, built to allow updates and never compacted. The notebook's volumes tell that development with its measurements: <a href="gpu-ordering.html">GPU Ordering Explained</a> and <a href="crowd-shadows.html">Crowd Shadows Explained</a>. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017 and 0020, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="anisotropy.html">Previous: Anisotropy Explained</a><a href="index.html">All field guides</a><a href="static-tlas.html">Next: The static TLAS</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
