@@ -517,8 +517,8 @@ fn publish(
     Ok(())
 }
 
-/// Imports the Baselines committed before the Bench history into it, and
-/// prints what it did.
+/// Imports the Baselines committed to `main` into the Bench history, those
+/// since it started marked as re-recorded, and prints what it did.
 fn import_baselines() -> anyhow::Result<()> {
     let publication = praxis::bench::import_baselines(Path::new("."))?;
     writeln!(std::io::stdout(), "{publication}")?;

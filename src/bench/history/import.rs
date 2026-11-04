@@ -1,5 +1,6 @@
-//! `praxis history import`: the Baselines committed to `main` before the
-//! Bench history existed, each a Bench record of the commit that changed it
+//! `praxis history import`: the Baselines committed to `main`, each a
+//! Bench record of the commit that changed it, those before the Bench
+//! history existed imported and those since marked as re-recorded
 //! (ADR 0024).
 
 use std::collections::BTreeSet;
@@ -9,17 +10,17 @@ use anyhow::Context;
 
 use super::{
     BenchRecord, ON_SERIES, Publication, RELEASE_BUILD, Run, TAGGED, Worktree,
-    committed_unix_seconds, push, tags,
+    committed_unix_seconds, fetch_main, push, tags,
 };
 use crate::bench::Spread;
-use crate::bench::provenance::{QUIET_P95_OVER_MEDIAN, git, source_hash};
+use crate::bench::provenance::{QUIET_P95_OVER_MEDIAN, git, harness_version_at, source_hash};
 
 /// Where `main` keeps its Baselines.
 const BASELINES_DIRECTORY: &str = "bench/baselines";
 
 /// The commit that started publishing Bench records: every Baseline
-/// committed before it is imported, and every bench since has published
-/// its own.
+/// committed up to it is imported, every bench since has published its
+/// own, and a Baseline committed since is re-recorded.
 const HISTORY_STARTED: &str = "3c6b9d92";
 
 /// The commits on `main` before `HISTORY_STARTED` that changed what a
@@ -68,12 +69,22 @@ const HARNESS_BREAKS: [(&str, &str); 9] = [
 /// What an imported record's provenance names as its source.
 pub(super) const IMPORTED_SOURCE: &str = "baseline-commit";
 
-/// Imports every Baseline file each commit before `HISTORY_STARTED`
-/// changed into the remote's `bench-history` branch, and gives the records
-/// a bench published before the import their era's Harness version. Each
-/// import replaces the records an earlier one wrote, so they carry the tags
-/// today's rules give them; a second import under the same rules changes
-/// nothing.
+/// What the provenance of a record of a Baseline re-recorded after
+/// `HISTORY_STARTED` names as its source.
+pub(super) const RERECORDED_SOURCE: &str = "baseline-rerecorded";
+
+/// Whether a record's provenance `source` names a Baseline, imported or
+/// re-recorded.
+pub(super) fn is_baseline_source(source: &str) -> bool {
+    [IMPORTED_SOURCE, RERECORDED_SOURCE].contains(&source)
+}
+
+/// Imports every Baseline file each commit on the remote's `main` changed
+/// into its `bench-history` branch, those after `HISTORY_STARTED` marked as
+/// re-recorded, and gives the records a bench published before the import
+/// their era's Harness version. Each import replaces the records an earlier
+/// one wrote, so they carry the tags today's rules give them; a second
+/// import under the same rules changes nothing.
 pub fn import_baselines(repository: &Path) -> anyhow::Result<Publication> {
     import_up_to(
         repository,
@@ -82,8 +93,9 @@ pub fn import_baselines(repository: &Path) -> anyhow::Result<Publication> {
     )
 }
 
-/// Imports the Baselines committed before `history_started`, with the
-/// Harness version raised at each of `breaks`.
+/// Imports the Baselines committed up to `history_started`, with the
+/// Harness version raised at each of `breaks`, and those `main` committed
+/// since as re-recorded.
 pub(super) fn import_up_to(
     repository: &Path,
     history_started: &str,
@@ -91,14 +103,12 @@ pub(super) fn import_up_to(
 ) -> anyhow::Result<Publication> {
     let root = git(repository, &["rev-parse", "--show-toplevel"], None)?;
     let repository = Path::new(&root);
-    let records = baseline_records(repository, history_started, breaks)?;
+    let main = fetch_main(repository)?;
+    let records = baseline_records(repository, history_started, &main, breaks)?;
     // The version of the method in force when the history started, which
     // records published before the import name 1.
     let started_harness_version = breaks.len() as u32 + 1;
-    let message = format!(
-        "Import {} Baselines committed before the Bench history",
-        records.len()
-    );
+    let message = format!("Import {} Baselines committed to main", records.len());
     push(repository, &message, |worktree| {
         let restamped = worktree.restamp(started_harness_version)?;
         worktree.remove_imported()?;
@@ -115,17 +125,21 @@ struct BaselineCommit<'commit> {
     source_hash: String,
     committed_unix_seconds: u64,
     harness_version: u32,
+    /// `IMPORTED_SOURCE` or `RERECORDED_SOURCE`.
+    source: &'static str,
 }
 
-/// A record per Baseline file per commit on the first-parent line before
-/// `history_started` that added or changed it, newest first: of two
-/// Baselines of one source, the quieter stays, and when neither measured
-/// its spread, the later, which replaced the earlier. A file only renamed,
-/// or given fields without a value it held changing, was not measured
-/// again.
+/// A record per Baseline file per commit on `main`'s first-parent line that
+/// added or changed it, newest first: of two Baselines of one source, the
+/// quieter stays, and when neither measured its spread, the later, which
+/// replaced the earlier. Up to `history_started` each is imported with the
+/// Harness version `breaks` give its commit; after it, re-recorded with
+/// the version its commit defined. A file only renamed, or given fields
+/// without a value it held changing, was not measured again.
 fn baseline_records(
     repository: &Path,
     history_started: &str,
+    main: &str,
     breaks: &[&str],
 ) -> anyhow::Result<Vec<BenchRecord>> {
     let breaks = breaks
@@ -165,52 +179,98 @@ fn baseline_records(
         if !changed_baselines.contains(commit) {
             continue;
         }
-        let baseline_commit = BaselineCommit {
-            commit,
-            source_hash: source_hash(repository, commit)?,
-            committed_unix_seconds: committed_unix_seconds(repository, commit)?,
-            harness_version,
-        };
-        let paths = git(
+        records.extend(commit_records(
             repository,
-            &[
-                "diff-tree",
-                "-r",
-                "--no-commit-id",
-                "--name-only",
-                "--find-renames=100%",
-                "--diff-filter=AM",
-                commit,
-                "--",
-                BASELINES_DIRECTORY,
-            ],
-            None,
-        )?;
-        for path in paths.lines().filter(|path| path.ends_with(".json")) {
-            let json = git(repository, &["show", &format!("{commit}:{path}")], None)?;
-            let earlier = git(repository, &["show", &format!("{commit}^:{path}")], None).ok();
-            if let Some(earlier) = earlier
-                && !remeasured(&earlier, &json)
-                    .with_context(|| format!("comparing {path} at {commit} with its parent's"))?
-            {
-                tracing::info!(
-                    path,
-                    commit,
-                    "Baseline not imported: its values are its parent's"
-                );
-                continue;
-            }
-            records.push(
-                imported(&baseline_commit, path, &json)
-                    .with_context(|| format!("importing {path} at {commit}"))?,
-            );
-        }
+            commit,
+            harness_version,
+            IMPORTED_SOURCE,
+        )?);
     }
     anyhow::ensure!(
         harness_version as usize == breaks.len() + 1,
         "a Harness version break is not on the first-parent line before {history_started}"
     );
+    let rerecorded = git(
+        repository,
+        &[
+            "log",
+            "--first-parent",
+            "--reverse",
+            "--format=%H",
+            &format!("{history_started}..{main}"),
+            "--",
+            BASELINES_DIRECTORY,
+        ],
+        None,
+    )?;
+    for commit in rerecorded.lines() {
+        // Version 1 named the method in force until the import numbered the
+        // eras before it, as `restamp` reads it.
+        let harness_version = match harness_version_at(repository, commit)? {
+            1 => breaks.len() as u32 + 1,
+            version => version,
+        };
+        records.extend(commit_records(
+            repository,
+            commit,
+            harness_version,
+            RERECORDED_SOURCE,
+        )?);
+    }
     records.reverse();
+    Ok(records)
+}
+
+/// A record per Baseline file `commit` added or changed, measured under
+/// `harness_version`, its provenance naming `source`.
+fn commit_records(
+    repository: &Path,
+    commit: &str,
+    harness_version: u32,
+    source: &'static str,
+) -> anyhow::Result<Vec<BenchRecord>> {
+    let baseline_commit = BaselineCommit {
+        commit,
+        source_hash: source_hash(repository, commit)?,
+        committed_unix_seconds: committed_unix_seconds(repository, commit)?,
+        harness_version,
+        source,
+    };
+    let mut records = Vec::new();
+    let paths = git(
+        repository,
+        &[
+            "diff-tree",
+            "-r",
+            "--no-commit-id",
+            "--name-only",
+            "--find-renames=100%",
+            "--diff-filter=AM",
+            commit,
+            "--",
+            BASELINES_DIRECTORY,
+        ],
+        None,
+    )?;
+    for path in paths.lines().filter(|path| path.ends_with(".json")) {
+        let json = git(repository, &["show", &format!("{commit}:{path}")], None)?;
+        let earlier = git(repository, &["show", &format!("{commit}^:{path}")], None).ok();
+        if let Some(earlier) = earlier
+            && !remeasured(&earlier, &json)
+                .with_context(|| format!("comparing {path} at {commit} with its parent's"))?
+        {
+            tracing::info!(
+                path,
+                commit,
+                "Baseline not imported: its values are its parent's"
+            );
+            continue;
+        }
+        records.push(
+            imported(&baseline_commit, path, &json)
+                .with_context(|| format!("importing {path} at {commit}"))?,
+        );
+    }
     Ok(records)
 }
 
@@ -274,7 +334,7 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
     file.insert(
         "provenance".to_owned(),
         serde_json::to_value(ImportedProvenance {
-            source: IMPORTED_SOURCE,
+            source: commit.source,
             baseline: path,
             commit: commit.commit,
             source_hash: &commit.source_hash,
@@ -346,7 +406,10 @@ impl Worktree<'_> {
     /// places.
     fn remove_imported(&self) -> anyhow::Result<()> {
         for (path, file) in self.measured_records()? {
-            if file["provenance"]["source"] == IMPORTED_SOURCE {
+            if file["provenance"]["source"]
+                .as_str()
+                .is_some_and(is_baseline_source)
+            {
                 std::fs::remove_file(&path)
                     .with_context(|| format!("removing {}", path.display()))?;
             }
@@ -422,6 +485,7 @@ mod tests {
             source_hash: "4b825dc6".to_owned(),
             committed_unix_seconds: 1_791_871_200,
             harness_version,
+            source: IMPORTED_SOURCE,
         }
     }
 
