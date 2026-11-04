@@ -13,14 +13,11 @@ use std::process::Command;
 /// The volumes that narrated how each mechanism was built, each kept, and
 /// passed over by the page checks, until the page that absorbs it lands.
 const VOLUMES: &[&str] = &[
-    "acceleration-structures.html",
     "anisotropy.html",
     "bench-history.html",
-    "blas-refit.html",
     "box-leakage.html",
     "crowd-shadows.html",
     "distant-textures.html",
-    "dynamic-tlas.html",
     "edge-shadows.html",
     "frame-timing.html",
     "froxel-lights.html",

@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Bend Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/bend_pass.rs</code></div>
+  <h1>The bend pass</h1>
+  <p class="definition">A compute pass that rewrites, in every frame, each bent Mesh's vertices from its rest Mesh's, the middle curved into a circular arc and each vertex's tangent frame turned with it: the engine's <span class="concept" data-term="Bend" data-tip="The GPU's stand-in for skinning until M7: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">bend</span>, which stands in for skinning and which the <code>crowd</code> scene's figures take.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="crowd-shadows.html">Crowd Shadows</a> for the scene whose figures the pass bends, <a href="blas-refit.html">BLAS Refit</a> for what follows the pass in the crowd's refit form.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>In every frame whose <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> lists a bend, which among the <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scenes</span> is <code>crowd</code>'s alone: the first pass recorded into the frame's encoder, after the frame's uploads and before culling phase one, so every pass that pulls vertices reads the bent shapes. A frame with no bends records no pass.</dd>
+      <dt>Reads</dt><dd>The frame's bends, a <code>BendData</code> each, in a buffer the CPU writes through frame staging; each rest Mesh's range of the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>.</dd>
+      <dt>Writes</dt><dd>Each bent Mesh's range of the vertex Arena, whole vertices: the position bent, the UV copied, the QTangent turned.</dd>
+      <dt>Dispatches</dt><dd>One, <code>bend_vertices</code>: a row of workgroups per bend, each of 64 invocations (<code>BEND_WORKGROUP_SIZE</code>), as many as the longest bend's vertices need.</dd>
+      <dt>Bind groups</dt><dd>Group 3, <code>BENDS</code>: the bends, read-only storage, and the vertex Arena, read-write storage.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/bend.wgsl</code>, assembled after the common part as the module <code>BEND</code>.</dd>
+      <dt>Counted</dt><dd><code>bend_pass</code> in GPU time; <code>bends_left_out</code> in counters; the bends' buffer in GPU memory; each frame's bends in <code>uploaded_bytes</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#ticks">2 &middot; A curvature per Tick</a>
+    <a href="#list">3 &middot; Prepare's list</a>
+    <a href="#dispatch">4 &middot; The dispatch</a>
+    <a href="#vertex">5 &middot; Where a vertex goes</a>
+    <a href="#frame-turn">6 &middot; The tangent frame</a>
+    <a href="#tests">7 &middot; How it is tested</a>
+    <a href="#cost">8 &middot; What it costs</a>
+    <a href="#why">9 &middot; Why this way</a>
+    <a href="#limits">10 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The pass is the first recorded into the frame's encoder, ahead of every pass that pulls vertices from the Arena, so the depth passes and the lit pass draw the bent shapes; and where the crowd's figures trace their own BLASes, the frame is cut into submissions right after it.</p>
+  <p class="order-label">The frame's passes in the default form, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li class="focus">bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
+  </ol>
+  <p><code>Renderer::render</code> records the pass into the frame's encoder, which already holds what <code>upload</code> recorded, the bends' copy among it, and the start of the frame's GPU stats; every other pass of the frame follows it in that encoder. The dynamic TLAS's build is not in it: it goes in a command buffer of its own, recorded after the pass on the CPU and submitted before the frame's.</p>
+<pre class="code"><code>let timestamps = self.gpu_stats.begin_frame(&amp;mut encoder, recorder);
+// Bent Meshes take their shapes before any pass reads their vertices.
+let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+let bent = self
+    .bend_pass
+    .record(&amp;mut encoder, &amp;frame.bends, bend_timestamps);
+let encoding = started.elapsed();
+// Their BLASes take them too, in a submission of their own, which
+// the dynamic TLAS's build, recorded after it, follows.
+let mut blas_refitted = false;
+if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
+    let started = Instant::now();
+    let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
+    let refit_end = timestamps.map(|timestamps| timestamps.marker_after(BLAS_REFIT_PASS));
+    blas_refitted =
+        blas_refit.submit(&amp;self.device, &amp;self.queue, head, &amp;self.mesh_pool, refit_end);
+    recorder.stage(BLAS_REFIT, started);
+}</code></pre>
+  <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>.</p>
+  <p>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at its default, <code>CrowdForm::Proxies</code>, the Renderer has no <code>BlasRefit</code>, nothing is cut, and the bent Meshes have no BLAS: shadow proxies cast their shadows. In the refit and rebuild forms each figure traces its own BLAS, which must take the bent shape before the dynamic TLAS is built over it. So in a frame that bent anything the encoder is swapped for a fresh one right after the pass, and the head, the uploads and the bend pass, goes to the GPU in a submission of its own with the BLAS updates, ahead of the build (<a href="blas-refit.html">BLAS Refit</a>). <code>record</code>'s answer, whether it recorded anything, decides both that cut and whether the frame's GPU stats time the pass.</p>
+</section>
+
+<section class="part prose" id="ticks">
+  <div class="part-mark">2 &middot; <code>Bend</code> &middot; <code>record_previous_curvatures</code></div>
+  <h2>A curvature per Tick, drawn between two</h2>
+  <p class="key-idea">How far a figure bends is game state: the fixed schedule sets a <code>Bend</code>'s curvature once per <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Tick</span>, after keeping the last one, and each frame draws the blend of the two, as it draws World transforms.</p>
+<pre class="code"><code>
+/// Bends its Renderable's Mesh on the GPU each frame from `rest`, a Mesh of
+/// the same vertices whose +Y axis runs up its middle from y = 0: a stand-in
+/// for skinning. The middle bends into a circular arc towards the
+/// azimuth, and every vertex turns with the middle at its height. The bent
+/// Mesh is the Renderable's own, since the GPU writes its vertices, and its
+/// bounds must hold every shape it bends to, since the culling pass tests
+/// them. Game state: the fixed schedule sets the curvature each Tick, after
+/// `record_previous_curvatures` keeps the last, and frames draw the blend of
+/// the two (ADR 0022); the azimuth is drawn as set. A bend spawns with its
+/// previous curvature equal to its curvature.
+#[derive(Component, Clone, Copy)]
+pub struct Bend {
+    pub rest: MeshHandle,
+    /// The direction the middle bends towards, about +Y from +X towards +Z,
+    /// in radians.
+    pub azimuth: f32,
+    /// Radians the middle turns through per metre of its height, after the
+    /// newest Tick and after the one before.
+    pub curvature: f32,
+    pub previous_curvature: f32,
+}
+
+impl Bend {
+    /// The curvature a frame draws, `blend_weight` of the way from the
+    /// previous Tick's to the newest Tick's.
+    pub fn drawn_curvature(&amp;self, blend_weight: f32) -&gt; f32 {
+        self.previous_curvature + (self.curvature - self.previous_curvature) * blend_weight
+    }
+}</code></pre>
+  <p class="code-source"><code>Bend</code>, <code>src/components.rs</code>. It is pure data; the GPU buffer it feeds belongs to the Renderer.</p>
+  <p>The rest Mesh stands with its +Y axis up its middle from y = 0 and is never written; the bent Mesh is the <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh's Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s own <code>MeshRef</code>, of as many vertices, since the GPU overwrites it. A writer sets only <code>curvature</code>: at the start of every Tick, right after <code>record_previous_world_transforms</code>, <code>record_previous_curvatures</code> copies it into <code>previous_curvature</code>, so no writer has to remember to. The azimuth is drawn as set, never blended.</p>
+<pre class="code"><code>/// Starts a Tick, as `record_previous_world_transforms` does for World
+/// transforms: each bend's curvature becomes its previous one, before the
+/// Tick sets it.
+pub fn record_previous_curvatures(mut bends: Query&lt;&amp;mut Bend&gt;) {
+    for mut bend in &amp;mut bends {
+        bend.previous_curvature = bend.curvature;
+    }
+}
+
+fixed_schedule.add_systems(
+    (
+        record_previous_world_transforms,
+        record_previous_curvatures,
+        (spawn_helmet, despawn_helmet)
+            .chain()
+            .run_if(resource_exists::&lt;HelmetAssets&gt;),
+        spin,
+        sway,
+        clear_just_pressed,
+        reset_teleported,
+        propagate_world_transforms,
+    )
+        .chain(),
+);</code></pre>
+  <p class="code-source"><code>record_previous_curvatures</code>, <code>src/transform/mod.rs</code>, and the fixed schedule in <code>simulation_schedules</code>, <code>src/state.rs</code>, chained in that order. In <code>crowd</code>, <code>sway</code> sets each figure's curvature after it.</p>
+</section>
+
+<section class="part prose" id="list">
+  <div class="part-mark">3 &middot; <code>prepare_bends</code>, <code>src/render/prepare.rs</code></div>
+  <h2>Prepare's list</h2>
+  <p class="key-idea">Prepare turns each Renderable with a <code>Bend</code> into one <code>BendData</code>, blended by the frame's blend weight, and keeps the list safe to hand to one dispatch: both Meshes loaded with as many vertices, no two bends racing on one Mesh, a fixed order and a fixed capacity.</p>
+<pre class="code"><code>fn prepare_bends(
+    world: &amp;World,
+    bend_query: &amp;mut BendQuery,
+    mesh_pool: &amp;MeshPool,
+    blend_weight: f32,
+    bends: &amp;mut Vec&lt;BendData&gt;,
+    left_out: &amp;mut u32,
+) {
+    bends.clear();
+    for (mesh_ref, bend) in bend_query.iter(world) {
+        let (Some(bent), Some(rest)) = (mesh_pool.get(mesh_ref.0), mesh_pool.get(bend.rest)) else {
+            tracing::warn!(
+                mesh = mesh_ref.0.0,
+                rest = bend.rest.0,
+                "A bent Mesh or its rest Mesh is not in the pool, so it is not bent"
+            );
+            continue;
+        };
+        if bent.vertices.len() != rest.vertices.len() {
+            tracing::warn!(
+                mesh = mesh_ref.0.0,
+                rest = bend.rest.0,
+                "A bent Mesh and its rest Mesh hold different vertex counts, so it is not bent"
+            );
+            continue;
+        }
+        let curvature = bend.drawn_curvature(blend_weight);
+        bends.push(BendData {
+            rest_first_vertex: rest.vertices.start,
+            first_vertex: bent.vertices.start,
+            vertex_count: bent.vertices.len() as u32,
+            azimuth: bend.azimuth,
+            curvature,
+        });
+    }
+    bends.sort_unstable_by_key(|bend| bend.first_vertex);
+    let listed = bends.len();
+    bends.dedup_by_key(|bend| bend.first_vertex);
+    let mut index = 0;
+    while index &lt; bends.len() {
+        let rest = bends[index].rest_first_vertex;
+        if bends
+            .binary_search_by_key(&amp;rest, |bend| bend.first_vertex)
+            .is_ok()
+        {
+            bends.remove(index);
+        } else {
+            index += 1;
+        }
+    }
+    if bends.len() &lt; listed {
+        tracing::warn!(
+            dropped = listed - bends.len(),
+            "Bends that would race are dropped: a Mesh two Renderables bend is bent once, and one bent from a Mesh a bend writes is not bent"
+        );
+    }
+    let capacity = BEND_CAPACITY as usize;
+    *left_out = bends.len().saturating_sub(capacity) as u32;
+    bends.truncate(capacity);
+}</code></pre>
+  <p class="code-source"><code>prepare_bends</code>, <code>src/render/prepare.rs</code>, called at the end of <code>FramePreparer::prepare</code> with the frame's <code>blend_weight</code> from <code>FixedTime</code>.</p>
+  <p>The rules, in the code's order:</p>
+  <p><b>Both Meshes loaded, with as many vertices.</b> A bend whose Mesh or rest Mesh the Mesh pool lacks, or whose two Meshes differ in vertex count, is warned about and skipped.</p>
+  <p><b>No races.</b> One dispatch runs every bend at once, writing each bent Mesh while it reads each rest Mesh. So the list is sorted by where each bent Mesh's vertices start in the Arena; of two bends of one Mesh, the dedup keeps one; and a bend whose rest Mesh some bend writes, its own included, is dropped, found by binary search over the sorted starts. One warning counts what was dropped. These checks run in every build.</p>
+  <p><b>A fixed order and a fixed capacity.</b> The sort makes the list independent of how the ECS World stores its entities. Past <code>BEND_CAPACITY</code>, 4,096, the bends of the Meshes highest in the Arena are left out, and those Meshes keep the shape they last took. <code>bends_left_out</code> counts them in every frame's Frame stats, and <code>prepare</code> warns once while any are left out.</p>
+</section>
+
+<section class="part prose" id="dispatch">
+  <div class="part-mark">4 &middot; <code>BendData</code> &middot; <code>BendPass::record</code></div>
+  <h2>The dispatch</h2>
+  <p class="key-idea">A bend reaches the GPU as 20 bytes: two vertex starts, a count, an azimuth and a curvature. The pass gives each bend a row of 64-vertex workgroups, as many as the longest bend needs; an invocation past its own bend's count returns.</p>
+<pre class="code"><code>/// One bend as the pass reads it: where its rest Mesh's vertices and its
+/// bent Mesh's start in the vertex Arena, how many each holds, and the bend
+/// (`Bend`), its curvature blended between the two newest Ticks.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct BendData {
+    pub rest_first_vertex: u32,
+    pub first_vertex: u32,
+    pub vertex_count: u32,
+    /// The direction the middle bends towards, about +Y from +X towards +Z,
+    /// in radians.
+    pub azimuth: f32,
+    /// Radians the middle turns through per metre of its height.
+    pub curvature: f32,
+}</code></pre>
+  <p class="code-source"><code>BendData</code>, <code>src/render/bend_pass.rs</code>; its WGSL twin in <code>bend.wgsl</code> holds the same five fields.</p>
+  <p>The bends' buffer is made once, at <code>BEND_CAPACITY</code> bends, and never grows. <code>Renderer::upload</code> writes the frame's bends to its start through frame staging with the frame's other uploads, whenever the list is not empty, and frame staging's bound counts the buffer whole.</p>
+<pre class="code"><code>pub fn record(
+    &amp;self,
+    encoder: &amp;mut wgpu::CommandEncoder,
+    bends: &amp;[BendData],
+    timestamp_writes: Option&lt;wgpu::ComputePassTimestampWrites&lt;'_&gt;&gt;,
+) -&gt; bool {
+    let Some(longest) = bends.iter().map(|bend| bend.vertex_count).max() else {
+        return false;
+    };
+    let mut pass = encoder.begin_compute_pass(&amp;wgpu::ComputePassDescriptor {
+        label: Some(BEND_PASS),
+        timestamp_writes,
+    });
+    pass.set_pipeline(&amp;self.pipeline);
+    pass.set_bind_group(BENDS.index, &amp;self.bind_group, &amp;[]);
+    pass.dispatch_workgroups(longest.div_ceil(BEND_WORKGROUP_SIZE), bends.len() as u32, 1);
+    true
+}</code></pre>
+  <p class="code-source"><code>BendPass::record</code>, <code>src/render/bend_pass.rs</code>.</p>
+  <p>The dispatch is ⌈longest / 64⌉ &times; bends &times; 1 workgroups. An invocation's y is its bend and its x the vertex within it, so the bends of one frame need not hold as many vertices as one another.</p>
+</section>
+
+<section class="part prose" id="vertex">
+  <div class="part-mark">5 &middot; <code>bend_vertices</code> &middot; <code>sinc</code>, <code>src/render/shaders/bend.wgsl</code></div>
+  <h2>Where a vertex goes</h2>
+  <p class="key-idea">A middle that turns at a constant rate per metre is a circular arc, and an arc's chord leans at half the angle the arc turns through. So a vertex at rest height h lands at the end of a chord h &middot; sin(&theta;/2) / (&theta;/2) long, leaning &theta;/2 from upright toward the azimuth, plus its horizontal offset from the middle, turned by &theta; = curvature &times; h.</p>
+  <div class="formula">&theta; = &kappa; h&emsp;&emsp;toward = (cos &psi;, 0, sin &psi;)
+middle(h) = h &middot; sinc(&theta;/2) &middot; (sin(&theta;/2) &middot; toward + cos(&theta;/2) &middot; Y)
+q = ((Y &times; toward) &middot; sin(&theta;/2), cos(&theta;/2))&emsp;the turn by &theta; about Y &times; toward
+bent vertex = middle(h) + rotate(q, (x, 0, z))</div>
+  <p class="note">&kappa; is the curvature and &psi; the azimuth; (x, y, z) is the rest vertex, h its y.</p>
+<pre class="code"><code>@compute @workgroup_size(BEND_WORKGROUP_SIZE)
+fn bend_vertices(@builtin(global_invocation_id) invocation: vec3&lt;u32&gt;) {
+    let bend = bends[invocation.y];
+    if invocation.x &gt;= bend.vertex_count {
+        return;
+    }
+    var vertex = vertices[bend.rest_first_vertex + invocation.x];
+    let height = vertex.position[1];
+    // At this height the middle has turned through twice the half angle,
+    // from +Y towards the azimuth, about +Y × toward. The arc's chord from
+    // the foot runs at the half angle, its length the height times
+    // sin(half) / half.
+    let half_angle = 0.5 * bend.curvature * height;
+    let toward = vec3&lt;f32&gt;(cos(bend.azimuth), 0.0, sin(bend.azimuth));
+    let rotation = vec4&lt;f32&gt;(
+        vec3&lt;f32&gt;(toward.z, 0.0, -toward.x) * sin(half_angle),
+        cos(half_angle)
+    );
+    let chord = height * sinc(half_angle);
+    let middle = chord * (vec3&lt;f32&gt;(0.0, cos(half_angle), 0.0) + toward * sin(half_angle));
+    let offset = vec3&lt;f32&gt;(vertex.position[0], 0.0, vertex.position[2]);
+    let position = middle + rotate(rotation, offset);
+    vertex.position = array&lt;f32, 3&gt;(position.x, position.y, position.z);</code></pre>
+  <p class="code-source"><code>bend_vertices</code>, its first half, <code>bend.wgsl</code>. (toward.z, 0, &minus;toward.x) is +Y &times; toward, the axis the middle turns about; <code>rotate</code>, in the common part, turns a vector by a unit quaternion.</p>
+  <p>Where a figure stands nearly straight, the half angle is tiny, and sin(x) / x divides one small number by another. Metal compiles shaders with fast math by default, under which <code>sin</code> is accurate only to an absolute error, at most 2<sup>&minus;13</sup> over [&minus;&pi;, &pi;], so dividing it by a small angle would magnify that error. Below 0.5 radians <code>sinc</code> takes the first four terms of the Taylor series instead, 1 &minus; x&sup2;/6 + x&#8308;/120 &minus; x&#8310;/5040 in nested form; the first term left out, x&#8312;/9!, is under 1.1 &times; 10<sup>&minus;8</sup> there.</p>
+<pre class="code"><code>// sin(angle) / angle, sinc, by its Taylor series below 0.5 radians, whose
+// first term left out, angle⁸ / 9!, is under 1.1e-8 there: Metal compiles
+// with fast math [ref:msl-4.1-fast-math], which leaves sin an absolute
+// error [ref:msl-4.1-sin-fast-accuracy] that dividing by a small angle
+// would magnify.
+fn sinc(angle: f32) -&gt; f32 {
+    let squared = angle * angle;
+    let series = 1.0 - squared / 6.0 * (1.0 - squared / 20.0 * (1.0 - squared / 42.0));
+    return select(sin(angle) / angle, series, abs(angle) &lt; 0.5);
+}</code></pre>
+  <p class="code-source"><code>sinc</code>, <code>bend.wgsl</code>.</p>
+</section>
+
+<section class="part prose" id="frame-turn">
+  <div class="part-mark">6 &middot; <code>bend_vertices</code>, its second half</div>
+  <h2>The tangent frame turns too</h2>
+  <p class="key-idea">A cooked vertex's normal, tangent and bitangent sign travel as one QTangent, a unit quaternion in four Snorm16 values whose sign is the bitangent sign (ADR 0018). The pass turns it by the vertex's rotation and stores it back as the cooker stores one.</p>
+<pre class="code"><code>    // The QTangent turns with it, stored as the cooker stores one: its w
+    // made positive and kept off zero, then given the bitangent sign
+    // (ADR 0018).
+    let stored = unpack_qtangent(vertex);
+    let bitangent_sign = select(1.0, -1.0, stored.w &lt; 0.0);
+    var turned = quaternion_product(rotation, normalize(stored) * bitangent_sign);
+    turned *= select(1.0, -1.0, turned.w &lt; 0.0);
+    if turned.w &lt; QTANGENT_SMALLEST_W {
+        let axis_length = sqrt(1.0 - QTANGENT_SMALLEST_W * QTANGENT_SMALLEST_W);
+        turned = vec4&lt;f32&gt;(normalize(turned.xyz) * axis_length, QTANGENT_SMALLEST_W);
+    }
+    turned *= bitangent_sign;
+    vertex.qtangent = array&lt;u32, 2&gt;(pack2x16snorm(turned.xy), pack2x16snorm(turned.zw));
+    vertices[bend.first_vertex + invocation.x] = vertex;
+}</code></pre>
+  <p class="code-source"><code>bend_vertices</code>, its end, <code>bend.wgsl</code>. <code>unpack_qtangent</code> is the common part's; <code>QTANGENT_SMALLEST_W</code> and <code>BEND_WORKGROUP_SIZE</code> are declared into the WGSL from Rust when the module is assembled.</p>
+  <p>The stored quaternion is normalised and given back its positive w before the turn, since its sign carries the bitangent sign and not the rotation. After the product, w is made positive again and kept at least <code>QTANGENT_SMALLEST_W</code>, one Snorm16 step, so it never rounds to zero and loses the sign; then the sign is put back. The cooker's <code>qtangent</code> in <code>src/cook/mesh.rs</code> takes the same three steps with the same constant. The vertex's UV is copied unchanged, and the whole vertex lands in the bent Mesh's range at the same index.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">A GPU test holds the bent positions and tangent frames to an f64 oracle that integrates the bent middle in small steps; prepare's tests pin the list's rules; a State test pins the blend between Ticks; the twin test holds the struct's layout.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>the_bend_pass_bends_each_mesh_from_its_rest_mesh</code></td><td><code>bend_pass.rs</code></td><td>five Meshes of 67 vertices, more than a workgroup and not a multiple of one, with tangent frames turned every way and both bitangent signs; three bent from the first, straight, forward and back: each bent position within 10<sup>&minus;5</sup> m of an oracle that sums the middle's direction in 1,024 steps, each tangent frame within 2 &times; 10<sup>&minus;4</sup> of the oracle's turn, sign and UV unchanged; at curvature 0 no position moves at all; the unbent Meshes keep their vertices; the pass's GPU time read back within the frame's</td></tr>
+      <tr><td><code>each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks</code></td><td><code>prepare.rs</code></td><td>seven Renderables, two bends: the blend, the Arena order, the skips for a Mesh not loaded and for differing vertex counts, and the three dropped as races, with the warnings each logs</td></tr>
+      <tr><td><code>the_bend_of_the_highest_mesh_past_the_bend_capacity_is_left_out</code></td><td><code>prepare.rs</code></td><td>one bend past <code>BEND_CAPACITY</code>: the Mesh highest in the Arena is left out, counted in every frame, warned about once</td></tr>
+      <tr><td><code>between_ticks_a_bend_is_drawn_at_the_blend_of_its_two_newest_tick_curvatures</code></td><td><code>state.rs</code></td><td>through the State's fixed schedule, 200 frames at 144, 60, 30 and 90 Hz in turn, which run from no Tick to three a frame: every frame draws the curvature at the analytic blend</td></tr>
+      <tr><td><code>structs_shared_with_the_cpu_match_their_rust_twins</code></td><td><code>shader_tests.rs</code></td><td><code>BendData</code>'s fields, offsets and strides match its WGSL twin</td></tr>
+      <tr><td><code>a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>the pass's time, and a frame that bends nothing reading it as zero, in each frame shape</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s frame, bent figures and their shadows, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above. The scene's own test that a figure bends within its culling bounds, <code>a_crowd_figure_bends_within_its_bounds</code>, uses the same oracle, <code>bent</code>, from this module's tests.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">Only <code>crowd</code> bends, so only its Baselines time the pass: a small share of its GPU frame on each adapter. Every other scene reads zero, since a frame with no bends records no pass, but holds the pass's one buffer in GPU memory.</p>
+  <p>Medians and 95th percentiles in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, in the shipping form, the proxies; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baseline, at 640&times;360 with only its counters judged, is left out.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>bend_pass</code> median</th><th class="n"><code>bend_pass</code> p95</th><th class="n">GPU frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">27.8</td><td class="n">30.7</td><td class="n">3,747.5</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">39.2</td><td class="n">40.9</td><td class="n">2,169.8</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">36.2</td><td class="n">36.9</td><td class="n">1,970.2</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, <code>crowd.json</code>, at the commit above: <code>gpu_pass_microseconds.bend_pass</code> and <code>gpu_frame_microseconds</code>. <code>crowd</code> bends its 100 figures of 5,120 triangles each in every frame.</p>
+  <p>The pass's memory is its bends' buffer alone, in every scene; the vertices it writes are the bent Meshes' own ranges of the vertex Arena, which the Mesh pool counts. Each frame uploads its bends, 20 bytes each.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Buffer</th><th>Size</th><th class="n">Bytes</th></tr></thead>
+    <tbody>
+      <tr><td>the bends, GPU memory in every scene</td><td><code>BEND_CAPACITY</code> &times; 20</td><td class="n">81,920</td></tr>
+      <tr><td>uploaded per <code>crowd</code> frame</td><td>100 bends &times; 20</td><td class="n">2,000</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">9 &middot; ADRs 0003, 0013, 0017, 0018, 0019, 0020, 0022</div>
+  <h2>Why this way</h2>
+  <p><b>A stand-in for skinning.</b> ADR 0020 gives every shadow to a ray against the TLAS, so whatever deforms must reach the TLAS in the shape it is drawn in. Until skinning arrives, the crowd needs Meshes whose every vertex the GPU rewrites each frame, as skinning would, so that the forms a deforming mesh can take in the TLAS can be measured against the crowd's Budget. One arc per figure is the least that does it: one curvature and one azimuth a bend, no bones or weights.</p>
+  <p><b>In place in the vertex Arena.</b> The main pass pulls every vertex from the Arena (ADR 0019), so a bent Mesh needs nothing new downstream: the depth passes and the lit pass draw it as any Mesh. Writing over the bent Mesh's own range keeps the fixed Arenas of ADR 0017 as they are, and is why the bent Mesh is the Renderable's own rather than a shared one.</p>
+  <p><b>Blended between Ticks.</b> ADR 0022 puts game state in the fixed schedule at 64 Hz and draws frames between the two newest Ticks. A curvature is game state, so it takes the treatment World transforms take: the previous value kept at the start of each Tick, the blend drawn. The azimuth does not change in the scene, and is drawn as set.</p>
+  <p><b>One dispatch, races ruled out on the CPU.</b> All bends run in one dispatch with no barrier between them, so prepare drops what would race, a second bend of one Mesh and a bend from a Mesh a bend writes, rather than the GPU ordering them.</p>
+  <p><b>A fixed buffer.</b> No GPU buffer grows at runtime (ADRs 0003, 0017): the bends' buffer is made at its capacity, a request past it is refused and counted, and the capacity stays provisional until ADR 0013's split of the GPU memory Budget sizes it.</p>
+  <p><b>The QTangent as the cooker stores it.</b> ADR 0018's 28-byte vertex carries one quaternion for the tangent frame, so turning the frame is one quaternion product, and storing it back by the cooker's rule keeps every bent vertex one the main pass decodes like any other.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">10</div>
+  <h2>Limits</h2>
+  <p><b>One arc, about one axis.</b> A bend curves the middle of a rest Mesh that stands up +Y from y = 0, toward one azimuth, at one curvature over its whole height. It is not skinning: no bones, no weights, no twist.</p>
+  <p><b>A rigid turn of the tangent frame.</b> Each vertex's offset and tangent frame turn rigidly with the middle at its height. The bend also stretches the surface along the middle on the side away from the azimuth and compresses it on the side toward it, which a rigid turn does not follow, so a normal that is neither horizontal nor along the middle leans a little off the bent surface's.</p>
+  <p><b>Bounds and BLASes stay as loaded.</b> The pass rewrites vertices only. The culling pass tests the bent Mesh's cooked bounds, which must hold every shape it bends to, as <code>Bend</code> requires. A bent Mesh loaded as <code>MeshUse::Drawn</code> has no BLAS; its shadow comes from shadow proxies or, in the refit and rebuild forms, from a BLAS the next step updates.</p>
+  <p><b>A frame's bends, at most 4,096.</b> Past <code>BEND_CAPACITY</code> the highest Meshes in the Arena keep their last shape, counted and warned about. A bend prepare drops as a race keeps no shape of its own that frame.</p>
+  <p><b>No bends, no time.</b> A frame that bends nothing records no pass; its timestamp slots keep an earlier frame's values, and the readback reads the pass as taking no time.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15">Metal Shading Language Specification 4.1, &sect;1.6.3 Math Intrinsics Compiler Options</a></dt><dd>fast math is Metal's default, with its lossy assumptions about floating-point math; <code>msl-4.1-fast-math</code></dd>
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=372">Metal Shading Language Specification 4.1, &sect;8.4, Table 8.2</a></dt><dd>under fast math, <code>sin</code>'s error over [&minus;&pi;, &pi;] is absolute, at most 2<sup>&minus;13</sup>, which is why <code>sinc</code> takes its series near zero; <code>msl-4.1-sin-fast-accuracy</code></dd>
+    <dt><a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">Akenine-M&ouml;ller and colleagues, Real-Time Rendering, 4th edition, chapter 4, Transforms (the table of contents: the book is not online)</a></dt><dd>&sect;4.3, quaternions: the rotations the bend and the QTangent use; &sect;4.4, vertex blending: the skinning the bend stands in for</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass arrived in the third milestone with the <code>crowd</code> scene, in four steps: the pass, the <code>Bend</code> component and its blend between Ticks, the scene's swaying figures, and the shadow proxies that give them shadows; the refit form then cut the frame after the pass so each figure's own BLAS could follow its bend. The development narrative, with the measurements of its day, is in the notebook's volume <a href="crowd-shadows.html">Crowd Shadows</a>; this page describes the pass as it is.</p>
+  <footer class="sources">Written from <code>src/render/bend_pass.rs</code>, <code>src/render/shaders/bend.wgsl</code>, <code>common.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/bind_groups.rs</code>, <code>prepare.rs</code>, <code>renderer.rs</code>, <code>readback.rs</code>, <code>src/components.rs</code>, <code>src/transform/mod.rs</code>, <code>src/state.rs</code>, <code>src/cook/mesh.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0017, 0018, 0019, 0020 and 0022, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="dynamic-tlas.html">Previous: The dynamic TLAS</a><a href="index.html">All field guides</a><a href="blas-refit.html">Next: The BLAS refit</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
