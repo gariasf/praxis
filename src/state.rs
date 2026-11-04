@@ -253,7 +253,7 @@ impl State {
     /// and uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
         self.recorder.begin();
-        self.recorder.dropped_time = self.simulation.simulate(frame_delta);
+        self.recorder.counters.dropped_time = self.simulation.simulate(frame_delta);
 
         let started = Instant::now();
         // Writes a failed upload lost are written again, with every Instance.
@@ -268,10 +268,11 @@ impl State {
         self.recorder.stage("prepare_frame", started);
 
         self.renderer.upload(frame, &mut self.recorder);
-        self.recorder.renderables_refused = self.preparer.renderables_refused();
-        self.recorder.lights_overflowed = self.preparer.lights_overflowed();
-        self.recorder.moving_instances_left_out = self.preparer.moving_instances_left_out();
-        self.recorder.bends_left_out = self.preparer.bends_left_out();
+        self.recorder.counters.renderables_refused = self.preparer.renderables_refused();
+        self.recorder.counters.lights_overflowed = self.preparer.lights_overflowed();
+        self.recorder.counters.moving_instances_left_out =
+            self.preparer.moving_instances_left_out();
+        self.recorder.counters.bends_left_out = self.preparer.bends_left_out();
     }
 
     /// Draws the frame into `target`, a view in the format and size this
