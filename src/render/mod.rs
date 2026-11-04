@@ -34,7 +34,7 @@ pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::{BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES};
 pub use renderer::{CrowdForm, RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging};
-pub use targets::{DEPTH_FORMAT, HDR_FORMAT};
+pub use targets::{HDR_FORMAT, MULTISAMPLED_FORMATS};
 pub use uniforms::{CameraUniform, LIGHT_CAPACITY, LightData, LightUniform};
 
 /// Frames submitted but not finished on the GPU when the next one starts, at

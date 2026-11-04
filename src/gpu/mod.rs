@@ -53,7 +53,7 @@ impl GpuContext {
     /// Requests a device with exactly the Capability floor, after checking
     /// the adapter against all of it.
     async fn request_device(adapter: wgpu::Adapter) -> anyhow::Result<Self> {
-        let attachment_formats: Vec<_> = MAIN_PASS_FORMATS
+        let attachment_formats: Vec<_> = crate::render::MULTISAMPLED_FORMATS
             .into_iter()
             .map(|format| (format, adapter.get_texture_format_features(format).flags))
             .collect();
@@ -215,7 +215,7 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
         report.push_str(line.trim_end());
         report.push('\n');
     }
-    let msaa_x4: Vec<_> = MAIN_PASS_FORMATS
+    let msaa_x4: Vec<_> = crate::render::MULTISAMPLED_FORMATS
         .into_iter()
         .map(|format| {
             let flags = adapter.get_texture_format_features(format).flags;
@@ -251,10 +251,6 @@ fn adapter_report(adapter: &wgpu::Adapter) -> String {
     ));
     report
 }
-
-/// The attachment formats the main pass uses: depth, and the HDR colour.
-const MAIN_PASS_FORMATS: [wgpu::TextureFormat; 2] =
-    [crate::render::DEPTH_FORMAT, crate::render::HDR_FORMAT];
 
 /// The Capability floor's features (ADR 0021): exactly what every device
 /// requests.
@@ -347,14 +343,15 @@ fn check_floor(
 }
 
 /// The format features the floor requires of a main-pass attachment format:
-/// 4x MSAA, and on a colour format its resolve, since the lit pass resolves
-/// its multisampled colour into the HDR target (ADR 0019).
+/// 4x MSAA, and on the HDR format its resolve, since the lit pass resolves
+/// its multisampled colour into the HDR target (ADR 0019). No other target
+/// is resolved.
 fn floor_format_features(format: wgpu::TextureFormat) -> wgpu::TextureFormatFeatureFlags {
     let msaa_x4 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4;
-    if format.is_depth_stencil_format() {
-        msaa_x4
-    } else {
+    if format == crate::render::HDR_FORMAT {
         msaa_x4 | wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
+    } else {
+        msaa_x4
     }
 }
 
@@ -647,11 +644,11 @@ mod tests {
     }
 
     /// The main pass's formats on the M4 Pro, each with 4x MSAA.
-    fn m4_pro_attachment_formats() -> [(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags); 2] {
-        [
-            (wgpu::TextureFormat::Depth32Float, MSAA_X4),
-            (wgpu::TextureFormat::Rgba16Float, MSAA_X4),
-        ]
+    fn m4_pro_attachment_formats() -> Vec<(wgpu::TextureFormat, wgpu::TextureFormatFeatureFlags)> {
+        crate::render::MULTISAMPLED_FORMATS
+            .into_iter()
+            .map(|format| (format, MSAA_X4))
+            .collect()
     }
 
     /// The surface takes the 8-bit UNORM format it offers, wherever it is
@@ -688,6 +685,34 @@ mod tests {
         );
     }
 
+    /// The surface normals are multisampled but never resolved, so the floor
+    /// asks no resolve of their format.
+    #[test]
+    fn the_surface_normals_format_needs_no_resolve() {
+        let formats: Vec<_> = m4_pro_attachment_formats()
+            .into_iter()
+            .map(|(format, flags)| {
+                if format == crate::render::targets::SURFACE_NORMALS_FORMAT {
+                    (
+                        format,
+                        flags - wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
+                    )
+                } else {
+                    (format, flags)
+                }
+            })
+            .collect();
+        assert_eq!(
+            check_floor(
+                m4_pro_features(),
+                M4_PRO_DOWNLEVEL_FLAGS,
+                &m4_pro_limits(),
+                &formats
+            ),
+            Ok(())
+        );
+    }
+
     #[test]
     fn every_gap_is_named_in_one_error() {
         let limits = wgpu::Limits {
@@ -697,6 +722,7 @@ mod tests {
         let mut formats = m4_pro_attachment_formats();
         formats[0].1 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2;
         formats[1].1 = MSAA_X4 - wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+        formats[2].1 = MSAA_X4 - wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4;
 
         let error = check_floor(
             m4_pro_features() - wgpu::Features::TIMESTAMP_QUERY,
@@ -723,6 +749,10 @@ mod tests {
                         wgpu::TextureFormat::Rgba16Float,
                         wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
                     ),
+                    (
+                        wgpu::TextureFormat::Rgba8Unorm,
+                        wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4
+                    ),
                 ],
                 limits: vec![LimitGap {
                     name: "max_buffer_size",
@@ -739,6 +769,7 @@ mod tests {
              missing downlevel flag ANISOTROPIC_FILTERING; \
              missing format feature MULTISAMPLE_X4 on Depth32Float; \
              missing format feature MULTISAMPLE_RESOLVE on Rgba16Float; \
+             missing format feature MULTISAMPLE_X4 on Rgba8Unorm; \
              max_buffer_size 2147483647 required, adapter has 268435456"
         );
     }

@@ -44,6 +44,13 @@ pub const SHADOW_MASK_SAMPLES_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat:
 /// (`octahedral_encode`, common.wgsl) of 8 bits each, mapped from [-1, 1].
 pub const SURFACE_NORMALS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// The formats of the multisampled targets the main pass draws into: depth,
+/// the HDR colour and the surface normals. The Capability floor checks 4x
+/// MSAA on each (ADR 0021), and `RenderTargets::new` creates no
+/// multisampled target of another format.
+pub const MULTISAMPLED_FORMATS: [wgpu::TextureFormat; 3] =
+    [DEPTH_FORMAT, HDR_FORMAT, SURFACE_NORMALS_FORMAT];
+
 /// The luminance of a linear colour in Rec. 709's primaries, the scene's, per
 /// unit of each: ITU-R BT.709-6's luma weights (item 3.2), which are the Y
 /// row of its linear RGB-to-XYZ matrix as ITU-R BT.2087-0 prints it
@@ -100,6 +107,10 @@ impl RenderTargets {
         // (`shadow_mask.wgsl`).
         assert!(height <= 1 << 14, "targets {height} pixels tall");
         let layered_target = |label, format, sample_count, layers, usage| {
+            assert!(
+                sample_count == 1 || MULTISAMPLED_FORMATS.contains(&format),
+                "{label} is multisampled in {format:?}, which the Capability floor does not check"
+            );
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(label),
                 size: wgpu::Extent3d {
