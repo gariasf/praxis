@@ -390,16 +390,16 @@ mod tests {
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
         // A software rasterizer shares the test's CPU, and on CI's runner
-        // can take longer than the wait to finish a frame: a frame left
-        // unfinished changes what the frames after it allocate.
+        // can take longer than the longest wait to finish a frame.
         if context.adapter.get_info().device_type == wgpu::DeviceType::Cpu {
             writeln!(std::io::stderr(), "skipped: needs a hardware adapter").ok();
             return;
         }
         let scene = ReferenceScene::Orrery;
-        // Retired by a poll between frames with no wait, or left finished
-        // after it; `None` when a frame began before the GPU finished the
-        // frame before it.
+        // Each frame's work retired by a poll before the next frame, or, given
+        // a wait, left finished for the next frame's submissions after that
+        // wait; `None` when a frame's submissions did not retire the frame
+        // before it.
         let allocations = |left_finished_after: Option<Duration>| -> Option<Vec<u64>> {
             let mut state = State::new(
                 &context,
@@ -433,7 +433,7 @@ mod tests {
                         let wait = context.device.poll(wgpu::PollType::wait_indefinitely());
                         wait.expect("the frames before finish");
                     }
-                    Some(wait) => std::thread::sleep(wait),
+                    Some(finish_wait) => std::thread::sleep(finish_wait),
                 }
                 state
                     .simulation
@@ -441,8 +441,8 @@ mod tests {
                     .insert_resource(scene.camera_at(frame, glam::DVec3::ZERO));
                 state.update(scene.frame_delta());
                 state.render(&view);
-                // The frame before, finished before this one began, is
-                // retired by this one's submissions.
+                // The frame before was retired by this one's submissions,
+                // so the GPU had finished it before they ran.
                 if state.frames_completed() < u64::from(frame) {
                     writeln!(
                         std::io::stderr(),

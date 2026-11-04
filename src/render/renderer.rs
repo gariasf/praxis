@@ -727,8 +727,8 @@ impl Renderer {
         submission
     }
 
-    /// How many frames, counted from the first, the GPU has finished, as
-    /// far as the submissions and polls since have seen.
+    /// One past the last frame whose submission completed, as far as the
+    /// submissions and polls since have seen.
     #[cfg(test)]
     pub(crate) fn frames_completed(&self) -> u64 {
         self.gpu_stats.frames_completed()
