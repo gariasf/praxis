@@ -960,6 +960,18 @@ for (resource, use_info) in group.resources_to_use.iter() {
 encoder.useResource_usage_stages('''
 checked = 2026-10-26
 
+["wgpu-hal-30-metal-resources-to-use-by-view"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L1041-L1047"
+section = "wgpu-hal 30.0.1, Metal Device::create_bind_group, a binding array of Textures: each view's entry in the bind group's resources_to_use, which set_bind_group passes to useResource"
+quote = '''for (idx, tex) in textures.iter().enumerate() {
+resource_ids[idx] = tex.view.raw.gpuResourceID();
+
+let use_info = bg
+.resources_to_use
+.entry(tex.view.as_raw().cast())
+.or_default();'''
+checked = 2026-11-04
+
 ["polyhaven-asset-license"]
 url = "https://polyhaven.com/license"
 section = "Asset License"
