@@ -1030,8 +1030,8 @@ checked = 2026-10-26
 ["ign-mdt05-distribution"]
 url = "https://www.idee.es/csw-inspire-idee/srv/spa/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full&id=spaignMDT05"
 section = "gmd:distributionInfo, gmd:onLine linkages"
-quote = '''https://centrodedescargas.cnig.es/CentroDescargas/busquedaSerie.do?codSerie=MDT05 [...] https://servicios.idee.es/wcs-inspire/mdt?request=GetCapabilities&service=WCS&version=2.0.1'''
-checked = 2026-10-26
+quote = '''https://servicios.idee.es/wcs-inspire/mdt?request=GetCapabilities&service=WCS&version=2.0.1 [...] https://centrodedescargas.cnig.es/CentroDescargas/modelo-digital-terreno-mdt05-primera-cobertura'''
+checked = 2026-11-04
 
 ["gltf-ibl-sampler"]
 url = "https://github.com/KhronosGroup/glTF-IBL-Sampler/blob/bd32f8a9ae502df5797ad18c705312eda247dbfd/README.md"
@@ -1969,6 +1969,7 @@ checked = 2026-10-27
 url = "https://developer.apple.com/documentation/metal/mtldevice/currentallocatedsize"
 section = "Apple Metal documentation, MTLDevice.currentAllocatedSize, abstract (macOS 10.13 and later)"
 quote = '''The total amount of memory, in bytes, the GPU device is using for all of its resources.'''
+checked = 2026-11-04
 
 ["wgpu-29-metal-store-action-resolve"]
 url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/conv.rs#L312-L319"
@@ -3843,15 +3844,15 @@ checked = 2026-10-30
 
 ["apple-tech-talk-110147-busy-waits"]
 url = "https://developer.apple.com/videos/play/tech-talks/110147/"
-section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2022), transcript, on busy waits"
+section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2021), transcript, on busy waits"
 quote = '''Avoid busy waits. They potentially lock a P core, instead of doing something useful with it. They also prevents the scheduler from promoting a thread from and E to a P core. You are also wasting energy and producing unnecessary heat, eating away your thermal headroom.'''
-checked = 2026-10-30
+checked = 2026-11-04
 
 ["apple-tech-talk-110147-cluster-frequency"]
 url = "https://developer.apple.com/videos/play/tech-talks/110147/"
-section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2022), transcript, on CPU clusters"
+section = "Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games (2021), transcript, on CPU clusters"
 quote = '''Each cluster may be independently activated or have its frequency adjusted by the kernel's scheduler -- depending on the current workload, the current thermal pressure for that cluster, and other factors.'''
-checked = 2026-10-30
+checked = 2026-11-04
 
 ["apple-wwdc18-612-render-thread-priority"]
 url = "https://developer.apple.com/videos/play/wwdc2018/612/"
