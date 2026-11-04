@@ -107,7 +107,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>Phase one of the culling pass, which builds the draw of the Instances in view that were visible the frame before.
       <span class="reads">Page: <a class="reference" href="culling-pass.html">The culling pass</a>. Volumes it has not yet absorbed, for their Metal paragraphs: <a href="instance-culling.html">Instance Culling Explained</a>, <a href="meshlet-culling.html">Meshlet Culling Explained</a></span></li>
     <li>The Froxel pass, which lists for each Froxel the point lights that may reach it.
-      <span class="reads">Page: <a class="reference" href="froxel-pass.html">The Froxel pass</a>, which opens with the light buffer it reads. Volume it has not yet absorbed: <a href="froxel-lights.html">Froxel Lights Explained</a>, for prepare's lights and the lit pass's lookup</span></li>
+      <span class="reads">Page: <a class="reference" href="froxel-pass.html">The Froxel pass</a>, which opens with the light buffer it reads</span></li>
     <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, and with shadow rays on each sample's surface normals beside it.
       <span class="reads">Page: <a class="reference" href="depth-prepass.html">The depth pre-pass</a></span></li>
     <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen.
@@ -117,7 +117,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>With shadow rays on, as Praxis ships: phase two's depth pass, which draws phase two's Instances into depth and the surface normals (<a href="depth-prepass.html#phase-two">The depth pre-pass</a>), then the shadow mask pass, which traces each pixel's shadow rays against both TLAS into the shadow mask, those of each edge pixel's second surface into its second layer, and a directional light's again from each sample of the pixels where its verdict differs from a neighbour's.
       <span class="reads">Pages: <a class="reference" href="shadow-mask.html">The shadow mask pass</a>, and <a class="reference" href="dynamic-tlas.html">The dynamic TLAS</a> for the box that lets a ray skip its second query. Volumes it has not yet absorbed: <a href="shadow-rays.html">Shadow Rays Explained</a>, <a href="edge-shadows.html">Edge Shadows Explained</a>, <a href="shadow-terminator.html">Shadow Terminator Explained</a></span></li>
     <li>The lit pass, which shades both phases' Instances, reading each pixel's point lights from its Froxel's list and its shadows from the shadow mask, and resolves its 4x MSAA colour into the HDR target.
-      <span class="reads">Page: <a class="reference" href="lit-pass.html">The lit pass</a>. Volume it has not yet absorbed: <a href="lit-pass-explained.html">Lit Pass Explained</a>, for the light units a concept page will take</span></li>
+      <span class="reads">Page: <a class="reference" href="lit-pass.html">The lit pass</a></span></li>
     <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target.
       <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a></span></li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats.

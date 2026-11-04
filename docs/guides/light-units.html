@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; a concept &middot; <code>src/components.rs</code> &middot; <code>src/camera/mod.rs</code></div>
   <h1>Light units</h1>
   <p class="definition">Every light value in the engine is photometric, in the units glTF defines: a directional light's illuminance in lux, a point light's luminous intensity in candela, an emissive surface's and the background's luminance in cd/m&sup2;, the ambient term's illuminance in lux; and the camera's exposure is an EV100, which scales the luminance the lit pass computes so that a scene's brightest ordinary surfaces land near display white before the HDR target stores them.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to a light's units, to a scene's figures or to the exposure rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="froxel-pass.html">The Froxel pass</a> for the light buffer that carries the values, <a href="lit-pass.html">Lit Pass Explained</a> for the shading that turns them into luminance.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at a79fe156 (2026-11-05). A change to a light's units, to a scene's figures or to the exposure rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="froxel-pass.html">The Froxel pass</a> for the light buffer that carries the values, <a href="lit-pass.html">The lit pass</a> for the shading that turns them into luminance.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -298,10 +298,10 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   </dl>
   <h3>History</h3>
   <p class="note">The lights took units in one step of the third milestone, with the HDR target and the tonemapping pass beside them: before it the sun's illuminance was 1, every other light a multiple of it, and the lit pass wrote display colour directly. The scenes' figures kept their ratios, and their EV100 of 16.35 divides by the 100,000 the values grew by, so no Golden moved by more than one 8-bit step, at no more than 110 pixels a scene. The volumes that narrated that step are retired: this page, <a href="hdr-target.html">The HDR target</a> and <a href="tonemapping-pass.html">The tonemapping pass</a> describe the chain as it is.</p>
-  <footer class="sources">Written from <code>src/components.rs</code>, <code>src/camera/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>town.rs</code>, <code>src/render/uniforms.rs</code>, <code>prepare.rs</code>, <code>main.wgsl</code>, <code>shading.wgsl</code>, <code>hdr.wgsl</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0020 and 0023, and the sources above, all at <code>main</code> fbae12f4.</footer>
+  <footer class="sources">Written from <code>src/components.rs</code>, <code>src/camera/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>town.rs</code>, <code>src/render/uniforms.rs</code>, <code>prepare.rs</code>, <code>main.wgsl</code>, <code>shading.wgsl</code>, <code>hdr.wgsl</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0020 and 0023, and the sources above, all at <code>main</code> a79fe156.</footer>
 </section>
 
-<nav class="series" aria-label="Praxis field guides"><a href="bench-history.html">Previous: Bench History Explained</a><a href="index.html">All field guides</a><a href="box-leakage.html">Next: Box Leakage Explained</a></nav>
+<nav class="series" aria-label="Praxis field guides"><a href="bench-history.html">Previous: Bench History Explained</a><a href="index.html">All field guides</a><a href="msaa.html">Next: MSAA</a></nav>
 </div>
 </div>
 <div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
