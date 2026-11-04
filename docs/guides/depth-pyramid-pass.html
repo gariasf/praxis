@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Depth Pyramid Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/depth_pyramid_pass.rs</code></div>
+  <h1>The depth pyramid pass</h1>
+  <p class="definition">A compute pass that reduces the depth pre-pass's 4x MSAA depth, level by level, into the depth pyramid, whose every texel holds the minimum depth over its share of the screen: under reverse Z, the farthest surface drawn anywhere beneath it. Phase two of the culling pass reads four of its texels per <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span> to cull those hidden behind what phase one drew.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read with:</b> <a href="culling-pass.html">The culling pass</a>, whose phase two reads the pyramid.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Every frame, after the depth pre-pass has drawn phase one's Instances and before phase two of the culling pass, whatever the <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switches</span>.</dd>
+      <dt>Reads</dt><dd>The depth target, 4x MSAA, every sample of every pixel; each later level, the level below it.</dd>
+      <dt>Writes</dt><dd>The depth pyramid, an <code>R32Float</code> texture of every level from level 0, half the targets' size rounded down and at least 1, to 1&times;1.</dd>
+      <dt>Dispatches</dt><dd>One per level, in order, in one compute pass: <code>reduce_depth</code> for level 0 in workgroups of 16&times;16 pixels, each writing 8&times;8 texels; <code>reduce_level</code> for every later level in workgroups of 8&times;8 texels. Eleven at 2560&times;1440.</dd>
+      <dt>Bind groups</dt><dd>Group 3, <code>DEPTH_PYRAMID_LEVEL</code>, one per level: level 0's holds the level and the depth target, every later level's the level and the level below. Phase two reads the whole pyramid through the culling pass's own group 3.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/depth_pyramid.wgsl</code>, with <code>DEPTH_PYRAMID_TILE_SIZE</code> declared from Rust.</dd>
+      <dt>Counted</dt><dd><code>depth_pyramid_pass</code> in GPU time; every level of the pyramid in GPU memory, through the render targets.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#shares">2 &middot; Sizes and shares</a>
+    <a href="#level-zero">3 &middot; Level 0, every sample</a>
+    <a href="#levels">4 &middot; The later levels</a>
+    <a href="#resize">5 &middot; Recreated on resize</a>
+    <a href="#reader">6 &middot; What phase two reads</a>
+    <a href="#tests">7 &middot; How it is tested</a>
+    <a href="#cost">8 &middot; What it costs</a>
+    <a href="#why">9 &middot; Why this way</a>
+    <a href="#limits">10 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The pyramid is built from the depth of the Instances phase one drew, the ones visible the frame before, so that phase two can test every other Instance in view against it within the same frame.</p>
+  <p class="order-label">The frame's passes with shadow rays on, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li class="warm">culling, phase one</li><li>Froxel pass</li><li class="warm">depth pre-pass</li><li class="focus">depth pyramid pass</li><li class="warm">culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
+  </ol>
+  <p>The depth pre-pass clears the depth target to 0, the far plane, draws phase one's Instances into it with depth compared <code>Greater</code>, and stores it. The pyramid pass then reduces it, and phase two reads the result. Nothing after phase two reads the pyramid, so it is built fresh each frame and holds nothing of phase two's own Instances.</p>
+  <p>The pass records one compute pass of one dispatch per level, each level's bind group holding the level it writes and what it reduces:</p>
+<pre class="code"><code><span class="comment">// Level 0 reduces the depth target, each later level the one below,
+// a workgroup per tile of texels: level 0's with an invocation per
+// pixel of the tile, the others' per texel.</span>
+for (index, (bind_group, size)) in self.levels.iter().enumerate() {
+    pass.set_pipeline(if index == 0 {
+        &amp;self.reduce_depth
+    } else {
+        &amp;self.reduce_level
+    });
+    pass.set_bind_group(DEPTH_PYRAMID_LEVEL.index, bind_group, &amp;[]);
+    pass.dispatch_workgroups(
+        size.width.div_ceil(DEPTH_PYRAMID_TILE_SIZE),
+        size.height.div_ceil(DEPTH_PYRAMID_TILE_SIZE),
+        1,
+    );
+}</code></pre>
+  <p class="code-source"><code>DepthPyramidPass::record</code>, <code>src/render/depth_pyramid_pass.rs</code>.</p>
+  <p>wgpu tracks each dispatch's use of every texture in a usage scope of its own, so it orders a level's writes before the next dispatch reads that level; the pass records no barrier itself. Both dispatch forms take the level's size over <code>DEPTH_PYRAMID_TILE_SIZE</code>, 8, as their workgroup counts: level 0's workgroups cover 16&times;16 pixels, which reduce to 8&times;8 texels.</p>
+</section>
+
+<section class="part prose" id="shares">
+  <div class="part-mark">2 &middot; <code>RenderTargets::new</code> &middot; <code>overlapped_texels</code></div>
+  <h2>Sizes and shares</h2>
+  <p class="key-idea">Each level is the one below halved and rounded down, at least 1, as a mip chain is, and each level's rows and columns divide the screen evenly. A texel holds the minimum of every texel below whose share of the screen overlaps its own: two along a side that halves exactly, three along one whose level below is odd.</p>
+  <p>The render targets create the pyramid with the other targets whose size is the frame's. Level 0 is half the targets' width and height, rounded down and at least 1, and the texture holds every level to 1&times;1. At 2560&times;1440 that is eleven levels, 1280&times;720, 640&times;360, 320&times;180, 160&times;90, 80&times;45, 40&times;22, 20&times;11, 10&times;5, 5&times;2, 2&times;1 and 1&times;1: 1,228,763 texels, 4,915,052 bytes. Besides a view of every level, which phase two reads, the targets keep a view of each level alone, which the pass writes and then reads to reduce the next.</p>
+  <p>Texel <i>x</i> of a level <i>n</i> texels wide stands for <i>x</i>/<i>n</i> to (<i>x</i>+1)/<i>n</i> of the screen's width, its share. Where the level below is <i>m</i> texels wide, the texels below whose shares overlap it run from &lfloor;<i>x</i>&middot;<i>m</i>/<i>n</i>&rfloor; to &lceil;(<i>x</i>+1)&middot;<i>m</i>/<i>n</i>&rceil; &minus; 1. Where <i>m</i> = 2<i>n</i> that is columns 2<i>x</i> and 2<i>x</i>+1; where <i>m</i> = 2<i>n</i>+1, a texel's share spans 2 + 1/<i>n</i> columns below, so it overlaps three.</p>
+<pre class="code"><code><span class="comment">// The texels of a level `below_size` texels in size that `texel` of a level
+// `size` overlaps, the rows and columns of each level sharing the screen
+// evenly: from ⌊texel × below / size⌋ to ⌈(texel + 1) × below / size⌉ − 1.
+// Two along an axis that halves exactly, three where the level below is odd.</span>
+fn overlapped_texels(texel: vec2&lt;u32&gt;, size: vec2&lt;u32&gt;, below_size: vec2&lt;u32&gt;) -&gt; OverlappedTexels {
+    return OverlappedTexels(
+        texel * below_size / size,
+        ((texel + 1u) * below_size + size - 1u) / size - 1u,
+    );
+}</code></pre>
+  <p class="code-source"><code>depth_pyramid.wgsl</code>.</p>
+  <p>The shares matter because phase two finds texels by the same rule: a screen position <i>u</i>, from 0 to 1, falls in texel &lfloor;<i>u</i>&middot;<i>n</i>&rfloor;. A plain 2&times;2 reduction, reading columns 2<i>x</i> and 2<i>x</i>+1 everywhere, would leave the last column of an odd level unread and some texels short of their share; a pixel there that showed the far plane through a gap would be missed, and a visible Instance behind it culled.</p>
+</section>
+
+<section class="part prose" id="level-zero">
+  <div class="part-mark">3 &middot; <code>reduce_depth</code></div>
+  <h2>Level 0: every sample of every pixel</h2>
+  <p class="key-idea">Under 4x MSAA a pixel along a silhouette holds the near surface at some samples and what lies behind at others. Level 0 takes the minimum of all four samples of every pixel its share covers, so one sample that sees past an edge pulls the texel to the farther depth.</p>
+  <p>The depth target is bound as a <code>texture_depth_multisampled_2d</code>, which <code>textureLoad</code> reads one sample at a time. Each invocation of <code>reduce_depth</code> owns one pixel of a 16&times;16 tile, loads its four samples with four explicit loads, since Metal's compiler does not unroll a loop over them, and shares their minimum in workgroup memory. Rust asserts the sample count is 4, so the build fails if it changes.</p>
+<pre class="code"><code>fn pixel_minimum(pixel: vec2&lt;u32&gt;) -&gt; f32 {
+    return min(
+        min(textureLoad(depth, pixel, 0), textureLoad(depth, pixel, 1)),
+        min(textureLoad(depth, pixel, 2), textureLoad(depth, pixel, 3))
+    );
+}</code></pre>
+  <p class="code-source"><code>depth_pyramid.wgsl</code>.</p>
+  <p>Level 0 is half the depth target rounded down, so along an even side each texel overlaps the two pixels from twice its index, and along an odd side those two and the next texel's first. The workgroup's shared array therefore holds a 17th row and column: where a side is odd, the invocations along the tile's first row or column also load the pixel just past the tile. A pixel past the depth target's edge reads as 1, the nearest depth, which leaves any minimum as it is. After a barrier, the tile's first 8&times;8 invocations each take one texel's minimum from the shared minima and store it.</p>
+<pre class="code"><code>let first = 2u * local.xy;
+let last = first + 2u;
+var minimum = shared_block_minimum(first);
+if odd_sides.x {
+    minimum = min(minimum, min(pixel_minima[first.y][last.x], pixel_minima[first.y + 1u][last.x]));
+}
+if odd_sides.y {
+    minimum = min(minimum, min(pixel_minima[last.y][first.x], pixel_minima[last.y][first.x + 1u]));
+}
+if all(odd_sides) {
+    minimum = min(minimum, pixel_minima[last.y][last.x]);
+}
+textureStore(level, texel, vec4&lt;f32&gt;(minimum));</code></pre>
+  <p class="code-source"><code>reduce_depth</code>, <code>depth_pyramid.wgsl</code>, after the barrier.</p>
+  <p>At 2560&times;1440 level 0 is exactly half the target, so each texel reduces 2&times;2 pixels, 16 samples; where both of a target's sides are odd, a texel reduces 3&times;3 pixels, 36 samples.</p>
+</section>
+
+<section class="part prose" id="levels">
+  <div class="part-mark">4 &middot; <code>reduce_level</code></div>
+  <h2>The later levels</h2>
+  <p class="key-idea">Every later level runs one invocation per texel, in workgroups of 8&times;8, and takes the minimum of the texels below it overlaps, with explicit loads in blocks of four.</p>
+<pre class="code"><code>let overlapped = overlapped_texels(texel.xy, size, textureDimensions(level_below));
+let first = overlapped.first;
+let second = min(first + 1u, overlapped.last);
+let last = overlapped.last;
+var minimum = level_block_minimum(vec2&lt;u32&gt;(first.x, second.x), vec2&lt;u32&gt;(first.y, second.y));
+if last.x &gt; second.x {
+    minimum = min(minimum, level_block_minimum(vec2&lt;u32&gt;(last.x), vec2&lt;u32&gt;(first.y, second.y)));
+}
+if last.y &gt; second.y {
+    minimum = min(minimum, level_block_minimum(vec2&lt;u32&gt;(first.x, second.x), vec2&lt;u32&gt;(last.y)));
+}
+if all(last &gt; second) {
+    minimum = min(minimum, level_block_minimum(vec2&lt;u32&gt;(last.x), vec2&lt;u32&gt;(last.y)));
+}
+textureStore(level, texel.xy, vec4&lt;f32&gt;(minimum));</code></pre>
+  <p class="code-source"><code>reduce_level</code>, <code>depth_pyramid.wgsl</code>.</p>
+  <p>The first block is the texel's first two columns and rows below, the second taken again where the texel overlaps one alone, as a 1-texel level below a 1-texel level does. A third column, a third row, or both, follow where the level below is odd. The two entry points stay apart, with a pipeline each: WGSL has no generics, and a function shared between them would make each use both the depth target's binding and the level below's, so each pipeline's layout holds only the two bindings its entry point reads.</p>
+</section>
+
+<section class="part prose" id="resize">
+  <div class="part-mark">5 &middot; <code>DepthPyramidPass::bind_render_targets</code></div>
+  <h2>Recreated on resize</h2>
+  <p class="key-idea">The pyramid's size follows the targets', so it lives with them and is created again on every resize; the passes whose bind groups hold it rebuild those groups, since a bind group keeps the textures it was built with.</p>
+  <p><code>Renderer::resize</code> creates every render target again, then calls <code>bind_render_targets</code> on each pass whose groups read one: the pyramid pass, which rebuilds a group per level with that level's size, and the culling pass, whose group 3 holds the whole pyramid for phase two, among others. Left bound to the old targets, the pyramid pass would go on reducing the old depth into the old pyramid, and phase two would read texels the frame never wrote.</p>
+</section>
+
+<section class="part prose" id="reader">
+  <div class="part-mark">6 &middot; <code>occluded</code>, <code>src/render/shaders/culling.wgsl</code></div>
+  <h2>What phase two reads</h2>
+  <p class="key-idea">Phase two reads four texels per Instance, at the level where the Instance's screen rectangle spans at most two per axis, and culls the Instance where even its nearest point is farther than their minimum.</p>
+  <p>The test, with its rounding margins, the level it picks and why it computes each level's size rather than query it, is described in full on <a href="culling-pass.html#occlusion">the culling pass's page</a>. What it needs of the pyramid is two properties. Every texel's value is never nearer than the farthest sample beneath its share, so a rectangle's covering texels bound the farthest depth under it; and the levels' sizes are those of a mip chain, so phase two can derive any level's size from level 0's by shifting. Where phase one drew nothing, the depth stays 0, and no box in front of the camera lies behind 0: open sky hides nothing, and the first frame, before any Instance was visible, culls nothing.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">A pass-level test compares every texel of every level with a CPU reduction of the read-back samples, with no tolerance; renderer tests drive the pyramid through phase two and a resize; and every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> must render the same with culling on and off.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen</code></td><td><code>depth_pyramid_pass.rs</code></td><td>the pass, created at 16&times;16 and rebound to targets at 37&times;23, where levels 0 to 2 reduce an odd side, and at 64&times;48, where they halve exactly: five triangles at several depths drawn as the pre-pass draws, and every texel of every level equal to a CPU reduction of every sample of the read-back depth, which keeps each texel below whose share overlaps by an integer test rather than by the shader's formula</td></tr>
+      <tr><td><code>an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears</code></td><td><code>renderer.rs</code></td><td>the pyramid through phase two, in a Renderer created at another size and resized first, so a pyramid or bind group left at the old size culls wrongly</td></tr>
+      <tr><td><code>a_resized_renderer_draws_as_one_created_at_its_new_size</code></td><td><code>renderer.rs</code></td><td>a resized Renderer's frame equals one created at its new size</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the pass timed by name, and the closed-form GPU memory with the pyramid's 80&times;45 to 1&times;1 levels in it</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene's frame with culling off matches its frame with culling on, <code>town</code> at eight frames of its path: no pixel may differ on hardware, one a frame on a software driver</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span>.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The pass costs about the same on every scene of an adapter, since it reads every sample of the same-sized depth whatever the scene draws; level 0 is most of it, and on the M4 Pro it reads at that GPU's bandwidth floor.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. The gate is ADR 0019's, from culling phase one to the end of the lit pass with shadow rays off, which the pass is part of.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>depth_pyramid_pass</code></th><th class="n">Gate, rays off</th><th class="n">GPU frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">213.0</td><td class="n">849.5</td><td class="n">4,094.7</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">142.6</td><td class="n">672.9</td><td class="n">2,338.8</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">163.8</td><td class="n">750.5</td><td class="n">2,341.4</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">205.5</td><td class="n">1,210.1</td><td class="n">6,689.1</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">133.1</td><td class="n">865.1</td><td class="n">2,736.3</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">159.7</td><td class="n">908.4</td><td class="n">2,717.7</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">204.3</td><td class="n">773.8</td><td class="n">3,851.5</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">133.7</td><td class="n">548.0</td><td class="n">1,692.5</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">157.2</td><td class="n">571.4</td><td class="n">1,611.1</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">204.6</td><td class="n">818.2</td><td class="n">3,664.5</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">137.7</td><td class="n">565.2</td><td class="n">1,680.2</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">158.2</td><td class="n">595.9</td><td class="n">1,639.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">205.0</td><td class="n">763.0</td><td class="n">2,917.0</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">138.0</td><td class="n">537.6</td><td class="n">1,747.0</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">159.1</td><td class="n">563.1</td><td class="n">1,685.5</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">214.1</td><td class="n">835.2</td><td class="n">3,003.5</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">138.7</td><td class="n">634.8</td><td class="n">1,846.3</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">159.8</td><td class="n">720.9</td><td class="n">1,819.8</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">213.4</td><td class="n">677.2</td><td class="n">2,598.5</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">137.2</td><td class="n">715.6</td><td class="n">1,594.7</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">159.6</td><td class="n">870.4</td><td class="n">1,622.2</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">203.2</td><td class="n">642.6</td><td class="n">2,917.3</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">126.5</td><td class="n">422.4</td><td class="n">1,424.8</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">151.6</td><td class="n">448.5</td><td class="n">1,110.5</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">490.5</td><td class="n">14,109.0</td><td class="n">15,975.0</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">138.3</td><td class="n">513.6</td><td class="n">1,207.2</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">159.4</td><td class="n">558.9</td><td class="n">1,095.3</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">213.7</td><td class="n">1,297.0</td><td class="n">3,747.5</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">139.3</td><td class="n">840.5</td><td class="n">2,169.8</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">161.2</td><td class="n">924.8</td><td class="n">1,970.2</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">219.7</td><td class="n">8,612.1</td><td class="n">19,935.0</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">153.3</td><td class="n">4,991.8</td><td class="n">9,395.0</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">174.8</td><td class="n">5,306.9</td><td class="n">9,279.4</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. <code>texture-wall</code>, whose frame on the M4 Pro is set by its bound Textures, reads more than twice its neighbours there; on the RTX 2070 SUPER it reads as they do.</p>
+  <p>The pyramid's memory is a byte and a third per pixel: 4 bytes a texel over a level 0 of a quarter of the pixels, and a third more for the levels after it. It reads, each frame, the depth target's 16 bytes a pixel, 58,982,400 bytes at 1440p; on the Apple M4 Pro level 0 measured at that GPU's bandwidth floor for those bytes (<code>docs/performance.md</code>, the depth pyramid and culling against their sources).</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes at 2560&times;1440</th><th class="n">Bytes per pixel</th></tr></thead>
+    <tbody>
+      <tr><td>depth pyramid, 11 levels</td><td><code>R32Float</code></td><td class="n">4,915,052</td><td class="n">1.33</td></tr>
+      <tr><td>depth target it reads, 4 samples</td><td><code>Depth32Float</code>, 4x MSAA</td><td class="n">58,982,400</td><td class="n">16</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">9 &middot; ADRs 0015, 0019</div>
+  <h2>Why this way</h2>
+  <p><b>A pyramid, not the depth itself.</b> Bounding the farthest depth under a rectangle from the 4x depth means reading every sample under it, 160,000 for a square 200 pixels on a side; a pyramid answers with four reads whatever the rectangle's size. Greene, Kass and Miller's Z pyramid combines four depths into the farthest at each coarser level; ADR 0019 takes it, with two phases, for its GPU-driven culling.</p>
+  <p><b>The minimum, not the maximum.</b> Under ADR 0015's reverse Z a nearer depth is greater, so the farthest is the smallest, and the ADR says a Hi-Z pyramid keeps the minimum. A pyramid that kept the maximum would let a box showing through a gap be culled: built so on purpose, the culled and unculled captures differed by 2,742 to 29,519 pixels on four Reference scenes on Metal.</p>
+  <p><b>Even shares, not a plain 2&times;2.</b> A plain reduction is exact only where every level halves, which 1440p's chain stops doing at 80&times;45. Taking every texel below whose share overlaps costs a third load along an odd side and keeps the pyramid conservative at any target size.</p>
+  <p><b>Every sample, not one.</b> Reading one sample a pixel, or a 1x depth, would let a pixel whose other samples see past an edge hide what lies behind; phase two also grows each rectangle by a pixel so that every sample a covered pixel holds is in the texels it reads. Published reductions start from less: one from a GPU's depth tile metadata, another from a 16-bit depth already decompressed. Reading one sample instead of four cut level 0 by a third on <code>town</code> and by half on uv-grid on the M4 Pro, which is the price of keeping the test conservative under MSAA.</p>
+  <p><b>An invocation per pixel at level 0.</b> With an invocation per texel each issued sixteen loads; with one per pixel each issues four and the texels' minima come from workgroup memory, which as shipped saved 48 &micro;s on <code>town</code> and 17 to 31 &micro;s on helmet and uv-grid, left the other light scenes within a few microseconds, and matched a CPU reduction texel for texel. Fusing levels 1 to 3 into level 0's dispatch was measured and was slower: their later steps run on 16, 4 and 1 of the 256 invocations behind barriers.</p>
+  <p><b>A dispatch per level.</b> The ten later levels cost about 40 &micro;s together, mostly per-dispatch cost. A single-pass downsampler would save some of it, but its last step needs storage writes visible across workgroups, which not every WebGPU platform promises; it waits until a profile names the pyramid's tail.</p>
+  <p><b>Explicit loads.</b> In its first form, written as a loop over pixels and samples, level 0 took 656 &micro;s on the M4 Pro, a loop over samples alone 175, and the written-out loads 150: Metal's compiler serialised the loads in a loop.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">10</div>
+  <h2>Limits</h2>
+  <p><b>Phase one's depth only.</b> The pyramid holds what phase one drew, the Instances visible the frame before. After a camera cut it holds little, and phase two culls little in that frame; the image stays right.</p>
+  <p><b>Four samples, fixed.</b> Level 0 loads exactly four samples a pixel; another sample count fails the build until the loads are rewritten.</p>
+  <p><b>Bandwidth-bound.</b> Level 0 reads every byte of the multisampled depth, so its cost scales with the target's area and does not fall with what a scene draws. A minimum-depth resolve in the depth pre-pass would let level 0 read one sample a pixel; Metal has one, but wgpu 30 exposes none.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote of each, under the key the code cites where it cites one.</p>
+  <dl class="reading">
+    <dt><a href="https://www.cs.princeton.edu/courses/archive/spring01/cs598b/papers/greene93.pdf#page=3">Greene, Kass and Miller, Hierarchical Z-Buffer Visibility, SIGGRAPH 1993, &sect;3.2</a></dt><dd>the Z pyramid: each coarser level combines four depths by keeping the farthest</dd>
+    <dt><a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=52">Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances</a></dt><dd>two-phase occlusion culling against a depth pyramid, refreshed between the phases, and a pyramid built from depth tile metadata at 0.06 ms on Xbox One at 1080p</dd>
+    <dt><a href="https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=66">Wihlidal, Optimizing the Graphics Pipeline with Compute, GDC 2016</a></dt><dd>a reduction storing a conservative depth per tile; a lane-swizzling variant over a 16-bit depth already decompressed takes about 41 &micro;s on Xbox One at 1080p</dd>
+    <dt><a href="https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_core_pipeline/src/mip_generation/experimental/downsample_depth.wesl#L331-L341">Bevy 0.20.1, its depth downsampling shader</a></dt><dd>an engine whose first reduction under MSAA also takes the minimum of every sample</dd>
+    <dt><a href="https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/">Apple, Apple introduces M4 Pro and M4 Max, 2024</a></dt><dd>273 GB/s of memory bandwidth, the floor level 0 is measured against</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass was built in the third milestone with the two-phase culling that reads it: the pyramid first, with its even shares and every sample at level 0 written out as explicit loads, then phase two's test of it. A later comparison of its cost with the published figures found level 0 at the M4 Pro's bandwidth floor and the sources reading less input, and moved level 0 to an invocation per pixel. The development narrative, with each step's measurements, was the notebook's volume Depth Pyramid Explained, which this page replaces; <code>docs/performance.md</code> keeps the measurements.</p>
+  <footer class="sources">Written from <code>src/render/depth_pyramid_pass.rs</code>, <code>src/render/shaders/depth_pyramid.wgsl</code>, <code>culling.wgsl</code>, <code>src/render/targets.rs</code>, <code>bind_groups.rs</code>, <code>renderer.rs</code>, the tests named above, <code>docs/performance.md</code>, <code>CONTEXT.md</code>, ADRs 0015 and 0019, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="msaa-fragment-merging.html">Previous: MSAA Fragment Merging Explained</a><a href="index.html">All field guides</a><a href="shadow-mask.html">Next: The shadow mask pass</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
