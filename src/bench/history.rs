@@ -35,8 +35,8 @@ const RELEASE_BUILD: &str = "release-build";
 /// How Mesa's lavapipe, CI's software Vulkan, names its adapter.
 const LAVAPIPE_ADAPTER_PREFIX: &str = "llvmpipe";
 
-/// How many times a publish rebuilds its commit on the branch's new tip
-/// after another publish pushed first.
+/// How many times a publish pushes: each attempt after the first rebuilds
+/// its commit on the branch's new tip, as another publish pushed first.
 const PUSH_ATTEMPTS: u32 = 5;
 
 /// What the branch's README says: how it is laid out.

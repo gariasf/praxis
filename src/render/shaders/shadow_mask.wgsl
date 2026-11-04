@@ -4,7 +4,14 @@
 // its ray found hidden, for the lit pass to read. Where other samples of the
 // pixel show another surface, it does the same from the farthest of them
 // into the mask's second layer, and marks which samples show it, so each
-// fragment of an edge pixel reads its own surface's bits. The bits follow
+// fragment of an edge pixel reads its own surface's bits. Its four
+// dispatches: `build_shadow_mask` traces each pixel's nearest surface and
+// lists its second surface; `trace_second_surfaces` traces that list;
+// `list_shadow_edges` lists each pixel where a directional light's verdict
+// differs from a 4-neighbour's, or that its nearest sample turns from while
+// another sample faces it; and `trace_shadow_edges` traces those lights
+// again from each other sample that shows the nearest surface, keeping each
+// sample's verdict in `shadow_mask_samples`. The bits follow
 // the pixel's lights in the order the lit pass sums them: the directional
 // lights, then the point lights its Froxel lists, as many as
 // SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top

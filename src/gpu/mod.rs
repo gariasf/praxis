@@ -128,7 +128,8 @@ pub async fn adapter_info() -> anyhow::Result<wgpu::AdapterInfo> {
 
 /// The adapter, its backend, and whether the adapter supports each
 /// feature the roadmap plans on, with the related features and limits.
-/// One line per entry, followed by the Capability floor's limits, 4x MSAA on
+/// One line per entry, followed by two of the Capability floor's limits, the
+/// buffer size and the acceleration structures per stage, then 4x MSAA on
 /// the main pass's attachment formats, resolved on colour ones, and
 /// anisotropic filtering.
 fn adapter_report(adapter: &wgpu::Adapter) -> String {

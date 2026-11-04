@@ -87,7 +87,6 @@ jobs:
         run: cargo test
 
   software-goldens:
-    # Not a required check until two green weeks.
     name: Goldens (software Vulkan)
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}

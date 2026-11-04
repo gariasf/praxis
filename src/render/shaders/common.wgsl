@@ -1,6 +1,8 @@
-// Shared by every shader module: the structs the CPU writes, the Anchor
+// Shared by the modules that read the frame, the geometry or the lights
+// (src/render/shaders/mod.rs): the structs the CPU writes, the Anchor
 // composition, the position a depth target's depth places at a pixel, the
-// packed index and the vertex decode (src/render/shaders/mod.rs).
+// ray and box test, the point light's position, the packed index, the
+// vertex decode and the octahedral codec.
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's

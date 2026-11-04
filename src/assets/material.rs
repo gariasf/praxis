@@ -69,7 +69,7 @@ impl MaterialChannel {
 pub struct MaterialData {
     pub base_color: [f32; 4],
     pub metallic_roughness: [f32; 4], // x=metallic, y=roughness, z=normal scale, w=pad
-    pub emissive: [f32; 4],           // xyz=color, w=strength
+    pub emissive: [f32; 4],           // xyz=color, w=pad
     pub layers: [u32; 4],             // x=albedo, y=normal, z=MR, w=AO
     pub extra: [u32; 4],              // x=emissive Layer, yzw=pad
 }

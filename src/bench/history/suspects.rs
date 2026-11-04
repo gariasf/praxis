@@ -23,8 +23,8 @@ pub(super) struct Point {
     /// None when the record did not measure the metric.
     pub median: Option<f64>,
     /// Whether no record before it compares with it: its Harness version or
-    /// scene content changed, or it is an imported Baseline, which accepted
-    /// its level.
+    /// scene content changed, it is an imported or re-recorded Baseline,
+    /// which accepted its level, or a Verdict pinned its commit.
     pub starts_line: bool,
 }
 

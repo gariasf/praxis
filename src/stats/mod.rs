@@ -17,8 +17,10 @@ pub struct FrameStats {
     /// `None` until then, and for good if its readback was skipped.
     pub gpu: Option<GpuFrameStats>,
     pub draw_calls: u32,
-    /// Bytes the frame's uploads wrote to GPU buffers: the Instances it wrote
-    /// and the uniforms. Pools upload only while a Scene loads.
+    /// Bytes the frame's uploads wrote to GPU buffers: the camera and light
+    /// uniforms, the light buffer, the bends, the Instances it wrote, the
+    /// Instance slot count when it changed, and the dynamic TLAS's instances
+    /// its build uploads. Pools upload only while a Scene loads.
     pub uploaded_bytes: u64,
     /// Instances the frame wrote: those of new Renderables and of those whose
     /// World transform or Material changed (ADR 0003).

@@ -245,7 +245,13 @@ fn assets() -> Check {
     let (absent, fetched) =
         match crate::cook::absent_fetched(Path::new(crate::cook::ASSETS_DIRECTORY)) {
             Ok(found) => found,
-            Err(error) => return Check::new("assets", Verdict::Fail, format!("{error:#}")),
+            Err(error) => {
+                return Check::new(
+                    "assets",
+                    Verdict::Fail,
+                    format!("{error:#}; `cargo test --test asset_manifest` names what to fix"),
+                );
+            }
         };
     if !absent.is_empty() {
         return Check::new(

@@ -310,16 +310,27 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [scene] if ReferenceScene::from_name(scene).is_some() => {
             Command::Window(parse_scene(scene)?)
         }
-        _ => anyhow::bail!(
-            "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
-             `cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
-             `export-scene <scene> <directory> [--frame <n>]`, \
-             `difference <expected png> <actual png> <difference png>`, \
-             `bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; `capture` and `bench` also take \
+        _ => {
+            // As the commands themselves, the `cook` feature's exist only in
+            // a build with it.
+            let (cook_commands, crowd_form_commands) = if cfg!(feature = "cook") {
+                (
+                    "`cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+                     `export-scene <scene> <directory> [--frame <n>]`, \
+                     `difference <expected png> <actual png> <difference png>`, ",
+                    "`capture` and `bench` also take",
+                )
+            } else {
+                ("", "`bench` also takes")
+            };
+            anyhow::bail!(
+                "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
+             `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_commands} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
-            ReferenceScene::ALL.map(ReferenceScene::name)
-        ),
+                ReferenceScene::ALL.map(ReferenceScene::name)
+            )
+        }
     })
 }
 
@@ -874,6 +885,25 @@ mod tests {
     fn a_command_missing_its_arguments_is_refused_with_the_usage() {
         let error = parse(&["bench"]).unwrap_err().to_string();
         assert!(error.contains("praxis [<scene>]"), "{error}");
+        assert!(error.contains("`preflight`"), "{error}");
+        for command in [
+            "`cook`",
+            "`fetch`",
+            "`capture ",
+            "`export-scene ",
+            "`difference ",
+        ] {
+            assert_eq!(
+                error.contains(command),
+                cfg!(feature = "cook"),
+                "{command} in a build {} `cook`: {error}",
+                if cfg!(feature = "cook") {
+                    "with"
+                } else {
+                    "without"
+                }
+            );
+        }
     }
 
     #[test]

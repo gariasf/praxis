@@ -164,7 +164,7 @@ impl RenderTargets {
             view_formats: &[],
         });
         RenderTargets {
-            // Read by the depth pyramid pass.
+            // Bound by the depth pyramid, shadow mask and light count passes.
             depth: target(
                 "Depth Texture",
                 DEPTH_FORMAT,

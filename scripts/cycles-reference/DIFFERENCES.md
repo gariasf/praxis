@@ -8,8 +8,8 @@ ticket once the triage opens a fix. This is the image half of the engine's
 Deviations; the rest, where the code should not match the literature and
 why, is `docs/audit/deviations.md`.
 
-Each crop is praxis | Cycles | difference, from `scripts/gallery.sh` with
-`PRAXIS_BLENDER` set, at 2x. The difference is praxis's capture dimmed to a
+Each crop is praxis | Cycles | difference, cut by `compare.py crop` from a
+gallery (`scripts/gallery.sh` with `PRAXIS_BLENDER` set), at 2x. The difference is praxis's capture dimmed to a
 quarter, red where praxis is brighter and blue where Cycles is, at four
 times the channel that differs most. A difference of an 8-bit step
 or so everywhere is praxis's dither, which the Cycles image does not carry,

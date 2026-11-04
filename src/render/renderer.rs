@@ -51,7 +51,8 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
 /// time.
 pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
 
-/// The render passes of `TIMED_PASSES`; the others are compute passes.
+/// The render passes of `TIMED_PASSES`; the others are compute passes, but
+/// the dynamic TLAS's build and the BLAS refit, which markers time.
 pub(crate) const RENDER_PASSES: [&str; 4] = [
     DEPTH_PREPASS,
     PHASE_TWO_DEPTH_PASS,
@@ -59,14 +60,16 @@ pub(crate) const RENDER_PASSES: [&str; 4] = [
     TONEMAPPING_PASS,
 ];
 
-/// The CPU stages of the dynamic TLAS's build: its recording and its
-/// submit, the CPU cost ADR 0020 caps.
+/// The CPU stage that records the dynamic TLAS's build; with
+/// `DYNAMIC_TLAS_SUBMIT`, its submit, the CPU cost ADR 0020 caps.
 pub(crate) const DYNAMIC_TLAS_RECORDING: &str = "dynamic_tlas";
 
 /// The CPU stage that records the frame's BLAS updates, with the crowd's
 /// refit or rebuild form, and submits them with the frame's commands before
 /// them.
 pub(crate) const BLAS_REFIT: &str = "blas_refit";
+
+/// The CPU stage that submits the dynamic TLAS's build, on its own.
 pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 
 /// The Render switches a Renderer is created with and keeps. The defaults are
@@ -721,13 +724,12 @@ impl Renderer {
         recorder.stage(DYNAMIC_TLAS_SUBMIT, started);
 
         let started = Instant::now();
-        // submit will accept anything that implements IntoIter
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);
         submission
     }
 
-    /// The GPU stats of earlier frames that the last `upload` or
+    /// The GPU stats of earlier frames that the last `render` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
         self.gpu_stats.read_back()
