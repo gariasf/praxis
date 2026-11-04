@@ -5,7 +5,8 @@ on:
     branches: [main]
   # On main the run tests the merged commit, which PR checks never saw
   # (branches need not be up to date), and saves the caches PR runs restore.
-  # Docs pushes skip it; PRs never do, as the required check must report.
+  # Docs pushes skip it; PRs never do, as the required checks must report:
+  # a docs-only PR skips the engine jobs instead (see `changes`).
   push:
     branches: [main]
     paths-ignore: ['docs/**', '*.md']
@@ -30,6 +31,35 @@ env:
   LAVAPIPE_VERSION: 25.2.8-0ubuntu0.24.04.4
 
 jobs:
+  # Whether a pull request changes anything but docs: `docs/` and the root's
+  # Markdown, which the build, the Goldens and the bench never read, while
+  # `check` runs the tests that do. A job skipped by `if` reports success, so
+  # the required checks pass on a docs-only PR. The engine jobs run unless
+  # this says `false`, so a push or a failed listing runs them all.
+  changes:
+    name: Changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      engine: ${{ steps.list.outputs.engine }}
+    steps:
+      # The merge commit and its first parent, the base it merges into.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Without renames, a file moved out of `docs/` lists both its paths.
+      - name: List
+        id: list
+        run: |
+          changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
+          if grep -qvE '^(docs/|[^/]*\.md$)' <<< "$changed"; then
+            echo engine=true >> "$GITHUB_OUTPUT"
+          else
+            echo engine=false >> "$GITHUB_OUTPUT"
+          fi
+
   check:
     name: Check, Clippy & Format
     runs-on: ubuntu-latest
@@ -57,6 +87,8 @@ jobs:
   software-goldens:
     # Not a required check until two green weeks.
     name: Goldens (software Vulkan)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -95,6 +127,8 @@ jobs:
     # links no source decoder, and renders every CI Golden from a cooked
     # `cooked/` with `assets/` absent.
     name: Goldens from a shipping build (software Vulkan)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -143,6 +177,8 @@ jobs:
 
   software-bench:
     name: Bench counters (software Vulkan)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.engine != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
