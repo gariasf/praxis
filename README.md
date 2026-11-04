@@ -37,8 +37,8 @@ record a suspect, with its shift as a share of the median of up to 8 records
 before it on its line: it lies outside that median ± the larger of 4 median
 absolute deviations and 3%, unless it only continues a suspect among those 8:
 on the same side, within that suspect's tolerance of its median. A new Harness
-version or scene content, an imported Baseline, or a commit a Verdict pinned
-starts a line. lavapipe's records are never suspects.
+version or scene content, an imported or re-recorded Baseline, or a commit a
+Verdict pinned starts a line. lavapipe's records are never suspects.
 
 - `verdicts/<adapter>-<backend>/<scene>/<source hash>.json`: what the sweep
   found of the slower suspect of that source: the night re-benched it and the
@@ -73,4 +73,8 @@ quiet unchecked. Each import rewrites the records an earlier one wrote, with
 the tags the rules of its day give them. A record holds what the bench
 measured then, so a metric added later is absent from it: its Series row
 holds null for a time, Aliasing figure or scene content hash it lacks, and
-leaves out a counter or pass it lacks.
+leaves out a counter or pass it lacks. A Baseline `main` re-recorded since
+is a record the same way, its `provenance.source` `baseline-rerecorded` and its
+Harness version the one its commit defined; the sweep imports each night.
+Its mark stays with its key: a quieter record of its source that holds the key
+in its place carries `rerecorded_baseline`, and starts the line in its place.
