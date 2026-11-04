@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use praxis::ReferenceScene;
-use praxis::cook::{CookSettings, texture_sources};
+use praxis::cook::{CookSettings, Referrer, texture_sources};
 use praxis::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial, CookedTexture,
     MaterialChannel,
@@ -674,6 +674,57 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
+/// Renaming a Mesh gives it a new Asset ID, while the Cooked cache keeps the
+/// old ID's Blob: the normal-tangent scene, which names the Mesh by its old
+/// name, then references an Asset no cook makes any more, and the cook warns
+/// of it, naming the scene and the ID.
+#[test]
+fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
+    let directory = scratch("rename-mesh");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    let glb = assets.join("NormalTangentTest/NormalTangentTest.glb");
+    fs::create_dir_all(glb.parent().unwrap()).unwrap();
+    let repository_assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    fs::copy(
+        repository_assets.join("NormalTangentTest/NormalTangentTest.glb"),
+        &glb,
+    )
+    .unwrap();
+    let manifest = json!([{
+        "path": "NormalTangentTest/NormalTangentTest.glb",
+        "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
+    }]);
+    fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
+    let old_mesh = AssetId::new(
+        AssetSource::File(NORMAL_TANGENT_TEST_GUID),
+        AssetKind::Mesh,
+        AssetName::Name("NormalTangentTest_low"),
+    );
+    let reference = (Referrer::Scene(ReferenceScene::NormalTangent), old_mesh);
+    let report = cook(&assets, &cache).unwrap();
+    assert!(!report.dangling_references.contains(&reference));
+
+    let source = fs::read(&glb).unwrap();
+    let gltf::Glb { header, json, bin } = gltf::Glb::from_slice(&source).unwrap();
+    let mut document: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    document["meshes"][0]["name"] = json!("NormalTangentTest_renamed");
+    let renamed = gltf::Glb {
+        header,
+        json: document.to_string().into_bytes().into(),
+        bin,
+    };
+    fs::write(&glb, renamed.to_vec().unwrap()).unwrap();
+    let report = cook(&assets, &cache).unwrap();
+    assert!(cache.mesh(old_mesh).is_ok(), "the old ID's Blob stays");
+    assert!(
+        report.dangling_references.contains(&reference),
+        "{:?}",
+        report.dangling_references
+    );
+    fs::remove_dir_all(&directory).unwrap();
+}
+
 /// SciFiHelmet's cooked Mesh Blob bytes per triangle, Meshlets included, at
 /// most: the ceiling the Meshlet cook's measurement sets. A lower figure
 /// re-records it.
@@ -686,9 +737,19 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
     let cache = CookedCache::new(directory.join("cooked"));
     let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
     let report = cook(&assets, &cache).unwrap();
-    assert_eq!(report.unresolved_materials, []);
-
     let mesh_id = |source, name| AssetId::new(source, AssetKind::Mesh, AssetName::Name(name));
+    let helmet = mesh_id(
+        AssetSource::File(0x3b67bb0196a34daa9d4389cb09aa9a27),
+        "SciFiHelmet",
+    );
+    let helmet_fetched = assets.join("SciFiHelmet/SciFiHelmet.gltf").exists();
+    // Unfetched, the helmet scene's helmet is cooked nowhere, as in CI.
+    let expected = match helmet_fetched {
+        true => vec![],
+        false => vec![(Referrer::Scene(ReferenceScene::Helmet), helmet)],
+    };
+    assert_eq!(report.dangling_references, expected);
+
     let scene = |name| AssetSource::Scene(name);
     let normal_tangent = AssetSource::File(NORMAL_TANGENT_TEST_GUID);
     for id in [
@@ -703,11 +764,7 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
         assert!(!mesh.primitives.is_empty(), "Mesh {id} has no Primitives");
     }
 
-    let helmet = mesh_id(
-        AssetSource::File(0x3b67bb0196a34daa9d4389cb09aa9a27),
-        "SciFiHelmet",
-    );
-    if assets.join("SciFiHelmet/SciFiHelmet.gltf").exists() {
+    if helmet_fetched {
         assert_eq!(
             cache.mesh(helmet).unwrap().indices.len(),
             HELMET_TRIANGLES * 3
