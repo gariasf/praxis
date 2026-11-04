@@ -22,7 +22,7 @@ const MATERIAL_CAPACITY: u64 = 256;
 /// The colour Channels' anisotropy (albedo, emissive) and the data
 /// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
 /// the candidates measured in `docs/performance.md`: 4x on the data
-/// Channels saves 126 µs of minification's lit pass and drops the sparkle
+/// Channels shortens minification's lit pass and drops the sparkle
 /// of highlights whose normals came from finer mips than Toksvig widened
 /// their roughness for.
 const COLOUR_ANISOTROPY: u16 = 16;

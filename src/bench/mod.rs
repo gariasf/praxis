@@ -128,9 +128,11 @@ fn adapter_key(adapter: &str, backend: Option<&str>) -> String {
 
 /// A time warns above this ratio to its Baseline and fails above
 /// `FAIL_RATIO`; a counter fails on any increase, as it is the same on every
-/// run. Noise floor on the M4 Pro, 6 runs of each scene under the owner's
-/// usual load: counters identical, GPU medians within 3.4%, CPU medians of
-/// 31–42 µs within 8.1 µs.
+/// run. Both ratios sit above the noise of GPU medians over repeated runs
+/// on the M4 Pro under the owner's usual load, where counters read
+/// identical; CPU medians of tens of microseconds move by more, hence the
+/// floor below (measured: `docs/performance.md`, Measurements behind the
+/// code).
 const WARN_RATIO: f64 = 1.05;
 const FAIL_RATIO: f64 = 1.10;
 
@@ -138,8 +140,9 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
-/// Likewise for a pass's GPU time: over three runs on the M4 Pro, helmet's
-/// culling pass read 136 to 153 µs, every other pass within 3%.
+/// Likewise for a pass's GPU time: a short pass moves by more than the
+/// ratios between runs on the M4 Pro (measured: `docs/performance.md`,
+/// Measurements behind the code).
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
 
 /// The steady-state cost of one Reference scene: medians over the measured

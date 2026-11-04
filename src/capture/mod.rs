@@ -280,8 +280,9 @@ pub(crate) enum FrameWait {
     /// Blocks, as a window does in `get_current_texture`.
     Block,
     /// Polls until the frame is done. Behind a GPU-bound frame, the M4 Pro
-    /// runs a main thread that blocks about 30% slower for the whole next
-    /// frame, so its CPU times would measure the clock, not the work. Apple
+    /// runs a main thread that blocks markedly slower for the whole next
+    /// frame (measured: `docs/performance.md`, Measurements behind the
+    /// code), so its CPU times would measure the clock, not the work. Apple
     /// asks games not to busy-wait, which holds a P-core and spends thermal
     /// headroom [ref:apple-tech-talk-110147-busy-waits], so only the bench
     /// spins, on a hardware adapter.

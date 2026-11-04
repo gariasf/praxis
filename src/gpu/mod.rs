@@ -9,8 +9,9 @@ use std::fmt;
 /// mips still shares one, so Textures cost few allocations. In blocks of 128
 /// to 256 MiB, on the RTX 2070 SUPER under Vulkan, a State whose targets
 /// landed in a block an earlier State had filled drew pbr-sweep's depth
-/// pre-pass in 198 µs instead of 52 and its lit pass in 798 µs instead of
-/// 285. wgpu-hal's Vulkan backend puts
+/// pre-pass and lit pass several times slower (measured:
+/// `docs/performance.md`, Measurements behind the code). wgpu-hal's Vulkan
+/// backend puts
 /// no texture it creates in dedicated memory
 /// [ref:wgpu-hal-30-vulkan-texture-allocation], which NVIDIA says may speed
 /// colour and depth attachments, most on pre-Turing GPUs

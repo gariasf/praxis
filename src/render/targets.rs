@@ -323,7 +323,8 @@ impl RenderTargets {
     /// The depth target as the attachment of the frame's last pass that
     /// draws depth: loaded, and discarded unless `kept` for a later pass to
     /// read. A pass that writes depth and stores it writes the whole target
-    /// back, about 50 µs at 1440p on the M4 Pro.
+    /// back, a measurable cost at 1440p on the M4 Pro (measured:
+    /// `docs/performance.md`, Measurements behind the code).
     pub fn final_depth_attachment(&self, kept: bool) -> wgpu::RenderPassDepthStencilAttachment<'_> {
         wgpu::RenderPassDepthStencilAttachment {
             view: &self.depth,

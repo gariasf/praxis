@@ -17,7 +17,8 @@ impl WorldTransform {
     /// schedule moves, the blend `blend_weight` of the way to it from the
     /// previous Tick's (ADR 0022). The blend is linear in every entry, in
     /// f64: exact for translation, while a rotation of θ per Tick shrinks the
-    /// entity by up to 1 − cos(θ/2) mid-Tick, 0.1% at 0.09 rad (5.8 rad/s).
+    /// entity by up to 1 − cos(θ/2) mid-Tick, ≈ 0.001 at 0.09 rad
+    /// (5.8 rad/s).
     pub fn drawn(&self, previous: Option<&PreviousWorldTransform>, blend_weight: f32) -> Self {
         let Some(previous) = previous.and_then(|previous| previous.0) else {
             return *self;

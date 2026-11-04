@@ -7,13 +7,18 @@ use std::path::Path;
 
 const REGISTRY: &str = "docs/references.toml";
 
+/// Hosts whose pages are databases that change under a quote, so an entry
+/// quotes them from an archived snapshot a reader can still open.
+const LIVE_HOSTS: [&str; 1] = ["vulkan.gpuinfo.org"];
+
 #[test]
 fn every_citation_has_an_entry_and_every_entry_a_citation() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let registry = fs::read_to_string(root.join(REGISTRY)).expect("read the registry");
     let mut files = Vec::new();
     collect_files(root, root, &mut files);
-    let problems = mismatches(&entries(&registry), &files);
+    let mut problems = mismatches(&entries(&registry), &files);
+    problems.extend(unarchived_live_sources(&registry));
     assert!(
         problems.is_empty(),
         "{} registry mismatches:\n{}",
@@ -46,6 +51,17 @@ fn a_dangling_key_and_an_unused_entry_are_found() {
 }
 
 #[test]
+fn a_live_database_quoted_without_an_archived_snapshot_is_found() {
+    let registry = "[\"live\"]\nurl = \"https://vulkan.gpuinfo.org/listmemory.php?platform=linux\"\n\n[\"archived\"]\nurl = \"https://web.archive.org/web/20261104112316/https://vulkan.gpuinfo.org/listmemory.php?platform=linux\"\n\n[\"paper\"]\nurl = \"https://doi.org/10.1137/1.9780898718027\"\n";
+    assert_eq!(
+        unarchived_live_sources(registry),
+        [
+            "docs/references.toml: `live` quotes a live database at its live url; cite a web.archive.org snapshot"
+        ]
+    );
+}
+
+#[test]
 fn malformed_citations_and_keys_are_found() {
     let entries = ["higham-3.1", "Higham_3.1", "higham-3.1"].map(str::to_owned);
     let files = [(
@@ -72,6 +88,40 @@ fn entries(registry: &str) -> Vec<String> {
         .filter_map(|line| line.trim().strip_prefix("[\"")?.strip_suffix("\"]"))
         .map(str::to_owned)
         .collect()
+}
+
+/// Entries whose url is a page on one of `LIVE_HOSTS` rather than its
+/// `web.archive.org` snapshot.
+fn unarchived_live_sources(registry: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut key = "";
+    for line in registry.lines() {
+        if let Some(header) = line
+            .trim()
+            .strip_prefix("[\"")
+            .and_then(|rest| rest.strip_suffix("\"]"))
+        {
+            key = header;
+        }
+        let Some(url) = line
+            .strip_prefix("url = \"")
+            .and_then(|rest| rest.strip_suffix('"'))
+        else {
+            continue;
+        };
+        let host = url
+            .split_once("://")
+            .map_or(url, |(_, rest)| rest)
+            .split('/')
+            .next()
+            .unwrap_or_default();
+        if LIVE_HOSTS.contains(&host) {
+            problems.push(format!(
+                "{REGISTRY}: `{key}` quotes a live database at its live url; cite a web.archive.org snapshot"
+            ));
+        }
+    }
+    problems
 }
 
 /// Whether `text` is a key: lowercase letters, digits, dots and hyphens.
