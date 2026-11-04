@@ -87,11 +87,13 @@ impl BlasRefit {
         })
     }
 
-    /// Records the update of `mesh_pool`'s refitted BLASes after `head`,
-    /// the frame's commands up to its bend pass, submits both through
-    /// `queue`, and orders what `queue` submits next after them. A refit
-    /// is followed by a marker that writes `refit_end`; returns whether it
-    /// was.
+    /// Records the update of `mesh_pool`'s refitted BLASes, submits it with
+    /// `head`, the frame's commands up to its bend pass, through `queue`, and
+    /// orders what `queue` submits next after them. The rebuild form records
+    /// the update into `head` and submits that one command buffer; the refit
+    /// form, on Apple, records it after `head`, in a command buffer of its own
+    /// submitted beside it and followed, when given `refit_end`, by a marker
+    /// that writes it. Returns whether that marker was recorded.
     pub fn submit(
         &mut self,
         device: &wgpu::Device,

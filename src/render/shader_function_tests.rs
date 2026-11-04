@@ -1012,10 +1012,14 @@ const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
 ];
 
 /// Largest difference allowed between GT7 on the GPU and the sample's
-/// outputs, on a scale where 1 is display white. On the M4 Pro, GT7 lands
-/// within 7e-5 of them, PQ's exponents amplifying f32 rounding, and
-/// `tonemap` within 2.3e-4, where its conversion back to Rec. 709 subtracts
-/// near-equal terms for saturated green: a fifth of an 8-bit step.
+/// outputs, on each test's own scale: display-linear, where 1 is display
+/// white, for `gt7_tonemap` and `tonemap`; the frame buffer's, where display
+/// white is `GT7_PAPER_WHITE`'s 2.5, for the curve; and PQ's signal, where 1
+/// is 10,000 cd/m², for PQ and ICtCp, PQ's round trip back to the frame
+/// buffer relative above 1. On the M4 Pro, GT7 lands within 7e-5 of them,
+/// PQ's exponents amplifying f32 rounding, and `tonemap` within 2.3e-4,
+/// where its conversion back to Rec. 709 subtracts near-equal terms for
+/// saturated green: a fifth of an 8-bit step.
 const GT7_TOLERANCE: f64 = 3e-4;
 
 /// IEC 61966-2-1's sRGB encoding, as the Khronos Data Format Specification
@@ -1187,10 +1191,15 @@ const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
 /// theirs on the M4 Pro.
 const RELATIVE_TOLERANCE: f64 = 4e-6;
 
-/// The same for shading from unit vectors: f32 rounds each direction and
-/// each cosine between them by up to about 1e-7, which D, steep near its
-/// peak at the roughness floor, turns into up to 1.1e-5 of the result on the
-/// M4 Pro.
+/// The same for shading from unit vectors. Smith V at a grazing view sets
+/// its floor, in the case of view 90° and light 45° at the roughness floor:
+/// N·V is 0 there, so V's |N·V| term, |N·V| times about 0.71, holds only the
+/// f32 dot's error, up to γ₃ of the unit vectors [ref:higham-3.1], about
+/// 3.6e-7 at the u of 2⁻²³ this file takes for Metal: against the |N·L| α
+/// term's 1.1e-3, a relative error of up to 2.2e-4. On the M4 Pro, whose dot
+/// lands well inside γ₃, results land within 1.1e-5 of their references; a
+/// backend that rounds each product and sum of the dot may exceed this
+/// tolerance in that case.
 const DIRECTION_TOLERANCE: f64 = 5e-5;
 
 /// Asserts that `actual` is finite and within `tolerance` of `expected`, so
@@ -1650,7 +1659,8 @@ fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
     );
     let view_proj = crate::camera::projection_matrix(size[0] / size[1]) * view;
     let columns = view_proj.to_cols_array_2d();
-    // The near plane's distance over the depth along the view axis.
+    // The near plane's distance, which over a point's distance along the
+    // view axis gives its depth.
     let near = f64::from(columns[3][2]);
     let points = [0.0, 0.375, 640.5, 1279.875, 2559.625, 2560.0]
         .into_iter()

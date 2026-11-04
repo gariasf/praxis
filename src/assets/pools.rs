@@ -56,7 +56,7 @@ pub struct MeshBlas {
 
 /// The Meshes, and the GPU tables they are drawn from: Arenas of vertices
 /// and indices, the Meshlet Arenas and the Mesh table (ADRs 0017, 0019);
-/// and a BLAS per Mesh, which rays trace (ADR 0020).
+/// and a BLAS per Mesh that rays trace (ADR 0020).
 pub struct MeshPool {
     device: wgpu::Device,
     meshes: Vec<Mesh>,

@@ -916,7 +916,7 @@ const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 const CROWD_COLORS: [[f32; 4]; 2] = [[0.6, 0.6, 0.6, 1.0], [0.2, 0.35, 0.7, 1.0]];
 #[cfg(feature = "cook")]
 const CROWD_ROUGHNESS: f32 = 0.6;
-/// Above the crowd and back from it, looking down about 28° at its middle,
+/// Above the crowd and back from it, looking down about 27° at its middle,
 /// so every figure stays in view and none hides another whole.
 const CROWD_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 11.0, 20.0);
 const CROWD_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.6, -0.5);

@@ -54,8 +54,10 @@ macro_rules! part {
     };
 }
 
-/// The structs more than one pass reads, the Anchor composition, the packed
-/// index and the vertex decode.
+/// The structs more than one pass reads, the Anchor composition, the
+/// position a depth places at a pixel, the ray and box test, the point
+/// light's position, the packed index, the vertex decode and the octahedral
+/// codec.
 const COMMON: Part = part!("common.wgsl");
 
 /// The shading terms.

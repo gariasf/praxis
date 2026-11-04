@@ -27,7 +27,7 @@ section() {
 }
 
 if ! grep -Eq '^(Closes #[0-9]+|Part [0-9]+ of #[0-9]+|Ticket: n/a \(.+\))$' <<<"$body"; then
-  miss 'body: no ticket line; one ticket per PR needs "Closes #N", "Part k of #N" or "Ticket: n/a (reason)" on a line of its own (workflow.md, PRs)'
+  miss 'body: no ticket line; one ticket per PR needs "Closes #N" on a line of its own (workflow.md, PRs), or there "Part k of #N" for a partial PR or "Ticket: n/a (reason)" for none (the PR template)'
 fi
 
 while IFS= read -r heading; do

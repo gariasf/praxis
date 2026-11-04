@@ -63,7 +63,7 @@ impl Configuration {
         aliasing: true,
     };
 
-    /// CI's lavapipe renders on the CPU, so CI benches at the Goldens' size
+    /// lavapipe renders on the CPU, so `--ci` benches at the Goldens' size
     /// and for fewer frames, and without `Aliasing`, whose render at three
     /// times the Goldens' size it is too slow for: `compare --ci` reads
     /// counters only.
@@ -85,8 +85,8 @@ impl Configuration {
         aliasing: true,
     };
 
-    /// CI's size, rendering the counter frames and no more: CI's bench of a
-    /// scene too dense for lavapipe to render `CI`'s frames in its time.
+    /// `CI`'s size, rendering the counter frames and no more: CI's
+    /// configuration, which it benches every scene with (`--ci-counters`).
     pub const CI_COUNTERS: Self = Self {
         width: Self::CI.width,
         height: Self::CI.height,
@@ -628,9 +628,11 @@ fn measure(
     })
 }
 
-/// One line, `key=value` pairs after the scene name: medians and p95s of
-/// the CPU and GPU frame, the gate, shadow-ray time and the lit pass's
-/// wait, each pass's median, then the counters.
+/// One line, `key=value` pairs after the scene name: the CPU frame's median
+/// and p95, the dynamic TLAS's CPU median, then medians and p95s of the GPU
+/// frame, the gate, shadow-ray time and, when measured, the lit pass's wait,
+/// each pass's median, the counters, then the aliasing figures when
+/// measured.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);

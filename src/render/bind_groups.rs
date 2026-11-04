@@ -196,11 +196,14 @@ pub const BENDS: BindGroupDefinition = BindGroupDefinition {
 };
 
 /// Group 3 of the shadow mask pass, which builds the mask: the camera, the
-/// lights and the Froxel lists, which `FRAME` holds, the depth target, and
-/// what the pass writes: the shadow mask, which samples show its second
-/// surface, how many lights it had no bit for, which the CPU reads back, and
-/// the list of second surfaces its first dispatch writes for its second,
-/// with that dispatch's size.
+/// lights and the Froxel lists, which `FRAME` holds, the depth target and the
+/// surface normals, and what the pass writes: the shadow mask, which samples
+/// show its second surface and the first directional lights' verdicts at
+/// each sample, how many lights it had no bit for, which the CPU reads back,
+/// the list of second surfaces its first dispatch writes for its second, with
+/// that dispatch's size, each pixel's directional verdicts, and the list of
+/// shadow edges its third dispatch writes for its fourth, with that
+/// dispatch's size.
 pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Shadow Mask Build Bind Group",
