@@ -11,7 +11,8 @@ use anyhow::Context;
 
 use super::Spread;
 use crate::preflight::{
-    BUSY_GPU_PERCENT, gpu_load_percent, machine_warnings, other_praxis_processes,
+    BUSY_GPU_PERCENT, gpu_load_percent, machine_warnings, one_minute_load_average,
+    other_praxis_processes,
 };
 
 /// Names what the bench's metrics mean: raised by any change to how a
@@ -43,6 +44,9 @@ pub struct Provenance {
     pub scene_content_hash: String,
     /// The busiest GPU's utilisation at the bench's start, when known.
     pub gpu_load_percent: Option<u32>,
+    /// The one-minute load average at the bench's start, when the OS keeps
+    /// one; unknown in records from before results carried it.
+    pub one_minute_load_average: Option<f64>,
     /// Other praxis processes at the bench's start, when listed.
     pub other_processes: Option<Vec<String>>,
     /// The scene's GPU frame p95 over its median; none when the median is
@@ -62,6 +66,7 @@ pub struct BenchStart {
     /// None when the checkout is no git repository.
     pub checkout: Option<Checkout>,
     pub gpu_load_percent: Option<u32>,
+    pub one_minute_load_average: Option<f64>,
     pub other_processes: Option<Vec<String>>,
     /// Preflight's power and display warnings, such as a Mac on battery.
     pub machine_warnings: Vec<String>,
@@ -83,6 +88,7 @@ impl BenchStart {
         Self {
             checkout,
             gpu_load_percent: gpu_load_percent(),
+            one_minute_load_average: one_minute_load_average(),
             other_processes: other_praxis_processes(),
             machine_warnings: machine_warnings(),
         }
@@ -108,6 +114,7 @@ impl BenchStart {
             harness_version: HARNESS_VERSION,
             scene_content_hash,
             gpu_load_percent: self.gpu_load_percent,
+            one_minute_load_average: self.one_minute_load_average,
             other_processes: self.other_processes.clone(),
             gpu_frame_p95_over_median,
             quiet: is_quiet(
@@ -126,7 +133,9 @@ impl BenchStart {
 /// Whether a run was quiet: preflight would have warned of neither the GPU
 /// load, other praxis processes, nor the power or display at its start, and its GPU frames spread
 /// less than `QUIET_P95_OVER_MEDIAN`. A load or listing that could not be
-/// read is a preflight note, not a warning, so it passes.
+/// read is a preflight note, not a warning, so it passes. The load average
+/// is recorded but not judged: quiet judges GPU times, which held within 2%
+/// of their Baselines on the M4 Pro at one-minute load averages up to 19.
 fn is_quiet(
     gpu_load_percent: Option<u32>,
     other_processes: Option<&[String]>,

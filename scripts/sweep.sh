@@ -85,10 +85,14 @@
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
 
   # A FAIL line, such as a scene without a Golden here, spoils no bench, and
-  # one that does, such as no adapter, fails the bench itself.
+  # one that does, such as no adapter, fails the bench itself. The CPU load
+  # holds off nothing here: the sweep's own build and cook raise the
+  # one-minute load average, which takes minutes to fall; quiet judges what
+  # spoils GPU times; and each record carries the load it started under.
   preflight=$("$praxis" preflight)
   [ -n "$preflight" ] || fail "praxis preflight printed nothing"
-  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | sed 's/  */ /g')
+  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | grep -v '^warn *cpu load' |
+    sed 's/  */ /g')
   if [ -n "$warnings" ]; then
     log "skipped, the machine is not quiet:"
     printf '%s\n' "$warnings"

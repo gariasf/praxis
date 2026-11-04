@@ -14,6 +14,12 @@ use crate::capture::{GOLDEN_DIRECTORY, golden_key};
 /// someone else's.
 pub(crate) const BUSY_GPU_PERCENT: u32 = 10;
 
+/// The one-minute load average above which a bench's CPU times would be
+/// someone else's: on the M4 Pro, at 3.7 to 19.3 the light scenes' CPU
+/// frames read 1.10 to 2.25 times their Baselines while their GPU frames
+/// held within 2%.
+const BUSY_LOAD_AVERAGE: f64 = 2.0;
+
 /// Names listed per line before the rest are counted.
 const LISTED_NAMES: usize = 4;
 
@@ -100,7 +106,9 @@ impl fmt::Display for Check {
 
 /// Every check, run from the repository root.
 pub fn run() -> Vec<Check> {
-    let mut checks = vec![gpu_load(), other_processes()];
+    let mut checks = vec![gpu_load()];
+    checks.extend(cpu_load());
+    checks.push(other_processes());
     checks.extend(power());
     checks.extend(display());
     match pollster::block_on(crate::gpu::adapter_info()) {
@@ -342,6 +350,53 @@ fn parse_ioreg_utilization(report: &str) -> Option<u32> {
             value[..digits].parse().ok()
         })
         .max()
+}
+
+/// The one-minute load average where the OS keeps one: `sysctl -n
+/// vm.loadavg` on macOS, `/proc/loadavg` on Linux; none on Windows.
+pub(crate) fn one_minute_load_average() -> Option<f64> {
+    if cfg!(target_os = "macos") {
+        output("sysctl", &["-n", "vm.loadavg"]).and_then(|report| parse_load_average(&report))
+    } else if cfg!(target_os = "linux") {
+        std::fs::read_to_string("/proc/loadavg")
+            .ok()
+            .and_then(|report| parse_load_average(&report))
+    } else {
+        None
+    }
+}
+
+/// On macOS and Linux, whether other work loads the CPU, which spoils a
+/// bench's CPU times though not its GPU times.
+fn cpu_load() -> Option<Check> {
+    (!cfg!(windows)).then(|| load_check(one_minute_load_average()))
+}
+
+fn load_check(load_average: Option<f64>) -> Check {
+    match load_average {
+        Some(load) if load > BUSY_LOAD_AVERAGE => Check::new(
+            "cpu load",
+            Verdict::Warn,
+            format!(
+                "{load:.2} over the last minute: bench only once it is under {BUSY_LOAD_AVERAGE}"
+            ),
+        ),
+        Some(load) => Check::new("cpu load", Verdict::Ok, format!("{load:.2}")),
+        None => Check::new("cpu load", Verdict::Note, "unknown: no load average"),
+    }
+}
+
+/// The one-minute load average, the first of the three that `sysctl -n
+/// vm.loadavg` prints as `{ 1.23 0.98 0.87 }` and `/proc/loadavg` as
+/// `1.23 0.98 0.87 2/345 6789`.
+fn parse_load_average(report: &str) -> Option<f64> {
+    report
+        .trim_start()
+        .trim_start_matches('{')
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
 }
 
 /// The power and display checks that warn: what spoils a bench's times on
@@ -729,6 +784,21 @@ mod tests {
         let ioreg = r#"| "PerformanceStatistics" = {"In use system memory"=123,"Device Utilization %"=27,"Renderer Utilization %"=25}"#;
         assert_eq!(parse_ioreg_utilization(ioreg), Some(27));
         assert_eq!(parse_ioreg_utilization("no statistics"), None);
+    }
+
+    #[test]
+    fn a_load_average_over_2_warns_and_names_it() {
+        assert_eq!(parse_load_average("{ 2.50 1.98 1.71 }\n"), Some(2.5));
+        assert_eq!(
+            parse_load_average("1.00 0.58 0.59 1/389 12345\n"),
+            Some(1.0)
+        );
+        assert_eq!(parse_load_average(""), None);
+        let busy = load_check(Some(2.5));
+        assert_eq!(busy.verdict, Verdict::Warn);
+        assert!(busy.detail.contains("2.50"), "{}", busy.detail);
+        assert_eq!(load_check(Some(1.0)).verdict, Verdict::Ok);
+        assert_eq!(load_check(None).verdict, Verdict::Note);
     }
 
     #[test]
