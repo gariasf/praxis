@@ -72,7 +72,7 @@ impl std::fmt::Display for Referrer {
         match self {
             Self::Material(id) => write!(formatter, "Material {id}"),
             Self::Mesh(id) => write!(formatter, "Mesh {id}"),
-            Self::Scene(scene) => write!(formatter, "scene {}", scene.name()),
+            Self::Scene(scene) => write!(formatter, "Reference scene {}", scene.name()),
         }
     }
 }
@@ -123,6 +123,12 @@ struct Sources {
     /// Each Mesh with its Cook key and its Primitives.
     meshes: Vec<(AssetId, String, Vec<mesh::SourcePrimitive>)>,
     absent: Vec<String>,
+    /// The GUID of each source some or all of whose Blobs stay as they are,
+    /// as the source, or an image it names, is absent.
+    kept_sources: Vec<u128>,
+    /// Each Texture a read source's Materials sample whose image this cook
+    /// did not read, so its Blob, if any, stays as it is.
+    kept_textures: Vec<AssetId>,
 }
 
 /// The source directory a launch cooks from, relative to the working
@@ -248,8 +254,24 @@ fn cook_sources(
         .chain(material_references)
         .chain(scene_references.iter().copied())
         .collect();
-    let kept_absent = !sources.absent.is_empty();
-    report.dangling_references = dangling_references(cache, &report, &references, kept_absent);
+    let made: HashSet<_> = report
+        .cooked
+        .iter()
+        .chain(&report.unchanged)
+        .copied()
+        .collect();
+    // A glTF file's Materials sample its own images, and a Primitive names a
+    // Material of its own file or scene, so only a Texture whose image this
+    // cook did not read may be kept; a scene's references, only while one of
+    // its own sources is.
+    let may_be_kept = |(referrer, id): &(Referrer, AssetId)| match referrer {
+        Referrer::Scene(scene) => scene
+            .source_files()
+            .iter()
+            .any(|guid| sources.kept_sources.contains(guid)),
+        Referrer::Material(_) | Referrer::Mesh(_) => sources.kept_textures.contains(id),
+    };
+    report.dangling_references = dangling_references(cache, &made, &references, may_be_kept);
     report.absent_sources = sources.absent.clone();
     tracing::info!(
         cooked = report.cooked.len(),
@@ -295,15 +317,21 @@ fn read_sources(
         let Ok(source) = std::fs::read(&path) else {
             tracing::warn!(path = %path.display(), "source absent; its cooked Blobs stay as they are");
             sources.absent.push(path.display().to_string());
+            sources.kept_sources.push(guid);
             continue;
         };
+        let absent_before = sources.absent.len();
         read_gltf(guid, &path, &source, &mut sources)
             .with_context(|| format!("reading {}", path.display()))?;
+        if sources.absent.len() > absent_before {
+            sources.kept_sources.push(guid);
+        }
     }
     for guid in unlisted {
         tracing::warn!(manifest = %manifest_path.display(), guid = %format!("{guid:032x}"), "no source listed with this GUID; its cooked Blobs stay as they are");
         let absent = format!("GUID {guid:032x}, unlisted in {}", manifest_path.display());
         sources.absent.push(absent);
+        sources.kept_sources.push(guid);
     }
     for &scene in scenes {
         let materials = scene.materials();
@@ -380,24 +408,26 @@ fn is_fresh(cache: &CookedCache, id: AssetId, cook_key: &str) -> bool {
         .is_some_and(|entry| entry.cook_key == cook_key)
 }
 
-/// The references whose Asset `report`'s cook neither wrote nor found up to
-/// date, each warned of. An Asset the Cooked cache holds under an ID no cook
-/// makes any more is stale, so it does not resolve one; but while a source is
-/// absent (`kept_absent`), its Blobs stay as they are, and a reference the
-/// cache holds passes.
+/// The references to an Asset this cook did not make, each warned of. The
+/// Cooked cache is never pruned, so an ID it holds may be one no source
+/// defines any more; it resolves a reference only where `may_be_kept` says
+/// the Blob is one the cook kept, its source absent.
 fn dangling_references(
     cache: &CookedCache,
-    report: &CookReport,
+    made: &HashSet<AssetId>,
     references: &[(Referrer, AssetId)],
-    kept_absent: bool,
+    may_be_kept: impl Fn(&(Referrer, AssetId)) -> bool,
 ) -> Vec<(Referrer, AssetId)> {
-    // ponytail: with any source absent, every cached ID passes, a stale one
-    // included; an Asset ID does not say which source it came from.
-    let made: HashSet<_> = report.cooked.iter().chain(&report.unchanged).collect();
+    // ponytail: an absent source keeps its Blobs, and an Asset ID does not
+    // say which source it came from, so a scene with an absent source passes
+    // every cached ID, a stale one included.
     let dangling: Vec<_> = references
         .iter()
         .copied()
-        .filter(|(_, id)| !(made.contains(id) || kept_absent && cache.entry(*id).is_some()))
+        .filter(|reference| {
+            let (_, id) = reference;
+            !(made.contains(id) || may_be_kept(reference) && cache.entry(*id).is_some())
+        })
         .collect();
     for (referrer, id) in &dangling {
         tracing::warn!(%referrer, asset = %id, "references an Asset ID this cook does not make");
@@ -481,6 +511,7 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
                 continue;
             }
             let Some(mut source) = texture_source(channel, texture)? else {
+                sources.kept_textures.push(id);
                 continue;
             };
             // Toksvig: metallic-roughness cooks from its Material's normal
@@ -490,6 +521,7 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
                 && let Some(normal) = &textures[MaterialChannel::Normal as usize]
             {
                 let Some(normal_texture) = texture_source(MaterialChannel::Normal, normal)? else {
+                    sources.kept_textures.push(id);
                     continue;
                 };
                 source = source.with_normal_texture(normal_texture);
@@ -559,10 +591,7 @@ mod tests {
         let cache = CookedCache::new(&directory);
         let (stale, made, missing) = (AssetId(1), AssetId(2), AssetId(3));
         cache.write(stale, "cook key", b"stale Blob").unwrap();
-        let report = CookReport {
-            unchanged: vec![made],
-            ..CookReport::default()
-        };
+        let made_ids = HashSet::from([made]);
         let references = [
             (Referrer::Material(AssetId(10)), stale),
             (Referrer::Mesh(AssetId(11)), stale),
@@ -570,14 +599,30 @@ mod tests {
             (Referrer::Material(AssetId(10)), missing),
         ];
         assert_eq!(
-            dangling_references(&cache, &report, &references, false),
+            dangling_references(&cache, &made_ids, &references, |_| false),
             [references[0], references[1], references[3]]
         );
         assert_eq!(
-            dangling_references(&cache, &report, &references, true),
+            dangling_references(&cache, &made_ids, &references, |_| true),
             [references[3]]
         );
+        let only_the_mesh_kept =
+            |(referrer, _): &(Referrer, AssetId)| matches!(referrer, Referrer::Mesh(_));
+        assert_eq!(
+            dangling_references(&cache, &made_ids, &references, only_the_mesh_kept),
+            [references[0], references[3]]
+        );
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// texture-wall loads its Textures by Asset ID, with no Material naming
+    /// them, so its references come from the Textures its spawn loads.
+    #[test]
+    fn a_scene_references_the_textures_it_loads() {
+        let scene = ReferenceScene::TextureWall;
+        let references = scene_references(&[scene]).unwrap();
+        let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
+        assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }
 
     /// Each scene's dev launch finds the sources it references.

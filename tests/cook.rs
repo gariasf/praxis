@@ -677,7 +677,7 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
 /// Renaming a Mesh gives it a new Asset ID, while the Cooked cache keeps the
 /// old ID's Blob: the normal-tangent scene, which names the Mesh by its old
 /// name, then references an Asset no cook makes any more, and the cook warns
-/// of it, naming the scene and the ID.
+/// of it, naming the scene and the ID, whatever other source is absent.
 #[test]
 fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
     let directory = scratch("rename-mesh");
@@ -691,10 +691,14 @@ fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
         &glb,
     )
     .unwrap();
-    let manifest = json!([{
-        "path": "NormalTangentTest/NormalTangentTest.glb",
-        "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
-    }]);
+    // Another source, listed and absent, keeps only its own Blobs.
+    let manifest = json!([
+        {
+            "path": "NormalTangentTest/NormalTangentTest.glb",
+            "guid": format!("{NORMAL_TANGENT_TEST_GUID:032x}"),
+        },
+        {"path": "absent.gltf", "guid": format!("{GUID:032x}")},
+    ]);
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
     let old_mesh = AssetId::new(
         AssetSource::File(NORMAL_TANGENT_TEST_GUID),
@@ -706,13 +710,17 @@ fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
     assert!(!report.dangling_references.contains(&reference));
 
     let source = fs::read(&glb).unwrap();
-    let gltf::Glb { header, json, bin } = gltf::Glb::from_slice(&source).unwrap();
+    let gltf::Glb {
+        header,
+        json,
+        bin: binary_chunk,
+    } = gltf::Glb::from_slice(&source).unwrap();
     let mut document: serde_json::Value = serde_json::from_slice(&json).unwrap();
     document["meshes"][0]["name"] = json!("NormalTangentTest_renamed");
     let renamed = gltf::Glb {
         header,
         json: document.to_string().into_bytes().into(),
-        bin,
+        bin: binary_chunk,
     };
     fs::write(&glb, renamed.to_vec().unwrap()).unwrap();
     let report = cook(&assets, &cache).unwrap();
@@ -744,9 +752,10 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
     );
     let helmet_fetched = assets.join("SciFiHelmet/SciFiHelmet.gltf").exists();
     // Unfetched, the helmet scene's helmet is cooked nowhere, as in CI.
-    let expected = match helmet_fetched {
-        true => vec![],
-        false => vec![(Referrer::Scene(ReferenceScene::Helmet), helmet)],
+    let expected = if helmet_fetched {
+        vec![]
+    } else {
+        vec![(Referrer::Scene(ReferenceScene::Helmet), helmet)]
     };
     assert_eq!(report.dangling_references, expected);
 

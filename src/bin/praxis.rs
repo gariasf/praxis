@@ -379,9 +379,10 @@ fn cook() -> anyhow::Result<()> {
     )?;
     writeln!(
         std::io::stdout(),
-        "cooked {}, unchanged {}",
+        "cooked {}, unchanged {}, dangling references {}",
         report.cooked.len(),
-        report.unchanged.len()
+        report.unchanged.len(),
+        report.dangling_references.len()
     )?;
     Ok(())
 }
