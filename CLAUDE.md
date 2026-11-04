@@ -399,8 +399,8 @@ When reviewing changes, check for:
       at grazing angles or zero roughness, and calls no `textureSample`
       under non-uniform control flow
 - [ ] Workflows keep least-privilege permissions and pin each action
-      to a commit SHA, its version in a comment
-      (`uses: actions/checkout@<sha> # v4.4.0`)
+      to a commit SHA with its version in a comment, as `pr-lint.yml`
+      does
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
