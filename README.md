@@ -22,9 +22,10 @@ This branch holds data only and is never merged.
   on no Series. Each names its `experiment.merge_base` with `main` and that
   commit's source hash, whose record on the Series is what it compares with.
 
-A machine is quiet when preflight warned of no GPU load over 10%, other
-praxis process, battery power or busy display at the run's start, and the
-run's GPU frame p95 over its median stayed under 1.06.
+A machine is quiet when preflight warned of no GPU load over 10%, one-minute
+load average over 2, other praxis process, battery power or busy display at
+the run's start, and the run's GPU frame p95 over its median stayed
+under 1.06.
 
 lavapipe's records hold CPU, GPU and pass times like any other, but lavapipe
 renders on a shared runner's CPU, so the page draws only its counters and its
