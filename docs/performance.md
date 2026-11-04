@@ -112,15 +112,15 @@ The run binding one distinct Texture used 4.2 s in 12.4 s. The extra
 
 Frame stats now hold the lit pass's wait: the lit pass's start less the
 latest end of the passes from culling phase one up to it, zero when it
-starts beside them. `praxis bench` reports it from the rays-off frames,
-as it does the gate, in its line (`lit_pass_wait_us`), its results and
-`praxis report`'s row "Lit pass's wait, rays off". The rays-off gate is
-then the passes before the lit pass, the wait and the lit pass's own
-time. Baselines recorded before it lack the line, so `compare` judges
-none yet. The pass rows are measured with rays on, and with rays on the
-depth pre-pass sits on its slow level. So the gate's pass rows plus the
-wait match the gate only within the depth pre-pass's 0.3 ms between its
-levels.
+starts beside them. `praxis bench` measures it in the rays-off frames, as
+it does the gate. It also measures each pass the gate spans in those
+frames, because the pass rows come from the rays-on frames, and the two
+halves of a run can sit on different levels of L3-D08. Its line carries
+`lit_pass_wait_us`, its results carry both, and `praxis report` prints
+them as a table under the times, with their medians' sum beside the gate.
+Baselines recorded before them lack both, so `compare` judges neither
+yet. The Froxel pass runs beside culling phase one, so the sum counts its
+11 to 26 µs twice.
 
 QUIET_ROUNDS_PLACEHOLDER
 

@@ -58,37 +58,31 @@ pub fn report(
     let frame_times = [
         (
             "CPU frame",
-            Some(current.cpu_frame_microseconds),
+            current.cpu_frame_microseconds,
             times_baseline.map(|baseline| baseline.cpu_frame_microseconds),
             Some(budgets.cpu_frame_microseconds),
         ),
         (
             "Dynamic TLAS, CPU",
-            Some(current.dynamic_tlas_cpu_microseconds),
+            current.dynamic_tlas_cpu_microseconds,
             times_baseline.map(|baseline| baseline.dynamic_tlas_cpu_microseconds),
             Some(budgets.dynamic_tlas_cpu_microseconds),
         ),
         (
             "GPU frame",
-            Some(current.gpu_frame_microseconds),
+            current.gpu_frame_microseconds,
             times_baseline.map(|baseline| baseline.gpu_frame_microseconds),
             Some(budgets.gpu_frame_microseconds),
         ),
         (
             "Gate, rays off",
-            Some(current.gate_microseconds),
+            current.gate_microseconds,
             times_baseline.map(|baseline| baseline.gate_microseconds),
             Some(budgets.gate_microseconds),
         ),
         (
-            "Lit pass's wait, rays off",
-            current.lit_pass_wait_microseconds,
-            times_baseline.and_then(|baseline| baseline.lit_pass_wait_microseconds),
-            None,
-        ),
-        (
             "Shadow-ray time",
-            Some(current.shadow_ray_microseconds),
+            current.shadow_ray_microseconds,
             times_baseline.map(|baseline| baseline.shadow_ray_microseconds),
             None,
         ),
@@ -100,12 +94,9 @@ pub fn report(
         let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
         (format!("`{pass}`"), time, baseline_time, budget)
     });
-    // A line older results lack has no row.
     let times = frame_times
+        .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
         .into_iter()
-        .filter_map(|(name, time, baseline_time, budget)| {
-            Some((name.to_owned(), time?, baseline_time, budget))
-        })
         .chain(pass_times);
     for (name, time, baseline_time, budget) in times {
         let compared = match baseline_time {
@@ -124,6 +115,36 @@ pub fn report(
             grouped(time.median, 1),
             grouped(time.p95, 1),
             budget.map_or("—".to_owned(), |budget| grouped(budget, 1))
+        )?;
+    }
+
+    if let Some(wait) = current.lit_pass_wait_microseconds {
+        report.push_str(
+            "\n| Gate, rays off, µs | Median | p95 |\n\
+             |---|---:|---:|\n",
+        );
+        let passes = current
+            .gate_pass_microseconds
+            .iter()
+            .map(|(pass, &time)| (format!("`{pass}`"), time));
+        let lines = passes.chain([("Lit pass's wait".to_owned(), wait)]);
+        let mut sum = 0.0;
+        for (name, time) in lines {
+            sum += time.median;
+            writeln!(
+                report,
+                "| {name} | {} | {} |",
+                grouped(time.median, 1),
+                grouped(time.p95, 1)
+            )?;
+        }
+        let gate = current.gate_microseconds;
+        writeln!(report, "| Their medians' sum | {} | — |", grouped(sum, 1))?;
+        writeln!(
+            report,
+            "| Gate | {} | {} |",
+            grouped(gate.median, 1),
+            grouped(gate.p95, 1)
         )?;
     }
 
@@ -215,6 +236,8 @@ fn ratio(current: f64, baseline: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::bench::{Aliasing, CounterFrames, Counters, Spread};
 
@@ -263,6 +286,7 @@ mod tests {
             gate_microseconds: gate,
             shadow_ray_microseconds: spread(-3.2, 40.5),
             lit_pass_wait_microseconds: None,
+            gate_pass_microseconds: BTreeMap::new(),
             gpu_pass_microseconds: passes
                 .into_iter()
                 .map(|(pass, time)| (pass.to_owned(), time))
@@ -277,11 +301,18 @@ mod tests {
         }
     }
 
-    /// With the lit pass's wait, which its Baseline, recorded before
-    /// results carried it, lacks.
+    /// With the gate's lines, which its Baseline, recorded before results
+    /// carried them, lacks.
     fn current() -> Measurements {
         Measurements {
             lit_pass_wait_microseconds: Some(spread(1204.5, 1391.0)),
+            gate_pass_microseconds: [
+                ("culling_phase_one", spread(170.1, 175.0)),
+                ("lit_pass", spread(1575.4, 1600.2)),
+            ]
+            .into_iter()
+            .map(|(pass, time)| (pass.to_owned(), time))
+            .collect(),
             ..measurements(
                 spread(190.0, 262.3),
                 spread(4208.6, 5204.5),
@@ -328,11 +359,18 @@ mod tests {
 | Dynamic TLAS, CPU | 0.0 | 0.1 | 0.0 | 0.1 | +0.0 | — | 1,100.0 |
 | GPU frame | 4,208.6 | 5,204.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
 | Gate, rays off | 2,950.0 | 3,010.4 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
-| Lit pass's wait, rays off | 1,204.5 | 1,391.0 | — | — | — | — | — |
 | Shadow-ray time | -3.2 | 40.5 | -3.2 | 40.5 | +0.0 | — | — |
 | `culling_phase_one` | 166.3 | 169.8 | 160.0 | 170.0 | +6.3 | 1.039 | — |
 | `dynamic_tlas_build` | 48.7 | 462.9 | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | 800.0 | 810.0 | -44.2 | 0.945 | — |
+
+| Gate, rays off, µs | Median | p95 |
+|---|---:|---:|
+| `culling_phase_one` | 170.1 | 175.0 |
+| `lit_pass` | 1,575.4 | 1,600.2 |
+| Lit pass's wait | 1,204.5 | 1,391.0 |
+| Their medians' sum | 2,950.0 | — |
+| Gate | 2,950.0 | 3,010.4 |
 
 | Counter | Value | Baseline | Δ | Ratio | Budget |
 |---|---:|---:|---:|---:|---:|
@@ -373,6 +411,7 @@ mod tests {
                  frames 8..72",
                 "| CPU frame | 190.0 | 262.3 | — | — | — | — | 6,000.0 |",
                 "| `lit_pass` | 755.8 | 768.1 | — | — | — | — | — |",
+                "| `lit_pass` | 1,575.4 | 1,600.2 |",
                 "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
             ]
         );

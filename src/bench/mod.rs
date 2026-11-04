@@ -18,11 +18,14 @@ use anyhow::Context;
 use crate::capture::{FrameWait, capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+use crate::render::culling_pass::CullingPhase;
+use crate::render::main_pass::LIT_PASS;
+use crate::render::renderer::SHADOW_RAY_PASSES;
 use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
-use crate::stats::FrameStats;
+use crate::stats::{FrameStats, GpuFrameStats};
 use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
@@ -176,6 +179,12 @@ pub struct Measurements {
     /// results carried it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lit_pass_wait_microseconds: Option<Spread>,
+    /// Each pass the gate spans with shadow rays off, from culling phase
+    /// one to the lit pass, its own GPU time in those frames: with the lit
+    /// pass's wait they make up the gate. Absent from Baselines recorded
+    /// before results carried them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub gate_pass_microseconds: BTreeMap<String, Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     #[serde(flatten)]
@@ -523,16 +532,27 @@ fn measure(
     let (measured, measured_gpu) = (&frames[warm_up_frames..], &gpu_frames[warm_up_frames..]);
     let measured_without_rays = &gpu_frames_without_rays[warm_up_frames..];
     let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
-    let gpu_pass_microseconds = TIMED_PASSES
-        .iter()
-        .enumerate()
-        .map(|(pass, &name)| {
-            let times = measured_gpu
-                .iter()
-                .map(|gpu| microseconds(gpu.pass_times[pass].1));
-            (name.to_owned(), spread(times.collect()))
-        })
+    let pass_spreads = |frames: &[GpuFrameStats], passes: &[usize]| {
+        passes
+            .iter()
+            .map(|&pass| {
+                let times = frames
+                    .iter()
+                    .map(|gpu| microseconds(gpu.pass_times[pass].1));
+                (TIMED_PASSES[pass].to_owned(), spread(times.collect()))
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    let every_pass: Vec<usize> = (0..TIMED_PASSES.len()).collect();
+    let gpu_pass_microseconds = pass_spreads(measured_gpu, &every_pass);
+    let position = |name: &str| {
+        let position = TIMED_PASSES.iter().position(|&pass| pass == name);
+        position.expect("the gate's first and last passes are timed")
+    };
+    let gate_passes: Vec<usize> = (position(CullingPhase::One.label())..=position(LIT_PASS))
+        .filter(|&pass| !SHADOW_RAY_PASSES.contains(&TIMED_PASSES[pass]))
         .collect();
+    let gate_pass_microseconds = pass_spreads(measured_without_rays, &gate_passes);
     Ok(Measurements {
         scene: scene.name().to_owned(),
         adapter,
@@ -591,6 +611,7 @@ fn measure(
                 .map(|gpu| microseconds(gpu.lit_pass_wait))
                 .collect(),
         )),
+        gate_pass_microseconds,
         gpu_pass_microseconds,
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
@@ -1014,6 +1035,7 @@ mod tests {
                 p95: 600.0,
             },
             lit_pass_wait_microseconds: None,
+            gate_pass_microseconds: BTreeMap::new(),
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
                 .map(|(pass, median)| {
@@ -1587,6 +1609,23 @@ mod tests {
         );
         assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
+        // The gate's passes with shadow rays off: culling phase one to the
+        // lit pass, less the passes only shadow rays run.
+        assert_eq!(
+            reference
+                .gate_pass_microseconds
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "culling_phase_one",
+                "culling_phase_two",
+                "depth_prepass",
+                "depth_pyramid_pass",
+                "froxel_pass",
+                "lit_pass"
+            ]
+        );
         assert!(
             reference
                 .gpu_pass_microseconds
