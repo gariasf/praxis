@@ -34,7 +34,7 @@ const VOLUMES: &[&str] = &[
     "shadow-rays.html",
     "shadow-terminator.html",
     "specular-antialiasing.html",
-    "tonemapping-pass.html",
+    "tonemapping-pass-explained.html",
     "town.html",
     "visibility-buffer.html",
     "visibility-prepass.html",
