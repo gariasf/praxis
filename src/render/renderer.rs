@@ -282,6 +282,8 @@ impl Renderer {
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
             culling_pass.meshlet_records(),
+            culling_pass.packed_indices(),
+            culling_pass.frame_draw(),
             &render_targets,
             switches,
         );
@@ -639,12 +641,11 @@ impl Renderer {
             (&MATERIALS, &self.material_pool.bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
         ];
-        self.main_pass.record_depth_prepass(
+        self.main_pass.record_depth_pass(
             &mut encoder,
             &self.render_targets,
             &bind_groups,
-            self.culling_pass.packed_indices(),
-            self.culling_pass.frame_draw(),
+            CullingPhase::One,
             timestamps.map(|timestamps| timestamps.render_pass(DEPTH_PREPASS)),
         );
         self.depth_pyramid_pass.record(
@@ -659,12 +660,11 @@ impl Renderer {
             timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
         );
         if self.shadow_rays {
-            self.main_pass.record_phase_two_depth(
+            self.main_pass.record_depth_pass(
                 &mut encoder,
                 &self.render_targets,
                 &bind_groups,
-                self.culling_pass.packed_indices(),
-                self.culling_pass.frame_draw(),
+                CullingPhase::Two,
                 timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),
             );
             self.shadow_mask_pass.record(
@@ -676,8 +676,6 @@ impl Renderer {
             &mut encoder,
             &self.render_targets,
             &bind_groups,
-            self.culling_pass.packed_indices(),
-            self.culling_pass.frame_draw(),
             frame.background,
             timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
         );
