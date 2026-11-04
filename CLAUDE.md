@@ -190,8 +190,9 @@ src/
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
                                  cargo test --test goldens rewrites them;
-                                 README.md shows the metal ones, and
-                                 cargo test checks it lists each scene
+                                 the root README.md shows the metal
+                                 ones, and cargo test checks it lists
+                                 each scene
 bench/                         # budgets.json (ADR 0013) and baselines/
                                  <adapter>/<scene>.json: the M4 Pro's,
                                  CI's lavapipe (`--ci-counters`) and the RTX
@@ -397,8 +398,9 @@ When reviewing changes, check for:
 - [ ] WGSL keeps sRGB and linear apart, has no divide-by-zero or NaN
       at grazing angles or zero roughness, and calls no `textureSample`
       under non-uniform control flow
-- [ ] Workflows keep least-privilege permissions and pinned action
-      versions
+- [ ] Workflows keep least-privilege permissions and pin each action
+      to a commit SHA with its version in a comment, as `pr-lint.yml`
+      does
 - [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
