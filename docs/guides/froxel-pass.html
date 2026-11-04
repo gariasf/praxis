@@ -368,7 +368,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
 <section class="part prose" id="cost">
   <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">The pass makes 18,432 sphere tests for each point light, so its time follows the point lights: a few microseconds in scenes of up to four, about half a millisecond for <code>town</code>'s 1,024 lamps, a small share of its gate.</p>
+  <p class="key-idea">The pass makes 18,432 sphere tests for each point light, so its time follows the point lights: it barely shows in scenes of up to four, and in <code>town</code>, whose 1,024 lamps are what the lists are for, it is a small share of the gate.</p>
   <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baselines, whose counters alone are judged, are left out.</p>
   <div class="table-wrap">
   <table class="facts compact">
@@ -410,7 +410,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above; the gate is ADR 0019's, rays off. Point lights from <code>point_lights</code> and <code>town</code>'s lamps in <code>src/scenes</code>. In scenes of a few lights the pass's few microseconds are mostly its launch; <code>texture-wall</code>'s gate on the Apple M4 Pro is set by its bound textures, not its lights. <code>town</code>'s 1,024 lamps make 18,874,368 sphere tests a frame.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above; the gate is ADR 0019's, rays off. Point lights from <code>point_lights</code> and <code>town</code>'s lamps in <code>src/scenes</code>. <code>texture-wall</code>'s gate on the Apple M4 Pro is set by its bound textures, not its lights. <code>town</code>'s 1,024 lamps make 18,874,368 sphere tests a frame.</p>
   <p>The pass's memory is fixed, whatever the resolution and the scene, and counted in GPU memory:</p>
   <div class="table-wrap">
   <table class="facts compact">
