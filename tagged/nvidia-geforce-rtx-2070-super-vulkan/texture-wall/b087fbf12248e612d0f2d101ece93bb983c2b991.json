@@ -1,0 +1,153 @@
+{
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "aliasing_p99": 13718,
+  "aliasing_rmse": 3220,
+  "arena_bytes_in_use": 176,
+  "backend": "vulkan",
+  "committed_unix_seconds": 1793810543,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 768088523,
+    "heap_allocations": 352,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 224
+  },
+  "cpu_frame_microseconds": {
+    "median": 1725.9,
+    "p95": 4155.9
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.3,
+    "p95": 0.7999999999999999
+  },
+  "gate_microseconds": {
+    "median": 516.64,
+    "p95": 523.808
+  },
+  "gate_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 20.8,
+      "p95": 21.344
+    },
+    "culling_phase_two": {
+      "median": 20.096,
+      "p95": 20.448
+    },
+    "depth_prepass": {
+      "median": 27.36,
+      "p95": 28.672
+    },
+    "depth_pyramid_pass": {
+      "median": 158.176,
+      "p95": 158.912
+    },
+    "froxel_pass": {
+      "median": 5.984,
+      "p95": 6.56
+    },
+    "lit_pass": {
+      "median": 229.376,
+      "p95": 234.624
+    }
+  },
+  "gpu_frame_microseconds": {
+    "median": 1215.936,
+    "p95": 1656.0
+  },
+  "gpu_memory_bytes": 768088523,
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 18.72,
+      "p95": 21.376
+    },
+    "culling_phase_two": {
+      "median": 17.887999999999998,
+      "p95": 20.48
+    },
+    "depth_prepass": {
+      "median": 53.76,
+      "p95": 59.072
+    },
+    "depth_pyramid_pass": {
+      "median": 131.616,
+      "p95": 153.05599999999998
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 5.6,
+      "p95": 6.367999999999999
+    },
+    "lit_pass": {
+      "median": 202.752,
+      "p95": 232.864
+    },
+    "phase_two_depth_pass": {
+      "median": 2.4320000000000004,
+      "p95": 3.52
+    },
+    "shadow_mask_pass": {
+      "median": 505.28,
+      "p95": 896.16
+    },
+    "tonemapping_pass": {
+      "median": 190.944,
+      "p95": 227.328
+    }
+  },
+  "heap_allocations": 352,
+  "height": 1440,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "lit_pass_wait_microseconds": {
+    "median": 15.232,
+    "p95": 15.840000000000002
+  },
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "branch": "HEAD",
+    "commit": "c6bcb2e2130c6f0e6503388e1170bc8cc560817f",
+    "dirty": false,
+    "driver": "NVIDIA",
+    "driver_info": "621.01",
+    "gpu_frame_p95_over_median": 1.3619137849360494,
+    "gpu_load_percent": 0,
+    "harness_version": 10,
+    "one_minute_load_average": null,
+    "other_processes": [],
+    "quiet": false,
+    "scene_content_hash": "9a67b104118a36654fd54c571e90b250ddaaaa8b32d38a553a3dad6adb78c53d",
+    "source_hash": "b087fbf12248e612d0f2d101ece93bb983c2b991",
+    "started_unix_seconds": 1793811128
+  },
+  "scene": "texture-wall",
+  "shadow_ray_microseconds": {
+    "median": 461.3760000000001,
+    "p95": 896.8000000000001
+  },
+  "tags": [
+    "machine not quiet"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 224,
+  "width": 2560
+}
