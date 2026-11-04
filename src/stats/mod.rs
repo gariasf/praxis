@@ -211,8 +211,9 @@ pub(crate) struct FrameRecorder {
     started: Instant,
     allocations_at_start: u64,
     stages: Vec<(&'static str, Duration)>,
-    /// The frame's counters and CPU frame time; `stats` adds the CPU times
-    /// of its systems and stages.
+    /// The frame's counters, CPU frame time and heap allocations; `stats`
+    /// adds the CPU times of its systems and stages, and `State` the GPU
+    /// memory figures, so neither is written here.
     pub(crate) counters: FrameStats,
 }
 
