@@ -19,10 +19,10 @@ impl WorldTransform {
     /// linear, rotation spherical (slerp, the shorter way), so a spinning
     /// entity keeps its size at every weight. It reads each matrix as a
     /// rotation times a scale, as every hierarchy here composes them; a
-    /// shear, a non-uniformly scaled parent's turned child, would blend as
-    /// that reading of it. A rotation and scale the Tick left as they were,
-    /// or one with a zero scale and so no rotation to read, blends linearly
-    /// in every entry.
+    /// shear, a non-uniformly scaled parent's turned child, has no such
+    /// reading and would be drawn wrong even at a Tick. A rotation and scale
+    /// the Tick left as they were, or one with a zero scale and so no
+    /// rotation to read, blends linearly in every entry.
     pub fn drawn(&self, previous: Option<&PreviousWorldTransform>, blend_weight: f32) -> Self {
         let Some(previous) = previous.and_then(|previous| previous.0) else {
             return *self;
@@ -329,20 +329,25 @@ mod tests {
     fn a_spinning_entity_is_drawn_at_its_size_and_at_the_rotation_between_its_ticks() {
         // The orrery's outermost body turns 12.5 rad/s in World, 0.195 rad a
         // Tick, which a linear blend shrinks 0.48% mid-Tick.
-        const START: f64 = 1.0;
-        let per_tick = 12.5 * crate::time::TICK_SECONDS;
-        let at = |angle: f64, translation: glam::DVec3| {
+        const START_RADIANS: f64 = 1.0;
+        let radians_per_tick = 12.5 * crate::time::TICK_SECONDS;
+        let transform_at = |angle: f64, translation: glam::DVec3| {
             glam::DAffine3::from_mat3_translation(glam::DMat3::from_rotation_y(angle), translation)
         };
-        let previous = PreviousWorldTransform(Some(at(START, ROOT)));
-        let current = WorldTransform(at(START + per_tick, ROOT + glam::dvec3(4.0, -2.0, 8.0)));
+        let previous = PreviousWorldTransform(Some(transform_at(START_RADIANS, ROOT)));
+        let current = WorldTransform(transform_at(
+            START_RADIANS + radians_per_tick,
+            ROOT + glam::dvec3(4.0, -2.0, 8.0),
+        ));
 
         for (blend_weight, translation) in [
             (0.5, ROOT + glam::dvec3(2.0, -1.0, 4.0)),
             (0.25, ROOT + glam::dvec3(1.0, -0.5, 2.0)),
         ] {
             let drawn = current.drawn(Some(&previous), blend_weight);
-            let expected = glam::DMat3::from_rotation_y(START + f64::from(blend_weight) * per_tick);
+            let expected = glam::DMat3::from_rotation_y(
+                START_RADIANS + f64::from(blend_weight) * radians_per_tick,
+            );
             for (column, expected_column) in [
                 (drawn.0.matrix3.x_axis, expected.x_axis),
                 (drawn.0.matrix3.y_axis, expected.y_axis),
