@@ -3,7 +3,7 @@
 //! time, each texel the minimum depth, the farthest, of the texels below
 //! whose share of the screen overlaps its own (ADRs 0015, 0019).
 
-use crate::render::bind_groups::{DEPTH_PYRAMID_LEVEL, pipeline_layout};
+use crate::render::bind_groups::{DEPTH_PYRAMID_LEVEL, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
 
@@ -37,18 +37,8 @@ impl DepthPyramidPass {
         let reduce_level_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "level_below"]);
         let pipeline = |entry_point, layout| {
             let label = "Depth Pyramid Pipeline Layout";
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry_point),
-                layout: Some(&pipeline_layout(
-                    device,
-                    label,
-                    &[(&DEPTH_PYRAMID_LEVEL, layout)],
-                )),
-                module: &shader,
-                entry_point: Some(entry_point),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            })
+            let pipeline_layout = pipeline_layout(device, label, &[(&DEPTH_PYRAMID_LEVEL, layout)]);
+            compute_pipeline(device, &pipeline_layout, &shader, entry_point, &[])
         };
         let mut pass = DepthPyramidPass {
             reduce_depth: pipeline("reduce_depth", &reduce_depth_layout),

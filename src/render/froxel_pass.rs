@@ -3,7 +3,7 @@
 //! for the lit pass to shade a pixel with its Froxel's lights alone
 //! (ADR 0019).
 
-use crate::render::bind_groups::{FROXEL_LISTS, pipeline_layout};
+use crate::render::bind_groups::{FROXEL_LISTS, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
 
 /// The Froxel pass's label, and its name in frame stats.
@@ -92,18 +92,10 @@ impl FroxelPass {
             ],
         );
         let shader = device.create_shader_module(shaders::FROXEL.descriptor());
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("build_froxel_lists"),
-            layout: Some(&pipeline_layout(
-                device,
-                "Froxel Pass Pipeline Layout",
-                &[(&FROXEL_LISTS, &layout)],
-            )),
-            module: &shader,
-            entry_point: Some("build_froxel_lists"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
+        let layouts = [(&FROXEL_LISTS, &layout)];
+        let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &layouts);
+        let pipeline =
+            compute_pipeline(device, &pipeline_layout, &shader, "build_froxel_lists", &[]);
         FroxelPass {
             pipeline,
             bind_group,

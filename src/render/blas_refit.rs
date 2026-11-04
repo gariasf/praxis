@@ -291,7 +291,7 @@ mod metal {
     use crate::assets::MeshPool;
     use crate::assets::pools::{MeshBlas, REFITTED_BLAS_FLAGS};
     use crate::cooked::CookedVertex;
-    use crate::render::bind_groups::{BLAS_REFIT_MARKERS, pipeline_layout};
+    use crate::render::bind_groups::{BLAS_REFIT_MARKERS, compute_pipeline, pipeline_layout};
     use crate::render::shaders;
 
     /// Scratch regions start this far apart at least: a margin over the
@@ -403,18 +403,11 @@ mod metal {
         pub(super) fn new(device: &wgpu::Device) -> Self {
             let layout = BLAS_REFIT_MARKERS.layout(device);
             let shader = device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor());
-            let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("mark_blas_refit"),
-                layout: Some(&pipeline_layout(
-                    device,
-                    "BLAS Refit Marker Pipeline Layout",
-                    &[(&BLAS_REFIT_MARKERS, &layout)],
-                )),
-                module: &shader,
-                entry_point: Some("mark_blas_refit"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
+            let layouts = [(&BLAS_REFIT_MARKERS, &layout)];
+            let label = "BLAS Refit Marker Pipeline Layout";
+            let pipeline_layout = pipeline_layout(device, label, &layouts);
+            let pipeline =
+                compute_pipeline(device, &pipeline_layout, &shader, "mark_blas_refit", &[]);
             let result = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("BLAS Refit Marker Result"),
                 size: size_of::<u32>() as u64,

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::assets::{MeshHandle, MeshPool};
-use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, pipeline_layout};
+use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::{FrameData, InstanceData, shaders};
 
@@ -271,18 +271,11 @@ impl DynamicTlas {
             ],
         );
         let shader = device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor());
-        let marker_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("mark_dynamic_tlas"),
-            layout: Some(&pipeline_layout(
-                device,
-                "Dynamic TLAS Marker Pipeline Layout",
-                &[(&DYNAMIC_TLAS_MARKERS, &layout)],
-            )),
-            module: &shader,
-            entry_point: Some("mark_dynamic_tlas"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
+        let layouts = [(&DYNAMIC_TLAS_MARKERS, &layout)];
+        let label = "Dynamic TLAS Marker Pipeline Layout";
+        let pipeline_layout = pipeline_layout(device, label, &layouts);
+        let marker_pipeline =
+            compute_pipeline(device, &pipeline_layout, &shader, "mark_dynamic_tlas", &[]);
         Self {
             tlas,
             filled: 0,

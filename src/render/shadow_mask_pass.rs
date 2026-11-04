@@ -12,7 +12,9 @@
 //! runs once both culling phases' Instances are in the depth target.
 
 use crate::render::acceleration_structures::{DynamicTlas, StaticTlas};
-use crate::render::bind_groups::{SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, pipeline_layout};
+use crate::render::bind_groups::{
+    SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, compute_pipeline, pipeline_layout,
+};
 use crate::render::froxel_pass::FROXEL_SLICES;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
@@ -141,17 +143,7 @@ impl ShadowMaskPass {
         );
         let constants = switches.constants();
         let pipeline = |entry_point| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(entry_point),
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: Some(entry_point),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &constants,
-                    ..wgpu::PipelineCompilationOptions::default()
-                },
-                cache: None,
-            })
+            compute_pipeline(device, &pipeline_layout, &shader, entry_point, &constants)
         };
         let buffers = buffers.map(|(name, buffer)| (name, buffer.clone()));
         let shadow_mask_lights_overflowed = device.create_buffer(&wgpu::BufferDescriptor {
