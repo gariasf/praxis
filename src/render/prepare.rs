@@ -549,9 +549,8 @@ fn prepare_lights(
             .iter(world)
             .filter_map(|(current, previous, light)| {
                 let transform = current.drawn(previous, blend_weight);
-                // A zero scale, or a blend half way through a half turn,
-                // leaves no direction to shade with, so the light is not
-                // drawn.
+                // A zero scale leaves no direction to shade with, so the
+                // light is not drawn.
                 let direction = (transform.0.matrix3 * glam::DVec3::NEG_Z).try_normalize()?;
                 Some(LightData {
                     offset: direction.as_vec3().to_array(),

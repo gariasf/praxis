@@ -15,20 +15,37 @@ impl WorldTransform {
 
     /// What a frame draws: this World transform, or, for an entity the fixed
     /// schedule moves, the blend `blend_weight` of the way to it from the
-    /// previous Tick's (ADR 0022). The blend is linear in every entry, in
-    /// f64: exact for translation, while a rotation of θ per Tick shrinks the
-    /// entity by up to 1 − cos(θ/2) mid-Tick, ≈ 0.001 at 0.09 rad
-    /// (5.8 rad/s).
+    /// previous Tick's (ADR 0022). The blend is in f64: translation and scale
+    /// linear, rotation spherical (slerp, the shorter way), so a spinning
+    /// entity keeps its size at every weight. It reads each matrix as a
+    /// rotation times a scale, as every hierarchy here composes them; a
+    /// shear, a non-uniformly scaled parent's turned child, would blend as
+    /// that reading of it. A rotation and scale the Tick left as they were,
+    /// or one with a zero scale and so no rotation to read, blends linearly
+    /// in every entry.
     pub fn drawn(&self, previous: Option<&PreviousWorldTransform>, blend_weight: f32) -> Self {
         let Some(previous) = previous.and_then(|previous| previous.0) else {
             return *self;
         };
         let weight = f64::from(blend_weight);
-        Self(glam::DAffine3 {
-            matrix3: previous.matrix3 + (self.0.matrix3 - previous.matrix3) * weight,
-            translation: previous.translation
-                + (self.0.translation - previous.translation) * weight,
-        })
+        let translation =
+            previous.translation + (self.0.translation - previous.translation) * weight;
+        let blends_rotation = previous.matrix3 != self.0.matrix3
+            && previous.matrix3.determinant() != 0.0
+            && self.0.matrix3.determinant() != 0.0;
+        if !blends_rotation {
+            return Self(glam::DAffine3 {
+                matrix3: previous.matrix3 + (self.0.matrix3 - previous.matrix3) * weight,
+                translation,
+            });
+        }
+        let (previous_scale, previous_rotation, _) = previous.to_scale_rotation_translation();
+        let (scale, rotation, _) = self.0.to_scale_rotation_translation();
+        Self(glam::DAffine3::from_scale_rotation_translation(
+            previous_scale.lerp(scale, weight),
+            previous_rotation.slerp(rotation, weight),
+            translation,
+        ))
     }
 }
 
@@ -306,6 +323,43 @@ mod tests {
         let reset = PreviousWorldTransform(None);
         assert_eq!(current.drawn(Some(&reset), 0.25), current);
         assert_eq!(current.drawn(None, 0.25), current);
+    }
+
+    #[test]
+    fn a_spinning_entity_is_drawn_at_its_size_and_at_the_rotation_between_its_ticks() {
+        // The orrery's outermost body turns 12.5 rad/s in World, 0.195 rad a
+        // Tick, which a linear blend shrinks 0.48% mid-Tick.
+        const START: f64 = 1.0;
+        let per_tick = 12.5 * crate::time::TICK_SECONDS;
+        let at = |angle: f64, translation: glam::DVec3| {
+            glam::DAffine3::from_mat3_translation(glam::DMat3::from_rotation_y(angle), translation)
+        };
+        let previous = PreviousWorldTransform(Some(at(START, ROOT)));
+        let current = WorldTransform(at(START + per_tick, ROOT + glam::dvec3(4.0, -2.0, 8.0)));
+
+        for (blend_weight, translation) in [
+            (0.5, ROOT + glam::dvec3(2.0, -1.0, 4.0)),
+            (0.25, ROOT + glam::dvec3(1.0, -0.5, 2.0)),
+        ] {
+            let drawn = current.drawn(Some(&previous), blend_weight);
+            let expected = glam::DMat3::from_rotation_y(START + f64::from(blend_weight) * per_tick);
+            for (column, expected_column) in [
+                (drawn.0.matrix3.x_axis, expected.x_axis),
+                (drawn.0.matrix3.y_axis, expected.y_axis),
+                (drawn.0.matrix3.z_axis, expected.z_axis),
+            ] {
+                assert!(
+                    (column.length() - 1.0).abs() <= 1e-12,
+                    "at {blend_weight} a column is {} long",
+                    column.length()
+                );
+                assert!(
+                    (column - expected_column).abs().max_element() <= 1e-12,
+                    "at {blend_weight} a column is {column}, not {expected_column}"
+                );
+            }
+            assert_near(drawn.translation(), translation);
+        }
     }
 
     #[test]
