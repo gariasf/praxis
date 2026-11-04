@@ -33,12 +33,14 @@ step() {
 # with no Baseline at all, every scene runs and compare fails for each.
 # Aliasing renders each scene twice more, once at three times the Goldens'
 # size, so it is measured only when the diff against main can change what
-# renders: the renderer and its shaders, the cooker or the assets.
+# renders: the renderer and its shaders, the cooker, the Reference scenes'
+# generators or the assets.
+rendering_paths=(src/render src/cook src/scenes assets)
 skip_aliasing=--skip-aliasing
 base=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null)
 if [ -z "$base" ] ||
-  [ -n "$(git diff --name-only "$base" -- src/render src/cook assets)" ] ||
-  [ -n "$(git ls-files --others --exclude-standard -- src/render src/cook assets)" ]; then
+  [ -n "$(git diff --name-only "$base" -- "${rendering_paths[@]}")" ] ||
+  [ -n "$(git ls-files --others --exclude-standard -- "${rendering_paths[@]}")" ]; then
   skip_aliasing=
 fi
 
@@ -74,5 +76,5 @@ step clippy cargo clippy --all-targets -- -D warnings
 step build cargo build --release
 step test tests
 step bench bench
-[ -z "$skip_aliasing" ] || printf 'ok    bench   aliasing skipped: no change under src/render, src/cook or assets\n'
+[ -z "$skip_aliasing" ] || printf 'ok    bench   aliasing skipped: no change under %s\n' "${rendering_paths[*]}"
 printf 'ok    verify  %4ss\n' "$SECONDS"

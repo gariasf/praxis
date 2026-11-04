@@ -114,6 +114,17 @@ expect_pass "sources listed below their line" \
 # reader that stops at its first match would SIGPIPE the writer.
 expect_pass "a Verification section over 64 KB" \
   "$(edited_body 's/^(Review: )/("| scene | frame | median | Baseline |\n" x 3000) . "\n$1"/me')"
+# Pasted output: the given number of lines in a code fence above the review.
+pasted_body() {
+  passing_body | PASTED_LINES="$1" perl -0pe \
+    's/^(Review: )/"```\n" . ("ok    step\n" x $ENV{PASTED_LINES}) . "```\n\n$1"/me'
+}
+expect_pass "30 lines of pasted output" "$(pasted_body 30)"
+expect_pass "30 lines of pasted output, then a fence outside Verification" \
+  "$(pasted_body 30)"$'\n\n'"$fence"$'\nok\n'"$fence"
+expect_fail "31 lines of pasted output" 'pasted output is 31 lines, over 30' "$(pasted_body 31)"
+expect_fail "31 lines of pasted output across two fences" 'pasted output is 31 lines, over 30' \
+  "$(pasted_body 30 | perl -0pe 's/^(Sources checked)/```\nok\n```\n\n$1/m')"
 expect_pass "a commit body naming the attribution rule" "$body" \
   $'Add the check\n\nCommits carry no co-author or Generated with Claude line.'
 expect_pass "a 72-character subject with non-ASCII letters" "$body" \

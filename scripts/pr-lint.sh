@@ -51,6 +51,12 @@ done
 if [ ${#uncounted[@]} -gt 0 ]; then
   miss "body: Verification lacks the review counts \"N found, N fixed, N declined, N deferred\" (missing: ${uncounted[*]}) (workflow.md, Review)"
 fi
+# Pasted output is what Verification's code fences hold, all fences together.
+pasted_line_limit=30
+pasted_lines=$(awk '/^[[:space:]]*```/ { fenced = !fenced; next } fenced { lines++ } END { print lines + 0 }' <<<"$verification")
+if [ "$pasted_lines" -gt "$pasted_line_limit" ]; then
+  miss "body: Verification's pasted output is $pasted_lines lines, over $pasted_line_limit (workflow.md, PRs)"
+fi
 # "Sources checked" followed by something, on its line or below it.
 if ! awk '
   /^[*_ -]*Sources checked/ { seen = 1; sub(/^[*_ -]*Sources checked[*_: ]*/, "") }
