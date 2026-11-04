@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>MSAA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; concept &middot; <code>src/render/targets.rs</code></div>
+  <h1>MSAA</h1>
+  <p class="definition">Multisample antialiasing: the rasteriser tests each triangle's coverage and depth at four sample positions in every pixel, the fragment shader runs once per pixel for each triangle that covers any of them and its colour lands in the samples that triangle covers, and the resolve averages the four, so a triangle's edge blends into what lies behind it in proportion to the samples it covers, while what varies inside a triangle is shaded at one point per pixel.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A concept the pages lean on; a change to how Praxis multisamples rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="depth-prepass.html">The depth pre-pass</a>, <a href="lit-pass.html">The lit pass</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">In the frame</h2>
+    <dl>
+      <dt>Samples</dt><dd>Four per pixel, <code>SAMPLE_COUNT</code>, at the standard positions, which every pipeline that draws into the multisampled targets matches.</dd>
+      <dt>Targets</dt><dd><code>MULTISAMPLED_FORMATS</code>: the depth target, the multisampled colour and the surface normals. The <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> checks 4x MSAA on each, and <code>RenderTargets::new</code> creates no multisampled target of another format.</dd>
+      <dt>Resolved</dt><dd>The multisampled colour, into the HDR target, at the end of the lit pass, from colour weighted by 1/(1 + luminance).</dd>
+      <dt>Read per sample</dt><dd>The depth pyramid pass and the shadow mask pass load every sample of the depth target, as the light count pass does when its Render switch is on; the shadow mask pass also each sample's surface normals; the lit pass reads which samples its fragment covers.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#samples">1 &middot; Samples and fragments</a>
+    <a href="#inputs">2 &middot; What a fragment knows</a>
+    <a href="#buys">3 &middot; What it buys</a>
+    <a href="#misses">4 &middot; What it does not reach</a>
+    <a href="#resolve">5 &middot; The resolve</a>
+    <a href="#memory">6 &middot; Memory</a>
+    <a href="#tests">7 &middot; How it is tested</a>
+    <a href="#why">8 &middot; Why 4x MSAA</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="samples">
+  <div class="part-mark">1 &middot; <code>SAMPLE_COUNT</code> &middot; <code>SAMPLE_OFFSETS</code></div>
+  <h2>Samples and fragments</h2>
+  <p class="key-idea">Coverage and depth are decided per sample; shading per pixel. A pixel inside one triangle is shaded once. A pixel an edge crosses is shaded once for each triangle that covers any of its samples, and each colour lands only in its own triangle's samples.</p>
+  <p>A 4x multisampled target holds four values per pixel, each with its own depth and colour. For each triangle, the rasteriser tests each sample's position against the triangle and its depth against the depth target's at that sample. Where any sample passes, the fragment shader runs once, its inputs interpolated at the pixel's centre, and its output is written into each sample that passed. The resolve then averages the four samples into one pixel.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Sample</th><th class="n">x</th><th class="n">y</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td class="n">0.375</td><td class="n">0.125</td></tr>
+      <tr><td>1</td><td class="n">0.875</td><td class="n">0.375</td></tr>
+      <tr><td>2</td><td class="n">0.125</td><td class="n">0.625</td></tr>
+      <tr><td>3</td><td class="n">0.625</td><td class="n">0.875</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Vulkan's standard 4x sample locations, in pixels from the pixel's top left corner, which <code>SAMPLE_OFFSETS</code> in the shadow mask pass declares to rebuild each sample's position. An adapter promises them only with <code>standardSampleLocations</code>, so a test checks the target the backend makes. Each sample sits in its own row and column of a 4&times;4 grid, so an edge near horizontal or vertical still moves through four levels of coverage.</p>
+  <p>That is the economy of MSAA. A pixel shows few distinct surfaces, so shading once per triangle per pixel costs little more than shading once per pixel, while each surface's colour keeps to its own samples and the edge resolves to the blend of both, weighted by coverage. Shading per sample, the alternative, runs the fragment shader four times at every pixel, edge or not.</p>
+</section>
+
+<section class="part prose" id="inputs">
+  <div class="part-mark">2 &middot; <code>sample_mask</code> &middot; <code>@interpolate(flat)</code></div>
+  <h2>What a fragment knows</h2>
+  <p class="key-idea">A fragment knows its triangle and which of the pixel's samples that triangle covers; it does not know what the other samples show. Anything a pass computes once per pixel and a fragment reads has to say which surface it describes.</p>
+  <p>WGSL gives the fragment the samples it covers as the <code>sample_mask</code> built-in, a bit per sample. The lit pass reads it to choose, of the shadow mask's two words for the pixel, the one traced from the surface its samples show, since the shadow mask pass traces once per pixel from the depth target and, at an edge, would otherwise give the farther surface's fragment the nearer one's shadow (<a href="shadow-mask.html#second">The shadow mask pass</a>).</p>
+  <p>A fragment's inputs come from its triangle's vertices. Most are interpolated across the triangle, so their value says where on it the fragment lies; a flat input is not, and every fragment of a triangle reads the value one vertex wrote. On the Apple M4 Pro the difference matters beyond the value: when a fragment stage reads no flat input, the fragments of neighbouring triangles of one draw that share vertex indices can be merged in a pixel, so one triangle's inputs are written into the samples of both. The samples covered stay exact; whose inputs they receive does not. Every main pass fragment stage reads a flat input, so none is merged (<a href="depth-prepass.html#flat">The depth pre-pass</a>, <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a>).</p>
+</section>
+
+<section class="part prose" id="buys">
+  <div class="part-mark">3 &middot; <code>town</code></div>
+  <h2>What it buys: geometry finer than a pixel</h2>
+  <p class="key-idea">With one sample per pixel, a wire thinner than a pixel shows only where it crosses a pixel's one sample, and breaks into dashes. With four, each pixel tests coverage at four places and blends what it finds, so the wire reaches more pixels, each partly covered, and stays continuous while it is thicker than the gaps between samples.</p>
+  <p><code>town</code>'s street wires, 1.5 cm in radius, are thinner than a pixel a few tens of metres away. At 4x they run as faint lines, each pixel showing the share of its samples a wire covers, breaking only where a level wire runs between two rows of samples. Rendered with one sample, in a scratch build of an earlier <code>main</code>, the wires broke into dashes and the frame failed <code>town</code>'s Golden at 14,124 of its 230,400 pixels, by up to 231 8-bit steps, along every edge in the frame, since every silhouette loses its partial coverage.</p>
+  <p>Nothing else in the frame can recover such geometry. A post-process filter works from the finished image, in which a missed wire is absent, and the main pass reads no screen-space history (ADR 0008), so no earlier frame fills the gaps: MSAA has to catch the wire in every frame.</p>
+</section>
+
+<section class="part prose" id="misses">
+  <div class="part-mark">4</div>
+  <h2>What it does not reach</h2>
+  <p class="key-idea">MSAA antialiases coverage, not shading. Whatever the fragment shader computes at one point per pixel aliases as it would without MSAA, and each such term needs a filter of its own.</p>
+  <p><b>Highlights inside a triangle.</b> A highlight narrower than the normal's turn across a pixel sparkles; the lit pass widens roughness by the shading normal's screen-space derivatives, which under MSAA are per pixel (<a href="lit-pass.html#specular">The lit pass</a>).</p>
+  <p><b>Textures.</b> Detail finer than a pixel in a Texture is the mips' and the samplers' to filter.</p>
+  <p><b>Shadows across a surface.</b> One shadow ray per pixel is a point sample of visibility, so a shadow's edge across one surface steps by whole pixels beside geometry that MSAA smooths. The shadow mask pass traces the first directional lights again from each sample where neighbouring pixels disagree, and the lit pass shades each by the share of its covered samples the light reaches, so those edges resolve as geometry's do (<a href="shadow-mask.html#edges">The shadow mask pass</a>).</p>
+</section>
+
+<section class="part prose" id="resolve">
+  <div class="part-mark">5 &middot; <code>resolve_weighted</code> &middot; <code>src/render/shaders/hdr.wgsl</code></div>
+  <h2>The resolve, weighted by luminance</h2>
+  <p class="key-idea">The hardware resolve is a plain average. Over HDR colour, one bright sample outweighs three dark ones and the pixel tone-maps to white. Storing each colour divided by one plus its luminance, and undoing that after the resolve, turns the plain average into one weighted by 1/(1 + luminance).</p>
+<pre class="code"><code>fn resolve_weighted(color: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    return color / (1.0 + relative_luminance(color));
+}</code></pre>
+<pre class="code"><code>fn resolve_unweighted(weighted: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    let complement = max(1.0 - relative_luminance(weighted), 1.0 / LARGEST_HALF);
+    return min(weighted / complement, vec3&lt;f32&gt;(LARGEST_HALF));
+}</code></pre>
+  <p class="code-source"><code>hdr.wgsl</code>. The lit pass stores the weighted colour, and the multisampled colour's clear value is weighted the same way; the tonemapping pass reads the resolved HDR target through <code>resolve_unweighted</code>.</p>
+  <p>Luminance Y is linear, so the luminance of the stored average is the average of Y/(1 + Y), and one minus it is the average of 1/(1 + Y). Dividing the stored average by that leaves &Sigma; w<sub>i</sub> c<sub>i</sub> / &Sigma; w<sub>i</sub> with w<sub>i</sub> = 1/(1 + Y<sub>i</sub>):</p>
+  <div class="formula">stored s<sub>i</sub> = c<sub>i</sub> / (1 + Y<sub>i</sub>)
+resolved = avg(s) / (1 &minus; Y(avg(s))) = &Sigma; w<sub>i</sub> c<sub>i</sub> / &Sigma; w<sub>i</sub>,  w<sub>i</sub> = 1 / (1 + Y<sub>i</sub>)</div>
+  <p>Four grey samples of 100, 0.05, 0.05 and 0.05 average to 25.04 in a box, which tone-maps to white; weighted, they resolve to 0.395, by this page's arithmetic. A stored luminance stays below 1, so the attachment never holds a large value, though it still needs fp16, as bright samples crowd just below 1.</p>
+  <p>Shading each distinct triangle among a pixel's samples once and weighting it by the samples it covers is the same resolve: the hardware's average of the samples is exactly that sum over 4. A visibility buffer that shades from per-sample triangle IDs in compute reproduces a forward MSAA image this way, as Burns and Hunt describe, one shading sample per pixel per triangle.</p>
+</section>
+
+<section class="part prose" id="memory">
+  <div class="part-mark">6 &middot; <code>RenderTargets::new</code></div>
+  <h2>Memory</h2>
+  <p class="key-idea">The multisampled colour never leaves the GPU's tile memory where the adapter allows: it is cleared, drawn, resolved and discarded within the lit pass. What MSAA costs in memory is the 4x depth and the 4x surface normals, which the targets module creates whether or not shadow rays write them.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th><th class="n">At 2560&times;1440</th></tr></thead>
+    <tbody>
+      <tr><td>depth target</td><td><code>Depth32Float</code>, 4x</td><td class="n">16</td><td class="n">58,982,400</td></tr>
+      <tr><td>surface normals</td><td><code>Rgba8Unorm</code>, 4x</td><td class="n">16</td><td class="n">58,982,400</td></tr>
+      <tr><td>multisampled colour</td><td><code>Rgba16Float</code>, 4x, transient</td><td class="n">32, none where memoryless</td><td class="n">117,964,800 or none</td></tr>
+      <tr><td>HDR target, resolved</td><td><code>Rgba16Float</code></td><td class="n">8</td><td class="n">29,491,200</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>src/render/targets.rs</code> at the commit above. The colour is created as a transient attachment, which wgpu makes memoryless on Metal where the GPU supports it.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>each_depth_sample_lies_where_the_pass_rebuilds_it</code></td><td><code>shadow_mask_pass.rs</code></td><td>the backend's samples lie at <code>SAMPLE_OFFSETS</code></td></tr>
+      <tr><td><code>the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance</code></td><td><code>shader_function_tests.rs</code></td><td>the weight and its inverse give the weighted average</td></tr>
+      <tr><td><code>a_draw_of_whole_index_sharing_groups_keeps_every_sample</code></td><td><code>coverage_tests.rs</code></td><td>on the M4 Pro, whole index-sharing groups lose no sample to merging</td></tr>
+      <tr><td><code>an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one</code></td><td><code>renderer.rs</code></td><td>an edge pixel resolves between its two surfaces' neighbours</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every Reference scene's frame at 4x, <code>town</code>'s wires among them</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADRs 0008, 0019, 0021</div>
+  <h2>Why 4x MSAA</h2>
+  <p><b>Geometry finer than a pixel, stable in every frame.</b> ADR 0008 keeps screen-space history out of the frame, so no temporal method can fill what a frame missed; SMAA 1x and other filters on the finished image cannot rebuild sub-pixel geometry. MSAA tests coverage where the geometry is.</p>
+  <p><b>Four samples.</b> 4x is the most the Apple9 GPU family, the reference machine's, supports, and the Capability floor requires it on each multisampled format (ADRs 0019, 0021).</p>
+  <p><b>Forward, so MSAA costs its depth.</b> In a forward pass the multisampled colour resolves within the pass and never needs memory; a deferred G-buffer or a visibility buffer must store every sample's inputs or shade per sample at edges, which on the M4 Pro cost a deferred pass 1.2 to 3.7 times a forward one at 4x (ADR 0019).</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>Four levels per edge.</b> An edge pixel resolves to one of five coverages, so a near-horizontal edge still shows faint steps.</p>
+  <p><b>Sub-pixel highlights lose energy.</b> Under the weighted resolve, a highlight that covers one sample counts for less than its quarter of the pixel, and a half-and-half blend of very different luminances comes out darker than the plain average.</p>
+  <p><b>No alpha to coverage yet.</b> ADR 0019 plans it for masked materials; the main pass's pipelines create none.</p>
+  <p><b>Merging on Apple GPUs.</b> A pass that decides from which triangle a sample shows must read a flat input or keep whole Meshlets; only the M4 Pro has been measured.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750">Vulkan specification, Standard Sample Locations</a></dt><dd>the four positions; <code>vulkan-standard-sample-locations</code></dd>
+    <dt><a href="https://www.w3.org/TR/WGSL/#sample-mask-builtin-value">WGSL: sample_mask</a></dt><dd>the samples a fragment covers</dd>
+    <dt><a href="https://graphicrants.blogspot.com/2013/12/tone-mapping.html">Karis, Tone mapping, 2013</a></dt><dd>the reversible weight, 1/(1 + luma), for a weighted average from a plain one; <code>karis-2013-weighted-average</code></dd>
+    <dt><a href="https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6">ITU-R BT.709-6</a></dt><dd>the luma weights the weight's luminance takes; <code>bt709-6-luma</code></dd>
+    <dt><a href="https://www.w3.org/TR/2026/CRD-WGSL-20261021/#floating-point-types">WGSL, f16's largest finite value</a></dt><dd>65504, the clamp <code>resolve_unweighted</code> applies; <code>wgsl-f16-largest</code></dd>
+    <dt><a href="https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7">Jimenez et al., SMAA: Enhanced Subpixel Morphological Antialiasing, 2012</a></dt><dd>a filter on the finished image cannot reconstruct sub-pixel geometry</dd>
+    <dt><a href="https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9">Metal Feature Set Tables, render targets</a></dt><dd>4x the Apple9 family's maximum; <code>metal-feature-set-tables-msaa-max</code></dd>
+    <dt><a href="https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf">Salvi and Vidim&#269;e, Surface Based Anti-Aliasing, I3D 2012</a></dt><dd>a pixel covered by many triangles shows few distinct surfaces; <code>salvi-2012-sbaa-surfaces</code></dd>
+    <dt><a href="https://jcgt.org/published/0002/02/04/">Burns and Hunt, The Visibility Buffer: A Cache-Friendly Approach to Deferred Shading, JCGT 2013</a></dt><dd>one shading sample per pixel per triangle, weighted by the samples it covers</dd>
+    <dt><a href="https://www.microsoft.com/en-us/research/?p=159994">Fatahalian et al., Reducing Shading on GPUs using Quad-Fragment Merging, SIGGRAPH 2010</a></dt><dd>merging neighbouring triangles' fragments, which the M4 Pro's behaviour resembles</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The main pass has drawn at 4x MSAA since ADR 0019 chose it. The third milestone moved its colour to fp16 and resolved it weighted by luminance, gave the shadow mask a second surface per pixel and per-sample verdicts at shadow edges so shadows respect coverage, and found and stopped the M4 Pro's fragment merging. The narratives are in <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a>, <a href="edge-shadows.html">Edge Shadows Explained</a>, <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="town.html">Town Explained</a>.</p>
+  <footer class="sources">Written from <code>src/render/targets.rs</code>, <code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>hdr.wgsl</code>, <code>shadow_mask.wgsl</code>, the tests named above, ADRs 0008, 0019 and 0021, and the sources above, all at <code>main</code> b3d764b4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="bench-history.html">Previous: Bench History Explained</a><a href="index.html">All field guides</a><a href="msaa-fragment-merging.html">Next: MSAA Fragment Merging Explained</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
