@@ -241,7 +241,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             assert!(
                 (Duration::ZERO < time || may_be_empty) == runs
                     && time <= gpu.frame_time
-                    && gpu.frame_time < Duration::from_secs(1),
+                    // Under a second from frame 1 on: frame 0 can time
+                    // first-use work such as shader compilation. On lavapipe
+                    // it read 5.8 s, its compute passes seconds each, in the
+                    // first of twenty runs on a fresh CI runner, and under
+                    // 0.2 s in the other nineteen. A wrong tick period would
+                    // misread every frame alike.
+                    && (frame == 0 || gpu.frame_time < Duration::from_secs(1)),
                 "frame {frame}: {pass} took {time:?} of {:?} on the GPU",
                 gpu.frame_time
             );

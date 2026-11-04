@@ -1791,6 +1791,19 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
 /// view, for a point 0.3 m from the camera, is 0.043 mm.
 const PRECISION_BAR: f64 = 4.3e-5;
 
+/// Camera coordinates on each axis for the precision oracles: cell corners,
+/// points either side of them, and the 100 km edge.
+const PRECISION_COORDINATES: [f64; 8] = [
+    -100_000.0,
+    -54_321.987_654,
+    -64.000_01,
+    0.0,
+    0.3,
+    63.999_99,
+    12_345.678_9,
+    99_999.999,
+];
+
 /// A point 0.3 m from the camera, anywhere within 100 km of the origin, is
 /// composed from its Instance's anchor and offset, the camera's, and its f32
 /// position relative to the Instance; it lands within the precision bar of
@@ -1805,17 +1818,6 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     let Some(context) = gpu_context() else {
         return;
     };
-    // Cell corners, points either side of them, and the 100 km edge.
-    let coordinates = [
-        -100_000.0,
-        -54_321.987_654,
-        -64.000_01,
-        0.0,
-        0.3,
-        63.999_99,
-        12_345.678_9,
-        99_999.999,
-    ];
     let mut directions = Vec::new();
     for x in [-1.0, 0.0, 1.0] {
         for y in [-1.0, 0.0, 1.0] {
@@ -1834,9 +1836,9 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     ];
 
     let mut cases = Vec::new();
-    for x in coordinates {
-        for y in coordinates {
-            for z in coordinates {
+    for x in PRECISION_COORDINATES {
+        for y in PRECISION_COORDINATES {
+            for z in PRECISION_COORDINATES {
                 let camera = glam::DVec3::new(x, y, z);
                 for direction in &directions {
                     for local_position in local_positions {
@@ -1874,6 +1876,58 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
         world_space_error > PRECISION_BAR,
         "f32 World positions met the bar ({world_space_error} m), so the oracle cannot fail"
     );
+}
+
+/// A point light 0.3 m from the camera, anywhere within 100 km of the
+/// origin, lands within the precision bar of its f64 position relative to
+/// the camera, composed from its own anchor and offset and the camera's.
+/// Each case places the light as an Instance's pivot with no local
+/// position. Its range and intensity hold values no position holds, so a
+/// field read in place of another moves the light.
+#[test]
+fn point_light_position_meets_the_precision_bar_within_100_km() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let mut cases = Vec::new();
+    for x in PRECISION_COORDINATES {
+        for y in PRECISION_COORDINATES {
+            for z in PRECISION_COORDINATES {
+                let camera = glam::DVec3::new(x, y, z);
+                for direction in [glam::DVec3::X, glam::DVec3::NEG_Y, glam::DVec3::ONE] {
+                    cases.push(Case::new(
+                        camera,
+                        direction.normalize() * 0.3,
+                        glam::Vec3::ZERO,
+                    ));
+                }
+            }
+        }
+    }
+    let inputs: Vec<[[f32; 4]; 4]> = cases
+        .iter()
+        .map(|case| {
+            let [anchor, offset, camera_anchor, camera_offset, _] = case.test_vectors();
+            [anchor, offset, camera_anchor, camera_offset]
+        })
+        .collect();
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(point_light_position(LightData(vec3<i32>(inputs[0].xyz), 25.0, \
+         inputs[1].xyz, vec3<f32>(7.0, 11.0, 13.0)), vec3<i32>(inputs[2].xyz), \
+         inputs[3].xyz), 0.0)",
+        &inputs,
+        &[],
+    );
+
+    for (case, result) in cases.iter().zip(results) {
+        let gpu = glam::Vec3::from_slice(&result).as_dvec3();
+        let error = gpu.distance(case.camera_relative);
+        assert!(
+            error <= PRECISION_BAR,
+            "{case:?}: GPU places the light at {gpu}, {error} m from the f64 reference"
+        );
+    }
 }
 
 /// A segment of a ray meets a box where some point of it lies in the box,

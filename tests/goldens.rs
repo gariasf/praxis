@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use praxis::gpu::GpuContext;
 use praxis::{ReferenceScene, RenderSwitches};
 
-const SCENES: [ReferenceScene; 9] = [
+const SCENES: [ReferenceScene; 10] = [
     ReferenceScene::PbrSweep,
     ReferenceScene::UvGrid,
     ReferenceScene::NormalTangent,
@@ -41,6 +41,7 @@ const SCENES: [ReferenceScene; 9] = [
     ReferenceScene::TextureWall,
     ReferenceScene::Shadows,
     ReferenceScene::Town,
+    ReferenceScene::Crowd,
 ];
 
 /// The capture command's default size.
@@ -400,7 +401,7 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
         .filter(|line| !line.contains(&town_link))
         .map(|line| format!("{line}\n"))
         .collect();
-    let with_crowd = format!("{readme}\n![crowd]({README_GOLDEN_PREFIX}crowd.png)\n");
+    let with_helmet = format!("{readme}\n![helmet]({README_GOLDEN_PREFIX}helmet.png)\n");
     let with_town_twice = format!("{readme}\n![town]({README_GOLDEN_PREFIX}town.png)\n");
 
     assert_eq!(
@@ -412,12 +413,12 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
         ["README.md shows town more than once"]
     );
     assert_eq!(
-        readme_disagreements(&with_crowd, root),
+        readme_disagreements(&with_helmet, root),
         [
-            "README.md shows crowd, which the goldens test does not check".to_owned(),
+            "README.md shows helmet, which the goldens test does not check".to_owned(),
             format!(
                 "README.md links {}, which is absent",
-                root.join(format!("{README_GOLDEN_PREFIX}crowd.png"))
+                root.join(format!("{README_GOLDEN_PREFIX}helmet.png"))
                     .display()
             ),
         ]
