@@ -575,8 +575,9 @@ struct FrameTimes {
 /// counts; ADR 0019's gate, from the start of culling phase one to the
 /// latest end of the passes up to the lit pass; the lit pass's wait, from
 /// the latest end of the passes from culling phase one up to it to its
-/// start; and the tick its last pass ended at. The build, in a submission before the frame's passes, starts no
-/// earlier than `build_floor`; the passes `untimed` names take no time.
+/// start; and the tick its last pass ended at. The build, in a submission
+/// before the frame's passes, starts no earlier than `build_floor`; the
+/// passes `untimed` names take no time.
 fn frame_times(
     ticks: &[u64; QUERIES_PER_FRAME],
     shape: FrameShape,
@@ -870,6 +871,7 @@ mod tests {
 
         let untimed = [false; TIMED_PASSES.len()];
         ticks[2 * lit_pass] = culling_two_end + 19_000;
+        ticks[2 * lit_pass + 1] = culling_two_end + 21_000;
         let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
         assert_eq!(times.lit_pass_wait, Duration::ZERO);
     }

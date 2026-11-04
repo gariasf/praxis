@@ -545,11 +545,11 @@ fn measure(
     };
     let every_pass: Vec<usize> = (0..TIMED_PASSES.len()).collect();
     let gpu_pass_microseconds = pass_spreads(measured_gpu, &every_pass);
-    let position = |name: &str| {
+    let position_of = |name: &str| {
         let position = TIMED_PASSES.iter().position(|&pass| pass == name);
         position.expect("the gate's first and last passes are timed")
     };
-    let gate_passes: Vec<usize> = (position(CullingPhase::One.label())..=position(LIT_PASS))
+    let gate_passes: Vec<usize> = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
         .filter(|&pass| !SHADOW_RAY_PASSES.contains(&TIMED_PASSES[pass]))
         .collect();
     let gate_pass_microseconds = pass_spreads(measured_without_rays, &gate_passes);
@@ -626,8 +626,8 @@ fn measure(
 }
 
 /// One line, `key=value` pairs after the scene name: medians and p95s of
-/// the CPU and GPU frame, the gate and shadow-ray time, each pass's median,
-/// then the counters.
+/// the CPU and GPU frame, the gate, shadow-ray time and the lit pass's
+/// wait, each pass's median, then the counters.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);

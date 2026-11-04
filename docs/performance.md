@@ -10,10 +10,11 @@ its top three offenders and the tickets that take them.
 the time the kernel's GPU driver, on the CPU, spends scheduling the Metal
 command buffer that holds the lit pass
 [ref:apple-metal-command-buffer-kernel-time]: 15.3 ms a frame at the
-median (p5 14.5, p95 16.6 ms), against 2 to 27 µs for each of the frame's
-other command buffers.
-The lit pass starts when that scheduling ends, 195 µs after it at the
-median (p5 −461, p95 240 µs) in every one of 1,800 rays-off frames. The
+median (p5 14.5, p95 16.6 ms), from 2.5 ms before culling phase one
+starts, against 2 to 27 µs for each of the frame's other command buffers.
+The lit pass starts as that scheduling ends: 195 µs after it at the
+median, from 461 µs before to 240 µs after (p5 to p95), over 1,800
+rays-off frames. The
 cost grows with the distinct Textures in the lit pass's material bind
 group, each of which wgpu-hal passes to `useResource`
 [ref:wgpu-hal-30-metal-use-resource], and grows faster than their count.
@@ -33,18 +34,22 @@ builds of `bbadbcce` with measurement patches, not committed. One patch
 wrote each frame's raw timestamps. One set environment switches that
 made the views past a count in each Channel's binding array repeat its
 Layer 0, for the lit pass's bind group and the depth passes' apart,
-optionally keeping the 100 Layers the quads sample. Repeating a view
-removes a distinct Texture, because wgpu-hal keys `useResource` by view
+optionally keeping the 100 Layers the quads sample. Each Layer has one
+view, and wgpu-hal keys `useResource` by view object, so repeating Layer
+0's view removes a distinct Texture
 [ref:wgpu-hal-30-metal-resources-to-use-by-view].
 A patched wgpu-hal 30.0.1 wrote each Metal command buffer's commit time,
 `kernelStartTime`, `kernelEndTime`, `GPUStartTime` and `GPUEndTime` from
-a completed handler. GPU timestamps and those host times share one clock,
-`CLOCK_UPTIME_RAW`. Each run was `praxis bench <dir> --skip-aliasing
+a completed handler. Those host times are in mach time
+[ref:apple-metal-command-buffer-gpu-time], and so are the GPU timestamps
+here: culling phase one's start timestamp falls on its command buffer's
+`GPUStartTime`, within 0.04 µs, in all 1,800 rays-off frames. Each run was `praxis bench <dir> --skip-aliasing
 --no-publish texture-wall` at 2560×1440 with 4x MSAA, 248 warm-up and
 1,800 measured frames, rays on then off. Variants were interleaved over
-two to four rounds, at one-minute load averages of 4 to 23 from
+two to four rounds, at one-minute load averages of 4 to 66 from
 Spotlight indexing and peer builds, with no other praxis process. Each
-figure below is a run's median. The gate is rays off. The first round's
+figure below is a run's median, taken from its results by the probes'
+scripts. The gate is rays off. The first round's
 all-Textures run, at a five-minute load average of 74, read a 14,914 µs
 gate and a 26,099 µs GPU frame, and is left out of the table.
 
@@ -73,26 +78,32 @@ schedules one frame's buffers in about 15.3 ms, and frames start
 agrees. A full run used 68.5 s of system time in 72.9 s of wall time.
 The run binding one distinct Texture used 4.2 s in 12.4 s. The extra
 64 s over about 4,100 frames comes to 15.7 ms of kernel time a frame.
-Of the 660 samples `sample` took over 5 s, 343 find Metal's
+Of the 660 samples `sample` took over 5 s, 339 find Metal's
 `com.Metal.CommandQueueDispatch` thread in
 `IOGPUCommandQueueSubmitCommandBuffers`, in a call into the kernel.
 
 ### Which Textures cost it
 
-| Variant: distinct Textures bound | Gate, µs (rounds) | GPU frame, µs | CPU frame, µs |
-|---|---|---:|---:|
-| All 10,005, every pass | 13,793–14,268 (3) | 15,396–15,654 | 2,267–2,429 |
-| The lit pass's group 1, the depth passes' all | 620–629 (4) | 2,304–2,308 | 391–470 |
-| The depth passes' group 1, the lit pass's all | 13,432–13,774 (2) | 15,359–15,785 | 2,379–2,436 |
-| Both 1 | 632–776 (2) | 2,308–2,311 | 391–487 |
-| Both 1, the 100 sampled Layers kept | 626–630 (2) | 2,307–2,316 | 467–537 |
-| Both 2,500, sampled kept | 1,031–1,099 (2) | 2,307–2,308 | 748–780 |
-| Both 5,000, sampled kept | 3,661–3,729 (2) | 4,632–4,690 | 1,297–1,300 |
-| Both 7,500, sampled kept | 7,622–7,626 (2) | 9,345–9,378 | 1,833–1,849 |
+| Variant: distinct Textures bound | Rounds | Gate, µs | GPU frame, µs | CPU frame, µs |
+|---|---:|---|---|---|
+| All 10,005, every pass | 3 | 13,793.0–14,267.6 | 15,396.2–15,654.3 | 2,266.7–2,428.5 |
+| The lit pass's group 1, the depth passes' all | 4 | 619.6–629.4 | 2,303.5–2,308.4 | 390.8–470.2 |
+| The depth passes' group 1, the lit pass's all | 2 | 13,431.7–13,774.0 | 15,358.7–15,784.8 | 2,379.1–2,436.1 |
+| Both 1 | 2 | 631.6–775.5 | 2,308.0–2,310.8 | 391.4–486.9 |
+| Both 1, the 100 sampled Layers kept | 2 | 626.2–629.5 | 2,306.8–2,315.7 | 467.0–536.5 |
+| Both 2,500, sampled kept | 2 | 1,030.8–1,098.6 | 2,306.8–2,308.0 | 747.5–779.8 |
+| Both 5,000, sampled kept | 2 | 3,660.8–3,728.7 | 4,632.5–4,689.9 | 1,296.5–1,299.9 |
+| Both 7,500, sampled kept | 2 | 7,622.2–7,626.3 | 9,345.1–9,377.5 | 1,833.2–1,849.4 |
+| Both 2,500, sampled not kept | 2 | 894.0–960.3 | 2,302.3–2,304.3 | 541.4–567.5 |
+| Both 5,000, sampled not kept | 2 | 2,683.1–3,662.1 | 4,277.0–4,599.8 | 966.6–1,278.8 |
+| Both 7,500, sampled not kept | 2 | 7,590.4–7,658.7 | 9,069.2–10,088.1 | 1,652.9–2,262.3 |
 
 - **Bound, not sampled.** Keeping all 100 sampled Layers distinct changes
   nothing: the cost belongs to the Textures the group binds and the
-  fragment shader never reads.
+  fragment shader never reads. The runs that did not keep them, which
+  bind fewer distinct Textures at each count, read 0.1 ms lower at 2,500
+  and within 0.04 ms of the kept runs at 7,500, while the 5,000 run moved
+  by 1 ms between its rounds.
 - **Not linear.** Past one distinct Texture, the gate adds about 0.4 ms
   for the first 2,500, 2.6 more for the next 2,500, 3.9 more for the
   next, and 6.2 to 6.6 more for the last 2,505. Why is the driver's, and
@@ -108,7 +119,8 @@ Of the 660 samples `sample` took over 5 s, 343 find Metal's
   L3-D08 comes with the wait. That fits a GPU that idles for 11 ms of
   every 15.6 and clocks down, but no clock was read: Metal exposes none.
 - **The CPU frame.** wgpu-hal's per-Texture `useResource` on the main
-  thread also falls, from 2.4 ms to 0.4 to 0.5 ms, as #153 measured.
+  thread also falls, from 2.3 to 2.4 ms to 0.4 to 0.5 ms, as #153
+  measured.
 
 ### The lit pass's wait
 
@@ -126,9 +138,11 @@ yet. The Froxel pass runs beside culling phase one, so the sum counts its
 
 Three runs of `praxis bench <dir> --skip-aliasing --no-publish
 texture-wall` on this branch, back to back from 12:37 to 12:42 UTC. None
-was stamped quiet: WindowServer held the GPU at 12 to 37% and peer
-sessions' builds lifted the load average to 5 to 17. Each round's gate
-table as `praxis report` prints it, medians in µs:
+was stamped quiet. Preflight read a GPU load of 16, 47 and 88% at the
+rounds' starts and the bench's Provenance 24, 12 and 37%, from
+WindowServer, with load averages of 5 to 17 and no other praxis process.
+Each round's gate table as `praxis report` prints it, its medians in µs
+set side by side by script:
 
 | Line | Round 1 | Round 2 | Round 3 |
 |---|---:|---:|---:|

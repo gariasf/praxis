@@ -3877,7 +3877,13 @@ checked = 2026-10-30
 ["apple-metal-command-buffer-kernel-time"]
 url = "https://developer.apple.com/documentation/metal/mtlcommandbuffer/kernelstarttime"
 section = "Apple Developer Documentation, Metal, MTLCommandBuffer, kernelStartTime, and kernelEndTime beside it"
-quote = '''The host time, in seconds, when the CPU begins to schedule the command buffer. [...] The kernel start and end times remain 0.0 until the GPU driver (on the CPU) schedules the command buffer to run on the GPU.'''
+quote = '''The host time, in seconds, when the CPU begins to schedule the command buffer. [...] You can calculate how much time the kernel spends scheduling a command buffer by subtracting this value from kernelEndTime. The kernel start and end times remain 0.0 until the GPU driver (on the CPU) schedules the command buffer to run on the GPU.'''
+checked = 2026-11-04
+
+["apple-metal-command-buffer-gpu-time"]
+url = "https://developer.apple.com/documentation/metal/mtlcommandbuffer/gpustarttime"
+section = "Apple Developer Documentation, Metal, MTLCommandBuffer, gpuStartTime"
+quote = '''The host time, in seconds, when the GPU starts command buffer execution. [...] Both values are relative to system mach time.'''
 checked = 2026-11-04
 
 ["apple-metal-fence-per-stage"]
