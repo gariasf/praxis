@@ -114,13 +114,12 @@ Test scenes, each one benched. Images are the Metal goldens, 640×360.
 | <img src="tests/goldens/metal/minification.png" width="320" alt="minification"> | **minification**: glossy checker floor, 100 m, under a raking light. Mips, anisotropic filtering, Toksvig. |
 | <img src="tests/goldens/metal/texture-wall.png" width="320" alt="texture-wall"> | **texture-wall**: 10,000 resident textures sampled by 100 quads. |
 | <img src="tests/goldens/metal/shadows.png" width="320" alt="shadows"> | **shadows**: sphere over a plane, sun and point light; ray-traced shadow against the analytic one. |
+| <img src="tests/goldens/metal/crowd.png" width="320" alt="crowd"> | **crowd**: 100 figures bent on the GPU every frame, a stand-in for skinning, with shadows from per-bone proxies. |
 
-Plus `town` (top), and two without goldens:
+Plus `town` (top), and one without a golden:
 
 - **helmet**: the SciFiHelmet sample model and a material sweep. The model
   is downloaded, not committed.
-- **crowd**: 100 figures bent on the GPU every frame, a stand-in for
-  skinning, with shadows from per-bone proxies.
 
 ## License
 

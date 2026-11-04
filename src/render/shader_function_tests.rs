@@ -1876,6 +1876,66 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
     );
 }
 
+/// A point light 0.3 m from the camera, anywhere within 100 km of the
+/// origin, lands within the precision bar of its f64 position relative to
+/// the camera, composed from its own anchor and offset and the camera's;
+/// its range and intensity, set apart from both, move it nowhere.
+#[test]
+fn point_light_position_meets_the_precision_bar_within_100_km() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let coordinates = [
+        -100_000.0,
+        -54_321.987_654,
+        -64.000_01,
+        0.0,
+        0.3,
+        63.999_99,
+        12_345.678_9,
+        99_999.999,
+    ];
+    let mut cases = Vec::new();
+    for x in coordinates {
+        for y in coordinates {
+            for z in coordinates {
+                let camera = glam::DVec3::new(x, y, z);
+                for direction in [glam::DVec3::X, glam::DVec3::NEG_Y, glam::DVec3::ONE] {
+                    cases.push(Case::new(
+                        camera,
+                        direction.normalize() * 0.3,
+                        glam::Vec3::ZERO,
+                    ));
+                }
+            }
+        }
+    }
+    let inputs: Vec<[[f32; 4]; 4]> = cases
+        .iter()
+        .map(|case| {
+            let [anchor, offset, camera_anchor, camera_offset, _] = case.test_vectors();
+            [anchor, offset, camera_anchor, camera_offset]
+        })
+        .collect();
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(point_light_position(LightData(vec3<i32>(inputs[0].xyz), 25.0, \
+         inputs[1].xyz, vec3<f32>(7.0, 11.0, 13.0)), vec3<i32>(inputs[2].xyz), \
+         inputs[3].xyz), 0.0)",
+        &inputs,
+        &[],
+    );
+
+    for (case, result) in cases.iter().zip(results) {
+        let gpu = glam::Vec3::from_slice(&result).as_dvec3();
+        let error = gpu.distance(case.camera_relative);
+        assert!(
+            error <= PRECISION_BAR,
+            "{case:?}: GPU places the light at {gpu}, {error} m from the f64 reference"
+        );
+    }
+}
+
 /// A segment of a ray meets a box where some point of it lies in the box,
 /// its faces included. The cases, each against the box from -1 to 1 on
 /// every axis unless it names another, hold their answer as a literal: rays
