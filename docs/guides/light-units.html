@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Light Units</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; a concept &middot; <code>src/components.rs</code> &middot; <code>src/camera/mod.rs</code></div>
+  <h1>Light units</h1>
+  <p class="definition">Every light value in the engine is photometric, in the units glTF defines: a directional light's illuminance in lux, a point light's luminous intensity in candela, an emissive surface's and the background's luminance in cd/m&sup2;, the ambient term's illuminance in lux; and the camera's exposure is an EV100, which scales the luminance the lit pass computes so that a scene's brightest ordinary surfaces land near display white before the HDR target stores them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to a light's units, to a scene's figures or to the exposure rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="froxel-pass.html">The Froxel pass</a> for the light buffer that carries the values, <a href="lit-pass.html">Lit Pass Explained</a> for the shading that turns them into luminance.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Authored</dt><dd><code>DirectionalLight</code>'s <code>intensity</code> in lux and <code>PointLight</code>'s in candela, each times a colour; the <code>Environment</code>'s <code>ambient_illuminance</code> in lux and <code>background_luminance</code> in cd/m&sup2;; a Material's emissive in cd/m&sup2;; the <code>Camera</code>'s <code>ev100</code>.</dd>
+      <dt>Carried</dt><dd>Each light's colour times its intensity in the light buffer's <code>intensity</code>; the ambient term in <code>LightUniform</code>; the exposure, as a scale, in <code>CameraUniform</code>; the background, already exposed, as the colour the lit pass clears to.</dd>
+      <dt>Shaded</dt><dd>In the lit pass, in f32: each light's illuminance at the surface, from lux as given or from candela over the squared distance, through the BRDF into luminance, plus the ambient term and the emissive; then times the exposure and clamped to fp16's largest value, 65504, before the HDR target stores it.</dd>
+      <dt>Set</dt><dd>Each <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s EV100 by hand, from its sun's illuminance; a camera made without one starts at EV100 15.</dd>
+      <dt>Decided</dt><dd>ADR 0023.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#units">1 &middot; Four units</a>
+    <a href="#scenes">2 &middot; The scenes' figures</a>
+    <a href="#exposure">3 &middot; Exposure as an EV100</a>
+    <a href="#frame">4 &middot; Where the frame applies them</a>
+    <a href="#tests">5 &middot; How it is tested</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#why">7 &middot; Why this way</a>
+    <a href="#limits">8 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="units">
+  <div class="part-mark">1 &middot; <code>src/components.rs</code></div>
+  <h2>Four units, three of them glTF's</h2>
+  <p class="key-idea">Photometry measures visible light in four units; glTF uses three, and Praxis takes them as glTF defines them, so a glTF light imports with no scale and the ratios between sun, sky and lamps are real.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Quantity</th><th>Unit</th><th>What it measures</th><th>In Praxis</th></tr></thead>
+    <tbody>
+      <tr><td>illuminance</td><td>lux, lm/m&sup2;</td><td>light arriving on a surface</td><td>a <code>DirectionalLight</code>, on a surface facing it; the ambient term</td></tr>
+      <tr><td>luminous intensity</td><td>candela, lm/sr</td><td>light leaving a point in one direction</td><td>a <code>PointLight</code>, as KHR_lights_punctual gives it</td></tr>
+      <tr><td>luminance</td><td>cd/m&sup2;, also called nits</td><td>how bright a surface looks</td><td>emissive surfaces, the background, and what the lit pass computes for each pixel</td></tr>
+      <tr><td>luminous flux</td><td>lumens</td><td>a lamp's total output</td><td>not used; a point light of I candela that shines equally everywhere emits 4&pi;I lumens</td></tr>
+    </tbody>
+  </table>
+  </div>
+<pre class="code"><code>pub struct PointLight {
+    pub color: glam::Vec3,
+    <span class="comment">/// Luminous intensity, in candela (ADR 0023).</span>
+    pub intensity: f32,
+    <span class="comment">/// Metres from the light past which it adds nothing (KHR_lights_punctual's
+    /// `range`, which must be positive and here finite).</span>
+    pub range: f32,
+}
+
+pub struct DirectionalLight {
+    pub color: glam::Vec3,
+    <span class="comment">/// Illuminance on a surface facing it, in lux (ADR 0023).</span>
+    pub intensity: f32,
+}</code></pre>
+  <p class="code-source"><code>src/components.rs</code>.</p>
+  <p>A point light of intensity I candela gives a surface facing it at distance d an illuminance of I / d&sup2; lux, inside its range window; the lit pass then reflects each light's illuminance through the surface's BRDF into luminance. A white diffuse surface facing a sun of 100,000 lx reflects 100,000 / &pi; &asymp; 31,831 cd/m&sup2;, since an ideal diffuse surface's BRDF is its colour over &pi;.</p>
+  <p>Direct sun is 100,000 lx and a moonless night about 0.0001 lx: 29.9 stops between them, and about 11 between a living room's 50 lx and the sun. Shading runs in f32, which holds that range; fp16, the HDR target's format, does not hold it unexposed (section 4).</p>
+</section>
+
+<section class="part prose" id="scenes">
+  <div class="part-mark">2 &middot; <code>src/scenes/mod.rs</code> &middot; <code>town.rs</code></div>
+  <h2>The scenes' figures</h2>
+  <p class="key-idea">Every Reference scene is lit from one figure, a sun of 100,000 lx, "direct sunlight", and gives each other light against it: a point light by the distance at which it matches the sun.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Light</th><th>Quantity</th><th class="n">Value</th><th>Against the sun</th></tr></thead>
+    <tbody>
+      <tr><td>the sun, a <code>DirectionalLight</code>, every scene</td><td>illuminance</td><td class="n">100,000 lx</td><td><code>SUN_ILLUMINANCE</code></td></tr>
+      <tr><td>ambient, every scene</td><td>illuminance</td><td class="n">10,000 lx</td><td>a tenth</td></tr>
+      <tr><td>background, red, green, blue</td><td>luminance</td><td class="n">10,000 &middot; 20,000 &middot; 30,000 cd/m&sup2;</td><td>a tenth to three tenths of its figure</td></tr>
+      <tr><td>each of the four coloured point lights, and the <code>shadows</code> scene's white one</td><td>luminous intensity</td><td class="n">900,000 cd</td><td>its illuminance 3 m away; reaches 20 m</td></tr>
+      <tr><td><code>minification</code>'s point light</td><td>luminous intensity</td><td class="n">30,000,000 cd</td><td>its illuminance about 17.3 m away; reaches 200 m</td></tr>
+      <tr><td>each of <code>town</code>'s 1,024 street lamps, warm white</td><td>luminous intensity</td><td class="n">2,000,000 cd</td><td>its illuminance about 4.5 m away; reaches 18 m</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>src/scenes/mod.rs</code> and <code>town.rs</code> at the commit above. A point light of I candela gives the sun's 100,000 lx at &radic;(I / 100,000) m: 3 m for 900,000 cd, &radic;300 &asymp; 17.3 m for 30,000,000 cd, &radic;20 &asymp; 4.5 m for 2,000,000 cd. <code>texture-wall</code> and <code>crowd</code> have the sun alone.</p>
+  <p>For lamps the point lights look extreme. Their figures keep the ratios the scenes had before their lights had units, when the sun's illuminance was 1: a light that matched the sun 3 m away then is one that matches it 3 m away now. Each is in candela all the same, as glTF would give it.</p>
+</section>
+
+<section class="part prose" id="exposure">
+  <div class="part-mark">3 &middot; <code>Camera::exposure</code></div>
+  <h2>Exposure as an EV100</h2>
+  <p class="key-idea">A camera does not show luminance as it is: its exposure decides which luminance comes out as white. Praxis sets it as photographers do, as an EV100, the exposure value at ISO 100, and the lit pass multiplies each pixel's luminance by the scale it gives.</p>
+  <div class="formula">exposure = 1 / (1.2 &middot; 2<sup>EV100</sup>)        EV100 = log&#8322;(1 / (1.2 &middot; exposure))</div>
+<pre class="code"><code>const SATURATING_LUMINANCE_AT_EV100_ZERO: f32 = 1.2;
+
+pub fn ev100_for_exposure(exposure: f32) -&gt; f32 {
+    (1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * exposure)).log2()
+}
+
+pub fn exposure(&amp;self) -&gt; f32 {
+    1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * self.ev100.exp2())
+}</code></pre>
+  <p class="code-source"><code>src/camera/mod.rs</code>.</p>
+  <p>The 1.2 is a luminance: 1.2 cd/m&sup2; = 78 / (100 &middot; 0.65), the luminance that saturates an ISO 100 sensor at EV100 0, with the lens and vignetting factor q = 0.65 of Lagarde and de Rousiers's course notes. At EV100 0, 1.2 cd/m&sup2; exposes to 1; each EV100 more halves the scale, so the luminance that exposes to 1 doubles.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>EV100</th><th class="n">Exposure</th><th class="n">Luminance that exposes to 1, cd/m&sup2;</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td class="n">1 / 1.2</td><td class="n">1.2</td><td>the scale's definition</td></tr>
+      <tr><td>15</td><td class="n">1 / 39,321.6</td><td class="n">39,321.6</td><td>Sunny 16, a sunny day's exposure, the default of <code>Camera::new</code></td></tr>
+      <tr class="focus"><td>16.35</td><td class="n">1 / 100,000</td><td class="n">100,000</td><td>every Reference scene: log&#8322;(100,000 / 1.2), one over the sun's illuminance in lux</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The scenes' EV100 is <code>ev100_for_exposure</code> of one over <code>SUN_ILLUMINANCE</code>, so the sun's illuminance in lux exposes to 1, as it was before the lights had units: every value grew by 100,000 when they took units, and the exposure divides by 100,000. Exposed at 16.35, a white diffuse surface facing the sun is 0.318, and the background 0.1, 0.2 and 0.3.</p>
+</section>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">4 &middot; <code>main.wgsl</code></div>
+  <h2>Where the frame applies them</h2>
+  <p class="key-idea">The units live in the CPU's components and the GPU's buffers unchanged; the lit pass computes luminance in f32 in real units and exposes it as its last step, so the fp16 HDR target stores values near 1 rather than near 10<sup>5</sup>.</p>
+<pre class="code"><code>let luminance = ambient_luminance(surface, light.ambient_illuminance.rgb) + outgoing_luminance
+    + surface.emissive;
+<span class="comment">// Pre-exposed in f32 and clamped to fp16's range before the HDR target
+// stores it (ADR 0023), weighted for the resolve.</span>
+let exposed = min(luminance * camera.exposure, vec3&lt;f32&gt;(LARGEST_HALF));
+return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
+  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>; <code>outgoing_luminance</code> holds the directional and point lights' reflected luminance.</p>
+  <p>fp16 cannot hold the range unexposed: under 100,000 lx a dielectric's sun glint at roughness 0.04 peaks at 1.24&times;10<sup>8</sup> cd/m&sup2;, 10.9 stops past fp16's largest value, 65504. Exposing in f32 first brings ordinary surfaces near 1, and the clamp keeps the rest finite on every backend: on overflow the Apple M4 Pro saturates, while Vulkan may store infinity. The background takes the same exposure on the CPU, as the colour the lit pass clears to. The tonemapping pass then maps the exposed values through GT7 to display colour (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">5 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The exposure is held to its formula at chosen EV100s; the shading functions that turn lux and candela into luminance are held to f64 oracles; and the Goldens hold each scene's image at its figures and its EV100.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>exposure_is_one_over_1_2_times_2_to_the_ev100</code></td><td><code>src/camera/mod.rs</code></td><td>the scale at EV100 0, &minus;1 and 15: 1 / 1.2, 1 / 0.6 and 1 / 39,321.6</td></tr>
+      <tr><td><code>point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range</code></td><td><code>shader_function_tests.rs</code></td><td>candela over the squared distance, inside the range window</td></tr>
+      <tr><td><code>point_light_luminance_attenuates_the_intensity_it_reflects</code></td><td><code>shader_function_tests.rs</code></td><td>a point light's intensity reaches the BRDF as its illuminance at the surface</td></tr>
+      <tr><td><code>reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_it_receives</code></td><td><code>shader_function_tests.rs</code></td><td>illuminance becomes luminance through the BRDF, and no more than arrives</td></tr>
+      <tr><td><code>ambient_luminance_is_the_base_colour_over_pi_darkened_by_occlusion</code></td><td><code>shader_function_tests.rs</code></td><td>the ambient term, lux reflected by a diffuse surface over &pi;</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>every Reference scene's frame at its figures and its EV100 matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">6</div>
+  <h2>What it costs</h2>
+  <p class="key-idea">Nothing a Baseline can see apart: the units are the values the frame already carries, and the exposure is one multiply and one clamp per fragment at the end of the lit pass, timed within <code>lit_pass</code>.</p>
+  <p>Real units cost range, not time: fp16 cannot store them unexposed, which is why the lit pass pre-exposes in f32, and why the HDR target's format, its memory and its resolve are what they are. Those are the HDR target's to account for, within the lit pass's and the tonemapping pass's own figures (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">7 &middot; ADRs 0008, 0020, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>Real units, not relative ones.</b> Relative units, a sun near 1 and unitless point lights, would mean fewer stops and an exposure near 1. But glTF lights would need a scale at import, values tuned in one scene would not carry to another, and an engine that moved its lighting to physical units after its content existed found converting it extremely hard. Units are hard to change once worlds are authored; ADR 0020's ray-traced shadows and the probe lighting planned beside them work on real ratios between sun, sky and interiors.</p>
+  <p><b>Candela, not lumens.</b> Several engines author point lights in lumens, a bulb's familiar rating. glTF stores candela, so lumens would mean a conversion at every import, as one engine's glTF loader multiplies candela by 4&pi;. Blender's glTF exporter, in its physically based mode, writes a point light's watts as candela and a sun's W/m&sup2; as lux, so lights authored there arrive in these units.</p>
+  <p><b>A manual EV100 per scene.</b> Each Reference scene sets its exposure by hand: exact every frame, the Goldens exact, one multiply. Histogram adaptation, a pass that measures the frame and eases the exposure towards it, carries one number across frames, which ADR 0008 allows; local tone mapping exposes regions of the image apart. Both wait, by ADR 0023, for the first scene that joins an interior and sunlight or changes the time of day.</p>
+  <p><b>The 1.2 from a camera's sensor.</b> The scale is that of a sensor at ISO 100 saturating, through the course notes' lens and vignetting factor, so an EV100 means what a photographer's means, and Sunny 16 lands near EV100 15.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">8</div>
+  <h2>Limits</h2>
+  <p><b>Emissive is dim.</b> Core glTF caps an emissive surface at 1 cd/m&sup2;, its texture and factor each at most 1, which the scenes' EV100 maps to 10<sup>&minus;5</sup> of display white. Brighter emissives need KHR_materials_emissive_strength, which the cooker does not read.</p>
+  <p><b>One exposure per scene.</b> Nothing adapts to the frame: a scene that moves from sunlight into an interior keeps the sun's exposure.</p>
+  <p><b>Point and directional lights only.</b> Spot lights would take candela too, and area lights wait for soft shadows.</p>
+  <p><b>Headroom past white is fp16's.</b> Past 65504 times the luminance that exposes to 1, a value is clamped; highlights beyond it saturate.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the units rest on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code and ADR 0023 cite.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md#L90">KHR_lights_punctual, Light Types</a></dt><dd>a point light's intensity in candela, a directional light's in lux; <code>khr-lights-punctual-units</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L2691">glTF 2.0 specification, emission</a></dt><dd>emissive in cd/m&sup2;; <code>gltf-2.0-emissive-units</code></dd>
+    <dt><a href="https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf#page=85">Lagarde and de Rousiers, Moving Frostbite to Physically Based Rendering 3.0, SIGGRAPH 2014 course notes, &sect;5.1.2</a></dt><dd>the EV100 and the scale of 1 / (1.2 &middot; 2<sup>EV100</sup>); <code>frostbite-2014-exposure</code>; and, &sect;6, converting relative lights once content exists; <code>frostbite-2014-relative-lights</code></dd>
+    <dt><a href="https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_light/src/lib.rs#L130-L158">Bevy, module lux</a></dt><dd>reference illuminances from a moonless night to direct sunlight, the sun's 100,000 lx among them; <code>bevy-lux-constants</code></dd>
+    <dt><a href="https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_gltf/src/loader/mod.rs#L1793-L1796">Bevy, glTF loader</a></dt><dd>a glTF point light's candela converted to lumens by 4&pi; at import; <code>bevy-gltf-point-candela</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF-Blender-IO/blob/e03d6603c44a9a95f006fd79a38b40cdd3c3a009/addons/io_scene_gltf2/blender/exp/lights.py#L178-L192">glTF-Blender-IO, light export</a></dt><dd>watts to candela and W/m&sup2; to lux at 683 lm/W; <code>blender-gltf-light-export</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The lights took units in one step of the third milestone, with the HDR target and the tonemapping pass beside them: before it the sun's illuminance was 1, every other light a multiple of it, and the lit pass wrote display colour directly. The scenes' figures kept their ratios, and their EV100 of 16.35 divides by the 100,000 the values grew by, so no Golden moved by more than one 8-bit step, at no more than 110 pixels a scene. The development narrative is in <a href="hdr-pipeline.html">HDR Pipeline Explained</a> and <a href="tonemapping-pass.html">Tonemapping Pass Explained</a> until the pages that take their other chapters land; this page describes the units as they are.</p>
+  <footer class="sources">Written from <code>src/components.rs</code>, <code>src/camera/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>town.rs</code>, <code>src/render/uniforms.rs</code>, <code>prepare.rs</code>, <code>main.wgsl</code>, <code>shading.wgsl</code>, <code>hdr.wgsl</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0020 and 0023, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="bench-history.html">Previous: Bench History Explained</a><a href="index.html">All field guides</a><a href="box-leakage.html">Next: Box Leakage Explained</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

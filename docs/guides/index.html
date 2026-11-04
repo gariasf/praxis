@@ -107,7 +107,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>Phase one of the culling pass, which builds the draw of the Instances in view that were visible the frame before.
       <span class="reads">Page: <a class="reference" href="culling-pass.html">The culling pass</a>. Volumes it has not yet absorbed, for their Metal paragraphs: <a href="instance-culling.html">Instance Culling Explained</a>, <a href="meshlet-culling.html">Meshlet Culling Explained</a></span></li>
     <li>The Froxel pass, which lists for each Froxel the point lights that may reach it.
-      <span class="reads">Volume: <a href="froxel-lights.html">Froxel Lights Explained</a></span></li>
+      <span class="reads">Page: <a class="reference" href="froxel-pass.html">The Froxel pass</a>, which opens with the light buffer it reads. Volume it has not yet absorbed: <a href="froxel-lights.html">Froxel Lights Explained</a>, for prepare's lights and the lit pass's lookup</span></li>
     <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, and with shadow rays on each sample's surface normals beside it.
       <span class="reads">Page: <a class="reference" href="depth-prepass.html">The depth pre-pass</a></span></li>
     <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen.
@@ -121,7 +121,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target.
       <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a>. Volumes they have not yet absorbed: <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="hdr-pipeline.html">HDR Pipeline Explained</a>, for the light units and exposure</span></li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats.
-      <span class="reads">Volume: <a href="town.html">Town Explained</a></span></li>
+      <span class="reads">Page: <a class="reference" href="froxel-pass.html#light-count">The Froxel pass, its light count section</a>. Volume: <a href="town.html">Town Explained</a></span></li>
   </ol>
 </section>
 
@@ -139,6 +139,8 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <h2 id="concepts">What the pages lean on</h2>
   <p class="note">Ideas several mechanisms share, each to become a page of its own, and two options the frame measured and did not take.</p>
   <ul class="frame unnumbered" role="list">
+    <li>The units every light value carries, glTF's photometric ones, and the EV100 exposure that brings the lit pass's luminance near display white.
+      <span class="reads">Page: <a class="reference" href="light-units.html">Light units</a></span></li>
     <li>How a pixel's samples and its fragments differ under 4x MSAA, how the samples resolve, and how Apple GPUs merge fragments.
       <span class="reads">Page: <a class="reference" href="msaa.html">MSAA</a>. Volume it has not yet absorbed: <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a>, for the merging</span></li>
     <li>Why a box filter, as mips and anisotropic probes average texels, lets through detail finer than a pixel can show.

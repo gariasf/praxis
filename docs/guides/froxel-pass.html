@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Froxel Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/froxel_pass.rs</code></div>
+  <h1>The Froxel pass</h1>
+  <p class="definition">A compute pass that cuts the view into 18,432 <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span>, 32 screen rectangles across, 18 down and 32 slices of depth each, and lists for every Froxel, in light order, the point lights of the light buffer whose range reaches into its bounds, so that the lit pass shades a pixel with its Froxel's point lights alone and a light left out would have added exactly zero.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass or the light buffer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="light-units.html">Light units</a> for what a light's intensity holds, <a href="shadow-mask.html">The shadow mask pass</a> for the bits that follow each list, <a href="lit-pass.html">Lit Pass Explained</a> for the shading that reads them.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Every frame, whatever the <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switches</span>: recorded right after phase one of the culling pass, so that ADR 0019's <span class="concept" data-term="Gate" data-tip="ADR 0019's measure of the opaque main pass: the GPU time from the first culling dispatch to the end of the lit pass, with shadow rays off.">gate</span> counts it. With <code>froxel_lights</code> off the lists are still built; only the lit pass stops reading them.</dd>
+      <dt>Reads</dt><dd>The camera uniform; the light uniform, for how many directional and point lights the light buffer holds; the light buffer.</dd>
+      <dt>Writes</dt><dd>Each Froxel's list, a count and up to 127 indices into the light buffer, 9 MiB for all 18,432; the first field of the light counts, the lights the lists had no room for, which <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the Froxel lists had no room for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> read back.</dd>
+      <dt>Dispatches</dt><dd>One, <code>build_froxel_lists</code>: a workgroup per screen rectangle, 32 &times; 18, and an invocation per slice, 32, one per Froxel.</dd>
+      <dt>Bind groups</dt><dd>Group 3, Froxel lists: the camera, the light uniform, the light buffer, the lists and the light counts. Three passes read the lists, each through a group of its own: the lit pass through group 0, the frame; the shadow mask pass through its shadow mask build group; the light count pass through its input group.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/froxel.wgsl</code>, assembled with the common part and <code>froxel_grid.wgsl</code>, whose <code>froxel_at</code> the three readers share to find a pixel's Froxel.</dd>
+      <dt>Counted</dt><dd><code>froxel_pass</code> in GPU time; <code>froxel_lights_overflowed</code> and, for the light buffer, <code>lights_overflowed</code> in counters; the lists and the light counts in GPU memory; with <code>count_point_lights</code> on, <code>lit_pixels</code>, <code>listed_point_lights</code> and <code>reaching_point_lights</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#buffer">1 &middot; The light buffer</a>
+    <a href="#frame">2 &middot; Where it sits</a>
+    <a href="#froxels">3 &middot; Froxels</a>
+    <a href="#test">4 &middot; The sphere test</a>
+    <a href="#lists">5 &middot; The lists</a>
+    <a href="#readers">6 &middot; Who reads them</a>
+    <a href="#tests">7 &middot; How it is tested</a>
+    <a href="#cost">8 &middot; What it costs</a>
+    <a href="#why">9 &middot; Why this way</a>
+    <a href="#limits">10 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="buffer">
+  <div class="part-mark">1 &middot; <code>src/render/uniforms.rs</code> &middot; <code>prepare_lights</code></div>
+  <h2>The light buffer</h2>
+  <p class="key-idea">Every light the frame draws is a 48-byte entry of one storage buffer of fixed capacity, the directional lights first and the point lights after them, a point light placed by an Anchor and an offset; a separate 32-byte uniform says how many of each it holds.</p>
+  <p>Prepare fills Frame data with every directional light, then every point light, each blended between its two newest <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, up to <code>LIGHT_CAPACITY</code>, 4,096, and the frame's upload writes them through its staging into the light buffer. The buffer is created at that capacity, 196,608 bytes, and never grows. Directional lights take their places first, so a full buffer leaves out point lights before the sun; whatever it leaves out, prepare counts as <code>lights_overflowed</code> and warns of once, "Lights past the light buffer's capacity are not drawn", until a frame in which all fit.</p>
+<pre class="code"><code>let capacity = LIGHT_CAPACITY as usize;
+lights.clear();
+lights.extend(directional_lights.by_ref().take(capacity));
+let directional_light_count = lights.len() as u32;
+lights.extend(point_lights.by_ref().take(capacity - lights.len()));
+*overflowed = (directional_lights.count() + point_lights.count()) as u32;
+directional_light_count</code></pre>
+  <p class="code-source"><code>prepare_lights</code>, <code>src/render/prepare.rs</code>.</p>
+  <p>A light is a <code>LightData</code>, with a WGSL twin in the common part that a test holds field for field to the Rust. A directional light has no position, so its offset carries the direction it shines along, its transform's forward axis; one scaled to nothing has no direction and is not drawn. Intensity is the light's colour times its intensity, in the units of <a href="light-units.html">Light units</a>: candela for a point light, lux for a directional light.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th class="n">Bytes</th><th>Field</th><th>A point light</th><th>A directional light</th></tr></thead>
+    <tbody>
+      <tr><td class="n">0&ndash;11</td><td><code>anchor</code>, 3 &times; i32</td><td>its 64 m grid cell</td><td>0</td></tr>
+      <tr><td class="n">12&ndash;15</td><td><code>range</code>, f32</td><td>in metres</td><td>0</td></tr>
+      <tr><td class="n">16&ndash;27</td><td><code>offset</code>, 3 &times; f32</td><td>its position within the cell</td><td>the direction it shines along</td></tr>
+      <tr><td class="n">28&ndash;31</td><td><code>_pad_offset</code></td><td colspan="2">padding</td></tr>
+      <tr><td class="n">32&ndash;43</td><td><code>intensity</code>, 3 &times; f32</td><td>colour &times; candela</td><td>colour &times; lux</td></tr>
+      <tr><td class="n">44&ndash;47</td><td><code>_pad_intensity</code></td><td colspan="2">padding</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The counts travel apart, in <code>LightUniform</code>: the scene's ambient illuminance, then <code>directional_light_count</code> and <code>point_light_count</code>. The Froxel pass reads both to find where the point lights start and end; every index a list holds is an index into the whole buffer, so it lands past the directional lights.</p>
+  <p>No World position reaches the GPU in f32 (ADR 0014). Prepare splits a point light's position into its <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> and an f32 offset from the cell's corner, as it splits an Instance's, and each shader composes it relative to the camera with <code>point_light_position</code>:</p>
+  <div class="formula">position = (anchor &minus; camera anchor) &times; 64 m + (offset &minus; camera offset)</div>
+  <p>The integer difference is exact, so the composed position rounds in proportion to its distance from the camera, not from the World's origin. Prepare's test places a point light at (100,000.25, 2, &minus;64.5) and expects the Anchor (1562, 0, &minus;2) and the offset (32.25, 2, 63.5).</p>
+</section>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">2 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The pass reads nothing another pass writes, only the frame's uniforms and lights, so it can run as early as the lists are needed; it is recorded after the first culling dispatch so the gate, which starts there, counts the lights' culling.</p>
+  <p class="order-label">The frame's passes with shadow rays on, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li class="focus">Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li class="warm">shadow mask pass</li><li class="warm">lit pass</li><li>tonemapping pass</li><li class="warm">light count pass</li>
+  </ol>
+  <p>The passes ringed warm read the lists: the shadow mask pass, to give each listed point light its bit; the lit pass, to shade each pixel's point lights; and, with the <code>count_point_lights</code> switch on, which ships off, the light count pass after the frame's others. On Metal the Froxel pass can run beside phase one of the culling pass, and now and then start before it, since neither writes what the other binds.</p>
+<pre class="code"><code>pub fn record(
+    &amp;self,
+    encoder: &amp;mut wgpu::CommandEncoder,
+    timestamp_writes: Option&lt;wgpu::ComputePassTimestampWrites&lt;'_&gt;&gt;,
+) {
+    encoder.clear_buffer(&amp;self.light_counts, 0, None);
+    let mut pass = encoder.begin_compute_pass(&amp;wgpu::ComputePassDescriptor {
+        label: Some(FROXEL_PASS),
+        timestamp_writes,
+    });
+    pass.set_pipeline(&amp;self.pipeline);
+    pass.set_bind_group(FROXEL_LISTS.index, &amp;self.bind_group, &amp;[]);
+    pass.dispatch_workgroups(FROXEL_COLUMNS, FROXEL_ROWS, 1);
+}</code></pre>
+  <p class="code-source"><code>FroxelPass::record</code>, <code>src/render/froxel_pass.rs</code>.</p>
+  <p>The light counts are cleared before the pass, since it adds to their first field, and the light count pass to the other three; the frame's end copies them into its slot of the GPU stats readback.</p>
+</section>
+
+<section class="part prose" id="froxels">
+  <div class="part-mark">3 &middot; <code>froxel_grid.wgsl</code></div>
+  <h2>Froxels: rectangles on screen, slices in depth</h2>
+  <p class="key-idea">The screen is cut into 32 &times; 18 rectangles of one size, and each rectangle's view into 32 slices of depth that grow three to each doubling, so every Froxel from 1 m to 1,024 m has the same shape, only larger with distance; the last slice reaches to infinity, as depth has no far plane.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it fixes</th></tr></thead>
+    <tbody>
+      <tr><td><code>FROXEL_COLUMNS</code></td><td class="n">32</td><td>rectangles across the screen: 80 pixels at 2560 wide, 20 at the Goldens' 640</td></tr>
+      <tr><td><code>FROXEL_ROWS</code></td><td class="n">18</td><td>rectangles down it: 80 pixels at 1440 high</td></tr>
+      <tr><td><code>FROXEL_SLICES</code></td><td class="n">32</td><td>slices of view depth per rectangle, and the workgroup's size</td></tr>
+      <tr><td><code>FIRST_FROXEL_SLICE_DEPTH</code></td><td class="n">1.0</td><td>metres: slice 0 takes everything nearer</td></tr>
+      <tr><td><code>FROXEL_SLICES_PER_OCTAVE</code></td><td class="n">3.0</td><td>slices to each doubling of depth</td></tr>
+      <tr><td><code>FROXEL_LIGHT_CAPACITY</code></td><td class="n">127</td><td>lights a list holds; with its count a list is 512 bytes</td></tr>
+      <tr><td><code>FROXEL_COUNT</code></td><td class="n">18,432</td><td>lists in all, 9,437,184 bytes</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>froxel_pass.rs</code> at the commit above; Rust declares them into the WGSL when each module is assembled.</p>
+  <p>Depth here is the distance along the view axis, which a point's clip w holds. Slice 0 runs from the camera to 1 m; slices 1 to 30 follow at three to each doubling, 1 to 1.26 m, 1.26 to 1.59 m, and on to 812.7 to 1,024 m; slice 31 runs from 1,024 m to infinity.</p>
+<pre class="code"><code>fn froxel_slice_start(slice: u32) -&gt; f32 {
+    let octaves = (f32(slice) - 1.0) / FROXEL_SLICES_PER_OCTAVE;
+    return select(FIRST_FROXEL_SLICE_DEPTH * exp2(octaves), 0.0, slice == 0u);
+}
+
+fn froxel_slice(depth: f32) -&gt; u32 {
+    let slice = floor(log2(depth / FIRST_FROXEL_SLICE_DEPTH) * FROXEL_SLICES_PER_OCTAVE) + 1.0;
+    return u32(clamp(slice, 0.0, f32(FROXEL_SLICES - 1u)));
+}</code></pre>
+  <p class="code-source"><code>froxel_grid.wgsl</code>.</p>
+  <p>A rectangle's height grows in proportion to its distance: at the camera's 45&deg; vertical field of view a row of rectangles is about 4.6% of the distance tall. A slice spans the same ratio of depths wherever it lies, 2<sup>1/3</sup> &asymp; 1.26, so its depth is about 26% of the distance where it starts. Each Froxel is therefore about five times as deep as it is wide, at every distance. Exponential slices shrink without end towards the camera, so slice 0 takes everything nearer than 1 m; depth is reversed with no far plane (ADR 0015), so the last slice runs to infinity and every visible point has a Froxel.</p>
+  <p>A Froxel's index puts the slices of one rectangle side by side, the rectangles counted from the lowest normalised device coordinates, as clip space counts them:</p>
+  <div class="formula">index = (row &times; 32 + column) &times; 32 + slice</div>
+</section>
+
+<section class="part prose" id="test">
+  <div class="part-mark">4 &middot; <code>build_froxel_lists</code></div>
+  <h2>The sphere test</h2>
+  <p class="key-idea">A point light's range is a sphere. The pass drops a light from a Froxel only when the sphere lies wholly outside one of the six planes that bound it, so it never drops a light that reaches the Froxel and sometimes keeps one that does not.</p>
+  <p>The camera sits at the origin of every position the shaders see, and <code>view_proj</code> holds no translation (ADR 0014), so each rectangle side is a plane through the camera. A side at normalised x = a is where clip x &minus; a &middot; clip w = 0; with row<sub>0</sub> to row<sub>3</sub> the rows of <code>view_proj</code>, its normal is row<sub>0</sub> &minus; a &middot; row<sub>3</sub>, and clip x &minus; a &middot; clip w over that normal's length is a point's signed distance from it. A sphere lies wholly outside the side only when its centre is farther outside than its range. Each invocation computes its rectangle's four normal lengths once; a slice's two planes stand square to the view axis, where clip w is already the distance.</p>
+<pre class="code"><code>let froxel = froxel_index(rectangle.xy, slice);
+var count = 0u;
+let end = light.directional_light_count + light.point_light_count;
+for (var index = light.directional_light_count; index &lt; end; index++) {
+    let point = lights[index];
+    let centre = point_light_position(point, camera.anchor, camera.offset);
+    let clip_x = dot(rows[0].xyz, centre);
+    let clip_y = dot(rows[1].xyz, centre);
+    let depth = dot(rows[3].xyz, centre);
+    let inside_sides = vec4&lt;f32&gt;(
+        clip_x - lowest.x * depth,
+        highest.x * depth - clip_x,
+        clip_y - lowest.y * depth,
+        highest.y * depth - clip_y
+    );
+    <span class="comment">// Its range reaches into the Froxel unless it lies wholly outside a
+    // side or beyond the slice: conservative, as a sphere may miss a
+    // corner that it reaches past both sides of.</span>
+    if all(inside_sides &gt;= -point.range * normal_lengths)
+        &amp;&amp; depth + point.range &gt;= nearest
+        &amp;&amp; (last_slice || depth - point.range &lt;= farthest) {
+        if count &lt; FROXEL_LIGHT_CAPACITY {
+            froxel_lists[froxel].lights[count] = index;
+        }
+        count++;
+    }
+}</code></pre>
+  <p class="code-source"><code>build_froxel_lists</code>, <code>froxel.wgsl</code>; <code>rows</code> is <code>view_proj</code> transposed, <code>lowest</code> and <code>highest</code> the rectangle's corners in normalised device coordinates, <code>nearest</code> and <code>farthest</code> its slice's depths.</p>
+  <p>Each plane test is exact; together they are not. A sphere near a Froxel's corner can reach past two sides' planes and still miss the edge where they meet, and the light is listed though its range never enters the Froxel. A plane through the camera shows on screen as a rectangle edge, so the rectangles that list a light are those under its outline's bounding box, and the false positives are the box's corners the outline misses; the outline of a sphere in front of the camera is an ellipse, stretched towards the screen's edges. A false positive costs the lit pass one light evaluated to zero at each pixel of that Froxel, and the image nothing, unless a list or a pixel's shadow mask runs out of room (Limits).</p>
+  <p>Why a skipped light changes nothing: a point light falls off with the square of the distance inside KHR_lights_punctual's range window, which reaches 0 at the range and stays there.</p>
+  <div class="formula">attenuation = clamp(1 &minus; (distance / range)<sup>4</sup>, 0, 1) / distance<sup>2</sup></div>
+  <p class="code-source"><code>point_light_attenuation</code>, <code>shading.wgsl</code>.</p>
+</section>
+
+<section class="part prose" id="lists">
+  <div class="part-mark">5 &middot; <code>FroxelList</code></div>
+  <h2>The lists: one writer each, in light order</h2>
+  <p class="key-idea">Each invocation owns one list and walks the point lights in buffer order, so the lists need no atomics and each comes out in light order: the lit pass then adds a pixel's nonzero terms in the order brute force adds them, and the image does not depend on which thread ran first.</p>
+  <p>The dispatch launches 576 workgroups of 32 invocations: an invocation's slice is its index in its workgroup, its rectangle the workgroup's position. Its list sits at its Froxel's index in one buffer of <code>FroxelList</code> entries, a count and 127 indices into the light buffer each.</p>
+  <div class="bits">FroxelList, 128 &times; u32:  light_count, then lights[0] &hellip; lights[126]
+for example:              3,  1,  3,  4,  &hellip;   the sun is light 0; this Froxel lists point lights 1, 3 and 4</div>
+  <p>Light order matters because the lit pass sums luminance in f32, which rounds after every addition: (1 + 3&times;10<sup>&minus;8</sup>) + 3&times;10<sup>&minus;8</sup> is 1 in f32, while 1 + (3&times;10<sup>&minus;8</sup> + 3&times;10<sup>&minus;8</sup>) is 1.00000012, and a last-bit difference can tip a pixel to the next 8-bit code. Gathering a tile's lights with atomics, as Forward+ does, would make a list's order depend on which thread gets in first.</p>
+  <p>An invocation keeps counting past 127, stores the smaller of its count and 127, and only if its list overflowed adds the rest to <code>froxel_lights_overflowed</code> with one atomic add; integer addition gives the same total in any order, so the count is exact. A full list keeps its first 127 lights in light order; the others light nothing in that Froxel.</p>
+<pre class="code"><code>froxel_lists[froxel].light_count = min(count, FROXEL_LIGHT_CAPACITY);
+if count &gt; FROXEL_LIGHT_CAPACITY {
+    atomicAdd(&amp;light_counts.froxel_lights_overflowed, count - FROXEL_LIGHT_CAPACITY);
+}</code></pre>
+  <p class="code-source"><code>froxel.wgsl</code>.</p>
+  <p>A few frames later the CPU reads the counter back with the frame's other GPU stats. It becomes Frame stats' <code>froxel_lights_overflowed</code>, and the first frame read back with an overflow warns, once until a frame has room for all: "The Froxel lists are full: lights past a list's capacity do not light its Froxel".</p>
+</section>
+
+<section class="part prose" id="readers">
+  <div class="part-mark">6 &middot; <code>froxel_at</code> &middot; <code>main.wgsl</code></div>
+  <h2>Who reads the lists</h2>
+  <p class="key-idea">A reader finds a pixel's Froxel from the pixel itself, its place on the target for the rectangle and its view depth for the slice, through one shared function; the lit pass shades every directional light, then that Froxel's point lights in list order.</p>
+<pre class="code"><code>fn froxel_at(point: vec2&lt;f32&gt;, size: vec2&lt;f32&gt;, view_depth: f32) -&gt; u32 {
+    let rectangle = clamp(
+        floor(vec2&lt;f32&gt;(point.x / size.x, 1.0 - point.y / size.y) * FROXEL_GRID_SIZE),
+        vec2&lt;f32&gt;(0.0),
+        FROXEL_GRID_SIZE - 1.0
+    );
+    return froxel_index(vec2&lt;u32&gt;(rectangle), froxel_slice(view_depth));
+}</code></pre>
+  <p class="code-source"><code>froxel_grid.wgsl</code>; <code>point</code> is in pixels from the target's top left corner, so the row is flipped to count from the bottom, as normalised device coordinates do.</p>
+  <p><b>The lit pass</b> takes the view depth as clip w of its fragment's camera-relative position and the target's size from the shadow mask, a target of the same size. A Render switch, <code>froxel_lights</code>, which ships on, sets the WGSL override <code>FROXEL_LIGHTS</code> when the pipeline is created; off, the loop runs over every point light in buffer order, brute force, the reference the lists must match.</p>
+<pre class="code"><code>var froxel = 0u;
+var mask_froxel = 0u;
+var point_light_count = light.point_light_count;
+if FROXEL_LIGHTS {
+    let view_depth = (camera.view_proj * vec4&lt;f32&gt;(in.camera_relative_position, 1.0)).w;
+    let size = vec2&lt;f32&gt;(textureDimensions(shadow_mask));
+    froxel = froxel_at(in.clip_position.xy, size, view_depth);
+    mask_froxel = froxel - froxel % FROXEL_SLICES + (mask.y &gt;&gt; (SHADOW_MASK_LIGHTS - 32u));
+    point_light_count = froxel_lists[froxel].light_count;
+}
+for (var entry = 0u; entry &lt; point_light_count; entry++) {
+    var index = light.directional_light_count + entry;
+    if FROXEL_LIGHTS {
+        index = froxel_lists[froxel].lights[entry];
+    }
+    <span class="comment">// [...] the shadow mask bit of the light, then point_light_luminance</span>
+}</code></pre>
+  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>, after the directional lights.</p>
+  <p><b>The shadow mask pass</b> gives each pixel's word a bit per light in the order the lit pass sums them: the directional lights, then its Froxel's list, entry by entry, with the Froxel's slice in the word's top bits so the lit pass can tell whose list the bits follow (<a href="shadow-mask.html#word">The shadow mask pass</a>). <b>The light count pass</b> reads the lists at each lit pixel's first sample (How it is tested).</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">A CPU oracle in f64 assigns every light to every Froxel and every list must match it exactly; brute force, the switch off, must render every Reference scene as the lists do; and a counting pass measures, per lit pixel, how many listed lights reach it.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>each_froxel_lists_the_point_lights_whose_range_reaches_into_its_bounds</code></td><td><code>renderer.rs</code></td><td>a camera about 122 km from the origin, turned, sees the sun and 300 point lights from 5 m behind it to 80 m ahead, one in ten 1 to 5 km out and reaching five times as far, among them 132 at one spot, five more than a list holds; against the CPU's assignment in f64 from side planes it unprojects itself, with lights within 1 mm of a boundary, and 1 cm more a kilometre out, left out so no verdict is a tie, every list holds exactly its lights, in light order, up to 127; the overflow is counted and warned of; no buffer grows</td></tr>
+      <tr><td><code>nine_point_lights_each_light_the_surface_under_them</code></td><td><code>renderer.rs</code></td><td>nine point lights 0.1 m in front of a white quad, 0.5 m apart and reaching 0.2 m, each light the quad under it and none between; lit through the lists the image equals brute force's, byte for byte</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>beside each scene's <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> captured through <code>capture_frames</code> with the lists and with brute force, shadow rays off, matches within the Goldens' tolerance with no pixel allowed past it; <code>town</code> at eight frames along its camera path, the others at the Golden's frame</td></tr>
+      <tr><td><code>the_light_count_pass_counts_the_point_lights_each_lit_pixel_lists_and_is_reached_by</code></td><td><code>renderer.rs</code></td><td>the counting pass below: lit pixels, listed and reaching lights against what a quad and lights placed in front of and behind it give; with the switch off, nothing is counted</td></tr>
+      <tr><td><code>every_light_is_drawn_directional_lights_first_point_lights_anchored</code></td><td><code>prepare.rs</code></td><td>the light buffer's order and a point light's Anchor and offset far from the origin</td></tr>
+      <tr><td><code>lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once</code></td><td><code>prepare.rs</code></td><td>one directional light and 4,097 point lights: the buffer holds 4,096, the two left out are counted every frame, warned of once, and the count returns to 0 once all fit</td></tr>
+      <tr><td><code>point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range</code></td><td><code>shader_function_tests.rs</code></td><td>the range window that makes a skipped light exact, against an oracle</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor.</p>
+  <h3 id="light-count">The light count pass</h3>
+  <p>With the <code>count_point_lights</code> Render switch on, which ships off, a compute pass after the frame's others counts how tight the lists are. An invocation per pixel of the depth target, in 8 &times; 8 tiles, takes the pixel's first sample; where the frame drew a surface there, it rebuilds the sample's position relative to the camera, finds its Froxel with <code>froxel_at</code>, and counts the point lights the Froxel lists and, of those, the ones whose range reaches the position. Each workgroup sums its pixels in workgroup memory, and one invocation adds the sums to the light counts, which Frame stats read back as <code>lit_pixels</code>, <code>listed_point_lights</code> and <code>reaching_point_lights</code>; Frame stats print the last two per lit pixel.</p>
+<pre class="code"><code>fn camera_relative_point(clip: vec4&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    let rows = transpose(camera.view_proj);
+    let x_row = rows[0].xyz;
+    let y_row = rows[1].xyz;
+    let w_row = rows[3].xyz;
+    let y_cross_w = cross(y_row, w_row);
+    return (clip.x * y_cross_w + clip.y * cross(w_row, x_row) + clip.w * cross(x_row, y_row))
+        / dot(x_row, y_cross_w);
+}</code></pre>
+  <p class="code-source"><code>light_count.wgsl</code>: the point is the solution of <code>view_proj</code>'s x, y and w rows, which hold no translation, by Cramer's rule in cross products. The view depth is the near plane's distance over the stored depth, under reverse Z with no far plane.</p>
+  <p>Listed against reaching is a measure of the sphere test's false positives at the surfaces the frame shows. The pass reads the depth the main pass keeps at the frame's end instead of counting in the lit pass: a fragment shader with side effects, such as atomic adds, makes the GPU run it before the depth test, for fragments it then rejects, which would slow the lit pass and count hidden surfaces.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The pass makes 18,432 sphere tests for each point light, so its time follows the point lights: a few microseconds in scenes of up to four, about half a millisecond for <code>town</code>'s 1,024 lamps, a small share of its gate.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baselines, whose counters alone are judged, are left out.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th class="n">Point lights</th><th>Adapter</th><th class="n"><code>froxel_pass</code></th><th class="n">Gate</th><th class="n"><code>lit_pass</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>texture-wall</code></td><td class="n">0</td><td>Apple M4 Pro, Metal</td><td class="n">11.3</td><td class="n">14,109.0</td><td class="n">607.2</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">0</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5.5</td><td class="n">513.6</td><td class="n">199.4</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">0</td><td>RTX 2070 SUPER, DX12</td><td class="n">8.4</td><td class="n">558.9</td><td class="n">196.7</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">0</td><td>Apple M4 Pro, Metal</td><td class="n">10.2</td><td class="n">1,297.0</td><td class="n">712.5</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">0</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">8.4</td><td class="n">840.5</td><td class="n">423.9</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">0</td><td>RTX 2070 SUPER, DX12</td><td class="n">10.9</td><td class="n">924.8</td><td class="n">464.9</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">1</td><td>Apple M4 Pro, Metal</td><td class="n">5.8</td><td class="n">849.5</td><td class="n">496.8</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">1</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5.7</td><td class="n">672.9</td><td class="n">395.3</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">1</td><td>RTX 2070 SUPER, DX12</td><td class="n">8.6</td><td class="n">750.5</td><td class="n">428.0</td></tr>
+      <tr><td><code>minification</code></td><td class="n">1</td><td>Apple M4 Pro, Metal</td><td class="n">5.9</td><td class="n">835.3</td><td class="n">528.5</td></tr>
+      <tr><td><code>minification</code></td><td class="n">1</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">6.8</td><td class="n">634.8</td><td class="n">387.1</td></tr>
+      <tr><td><code>minification</code></td><td class="n">1</td><td>RTX 2070 SUPER, DX12</td><td class="n">9.3</td><td class="n">720.9</td><td class="n">405.4</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">7.0</td><td class="n">1,210.1</td><td class="n">808.5</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">8.1</td><td class="n">865.1</td><td class="n">481.3</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">10.2</td><td class="n">908.4</td><td class="n">501.8</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">6.9</td><td class="n">773.8</td><td class="n">470.3</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7.5</td><td class="n">548.0</td><td class="n">289.5</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">9.2</td><td class="n">571.4</td><td class="n">288.3</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">6.8</td><td class="n">818.2</td><td class="n">475.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7.4</td><td class="n">565.2</td><td class="n">305.7</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">9.2</td><td class="n">595.9</td><td class="n">309.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">6.9</td><td class="n">763.0</td><td class="n">447.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7.6</td><td class="n">537.6</td><td class="n">288.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">9.3</td><td class="n">563.1</td><td class="n">288.6</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">6.7</td><td class="n">677.3</td><td class="n">344.5</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">6.6</td><td class="n">715.6</td><td class="n">306.9</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">9.7</td><td class="n">870.4</td><td class="n">417.5</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">4</td><td>Apple M4 Pro, Metal</td><td class="n">6.9</td><td class="n">642.6</td><td class="n">335.0</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">4</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7.5</td><td class="n">422.4</td><td class="n">183.2</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">4</td><td>RTX 2070 SUPER, DX12</td><td class="n">10.0</td><td class="n">448.5</td><td class="n">168.8</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">1,024</td><td>Apple M4 Pro, Metal</td><td class="n">579.5</td><td class="n">8,612.1</td><td class="n">3,762.6</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">1,024</td><td>RTX 2070 SUPER, Vulkan</td><td class="n">326.0</td><td class="n">4,991.8</td><td class="n">2,995.3</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">1,024</td><td>RTX 2070 SUPER, DX12</td><td class="n">325.5</td><td class="n">5,306.9</td><td class="n">3,248.1</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above; the gate is ADR 0019's, rays off. Point lights from <code>point_lights</code> and <code>town</code>'s lamps in <code>src/scenes</code>. In scenes of a few lights the pass's few microseconds are mostly its launch; <code>texture-wall</code>'s gate on the Apple M4 Pro is set by its bound textures, not its lights. <code>town</code>'s 1,024 lamps make 18,874,368 sphere tests a frame.</p>
+  <p>The pass's memory is fixed, whatever the resolution and the scene, and counted in GPU memory:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Buffer</th><th>Holds</th><th class="n">Bytes</th></tr></thead>
+    <tbody>
+      <tr><td>Froxel lists</td><td>18,432 &times; (1 + 127) &times; u32</td><td class="n">9,437,184</td></tr>
+      <tr><td>light counts</td><td><code>LightCounts</code>, four u32</td><td class="n">16</td></tr>
+      <tr><td>light buffer, the Renderer's</td><td>4,096 &times; <code>LightData</code></td><td class="n">196,608</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">9 &middot; ADRs 0014, 0015, 0019, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>Lists per Froxel, not per tile or per depth bin.</b> ADR 0019 weighed two other ways to cut light lists. Tiled culling, as in Forward+, lists each screen tile's lights between the nearest and farthest opaque depth in it, so a tile across a depth discontinuity takes in the gap, and transparent surfaces in front of the opaque depth need lists of their own. Z-binning keeps a bit mask of lights per tile and a table of the lowest and highest light index in each depth bin, intersected per pixel when it shades. A Froxel's list is built once against bounds fixed in advance, independent of the depth buffer, so one set of lists serves the opaque pass and the transparent pass to come.</p>
+  <p><b>Exponential slices, not equal ones.</b> Slices equal in normalised depth come out very thin near the camera and very long far away; slices equal in view depth, the reverse. Exponential spacing keeps the Froxels self-similar. Cubical cells would take about fifteen slices to each doubling at this rectangle size, five times as many lists; three keep the lists at 9 MiB.</p>
+  <p><b>Sphere against six planes, kept simple.</b> Tighter tests exist: one shrinks the sphere, slice by slice and row by row, to each plane it crosses, and culls better than a test against each cell's box at a similar cost. The simple test is exact on every plane and errs only towards keeping a light, which costs time and never the image, and the light count pass measures how much it keeps.</p>
+  <p><b>On the GPU, one writer per list.</b> Building the lists in a compute pass keeps the CPU's frame free of a per-light, per-cell loop; giving each invocation its own list keeps them in light order without atomics, so the lists and brute force sum the same terms in the same order and can be compared pixel for pixel.</p>
+  <p><b>A fixed capacity, counted.</b> Neither the light buffer nor the lists grow at runtime (ADR 0003); a light past either is left out and counted in Frame stats, so a scene that reaches a capacity shows it. Both capacities are provisional until ADR 0013's split of the 8 GB Budget sizes them.</p>
+  <p><b>Anchors and reverse Z throughout.</b> A light's position composes relative to the camera from its Anchor, as ADR 0014 requires of every World position; the last slice reaches to infinity because ADR 0015's projection has no far plane.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">10</div>
+  <h2>Limits</h2>
+  <p><b>False positives take places.</b> A light listed where its range never enters takes one of a list's 127 places: where more than 127 lights pass a Froxel's test, it can push a later light that does reach the Froxel off the end, and that light lights nothing there. With shadow rays on it also takes a bit: a pixel's word gives the directional lights their bits first, then the entries of its Froxel's list in order, up to 59, whether or not each entry's light reaches the pixel, so a false positive can push a later light past the bits, and that light casts no shadow there. Both are counted.</p>
+  <p><b>Point lights only.</b> Directional lights are never culled; every pixel shades all of them. Spot lights do not exist yet; a cone would be listed by its bounding sphere unless the test learns its shape.</p>
+  <p><b>One list per Froxel, whatever the surface.</b> A Froxel deep enough to hold a wall and the street behind it lists the lights of both; nothing narrows a list to the depths the frame shows.</p>
+  <p><b>Every invocation tests every point light.</b> The work grows with the lights and not with what they reach: 18,432 tests for each, before any is listed.</p>
+  <p><b>Fixed capacities.</b> 4,096 lights and 127 a list, both provisional.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code and ADRs cite.</p>
+  <dl class="reading">
+    <dt><a href="https://takahiroharada.files.wordpress.com/2015/04/forward_plus.pdf#page=2">Harada, McKee and Yang, Forward+: Bringing Deferred Lighting to the Next Level, Eurographics 2012 short papers, &sect;4.1</a></dt><dd>tiled culling between a tile's nearest and farthest opaque depth, gathered with local atomics; registry key forward-plus-tile-depth, cited by ADR 0019</dd>
+    <dt><a href="https://www.humus.name/Articles/PracticalClusteredShading.pdf#page=5">Persson, Practical Clustered Shading, Avalanche Studios</a></dt><dd>clusters serve transparent surfaces that tiles bounded by opaque depth cannot; the depth slicing, why sphere against six planes is loose, and a sphere shrunk to each plane it crosses; registry key persson-forward-plus-transparency, cited by ADR 0019</dd>
+    <dt><a href="https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf#page=30">Drobot, Improved Culling for Tiled and Clustered Rendering, SIGGRAPH 2017 Advances in Real-Time Rendering</a></dt><dd>Z-binning, the per-tile mask intersected with a depth bin's index range at shading time; registry key drobot-zbinning, cited by ADR 0019</dd>
+    <dt><a href="https://www.cse.chalmers.se/~uffe/clustered_shading_preprint.pdf">Olsson, Billeter and Assarsson, Clustered Deferred and Forward Shading, High Performance Graphics 2012, pp. 3&ndash;4</a></dt><dd>the three ways to slice depth, and why exponential slices keep the cells self-similar</dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md#L90">KHR_lights_punctual</a></dt><dd>a point light's intensity in candela and its range, the window that falls to zero there; <code>khr-lights-punctual-units</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass took its form in one step of the third milestone, in three parts: the light buffer replaced a uniform that held one directional and four point lights; the Froxel pass built the lists; the lit pass looked each pixel's Froxel up, with brute force kept as the reference. Since then the town scene's 1,024 lamps gave the lists the load they were built for, the light count pass came to measure their false positives, and the shadow mask pass came to give each listed light its bit. A light's place in the buffer once also depended on whether it cast a shadow; that distinction is gone, and every point light now casts one. The development narrative, with each part's measurements, is in <a href="froxel-lights.html">Froxel Lights Explained</a> until the pages that take its other chapters land; this page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/render/froxel_pass.rs</code>, <code>src/render/shaders/froxel.wgsl</code>, <code>froxel_grid.wgsl</code>, <code>main.wgsl</code>, <code>common.wgsl</code>, <code>light_count.wgsl</code>, <code>src/render/light_count_pass.rs</code>, <code>uniforms.rs</code>, <code>prepare.rs</code>, <code>bind_groups.rs</code>, <code>renderer.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0014, 0015, 0019 and 0023, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="meshlet-culling.html">Previous: Meshlet Culling Explained</a><a href="index.html">All field guides</a><a href="froxel-lights.html">Next: Froxel Lights Explained</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
