@@ -284,9 +284,22 @@ struct RenderableEntry {
 
 /// Notes the Asset ID behind each Handle a spawn takes, and loads nothing.
 #[derive(Default)]
-struct AssetRecorder {
+pub(super) struct AssetRecorder {
     meshes: Vec<AssetId>,
     materials: Vec<AssetId>,
+    textures: Vec<AssetId>,
+}
+
+impl AssetRecorder {
+    /// Every Asset ID a spawn loaded, once per load.
+    pub(super) fn ids(&self) -> impl Iterator<Item = AssetId> + '_ {
+        let ids = self
+            .meshes
+            .iter()
+            .chain(&self.materials)
+            .chain(&self.textures);
+        ids.copied()
+    }
 }
 
 impl AssetLoader for AssetRecorder {
@@ -296,7 +309,8 @@ impl AssetLoader for AssetRecorder {
     }
 
     /// Every Texture is Layer 0, which no export reads.
-    fn texture(&mut self, _channel: MaterialChannel, _id: AssetId) -> anyhow::Result<u32> {
+    fn texture(&mut self, _channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
+        self.textures.push(id);
         Ok(0)
     }
 
