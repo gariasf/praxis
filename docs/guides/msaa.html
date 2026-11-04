@@ -124,7 +124,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Samples</dt><dd>Four per pixel, <code>SAMPLE_COUNT</code>, at the standard positions, which every pipeline that draws into the multisampled targets matches.</dd>
       <dt>Targets</dt><dd><code>MULTISAMPLED_FORMATS</code>: the depth target, the multisampled colour and the surface normals. The <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> checks 4x MSAA on each, and <code>RenderTargets::new</code> creates no multisampled target of another format.</dd>
       <dt>Resolved</dt><dd>The multisampled colour, into the HDR target, at the end of the lit pass, from colour weighted by 1/(1 + luminance).</dd>
-      <dt>Read per sample</dt><dd>The depth pyramid pass and the shadow mask pass load every sample of the depth target; the shadow mask pass also each sample's surface normals; the lit pass reads which samples its fragment covers.</dd>
+      <dt>Read per sample</dt><dd>The depth pyramid pass and the shadow mask pass load every sample of the depth target, as the light count pass does when its Render switch is on; the shadow mask pass also each sample's surface normals; the lit pass reads which samples its fragment covers.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -208,7 +208,7 @@ resolved = avg(s) / (1 &minus; Y(avg(s))) = &Sigma; w<sub>i</sub> c<sub>i</sub> 
 <section class="part prose" id="memory">
   <div class="part-mark">6 &middot; <code>RenderTargets::new</code></div>
   <h2>Memory</h2>
-  <p class="key-idea">The multisampled colour never leaves the GPU's tile memory where the adapter allows: it is cleared, drawn, resolved and discarded within the lit pass. What MSAA costs in memory is the 4x depth, and with shadow rays the 4x surface normals.</p>
+  <p class="key-idea">The multisampled colour never leaves the GPU's tile memory where the adapter allows: it is cleared, drawn, resolved and discarded within the lit pass. What MSAA costs in memory is the 4x depth and the 4x surface normals, which the targets module creates whether or not shadow rays write them.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th><th class="n">At 2560&times;1440</th></tr></thead>
@@ -264,6 +264,8 @@ resolved = avg(s) / (1 &minus; Y(avg(s))) = &Sigma; w<sub>i</sub> c<sub>i</sub> 
     <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750">Vulkan specification, Standard Sample Locations</a></dt><dd>the four positions; <code>vulkan-standard-sample-locations</code></dd>
     <dt><a href="https://www.w3.org/TR/WGSL/#sample-mask-builtin-value">WGSL: sample_mask</a></dt><dd>the samples a fragment covers</dd>
     <dt><a href="https://graphicrants.blogspot.com/2013/12/tone-mapping.html">Karis, Tone mapping, 2013</a></dt><dd>the reversible weight, 1/(1 + luma), for a weighted average from a plain one; <code>karis-2013-weighted-average</code></dd>
+    <dt><a href="https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6">ITU-R BT.709-6</a></dt><dd>the luma weights the weight's luminance takes; <code>bt709-6-luma</code></dd>
+    <dt><a href="https://www.w3.org/TR/2026/CRD-WGSL-20261021/#floating-point-types">WGSL, f16's largest finite value</a></dt><dd>65504, the clamp <code>resolve_unweighted</code> applies; <code>wgsl-f16-largest</code></dd>
     <dt><a href="https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7">Jimenez et al., SMAA: Enhanced Subpixel Morphological Antialiasing, 2012</a></dt><dd>a filter on the finished image cannot reconstruct sub-pixel geometry</dd>
     <dt><a href="https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9">Metal Feature Set Tables, render targets</a></dt><dd>4x the Apple9 family's maximum; <code>metal-feature-set-tables-msaa-max</code></dd>
     <dt><a href="https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf">Salvi and Vidim&#269;e, Surface Based Anti-Aliasing, I3D 2012</a></dt><dd>a pixel covered by many triangles shows few distinct surfaces; <code>salvi-2012-sbaa-surfaces</code></dd>

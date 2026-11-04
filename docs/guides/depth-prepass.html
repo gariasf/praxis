@@ -127,7 +127,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Draws</dt><dd>One <code>draw_indexed_indirect</code> per pass, at the phase's offset in the frame's draw.</dd>
       <dt>Bind groups</dt><dd>The groups its vertex stage sees: group 0, the frame, for the camera; group 2, the scene geometry; group 3, the main pass inputs, for the Meshlet records. Its fragment stage reads no bind group.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>: <code>vs_depth_prepass</code> with no fragment stage, or with shadow rays on <code>vs_depth_normals</code> and <code>fs_surface_normals</code>.</dd>
-      <dt>Counted</dt><dd><code>depth_prepass</code> and <code>phase_two_depth_pass</code> in GPU time, both inside ADR 0019's gate; their draws in <code>draw_calls</code>; the depth target and the surface normals in GPU memory.</dd>
+      <dt>Counted</dt><dd><code>depth_prepass</code> and <code>phase_two_depth_pass</code> in GPU time; the pre-pass inside ADR 0019's gate, which is measured with shadow rays off, when phase two's depth is the lit pass's; their draws in <code>draw_calls</code>; the depth target and the surface normals in GPU memory.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -343,44 +343,44 @@ fn fs_depth() {}</code></pre>
   <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
   <p class="key-idea">The pre-pass's time follows the triangles phase one draws: <code>town</code>'s, with millions of triangles a frame, is an order of magnitude above the small scenes', which read nearly the same time whatever they draw. Phase two's depth pass draws little in these scenes and costs little but its load and store.</p>
-  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, from frames with shadow rays on; ADR 0019's gate, which both passes sit inside, from frames with them off. On Metal a pass's timestamps can include time spent waiting on the pass before.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, from frames with shadow rays on; ADR 0019's gate from frames with them off, when the pre-pass sits inside it and the lit pass draws phase two's depth. On Metal a pass's timestamps can include time spent waiting on the pass before.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>depth_prepass</code></th><th class="n"><code>phase_two_depth_pass</code></th><th class="n">Gate, rays off</th><th class="n">Triangles drawn</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">171.7</td><td class="n">11.9</td><td class="n">849.5</td><td class="n">2,210.0</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">122.1</td><td class="n">2.4</td><td class="n">672.9</td><td class="n">2,210.0</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">135.6</td><td class="n">0.4</td><td class="n">750.5</td><td class="n">2,210.0</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">238.9</td><td class="n">12.2</td><td class="n">1,210.1</td><td class="n">256,938.0</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">135.2</td><td class="n">2.4</td><td class="n">865.1</td><td class="n">256,938.0</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">133.7</td><td class="n">0.4</td><td class="n">908.4</td><td class="n">256,938.0</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.1</td><td class="n">773.8</td><td class="n">22,080.0</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">53.2</td><td class="n">2.4</td><td class="n">548.0</td><td class="n">22,080.0</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">50.2</td><td class="n">0.4</td><td class="n">571.4</td><td class="n">22,080.0</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">165.2</td><td class="n">12.1</td><td class="n">818.2</td><td class="n">7,774.0</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">55.3</td><td class="n">2.4</td><td class="n">565.2</td><td class="n">7,774.0</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">55.2</td><td class="n">0.4</td><td class="n">595.9</td><td class="n">7,774.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">158.8</td><td class="n">12.0</td><td class="n">763.0</td><td class="n">2.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">46.2</td><td class="n">2.4</td><td class="n">537.6</td><td class="n">2.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">45.1</td><td class="n">0.4</td><td class="n">563.1</td><td class="n">2.0</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.5</td><td class="n">12.0</td><td class="n">835.2</td><td class="n">2.0</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">83.0</td><td class="n">2.4</td><td class="n">634.8</td><td class="n">2.0</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">93.1</td><td class="n">0.4</td><td class="n">720.9</td><td class="n">2.0</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.0</td><td class="n">677.2</td><td class="n">4.0</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">216.7</td><td class="n">2.4</td><td class="n">715.6</td><td class="n">4.0</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">225.2</td><td class="n">0.4</td><td class="n">870.4</td><td class="n">4.0</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.9</td><td class="n">12.0</td><td class="n">642.6</td><td class="n">11,040.0</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">27.2</td><td class="n">2.4</td><td class="n">422.4</td><td class="n">11,040.0</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">24.6</td><td class="n">0.4</td><td class="n">448.5</td><td class="n">11,040.0</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">398.6</td><td class="n">16.7</td><td class="n">14,109.0</td><td class="n">200.0</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">50.6</td><td class="n">2.4</td><td class="n">513.6</td><td class="n">200.0</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">52.5</td><td class="n">0.4</td><td class="n">558.9</td><td class="n">200.0</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">384.0</td><td class="n">12.3</td><td class="n">1,297.0</td><td class="n">512,002.0</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">179.9</td><td class="n">2.4</td><td class="n">840.5</td><td class="n">512,002.0</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">182.8</td><td class="n">0.4</td><td class="n">924.8</td><td class="n">512,002.0</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,156.0</td><td class="n">56.3</td><td class="n">8,612.1</td><td class="n">5,552,214.0</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,082.6</td><td class="n">8.2</td><td class="n">4,991.8</td><td class="n">5,552,214.0</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,138.7</td><td class="n">8.3</td><td class="n">5,306.9</td><td class="n">5,552,214.0</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">171.7</td><td class="n">11.9</td><td class="n">849.5</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">122.1</td><td class="n">2.4</td><td class="n">672.9</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">135.6</td><td class="n">0.4</td><td class="n">750.5</td><td class="n">2,210</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">238.9</td><td class="n">12.2</td><td class="n">1,210.1</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">135.2</td><td class="n">2.4</td><td class="n">865.1</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">133.7</td><td class="n">0.4</td><td class="n">908.4</td><td class="n">256,938</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.1</td><td class="n">773.8</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">53.2</td><td class="n">2.4</td><td class="n">548.0</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">50.2</td><td class="n">0.4</td><td class="n">571.4</td><td class="n">22,080</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">165.2</td><td class="n">12.1</td><td class="n">818.2</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">55.3</td><td class="n">2.4</td><td class="n">565.2</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">55.2</td><td class="n">0.4</td><td class="n">595.9</td><td class="n">7,774</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">158.8</td><td class="n">12.0</td><td class="n">763.0</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">46.2</td><td class="n">2.4</td><td class="n">537.6</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">45.1</td><td class="n">0.4</td><td class="n">563.1</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.5</td><td class="n">12.0</td><td class="n">835.2</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">83.0</td><td class="n">2.4</td><td class="n">634.8</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">93.1</td><td class="n">0.4</td><td class="n">720.9</td><td class="n">2</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.0</td><td class="n">677.2</td><td class="n">4</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">216.7</td><td class="n">2.4</td><td class="n">715.6</td><td class="n">4</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">225.2</td><td class="n">0.4</td><td class="n">870.4</td><td class="n">4</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.9</td><td class="n">12.0</td><td class="n">642.6</td><td class="n">11,040</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">27.2</td><td class="n">2.4</td><td class="n">422.4</td><td class="n">11,040</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">24.6</td><td class="n">0.4</td><td class="n">448.5</td><td class="n">11,040</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">398.6</td><td class="n">16.7</td><td class="n">14,109.0</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">50.6</td><td class="n">2.4</td><td class="n">513.6</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">52.5</td><td class="n">0.4</td><td class="n">558.9</td><td class="n">200</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">384.0</td><td class="n">12.3</td><td class="n">1,297.0</td><td class="n">512,002</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">179.9</td><td class="n">2.4</td><td class="n">840.5</td><td class="n">512,002</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">182.8</td><td class="n">0.4</td><td class="n">924.8</td><td class="n">512,002</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,156.0</td><td class="n">56.3</td><td class="n">8,612.1</td><td class="n">5,552,214</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,082.6</td><td class="n">8.2</td><td class="n">4,991.8</td><td class="n">5,552,214</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,138.7</td><td class="n">8.3</td><td class="n">5,306.9</td><td class="n">5,552,214</td></tr>
     </tbody>
   </table>
   </div>
@@ -404,7 +404,7 @@ fn fs_depth() {}</code></pre>
   <p><b>The GPU builds the draw.</b> Recording a draw per Primitive of each Instance on the CPU grows with the Instances, and <code>town</code> holds about a quarter of a million. The culling pass writes one index buffer with each phase's indirect arguments beside it, drawn with one <code>draw_indexed_indirect</code> per pass, one native call on every backend, since wgpu's Metal backend has no count draws and runs multi-draw as a CPU loop (ADR 0019).</p>
   <p><b>Reverse Z with no far plane.</b> The view reaches 2 km; reversed <code>Depth32Float</code> resolves sub-millimetre depth there where standard depth resolves metres, and needs no far plane at all (ADR 0015).</p>
   <p><b>4x MSAA depth.</b> Thin geometry, such as <code>town</code>'s wires, needs coverage tested at more than one place per pixel in every frame, since ADR 0008 lets nothing average frames, and a post-process filter cannot rebuild what no sample saw; 4x is the Apple9 GPU family's maximum (ADR 0019, <a href="msaa.html">MSAA</a>).</p>
-  <p><b>Normals written here, not rebuilt from depth.</b> The shadow mask pass runs before the lit pass, so the lit pass cannot write them, and depth alone gives at best each sample's plane, guessed from neighbours that at an edge belong to other triangles. Of the options measured on <code>town</code>, writing the triangle's normal and the interpolated one per sample, and starting a ray inside the surface where the triangle turns from a light the interpolated normal faces, was chosen over moving the ray's origin by the shading normals, which needs the triangle's vertices, and over an offset estimated from the depth's curvature, which is approximate. Two normals at 8 bits a coordinate fill the 4 bytes a sample one normal at 16 bits would have (ADR 0019, amended).</p>
+  <p><b>Normals written here, not rebuilt from depth.</b> The shadow mask pass runs before the lit pass, so the lit pass cannot write them, and depth alone gives at best each sample's plane, guessed from neighbours that at an edge belong to other triangles. Of the options measured on <code>town</code>, writing the triangle's normal and the interpolated one per sample, and starting a ray inside the surface where the triangle turns from a light the interpolated normal faces, was chosen over moving the ray's origin by the shading normals, which needs the triangle's vertices, and over an offset estimated from the depth's curvature, which is approximate. Two normals at 8 bits a coordinate fill the 4 bytes a sample one normal at 16 bits would have; ADR 0019's amendment records the target and its cost, and <a href="shadow-terminator.html">Shadow Terminator Explained</a> the options and their measurements.</p>
   <p><b>A flat read, not another draw.</b> Of the ways to make the depth passes credit each sample to the lit pass's triangle, reading a flat input costs nothing measurable and matches the measurement that a fragment stage reading one is never merged. Drawing the normals in one draw of both phases at depth equal would cost about another geometry pass, and no specification promises identical fragments from different fragment shaders anyway; writing them in the lit pass's own draw is impossible, as the mask is traced before it; a triangle ID per sample, as a visibility buffer stores, is exact by construction and stays the fallback should another GPU merge regardless. WGSL's <code>@invariant</code> and Metal's preserved invariance cover the position alone, which already made depth equal.</p>
   <p><b>Phase two's depth in its own pass, with rays.</b> The mask must see every surface the lit pass will shade before the lit pass runs, so phase two's depth cannot wait for it; with rays off nothing needs it sooner, and drawing it inside the lit pass saves a load and store of the 4x depth.</p>
 </section>
