@@ -1171,8 +1171,8 @@ fn the_display_ramp_holds_the_display_transforms_values() {
 /// GT7_TOLERANCE of the sample implementation.
 const DISPLAY_RAMP_TOLERANCE: f64 = 2.0 * GT7_TOLERANCE;
 
-/// The inverse of IEC 61966-2-1's sRGB encoding [ref:khronos-dfs-srgb], in
-/// f64.
+/// The sRGB EOTF, the inverse of IEC 61966-2-1's sRGB encoding
+/// [ref:khronos-dfs-srgb-eotf], in f64.
 fn srgb_decode(encoded: f64) -> f64 {
     if encoded <= 0.04045 {
         encoded / 12.92
