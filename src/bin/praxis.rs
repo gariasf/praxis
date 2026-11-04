@@ -311,9 +311,8 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             Command::Window(parse_scene(scene)?)
         }
         _ => {
-            // As the commands themselves, the `cook` feature's exist only in
-            // a build with it.
-            let (cook_commands, crowd_form_commands) = if cfg!(feature = "cook") {
+            // Like the commands, their usage exists only in a `cook` build.
+            let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
                     "`cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
@@ -326,7 +325,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_commands} \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )

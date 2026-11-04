@@ -249,7 +249,7 @@ fn assets() -> Check {
                 return Check::new(
                     "assets",
                     Verdict::Fail,
-                    format!("{error:#}; `cargo test --test asset_manifest` names what to fix"),
+                    format!("{error:#}; restore or repair `assets/manifest.json`"),
                 );
             }
         };

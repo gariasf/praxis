@@ -8,18 +8,18 @@
 // dispatches: `build_shadow_mask` traces each pixel's nearest surface and
 // lists its second surface; `trace_second_surfaces` traces that list;
 // `list_shadow_edges` lists each pixel where a directional light's verdict
-// differs from a 4-neighbour's, or that its nearest sample turns from while
-// another sample faces it; and `trace_shadow_edges` traces those lights
+// differs from a 4-neighbour's, or where its nearest sample turns from a
+// light another sample faces; and `trace_shadow_edges` traces those lights
 // again from each other sample that shows the nearest surface, keeping each
-// sample's verdict in `shadow_mask_samples`. The bits follow
-// the pixel's lights in the order the lit pass sums them: the directional
-// lights, then the point lights its Froxel lists, as many as
-// SHADOW_MASK_LIGHTS, across the word's two halves; the second half's top
-// bits hold the Froxel's slice. A light past them casts no shadow there,
-// and is counted. The depth target holds both culling phases' Instances
-// when it runs, and the surface normals what each sample shows; the
-// surface's position is rebuilt from the sample's depth. Its bindings are
-// declared from their bind groups' definitions (src/render/bind_groups.rs).
+// sample's verdict in `shadow_mask_samples`. The bits follow the pixel's
+// lights in the order the lit pass sums them: the directional lights, then
+// the point lights its Froxel lists, as many as SHADOW_MASK_LIGHTS, across
+// the word's two halves; the second half's top bits hold the Froxel's
+// slice. A light past them casts no shadow there, and is counted. The depth
+// target holds both culling phases' Instances when it runs, and the surface
+// normals what each sample shows; the surface's position is rebuilt from
+// the sample's depth. Its bindings are declared from their bind groups'
+// definitions (src/render/bind_groups.rs).
 
 // A directional light's shadow ray runs to f32's largest distance, past
 // anything a TLAS holds.

@@ -65,8 +65,8 @@ impl Configuration {
 
     /// lavapipe renders on the CPU, so `--ci` benches at the Goldens' size
     /// and for fewer frames, and without `Aliasing`, whose render at three
-    /// times the Goldens' size it is too slow for. CI itself benches every
-    /// scene with `CI_COUNTERS`; `compare --ci` reads counters only.
+    /// times the Goldens' size it is too slow for: `compare --ci` reads
+    /// counters only.
     pub const CI: Self = Self {
         width: 640,
         height: 360,

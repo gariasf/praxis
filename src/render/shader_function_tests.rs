@@ -1193,12 +1193,13 @@ const RELATIVE_TOLERANCE: f64 = 4e-6;
 
 /// The same for shading from unit vectors. Smith V at a grazing view sets
 /// its floor, in the case of view 90° and light 45° at the roughness floor:
-/// N·V is 0 there, so V's |N·V| term is the f32 dot's error alone, up to γ₃
-/// of the unit vectors [ref:higham-3.1], about 1.8e-7, against the |N·L| α
-/// term's 1.1e-3, a relative error of up to 1.1e-4. On the M4 Pro, whose
-/// dot lands well inside γ₃, results land within 1.1e-5 of their
-/// references; a backend that rounds each product and sum of the dot may
-/// exceed this tolerance in that case.
+/// N·V is 0 there, so V's |N·V| term, |N·V| times about 0.71, holds only the
+/// f32 dot's error, up to γ₃ of the unit vectors [ref:higham-3.1], about
+/// 3.6e-7 at the u of 2⁻²³ this file takes for Metal: against the |N·L| α
+/// term's 1.1e-3, a relative error of up to 2.2e-4. On the M4 Pro, whose dot
+/// lands well inside γ₃, results land within 1.1e-5 of their references; a
+/// backend that rounds each product and sum of the dot may exceed this
+/// tolerance in that case.
 const DIRECTION_TOLERANCE: f64 = 5e-5;
 
 /// Asserts that `actual` is finite and within `tolerance` of `expected`, so
