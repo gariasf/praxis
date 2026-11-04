@@ -565,7 +565,11 @@ fn assigned_tickets() -> Check {
         .filter_map(|milestone| milestone["title"].as_str())
         .collect();
     let Some(live) = live_milestone(&titles) else {
-        return Check::new("tickets", Verdict::Note, "no open milestone named M<n>");
+        return Check::new(
+            "tickets",
+            Verdict::Note,
+            "no open milestone named M<n> or M<n>.<m>",
+        );
     };
     let issues = gh_json(&[
         "issue",
@@ -607,12 +611,19 @@ fn gh_json(arguments: &[&str]) -> Option<Vec<serde_json::Value>> {
     serde_json::from_str(&output("gh", arguments)?).ok()
 }
 
-/// The live milestone: the open one with the lowest number in its `M<n>`
-/// title.
+/// The live milestone: the open one with the lowest number in its `M<n>` or
+/// `M<n>.<m>` title, `M3.5` falling between `M3` and `M4` and before `M3.10`.
 fn live_milestone<'title>(titles: &[&'title str]) -> Option<&'title str> {
     titles
         .iter()
-        .filter_map(|&title| Some((title.strip_prefix('M')?.parse::<u32>().ok()?, title)))
+        .filter_map(|&title| {
+            let number = title.strip_prefix('M')?;
+            let (major, minor) = number.split_once('.').unwrap_or((number, "0"));
+            Some((
+                (major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?),
+                title,
+            ))
+        })
         .min()
         .map(|(_, title)| title)
 }
@@ -765,6 +776,9 @@ mod tests {
     #[test]
     fn the_live_milestone_is_the_lowest_numbered_open_one() {
         assert_eq!(live_milestone(&["M10", "M3", "Backlog", "M4"]), Some("M3"));
+        assert_eq!(live_milestone(&["M4", "M3.5"]), Some("M3.5"));
+        assert_eq!(live_milestone(&["M3.10", "M4", "M3.9"]), Some("M3.9"));
+        assert_eq!(live_milestone(&["M4", "M3.x", "M3."]), Some("M4"));
         assert_eq!(live_milestone(&["Backlog"]), None);
     }
 
