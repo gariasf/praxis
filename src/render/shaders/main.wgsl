@@ -206,9 +206,10 @@ fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @loc
     let view_direction = normalize(-in.camera_relative_position);
 
     // The first directional light is shaded whether or not the light buffer
-    // holds one, since a branch around it cost the lit pass about 10% on
-    // the M4 Pro: without one, its illuminance is zero and a fixed direction
-    // keeps the term finite. Any others follow.
+    // holds one, since a branch around it slowed the lit pass on the M4 Pro
+    // (measured: `docs/performance.md`, Measurements behind the code):
+    // without one, its illuminance is zero and a fixed direction keeps the
+    // term finite. Any others follow.
     let has_directional_light = light.directional_light_count > 0u;
     let first = lights[0];
     let first_direction = select(

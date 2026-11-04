@@ -107,7 +107,7 @@ fn fresnel_weight(view_dot_half: f32) -> f32 {
 // identity for unit N and H, as Filament's mobile path (Apache-2.0) computes
 // it [ref:filament-ggx-lagrange-identity]. Near the peak, at the roughness
 // floor, N·H is a few f32 steps below 1, so 1 − N·H errs by several percent,
-// which summed over the hemisphere gave a white metal seen head-on 1.1% more
+// which summed over the hemisphere gave a white metal seen head-on more
 // light than it received; |N × H|² keeps its relative precision there. For
 // unit N and H the sum is at least α², which it is held to, so a zero H,
 // where L and V are opposite, gives no infinity.
@@ -179,7 +179,8 @@ fn metallic_roughness_brdf(
     // diffuse; a metal's F0 is its base colour. Schlick's F is linear in F0,
     // so metallic's mix of the two specular lobes is one lobe whose F is at
     // the mixed F0, which no light changes. Mixed as Appendix B writes it,
-    // the lit pass took up to 25 µs (5%) longer at 1440p on the M4 Pro.
+    // the lit pass took longer at 1440p on the M4 Pro (measured:
+    // `docs/performance.md`, Measurements behind the code).
     let weight = fresnel_weight(view_dot_half);
     let dielectric_fresnel = DIELECTRIC_BASE_REFLECTANCE
         + (1.0 - DIELECTRIC_BASE_REFLECTANCE) * weight;

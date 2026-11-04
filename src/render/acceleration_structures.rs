@@ -61,7 +61,9 @@ impl AccelerationStructureBytes {
 
     /// The RTX 2070 SUPER's on Vulkan (NVIDIA 621.01): wgpu's allocator
     /// report around building and compacting BLASes of 2,048 to 131,072
-    /// triangles, which compaction shrinks to 41%, and creating TLASes of
+    /// triangles, which compaction shrinks to under half (measured:
+    /// `docs/performance.md`, Measurements behind the code), and creating
+    /// TLASes of
     /// 1,024 to 262,144 Instances, taken at the largest of each. On DX12 the
     /// same GPU measures within its 64 KiB placement granularity of these.
     const NVIDIA: Self = Self {

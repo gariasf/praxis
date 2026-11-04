@@ -12,8 +12,9 @@ use crate::stats::texture_bytes;
 pub(crate) const TONEMAPPING_PASS: &str = "tonemapping_pass";
 
 /// The side of the dither's mask, in texels: a power of two, so the shader
-/// tiles the screen with it by a bit mask, where a modulo by the texture's
-/// size cost about 38 µs at 1440p on the M4 Pro.
+/// tiles the screen with it by a bit mask, cheaper on the M4 Pro than a
+/// modulo by the texture's size (measured: `docs/performance.md`,
+/// Measurements behind the code).
 pub(crate) const DITHER_MASK_SIDE: u32 = 64;
 const _: () = assert!(DITHER_MASK_SIDE.is_power_of_two());
 

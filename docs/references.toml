@@ -15,8 +15,9 @@
 #
 # Code, ADRs and notes cite an entry by its key in square brackets after
 # `ref:`, beside their prose citation. `cargo test --test references` fails on
-# a cited key with no entry, an entry cited nowhere, and a malformed citation
-# or key. Review's Sources
+# a cited key with no entry, an entry cited nowhere, a malformed citation
+# or key, and a url on a live database's host (its `LIVE_HOSTS`, whose
+# figures move) that is not a web.archive.org snapshot. Review's Sources
 # axis re-checks only the entries a diff adds or changes, and the citations
 # that point at them (`docs/agents/workflow.md`, Review).
 
@@ -1835,10 +1836,10 @@ quote = '''If a device is feature level 12_2, it has [...] Shader Model: 6.5 [..
 checked = 2026-10-27
 
 ["gpuinfo-vulkan-ray-query-coverage"]
-url = "https://vulkan.gpuinfo.org/listextensions.php?platform=windows&age=recent"
-section = "Vulkan Hardware Database, extension coverage, Windows, Age Recent (1y); the figures move, read on the date checked"
-quote = '''VK_EXT_mesh_shader: 49.35 % [...] VK_KHR_ray_query: 47.66 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112140/https://vulkan.gpuinfo.org/listextensions.php?platform=windows&age=recent"
+section = "Vulkan Hardware Database, extension coverage, Windows, Age Recent (1y); the live page's figures move, so this is its snapshot of 2026-11-04"
+quote = '''VK_EXT_mesh_shader: 49.07 % [...] VK_KHR_ray_query: 47.39 %'''
+checked = 2026-11-04
 
 ["wgpu-hal-30-metal-acquire-window"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/surface.rs#L354-L375"
@@ -2945,40 +2946,40 @@ final block may be smaller.'''
 checked = 2026-10-27
 
 ["gpuinfo-sparse-residency-image2d-windows"]
-url = "https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=windows"
-section = "vulkan.gpuinfo.org, Core 1.0 device features, Windows, Recent (1y) filter, read 2026-10-27"
-quote = '''sparseResidencyImage2D: 76.64 %: 23.36 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112204/https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=windows"
+section = "vulkan.gpuinfo.org, Core 1.0 device features, Windows, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''sparseResidencyImage2D: 76.87 %: 23.13 %'''
+checked = 2026-11-04
 
 ["gpuinfo-sparse-residency-image2d-linux"]
-url = "https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=linux"
-section = "vulkan.gpuinfo.org, Core 1.0 device features, Linux, Recent (1y) filter, read 2026-10-27"
-quote = '''sparseResidencyImage2D: 72.11 %: 27.89 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112228/https://vulkan.gpuinfo.org/listfeaturescore10.php?platform=linux"
+section = "vulkan.gpuinfo.org, Core 1.0 device features, Linux, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''sparseResidencyImage2D: 72.15 %: 27.85 %'''
+checked = 2026-11-04
 
 ["gpuinfo-lazily-allocated-windows"]
-url = "https://vulkan.gpuinfo.org/listmemory.php?platform=windows"
-section = "vulkan.gpuinfo.org, Memory types for Windows, Recent (1y) filter, read 2026-10-27"
-quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 5.05 %: 94.95 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112253/https://vulkan.gpuinfo.org/listmemory.php?platform=windows"
+section = "vulkan.gpuinfo.org, Memory types for Windows, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 5.04 %: 94.96 %'''
+checked = 2026-11-04
 
 ["gpuinfo-lazily-allocated-linux"]
-url = "https://vulkan.gpuinfo.org/listmemory.php?platform=linux"
-section = "vulkan.gpuinfo.org, Memory types for Linux, Recent (1y) filter, read 2026-10-27"
-quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 3.85 %: 96.15 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112316/https://vulkan.gpuinfo.org/listmemory.php?platform=linux"
+section = "vulkan.gpuinfo.org, Memory types for Linux, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''DEVICE_LOCAL_BIT LAZILY_ALLOCATED_BIT: 3.88 %: 96.12 %'''
+checked = 2026-11-04
 
 ["gpuinfo-memory-extensions-windows"]
-url = "https://vulkan.gpuinfo.org/listextensions.php?platform=windows"
-section = "vulkan.gpuinfo.org, Extensions, Windows, Recent (1y) filter, read 2026-10-27"
-quote = '''VK_EXT_memory_budget: 91.03 % [...] VK_EXT_memory_priority: 78.13 % [...] VK_EXT_pageable_device_local_memory: 49.72 % [...] VK_NV_memory_decompression: 31.78 % [...] VK_EXT_memory_decompression: 21.5 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112340/https://vulkan.gpuinfo.org/listextensions.php?platform=windows"
+section = "vulkan.gpuinfo.org, Extensions, Windows, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''VK_EXT_memory_budget: 91.04 % [...] VK_EXT_memory_decompression: 21.64 % [...] VK_EXT_memory_priority: 78.36 % [...] VK_EXT_pageable_device_local_memory: 49.25 % [...] VK_NV_memory_decompression: 31.53 %'''
+checked = 2026-11-04
 
 ["gpuinfo-memory-extensions-linux"]
-url = "https://vulkan.gpuinfo.org/listextensions.php?platform=linux"
-section = "vulkan.gpuinfo.org, Extensions, Linux, Recent (1y) filter, read 2026-10-27"
-quote = '''VK_EXT_memory_budget: 93.65 % [...] VK_EXT_memory_priority: 55.56 % [...] VK_EXT_pageable_device_local_memory: 27.21 % [...] VK_NV_memory_decompression: 21.54 % [...] VK_EXT_memory_decompression: 11.34 %'''
-checked = 2026-10-27
+url = "https://web.archive.org/web/20261104112411/https://vulkan.gpuinfo.org/listextensions.php?platform=linux"
+section = "vulkan.gpuinfo.org, Extensions, Linux, Recent (1y) filter, snapshot of 2026-11-04"
+quote = '''VK_EXT_memory_budget: 93.84 % [...] VK_EXT_memory_decompression: 11.42 % [...] VK_EXT_memory_priority: 55.48 % [...] VK_EXT_pageable_device_local_memory: 26.94 % [...] VK_NV_memory_decompression: 21.69 %'''
+checked = 2026-11-04
 
 ["vma-3.0.0-tlsf"]
 url = "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/bfb2ca99e1e7e9684dc06546b552ee3eff4b10aa/CHANGELOG.md#L132"

@@ -1,8 +1,31 @@
 # Performance notes
 
 Profiles of the Reference scenes, one section per milestone exit, and
-measurements that name an offender's cause, newest first. Each exit names
-its top three offenders and the tickets that take them.
+measurements that name an offender's cause, newest first, after one
+standing section: the measurements behind the code's choices. Each exit
+names its top three offenders and the tickets that take them.
+
+## Measurements behind the code
+
+The figures behind a choice the code makes, which its comment gives in
+words and points here for. A timing or ratio in a shipping comment goes
+stale with the next change to its pass, so `cargo test --test conventions`
+keeps them out of comments; this table keeps them dated beside how they
+were taken. A row whose code changes is re-measured or left as history with
+its commit.
+
+| Item | Figure | Hardware | Commit | Method |
+|---|---|---|---|---|
+| `WARN_RATIO`, `FAIL_RATIO` (`src/bench/mod.rs`) | Counters identical; GPU medians within 3.4%; CPU medians of 31–42 µs within 8.1 µs | M4 Pro, Metal | 591433d7 (2026-10-13, #83) | 6 `praxis bench` runs of each scene under the owner's usual load |
+| `GPU_PASS_NOISE_FLOOR_MICROSECONDS` (`src/bench/mod.rs`) | helmet's culling pass 136, 153 and 144 µs; every other pass within 3% | M4 Pro, Metal | 3e7c80b2 (2026-10-20, #238) | 3 `praxis bench` runs |
+| `FrameWait::Spin` (`src/capture/mod.rs`) | A main thread that blocked behind a GPU-bound frame runs about 30% slower through the whole next frame | M4 Pro, Metal | 958ed4e9 (2026-10-30, #400) | `town`'s CPU stages with and without a spin-wait; "`town`'s CPU stages slow because the P-core clocks down while the main thread waits" below |
+| `DEVICE_MEMORY_BLOCK_BYTES` (`src/gpu/mod.rs`) | pbr-sweep's depth pre-pass 198 µs instead of 52, its lit pass 798 µs instead of 285, when its targets landed in a 128–256 MiB block an earlier State had filled | RTX 2070 SUPER, Vulkan | cd60e773 (2026-10-31, #424) | `pbr-sweep` benched twice in one process before the change |
+| `RenderTargets::final_depth_attachment` (`src/render/targets.rs`) | Storing the 4x depth target costs about 50 µs at 1440p (pbr-sweep 730 µs against 679 µs with `Discard`) | M4 Pro, Metal | 7be466e1 (2026-10-21, #241) | The lit pass's depth stored against discarded; the PR records no more |
+| `DITHER_MASK_SIDE` (`src/render/tonemapping_pass.rs`) | A modulo by the mask texture's size cost about 38 µs more than the bit mask at 1440p | M4 Pro, Metal | 064d2ba6 (2026-10-22, #256) | The two forms of the shader's tiling; the PR records no more |
+| `AccelerationStructureBytes::NVIDIA` (`src/render/acceleration_structures.rs`) | Compaction shrinks a BLAS to 41% of its built size (29.2 against 70.7 bytes per triangle) | RTX 2070 SUPER, Vulkan, NVIDIA 621.01 | 4a7ab0bc (2026-10-26, #303) | wgpu's allocator report around building and compacting BLASes of 2,048 to 131,072 triangles, at the largest |
+| The lit pass's first directional light (`src/render/shaders/main.wgsl`) | An `if` on the light count around its term cost the main pass 10 to 12% | M4 Pro, Metal | 58b41295 (2026-10-20, #222) | 3 interleaved `praxis bench` rounds of main and the branch, 1,800 frames at 2560×1440 |
+| The dielectric and metal mix, gathered by lobe (`src/render/shaders/shading.wgsl`) | Mixed as glTF's Appendix B writes it, the lit pass took up to 25 µs (5%) longer at 1440p | M4 Pro, Metal | 877ea946 (2026-10-22, #246) | `praxis bench` sessions, the Appendix B form against the gathered one |
+| `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 
 ## The turned point lights' search out of `build_shadow_mask`: no faster (2026-10-31, #440)
 

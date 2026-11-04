@@ -277,8 +277,10 @@ When a feature folder grows past one file, split into
   messages.
 - Default log filter is `praxis=debug,wgpu=warn,naga=warn` via
   `.cargo/config.toml`; override per run with `RUST_LOG`.
-- Bevy imports: `use bevy_ecs::prelude::*;` (not piecemeal).
-- WGPU types: full path (`wgpu::Buffer`), don't import individual types.
+- Bevy imports: `use bevy_ecs::prelude::*;` for what the prelude
+  exports; items outside it by path.
+- WGPU types: wgpu's own types by full path (`wgpu::Buffer`); wgpu-hal's
+  `api::Metal` and traits imported `as _` excepted.
 - Identifiers are full words, WGSL included (`normal_dot_view`, not
   `n_dot_v`; shading names tested). Put a textbook symbol in a comment
   where it helps.
@@ -352,6 +354,14 @@ When reviewing changes, check for:
       the change claims, is cited to the right place, and is implemented
       as it says; one that cannot be opened and confirmed is fixed or
       removed (`docs/agents/workflow.md`, Review: Sources)
+- [ ] Every name the change renames, removes or changes the behaviour
+      of (pass, buffer, format, Blob field, constant) is grepped in
+      comments, ADRs and `CONTEXT.md`; each clause the change makes
+      false (a doc comment, an "until", "today", "yet" or count, a
+      Consequence, a prediction) is rewritten or dated in the same PR;
+      a new glossary term is grepped against `pub struct`/`enum` names
+      and a same-named item of another meaning goes in its `_Avoid_`
+      line
 - [ ] Frame data holds no borrow into the ECS World, and only the
       main thread submits, presents or polls (ADR 0016)
 - [ ] Whatever changes what an Instance holds makes prepare write its
