@@ -246,16 +246,18 @@ impl MainPass {
         phase: CullingPhase,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
-        let (label, depth_attachment, draw_offset) = match phase {
-            CullingPhase::One => (DEPTH_PREPASS, render_targets.depth_attachment(), 0),
+        let (label, depth_attachment, clears_surface_normals, draw_offset) = match phase {
+            CullingPhase::One => (DEPTH_PREPASS, render_targets.depth_attachment(), true, 0),
             CullingPhase::Two => (
                 PHASE_TWO_DEPTH_PASS,
                 render_targets.loaded_depth_attachment(),
+                false,
                 PHASE_TWO_DRAW_OFFSET,
             ),
         };
-        let clear = phase == CullingPhase::One;
-        let surface_normals = [Some(render_targets.surface_normals_attachment(clear))];
+        let surface_normals = [Some(
+            render_targets.surface_normals_attachment(clears_surface_normals),
+        )];
         let mut depth_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(label),
             color_attachments: if self.shadow_rays {
