@@ -19,7 +19,6 @@ const VOLUMES: &[&str] = &[
     "blas-refit.html",
     "box-leakage.html",
     "crowd-shadows.html",
-    "depth-pyramid.html",
     "distant-textures.html",
     "dynamic-tlas.html",
     "edge-shadows.html",

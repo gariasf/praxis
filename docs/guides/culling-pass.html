@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Culling Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/culling_pass.rs</code></div>
+  <h1>The culling pass</h1>
+  <p class="definition">A compute pass, run twice a frame, that builds the frame's draw from the <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span>: a <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).">Meshlet</span> record per Meshlet and a packed index per triangle corner of each Instance it draws, in slot order, which the depth and lit passes draw with one indirect call each. Phase one draws the Instances in view that were visible the frame before; phase two, after the depth pyramid, the others in view that the pyramid does not hide, and it records which Instances are visible for the next frame.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="instance-buffer.html">Instance Buffer Explained</a> for the slots the pass reads, <a href="depth-pyramid-pass.html">The depth pyramid pass</a> for what phase two tests against.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Twice every frame: phase one first among the frame's passes after the dynamic TLAS's build and the bend pass, phase two between the depth pyramid pass and phase two's depth pass. With the <code>culling</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> off, which ships on, phase one draws every Instance in use and phase two draws none.</dd>
+      <dt>Reads</dt><dd>The Instance buffer and its slot count, the Mesh table, the Meshlets and their triangles, the camera uniform, each slot's visibility bit from the frame before, and in phase two the depth pyramid.</dd>
+      <dt>Writes</dt><dd>The frame's draw: the Meshlet records, the packed indices and <code>FrameDraw</code>, the draws' indirect arguments and counts; each slot's offsets; in phase two, each slot's visibility bit.</dd>
+      <dt>Dispatches</dt><dd>Four per phase, in one compute pass each: <code>offset_slots</code>, a workgroup per 256 slots; <code>offset_blocks</code>, one workgroup; <code>append_records</code>, an invocation per slot; <code>append_triangles</code>, a workgroup per Meshlet record, sized by indirect dispatch.</dd>
+      <dt>Bind groups</dt><dd>Group 0, the frame's camera; group 2, the scene geometry; group 3, <code>FRAME_DRAW</code>, the draw's buffers and the depth pyramid, in two copies that differ in the buffer bound as <code>frame_draw</code>.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/culling.wgsl</code>, after the common part; each phase's pipelines set the <code>PHASE_TWO</code> and <code>CULLING</code> overrides.</dd>
+      <dt>Counted</dt><dd><code>culling_phase_one</code> and <code>culling_phase_two</code> in GPU time; <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>phase_two_triangles_drawn</code> and <code>instances_overflowed</code> in counters, read back from <code>FrameDraw</code>; its buffers in GPU memory.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#draw">2 &middot; The frame's draw</a>
+    <a href="#order">3 &middot; Four dispatches, slot order</a>
+    <a href="#frustum">4 &middot; The frustum test</a>
+    <a href="#phases">5 &middot; Two phases</a>
+    <a href="#occlusion">6 &middot; The occlusion test</a>
+    <a href="#dispatch">7 &middot; The indirect dispatch</a>
+    <a href="#overflow">8 &middot; Overflow and counts</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea"><span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> lists no draws. The GPU chooses what to draw: phase one before the depth pre-pass, from last frame's visibility, and phase two after the depth pyramid, from what phase one drew this frame.</p>
+  <p class="order-label">The frame's passes with shadow rays on, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li class="focus">culling, phase one</li><li>Froxel pass</li><li class="warm">depth pre-pass</li><li class="warm">depth pyramid pass</li><li class="focus">culling, phase two</li><li class="warm">phase two's depth pass</li><li>shadow mask pass</li><li class="warm">lit pass</li><li>tonemapping pass</li>
+  </ol>
+  <p>The depth pre-pass draws phase one's Instances into depth, the depth pyramid pass reduces that depth, and phase two tests the rest against it. Phase two's own Instances then draw into depth in a pass of their own with shadow rays on, as Praxis ships, or at the start of the lit pass with them off; the lit pass shades both phases' at depth equal. The Froxel pass follows phase one so that ADR 0019's gate, timed from the start of phase one, counts the lights' culling.</p>
+  <p>Each phase records one compute pass. Phase one first clears <code>FrameDraw</code>; a frame with no slots in use dispatches nothing.</p>
+<pre class="code"><code>let slots = frame.instance_slot_count;
+if slots &gt; 0 {
+    <span class="comment">// Each slot's offsets are the sum of the earlier slots' Meshlet
+    // records and packed indices: summed by block, then the blocks.</span>
+    pass.set_pipeline(&amp;pipelines.offset_slots);
+    pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+    pass.set_pipeline(&amp;pipelines.offset_blocks);
+    pass.dispatch_workgroups(1, 1, 1);
+    <span class="comment">// An invocation per slot.</span>
+    pass.set_pipeline(&amp;pipelines.append_records);
+    pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+    <span class="comment">// A workgroup per Meshlet record the phase appends.</span>
+    pass.set_bind_group(FRAME_DRAW.index, &amp;self.append_bind_group, &amp;[]);
+    pass.set_pipeline(&amp;pipelines.append_triangles);
+    pass.dispatch_workgroups_indirect(&amp;self.buffers.frame_draw, APPEND_DISPATCH_OFFSET);
+}</code></pre>
+  <p class="code-source"><code>CullingPass::record</code>, <code>src/render/culling_pass.rs</code>.</p>
+</section>
+
+<section class="part prose" id="draw">
+  <div class="part-mark">2 &middot; <code>FrameDraw</code> &middot; <code>pack_index</code> &middot; <code>DrawCapacity</code></div>
+  <h2>The frame's draw</h2>
+  <p class="key-idea">One indexed draw spans every Instance: each index packs a Meshlet record above six bits of vertex, and the record names the Instance's slot, the Meshlet and the Material to draw it with. The draw has no base vertex, so the vertex shader finds everything from the index.</p>
+  <p>The cooker cuts each Primitive into Meshlets of at most 64 vertices and 124 triangles; a Meshlet lists its vertices as indices into the vertex Arena and its triangles as three one-byte corners into that list, in cooked order. For each Instance it draws, the pass writes one record per Meshlet of its Mesh, with the Instance's own Material ID where its Renderable overrides its Mesh's Materials and the Meshlet's Primitive's otherwise, and one packed index per corner.</p>
+<pre class="code"><code>fn pack_index(record: u32, vertex: u32) -&gt; u32 {
+    return (record &lt;&lt; MESHLET_VERTEX_BITS) | vertex;
+}</code></pre>
+  <p class="code-source"><code>common.wgsl</code>. <code>MESHLET_VERTEX_BITS</code> is the base-2 logarithm of <code>MESHLET_MAX_VERTICES</code>, 64, declared from Rust: 6, which leaves 26 bits for the record. <code>CullingPass::new</code> asserts the record capacity stays below 2<sup>26</sup>.</p>
+  <p>The vertex shader unpacks an index, reads its record, reads the Instance from the record's slot, finds the vertex through the Meshlet's list, pulls it from the vertex Arena and composes its position relative to the camera from the Anchors. Both buffers have fixed capacities, provisional until ADR 0013's split of the 8 GB Budget sizes them:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Buffer</th><th class="n">Capacity</th><th class="n">Bytes</th><th>What fixes it</th></tr></thead>
+    <tbody>
+      <tr><td><code>packed_indices</code></td><td class="n">2<sup>25</sup></td><td class="n">134,217,728</td><td>the most one storage binding holds at the Capability floor, 128 MiB: 11.2 million triangles, all of <code>town</code> with culling off</td></tr>
+      <tr><td><code>meshlet_records</code></td><td class="n">2<sup>20</sup></td><td class="n">12,582,912</td><td>three u32s a record: as many Meshlets of 10.7 triangles on average</td></tr>
+      <tr><td><code>instance_offsets</code></td><td class="n">526,337</td><td class="n">4,210,696</td><td>a pair of u32s per slot of <code>INSTANCE_CAPACITY</code>, 2<sup>19</sup>, then per block of 256 slots, then the phase's record range</td></tr>
+      <tr><td><code>instance_visibility</code></td><td class="n">2<sup>19</sup> bits</td><td class="n">65,536</td><td>a bit per slot</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The draws' arguments and counts live in one 72-byte buffer, <code>FrameDraw</code>, which the depth passes and the lit pass read as indirect arguments, the culling entry points write, and the GPU stats readback copies each frame:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th class="n">Bytes</th><th>Field</th><th>Read by</th></tr></thead>
+    <tbody>
+      <tr><td class="n">0 to 19</td><td><code>draw</code>: index count, instance count, first index, base vertex, first instance</td><td>the depth pre-pass, as phase one leaves it; the lit pass, with both phases</td></tr>
+      <tr><td class="n">20 to 27</td><td><code>instances_drawn</code>, <code>instances_overflowed</code></td><td>Frame stats, read back</td></tr>
+      <tr><td class="n">28 to 47</td><td><code>phase_two_draw</code>: the same five arguments, from phase one's index total</td><td>phase two's depth pass, or the lit pass's depth draw with shadow rays off</td></tr>
+      <tr><td class="n">48 to 55</td><td><code>phase_two_offsets</code>: where phase two's records and indices start</td><td>phase two's <code>offset_blocks</code></td></tr>
+      <tr><td class="n">56 to 67</td><td><code>append_dispatch</code>: the x, y and z workgroups of <code>append_triangles</code></td><td>its indirect dispatch</td></tr>
+      <tr><td class="n">68 to 71</td><td>padding: <code>phase_two_offsets</code>, a <code>vec2&lt;u32&gt;</code>, aligns the struct to 8 bytes</td><td>nothing</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Offsets from the <code>#[repr(C)]</code> struct in <code>culling_pass.rs</code>, five 4-byte arguments per draw and three per dispatch, and its twin in <code>culling.wgsl</code>; <code>PHASE_TWO_DRAW_OFFSET</code> and <code>APPEND_DISPATCH_OFFSET</code> are its <code>offset_of!</code>s.</p>
+</section>
+
+<section class="part prose" id="order">
+  <div class="part-mark">3 &middot; <code>offset_slots</code> &middot; <code>offset_blocks</code> &middot; <code>append_records</code> &middot; <code>append_triangles</code></div>
+  <h2>Four dispatches, in slot order</h2>
+  <p class="key-idea">Every Instance's place in the draw follows from the slots' order and counts alone: a running sum over the slots gives each drawn Instance where its records and indices start, and only then are they written. The draw is the same from run to run, and the image with it.</p>
+  <p><b><code>offset_slots</code></b> runs a workgroup per block of 256 slots, <code>SCAN_BLOCK_SIZE</code>. Each invocation decides whether its slot's Instance is drawn in this phase, takes the counts of its Mesh's Meshlet records and packed indices where it is, and joins a Hillis and Steele scan in workgroup memory, which gives each slot the sum of the counts before it in its block. A slot not drawn, freed or culled, takes <code>NOT_DRAWN</code>, all ones, past every capacity; the sums saturate there, so nothing past it can fit either. The block's total goes after every slot's entry.</p>
+<pre class="code"><code>fn exclusive_scan(invocation: u32, value: vec2&lt;u32&gt;) -&gt; vec2&lt;u32&gt; {
+    scan[invocation] = value;
+    for (var stride = 1u; stride &lt; SCAN_BLOCK_SIZE; stride *= 2u) {
+        workgroupBarrier();
+        var before = vec2&lt;u32&gt;(0u);
+        if invocation &gt;= stride {
+            before = scan[invocation - stride];
+        }
+        workgroupBarrier();
+        scan[invocation] = saturating_add(scan[invocation], before);
+    }
+    workgroupBarrier();
+    var before = vec2&lt;u32&gt;(0u);
+    if invocation &gt; 0u {
+        before = scan[invocation - 1u];
+    }
+    return before;
+}</code></pre>
+  <p class="code-source"><code>culling.wgsl</code>.</p>
+  <p><b><code>offset_blocks</code></b> runs one workgroup over the blocks' totals: at the Instance buffer's 2<sup>19</sup> slots, 2,048 blocks, 8 to an invocation, each loop bounded alike in every invocation so the scan's barriers stay in uniform control flow. It turns each block's total into the block's start, from where the phase starts: 0 in phase one, phase one's sums in phase two, which phase one's last invocation leaves in <code>phase_two_offsets</code>. It also sets the draw's instance count to 1, phase two's first index, the phase's range of records and <code>append_triangles</code>'s dispatch.</p>
+  <p><b><code>append_records</code></b> runs an invocation per slot. Each drawn Instance whose records and indices fit writes its records from its block's start plus its own offset, raises the draw's index count to its last index with an <code>atomicMax</code>, and counts itself drawn; one that does not fit counts itself overflowed.</p>
+  <p><b><code>append_triangles</code></b> runs a workgroup of 32 invocations per record the phase appended, and writes the record's Meshlet's packed indices at the Instance's first index plus the Meshlet's triangles before it in the Mesh, adjacent invocations writing adjacent indices, each triangle's corners as cooked, so the draw rasterises as the cooked index stream does.</p>
+  <p>Atomics remain only where order cannot matter: the index count's <code>atomicMax</code>, the counts' <code>atomicAdd</code>s and the visibility words' <code>atomicOr</code>s end at the same value whatever order invocations run in. Appending through a shared atomic count instead would place each Instance by when its workgroup arrived, and on the Apple M4 Pro, which triangles a draw holds before others changes the implicit derivatives some pixels sample their Textures with, so the image would differ from run to run (<a href="instance-culling.html">Instance Culling Explained</a>, chapter 3, measures it).</p>
+</section>
+
+<section class="part prose" id="frustum">
+  <div class="part-mark">4 &middot; <code>clip_space_bounds</code> &middot; <code>in_view_frustum</code></div>
+  <h2>The frustum test</h2>
+  <p class="key-idea">The test runs in clip space on the Mesh's bounds, a box composed relative to the camera as the vertices are. A plane's distance is linear there, so the box reaches furthest inside each plane by its centre's distance plus each half axis's, whole; a box is culled only where it lies wholly beyond one plane.</p>
+  <p>The view frustum is bounded by four side planes, &minus;<i>w</i> &le; <i>x</i> &le; <i>w</i> and &minus;<i>w</i> &le; <i>y</i> &le; <i>w</i>, and the near plane, <i>z</i> &le; <i>w</i>. Under ADR 0015's reverse Z with no far plane every point past the near plane lands at <i>z</i> &ge; 0, so there is no sixth plane. <code>clip_space_bounds</code> composes the box's centre from the Instance's and the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchors</span> with <code>camera_relative_position</code>, the function the vertex shader places vertices with (ADR 0014), and takes its three half axes, the Instance's rotation-scale columns times the box's half extents, into clip space as directions.</p>
+<pre class="code"><code>fn in_view_frustum(bounds: ClipBox) -&gt; bool {
+    let side_reach = side_plane_distances(bounds.centre)
+        + abs(side_plane_distances(bounds.half_axes[0]))
+        + abs(side_plane_distances(bounds.half_axes[1]))
+        + abs(side_plane_distances(bounds.half_axes[2]));
+    let near_reach = near_plane_distance(bounds.centre)
+        + abs(near_plane_distance(bounds.half_axes[0]))
+        + abs(near_plane_distance(bounds.half_axes[1]))
+        + abs(near_plane_distance(bounds.half_axes[2]));
+    return all(side_reach &gt;= vec4&lt;f32&gt;(0.0)) &amp;&amp; near_reach &gt;= 0.0;
+}</code></pre>
+  <p class="code-source"><code>culling.wgsl</code>. <code>side_plane_distances</code> returns <i>w</i> + <i>x</i>, <i>w</i> &minus; <i>x</i>, <i>w</i> + <i>y</i> and <i>w</i> &minus; <i>y</i> at once; <code>near_plane_distance</code> returns <i>w</i> &minus; <i>z</i>.</p>
+  <p>The five planes are tested with neither a branch nor a loop. The <code>culling</code> switch reaches WGSL as the <code>CULLING</code> override, which each pipeline sets from the Renderer's switches, so the shader compiles with it fixed and the shipping pipeline pays for no branch.</p>
+</section>
+
+<section class="part prose" id="phases">
+  <div class="part-mark">5 &middot; <code>offset_slots</code> &middot; <code>visible_before</code></div>
+  <h2>Two phases</h2>
+  <p class="key-idea">Frames are alike: most Instances visible in one frame are still visible in the next. Phase one draws those, the depth they leave becomes the depth pyramid, and phase two tests every Instance in view against it, draws the visible ones phase one did not, and records visibility for the next frame.</p>
+<pre class="code"><code>visible = !CULLING || in_view_frustum(bounds);
+if PHASE_TWO {
+    <span class="comment">// Behind what phase one drew, it is not visible.</span>
+    visible = visible &amp;&amp; !(CULLING &amp;&amp; occluded(bounds));
+    <span class="comment">// Phase one's offsets for the slot, before this phase's replace them.</span>
+    drawn = CULLING &amp;&amp; visible &amp;&amp; all(instance_offsets[slot] == NOT_DRAWN);
+} else {
+    drawn = visible &amp;&amp; (!CULLING || visible_before(slot));
+}
+<span class="comment">// A shadow proxy's Mesh has no Meshlets: rays trace it, no pass
+// draws it.</span>
+drawn = drawn &amp;&amp; mesh.meshlet_count != 0u;</code></pre>
+  <p class="code-source"><code>offset_slots</code>, <code>culling.wgsl</code>: each slot's decision.</p>
+  <p>Phase two tests the Instances phase one drew too, so the bits record what is visible now: an Instance that became hidden is drawn by phase one one last time, loses its bit, and leaves phase one the frame after. It gathers each block's bits with workgroup <code>atomicOr</code>s and writes the block's eight words once. Phase one's offsets for a slot, read before phase two writes its own, tell phase two which Instances phase one drew.</p>
+  <p>The image stays right. An Instance that shows this frame is either drawn by phase one, or tested by phase two against depth made only of Instances drawn this frame, and drawn if any part of it could be nearer. One that phase one draws although now hidden costs work, and the depth test hides it. The bits start zeroed, so the first frame's phase one draws nothing, the pyramid is all far plane, and phase two draws everything in view. After a camera cut last frame's bits predict little, and phase two draws most of the view.</p>
+  <p>Phase two's indices follow phase one's in the same buffers, from phase one's totals, so the draw at offset 0 grows across the phases: the depth pre-pass draws it as phase one leaves it, and the lit pass draws it with both. <code>phase_two_draw</code> covers phase two's indices alone, for the depth draw of phase two's Instances. With culling off, phase one draws every Instance in use and phase two draws none and sets every bit.</p>
+</section>
+
+<section class="part prose" id="occlusion">
+  <div class="part-mark">6 &middot; <code>occluded</code></div>
+  <h2>The occlusion test</h2>
+  <p class="key-idea">A box in view is occluded where even its nearest point is farther than the farthest depth phase one drew anywhere its screen rectangle could cover: the minimum of four texels of the depth pyramid, at the level where the rectangle spans at most two per axis. Every step errs towards drawing.</p>
+  <p><b>Eight corners, moved nearer.</b> For a box in front of the camera, depth, <i>z</i> over <i>w</i>, and reach across the screen are both extreme at a corner, so the test projects the eight corners and keeps the greatest depth, the box's nearest point under reverse Z. Each corner first moves towards the camera in <i>z</i> and <i>w</i> by 1/16384 of the summed magnitudes of that coordinate over the box's centre and half axes, <code>OCCLUSION_ROUNDING</code>, plus 0.1 mm, <code>COMPOSITION_ERROR</code>, past ADR 0014's worst camera-relative error for the box's composition and the vertices' each, so f32 rounding cannot make the box look farther than its drawn triangles. A box with a corner at or behind the camera's plane is never occluded.</p>
+  <p><b>A rectangle grown by a pixel.</b> The corners' <i>x</i> and <i>y</i> over <i>w</i> bound a screen rectangle, which the test takes into texture coordinates, rows top first, and grows by half a level-0 texel, a pixel, past where rasterisation rounds vertices, so every sample a covered pixel holds lies in the texels read.</p>
+  <p><b>The level, and its size computed.</b> With <i>e</i> the rectangle's larger side in level-0 texels, the level is min(&lceil;log<sub>2</sub> max(<i>e</i>, 1)&rceil;, levels &minus; 1), where it spans at most two texels per axis. The level's size is level 0's shifted down, at least 1, as a mip chain halves, rather than queried: lavapipe answers a size query whose level varies across a workgroup's invocations with one invocation's answer. If rounding leaves the rectangle over more than two texels, the box is not occluded.</p>
+<pre class="code"><code>let size = max(level_zero_texels &gt;&gt; vec2&lt;u32&gt;(level), vec2&lt;u32&gt;(1u));
+let first = min(vec2&lt;u32&gt;(first_coordinates * vec2&lt;f32&gt;(size)), size - 1u);
+let last = min(vec2&lt;u32&gt;(last_coordinates * vec2&lt;f32&gt;(size)), size - 1u);
+if any(last &gt; first + 1u) {
+    return false;
+}
+let farthest = min(
+    min(textureLoad(depth_pyramid, first, level).r, textureLoad(depth_pyramid, vec2&lt;u32&gt;(last.x, first.y), level).r),
+    min(textureLoad(depth_pyramid, vec2&lt;u32&gt;(first.x, last.y), level).r, textureLoad(depth_pyramid, last, level).r)
+);
+return nearest_depth &lt; farthest;</code></pre>
+  <p class="code-source">The end of <code>occluded</code>, <code>culling.wgsl</code>.</p>
+  <p><b>Four texels, compared.</b> The test loads the corners of the block of one or two by one or two texels, takes their minimum, the farthest depth anything drawn reaches there, and culls the box where its nearest depth is less. The pyramid keeps the farthest depth over every sample beneath a texel, the nearest corner stands for the whole box, the margins move it nearer and the rectangle grows: each makes the test keep Instances, never drop a visible one.</p>
+</section>
+
+<section class="part prose" id="dispatch">
+  <div class="part-mark">7 &middot; <code>offset_blocks</code> &middot; <code>frame_draw_bind_groups</code></div>
+  <h2>The indirect dispatch and its stand-in</h2>
+  <p class="key-idea">Only the GPU knows, mid-frame, how many records a phase appends, so <code>offset_blocks</code> writes <code>append_triangles</code>'s workgroup counts into <code>FrameDraw</code> and the dispatch reads them from there. wgpu checks a dispatch's bindings and its argument buffer as one usage scope, so that dispatch binds a 72-byte stand-in where <code>FrameDraw</code> would go.</p>
+  <p>A dispatch may launch at most 65,535 workgroups along each dimension, wgpu's default, which the Capability floor takes as its own (ADR 0021); <code>CullingPass::new</code> asserts the device allows it. The draw holds 2<sup>20</sup> records, so they are laid out in rows:</p>
+<pre class="code"><code>let records = appended.y - appended.x;
+<span class="comment">// At least one row, so no records dispatch no workgroups.</span>
+let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
+frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);</code></pre>
+  <p class="code-source">The end of <code>offset_blocks</code>, <code>culling.wgsl</code>.</p>
+  <p>Each workgroup of <code>append_triangles</code> finds its record from its position in the rows and returns at once past the phase's last, since <i>x</i> &times; <i>y</i> can exceed the count. Without the <code>max</code>, zero records would divide by zero rows.</p>
+  <p>The usage scope is why the stand-in exists. In wgpu-core 30, a dispatch's scope merges every active bind group's uses, then adds the indirect buffer as <code>INDIRECT</code>; a buffer that a bound group writes holds a use that excludes every other, so a dispatch whose arguments are in it fails validation. Group 3 holds <code>FrameDraw</code> read-write besides the offsets, records, indices, visibility and pyramid that <code>append_triangles</code> needs, so the pass builds two copies of group 3 from one layout: the second binds a stand-in buffer, never read, as <code>frame_draw</code>. <code>append_triangles</code> reads its phase's record range from <code>instance_offsets</code> instead, at <code>APPENDED_RECORDS</code>, past every slot's and block's offsets, where <code>offset_blocks</code> put a copy. One function builds both groups, at creation and after every resize, since they hold the depth pyramid.</p>
+</section>
+
+<section class="part prose" id="overflow">
+  <div class="part-mark">8 &middot; <code>fits</code> &middot; <code>src/render/readback.rs</code></div>
+  <h2>Overflow, and what Frame stats count</h2>
+  <p class="key-idea">A phase whose Instances need more records or indices than the draw holds draws those that fit, in slot order, and counts the rest as overflowed; the warning comes from that read-back count, not from the CPU's sums, so culled Instances never warn.</p>
+  <p><code>fits</code> checks an Instance's counts against both buffers from its first offsets. Since the offsets are a running sum, once one Instance does not fit, none after it does: the draw ends at the last Instance that fits, and every index before it is written. <code>append_records</code> still writes the records short of the buffer's end of an Instance that does not fit, so every record <code>append_triangles</code> reads is written, and that dispatch skips the indices of any record whose Instance does not fit. Once phase one fills the draw, phase two's Instances count as overflowed.</p>
+  <p>The GPU stats readback copies <code>FrameDraw</code> each frame into a ring of mapped buffers, a few frames late, and <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the shadow mask had no bit for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> report <code>instances_drawn</code>, <code>triangles_drawn</code>, the draw's index count over 3, <code>phase_two_triangles_drawn</code>, the same of phase two's draw, and <code>instances_overflowed</code>. It warns once when a frame read back overflowed, and again only after one has room for all. Frame stats carry no count of Instances in use, so a frame's culled Instances are those in use less the drawn, the overflowed and the shadow proxies, whose Meshes have no Meshlets.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">Culling must never change the image: every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> must render the same with culling on and off. Renderer tests pin each rule at the seam the draws read, against oracles written independently of the shader.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>the_culling_pass_draws_the_instances_whose_bounds_reach_into_the_frustum</code></td><td><code>renderer.rs</code></td><td>Instances about a camera 100 km out, turned and scaled, inside the frustum, beyond each plane alone, across planes, around the camera and freed, over several scan blocks: the draw holds exactly those whose bounds reach in by their corners in f64, in slot order, and Frame stats count only those; culling off, every Instance in use</td></tr>
+      <tr><td><code>the_draw_holds_each_drawn_instances_meshlets_and_their_cooked_corners_in_slot_order</code></td><td><code>renderer.rs</code></td><td>a Mesh of four Meshlets over two Primitives, half the Instances' Materials overridden: a record per Meshlet of each drawn Instance and its cooked corners, packed with its record, in slot order within each phase, across two frames and both phases</td></tr>
+      <tr><td><code>an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears</code></td><td><code>renderer.rs</code></td><td>quads behind, partly behind and turned through a near one: phase two culls only the hidden one from the third frame and draws it again in the frame it reappears; every frame equals culling off's, in a Renderer resized first</td></tr>
+      <tr><td><code>an_instance_entering_the_view_is_drawn_by_phase_two_in_the_frame_it_enters</code></td><td><code>renderer.rs</code></td><td>phase two draws an Instance in the frame it enters the view, into depth before the lit pass shades it; phase one takes it the frame after</td></tr>
+      <tr><td><code>a_frame_past_the_draws_capacity_draws_what_fits_and_warns_only_of_drawn_overflow</code></td><td><code>renderer.rs</code></td><td>past a scan block and a row of dispatches: culling off, the last Instance overflows and warns; culling on, the culled ones leave room and nothing warns</td></tr>
+      <tr><td><code>doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls</code></td><td><code>renderer.rs</code></td><td>twice the Instances, the same four draw calls</td></tr>
+      <tr><td><code>each_primitive_draws_with_its_own_material_unless_its_instance_overrides_it</code></td><td><code>renderer.rs</code></td><td>the record's Material ID</td></tr>
+      <tr><td><code>a_packed_index_holds_its_meshlet_record_above_six_bits_of_vertex</code></td><td><code>shader_function_tests.rs</code></td><td>packing and unpacking at every bit boundary, against indices written by hand</td></tr>
+      <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>every scene's read-back draw equals its closed-form counts, none overflowed; <code>town</code> with culling off, so the draw holds all of it</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each scene with culling off matches it with culling on, <code>town</code> at eight frames of its path: no pixel may differ on hardware, one a frame on a software driver; <code>capture_frames</code> draws each checked frame and the one before it, so culling reads the visibility an unbroken run would</td></tr>
+      <tr><td><code>the_gate_spans_culling_phase_one_to_the_lit_pass</code></td><td><code>readback.rs</code></td><td>ADR 0019's gate runs from the first culling dispatch to the latest end of the passes up to the lit pass, even where Metal starts the Froxel pass earlier</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span>. The <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span> themselves are captured with culling on.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">10 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">On the light scenes each phase costs a few tens of microseconds, mostly its four dispatches. On <code>town</code>, phase one's cost is writing about 16.7 million packed indices; phase two, which appends little, costs its scan and its occlusion tests.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them, with the median frame's Instances and triangles drawn; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. The gate is ADR 0019's, from the start of phase one to the end of the lit pass with shadow rays off.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>culling_phase_one</code></th><th class="n"><code>culling_phase_two</code></th><th class="n">Gate, rays off</th><th class="n"><code>instances_drawn</code></th><th class="n"><code>triangles_drawn</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">28.6</td><td class="n">19.8</td><td class="n">849.5</td><td class="n">1</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">24.2</td><td class="n">16.3</td><td class="n">672.9</td><td class="n">1</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">44.4</td><td class="n">38.5</td><td class="n">750.5</td><td class="n">1</td><td class="n">2,210</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">76.5</td><td class="n">20.8</td><td class="n">1,210.1</td><td class="n">11</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">65.2</td><td class="n">17.9</td><td class="n">865.1</td><td class="n">11</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">90.0</td><td class="n">38.9</td><td class="n">908.4</td><td class="n">11</td><td class="n">256,938</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">33.8</td><td class="n">20.3</td><td class="n">773.8</td><td class="n">10</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">24.4</td><td class="n">17.8</td><td class="n">548.0</td><td class="n">10</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">44.5</td><td class="n">38.9</td><td class="n">571.4</td><td class="n">10</td><td class="n">22,080</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">37.7</td><td class="n">19.8</td><td class="n">818.2</td><td class="n">1</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">31.8</td><td class="n">18.0</td><td class="n">565.2</td><td class="n">1</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">51.5</td><td class="n">38.9</td><td class="n">595.9</td><td class="n">1</td><td class="n">7,774</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">24.2</td><td class="n">20.2</td><td class="n">763.0</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">19.0</td><td class="n">18.0</td><td class="n">537.6</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">40.4</td><td class="n">38.9</td><td class="n">563.1</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">28.5</td><td class="n">19.4</td><td class="n">835.2</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">19.0</td><td class="n">16.3</td><td class="n">634.8</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">39.6</td><td class="n">38.6</td><td class="n">720.9</td><td class="n">1</td><td class="n">2</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">24.2</td><td class="n">20.2</td><td class="n">677.2</td><td class="n">2</td><td class="n">4</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">18.9</td><td class="n">17.9</td><td class="n">715.6</td><td class="n">2</td><td class="n">4</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">40.1</td><td class="n">38.9</td><td class="n">870.4</td><td class="n">2</td><td class="n">4</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">34.2</td><td class="n">20.1</td><td class="n">642.6</td><td class="n">5</td><td class="n">11,040</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">24.0</td><td class="n">17.8</td><td class="n">422.4</td><td class="n">5</td><td class="n">11,040</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">44.2</td><td class="n">38.5</td><td class="n">448.5</td><td class="n">5</td><td class="n">11,040</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">50.9</td><td class="n">39.4</td><td class="n">14,109.0</td><td class="n">100</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">18.7</td><td class="n">17.9</td><td class="n">513.6</td><td class="n">100</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">44.4</td><td class="n">45.2</td><td class="n">558.9</td><td class="n">100</td><td class="n">200</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">93.0</td><td class="n">21.2</td><td class="n">1,297.0</td><td class="n">101</td><td class="n">512,002</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">80.9</td><td class="n">18.2</td><td class="n">840.5</td><td class="n">101</td><td class="n">512,002</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">106.8</td><td class="n">39.5</td><td class="n">924.8</td><td class="n">101</td><td class="n">512,002</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,145.2</td><td class="n">169.2</td><td class="n">8,612.1</td><td class="n">137,730</td><td class="n">5,552,214</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">640.8</td><td class="n">126.9</td><td class="n">4,991.8</td><td class="n">137,729</td><td class="n">5,552,214</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">686.4</td><td class="n">196.4</td><td class="n">5,306.9</td><td class="n">137,730</td><td class="n">5,552,214</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. On the Apple M4 Pro the Froxel pass can run beside phase one, so phase one's timestamps can share time with it; timed apart, most of <code>town</code>'s phase one is <code>append_triangles</code> (<code>docs/performance.md</code>, the depth pyramid and culling against their sources). <code>town</code>'s gate is over its 6 ms on the Apple M4 Pro, the reference machine; what breaches it is the triangles every main-pass option draws.</p>
+  <p>The pass's buffers take 151,077,020 bytes, all fixed: the packed indices' 128 MiB, the records' 12 MiB, the offsets, the visibility bits, <code>FrameDraw</code> and its stand-in at 72 bytes each, and the slot count. None depends on the target's size.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">11 &middot; ADRs 0013, 0014, 0015, 0019, 0021</div>
+  <h2>Why this way</h2>
+  <p><b>The GPU builds the draw.</b> A draw call recorded per Primitive per Instance grows the CPU's work with the scene; ADR 0019 moves the choice to a compute pass whose output one <code>draw_indexed_indirect</code> per pipeline and phase draws, a native call on every backend. Count draws are no alternative: wgpu's Metal backend leaves them empty, and it runs a multi-draw as a CPU loop of single draws.</p>
+  <p><b>Slot order, not atomic order.</b> A scan costs two extra dispatches over appending through an atomic counter, and buys a draw that repeats from run to run, so captures are comparable and Goldens hold on the Apple M4 Pro. Wihlidal writes surviving indices in wavefront creation order where order matters, as for translucent rendering; here the reason is the derivatives.</p>
+  <p><b>Two phases.</b> Testing against last frame's depth alone leaves newly visible geometry missing for a frame; testing against this frame's needs depth first. Drawing last frame's visible set, building the pyramid from it and testing the rest, as Haar and Aaltonen and later Nanite do, culls in one frame what the frame's own depth hides and fails only under extreme visibility changes, which then cull less and still render right.</p>
+  <p><b>Instances, not Meshlets.</b> A test of each Meshlet's bounds against the frustum and the pyramid, and of its normal cone, was built and measured on <code>town</code>: it dropped 4.9% of the triangles and left the gate unchanged, since 71% of its slots draw a Mesh of one Meshlet whose box is the Mesh's and whose cone faces every way. ADR 0019 records that culling tests Instances and that tests per Meshlet wait for a profile that shows the pass raster-bound; <a href="meshlet-culling.html">Meshlet Culling Explained</a> keeps the prototype's story.</p>
+  <p><b>A workgroup per record, 32 wide.</b> The earlier form launched a workgroup of 124 invocations, one per triangle, for every slot in use, which on <code>town</code> spent about 0.7 ms of phase two appending almost nothing. Launching one per appended record, by indirect dispatch, removed it; 32 is an Apple SIMD group, and spreading each block's records over a workgroup cost <code>town</code> more than it saved on the light scenes. Copying the dispatch's arguments out between two passes, in place of the stand-in, cost about 50 heap allocations a frame.</p>
+  <p><b>Visibility in a buffer of its own.</b> The bits are state kept between frames, the rest of group 3 one frame's scratch; folding the bits into the offsets would have saved a binding. They cost the Capability floor its ninth storage buffer per compute stage.</p>
+  <p><b>Conservative throughout.</b> Each test is exact for what it can prove and errs towards drawing: the frustum test plane by plane, the occlusion test through the pyramid's farthest depth, nearest corners, rounding margins and a grown rectangle. A wrong cull removes something visible; a missed one costs a little drawing, which the depth test then hides.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">12</div>
+  <h2>Limits</h2>
+  <p><b>Boxes past a frustum's corner.</b> A box outside two planes near where they meet, but wholly beyond neither, is kept and drawn.</p>
+  <p><b>Boxes at the camera.</b> A box with a corner at or behind the camera's plane is never occluded, however much hides it.</p>
+  <p><b>A fixed draw.</b> The draw holds 2<sup>25</sup> indices and 2<sup>20</sup> records whatever the frame needs; past either, the Instances after the last that fits are not drawn that frame, whatever their distance. The capacities are provisional until the GPU memory Budget is split.</p>
+  <p><b>Phase order within the draw.</b> An Instance phase two draws sits after all of phase one's for that frame; one slot order across both phases would need a third index list or gaps of degenerate triangles.</p>
+  <p><b>Composed twice.</b> The pass composes each box relative to the camera for its tests, and the vertex shader composes every vertex again; handing the composed transform over would need a per-Instance buffer, another storage binding.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote of each, under the key the code cites where it cites one.</p>
+  <dl class="reading">
+    <dt><a href="https://doi.org/10.1145/7902.7903">Hillis and Steele, Data Parallel Algorithms, CACM 1986</a></dt><dd>all partial sums of an array in the time of one sum, the scan <code>exclusive_scan</code> runs; <code>hillis-steele-partial-sums</code></dd>
+    <dt><a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=52">Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances</a></dt><dd>two-phase occlusion culling: cull with last frame's depth pyramid and render, refresh the pyramid, test what was culled and render the false negatives</dd>
+    <dt><a href="https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=17">Karis, Stubbe and Wihlidal, A Deep Dive into Nanite Virtualized Geometry, SIGGRAPH 2021 Advances</a></dt><dd>the screen rectangle from the bounds, tested at the lowest mip where it is at most 4&times;4 pixels; the two-pass scheme, which "only falls apart under extreme visibility changes"</dd>
+    <dt><a href="https://www.cs.princeton.edu/courses/archive/spring01/cs598b/papers/greene93.pdf#page=3">Greene, Kass and Miller, Hierarchical Z-Buffer Visibility, SIGGRAPH 1993, &sect;3.2</a></dt><dd>testing a bounding box against the pyramid sample whose region covers it</dd>
+    <dt><a href="https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=42">Wihlidal, Optimizing the Graphics Pipeline with Compute, GDC 2016</a></dt><dd>surviving indices written in wavefront creation order where order matters</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/compute.rs#L340-L357">wgpu-core 30.0.1, State::flush_bindings</a></dt><dd>a dispatch's usage scope merges the active bind groups, then the indirect buffer; <code>wgpu-core-30-dispatch-usage-scope</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L456">wgpu-types 30.0.1, <code>Limits::defaults</code></a></dt><dd>65,535 workgroups per dimension; <code>wgpu-types-30-default-workgroups-per-dimension</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1608-L1670">wgpu-hal 30.0.1, Metal's indirect draws</a></dt><dd>a multi-draw as a loop of single draws, and count draws left empty, why one indirect draw per phase</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass took its form over the third milestone: one indirect draw of every Instance in slot order, then the frustum test and the switch that turns culling off, then the two phases and the occlusion test against the depth pyramid. A later change split each phase's append into a record per slot and a workgroup per record by indirect dispatch, which grew <code>FrameDraw</code> from 56 to 72 bytes, and a test of each Meshlet was measured and kept out. The development narrative, with each step's measurements, is in the notebook's volumes until the concept pages absorb their Metal paragraphs: <a href="instance-culling.html">Instance Culling Explained</a> and <a href="meshlet-culling.html">Meshlet Culling Explained</a>. This page describes the pass as it is.</p>
+  <footer class="sources">Written from <code>src/render/culling_pass.rs</code>, <code>src/render/shaders/culling.wgsl</code>, <code>common.wgsl</code>, <code>src/render/main_pass.rs</code>, <code>bind_groups.rs</code>, <code>readback.rs</code>, <code>renderer.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, <code>docs/performance.md</code>, <code>CONTEXT.md</code>, ADRs 0013, 0014, 0015, 0019 and 0021, the committed Baselines, and the sources above, all at <code>main</code> b3d764b4.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="blas-refit.html">Previous: BLAS Refit Explained</a><a href="index.html">All field guides</a><a href="instance-culling.html">Next: Instance Culling Explained</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
