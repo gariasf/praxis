@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Shadow Mask Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/shadow_mask_pass.rs</code></div>
+  <h1>The shadow mask pass</h1>
+  <p class="definition">A compute pass that traces, at each pixel, one hard shadow ray toward each light that reaches the surface its nearest sample shows, against the static and dynamic <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span>, and keeps a bit per light its ray found hidden in the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where the bit of one of the first seven directional lights at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span>, which the lit pass reads. Where a pixel's other samples show a second surface, it traces that one too, into the mask's second layer; where a directional light's verdict differs between neighbouring pixels, it traces that light again from each sample, so the shadow's edge resolves as 4x MSAA resolves geometry's.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at b3a8c555 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="acceleration-structures.html">Acceleration Structures</a> for the TLAS a ray walks, <a href="lit-pass.html">Lit Pass</a> for the shading that reads the mask, <a href="froxel-lights.html">Froxel Lights</a> for the lists the point lights' bits follow.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>With the <code>shadow_rays</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, which ships on: after phase two's depth pass and before the lit pass, once both culling phases' <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> are in the depth target. With it off, neither pass runs and the lit pass draws phase two's depth itself.</dd>
+      <dt>Reads</dt><dd>The depth target and the <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">surface normals</span>, both 4x MSAA; the camera and light uniforms and the light buffer; each <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span>'s list; the static and dynamic TLAS.</dd>
+      <dt>Writes</dt><dd>The shadow mask, two layers of a 64-bit word per pixel; the shadow mask samples, a 32-bit word per pixel; and, for the lit pass to ignore, its own working buffers: the directional verdicts, the two pixel lists and their indirect dispatch sizes, and the count of lights it had no bit for, which <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the shadow mask had no bit for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> read back.</dd>
+      <dt>Dispatches</dt><dd>Four, in one compute pass: <code>build_shadow_mask</code> and <code>list_shadow_edges</code> over every pixel in 8&times;8 tiles; <code>trace_second_surfaces</code> and <code>trace_shadow_edges</code> over a list the GPU built, sized by indirect dispatch.</dd>
+      <dt>Bind groups</dt><dd>Group 2, the shadow ray scene: the two TLAS. Group 3, shadow mask build: everything above. The lit pass reads the mask and its samples through its own group 3, the main pass inputs.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/shadow_mask.wgsl</code>, assembled with the common and Froxel grid parts; it alone enables <code>wgpu_ray_query</code> among the passes that trace.</dd>
+      <dt>Counted</dt><dd><code>shadow_mask_pass</code> in GPU time; <code>shadow_mask_lights_overflowed</code> in counters; its buffers and the mask's targets in GPU memory; the whole cost of shadows as shadow-ray time, the frame with rays on less the same frame with them off.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#surface">2 &middot; A sample's surface</a>
+    <a href="#word">3 &middot; One word per surface</a>
+    <a href="#ray">4 &middot; One ray</a>
+    <a href="#second">5 &middot; The second surface</a>
+    <a href="#edges">6 &middot; Shadow edges</a>
+    <a href="#lit">7 &middot; What the lit pass reads</a>
+    <a href="#tests">8 &middot; How it is tested</a>
+    <a href="#cost">9 &middot; What it costs</a>
+    <a href="#why">10 &middot; Why this way</a>
+    <a href="#limits">11 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The pass needs every surface the lit pass will shade to be in the depth target already, so it runs after both culling phases have drawn their Instances into depth and just before the lit pass shades them.</p>
+  <p class="order-label">The frame's passes with shadow rays on, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li class="warm">phase two's depth pass</li><li class="focus">shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
+  </ol>
+  <p>Phase one of the culling pass draws the Instances that were visible the frame before into the depth pre-pass; phase two finds the rest after the depth pyramid's test. Without shadow rays the lit pass draws phase two's depth as it shades. With them, phase two's Instances draw into depth in a pass of their own first, so that when the shadow mask pass runs, each depth sample holds the nearest surface the lit pass will shade there, and each sample of the surface normals holds that surface's two normals. Both passes run only with the switch on.</p>
+  <p>The pass records into the frame's encoder as one compute pass of four dispatches, after five buffer clears: the overflow count, both indirect dispatch sizes, and the counts at the head of both pixel lists.</p>
+<pre class="code"><code>pass.set_pipeline(&amp;self.nearest_surfaces_pipeline);
+pass.set_bind_group(SHADOW_RAY_SCENE.index, &amp;self.shadow_ray_scene, &amp;[]);
+pass.set_bind_group(
+    SHADOW_MASK_BUILD.index,
+    &amp;self.nearest_surfaces_bind_group,
+    &amp;[],
+);
+let (width, height) = self.size;
+pass.dispatch_workgroups(
+    width.div_ceil(SHADOW_MASK_TILE_SIZE),
+    height.div_ceil(SHADOW_MASK_TILE_SIZE),
+    1,
+);
+pass.set_pipeline(&amp;self.second_surfaces_pipeline);
+pass.set_bind_group(
+    SHADOW_MASK_BUILD.index,
+    &amp;self.second_surfaces_bind_group,
+    &amp;[],
+);
+pass.dispatch_workgroups_indirect(&amp;self.second_surface_dispatch, 0);
+pass.set_pipeline(&amp;self.list_shadow_edges_pipeline);
+pass.set_bind_group(
+    SHADOW_MASK_BUILD.index,
+    &amp;self.nearest_surfaces_bind_group,
+    &amp;[],
+);
+pass.dispatch_workgroups(
+    width.div_ceil(SHADOW_MASK_TILE_SIZE),
+    height.div_ceil(SHADOW_MASK_TILE_SIZE),
+    1,
+);
+pass.set_pipeline(&amp;self.trace_shadow_edges_pipeline);
+pass.set_bind_group(
+    SHADOW_MASK_BUILD.index,
+    &amp;self.sample_verdicts_bind_group,
+    &amp;[],
+);
+pass.dispatch_workgroups_indirect(&amp;self.shadow_edge_dispatch, 0);</code></pre>
+  <p class="code-source"><code>ShadowMaskPass::record</code>, <code>src/render/shadow_mask_pass.rs</code>.</p>
+  <p>The three bind groups differ in one thing. An indirect dispatch may not read its workgroup counts from a buffer any bound group can write, and the per-pixel dispatches write both dispatch buffers, so each list dispatch binds a 12-byte stand-in in the slot of the buffer it reads from. One function builds all three, at creation and again after every resize, since the groups hold the render targets.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it fixes</th></tr></thead>
+    <tbody>
+      <tr><td><code>SHADOW_MASK_TILE_SIZE</code></td><td class="n">8</td><td>pixels along each side of a per-pixel workgroup; the list dispatches run 64 lanes in a row</td></tr>
+      <tr><td><code>SHADOW_MASK_LIGHTS</code></td><td class="n">59</td><td>lights a pixel's word holds a bit for, across its two 32-bit halves</td></tr>
+      <tr><td><code>SHADOW_MASK_SURFACES</code></td><td class="n">2</td><td>layers of the mask: the nearest sample's surface and the farthest other one</td></tr>
+      <tr><td><code>SHADOW_EDGE_LIGHTS</code></td><td class="n">7</td><td>directional lights, the first in the light buffer, whose edges are traced again per sample</td></tr>
+      <tr><td><code>SAMPLE_OFFSETS</code></td><td class="n">(0.375, 0.125) (0.875, 0.375) (0.125, 0.625) (0.625, 0.875)</td><td>where each of a pixel's four samples lies, in pixels from its top left corner: Vulkan's standard 4x locations</td></tr>
+      <tr><td><code>UNBOUNDED_RAY_DISTANCE</code></td><td class="n">3.40282347e38</td><td>a directional light's ray end, f32's largest finite value</td></tr>
+      <tr><td><code>SHADOW_RAY_OFFSET_SCALE</code></td><td class="n">2<sup>&minus;16</sup></td><td>a ray origin's offset as a share of the point's largest coordinate, and of 1 m at least</td></tr>
+      <tr><td><code>SHADOW_RAY_PIXEL_OFFSET</code></td><td class="n">2<sup>&minus;5</sup></td><td>the same offset as a share of a pixel's width at the point; the larger of the two is used</td></tr>
+      <tr><td><code>DYNAMIC_TLAS_BOUNDS_MARGIN_SCALE</code></td><td class="n">2<sup>&minus;16</sup></td><td>how far the dynamic TLAS's box grows before a ray is tested against it</td></tr>
+      <tr><td><code>INTERPOLATED_TURN_MARGIN</code></td><td class="n">sin 2&deg;</td><td>past this, an interpolated normal turns from a light and hides it with no ray</td></tr>
+      <tr><td><code>AGREEING_TRIANGLE_TURN_MARGIN</code></td><td class="n">sin 2&deg;</td><td>a triangle facing a light by this much starts its ray outside, where its two normals agree</td></tr>
+      <tr><td><code>TRIANGLE_TURN_MARGIN</code></td><td class="n">sin 10&deg;</td><td>a triangle facing a light by this much starts its ray outside whatever its normals</td></tr>
+      <tr><td><code>NORMALS_AGREE</code></td><td class="n">cos 3&deg;</td><td>within this, a sample's two normals agree, as on a flat surface</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>shadow_mask_pass.rs</code>, <code>targets.rs</code> and <code>shadow_mask.wgsl</code> at the commit above. Rust declares <code>SHADOW_MASK_TILE_SIZE</code>, <code>SHADOW_MASK_LIGHTS</code>, <code>SHADOW_EDGE_LIGHTS</code> and <code>SAMPLE_OFFSETS</code> into the WGSL when the module is assembled; <code>SHADOW_MASK_SURFACES</code> is the mask's layer count, which <code>targets.rs</code> creates it with; the shader holds the rest.</p>
+</section>
+
+<section class="part prose" id="surface">
+  <div class="part-mark">2 &middot; <code>sample_surface</code> &middot; <code>build_shadow_mask</code></div>
+  <h2>A sample's surface, rebuilt from depth</h2>
+  <p class="key-idea">The pass has no vertices. From a sample's depth, its place in the pixel and the two normals the depth passes stored for it, it rebuilds the surface the sample shows: a position relative to the camera, a pixel's width there, the triangle's normal and the normal interpolated over the triangle.</p>
+  <p>Each invocation of <code>build_shadow_mask</code> owns one pixel. It loads the pixel's four depth samples with four explicit loads, since Metal's compiler does not unroll a loop over them, and takes the nearest: under reverse Z the greatest depth, and where two tie, the first. A depth of 0 is the far plane, the background, which nothing shadows; such a pixel's words stay empty.</p>
+<pre class="code"><code>fn sample_surface(pixel: vec2&lt;i32&gt;, sample: u32, depth: f32, size: vec2&lt;f32&gt;) -&gt; SampleSurface {
+    let point = vec2&lt;f32&gt;(pixel) + sample_offset(sample);
+    let position = position_at(camera.view_proj, point, depth, size);
+    let normals = textureLoad(surface_normals, pixel, sample) * 2.0 - 1.0;
+    return SampleSurface(
+        position,
+        distance(position, position_at(camera.view_proj, point + vec2&lt;f32&gt;(1.0, 0.0), depth, size)),
+        octahedral_decode(normals.xy),
+        octahedral_decode(normals.zw)
+    );
+}</code></pre>
+  <p class="code-source"><code>shadow_mask.wgsl</code>.</p>
+  <p><code>position_at</code>, in the common part, inverts the projection for one point: the view-projection matrix holds no translation, since positions reach the GPU relative to the camera, and its reverse-Z projection with no far plane puts the near distance in clip z and the view depth in clip w, so a sample's view depth is the near distance over its stored depth, and its position is that depth along the view axis plus its normalised device coordinates along the scaled right and up axes. The point is taken at the sample's own offset within the pixel, not at the pixel's centre, so it lies on the triangle that sample shows rather than on that triangle's plane extended past an edge.</p>
+  <p>The pixel's width at the surface is the distance to the point one pixel to the right at the same depth. It scales two things below: the second-surface test and the ray origin's offset.</p>
+  <p>The surface normals target holds, per sample, the triangle's own normal and the interpolated one as two 8-bit octahedral coordinates each, written by the depth passes' fragment shader from the screen-space derivatives of the position and from the vertex normals. Decoded, each lies within 0.95&deg; of the normal it encodes where the store rounds to the nearest step, as Metal's does, and within about twice that where a backend may round a Unorm store to either neighbour; the margins in the constants table are sized for that error.</p>
+</section>
+
+<section class="part prose" id="word">
+  <div class="part-mark">3 &middot; <code>surface_word</code></div>
+  <h2>One word per surface: a bit per light</h2>
+  <p class="key-idea">A surface's word has a bit per light that casts a shadow at the pixel, in the order the lit pass sums them: the directional lights, then the point lights of the pixel's Froxel, with the Froxel's slice in the word's top bits so the lit pass can tell whose list the bits follow.</p>
+  <div class="bits">first half,  bits 0 to 31:  lights 0 to 31
+second half, bits 0 to 26:  lights 32 to 58
+             bits 27 to 31: the Froxel slice the bits follow, one of 32</div>
+  <p><code>surface_word</code> walks the surface's lights in one loop, directional then point, and makes one call that traces for all of them, so the shader holds one ray query's state. For each light it reaches one of three outcomes.</p>
+  <p><b>Hidden with no ray</b> where the interpolated normal turns from the light by more than the interpolated turn margin. The lit pass's shading already fades that light out at the terminator, so no ray is spent. For a point light this test is made against the offset to the light scaled by its distance, so a light at no distance is tested without a divide.</p>
+  <p><b>Passed over</b> where a point light's range does not reach the surface: no ray, no bit, no count. A light past the word's bits, within range, casts no shadow at the pixel and is counted in the overflow.</p>
+  <p><b>Traced</b> otherwise: the directional light's ray runs to the unbounded distance, the point light's to the light. A hit sets the bit.</p>
+<pre class="code"><code>let light_count = light.directional_light_count + point_light_count;
+for (var entry = 0u; entry &lt; light_count; entry++) {
+    var direction: vec3&lt;f32&gt;;
+    var distance: f32;
+    var traced_surface = surface;
+    if entry &lt; light.directional_light_count {
+        if entry &gt;= SHADOW_MASK_LIGHTS {
+            overflowed++;
+            continue;
+        }
+        direction = normalize(-lights[entry].offset);
+        distance = UNBOUNDED_RAY_DISTANCE;
+        if !(dot(interpolated_normal, direction) &gt; -INTERPOLATED_TURN_MARGIN) {
+            hidden = with_bit(hidden, entry);
+            continue;
+        }
+        if entry &lt; SHADOW_EDGE_LIGHTS {
+            traced |= 1u &lt;&lt; entry;
+        }
+    } else {
+        <span class="comment">// … the point light at the Froxel list's entry: within its range,
+        // under the word's bits, facing by the interpolated normal or by another
+        // sample's, otherwise hidden …</span>
+    }
+    if shadowed(traced_surface.position, traced_surface.pixel_width, traced_surface.triangle_normal, traced_surface.interpolated_normal, direction, distance) {
+        hidden = with_bit(hidden, entry);
+    }
+}</code></pre>
+  <p class="code-source"><code>surface_word</code>, <code>shadow_mask.wgsl</code>, the point lights' branch elided.</p>
+  <p>A point light has one bit per surface and that bit shades every fragment of the surface, so a nearest sample that turns from a point light does not settle it alone. Where another of the surface's samples faces the light by its own interpolated normal, as at a silhouette where the surface behind a nearly edge-on triangle lies within a pixel's width of its plane, or along a smooth surface's terminator, the bit is the verdict of a ray from the first such sample. Only the nearest surface's word has other samples to search; a second surface's word is traced from its one sample.</p>
+  <p>With the <code>froxel_lights</code> Render switch off the bits follow every point light in light order, as brute force sums them, and the slice bits are 0.</p>
+</section>
+
+<section class="part prose" id="ray">
+  <div class="part-mark">4 &middot; <code>shadowed</code> &middot; <code>first_intersection</code></div>
+  <h2>One ray: where it starts, what it meets</h2>
+  <p class="key-idea">The ray starts in the TLAS's frame, a small step off the surface along the triangle's normal: outward where the triangle faces the light, inward where it turns from a light the interpolated normal still faces. An inward ray passes exactly one back face, where it leaves its own mesh, and anything beyond that hides the light.</p>
+  <h3>The frame</h3>
+  <p>Both TLAS place their Instances in f32 in a frame whose origin is the corner of the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> when the scene loaded, and a ray must start in that frame. The shader knows the point relative to the camera, so it composes it into the TLAS's frame with <code>camera_relative_position</code>, the function the vertex shader uses to place an Instance, with the camera in the Instance's place and the TLAS's anchor in the camera's: the anchor difference is exact in integers, so f32 only holds magnitudes near the camera.</p>
+  <h3>The offset</h3>
+  <p>A ray that starts exactly on its surface can meet that surface, since the point was rounded on its way to becoming an origin. The origin moves off the surface by the larger of two distances: a share of the point's largest coordinate, in either frame, which covers the roundings of rebuilding, composing and intersecting, as each rounds a coordinate in proportion to its size; and a share of a pixel's width at the point, which covers where the rasteriser's fixed-point grid put the depth off the TLAS's triangle. The second dominates near the camera and at low resolution, the first far away.</p>
+<pre class="code"><code>let extent = max(abs(tlas_position), abs(position));
+let offset = max(
+    SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0)),
+    SHADOW_RAY_PIXEL_OFFSET * pixel_width
+);
+let facing = dot(triangle_normal, direction);
+let leaves_surface = facing &gt;= TRIANGLE_TURN_MARGIN
+    || (facing &gt;= AGREEING_TRIANGLE_TURN_MARGIN
+        &amp;&amp; dot(triangle_normal, interpolated_normal) &gt;= NORMALS_AGREE);
+let origin = tlas_position + triangle_normal * select(-offset, offset, leaves_surface);</code></pre>
+  <p class="code-source"><code>shadowed</code>, <code>shadow_mask.wgsl</code>.</p>
+  <h3>Outside or inside</h3>
+  <p>A coarse smooth-shaded mesh is flat triangles shaded with curved normals. Near a light's terminator a triangle can turn from the light while the normals interpolated over it still face it, and a ray leaving that triangle along its normal would run back into its own mesh. So the ray leaves the surface only where the triangle faces the light by the triangle turn margin, or by the smaller agreeing margin where its two normals agree, as on a flat floor. Everywhere else it starts just inside the surface.</p>
+  <p>A ray that leaves the surface asks for any hit, and any hit hides the light. A ray that starts inside asks for the nearest hit first. A ray inside a closed mesh meets the back of a triangle on its way out, so a nearest hit that is a back face is the ray leaving its own mesh, and the search goes on from just past it with an any-hit ray. A nearest hit that is a front face is something else met first, an occluder entered from outside, and the light is hidden. Two turns at most, through one call.</p>
+<pre class="code"><code>var flags = select(0u, RAY_FLAG_TERMINATE_ON_FIRST_HIT, leaves_surface);
+var start_distance = 0.0;
+var hidden = false;
+loop {
+    let hit = first_intersection(flags, origin, direction, start_distance, distance);
+    let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
+    let any_hit = (flags &amp; RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
+    if any_hit || !found || hit.front_face || hit.t + offset &gt;= distance {
+        hidden = found &amp;&amp; (any_hit || hit.front_face);
+        break;
+    }
+    flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+    start_distance = hit.t + offset;
+}
+return hidden;</code></pre>
+  <p class="code-source"><code>shadowed</code>, <code>shadow_mask.wgsl</code>. For a point light, an exit within one offset of the light settles the verdict without a second query, which also keeps every ray's start at or before its end.</p>
+  <h3>Two TLAS, one query at a time</h3>
+  <p><code>first_intersection</code> queries the static TLAS first, with forced opacity so one <code>rayQueryProceed</code> completes the traversal. It then queries the dynamic TLAS only if the frame has Moving Instances, no any-hit has been found already, and the ray's segment up to the static hit meets the box that holds the dynamic TLAS's triangles, grown by the margin scale; a query starts at the TLAS's root however far the ray passes from its Instances, so the box test saves the traversal where the segment misses it. A nearer dynamic hit replaces the static one.</p>
+  <p>Every ray of a surface goes through this one function, so the shader holds one query's registers. Its flags are therefore a run-time value, which costs a scene of few short rays a little and saves scenes of many rays more.</p>
+</section>
+
+<section class="part prose" id="second">
+  <div class="part-mark">5 &middot; <code>build_shadow_mask</code> &middot; <code>trace_second_surfaces</code></div>
+  <h2>The second surface</h2>
+  <p class="key-idea">Under MSAA an edge pixel's samples can show two surfaces. One word, traced from the nearest sample, would give the farther surface's fragments the nearer one's shadow. So the pass finds the samples off the nearest sample's triangle plane, traces the farthest of them into the mask's second layer, and marks which samples show it.</p>
+  <p>A sample shows another surface when it lies off the plane of the nearest sample's triangle by more than a pixel's width at that distance, along the triangle's own normal. Measuring from the plane, not comparing raw depths, keeps a floor seen at a grazing angle one surface: its samples differ in depth but lie on the plane. The interpolated normal would tilt the plane away from where the samples are, so the test uses the triangle's.</p>
+<pre class="code"><code>let second = abs(off_plane) &gt; vec4&lt;f32&gt;(surface.pixel_width) &amp; depths &gt; vec4&lt;f32&gt;(0.0);
+let bits = select(vec4&lt;u32&gt;(0u), vec4&lt;u32&gt;(1u, 2u, 4u, 8u), second);
+second_samples = bits.x | bits.y | bits.z | bits.w;
+if second_samples != 0u {
+    <span class="comment">// Depth 2 lies past the near plane's 1, so no other is less.</span>
+    let candidates = select(vec4&lt;f32&gt;(2.0), depths, second);
+    let second_depth = min(min(candidates.x, candidates.y), min(candidates.z, candidates.w));
+    let second_sample = first_sample_of(candidates, second_depth);
+    let entry = atomicAdd(&amp;second_surfaces.count, 1u);
+    second_surfaces.entries[entry] = invocation.x | (invocation.y &lt;&lt; 16u) | (second_sample &lt;&lt; 30u);
+    let group_size = SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE;
+    if entry % group_size == 0u {
+        let groups = entry / group_size + 1u;
+        atomicMax(&amp;second_surface_dispatch[0], min(groups, MAX_WORKGROUPS_PER_DIMENSION));
+        atomicMax(&amp;second_surface_dispatch[1], (groups + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION);
+        atomicStore(&amp;second_surface_dispatch[2], 1u);
+    }
+}</code></pre>
+  <p class="code-source"><code>build_shadow_mask</code>, <code>shadow_mask.wgsl</code>.</p>
+  <p>Second surfaces lie thinly along silhouettes, so tracing them in place behind a branch would hold up every SIMD group that holds one. Instead each such pixel claims an entry in a frame-wide list with one atomic add, packing its column in the low 16 bits, its row in the next 14 and the sample to trace from in the top 2; the entry that opens each run of 64 grows the indirect dispatch's workgroup count, in rows of the dispatch limit per dimension. <code>trace_second_surfaces</code> then runs an invocation per entry: lane 0 of each workgroup loads the count once and shares it with <code>workgroupUniformLoad</code>, each lane past the count returns, and the rest rebuild their sample's surface and write its word into layer 1.</p>
+  <p>The mask's samples texel marks, in its low four bits, which samples show the second surface. The row packing is why a render target is at most 2<sup>14</sup> pixels tall, which the targets module asserts.</p>
+</section>
+
+<section class="part prose" id="edges">
+  <div class="part-mark">6 &middot; <code>list_shadow_edges</code> &middot; <code>trace_shadow_edges</code></div>
+  <h2>Shadow edges, traced again per sample</h2>
+  <p class="key-idea">One ray per pixel is a point sample, so a shadow's edge across one surface steps by whole pixels beside geometry that MSAA smooths. Where a directional light's verdict differs from a 4-neighbour's, the pass traces that light again from the pixel's other samples and keeps a verdict per sample, for the first seven directional lights.</p>
+  <p><code>build_shadow_mask</code> writes, beside the mask, a 32-bit word per pixel of directional verdicts: the second surface's samples in bits 0 to 3, a hidden bit per light from bit 8, and a traced bit per light from bit 16. A later dispatch can read every pixel's word; nothing inside one dispatch can see another workgroup's writes.</p>
+  <div class="bits">directional verdicts, one u32 per pixel
+  bits 0 to 3    the samples that show the second surface
+  bits 8 to 14   light hidden, for directional lights 0 to 6
+  bits 16 to 22  light traced, for the same lights
+
+shadow mask samples, one u32 per pixel
+  bits 0 to 3    the samples that show the second surface
+  bit 4 + 4l + s light l hidden at sample s, for l in 0 to 6 and s in 0 to 3</div>
+  <p><code>list_shadow_edges</code> runs over every pixel and lists it when either holds. The pixel's verdicts differ from its left, right, upper or lower neighbour's for a light both traced a ray toward: a light either surface turned from is left out, since its shading already fades at the terminator, and at the target's sides the pixel stands in for the neighbour past it. Or the nearest sample turned from a light that another sample of the nearest surface faces by its own interpolated normal: at a silhouette the pixel shows one surface by depth while its samples disagree about facing. The second test reads each sample's normals here rather than in <code>build_shadow_mask</code>, whose ray queries already bound its occupancy; this dispatch holds no query.</p>
+<pre class="code"><code>fn differing_lights(own: u32, neighbour: u32) -&gt; u32 {
+    return ((own ^ neighbour) &gt;&gt; VERDICT_HIDDEN_SHIFT)
+        &amp; (own &gt;&gt; VERDICT_TRACED_SHIFT)
+        &amp; (neighbour &gt;&gt; VERDICT_TRACED_SHIFT)
+        &amp; EDGE_LIGHTS;
+}</code></pre>
+  <p class="code-source"><code>shadow_mask.wgsl</code>. A directional light's bit sits at the same index at every pixel, so the comparison crosses Froxel borders.</p>
+  <p>Listed pixels go into a second frame-wide list, sized for its indirect dispatch as the first is. <code>trace_shadow_edges</code> runs an invocation per entry, works out the lights that differ or were turned from, and, for each sample other than the nearest that is neither a second-surface sample nor background, rebuilds that sample's surface and takes each such light's verdict there: hidden with no ray where the sample's interpolated normal turns from it, otherwise by a ray. <code>build_shadow_mask</code> had written each light's nearest verdict into all four of its sample bits; this dispatch overwrites the bits of the samples it traced, so an unlisted pixel reads as before.</p>
+<pre class="code"><code>for (var sample = 0u; sample &lt; SAMPLE_COUNT; sample++) {
+    let depth = depths[sample];
+    if sample == nearest || ((second_samples &gt;&gt; sample) &amp; 1u) == 1u || depth &lt;= 0.0 {
+        continue;
+    }
+    let surface = sample_surface(pixel, sample, depth, vec2&lt;f32&gt;(size));
+    for (var index = 0u; index &lt; edge_light_count; index++) {
+        if ((edge_lights &gt;&gt; index) &amp; 1u) == 0u {
+            continue;
+        }
+        let bit = 1u &lt;&lt; (SAMPLE_COUNT * index + sample);
+        sample_verdicts = select(sample_verdicts &amp; ~bit, sample_verdicts | bit, directional_hidden(surface, index));
+    }
+}</code></pre>
+  <p class="code-source"><code>trace_shadow_edges</code>, <code>shadow_mask.wgsl</code>.</p>
+  <div class="compare">
+    <figure><img src="img/shadow-mask/crop-shadows-8x-before-left-after-right.png" alt="The shadows scene's ground and a contact edge at 8x, one ray per pixel on the left, per-sample edge rays on the right" width="1280" height="480"><figcaption><b>A sun shadow's edge on <code>shadows</code>, 8x.</b> Left, one ray per pixel: the edge steps by whole pixels. Right, with the edge rays: the edge resolves from four verdicts per pixel.</figcaption></figure>
+    <figure><img src="img/edge-shadows/crop-shadows-limb-8x-before-left-after-right.png" alt="The shadows sphere's limb against the ground at 8x, one word per pixel on the left, a word per surface on the right" width="968" height="480"><figcaption><b>A silhouette on <code>shadows</code>, 8x.</b> Left, one word per pixel: the ground's samples take the sphere's shadow, an outline. Right, a word per surface: each fragment reads its own surface's bits.</figcaption></figure>
+  </div>
+</section>
+
+<section class="part prose" id="lit">
+  <div class="part-mark">7 &middot; <code>fs_main</code>, <code>src/render/shaders/main.wgsl</code></div>
+  <h2>What the lit pass reads</h2>
+  <p class="key-idea">A fragment loads the samples texel, picks the layer of the surface its covered samples show, and shades each light by its bit, or, for the first directional lights at the nearest surface, by the share of its covered samples the light reaches.</p>
+<pre class="code"><code>let pixel = vec2&lt;u32&gt;(in.clip_position.xy);
+let samples = textureLoad(shadow_mask_samples, pixel, 0).r;
+nearest_surface = (covered &amp; samples) == 0u;
+mask = textureLoad(shadow_mask, pixel, select(1u, 0u, nearest_surface), 0).rg;
+sample_verdicts = samples &gt;&gt; SAMPLE_COUNT;</code></pre>
+  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>. <code>covered</code> is the fragment's <code>sample_mask</code> input, the samples its triangle covers, kept to the pixel's four.</p>
+  <p>A fragment that covers any sample marked as the second surface's reads layer 1; otherwise layer 0. For a directional light under the edge-light count at the nearest surface, <code>directional_hidden_share</code> counts the hidden bits among the fragment's own covered samples and divides by their number, so two triangles that split a pixel each take the answer for their own samples and the resolve averages two right values. Every other light reads one bit through <code>masked</code>, and a bit past the word's count reads as not hidden.</p>
+  <p>A point light's bit is the number of directional lights plus its entry in the Froxel's list, as long as the fragment's Froxel is the word's. Both passes find the Froxel's screen rectangle from the pixel, but the slice comes from depth, which can differ between the sample the word was traced from and the fragment: where a slice boundary falls between them. So the lit pass compares its own slice with the word's top bits and, where they differ, looks each light up in the word's Froxel list by binary search, since the list is in light order, and takes the bit of the entry it finds; a light that list lacks casts no shadow at that fragment.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">8 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">An analytic oracle in f64 judges the shadows scene pixel by pixel; Renderer tests pin each rule of the pass at the seam the lit pass reads; shader function tests hold the rebuild and the TLAS frame to oracles; and the Goldens hold every Reference scene's image.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadow_rays_darken_exactly_the_spheres_analytic_shadows</code></td><td><code>tests/shadows.rs</code></td><td>on the <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> <code>shadows</code>, rays on against rays off darkens exactly the pixels where the true sphere's shadows fall on the ground, under the sun and the point light, outside a one-pixel band around every edge; every sphere pixel is unchanged, its terminator band included</td></tr>
+      <tr><td><code>each_depth_sample_lies_where_the_pass_rebuilds_it</code></td><td><code>shadow_mask_pass.rs</code></td><td>a sloped triangle's depth at every sample of the backend's target equals its plane at <code>SAMPLE_OFFSETS</code></td></tr>
+      <tr><td><code>position_at_rebuilds_the_point_a_depth_shows_through_a_pixel</code></td><td><code>shader_function_tests.rs</code></td><td>the position rebuilt from a depth matches an f64 oracle</td></tr>
+      <tr><td><code>octahedral_coordinates_decode_to_the_unit_vector_they_encode</code></td><td><code>shader_function_tests.rs</code></td><td>decoded normals within a stated angle after rounding to 8 bits, over the axes, the fold and a Fibonacci lattice</td></tr>
+      <tr><td><code>camera_relative_position_meets_the_precision_bar_within_100_km</code></td><td><code>shader_function_tests.rs</code></td><td>the composition that puts a ray's origin in the TLAS's frame holds its precision bar far from the World's origin</td></tr>
+      <tr><td><code>a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box</code></td><td><code>shader_function_tests.rs</code></td><td>the dynamic TLAS's box test against an oracle, parallel and unbounded rays included</td></tr>
+      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>renderer.rs</code></td><td>a static and a moving occluder each shadow the floor; with the switch off the frame equals the frame without them</td></tr>
+      <tr><td><code>a_point_lights_shadow_ray_ends_at_the_light</code></td><td><code>renderer.rs</code></td><td>a square beyond the light shadows nothing it lights</td></tr>
+      <tr><td><code>the_shadow_mask_holds_each_lights_bit_and_its_froxels_slice</code></td><td><code>renderer.rs</code></td><td>the word's bit layout and slice bits as read back</td></tr>
+      <tr><td><code>an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one</code></td><td><code>renderer.rs</code></td><td>a panel's edge through a pixel's middle: the pixel lies between its neighbours, with the shadow on either surface</td></tr>
+      <tr><td><code>an_edge_pixel_of_a_panel_seen_edge_on_resolves_between_it_and_the_lit_floor</code></td><td><code>renderer.rs</code></td><td>a nearly edge-on triangle's turned nearest sample does not darken the lit surface behind it</td></tr>
+      <tr><td><code>a_pixel_split_by_a_suns_shadow_edge_resolves_between_shadow_and_light</code></td><td><code>renderer.rs</code></td><td>two samples in shadow, two in light: the pixel lies between its shadowed and lit neighbours</td></tr>
+      <tr><td><code>a_light_past_the_shadow_masks_bits_casts_no_shadow_and_is_counted</code></td><td><code>renderer.rs</code></td><td>the overflow counter equals the pixels a light past the bits reaches</td></tr>
+      <tr><td><code>only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas</code></td><td><code>shader_tests.rs</code></td><td>no other module binds an acceleration structure</td></tr>
+      <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>the crowd's two update forms give the same shadows through this pass</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every Reference scene's frame with rays on, at the origin and shifted far from it, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">9 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The pass is the largest single GPU pass in every scene on every adapter but one, <code>town</code> on DX12, where the lit pass is larger. Shadow-ray time, the frame with rays on less the frame with them off, measures what shadows cost as a whole: on Metal neighbouring passes can overlap, so one pass's timestamps can share time with another's.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baselines, at 640&times;360 with only their counters judged, are left out.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>shadow_mask_pass</code></th><th class="n">Shadow-ray time</th><th class="n">GPU frame</th><th class="n"><code>lit_pass</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,813.4</td><td class="n">2,922.7</td><td class="n">4,094.7</td><td class="n">496.8</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,361.7</td><td class="n">1,473.2</td><td class="n">2,338.8</td><td class="n">395.3</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,304.0</td><td class="n">1,400.5</td><td class="n">2,341.4</td><td class="n">428.0</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,972.3</td><td class="n">5,155.2</td><td class="n">6,689.1</td><td class="n">808.5</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,614.3</td><td class="n">1,669.9</td><td class="n">2,736.3</td><td class="n">481.3</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,562.6</td><td class="n">1,615.4</td><td class="n">2,717.7</td><td class="n">501.8</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,606.3</td><td class="n">2,751.6</td><td class="n">3,851.5</td><td class="n">470.2</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">882.2</td><td class="n">928.0</td><td class="n">1,692.5</td><td class="n">289.5</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">795.3</td><td class="n">841.1</td><td class="n">1,611.1</td><td class="n">288.3</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,406.0</td><td class="n">2,522.9</td><td class="n">3,664.5</td><td class="n">475.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">852.5</td><td class="n">919.4</td><td class="n">1,680.2</td><td class="n">305.7</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">794.6</td><td class="n">851.6</td><td class="n">1,639.2</td><td class="n">309.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,705.8</td><td class="n">1,830.1</td><td class="n">2,917.0</td><td class="n">447.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">948.0</td><td class="n">1,012.4</td><td class="n">1,747.0</td><td class="n">288.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">883.7</td><td class="n">929.1</td><td class="n">1,685.5</td><td class="n">288.6</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,694.2</td><td class="n">1,844.0</td><td class="n">3,003.5</td><td class="n">528.5</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">920.8</td><td class="n">1,014.7</td><td class="n">1,846.3</td><td class="n">387.1</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">851.6</td><td class="n">903.0</td><td class="n">1,819.8</td><td class="n">405.4</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,478.1</td><td class="n">1,597.9</td><td class="n">2,598.5</td><td class="n">344.5</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">615.3</td><td class="n">683.2</td><td class="n">1,594.7</td><td class="n">306.9</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">512.0</td><td class="n">559.7</td><td class="n">1,622.2</td><td class="n">417.5</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,815.7</td><td class="n">1,952.4</td><td class="n">2,917.3</td><td class="n">335.0</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">711.6</td><td class="n">753.4</td><td class="n">1,424.8</td><td class="n">183.2</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">397.8</td><td class="n">423.2</td><td class="n">1,110.5</td><td class="n">168.8</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,973.2</td><td class="n">387.6</td><td class="n">15,975.0</td><td class="n">607.2</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">503.7</td><td class="n">464.7</td><td class="n">1,207.2</td><td class="n">199.4</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">378.4</td><td class="n">310.3</td><td class="n">1,095.3</td><td class="n">196.7</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,950.3</td><td class="n">2,128.6</td><td class="n">3,747.5</td><td class="n">712.5</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">838.4</td><td class="n">940.1</td><td class="n">2,169.8</td><td class="n">423.9</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">578.9</td><td class="n">656.3</td><td class="n">1,970.2</td><td class="n">464.9</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">11,924.1</td><td class="n">10,792.9</td><td class="n">19,935.0</td><td class="n">3,762.6</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,582.8</td><td class="n">3,994.9</td><td class="n">9,395.0</td><td class="n">2,995.3</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,992.8</td><td class="n">3,502.6</td><td class="n">9,279.4</td><td class="n">3,248.1</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. <code>texture-wall</code>'s frame is set by its bound textures, not its rays, so its shadow-ray time is noise. On the reference machine, the Apple M4 Pro, two scenes' GPU frames are over their <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: <code>texture-wall</code>'s for its textures, and <code>town</code>'s, with the sun and its street lamps over a dense scene, by less than its shadow-ray time.</p>
+  <p>The pass's memory is a fixed number of bytes per pixel, all of it in render targets but the three small dispatch buffers and the overflow count: the mask's two layers, the samples texel, the directional verdicts, an entry in each of the two lists since every pixel could be listed, and the surface normals the depth passes write for it at four samples per pixel.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Target or buffer</th><th>Format</th><th class="n">Bytes per pixel</th></tr></thead>
+    <tbody>
+      <tr><td>shadow mask, 2 layers</td><td><code>Rg32Uint</code></td><td class="n">16</td></tr>
+      <tr><td>shadow mask samples</td><td><code>R32Uint</code></td><td class="n">4</td></tr>
+      <tr><td>directional verdicts</td><td><code>array&lt;u32&gt;</code></td><td class="n">4</td></tr>
+      <tr><td>second surfaces list</td><td><code>PixelList</code></td><td class="n">4, plus a 4-byte count</td></tr>
+      <tr><td>shadow edges list</td><td><code>PixelList</code></td><td class="n">4, plus a 4-byte count</td></tr>
+      <tr><td>surface normals, 4 samples</td><td><code>Rgba8Unorm</code>, 4x MSAA</td><td class="n">16</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">10 &middot; ADRs 0008, 0014, 0015, 0019, 0020, 0021</div>
+  <h2>Why this way</h2>
+  <p><b>Hard rays, one per light, no history.</b> ADR 0020 gives direct light one hard shadow ray per pixel per light, complete in every frame, so a shadow never lags a moving sun or object; ADR 0008 keeps screen-space history out of the frame, so a denoiser over jittered rays is not an option, and soft sun shadows wait for area lights. Ray queries are in the capability floor of ADR 0021, so every adapter the engine starts on can trace.</p>
+  <p><b>A compute pass, not the fragment shader.</b> The rays were first traced inline in the lit pass. A ray query's state holds registers across the whole shading loop and lowers the fragment shader's occupancy, and on the Apple M4 Pro the query's mere presence cost the lit pass time even where it never ran; at an MSAA edge each covering triangle's fragment traced its own rays besides. Tracing once per pixel from the depth target cut the rays' cost several times over and left the lit pass with no query.</p>
+  <p><b>The nearest sample, then a second surface.</b> Surface-based antialiasing observes that a pixel covered by many triangles shows very few distinct surfaces, so a small fixed number of shading samples per surface is enough. The mask stores two words per pixel, not one per triangle or per sample, and finds the second surface the way deferred renderers find per-sample pixels: by each sample's distance from the plane the nearest sample's derivative, here its triangle, predicts.</p>
+  <p><b>Lists, not branches.</b> Edge pixels are a minority laid along thin lines that cross most SIMD groups, so extra rays traced in place behind a branch cost about as much as tracing every pixel again. Packing the pixels that need more work into a list and dispatching over it is the tile-based deferred recipe, applied frame-wide here because packing within each workgroup did not pay on the reference hardware.</p>
+  <p><b>More rays where neighbours disagree.</b> Only more visibility samples recover an edge inside one surface; a filter over one sample per pixel can straighten the stairs but not restore what no sample saw. Comparing a pixel's verdict with its four neighbours' is the adaptive supersampling of the first recursive ray tracer, and the split shipped by at least one ray-traced game. It is confined to the first seven directional lights because their verdicts fit the samples texel's spare bits; a ray per sample at every pixel for every light would cost about an order of magnitude more.</p>
+  <p><b>The inside ray, not a skipped one.</b> Skipping the ray where a triangle turns from a light its interpolated normal faces smooths the terminator but lets light into cast shadows, since whatever stands in the ray's way is ignored. Starting the ray inside the surface and passing exactly one back face keeps the mesh's own triangles out of the way while an occluder, a closed mesh entered through a front face, still hides the light. The general treatment moves the origin by the shading normals and needs the triangle's vertices, which the pass does not have.</p>
+  <p><b>An offset that scales.</b> A fixed offset is not scale invariant: the error of an intersection grows with the point's distance from the frame's origin, so the offset grows with the largest coordinate. The second term, a share of a pixel's width, is the engine's own, for a depth that lies on the triangle as the rasteriser snapped it rather than on the TLAS's.</p>
+  <p><b>Fifty-nine bits, then no shadow.</b> A Froxel's list can hold more lights than a word has bits. The alternative, an inline ray query in the lit pass for the lights past the bits, cost the lit pass time without ever running, so the word's capacity is a cap, and the overflow is counted so Frame stats show when a scene reaches it.</p>
+  <p><b>Reverse Z and anchors throughout.</b> The nearest sample is the greatest depth and the background is 0 because of ADR 0015; the TLAS frame composition and the camera-relative positions follow ADR 0014, which forbids any World position in f32 on the GPU.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">11</div>
+  <h2>Limits</h2>
+  <p><b>Three surfaces or more in one pixel.</b> Every off-plane sample is marked and the farthest is traced, so a middle surface's fragment takes the farthest one's word.</p>
+  <p><b>Coverage before the depth test.</b> A fragment's sample mask may include samples where the fragment then fails the depth test, so a fragment of the nearest surface that runs under another at a sample can read the second word.</p>
+  <p><b>What no ray saw.</b> A shadow narrower than the spacing of the rays is refined where it crosses one pixel's ray and stays a gap between. A shadow's corner that clips a pixel's samples while its ray and its four neighbours' agree is not listed; the comparison does not look diagonally.</p>
+  <p><b>Point lights' edges, directional lights past the seventh, the second surface.</b> Each keeps one ray per pixel per light.</p>
+  <p><b>Normal maps.</b> The mask follows the interpolated normal; a bump the normal map turns toward a light past where the interpolated normal turns from it stays dark.</p>
+  <p><b>Overlapping shells and interpenetrating meshes.</b> An inside ray that starts in one shell can meet another shell's front face first and be hidden, or pass another mesh's back face as if it were its own.</p>
+  <p><b>Hard edges.</b> The sun has no penumbra; contact shadows are right, distant ones sharper than the sun's disc would make them.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://doi.org/10.1007/978-1-4842-4427-2_6">W&auml;chter and Binder, A Fast and Robust Method for Avoiding Self-Intersection, Ray Tracing Gems ch. 6, 2019</a></dt><dd>the intersection error grows with the distance from the origin, so a fixed offset is not scale invariant; <code>wachter-binder-2019-offset-error</code>. The book is CC BY-NC-ND, so none of its code is copied.</dd>
+    <dt><a href="https://pbr-book.org/4ed/Shapes/Managing_Rounding_Error">Pharr, Jakob and Humphreys, Physically Based Rendering, 4th edition, &sect;6.8 Managing Rounding Error</a></dt><dd>bounding an intersection's error and spawning the next ray off the surface by that bound</dd>
+    <dt><a href="https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm">Direct3D 11.3 Functional Specification, &sect;15.16 Rasterizer Precision</a> and <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/limits.adoc#L537-L539">Vulkan, subPixelPrecisionBits</a></dt><dd>the fixed-point grid a rasterised depth lies on, which the pixel-width term of the offset covers; <code>d3d11.3-rasterizer-precision</code>, <code>vulkan-subpixel-precision-bits</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750">Vulkan, Standard Sample Locations</a></dt><dd>the four offsets the pass rebuilds each sample at, which an adapter promises only with <code>standardSampleLocations</code>, so a test checks the target; <code>vulkan-standard-sample-locations</code></dd>
+    <dt><a href="https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/">Sjoholm, Best Practices for Using NVIDIA RTX Ray Tracing, 2022</a></dt><dd>terminate on first hit for shadow rays; a live query object holds registers and limits occupancy, so every ray goes through one call; <code>nvidia-2022-rtx-best-practices-shadow-rays</code></dd>
+    <dt><a href="https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf">Lauritzen, Deferred Rendering for Current and Future Rendering Pipelines, SIGGRAPH 2010</a></dt><dd>finding surface discontinuities by comparing sample depths with depth derivatives; packing the pixels that need per-sample work into a list rather than branching; <code>lauritzen-2010-edge-detection</code>, <code>lauritzen-2010-per-sample-scheduling</code></dd>
+    <dt><a href="https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf">Salvi and Vidim&#269;e, Surface Based Anti-Aliasing, I3D 2012</a></dt><dd>a pixel shows few distinct surfaces, so store a small fixed number and shade each once; <code>salvi-2012-sbaa-surfaces</code></dd>
+    <dt><a href="https://users.aalto.fi/~laines9/publications/aila2004egsr_paper.pdf">Aila and Laine, Alias-Free Shadow Maps, EGSR 2004</a></dt><dd>under multisampling the shadow term must be determined separately for each sample</dd>
+    <dt><a href="https://doi.org/10.1145/358876.358882">Whitted, An Improved Illumination Model for Shaded Display, CACM 1980</a></dt><dd>supersample where neighbouring samples differ, and the small objects such a rule misses</dd>
+    <dt><a href="https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9984-shadows-of-the-tomb-raider-ray-tracing-deep-dive.pdf">Gruen, Story and Roza, Shadows of the Tomb Raider: A Ray Tracing Deep Dive, GTC 2019</a></dt><dd>one ray per pixel is point sampling of visibility; a shipped second phase casts more rays where necessary</dd>
+    <dt><a href="https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_13.pdf">Boksansky, Wimmer and Bittner, Ray Traced Shadows: Maintaining Real-Time Frame Rates, Ray Tracing Gems ch. 13, 2019</a></dt><dd>one ray in a neighbourhood of four costs about as much as four, because of SIMD group dependencies</dd>
+    <dt><a href="https://doi.org/10.1007/978-1-4842-7185-8_4">Hanika, Hacking the Shadow Terminator, Ray Tracing Gems II ch. 4, 2021</a></dt><dd>the general treatment of the terminator, which moves the origin by the shading normals and needs the triangle's vertices</dd>
+    <dt><a href="https://jcgt.org/published/0003/02/01/">Cigolle, Donow, Evangelakos, Mara, McGuire and Meyer, Survey of Efficient Representations for Independent Unit Vectors, JCGT 2014</a></dt><dd>octahedral coordinates against the alternatives, with their error per bit</dd>
+    <dt><a href="https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#ray-traversal-culling-face">Vulkan specification, Ray Traversal: Face Culling</a></dt><dd>a triangle's front face is decided in the BLAS's own space, so a mirrored Instance does not flip it</dd>
+    <dt><a href="https://www.w3.org/TR/WGSL/#sample-mask-builtin-value">WGSL: sample_mask</a>, <a href="https://www.w3.org/TR/WGSL/#workgroupUniformLoad-builtin">workgroupUniformLoad</a>, <a href="https://www.w3.org/TR/WGSL/#sync-builtin-functions">synchronization functions</a></dt><dd>the coverage input the lit pass reads; one load of a list's count per workgroup; why a neighbour's word needs a second dispatch</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass took its present form in nine steps over ten days of the third milestone: the rays began in the lit pass's fragment shader, moved into this compute pass, gained the dynamic TLAS and its box test, the surface normals and the inside ray for the terminator, the second surface, the per-sample edge rays, the turned-sample searches and the pixel-width offset. The development narrative, with each step's measurements and images, is in the notebook's volumes until this page absorbs them: <a href="shadow-rays.html">Shadow Rays</a>, <a href="crowd-shadows.html">Crowd Shadows</a>, <a href="shadow-terminator.html">Shadow Terminator</a> and <a href="edge-shadows.html">Edge Shadows</a>. This page describes the mechanism as it is; the volumes describe how it got here.</p>
+  <footer class="sources">Written from <code>src/render/shadow_mask_pass.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>main.wgsl</code>, <code>common.wgsl</code>, <code>src/render/bind_groups.rs</code>, <code>targets.rs</code>, <code>renderer.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0014, 0015, 0019, 0020 and 0021, the committed Baselines, and the sources above, all at <code>main</code> b3a8c555. The two crops are from earlier before-and-after galleries at 2560&times;1440 on the Apple M4 Pro.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="depth-pyramid.html">Previous: Depth Pyramid Explained</a><a href="index.html">All field guides</a><a href="shadow-rays.html">Next: Shadow Rays Explained</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

@@ -287,7 +287,7 @@ details.check p { margin: 0; }
     <p class="key-idea"><b>Key idea.</b> With two frames in flight and a GPU-bound frame, the main thread waits for the oldest frame in every frame; it can wait by blocking, asleep until the GPU signals, or by spinning, polling on its core.</p>
     <p class="plain">The CPU records a frame and hands it to the GPU, then starts the next. It may run ahead by a fixed number of frames. When the GPU is the slower of the two, the CPU reaches that limit every frame and has to wait.</p>
     <p>Praxis lets two frames be in flight. <code>FRAMES_IN_FLIGHT</code> is 2, in <code>src/render/mod.rs</code>: "Frames submitted but not finished on the GPU when the next one starts, at most: the window's swapchain latency and capture's queue." While the GPU runs frame N, the CPU records frame N+1 beside it (<a href="frame-timing.html#frame">Frame Timing Explained</a>). Before it starts N+2, frame N must be done.</p>
-    <p>On <code>town</code> at 2560&times;1440 with 4x MSAA, the GPU frame is now 20.1 ms, since volume 26's sun shadow edge rays (<a href="shadow-edge-rays.html">Shadow Edge Rays Explained</a>). Spin-waiting, the CPU frame reads 4,977 &micro;s. So the main thread spends most of each frame waiting.</p>
+    <p>On <code>town</code> at 2560&times;1440 with 4x MSAA, the GPU frame is now 20.1 ms, since volume 26's sun shadow edge rays (<a href="shadow-mask.html#edges">The shadow mask pass</a>). Spin-waiting, the CPU frame reads 4,977 &micro;s. So the main thread spends most of each frame waiting.</p>
     <h3>Two places, two ways</h3>
     <p>The window and the bench wait in different places. The window waits in the surface's <code>get_current_texture</code>, in <code>src/lib.rs</code>, for a swapchain texture to come free. <code>praxis bench</code>, <code>praxis capture</code> and the Goldens all render through <code>render_frames</code> in <code>src/capture/mod.rs</code>, which keeps a queue of submissions and, when two are in flight, waits for the oldest with <code>device.poll</code>:</p>
 <pre class="code"><code><span class="comment">// src/capture/mod.rs at 958ed4e9, render_frames.</span>
@@ -597,7 +597,6 @@ let wait = match context.adapter.get_info().device_type {
         <li><a href="frame-timing.html">Frame Timing Explained</a> <span>frames in flight, and the CPU and GPU frame</span></li>
         <li><a href="town.html">Town Explained</a> <span>the scene these runs measured</span></li>
         <li><a href="dynamic-tlas.html">Dynamic TLAS Explained</a> <span>the build whose CPU line has the 1.1 ms ceiling</span></li>
-        <li><a href="shadow-edge-rays.html">Shadow Edge Rays Explained</a> <span>the previous volume: the rays that made <code>town</code>'s GPU frame 20.1 ms</span></li>
       </ul>
     </article>
     <article>
@@ -640,7 +639,7 @@ let wait = match context.adapter.get_info().device_type {
   </dl>
   <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/381">#381</a>, PR <a href="https://github.com/gariasf/praxis/pull/400">#400</a> at 958ed4e9, <code>docs/performance.md</code>, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is <code>docs/performance.md</code>'s own, on one Apple M4 Pro. The timeline demo is this page's model; the runs demo plots the measured table.</footer>
 </section>
-<nav class="series" aria-label="Praxis field guides"><a href="shadow-edge-rays.html">Previous: Shadow Edge Rays Explained</a><a href="index.html">All field guides</a><a href="bench-history.html">Next: Bench History Explained</a></nav>
+<nav class="series" aria-label="Praxis field guides"><a href="frame-timing.html">Previous: Frame Timing Explained</a><a href="index.html">All field guides</a><a href="bench-history.html">Next: Bench History Explained</a></nav>
 </div>
 </div>
 
