@@ -210,7 +210,12 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // its passes; nothing moves and nothing bends, so no frame builds the
     // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
     // Phase two's depth pass draws nothing in a frame whose phase one drew
-    // every visible Instance, and NVIDIA times an empty pass at 0.
+    // every visible Instance, and NVIDIA times an empty pass at 0. A frame
+    // takes under a second from frame 1 on: frame 0 can time shader
+    // compilation, which lavapipe runs inside the first dispatches'
+    // timestamps when Mesa's shader cache is cold, its frame 0 then reading
+    // 5.8 s against under 0.2 s warm, and a wrong tick period would misread
+    // every frame alike.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -241,7 +246,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
             assert!(
                 (Duration::ZERO < time || may_be_empty) == runs
                     && time <= gpu.frame_time
-                    && gpu.frame_time < Duration::from_secs(1),
+                    && (frame == 0 || gpu.frame_time < Duration::from_secs(1)),
                 "frame {frame}: {pass} took {time:?} of {:?} on the GPU",
                 gpu.frame_time
             );
