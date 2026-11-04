@@ -106,6 +106,7 @@
     "source_hash": "9bc9bf09e3aa591c82667b6dde96d261c8805497",
     "started_unix_seconds": 1793531959
   },
+  "rerecorded_baseline": true,
   "scene": "town",
   "shadow_ray_microseconds": {
     "median": 94690.541,
