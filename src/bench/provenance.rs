@@ -11,7 +11,8 @@ use anyhow::Context;
 
 use super::Spread;
 use crate::preflight::{
-    BUSY_GPU_PERCENT, gpu_load_percent, machine_warnings, other_praxis_processes,
+    BUSY_GPU_PERCENT, BUSY_LOAD_AVERAGE, gpu_load_percent, machine_warnings,
+    one_minute_load_average, other_praxis_processes,
 };
 
 /// Names what the bench's metrics mean: raised by any change to how a
@@ -43,6 +44,9 @@ pub struct Provenance {
     pub scene_content_hash: String,
     /// The busiest GPU's utilisation at the bench's start, when known.
     pub gpu_load_percent: Option<u32>,
+    /// The one-minute load average at the bench's start, when the OS keeps
+    /// one; unknown in records from before results carried it.
+    pub one_minute_load_average: Option<f64>,
     /// Other praxis processes at the bench's start, when listed.
     pub other_processes: Option<Vec<String>>,
     /// The scene's GPU frame p95 over its median; none when the median is
@@ -62,6 +66,7 @@ pub struct BenchStart {
     /// None when the checkout is no git repository.
     pub checkout: Option<Checkout>,
     pub gpu_load_percent: Option<u32>,
+    pub one_minute_load_average: Option<f64>,
     pub other_processes: Option<Vec<String>>,
     /// Preflight's power and display warnings, such as a Mac on battery.
     pub machine_warnings: Vec<String>,
@@ -83,6 +88,7 @@ impl BenchStart {
         Self {
             checkout,
             gpu_load_percent: gpu_load_percent(),
+            one_minute_load_average: one_minute_load_average(),
             other_processes: other_praxis_processes(),
             machine_warnings: machine_warnings(),
         }
@@ -108,10 +114,12 @@ impl BenchStart {
             harness_version: HARNESS_VERSION,
             scene_content_hash,
             gpu_load_percent: self.gpu_load_percent,
+            one_minute_load_average: self.one_minute_load_average,
             other_processes: self.other_processes.clone(),
             gpu_frame_p95_over_median,
             quiet: is_quiet(
                 self.gpu_load_percent,
+                self.one_minute_load_average,
                 self.other_processes.as_deref(),
                 &self.machine_warnings,
                 gpu_frame_p95_over_median,
@@ -124,16 +132,19 @@ impl BenchStart {
 }
 
 /// Whether a run was quiet: preflight would have warned of neither the GPU
-/// load, other praxis processes, nor the power or display at its start, and its GPU frames spread
-/// less than `QUIET_P95_OVER_MEDIAN`. A load or listing that could not be
-/// read is a preflight note, not a warning, so it passes.
+/// or CPU load, other praxis processes, nor the power or display at its
+/// start, and its GPU frames spread less than `QUIET_P95_OVER_MEDIAN`. A
+/// load or listing that could not be read is a preflight note, not a
+/// warning, so it passes.
 fn is_quiet(
     gpu_load_percent: Option<u32>,
+    one_minute_load_average: Option<f64>,
     other_processes: Option<&[String]>,
     machine_warnings: &[String],
     gpu_frame_p95_over_median: Option<f64>,
 ) -> bool {
     gpu_load_percent.is_none_or(|percent| percent <= BUSY_GPU_PERCENT)
+        && one_minute_load_average.is_none_or(|load| load <= BUSY_LOAD_AVERAGE)
         && other_processes.is_none_or(<[String]>::is_empty)
         && machine_warnings.is_empty()
         && gpu_frame_p95_over_median.is_some_and(|ratio| ratio < QUIET_P95_OVER_MEDIAN)
@@ -456,23 +467,32 @@ mod tests {
         let other = &["praxis 42".to_owned()][..];
         let steady = Some(1.02);
         let battery = &["power: on battery".to_owned()][..];
-        assert!(is_quiet(Some(BUSY_GPU_PERCENT), Some(none), none, steady));
-        // Unknown load and processes are preflight notes, not warnings.
-        assert!(is_quiet(None, None, none, steady));
-        assert!(!is_quiet(
-            Some(BUSY_GPU_PERCENT + 1),
+        assert!(is_quiet(
+            Some(BUSY_GPU_PERCENT),
+            Some(BUSY_LOAD_AVERAGE),
             Some(none),
             none,
             steady
         ));
-        assert!(!is_quiet(Some(0), Some(other), none, steady));
-        assert!(!is_quiet(Some(0), Some(none), battery, steady));
+        // Unknown load and processes are preflight notes, not warnings.
+        assert!(is_quiet(None, None, None, none, steady));
+        assert!(!is_quiet(
+            Some(BUSY_GPU_PERCENT + 1),
+            None,
+            Some(none),
+            none,
+            steady
+        ));
+        assert!(!is_quiet(Some(0), None, Some(other), none, steady));
+        assert!(!is_quiet(Some(0), None, Some(none), battery, steady));
         assert!(!is_quiet(
             Some(0),
+            None,
             Some(none),
             none,
             Some(QUIET_P95_OVER_MEDIAN)
         ));
-        assert!(!is_quiet(Some(0), Some(none), none, None));
+        assert!(!is_quiet(Some(0), None, Some(none), none, None));
+        assert!(!is_quiet(Some(0), Some(2.5), Some(none), none, steady));
     }
 }

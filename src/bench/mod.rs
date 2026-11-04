@@ -179,7 +179,8 @@ pub struct Measurements {
     #[serde(flatten)]
     pub aliasing: Option<Aliasing>,
     /// Absent from Baselines recorded before results carried it, and from
-    /// a run outside a git checkout. `compare` reads none of it.
+    /// a run outside a git checkout. `compare` reads only its load average,
+    /// to print beside a CPU time it fails.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance: Option<Provenance>,
 }
@@ -763,7 +764,31 @@ pub fn compare(
             budgets.dynamic_tlas_gpu_microseconds,
         );
     }
+    // CPU times move with the machine's load where GPU times hold, so a
+    // failed CPU line says what load each run started under.
+    let load_averages = format!(
+        "one-minute load average {}, its Baseline's {}",
+        load_average(current),
+        load_average(baseline)
+    );
+    for finding in &mut findings {
+        if finding.verdict == Verdict::Fail && CPU_TIME_METRICS.contains(&finding.metric) {
+            finding.detail = format!("{}; {load_averages}", finding.detail);
+        }
+    }
     Ok(findings)
+}
+
+/// The metrics that time the CPU.
+const CPU_TIME_METRICS: [&str; 2] = ["cpu_frame_microseconds", "dynamic_tlas_cpu_microseconds"];
+
+/// The one-minute load average `measurements` started under, or `unknown`.
+fn load_average(measurements: &Measurements) -> String {
+    measurements
+        .provenance
+        .as_ref()
+        .and_then(|provenance| provenance.one_minute_load_average)
+        .map_or_else(|| "unknown".to_owned(), |load| format!("{load:.2}"))
 }
 
 /// Fails unless `baseline` ran `current`'s scene in its profile at its size,
@@ -997,6 +1022,7 @@ mod tests {
             harness_version: 1,
             scene_content_hash: "e3b0c442".to_owned(),
             gpu_load_percent: Some(3),
+            one_minute_load_average: Some(0.75),
             other_processes: Some(Vec::new()),
             gpu_frame_p95_over_median: Some(p95_over_median),
             quiet: p95_over_median < provenance::QUIET_P95_OVER_MEDIAN,
@@ -1050,6 +1076,52 @@ mod tests {
         let without = serde_json::to_string(&baseline()).expect("serializable");
         assert!(!without.contains("provenance"), "{without}");
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Local), []);
+    }
+
+    #[test]
+    fn provenance_round_trips_with_or_without_a_load_average() {
+        let mut current = Measurements {
+            provenance: Some(provenance(
+                Checkout {
+                    source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
+                    commit: "bea8706b".to_owned(),
+                    dirty: false,
+                    branch: "main".to_owned(),
+                },
+                1.01,
+            )),
+            ..baseline()
+        };
+        let serde_json::Value::Object(mut json) =
+            serde_json::to_value(&current).expect("serializable")
+        else {
+            panic!("a result is a JSON object");
+        };
+        assert_eq!(json["provenance"]["one_minute_load_average"], 0.75);
+        json["provenance"]
+            .as_object_mut()
+            .expect("an object")
+            .remove("one_minute_load_average");
+        let parsed = Measurements::from_baseline_json(&serde_json::to_vec(&json).unwrap())
+            .expect("a record from before the load average");
+        current.provenance.as_mut().unwrap().one_minute_load_average = None;
+        assert_eq!(parsed, current);
+    }
+
+    #[test]
+    fn every_committed_baseline_parses() {
+        for entry in std::fs::read_dir(BASELINE_DIRECTORY).expect("Baselines") {
+            for baseline in std::fs::read_dir(entry.unwrap().path()).unwrap() {
+                let path = baseline.unwrap().path();
+                if path
+                    .extension()
+                    .is_some_and(|extension| extension == "json")
+                {
+                    Measurements::from_baseline_json(&std::fs::read(&path).unwrap())
+                        .unwrap_or_else(|error| panic!("{}: {error:#}", path.display()));
+                }
+            }
+        }
     }
 
     #[test]
@@ -1148,7 +1220,9 @@ mod tests {
             [Finding {
                 metric: "cpu_frame_microseconds",
                 verdict: Verdict::Fail,
-                detail: "p95 6210.0 over Budget 6000.0".to_owned(),
+                detail: "p95 6210.0 over Budget 6000.0; \
+                         one-minute load average unknown, its Baseline's unknown"
+                    .to_owned(),
             }]
         );
     }
@@ -1279,6 +1353,60 @@ mod tests {
         let current = serde_json::to_vec(&baseline()).expect("serializable");
         let parsed = Measurements::from_baseline_json(&current).expect("the current form");
         assert_eq!(parsed, baseline());
+    }
+
+    #[test]
+    fn a_failed_cpu_line_names_both_load_averages_or_unknown() {
+        let mut current = baseline();
+        current.cpu_frame_microseconds.median = 1200.0;
+        current.dynamic_tlas_cpu_microseconds.median = 1200.0;
+        current
+            .gpu_pass_microseconds
+            .get_mut("main_pass")
+            .unwrap()
+            .median = 2300.0;
+        current.provenance = Some(Provenance {
+            one_minute_load_average: Some(8.2),
+            ..provenance(
+                Checkout {
+                    source_hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
+                    commit: "bea8706b".to_owned(),
+                    dirty: false,
+                    branch: "main".to_owned(),
+                },
+                1.01,
+            )
+        });
+        let details = |current: &Measurements| -> Vec<String> {
+            compare(current, &baseline(), &BUDGETS, CompareMode::Local)
+                .expect("comparable")
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        };
+        assert_eq!(
+            details(&current),
+            [
+                "FAIL cpu_frame_microseconds 1200.0 against Baseline 1000.0 (+20.0%); \
+                 one-minute load average 8.20, its Baseline's unknown",
+                "FAIL gpu_pass_microseconds main_pass 2300.0 against Baseline 2000.0 (+15.0%)",
+                "FAIL dynamic_tlas_cpu_microseconds 1200.0 over Budget 1100.0; \
+                 one-minute load average 8.20, its Baseline's unknown",
+            ]
+        );
+        current.provenance = None;
+        assert!(
+            details(&current)[0]
+                .ends_with("one-minute load average unknown, its Baseline's unknown"),
+            "{:?}",
+            details(&current)
+        );
+        // A warning names neither.
+        current.cpu_frame_microseconds.median = 1060.0;
+        assert_eq!(
+            details(&current)[0],
+            "warn cpu_frame_microseconds 1060.0 against Baseline 1000.0 (+6.0%)"
+        );
     }
 
     #[test]
