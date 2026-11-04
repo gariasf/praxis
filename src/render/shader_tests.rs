@@ -223,6 +223,7 @@ macro_rules! twin {
                 offset: std::mem::offset_of!($type, $field),
                 size: size_of_val(&value.$field),
                 scalar: scalar_of(&value.$field),
+                strides: strides_of(&value.$field),
             }),+],
         }
     }};
@@ -314,7 +315,9 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
 #[test]
 fn layout_check_reports_every_kind_of_mismatch() {
     const SOURCE: &str = "
-        struct Light { color: vec3<f32>, count: u32, direction: vec4<f32> }
+        struct Light {
+            color: vec3<f32>, count: u32, direction: vec4<f32>, rotation: mat3x3<f32>,
+        }
         struct Material { base_color: vec4<f32>, roughness: f32 }
         struct Orphan { value: f32 }
         @group(0) @binding(0) var<uniform> light: Light;
@@ -326,6 +329,9 @@ fn layout_check_reports_every_kind_of_mismatch() {
         color: [f32; 3],
         count: f32,
         direction: [f32; 4],
+        // As many bytes as a `mat3x3<f32>`, but its columns 12 bytes apart,
+        // not 16.
+        rotation: [[f32; 3]; 4],
     }
     #[repr(C)]
     struct Material {
@@ -336,7 +342,8 @@ fn layout_check_reports_every_kind_of_mismatch() {
         twin!(Light {
             color,
             count,
-            direction
+            direction,
+            rotation
         }),
         twin!(Material {
             base_color,
@@ -369,7 +376,9 @@ fn layout_check_reports_every_kind_of_mismatch() {
         [
             "Missing: no shader module shares it",
             "test module: Light: Rust `count` at offset 12: 4 bytes of f32",
+            "test module: Light: Rust `rotation` at offset 32: 48 bytes of f32, strides [12, 4]",
             "test module: Light: WGSL `count` at offset 12: 4 bytes of u32",
+            "test module: Light: WGSL `rotation` at offset 32: 48 bytes of f32, strides [16, 4]",
             "test module: Material: Rust size: 20 bytes",
             "test module: Material: WGSL size: 32 bytes",
             "test module: Orphan: shared with the CPU but has no twin",
@@ -586,11 +595,18 @@ struct Field {
     offset: usize,
     size: usize,
     scalar: naga::Scalar,
+    strides: Vec<usize>,
 }
 
 /// The scalar WGSL reads a Rust field as: `f32` for `[[f32; 4]; 4]`.
 trait ShaderScalar {
     const SCALAR: naga::Scalar;
+
+    /// The bytes between consecutive elements at each level of nesting,
+    /// outermost first: `[16, 4]` for `[[f32; 4]; 4]`, none for a scalar.
+    fn strides() -> Vec<usize> {
+        Vec::new()
+    }
 }
 
 impl ShaderScalar for f32 {
@@ -612,10 +628,21 @@ impl ShaderScalar for i16 {
 
 impl<T: ShaderScalar, const LENGTH: usize> ShaderScalar for [T; LENGTH] {
     const SCALAR: naga::Scalar = T::SCALAR;
+
+    /// An element narrower than the scalar WGSL reads it as is packed, so
+    /// its stride is the scalar's: an `[i16; 4]` is read as two u32s.
+    fn strides() -> Vec<usize> {
+        let stride = size_of::<T>().max(usize::from(T::SCALAR.width));
+        [stride].into_iter().chain(T::strides()).collect()
+    }
 }
 
 fn scalar_of<T: ShaderScalar>(_: &T) -> naga::Scalar {
     T::SCALAR
+}
+
+fn strides_of<T: ShaderScalar>(_: &T) -> Vec<usize> {
+    T::strides()
 }
 
 /// Each way a struct shared with the CPU in `modules`, each parsed, disagrees
@@ -699,7 +726,14 @@ fn twin_problems(
         let name = member.name.as_deref().unwrap_or_default();
         let size = module.types[member.ty].inner.size(module.to_ctx()) as usize;
         let scalar = wgsl_scalar(module, member.ty);
-        wgsl.insert(describe(name, member.offset as usize, size, scalar));
+        let strides = wgsl_strides(module, member.ty);
+        wgsl.insert(describe(
+            name,
+            member.offset as usize,
+            size,
+            scalar,
+            &strides,
+        ));
     }
     wgsl.insert(format!("size: {span} bytes"));
     let rust: BTreeSet<String> = twin
@@ -707,7 +741,15 @@ fn twin_problems(
         .iter()
         // An underscored field is explicit padding, absent from WGSL.
         .filter(|field| !field.name.starts_with('_'))
-        .map(|field| describe(field.name, field.offset, field.size, Some(field.scalar)))
+        .map(|field| {
+            describe(
+                field.name,
+                field.offset,
+                field.size,
+                Some(field.scalar),
+                &field.strides,
+            )
+        })
         .chain([format!("size: {} bytes", twin.size)])
         .collect();
     problems.extend(wgsl.difference(&rust).map(|line| format!("WGSL {line}")));
@@ -726,8 +768,35 @@ fn wgsl_scalar(
     }
 }
 
+/// The bytes between consecutive elements of a WGSL type at each level of
+/// nesting, outermost first, as naga lays it out: `[16, 4]` for
+/// `mat3x3<f32>`, whose columns are each padded to a `vec4<f32>`.
+fn wgsl_strides(module: &naga::Module, type_handle: naga::Handle<naga::Type>) -> Vec<usize> {
+    let inner = &module.types[type_handle].inner;
+    match *inner {
+        naga::TypeInner::Array { base, stride, .. } => [stride as usize]
+            .into_iter()
+            .chain(wgsl_strides(module, base))
+            .collect(),
+        naga::TypeInner::Matrix {
+            columns, scalar, ..
+        } => {
+            let column_stride = inner.size(module.to_ctx()) / columns as u32;
+            vec![column_stride as usize, usize::from(scalar.width)]
+        }
+        naga::TypeInner::Vector { scalar, .. } => vec![usize::from(scalar.width)],
+        _ => Vec::new(),
+    }
+}
+
 /// A field's place and type.
-fn describe(name: &str, offset: usize, size: usize, scalar: Option<naga::Scalar>) -> String {
+fn describe(
+    name: &str,
+    offset: usize,
+    size: usize,
+    scalar: Option<naga::Scalar>,
+    strides: &[usize],
+) -> String {
     let scalar = scalar.map_or("?".to_string(), |scalar| {
         let kind = match scalar.kind {
             naga::ScalarKind::Sint => "i",
@@ -737,5 +806,10 @@ fn describe(name: &str, offset: usize, size: usize, scalar: Option<naga::Scalar>
         };
         format!("{kind}{}", u32::from(scalar.width) * 8)
     });
-    format!("`{name}` at offset {offset}: {size} bytes of {scalar}")
+    let strides = if strides.is_empty() {
+        String::new()
+    } else {
+        format!(", strides {strides:?}")
+    };
+    format!("`{name}` at offset {offset}: {size} bytes of {scalar}{strides}")
 }
