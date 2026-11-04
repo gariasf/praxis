@@ -329,6 +329,13 @@ impl GpuStatsReadback {
         Ok(())
     }
 
+    /// How many frames, counted from the first, the GPU has finished, as
+    /// far as the submissions and polls since have seen.
+    #[cfg(test)]
+    pub(crate) fn frames_completed(&self) -> u64 {
+        self.frames_completed.load(Ordering::Acquire)
+    }
+
     /// The stats the last `begin_frame` or `flush` read back, by frame.
     pub fn read_back(&self) -> &[GpuFrameStats] {
         &self.read_back

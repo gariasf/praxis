@@ -727,6 +727,13 @@ impl Renderer {
         submission
     }
 
+    /// How many frames, counted from the first, the GPU has finished, as
+    /// far as the submissions and polls since have seen.
+    #[cfg(test)]
+    pub(crate) fn frames_completed(&self) -> u64 {
+        self.gpu_stats.frames_completed()
+    }
+
     /// The GPU stats of earlier frames that the last `render` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {

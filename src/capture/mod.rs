@@ -369,12 +369,17 @@ mod tests {
     /// whose Moving Instances build the dynamic TLAS every frame, renders
     /// twice: once with the GPU's work retired by a poll between frames,
     /// once with it left finished for the frame's own submissions to retire.
+    /// A run whose GPU had not finished a frame when the next began, as when
+    /// other work holds the GPU, is not left finished, so it runs again
+    /// with the wait doubled.
     #[test]
     fn a_frames_allocations_do_not_depend_on_when_the_gpu_finished() {
         const FRAMES: u32 = 24;
         const WARM_UP_FRAMES: usize = 8;
         // Far longer than a hardware GPU takes to render a frame of 64 × 64.
         const GPU_FINISH_WAIT: Duration = Duration::from_millis(100);
+        // Up to 1.6 s a frame.
+        const LEFT_FINISHED_ATTEMPTS: u32 = 5;
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -392,7 +397,10 @@ mod tests {
             return;
         }
         let scene = ReferenceScene::Orrery;
-        let allocations = |retired_between_frames: bool| -> Vec<u64> {
+        // Retired by a poll between frames with no wait, or left finished
+        // after it; `None` when a frame began before the GPU finished the
+        // frame before it.
+        let allocations = |left_finished_after: Option<Duration>| -> Option<Vec<u64>> {
             let mut state = State::new(
                 &context,
                 TARGET_FORMAT,
@@ -418,27 +426,40 @@ mod tests {
                 view_formats: &[],
             });
             let view = target.create_view(&wgpu::TextureViewDescriptor::default());
-            (0..FRAMES)
-                .map(|frame| {
-                    if retired_between_frames {
+            let mut allocations_per_frame = Vec::new();
+            for frame in 0..FRAMES {
+                match left_finished_after {
+                    None => {
                         let wait = context.device.poll(wgpu::PollType::wait_indefinitely());
                         wait.expect("the frames before finish");
-                    } else {
-                        std::thread::sleep(GPU_FINISH_WAIT);
                     }
-                    state
-                        .simulation
-                        .world
-                        .insert_resource(scene.camera_at(frame, glam::DVec3::ZERO));
-                    state.update(scene.frame_delta());
-                    state.render(&view);
-                    state.frame_stats().heap_allocations
-                })
-                .collect()
+                    Some(wait) => std::thread::sleep(wait),
+                }
+                state
+                    .simulation
+                    .world
+                    .insert_resource(scene.camera_at(frame, glam::DVec3::ZERO));
+                state.update(scene.frame_delta());
+                state.render(&view);
+                // The frame before, finished before this one began, is
+                // retired by this one's submissions.
+                if state.frames_completed() < u64::from(frame) {
+                    writeln!(
+                        std::io::stderr(),
+                        "frame {frame} began before the GPU finished the frame before it"
+                    )
+                    .ok();
+                    return None;
+                }
+                allocations_per_frame.push(state.frame_stats().heap_allocations);
+            }
+            Some(allocations_per_frame)
         };
 
-        let retired = allocations(true);
-        let left_finished = allocations(false);
+        let retired = allocations(None).expect("a poll waits for every frame");
+        let left_finished = (0..LEFT_FINISHED_ATTEMPTS)
+            .find_map(|attempt| allocations(Some(GPU_FINISH_WAIT * 2u32.pow(attempt))))
+            .expect("the GPU finishes each frame before the next within the longest wait");
         assert_eq!(
             retired[WARM_UP_FRAMES..],
             left_finished[WARM_UP_FRAMES..],
