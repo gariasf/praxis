@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/targets.rs</code> &middot; <code>hdr.wgsl</code></div>
   <h1>The HDR target</h1>
   <p class="definition">The single-sample <code>Rgba16Float</code> target that the lit pass's 4x MSAA colour resolves into, holding each pixel's exposed colour, clamped to fp16's range and weighted by 1&nbsp;/&nbsp;(1&nbsp;+&nbsp;its luminance) so that the hardware's plain average of the samples comes out as an average weighted the way a display shows them; the tonemapping pass reads it and undoes the weighting.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the target rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="lit-pass.html">Lit Pass</a> for the shading whose colour the target stores, <a href="hdr-pipeline.html">HDR Pipeline Explained</a> for the light units and the EV100 exposure, <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> for a pixel's samples and its fragments.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the target rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="lit-pass.html">Lit Pass</a> for the shading whose colour the target stores, <a href="light-units.html">Light units</a> for the light units and the EV100 exposure, <a href="msaa-fragment-merging.html">MSAA Fragment Merging Explained</a> for a pixel's samples and its fragments.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -296,7 +296,7 @@ wgpu::RenderPassColorAttachment {
     <dt><a href="https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6">ITU-R BT.709-6, item 3.2</a></dt><dd>the luminance weights the weighting uses; <code>bt709-6-luma</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The target came with the move to photometric light in the third milestone: first an fp16 target behind a clamp-only pass, then the weighted resolve, after a plain one whitened bright edges, then the tonemapping pass it feeds. The development narrative, with each step's measurements and the operator survey, is in the notebook's volumes until the pages absorb them: <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="hdr-pipeline.html">HDR Pipeline Explained</a>. This page describes the target as it is; the volumes describe how it got here.</p>
+  <p class="note">The target came with the move to photometric light in the third milestone: first an fp16 target behind a clamp-only pass, then the weighted resolve, after a plain one whitened bright edges, then the tonemapping pass it feeds. The volumes that narrated each step, with its measurements and the operator survey, are retired: this page, <a href="tonemapping-pass.html">The tonemapping pass</a> and <a href="light-units.html">Light units</a> describe the chain as it is.</p>
   <footer class="sources">Written from <code>src/render/targets.rs</code>, <code>src/render/shaders/hdr.wgsl</code>, <code>main.wgsl</code>, <code>tonemapping.wgsl</code>, <code>src/render/main_pass.rs</code>, <code>src/render/prepare.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, ADRs 0008, 0019, 0021 and 0023, and the sources above, all at <code>main</code> fbae12f4.</footer>
 </section>
 

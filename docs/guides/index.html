@@ -119,7 +119,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li>The lit pass, which shades both phases' Instances, reading each pixel's point lights from its Froxel's list and its shadows from the shadow mask, and resolves its 4x MSAA colour into the HDR target.
       <span class="reads">Page: <a class="reference" href="lit-pass.html">The lit pass</a>. Volume it has not yet absorbed: <a href="lit-pass-explained.html">Lit Pass Explained</a>, for the light units a concept page will take</span></li>
     <li>The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target.
-      <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a>. Volumes they have not yet absorbed: <a href="tonemapping-pass-explained.html">Tonemapping Pass Explained</a> and <a href="hdr-pipeline.html">HDR Pipeline Explained</a>, for the light units and exposure</span></li>
+      <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a></span></li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats.
       <span class="reads">Page: <a class="reference" href="froxel-pass.html#light-count">The Froxel pass, its light count section</a>. Volume: <a href="town.html">Town Explained</a></span></li>
   </ol>

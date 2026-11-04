@@ -236,7 +236,7 @@ pub fn exposure(&amp;self) -&gt; f32 {
 let exposed = min(luminance * camera.exposure, vec3&lt;f32&gt;(LARGEST_HALF));
 return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>; <code>outgoing_luminance</code> holds the directional and point lights' reflected luminance.</p>
-  <p>fp16 cannot hold the range unexposed: under 100,000 lx a dielectric's sun glint at roughness 0.04 peaks at 1.24&times;10<sup>8</sup> cd/m&sup2;, 10.9 stops past fp16's largest value, 65504. Exposing in f32 first brings ordinary surfaces near 1, and the clamp keeps the rest finite on every backend: on overflow the Apple M4 Pro saturates, while Vulkan may store infinity. The background takes the same exposure on the CPU, as the colour the lit pass clears to. The tonemapping pass then maps the exposed values through GT7 to display colour (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</p>
+  <p>fp16 cannot hold the range unexposed: under 100,000 lx a dielectric's sun glint at roughness 0.04 peaks at 1.24&times;10<sup>8</sup> cd/m&sup2;, 10.9 stops past fp16's largest value, 65504. Exposing in f32 first brings ordinary surfaces near 1, and the clamp keeps the rest finite on every backend: on overflow the Apple M4 Pro saturates, while Vulkan may store infinity. The background takes the same exposure on the CPU, as the colour the lit pass clears to. The tonemapping pass then maps the exposed values through GT7 to display colour (<a href="tonemapping-pass.html">The tonemapping pass</a>).</p>
 </section>
 
 <section class="part prose" id="tests">
@@ -263,7 +263,7 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <div class="part-mark">6</div>
   <h2>What it costs</h2>
   <p class="key-idea">Nothing a Baseline can see apart: the units are the values the frame already carries, and the exposure is one multiply and one clamp per fragment at the end of the lit pass, timed within <code>lit_pass</code>.</p>
-  <p>Real units cost range, not time: fp16 cannot store them unexposed, which is why the lit pass pre-exposes in f32, and why the HDR target's format, its memory and its resolve are what they are. Those are the HDR target's to account for, within the lit pass's and the tonemapping pass's own figures (<a href="tonemapping-pass.html">Tonemapping Pass Explained</a>).</p>
+  <p>Real units cost range, not time: fp16 cannot store them unexposed, which is why the lit pass pre-exposes in f32, and why the HDR target's format, its memory and its resolve are what they are. Those are <a href="hdr-target.html">The HDR target</a>'s to account for, within the lit pass's and the tonemapping pass's own figures.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -297,7 +297,7 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
     <dt><a href="https://github.com/KhronosGroup/glTF-Blender-IO/blob/e03d6603c44a9a95f006fd79a38b40cdd3c3a009/addons/io_scene_gltf2/blender/exp/lights.py#L178-L192">glTF-Blender-IO, light export</a></dt><dd>watts to candela and W/m&sup2; to lux at 683 lm/W; <code>blender-gltf-light-export</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The lights took units in one step of the third milestone, with the HDR target and the tonemapping pass beside them: before it the sun's illuminance was 1, every other light a multiple of it, and the lit pass wrote display colour directly. The scenes' figures kept their ratios, and their EV100 of 16.35 divides by the 100,000 the values grew by, so no Golden moved by more than one 8-bit step, at no more than 110 pixels a scene. The development narrative is in <a href="hdr-pipeline.html">HDR Pipeline Explained</a> and <a href="tonemapping-pass.html">Tonemapping Pass Explained</a> until the pages that take their other chapters land; this page describes the units as they are.</p>
+  <p class="note">The lights took units in one step of the third milestone, with the HDR target and the tonemapping pass beside them: before it the sun's illuminance was 1, every other light a multiple of it, and the lit pass wrote display colour directly. The scenes' figures kept their ratios, and their EV100 of 16.35 divides by the 100,000 the values grew by, so no Golden moved by more than one 8-bit step, at no more than 110 pixels a scene. The volumes that narrated that step are retired: this page, <a href="hdr-target.html">The HDR target</a> and <a href="tonemapping-pass.html">The tonemapping pass</a> describe the chain as it is.</p>
   <footer class="sources">Written from <code>src/components.rs</code>, <code>src/camera/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>town.rs</code>, <code>src/render/uniforms.rs</code>, <code>prepare.rs</code>, <code>main.wgsl</code>, <code>shading.wgsl</code>, <code>hdr.wgsl</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0020 and 0023, and the sources above, all at <code>main</code> fbae12f4.</footer>
 </section>
 
