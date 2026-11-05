@@ -78,7 +78,8 @@ pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RenderSwitches {
     /// Whether the culling pass draws only the Instances whose Mesh bounds
-    /// reach into the view frustum, rather than every Instance in use.
+    /// reach into the view frustum, and in phase two only those the depth
+    /// pyramid does not hide, rather than every Instance in use.
     pub culling: bool,
     /// Whether the lit pass shades each pixel with the point lights its
     /// Froxel's list holds, rather than every point light (brute force).
@@ -100,7 +101,8 @@ pub struct RenderSwitches {
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
-/// 0020): the forms M3's `crowd` scene measures for M7 to pick from.
+/// 0020): the proxies M7 builds on, and refit and its oracle, rebuild, kept
+/// behind the switch as the shapes' reference.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CrowdForm {
     /// The bent Meshes have no BLAS: rigid shadow proxies, one per bone,
@@ -152,8 +154,8 @@ impl Default for RenderSwitches {
 }
 
 impl RenderSwitches {
-    /// Each switch by the name of the WGSL `override` that every shader
-    /// module declares for it, with its value as a pipeline sets it.
+    /// Each switch shaders read, by the name of the WGSL `override` that every
+    /// shader module declares for it, with its value as a pipeline sets it.
     pub(crate) fn constants(&self) -> [(&'static str, f64); 3] {
         [
             ("CULLING", f64::from(u8::from(self.culling))),
@@ -214,8 +216,8 @@ pub struct Renderer {
     uploaded_instance_slot_count: u32,
     transient_saves_memory: bool,
     frame_staging: FrameStaging,
-    /// The frame's encoder from `update`, holding its upload copies, until
-    /// `render` records the pass into it and submits it.
+    /// The frame's encoder from `upload`, holding its upload copies, until
+    /// `render` takes it to record the frame's passes and submit them.
     frame_encoder: Option<wgpu::CommandEncoder>,
     gpu_stats: GpuStatsReadback,
 }
@@ -792,9 +794,10 @@ impl Renderer {
             + self.tonemapping_pass.gpu_memory_bytes()
     }
 
-    /// Bytes of its acceleration structures, estimated from the bytes
-    /// measured on its backend, since wgpu exposes no acceleration-structure
-    /// size (ADR 0017).
+    /// Bytes of its acceleration structures, estimated from the sizes
+    /// measured on the adapter `AccelerationStructureBytes::estimate` picks
+    /// for this one, since wgpu exposes no acceleration-structure size (ADR
+    /// 0017).
     pub fn estimated_acceleration_structure_bytes(&self) -> u64 {
         let bytes = &self.acceleration_structure_bytes;
         self.mesh_pool.estimated_blas_bytes(bytes)
@@ -1754,7 +1757,7 @@ pub(crate) mod tests {
             RenderSwitches::default(),
         );
         let red = emissive_material(&mut renderer, [1.0, 0.0, 0.0]);
-        // A triangle facing the camera, 2 m ahead of it.
+        // A triangle facing the camera, 1.5 m ahead of it.
         let mesh = load_triangles(&mut renderer, &[[0.0, 0.0]], &[Some(red)]);
         let mut world = World::new();
         // Exposed to 1, so the emissive reaches the target as it is.
@@ -2533,9 +2536,9 @@ pub(crate) mod tests {
     }
 
     /// Frame data that draws a triangle around the target's centre, black,
-    /// unlit and red emissive, loaded into `renderer`'s Pools after a
+    /// unlit and red emissive, loaded into `renderer`'s Mesh pool after a
     /// triangle outside the target, so it is drawn only from past the first
-    /// entry of every table.
+    /// entry of each of the Mesh pool's tables.
     fn triangle_frame(renderer: &mut Renderer) -> FrameData {
         load_triangles(renderer, &[[3.0, 3.0]], &[None]);
         let mesh = load_triangles(renderer, &[[0.0, 0.0]], &[None]);

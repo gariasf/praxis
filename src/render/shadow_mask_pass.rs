@@ -209,8 +209,8 @@ impl ShadowMaskPass {
         }
     }
 
-    /// Builds the bind groups that read and write `render_targets`: at
-    /// creation, and after every resize, which creates them again.
+    /// Builds the bind groups that read and write `render_targets` again, as
+    /// `new` builds them: after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
         [
             self.nearest_surfaces_bind_group,

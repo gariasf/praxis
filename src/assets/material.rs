@@ -136,8 +136,9 @@ impl ChannelTextures {
 
 /// Material-as-ID: one SSBO of `MaterialData` indexed by `MaterialHandle`, plus
 /// one texture binding array per Channel. A single bind group serves every
-/// material; the fragment shader looks up `materials[instance.material_id]` and
-/// samples each Channel's array at the Layer stored in `layers`.
+/// material; the fragment shader looks up the Material ID its Meshlet record
+/// carries, the Instance's override or else the Meshlet's own, and samples
+/// each Channel's array at the Layer stored in `layers`.
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: wgpu::Buffer,

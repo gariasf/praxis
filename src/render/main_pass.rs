@@ -38,7 +38,7 @@ pub struct MainPass {
     /// The frame's draw's indirect arguments, a draw per phase.
     frame_draw_buffer: wgpu::Buffer,
     /// Its group 3 (`MAIN_PASS_INPUTS`), built from the render targets by
-    /// `bind_render_targets`.
+    /// `new`, and again by `bind_render_targets`.
     inputs: wgpu::BindGroup,
     /// Whether shadow rays are on, so phase two's depth is drawn in its own
     /// pass rather than by the lit pass.
@@ -196,8 +196,8 @@ impl MainPass {
         }
     }
 
-    /// Builds the bind group that reads `render_targets`: at creation, and
-    /// after every resize, which creates them again.
+    /// Builds the bind group that reads `render_targets` again, as `new`
+    /// builds it: after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
         self.inputs = Self::inputs_bind_group(
             device,

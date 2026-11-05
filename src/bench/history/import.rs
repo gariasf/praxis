@@ -130,9 +130,10 @@ struct BaselineCommit<'commit> {
 }
 
 /// A record per Baseline file per commit on `main`'s first-parent line that
-/// added or changed it, newest first: of two Baselines of one source, the
-/// quieter stays, and when neither measured its spread, the later, which
-/// replaced the earlier. Up to `history_started` each is imported with the
+/// added or changed it, newest first, as `apply` meets them: of two Baselines
+/// of one source, one on a Series holds its key against a tagged one;
+/// otherwise the later keeps it unless the earlier's GPU frame spread is lower
+/// and neither is lavapipe's. Up to `history_started` each is imported with the
 /// Harness version `breaks` give its commit; after it, re-recorded with
 /// the version its commit defined. A file only renamed, or given fields
 /// without a value it held changing, was not measured again.

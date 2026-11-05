@@ -20,7 +20,8 @@ pub struct LightCountPass {
     pipeline: wgpu::ComputePipeline,
     layout: wgpu::BindGroupLayout,
     buffers: LightCountBuffers,
-    /// Built from the render targets by `bind_render_targets`.
+    /// Built from the render targets by `new`, and again by
+    /// `bind_render_targets`.
     bind_group: wgpu::BindGroup,
     /// The depth target's size.
     size: wgpu::Extent3d,
