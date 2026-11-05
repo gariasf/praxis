@@ -729,6 +729,117 @@ mod tests {
         ticks
     }
 
+    /// Asserts `frame_times`' whole output, in microseconds, for the
+    /// `spread_ticks` frame of `shape` after a frame whose last pass ended
+    /// 1 µs into this one's build.
+    fn assert_spread_frame(
+        shape: FrameShape,
+        shadow_rays: bool,
+        pass_microseconds: [u64; TIMED_PASSES.len()],
+        frame_microseconds: u64,
+        gate_microseconds: u64,
+        lit_pass_wait_microseconds: u64,
+    ) {
+        let ticks = spread_ticks();
+        let mut untimed = [false; TIMED_PASSES.len()];
+        if !shadow_rays {
+            for pass in SHADOW_RAY_PASSES {
+                untimed[pass_position(pass)] = true;
+            }
+        }
+        let times = frame_times(&ticks, shape, &untimed, ticks[0] + 1, 1000.0);
+        let microseconds = Duration::from_micros;
+        let expected_passes: [(&str, Duration); TIMED_PASSES.len()] =
+            std::array::from_fn(|pass| (TIMED_PASSES[pass], microseconds(pass_microseconds[pass])));
+        assert_eq!(
+            times.pass_times, expected_passes,
+            "{shape:?}, shadow rays {shadow_rays}"
+        );
+        assert_eq!(times.frame_time, microseconds(frame_microseconds));
+        assert_eq!(times.gate_time, microseconds(gate_microseconds));
+        assert_eq!(
+            times.lit_pass_wait,
+            microseconds(lit_pass_wait_microseconds)
+        );
+        assert_eq!(times.last_pass_end, 1314);
+    }
+
+    #[test]
+    fn a_frame_that_neither_builds_nor_bends_spans_its_last_submission() {
+        let shape = FrameShape::default();
+        let all = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 84, 74, 6);
+        let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 84, 74, 26);
+    }
+
+    #[test]
+    fn a_frame_that_builds_but_does_not_bend_adds_its_build_from_the_floor() {
+        let shape = FrameShape {
+            dynamic_tlas_built: true,
+            ..FrameShape::default()
+        };
+        let all = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 87, 74, 6);
+        let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 87, 74, 26);
+    }
+
+    /// The shape of a bent frame whose refit is absent and whose build is
+    /// not bracketed, and of one whose refit went untimed, which `render`
+    /// gives no bracketed build.
+    #[test]
+    fn a_bent_frame_without_a_bracketed_build_spans_from_the_bend_pass() {
+        let shape = FrameShape {
+            bent: true,
+            ..FrameShape::default()
+        };
+        let all = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 204, 74, 6);
+        let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 204, 74, 26);
+    }
+
+    #[test]
+    fn a_bent_frame_with_a_bracketed_build_and_no_refit_adds_the_build() {
+        let shape = FrameShape {
+            dynamic_tlas_built: true,
+            bent: true,
+            blas_refitted: false,
+        };
+        let all = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 207, 74, 6);
+        let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 207, 74, 26);
+    }
+
+    /// No Moving Instance, so no build, beside a timed refit of a bent Mesh.
+    #[test]
+    fn a_refitted_frame_without_a_build_times_its_refit_from_the_bend() {
+        let shape = FrameShape {
+            dynamic_tlas_built: false,
+            bent: true,
+            blas_refitted: true,
+        };
+        let all = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 95, 74, 6);
+        let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 95, 74, 26);
+    }
+
+    #[test]
+    fn a_refitted_frame_with_a_build_times_three_submissions_apart() {
+        let shape = FrameShape {
+            dynamic_tlas_built: true,
+            bent: true,
+            blas_refitted: true,
+        };
+        let all = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, all, 98, 74, 6);
+        let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(shape, false, without_shadow_rays, 98, 74, 26);
+    }
+
     #[test]
     fn a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend() {
         let ticks = spread_ticks();
