@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Frame stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/stats/mod.rs</code> &middot; <code>src/render/readback.rs</code></div>
+  <h1>Frame stats</h1>
+  <p class="definition"><span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> are what one frame cost, measured by the engine itself: on the CPU, a clock around each ECS system and each renderer stage, the thread's allocation count and the counters the frame's own code keeps; on the GPU, a timestamp at each end of every timed pass and the counts the passes wrote, which come back through a ring of mapped buffers seven frames later and are turned into a time per pass, a GPU frame total that is a span rather than a sum, ADR 0019's gate and the lit pass's wait.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Recorded</dt><dd>The CPU side from <code>FrameRecorder::begin</code>, the first line of <code>State::update</code>, to <code>FrameRecorder::end</code>, the last of <code>State::render</code>. The GPU side as the passes run: <code>GpuStatsReadback::begin_frame</code> hands the frame's encoder its timestamp queries, <code>end_frame</code> copies the counts the GPU wrote into the frame's slot, and the slot is read seven frames later by <code>begin_frame</code>, or by <code>flush</code> at the end of a run. <code>State::frame_stats</code> returns the last frame's.</dd>
+      <dt>Reads</dt><dd>On the CPU, the clock around each stage, the spans bevy_ecs enters around each system, the thread's allocation count, the preparer's refusals and each owner's byte sum. On the GPU, the query set's timestamps, the culling pass's <code>FrameDraw</code>, the Froxel pass's <code>LightCounts</code> and the shadow mask pass's overflow count.</dd>
+      <dt>Writes</dt><dd>One <code>FrameStats</code> per frame, whose <code>gpu</code> is <code>None</code> until that frame's <code>GpuFrameStats</code> come back, and for good if their readback was skipped.</dd>
+      <dt>Buffers</dt><dd>One query set of 168 timestamps, 24 per slot; a 192-byte resolve buffer, since queries resolve only into a buffer the CPU cannot map; and seven slots of 288 bytes each, <code>MAP_READ</code> and <code>COPY_DST</code>, holding a frame's draw, its light counts, its overflow count and then its timestamps. ADR 0013 leaves all of them out of <code>gpu_memory_bytes</code>, since they measure the frame rather than hold it.</dd>
+      <dt>Counted</dt><dd>Of itself, only <code>gpu_readbacks_skipped</code>, the slots that were still copying or mapping when their frame came round. Every other field is another mechanism's cost; <code>praxis capture</code> writes the last frame's to standard output, and <code>praxis bench</code> reduces every measured frame's into a <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span>'s form (<a href="bench.html">The bench</a>). The window shell reads none of them.</dd>
+      <dt>Where in the code</dt><dd><code>src/stats/mod.rs</code>: <code>FrameStats</code>, <code>GpuFrameStats</code>, <code>FrameRecorder</code>, <code>SystemTimer</code>, <code>CountingAllocator</code>, <code>texture_bytes</code>. <code>src/render/readback.rs</code>: <code>GpuStatsReadback</code>, <code>FrameTimestamps</code>, <code>FrameShape</code>, <code>frame_times</code>. <code>TIMED_PASSES</code> and <code>RENDER_PASSES</code> in <code>src/render/renderer.rs</code>, whose <code>render</code> hands each pass its queries; the stages in <code>src/state.rs</code> and <code>renderer.rs</code>; the sums in each owner's <code>gpu_memory_bytes</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#stats">1 &middot; What a frame's stats are</a>
+    <a href="#cpu">2 &middot; The CPU side</a>
+    <a href="#queries">3 &middot; The timestamp queries</a>
+    <a href="#ring">4 &middot; The readback ring</a>
+    <a href="#times">5 &middot; From timestamps to times</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="stats">
+  <div class="part-mark">1 &middot; <code>FrameStats</code> &middot; <code>GpuFrameStats</code> &middot; <code>src/stats/mod.rs</code></div>
+  <h2>What a frame's stats are</h2>
+  <p class="key-idea">A frame's stats are two structs: what the CPU measured while it ran the frame, complete when the frame is submitted, and what the GPU measured of it, which arrives a few frames later and is slotted in by frame number.</p>
+  <p><code>FrameStats</code> holds the CPU's times and every counter. Its <code>cpu_times</code> list the ECS systems and renderer stages in run order, each with its wall-clock time; <code>cpu_frame_time</code> runs from the start of <code>State::update</code> to the end of <code>State::render</code>. The counters are what each mechanism refused or left out, which the preparer, the upload and the acceleration structures write into the recorder as they go.</p>
+  <div class="code-source"><code>FrameStats</code>, <code>src/stats/mod.rs</code>, the counters' fields elided</div>
+<pre class="code"><code>/// What one frame cost.
+#[derive(Clone, Debug, Default)]
+pub struct FrameStats {
+    /// Wall-clock time on the CPU of each ECS system and renderer stage the
+    /// frame ran, in run order.
+    pub cpu_times: Vec&lt;(String, Duration)&gt;,
+    /// Wall-clock time from the start of `update` to the end of `render`.
+    pub cpu_frame_time: Duration,
+    /// What the GPU measured of the frame, read back a few frames after it:
+    /// `None` until then, and for good if its readback was skipped.
+    pub gpu: Option&lt;GpuFrameStats&gt;,
+    pub draw_calls: u32,
+    /// Bytes the frame's uploads wrote to GPU buffers: the camera and light
+    /// uniforms, the light buffer, the bends, the Instances it wrote, the
+    /// Instance slot count when it changed, and the dynamic TLAS's instances
+    /// its build uploads. Pools upload only while a Scene loads.
+    pub uploaded_bytes: u64,
+    …
+    /// Bytes of the GPU buffers and textures the State created, its Pools
+    /// included, summed by the engine on every backend (ADR 0013), and of
+    /// its acceleration structures, estimated. The render target and
+    /// capture's own buffers are the caller's, and the GPU stats
+    /// readback's are left out, since they measure the frame rather than
+    /// hold it.
+    pub gpu_memory_bytes: u64,
+    …
+    /// Heap allocations and reallocations on the thread that ran the frame.
+    pub heap_allocations: u64,
+    /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
+    /// game slowed by this much.
+    pub dropped_time: Duration,
+    /// Readbacks of GPU stats the frame skipped, its own or an earlier
+    /// frame's, as their ring slot was not ready and the main thread never
+    /// waits on the GPU (ADR 0016).
+    pub gpu_readbacks_skipped: u32,
+}</code></pre>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Field</th><th>What it counts</th><th>Who writes it</th></tr></thead>
+    <tbody>
+      <tr><td><code>cpu_times</code></td><td>each system's and stage's wall-clock time, in run order</td><td><code>SystemTimer</code> and <code>FrameRecorder::stage</code></td></tr>
+      <tr><td><code>cpu_frame_time</code></td><td>from the start of <code>update</code> to the end of <code>render</code></td><td><code>FrameRecorder::end</code></td></tr>
+      <tr><td><code>draw_calls</code></td><td>the draws the frame recorded, four in every frame: three indirect and the tonemapping pass's one triangle</td><td><code>Renderer::render</code></td></tr>
+      <tr><td><code>uploaded_bytes</code></td><td>bytes the frame's staging wrote, and the dynamic TLAS's entries its build uploaded</td><td><code>Renderer::upload</code> and <code>render</code></td></tr>
+      <tr><td><code>instances_written</code></td><td>the <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> the frame wrote; none for a camera move alone</td><td><code>Renderer::upload</code>, only when the upload landed</td></tr>
+      <tr><td><code>renderables_refused</code>, <code>lights_overflowed</code>, <code>moving_instances_left_out</code>, <code>bends_left_out</code></td><td>what prepare had no slot, light buffer entry, dynamic TLAS entry or bend for</td><td><code>State::update</code>, from the preparer</td></tr>
+      <tr><td><code>static_instances_left_out</code></td><td>static Instances past the static TLAS's capacity</td><td><code>Renderer::upload</code></td></tr>
+      <tr><td><code>gpu_memory_bytes</code>, <code>estimated_acceleration_structure_bytes</code>, <code>arena_bytes_in_use</code>, <code>allocator_report_bytes</code></td><td>the GPU memory sums of section 2</td><td><code>State::frame_stats</code>, when asked</td></tr>
+      <tr><td><code>heap_allocations</code></td><td>allocations and reallocations on the frame's thread between <code>begin</code> and <code>end</code></td><td><code>FrameRecorder::end</code></td></tr>
+      <tr><td><code>dropped_time</code></td><td>simulated time the <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span> skipped past their cap</td><td><code>State::update</code>, from <code>simulate</code></td></tr>
+      <tr><td><code>gpu_readbacks_skipped</code></td><td>slots not ready when their frame came round</td><td><code>GpuStatsReadback::begin_frame</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>GpuFrameStats</code> is what the GPU measured of one frame, tagged with that frame's number. Its <code>pass_times</code> hold a time for each of the twelve timed passes in the order they ran; a pass that did not run in the frame, as the dynamic TLAS's build in a frame that had nothing to build, or with the crowd's rebuild form, which never brackets it, reads as taking no time. Three spans stand beside them, each defined in section 5, and the counts the GPU wrote: the Instances and triangles the frame's draw held, phase two's share of those triangles, and the overflows of the draw, the Froxel lists and the shadow mask. With the <code>count_point_lights</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, the lit pixels and the point lights their <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span> list and whose range reaches them join; they read 0 with it off.</p>
+  <div class="code-source"><code>GpuFrameStats</code>, <code>src/stats/mod.rs</code>, the counts elided</div>
+<pre class="code"><code>/// What the GPU measured of one frame, read back a few frames after it.
+#[derive(Clone, Copy, Debug)]
+pub struct GpuFrameStats {
+    /// The frame's number: how many frames its Renderer rendered before it.
+    pub frame: u64,
+    /// GPU time of each pass, between timestamps at its start and its end,
+    /// in the order the passes ran, after the dynamic TLAS's build, between
+    /// the markers around it: no time in a frame that does not build it, as
+    /// for the bend pass in a frame that bends nothing.
+    pub pass_times: [(&amp;'static str, Duration); TIMED_PASSES.len()],
+    /// The dynamic TLAS's build, from the end of the frame before's last
+    /// pass, plus the span from the start of the first pass to the end of
+    /// the last.
+    pub frame_time: Duration,
+    /// ADR 0019's gate: from the start of culling phase one to the latest
+    /// end of the passes up to the lit pass.
+    pub gate_time: Duration,
+    /// How long after the latest end of the passes from culling phase one
+    /// up to the lit pass it started; none when it starts beside them.
+    pub lit_pass_wait: Duration,
+    …
+}</code></pre>
+  <h3>Where they go</h3>
+  <p><code>FrameStats</code> prints as four lines, each a label and then <code>key=value</code> pairs: the CPU times, the GPU times when they are there, the counts and the GPU memory. <code>praxis capture</code> renders its 60 frames, waits for the last readbacks with <code>flush_gpu_frame_stats</code>, slots each <code>GpuFrameStats</code> into the frame it names, and writes the last frame's four lines to standard output under the image. <code>praxis bench</code> keeps every frame's and reduces the measured ones into medians and p95s, the <code>Measurements</code> a Baseline is a copy of; <a href="bench.html">The bench</a> says how. The window shell asks for none of them.</p>
+  <div class="code-source"><code>Display for FrameStats</code>, <code>src/stats/mod.rs</code></div>
+<pre class="code"><code>        write!(
+            formatter,
+            "cpu_us frame={:.1}",
+            microseconds(&amp;self.cpu_frame_time)
+        )?;
+        for (name, time) in &amp;self.cpu_times {
+            write!(formatter, " {name}={:.1}", microseconds(time))?;
+        }
+        writeln!(formatter)?;
+        if let Some(gpu) = &amp;self.gpu {
+            write!(
+                formatter,
+                "gpu_us frame={:.1}",
+                microseconds(&amp;gpu.frame_time)
+            )?;
+            for (pass, time) in &amp;gpu.pass_times {
+                write!(formatter, " {pass}={:.1}", microseconds(time))?;
+            }
+            writeln!(formatter)?;
+        }</code></pre>
+</section>
+
+<section class="part prose" id="cpu">
+  <div class="part-mark">2 &middot; <code>FrameRecorder</code> &middot; <code>SystemTimer</code> &middot; <code>CountingAllocator</code></div>
+  <h2>The CPU side</h2>
+  <p class="key-idea">One recorder lives in the <code>State</code> and is reset at the start of every frame. Stages are timed by whoever runs them, with a clock they start and hand back; systems are timed by a <code>tracing</code> subscriber that sees the span bevy_ecs enters around every system run; allocations are counted by the global allocator, per thread, and read twice.</p>
+  <h3>Stages</h3>
+  <p><code>FrameRecorder::begin</code> clears the systems' runs and the stages, resets the counters, reads the thread's allocation count and starts the clock. A stage is recorded by the code that ran it: it takes an <code>Instant</code> before the work and calls <code>stage</code> after it with the stage's name, and a stage recorded twice in one frame, as the dynamic TLAS's recording is, adds its times. <code>end</code> closes the frame and takes the allocation count again. The lists are sized by the first frames and never allocate after.</p>
+  <div class="code-source"><code>FrameRecorder</code>, <code>src/stats/mod.rs</code></div>
+<pre class="code"><code>    /// Starts measuring a frame.
+    pub(crate) fn begin(&amp;mut self) {
+        self.systems.reset();
+        self.stages.clear();
+        self.counters = FrameStats::default();
+        self.allocations_at_start = thread_allocations();
+        self.started = Instant::now();
+    }
+
+    /// Records the CPU time of `stage`, which began at `started`, added to
+    /// what the frame already recorded of it, and returns the time this call
+    /// recorded.
+    pub(crate) fn stage(&amp;mut self, stage: &amp;'static str, started: Instant) -&gt; Duration {
+        let time = started.elapsed();
+        match self.stages.iter_mut().find(|(name, _)| *name == stage) {
+            Some((_, recorded)) =&gt; *recorded += time,
+            None =&gt; self.stages.push((stage, time)),
+        }
+        time
+    }
+
+    /// Ends the frame `begin` started.
+    pub(crate) fn end(&amp;mut self) {
+        self.counters.cpu_frame_time = self.started.elapsed();
+        self.counters.heap_allocations = thread_allocations() - self.allocations_at_start;
+    }</code></pre>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Stage</th><th>Starts</th><th>Ends</th><th>Recorded in</th></tr></thead>
+    <tbody>
+      <tr><td>the systems</td><td>each system's span entered</td><td>its span exited: each Tick's schedule, then the frame's</td><td><code>State::update</code>, through <code>simulate</code></td></tr>
+      <tr><td><code>prepare_frame</code></td><td>after the Ticks, before the check for lost Instance writes</td><td><code>FramePreparer::prepare</code> returns</td><td><code>State::update</code></td></tr>
+      <tr><td><code>upload</code></td><td><code>Renderer::upload</code> starts, the two <code>dynamic_tlas</code> pieces inside it taken out</td><td>the frame's uploads are staged and the encoder kept</td><td><code>Renderer::upload</code></td></tr>
+      <tr><td><code>blas_refit</code></td><td>the bend pass is recorded, in a frame that bent Meshes with either of the crowd's update forms</td><td>the head command buffer and the refits are submitted</td><td><code>Renderer::render</code></td></tr>
+      <tr><td><code>dynamic_tlas</code></td><td>three pieces: the encoder's preparation, the fill, the build's recording</td><td>each piece's end, summed</td><td><code>Renderer::upload</code> and <code>render</code></td></tr>
+      <tr><td><code>encode</code></td><td><code>Renderer::render</code> starts, less what the two stages above took inside it</td><td>the frame's command buffer is finished</td><td><code>Renderer::render</code></td></tr>
+      <tr><td><code>dynamic_tlas_submit</code></td><td>the build's own submit</td><td>it returns</td><td><code>Renderer::render</code></td></tr>
+      <tr><td><code>submit</code></td><td>the frame's submit</td><td>it returns</td><td><code>Renderer::render</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The stages at the commit above, as <code>src/state.rs</code> and <code>src/render/renderer.rs</code> record them. <code>praxis bench</code> sums <code>blas_refit</code>, <code>dynamic_tlas</code> and <code>dynamic_tlas_submit</code> into <code>dynamic_tlas_cpu_microseconds</code>, the CPU cost ADR 0020 caps.</p>
+  <h3>Systems</h3>
+  <p>bevy_ecs's <code>trace</code> feature enters a <code>tracing</code> span named <code>system</code> around every system run. A span reports to the subscriber that was the default when it was created, whatever the global subscriber filters, so <code>State::new</code> builds its schedules inside <code>SystemTimer::scope</code>, which makes the timer the default subscriber for that closure and nothing else. The timer accepts only spans named <code>system</code> from a <code>bevy_ecs</code> target, keeps each system's name without its module path or generic arguments, and on every exit pushes the run's time in run order. Events logged inside the scope are dropped.</p>
+  <div class="code-source"><code>SystemTimer</code>, <code>src/stats/mod.rs</code></div>
+<pre class="code"><code>    /// Calls `create_systems` with this timer as the default subscriber;
+    /// events logged meanwhile are dropped.
+    pub(crate) fn scope&lt;T&gt;(&amp;self, create_systems: impl FnOnce() -&gt; T) -&gt; T {
+        tracing::subscriber::with_default(self.clone(), create_systems)
+    }
+…
+impl tracing::Subscriber for SystemTimer {
+    fn enabled(&amp;self, metadata: &amp;tracing::Metadata&lt;'_&gt;) -&gt; bool {
+        metadata.name() == "system" &amp;&amp; metadata.target().starts_with("bevy_ecs")
+    }
+…
+    fn enter(&amp;self, span: &amp;tracing::span::Id) {
+        self.spans().systems[span_index(span)].entered = Some(Instant::now());
+    }
+
+    fn exit(&amp;self, span: &amp;tracing::span::Id) {
+        let mut spans = self.spans();
+        let index = span_index(span);
+        if let Some(entered) = spans.systems[index].entered.take() {
+            spans.runs.push((index, entered.elapsed()));
+        }
+    }</code></pre>
+  <h3>Heap allocations</h3>
+  <p>The crate's global allocator is <code>CountingAllocator</code>, the system allocator with a thread-local counter in front of it. Every <code>alloc</code>, <code>alloc_zeroed</code> and <code>realloc</code> adds one; <code>dealloc</code> adds nothing. The counter is read through <code>try_with</code>, since an allocator may not panic, and the cell has no destructor, so it outlives everything its thread allocates. A frame's count is the difference between the two readings on the thread that ran it: whatever the compute pool's workers allocate is not in it.</p>
+  <div class="code-source"><code>CountingAllocator</code>, <code>src/stats/mod.rs</code></div>
+<pre class="code"><code>impl CountingAllocator {
+    fn count(&amp;self) {
+        // `try_with`, as an allocator must not panic. The counter has no
+        // destructor, so it is never gone while its thread allocates.
+        let _ = THREAD_ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+    }
+}
+…
+    unsafe fn alloc(&amp;self, layout: Layout) -&gt; *mut u8 {
+        self.count();
+        // SAFETY: the caller meets `alloc`'s contract, which `System` shares.
+        unsafe { System.alloc(layout) }
+    }
+…
+#[global_allocator]
+static ALLOCATOR: CountingAllocator = CountingAllocator;</code></pre>
+  <h3>Bytes uploaded</h3>
+  <p><code>uploaded_bytes</code> is what the frame's writes cost the GPU in bytes. <code>Renderer::upload</code> hands the frame's camera and light uniforms, its light buffer, its bends, the Instances it writes and, when it changed, the Instance slot count to the per-frame staging ring (<a href="staging.html">Staging</a>), which returns the bytes it copied; 0 means the slot failed to map and the frame's Instance writes are lost, to be written again. The dynamic TLAS's build adds the bytes of the entries it uploads. Loads stage outside the ring and count nothing here.</p>
+  <h3>GPU memory</h3>
+  <p><code>gpu_memory_bytes</code> is the engine's own ledger, summed the same way on every backend, because wgpu-hal's default allocator report is <code>None</code> and Metal keeps the default (ADR 0013). <code>Renderer::gpu_memory_bytes</code> adds the camera and light uniforms, the light buffer and the Instance buffer, then asks each owner: the render targets, the bend pass, the BLAS refit, the Froxel pass, the shadow mask pass, the culling pass, the Mesh <span class="concept" data-term="Pool" data-tip="The central store of one kind of resource (Mesh pool, Material pool). It hands out Handles; components never own resources.">Pool</span>, the acceleration structures' estimate, the dynamic TLAS, the Material pool, the per-frame staging and the tonemapping pass.</p>
+  <div class="code-source"><code>Renderer::gpu_memory_bytes</code>, <code>src/render/renderer.rs</code></div>
+<pre class="code"><code>    /// Bytes of the buffers and textures this Renderer created, its Pools
+    /// included, and of its acceleration structures, estimated; the render
+    /// target is the caller's. The GPU stats readback's buffers are left
+    /// out, since they measure the frame rather than hold it.
+    pub fn gpu_memory_bytes(&amp;self) -&gt; u64 {
+        let buffers = [
+            &amp;self.camera_buffer,
+            &amp;self.light_uniform_buffer,
+            &amp;self.light_buffer,
+            &amp;self.instance_buffer,
+        ];
+        buffers.iter().map(|buffer| buffer.size()).sum::&lt;u64&gt;()
+            + self
+                .render_targets
+                .gpu_memory_bytes(self.transient_saves_memory)
+            + self.bend_pass.gpu_memory_bytes()
+            + self
+                .blas_refit
+                .as_ref()
+                .map_or(0, BlasRefit::gpu_memory_bytes)
+            + self.froxel_pass.gpu_memory_bytes()
+            + self.shadow_mask_pass.gpu_memory_bytes()
+            + self.culling_pass.gpu_memory_bytes()
+            + self.mesh_pool.gpu_memory_bytes()
+            + self.estimated_acceleration_structure_bytes()
+            + self.dynamic_tlas.gpu_memory_bytes()
+            + self
+                .material_pool
+                .gpu_memory_bytes(self.transient_saves_memory)
+            + self.frame_staging.gpu_memory_bytes()
+            + self.tonemapping_pass.gpu_memory_bytes()
+    }</code></pre>
+  <p>A buffer counts its size. A texture counts through <code>texture_bytes</code>: the theoretical footprint of each level of its mip chain, summed and multiplied by its sample count, except a transient attachment on an adapter that keeps one in tile memory, which counts 0; the lit pass's 4x colour attachment is memoryless on Apple GPUs. Acceleration structures have no size wgpu exposes, so each is estimated from bytes measured once per adapter and kept in <code>estimated_acceleration_structure_bytes</code> beside the total (ADR 0017).</p>
+  <div class="code-source"><code>texture_bytes</code>, <code>src/stats/mod.rs</code></div>
+<pre class="code"><code>pub(crate) fn texture_bytes(texture: &amp;wgpu::Texture, transient_saves_memory: bool) -&gt; u64 {
+    if transient_saves_memory
+        &amp;&amp; texture
+            .usage()
+            .contains(wgpu::TextureUsages::TRANSIENT_ATTACHMENT)
+    {
+        return 0;
+    }
+    let mip_chain_bytes: u64 = (0..texture.mip_level_count())
+        .map(|level| {
+            let size = texture.size().mip_level_size(level, texture.dimension());
+            texture.format().theoretical_memory_footprint(size)
+        })
+        .sum();
+    mip_chain_bytes * u64::from(texture.sample_count())
+}</code></pre>
+  <p>Three things the engine creates stay out of the sum, each for a reason ADR 0013 records. The GPU stats readback's query set, resolve buffer and slots measure the frame rather than hold it. The target the frame is presented into is the caller's: a window's surface textures are the surface's, not the engine's, and capture's stand-in for them is left out so that a capture counts what a windowed run counts. Capture's read-back buffer is the caller's for the same reason. The load staging belt lives only until its copies have run and never counts. <code>arena_bytes_in_use</code> is the Mesh pool's <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>' occupied bytes, kept beside the total because the total counts each Arena whole whatever it holds. <code>allocator_report_bytes</code> is wgpu's own report where a backend has one, a diagnostic that the bench records nowhere.</p>
+  <h3>Dropped time</h3>
+  <p><code>State::update</code> runs the Ticks the frame's delta completes, under a cap, and <code>simulate</code> returns the simulated time past the cap it skipped; the recorder keeps it as <code>dropped_time</code>, the amount the game slowed by (ADR 0022).</p>
+</section>
+
+<section class="part prose" id="queries">
+  <div class="part-mark">3 &middot; <code>TIMED_PASSES</code> &middot; <code>FrameTimestamps</code></div>
+  <h2>The timestamp queries</h2>
+  <p class="key-idea">Twelve timed passes, two queries each: a frame owns 24 consecutive queries of one query set, and each pass is handed the pair at its position, as a compute pass's or a render pass's timestamp writes, or as the markers that bracket work no pass can time.</p>
+  <p class="order-label">The timed passes, in <code>TIMED_PASSES</code>' order</p>
+  <ol class="pass-order">
+    <li class="warm">dynamic TLAS build</li><li class="warm">bend pass</li><li class="warm">BLAS refit</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
+  </ol>
+  <div class="code-source"><code>TIMED_PASSES</code>, <code>src/render/renderer.rs</code></div>
+<pre class="code"><code>pub(crate) const TIMED_PASSES: [&amp;str; 12] = [
+    DYNAMIC_TLAS_BUILD,
+    BEND_PASS,
+    BLAS_REFIT_PASS,
+    CullingPhase::One.label(),
+    FROXEL_PASS,
+    DEPTH_PREPASS,
+    DEPTH_PYRAMID_PASS,
+    CullingPhase::Two.label(),
+    PHASE_TWO_DEPTH_PASS,
+    SHADOW_MASK_PASS,
+    LIT_PASS,
+    TONEMAPPING_PASS,
+];</code></pre>
+  <p>The three marked passes run in some frames only: the dynamic TLAS's build where the frame has Moving Instances or the fill before held some, so an emptied TLAS is rebuilt once, the bend pass where it bends Meshes, the BLAS refit where it bent them with the crowd's refit form. Phase two's depth pass and the shadow mask pass run only with the <code>shadow_rays</code> switch on; with it off they are created untimed and read as taking no time. Timestamp queries are in the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> (ADR 0021), so every frame on every adapter is timed.</p>
+  <p><code>begin_frame</code> returns a <code>FrameTimestamps</code>, the query set and the frame's first query, and <code>Renderer::render</code> asks it for each pass's writes as it records the pass. A compute pass and a render pass get wgpu's timestamp writes at their start and end. The dynamic TLAS's build is not a pass, so it is bracketed: the end timestamp of a marker before it and the start timestamp of a marker after it, both compute passes that query the TLAS so that Metal orders them around the build (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>). With the crowd's rebuild form the build is never bracketed, since its rebuilds through wgpu would fail the first marker's query, and reads as taking no time. The BLAS refit is recorded through wgpu-hal with no pass of its own, so it gets only a marker after it, which writes the refit's end query at its start; the refit's time runs from the bend pass's end (<a href="blas-refit.html#marker">The BLAS refit</a>).</p>
+  <div class="code-source"><code>FrameTimestamps</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>    /// The timestamp writes of `pass`, a compute pass of `TIMED_PASSES`.
+    pub fn compute_pass(self, pass: &amp;str) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
+        let first = self.first_query_of(pass);
+        wgpu::ComputePassTimestampWrites {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: Some(first),
+            end_of_pass_write_index: Some(first + 1),
+        }
+    }
+…
+    /// The timestamp writes that bracket `pass`, of `TIMED_PASSES`, with
+    /// two compute passes around it: the end of the first, the start of the
+    /// second.
+    pub fn bracket(self, pass: &amp;str) -&gt; [wgpu::ComputePassTimestampWrites&lt;'a&gt;; 2] {
+        let first = self.first_query_of(pass);
+        [
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: None,
+                end_of_pass_write_index: Some(first),
+            },
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: Some(first + 1),
+                end_of_pass_write_index: None,
+            },
+        ]
+    }
+
+    /// The timestamp write of a marker that ends `pass`, of `TIMED_PASSES`,
+    /// at its start: `pass` starts where the pass before it ends.
+    pub fn marker_after(self, pass: &amp;str) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
+        wgpu::ComputePassTimestampWrites {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: Some(self.first_query_of(pass) + 1),
+            end_of_pass_write_index: None,
+        }
+    }
+
+    fn first_query_of(self, pass: &amp;str) -&gt; u32 {
+        self.first_query + 2 * pass_position(pass) as u32
+    }</code></pre>
+  <p>Which of the optional passes ran is told to the ring after the frame is recorded, as a <code>FrameShape</code>: whether the build was bracketed, whether the bend pass ran, whether the refit was timed. A frame that bent Meshes but whose refit went untimed, the rebuild form's, counts no build apart, since its build's submission is then spanned from the bend pass. The shape decides which queries the readback trusts: a pass that did not run leaves the stale timestamps of the frame that last used its slot.</p>
+</section>
+
+<section class="part prose" id="ring">
+  <div class="part-mark">4 &middot; <code>GpuStatsReadback</code> &middot; <code>src/render/readback.rs</code></div>
+  <h2>The readback ring</h2>
+  <p class="key-idea">A frame's slot is filled in three steps on three later frames: its counts are copied in as it is recorded, its timestamps are resolved and copied once its submission has completed, and its buffer is mapped once that copy has completed and a fixed number of frames have passed. The main thread never waits for any of it; a slot that is not ready when its frame comes round is skipped and counted.</p>
+  <p>Only the main thread submits and polls (ADR 0016), and a window polls only through its submissions, so each step is seen done only at a later frame's submit. Three constants fix the lags, and the ring's size follows from them, so from the frames in flight.</p>
+  <div class="code-source"><code>src/render/readback.rs</code></div>
+<pre class="code"><code>/// Frames after its own by which a frame's submission has completed: those
+/// in flight and the one being recorded. Its timestamps resolve then.
+const COMPLETION_LAG: u64 = FRAMES_IN_FLIGHT as u64 + 1;
+
+/// Frames after the frame copying a slot's timestamps when its map is
+/// requested at the earliest, once that copy completed. The bench has
+/// waited for that frame by then, so each frame requests one map whatever
+/// the GPU's timing, and the frame's first submission maps it
+/// [ref:wgpu-30-submit-maintains]. A map requested with the copy maps in
+/// whichever submission or poll first sees the copy complete
+/// [ref:wgpu-30-map-after-submission], and wgpu allocates for it there
+/// [ref:wgpu-30-handle-mapping]: inside a frame or between two, as the GPU's
+/// timing falls.
+const MAP_LAG: u64 = FRAMES_IN_FLIGHT as u64;
+
+/// A slot's timestamps are copied `COMPLETION_LAG` frames after its frame.
+/// A window polls only through its submissions, so the copy may be seen
+/// complete as late as the submissions `MAP_LAG` frames after it; its map is
+/// then requested in the next frame and done by that frame's submissions,
+/// and the slot is read, and reused, in the frame after.
+const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;
+
+/// A timestamp at the start and one at the end of each timed pass.
+const QUERIES_PER_FRAME: usize = 2 * TIMED_PASSES.len();
+
+const TIMESTAMP_BYTES: u64 = QUERIES_PER_FRAME as u64 * wgpu::QUERY_SIZE as u64;</code></pre>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it fixes</th></tr></thead>
+    <tbody>
+      <tr><td><code>FRAMES_IN_FLIGHT</code></td><td class="n">2</td><td>frames submitted but not finished when the next starts, at most (<code>src/render/mod.rs</code>)</td></tr>
+      <tr><td><code>COMPLETION_LAG</code></td><td class="n">3</td><td>frames after its own by which a frame's submission has completed; its timestamps resolve then</td></tr>
+      <tr><td><code>MAP_LAG</code></td><td class="n">2</td><td>frames after the copy's before its map is requested, so the bench has waited for that frame</td></tr>
+      <tr><td><code>SLOT_COUNT</code></td><td class="n">7</td><td>the ring: copy at 3, seen complete by 5, mapped by 6, read and reused at 7</td></tr>
+      <tr><td><code>QUERIES_PER_FRAME</code></td><td class="n">24</td><td>two per timed pass</td></tr>
+      <tr><td><code>TIMESTAMP_BYTES</code></td><td class="n">192</td><td>24 queries of <code>QUERY_SIZE</code>, 8 bytes</td></tr>
+      <tr><td><code>LIGHT_COUNTS_OFFSET</code></td><td class="n">72</td><td>after <code>FrameDraw</code>: two indirect draws of 20 bytes, two counts, phase two's offsets, a 12-byte dispatch and 4 bytes of padding</td></tr>
+      <tr><td><code>SHADOW_MASK_OVERFLOW_OFFSET</code></td><td class="n">88</td><td>after the 16 bytes of <code>LightCounts</code></td></tr>
+      <tr><td><code>TIMESTAMP_OFFSET</code></td><td class="n">96</td><td>after the 4-byte overflow count, rounded up to a multiple of 8</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>src/render/readback.rs</code>, <code>src/render/mod.rs</code>, <code>FrameDraw</code> in <code>src/render/culling_pass.rs</code> and <code>LightCounts</code> in <code>src/render/froxel_pass.rs</code> at the commit above; the offsets are the struct sizes added up.</p>
+  <h3>A slot's states</h3>
+  <p>A slot is one buffer, a state the main thread keeps, and a progress byte that wgpu's callbacks write from whichever thread runs them.</p>
+  <div class="code-source"><code>SlotState</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>/// How far a slot's copy and map have come, as wgpu's callbacks report it.
+const COPY_PENDING: u8 = 0;
+const COPY_DONE: u8 = 1;
+const MAP_PENDING: u8 = 2;
+const MAP_DONE: u8 = 3;
+const MAP_FAILED: u8 = 4;
+…
+#[derive(Clone, Copy)]
+enum SlotState {
+    Free,
+    /// The frame's counts are copied in; its timestamps wait for its
+    /// submission to complete.
+    Recorded {
+        frame: u64,
+    },
+    /// The frame's timestamps are being copied in too, by the submission of
+    /// frame `copied_in`; the buffer maps once the copy completed.
+    Copying {
+        frame: u64,
+        copied_in: u64,
+    },
+    /// The frame's timestamps are copied in too, and the buffer maps.
+    Mapping {
+        frame: u64,
+    },
+}</code></pre>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Frame</th><th>What happens to frame N's slot</th><th>State after</th></tr></thead>
+    <tbody>
+      <tr><td>N</td><td><code>begin_frame</code> reads the slot's last occupant and takes it; <code>end_frame</code> records the copies of the draw, the light counts and the overflow count into it, and a work-done callback that raises <code>frames_completed</code> past N</td><td><code>Recorded</code></td></tr>
+      <tr><td>N + 3</td><td><code>begin_frame</code> sees N's submission completed, resolves its 24 queries into the resolve buffer and copies them into the slot; N + 3's work-done callback marks the copy done</td><td><code>Copying</code></td></tr>
+      <tr><td>N + 5 or N + 6</td><td><code>begin_frame</code> requests the map once the copy is done and was recorded at least <code>MAP_LAG</code> frames back: at N + 5 where N + 4's submissions saw it done, else at N + 6, since a window sees it only through N + 5's submissions; that frame's submissions map it</td><td><code>Mapping</code></td></tr>
+      <tr><td>N + 7</td><td><code>begin_frame</code> reads the slot, pushes N's <code>GpuFrameStats</code>, unmaps the buffer and takes the slot for frame N + 7</td><td><code>Recorded</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Two skips are possible, both counted in <code>gpu_readbacks_skipped</code>. At N + 3, if N's submission has not completed, N's timestamps are not resolved at all and its slot is freed: Metal reads a timestamp resolved before its pass's submission completed as 0 or stale, so a late resolve would be worse than none. At N + 7, if the slot is still copying or mapping, frame N + 7 goes untimed and its passes get no queries; the slot is read when its map lands and the ring next comes round. A frame that resolved nothing also pushes nothing: its <code>FrameStats</code> keep <code>gpu</code> as <code>None</code>.</p>
+  <div class="code-source"><code>GpuStatsReadback::begin_frame</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>        self.read_back.clear();
+        if let Some(latest_copy) = self.frame.checked_sub(MAP_LAG) {
+            self.request_maps(latest_copy);
+        }
+        if let Some(resolved) = self.frame.checked_sub(COMPLETION_LAG) {
+            let index = slot_index(resolved);
+            if let SlotState::Recorded { frame } = self.slots[index].state {
+                if self.frames_completed.load(Ordering::Acquire) &gt; frame {
+                    self.resolve(encoder, index, frame);
+                } else {
+                    // Its timestamps may not be written yet.
+                    self.slots[index].state = SlotState::Free;
+                    recorder.counters.gpu_readbacks_skipped += 1;
+                }
+            }
+        }
+
+        let index = slot_index(self.frame);
+        if !self.read(index) {
+            recorder.counters.gpu_readbacks_skipped += 1;
+            return None;
+        }
+        self.slots[index].state = SlotState::Recorded { frame: self.frame };
+        self.slots[index].shape = FrameShape::default();
+        Some(FrameTimestamps {
+            query_set: &amp;self.query_set,
+            first_query: (index * QUERIES_PER_FRAME) as u32,
+        })</code></pre>
+  <p><code>end_frame</code> copies the three counters the GPU wrote during the frame into the slot's head, in front of the timestamps' place: the culling pass's <code>FrameDraw</code>, whose indirect arguments carry the draw's index count and whose two counts are the Instances drawn and overflowed; the Froxel pass's <code>LightCounts</code>; and the shadow mask pass's 4-byte count of the lights it had no bit for. Each is read on the CPU with <code>pod_read_unaligned</code> at its offset. A frame whose draw, lists or mask overflowed is warned about once, until a frame read back has room for all.</p>
+  <div class="code-source"><code>GpuStatsReadback::end_frame</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>        let (frame, frames_completed) = (self.frame, self.frames_completed.clone());
+        // At most the one slot `begin_frame` resolved.
+        let copying = self.copying_in(frame).next();
+        encoder.on_submitted_work_done(move || {
+            frames_completed.fetch_max(frame + 1, Ordering::Release);
+            if let Some(progress) = copying {
+                progress.store(COPY_DONE, Ordering::Release);
+            }
+        });
+        self.frame += 1;</code></pre>
+  <p><code>flush</code> is the end of a run: it waits for the GPU with <code>wait_indefinitely</code>, resolves every recorded slot in one encoder, oldest frame first, submits it, waits again, requests every map, waits a third time and reads every slot. Capture calls it after its last frame, so each frame's <code>GpuFrameStats</code> can be slotted into the frame it names before the stats are returned.</p>
+  <p>All 168 queries live in one query set because Apple GPUs allow 32 counter sample buffers and on Metal each query set is one. The slot's map is requested a fixed number of frames after its copy, not as soon as the copy is seen done, so that the frame in which wgpu maps the buffer, and allocates the list of its callbacks, does not depend on how the GPU's timing happened to fall: a frame's <code>heap_allocations</code> are then the same whether the GPU finished the frame before between frames or inside the next one.</p>
+</section>
+
+<section class="part prose" id="times">
+  <div class="part-mark">5 &middot; <code>frame_times</code> &middot; <code>src/render/readback.rs</code></div>
+  <h2>From timestamps to times</h2>
+  <p class="key-idea">A frame's GPU time is a span, not a sum. Metal runs neighbouring passes side by side wherever neither writes what the other binds, so adding the passes' times would count the shared stretches twice; the frame is timed from its passes' earliest start to their latest end, submission by submission, with the dynamic TLAS's build counted only where it sticks out past the frame before.</p>
+  <p><code>frame_times</code> is a pure function of the 24 ticks, the frame's shape, which passes are untimed, a floor for the build and the tick period. Every time it returns is <code>end.saturating_sub(begin)</code> scaled by the period, so a stale or missing timestamp reads as no time rather than as a huge one. Its helper <code>bounds</code> takes a range of passes and returns the earliest start and latest end among those that wrote both timestamps, the refit always left out since its start is never written.</p>
+  <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>    let build = if shape.dynamic_tlas_built {
+        time(ticks[0].max(build_floor), ticks[1])
+    } else {
+        Duration::ZERO
+    };
+    // From the earliest start to the latest end of `passes` that write both
+    // timestamps: Metal can run a pass alongside those recorded around it
+    // when it reads none of their output, so the Froxel pass can start
+    // before culling phase one, and a pass can end after the last.
+    let bounds = |passes: std::ops::Range&lt;usize&gt;| {
+        passes
+            .filter(|&amp;pass| pass != blas_refit &amp;&amp; !untimed[pass])
+            .fold((u64::MAX, 0), |(begin, end), pass| {
+                (begin.min(ticks[2 * pass]), end.max(ticks[2 * pass + 1]))
+            })
+    };
+    let span = |passes| {
+        let (begin, end) = bounds(passes);
+        time(begin, end)
+    };
+    // The refit runs from the end of the bend pass, and the frame's other
+    // passes in a later submission. A frame that bends nothing records no
+    // bend pass, whose timestamps are then an earlier frame's.
+    let frame_time = if shape.blas_refitted {
+        build
+            + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
+            + span(blas_refit + 1..TIMED_PASSES.len())
+    } else {
+        let first_pass = if shape.bent {
+            bend_pass
+        } else {
+            blas_refit + 1
+        };
+        build + span(first_pass..TIMED_PASSES.len())
+    };</code></pre>
+  <h3>The GPU frame total</h3>
+  <p>The frame's passes reach the GPU in up to three submissions: the bend pass with the BLAS refits and their marker, the dynamic TLAS's build between its markers, and the rest. <code>frame_time</code> is the build, plus the span of each submission of passes: with a timed refit, from the bend pass's start to the refit marker's start and then the span of the passes after the refit; without one, the span from the bend pass or, in a frame that bent nothing, from culling phase one. Neither the GPU's idle time between submissions nor what a submission records before its first pass counts.</p>
+  <p>The build's time starts at the later of its first marker's end and the floor, and the floor is the tick at which the frame before's last pass ended, which the readback keeps from the last frame it read and hands on only to the frame that directly follows. The build is submitted before the frame's passes and, with two frames in flight, runs beside the frame before's lit and tonemapping passes, which bind no TLAS; counted from its own marker, that overlap would sit in the frame before's span and again in this frame's build. Where the build starts on the GPU, and what its two markers are, is on <a href="dynamic-tlas.html#build">The dynamic TLAS</a>; the refit's marker on <a href="blas-refit.html#marker">The BLAS refit</a>.</p>
+  <h3>The gate and the lit pass's wait</h3>
+  <p>ADR 0019's gate is the span its reopen clause names: from the start of culling phase one, not from the earliest start among the gate's passes, to the latest end of the passes up to and including the lit pass. The build and the tonemapping pass are outside it. The lit pass's wait is how long after the latest end of the passes from culling phase one up to it the lit pass started, and none where it started beside them; with the span of the passes before it and the lit pass's own time it makes up the gate, which is how <code>praxis report</code> prints the gate as a table that sums.</p>
+  <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>    let culling_phase_one = pass_position(CullingPhase::One.label());
+    let (_, gate_end) = bounds(culling_phase_one..lit_pass + 1);
+    let (_, before_lit_end) = bounds(culling_phase_one..lit_pass);
+    FrameTimes {
+        pass_times,
+        frame_time,
+        gate_time: time(ticks[2 * culling_phase_one], gate_end),
+        lit_pass_wait: time(before_lit_end, ticks[2 * lit_pass]),
+        last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
+    }</code></pre>
+  <h3>A pass's own time</h3>
+  <p>Apple GPUs can run a render pass's vertex stage while its fragment stage waits for the passes before it, and the M4 Pro writes the pass's start timestamp as the vertex stage starts: the lit pass's beside the shadow mask pass in some frames, the tonemapping pass's beside the lit pass in every frame. A time read from its own two timestamps would then hold the wait. So a render pass counts from the latest end of the passes before it that it waits on, if later than its own start: its time is what it adds past them. The depth pre-pass and phase two's depth pass do not count from the Froxel pass's end, which only the lit pass and later read; Metal can run them beside the Froxel pass and end them first, and a floor at its end would read them as 0. A compute pass keeps its own time, as the Froxel pass runs beside culling phase one and outlasts it. <code>counted_begin</code> models no other dependency: a render pass's floor is the latest end of every pass that ran before it, from the bend pass on, with the Froxel pass left out for the passes before the lit pass, whether or not the pass waited on each of them; a pass that did not run in the frame bounds nothing, since its end timestamp is stale.</p>
+  <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>    let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
+    let counted_begin = |pass: usize| {
+        let begin = ticks[2 * pass];
+        if !RENDER_PASSES.contains(&amp;TIMED_PASSES[pass]) {
+            return begin;
+        }
+        (bend_pass..pass)
+            .filter(|&amp;earlier| wrote_end(earlier) &amp;&amp; (earlier != froxel_pass || pass &gt;= lit_pass))
+            .map(|earlier| ticks[2 * earlier + 1])
+            .fold(begin, u64::max)
+    };
+    let pass_times = std::array::from_fn(|pass| {
+        let taken = match pass {
+            0 =&gt; build,
+            _ if pass == bend_pass &amp;&amp; !shape.bent =&gt; Duration::ZERO,
+            _ if pass == blas_refit &amp;&amp; shape.blas_refitted =&gt; {
+                time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1])
+            }
+            _ if pass == blas_refit =&gt; Duration::ZERO,
+            _ if untimed[pass] =&gt; Duration::ZERO,
+            _ =&gt; time(counted_begin(pass), ticks[2 * pass + 1]),
+        };
+        (TIMED_PASSES[pass], taken)
+    });</code></pre>
+  <h3 id="overlap">Overlap on Metal</h3>
+  <p>Metal orders passes by hazard tracking: a pass waits for an earlier pass only where it binds a resource that pass wrote, or writes one it read (<a href="metal-quirks.html#hazards">Metal quirks</a>). Any two neighbouring passes with no such hazard can run side by side, and a pass's two timestamps then share time with its neighbours': the Froxel pass starts before culling phase one, the lit pass's vertex stage starts beside the shadow mask pass, the tonemapping pass's beside the lit pass. A single pass's time is therefore a reading of that pass under its neighbours, not a cost that could be added to theirs; the spans, the GPU frame total and the gate, count each shared stretch once. How much Metal overlaps also depends on whether frames queue on the GPU: when the CPU frame is shorter than the GPU frame, passes that overlap on an idle GPU stop overlapping. Only a span, or a difference of two whole frames, compares two changes fairly.</p>
+  <h3>Shadow-ray time</h3>
+  <p>No pass is only the rays: they add phase two's depth pass and the shadow mask pass and change the lit pass. So the bench renders each scene twice, the second time with <code>shadow_rays: false</code>, and <code>shadow_ray_microseconds</code> in <code>src/bench/mod.rs</code> is, for each measured frame, the frame's GPU total with rays on less the same frame's with them off; both runs draw the same frames from the same camera path, so the frames pair. The gate is taken from the rays-off run, as ADR 0019 asks. Each total carries its own noise, so where the rays cost almost nothing the difference is centred near zero and its median can read below it; <code>check_regression</code> therefore passes anything at or below its Baseline, and from a Baseline at or below zero treats any growth as past every ratio and fails it only past the noise floor.</p>
+  <div class="code-source"><code>measure</code>, <code>src/bench/mod.rs</code></div>
+<pre class="code"><code>        shadow_ray_microseconds: spread(
+            measured_gpu
+                .iter()
+                .zip(measured_without_rays)
+                .map(|(with, without)| {
+                    microseconds(with.frame_time) - microseconds(without.frame_time)
+                })
+                .collect(),
+        ),</code></pre>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">Unit tests feed <code>frame_times</code> made-up ticks and pin each rule of the accounting; a GPU test drives the ring with frames that never complete; integration tests capture a Reference scene and check every CPU stage, every pass and the memory sum to the byte.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>with a timed refit the frame is the build, the bend-to-marker span and the rest's span; with proxies the refit reads 0 and the span runs from the bend pass; a still frame times neither build nor bend</td></tr>
+      <tr><td><code>a_frame_spans_its_passes_earliest_start_and_latest_end</code></td><td><code>readback.rs</code></td><td>a Froxel pass that starts before culling and a lit pass that ends after the last stretch the frame; an untimed pass's stale ticks span nothing; no pass outlasts the frame</td></tr>
+      <tr><td><code>the_gate_spans_culling_phase_one_to_the_lit_pass</code></td><td><code>readback.rs</code></td><td>the gate runs from culling's start to the lit pass's end, without the build or the passes after, even where the Froxel pass starts first; the last pass's end</td></tr>
+      <tr><td><code>the_lit_pass_waits_from_the_latest_end_before_it</code></td><td><code>readback.rs</code></td><td>the wait from the latest end before it, with a stale end from an untimed pass ignored; it and the passes make up the gate; a lit pass beside them waits for none</td></tr>
+      <tr><td><code>a_render_pass_counts_from_the_end_of_the_passes_before_it</code></td><td><code>readback.rs</code></td><td>the lit and tonemapping passes count past the passes before them; the Froxel pass keeps its own time; a pass that did not run bounds nothing; neither the frame nor the gate moves</td></tr>
+      <tr><td><code>a_depth_pass_counts_past_the_froxel_pass_it_does_not_read</code></td><td><code>readback.rs</code></td><td>both depth passes keep their own time past a Froxel pass that ends after them; the lit pass counts from its end</td></tr>
+      <tr><td><code>readbacks_not_ready_are_skipped_and_counted</code></td><td><code>readback.rs</code></td><td>on a GPU: frames never submitted skip their timestamps from <code>COMPLETION_LAG</code> on, counted, and none is read; a slot whose copy was dropped is skipped once the ring comes round and the next slot is read</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> at 160&times;90: the draw calls, the first and a later frame's uploaded bytes, no dropped time, the acceleration structures' estimate, <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> to the byte, every system and stage named, their sum within the frame, no readback skipped, the twelve pass names, each pass's time within the frame, allocations counted, the printout within five lines</td></tr>
+      <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s <code>instances_drawn</code> and <code>triangles_drawn</code> equal its closed-form counts, none overflowed; after the first frame only what moves is written; <code>town</code>'s uploaded bytes</td></tr>
+      <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>the orrery's entries join <code>uploaded_bytes</code> every frame, and its build never exceeds the frame</td></tr>
+      <tr><td><code>camera_motion_writes_no_instances</code></td><td><code>tests/frame_stats.rs</code></td><td>on the scenes whose camera moves, <code>instances_written</code> is 0 after the first frame</td></tr>
+      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery's <code>heap_allocations</code> per frame are equal whether each frame's work was retired by a poll between frames or left finished for the next frame's submissions</td></tr>
+      <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a refused Mesh leaves the pool's <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> as they were</td></tr>
+      <tr><td><code>a_texture_two_materials_share_loads_once</code></td><td><code>src/assets/material.rs</code></td><td>a shared texture grows the pool's <code>gpu_memory_bytes</code> once</td></tr>
+      <tr><td><code>each_froxel_lists_the_point_lights_whose_range_reaches_into_its_bounds</code></td><td><code>renderer.rs</code></td><td>a rendered frame leaves <code>gpu_memory_bytes</code>, beside the staging ring, as creation left it</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the Capability floor.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The stats are what every other page's cost table is read from. Their own cost is the ring: a few kilobytes that ADR 0013 keeps out of the memory they count, and the slot's map and read on the main thread, whose allocations are fixed in place by the map lag.</p>
+  <p>Medians from the committed Baselines, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, as <code>praxis report</code> prints them; the counters are medians over the same frames. CI's lavapipe Baselines, at 640&times;360 with only their counters judged, are left out. On the reference machine the frame times and the gate are judged against their <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019's gate, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget is to split into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, at sizes M4 sets (ADRs 0013, 0017); today it is one number, and each kind's capacity is provisional. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budgets</span>, the counters against their Baselines.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame</th><th class="n">GPU frame</th><th class="n">Gate</th><th class="n">Heap allocations</th><th class="n">GPU memory bytes</th><th class="n">Uploaded bytes</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">265.9</td><td class="n">4,094.7</td><td class="n">849.5</td><td class="n">345</td><td class="n">663,385,447</td><td class="n">272</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">482.6</td><td class="n">2,338.8</td><td class="n">672.9</td><td class="n">351</td><td class="n">767,625,381</td><td class="n">272</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">707.4</td><td class="n">2,341.4</td><td class="n">750.5</td><td class="n">348</td><td class="n">767,625,381</td><td class="n">272</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">186.1</td><td class="n">6,689.1</td><td class="n">1,210.1</td><td class="n">347</td><td class="n">683,925,801</td><td class="n">416</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">362.8</td><td class="n">2,736.3</td><td class="n">865.1</td><td class="n">353</td><td class="n">787,821,023</td><td class="n">416</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.8</td><td class="n">2,717.7</td><td class="n">908.4</td><td class="n">350</td><td class="n">787,821,023</td><td class="n">416</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">181.6</td><td class="n">3,851.5</td><td class="n">773.8</td><td class="n">347</td><td class="n">663,389,964</td><td class="n">416</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">342.1</td><td class="n">1,692.5</td><td class="n">548.0</td><td class="n">353</td><td class="n">767,629,931</td><td class="n">416</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.0</td><td class="n">1,611.1</td><td class="n">571.4</td><td class="n">350</td><td class="n">767,629,931</td><td class="n">416</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">208.6</td><td class="n">3,664.5</td><td class="n">818.2</td><td class="n">345</td><td class="n">683,213,657</td><td class="n">416</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">355.0</td><td class="n">1,680.2</td><td class="n">565.2</td><td class="n">351</td><td class="n">787,362,898</td><td class="n">416</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">528.3</td><td class="n">1,639.2</td><td class="n">595.9</td><td class="n">348</td><td class="n">787,362,898</td><td class="n">416</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">184.0</td><td class="n">2,917.0</td><td class="n">763.0</td><td class="n">345</td><td class="n">668,878,951</td><td class="n">416</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">354.6</td><td class="n">1,747.0</td><td class="n">537.6</td><td class="n">351</td><td class="n">773,154,875</td><td class="n">416</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.9</td><td class="n">1,685.5</td><td class="n">563.1</td><td class="n">348</td><td class="n">773,154,875</td><td class="n">416</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">192.7</td><td class="n">3,003.5</td><td class="n">835.2</td><td class="n">345</td><td class="n">663,547,207</td><td class="n">272</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">336.6</td><td class="n">1,846.3</td><td class="n">634.8</td><td class="n">351</td><td class="n">767,823,131</td><td class="n">272</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.2</td><td class="n">1,819.8</td><td class="n">720.9</td><td class="n">348</td><td class="n">767,823,131</td><td class="n">272</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">185.8</td><td class="n">2,598.5</td><td class="n">677.2</td><td class="n">345</td><td class="n">663,286,519</td><td class="n">416</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">327.6</td><td class="n">1,594.7</td><td class="n">715.6</td><td class="n">351</td><td class="n">767,562,443</td><td class="n">416</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.3</td><td class="n">1,622.2</td><td class="n">870.4</td><td class="n">348</td><td class="n">767,562,443</td><td class="n">416</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">358.8</td><td class="n">2,917.3</td><td class="n">642.6</td><td class="n">455</td><td class="n">668,982,396</td><td class="n">1,416</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">915.3</td><td class="n">1,424.8</td><td class="n">422.4</td><td class="n">471</td><td class="n">773,222,363</td><td class="n">1,376</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,169.5</td><td class="n">1,110.5</td><td class="n">448.5</td><td class="n">462</td><td class="n">773,222,363</td><td class="n">1,376</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,138.5</td><td class="n">15,975.0</td><td class="n">14,109.0</td><td class="n">350</td><td class="n">663,812,599</td><td class="n">224</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,181.9</td><td class="n">1,207.2</td><td class="n">513.6</td><td class="n">357</td><td class="n">768,088,523</td><td class="n">224</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,539.8</td><td class="n">1,095.3</td><td class="n">558.9</td><td class="n">353</td><td class="n">768,088,523</td><td class="n">224</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">744.5</td><td class="n">3,747.5</td><td class="n">1,297.0</td><td class="n">2,099</td><td class="n">664,077,523</td><td class="n">322,224</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,469.2</td><td class="n">2,169.8</td><td class="n">840.5</td><td class="n">2,115</td><td class="n">768,350,709</td><td class="n">309,424</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,085.5</td><td class="n">1,970.2</td><td class="n">924.8</td><td class="n">2,106</td><td class="n">768,350,709</td><td class="n">309,424</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,734.8</td><td class="n">19,935.0</td><td class="n">8,612.1</td><td class="n">10,498</td><td class="n">764,009,624</td><td class="n">2,049,376</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,194.9</td><td class="n">9,395.0</td><td class="n">4,991.8</td><td class="n">10,514</td><td class="n">868,263,022</td><td class="n">1,969,376</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">8,122.8</td><td class="n">9,279.4</td><td class="n">5,306.9</td><td class="n">10,505</td><td class="n">868,263,022</td><td class="n">1,969,376</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. The GPU frame is the span of section 5, with shadow rays on; the gate is the rays-off run's.</p>
+  <p>The ring's own bytes, which <code>gpu_memory_bytes</code> leaves out: seven slots and the resolve buffer, from the constants in section 4.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Buffer</th><th>Usage</th><th class="n">Bytes</th></tr></thead>
+    <tbody>
+      <tr><td>one slot: the draw, the light counts, the overflow count, 4 bytes of padding, 24 timestamps</td><td><code>MAP_READ</code>, <code>COPY_DST</code></td><td class="n">288</td></tr>
+      <tr><td>seven slots</td><td></td><td class="n">2,016</td></tr>
+      <tr><td>the resolve buffer</td><td><code>QUERY_RESOLVE</code>, <code>COPY_SRC</code></td><td class="n">192</td></tr>
+      <tr><td>the query set</td><td>168 timestamps</td><td class="n">not a buffer</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>GpuStatsReadback::new</code> in <code>src/render/readback.rs</code> at the commit above: a slot is <code>TIMESTAMP_OFFSET</code> plus <code>TIMESTAMP_BYTES</code>, 96 + 192; seven of them are 2,016; the resolve buffer is <code>TIMESTAMP_BYTES</code>.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADRs 0013, 0016, 0017, 0019, 0021, 0022</div>
+  <h2>Why this way</h2>
+  <p><b>The engine sums its own memory.</b> ADR 0013 counts GPU memory as the bytes of the buffers and textures the engine created, summed by the engine on every backend, because wgpu has no allocator report on Metal and unified memory has no separate pool to ask. The readback's buffers are left out since they measure the frame rather than hold it; the presented target and capture's read-back buffer are left out so a capture counts what a windowed run counts. The Budget it is judged against is one number today, to split by kind of memory later.</p>
+  <p><b>A ring of mapped buffers, never a wait.</b> ADR 0016 keeps every submit, present and poll on the main thread, so map and work-done callbacks land at known points of the frame, and has the GPU stats come back through a ring of mapped readback buffers on the per-frame staging ring's rule (ADR 0017): a slot is reused only after its callback fired. The ring decides whether the CPU waits, not whether a read is safe; wgpu completes a map only after the last submission using the buffer and refuses to submit work on a mapped one. The alternative, blocking on each frame's map, would stall the frame that reads it; the ring costs seven slots and a few frames of lag instead.</p>
+  <p><b>Timestamps, not CPU clocks, for the GPU.</b> A CPU clock around a submit measures the driver, not the GPU; the GPU's own clock, written into a query set at each end of a pass, is what the Capability floor requires of every adapter (ADR 0021). Where the floor's timestamps cannot bracket the work, the dynamic TLAS's build and the BLAS refit, a marker pass that Metal must order after it writes one.</p>
+  <p><b>A span against a sum.</b> Summing the passes' times double-counts whatever Metal overlaps, and the overlap changes with the scene and with whether frames queue, so a sum of passes is a number that moves when nothing in the engine changes. The span from earliest start to latest end counts each stretch of GPU time once; the build is counted only past the frame before, since it is submitted first and runs beside that frame's last passes. ADR 0019's gate is a span for the same reason, cut to the passes the main pass's design decides and taken with shadow rays off, since every option traces the same rays.</p>
+  <p><b>A render pass counts from what it waits on.</b> Apple's per-stage fences let a render pass's vertex stage start, and its start timestamp be written, before the passes it depends on have ended. Counting from the latest end of those passes reads the pass as what it adds; counting from its own timestamp reads its wait. The floor is every earlier pass's end, not a dependency graph; the one dependency it models is the depth passes against the Froxel pass, whose lists they do not read and which Metal lets them finish before.</p>
+  <p><b>A fixed map lag.</b> wgpu maps a buffer, and allocates the list of its callbacks, in whichever submission or poll first finds its copy complete. Requesting the map as soon as the copy was seen done would put that allocation in a frame that depends on the GPU's timing, and the bench's allocation counts would then differ between a quiet run and a loaded one. Requesting it a fixed number of frames after the copy, by which the bench has waited for that frame, pins the allocation to one frame whatever the GPU did.</p>
+  <p><b>Wall-clock times per system and stage.</b> ADR 0013's CPU Budget bounds the wall time of each stage's critical path, waits on workers included; CPU time summed across threads is neither measured nor budgeted, so the recorder times stages on the main thread and the allocator counts that thread alone. Dropped time is ADR 0022's: the fixed schedule reads no wall clock, so what the Tick cap skipped is reported, not hidden.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>Seven frames late, or never.</b> A frame's GPU stats arrive seven frames after it at the earliest. A frame whose submission had not completed three frames on never gets them. A slot still copying or mapping when its frame comes round is read when the ring next comes round, so that frame's stats arrive fourteen frames late, and the frame that found the slot busy goes untimed. The count of skips is all that records either.</p>
+  <p><b>One thread's allocations.</b> The counter is per thread and the frame reads the main thread's; what the compute pool's workers allocate inside the frame is not counted.</p>
+  <p><b>A pass's time is a reading under its neighbours.</b> Where Metal overlaps passes, a pass's own time depends on what ran beside it and on whether frames queued on the GPU, and a render pass's floor is at the latest end of the passes before it whether or not it waited on all of them. Only the spans compare two changes fairly.</p>
+  <p><b>The build's cost is not separated.</b> Counted past the frame before, the build reads what sticks out, not what it took from the passes it ran beside; that cost shows in their times.</p>
+  <p><b>Estimated acceleration structures.</b> wgpu exposes no acceleration-structure size, so their bytes are an estimate from figures measured once per adapter: NVIDIA's on an NVIDIA GPU on any backend, lavapipe's on any other Vulkan adapter, the M4 Pro's on any other.</p>
+  <p><b>No cost across frames.</b> Loads stage outside the per-frame ring and count no upload; the stats say what a frame cost, not what a Scene's load did.</p>
+  <p><b>Timestamps inside a pass.</b> wgpu's timestamps inside encoders and passes are reported by the capability printout and never requested, so no finer division than a pass is measured.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the stats rest on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1210-L1212">wgpu-hal 30.0.1, <code>Device::generate_allocator_report</code> default</a></dt><dd>the default returns <code>None</code> and only DX12 and Vulkan override it, so Metal has no allocator report and the engine sums its own; <code>wgpu-hal-30-allocator-report-default</code></dd>
+    <dt><a href="https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8">Metal Feature Set Tables, GPU implementation limits by family</a></dt><dd>32 counter sample buffers at most on every Apple family, and on Metal each query set is one, so every slot's queries share one set; <code>metal-feature-set-tables-sample-buffers</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlfence">Apple Developer Documentation, Metal, MTLFence</a></dt><dd>Apple GPUs update and respond to fences per stage: a pass's vertex stage can run while its fragment stage waits for another pass, which is why a render pass counts from the latest end of the passes before it; <code>apple-metal-fence-per-stage</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1536-L1541">wgpu-core 30.0.1, <code>Queue::submit</code></a></dt><dd>every submission ends by maintaining the device, which retires finished submissions and maps the buffers ready to map, so a frame's first submission maps the slot whose map it requested; <code>wgpu-30-submit-maintains</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L236-L250">wgpu-core 30.0.1, LifetimeTracker::map</a></dt><dd>a map waits on the latest pending submission that uses the buffer, else is ready at the next maintenance, so a map requested with its copy lands wherever the GPU's timing falls; <code>wgpu-30-map-after-submission</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413">wgpu-core 30.0.1, LifetimeTracker::handle_mapping</a></dt><dd>each maintenance that finds buffers ready to map allocates their callbacks' list, the allocation the map lag pins to one frame; <code>wgpu-30-handle-mapping</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The stats began as the CPU recorder, the counting allocator and the engine's own memory ledger, written when the Instance buffer stopped growing and every Baseline's memory had to add up to the byte. GPU time came as two timestamps per pass summed into a frame, then the dynamic TLAS's build bracketed by two markers that query the TLAS, since a build is no pass, and the BLAS refit ended by a marker that reads its scratch (<a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="blas-refit.html">The BLAS refit</a>). The frame became a span per submission once the Froxel pass was seen starting before culling, and the build was counted from the frame before's last pass after it was found running beside that frame and counted twice; the main pass prototypes were judged by spans for the same reason (<a href="metal-quirks.html#overlap">Metal quirks</a>). A render pass came to count from the passes before it when the M4 Pro was seen writing its start timestamp as the vertex stage started, the depth passes were then freed from the Froxel pass's end, and the lit pass's wait was added when a scene spent most of its gate before the lit pass began. The ring took its map lag when a frame's allocations were found to depend on when the GPU finished, and the readback's, the presented target's and capture's buffers left the memory sum. The volumes that narrated those steps are absorbed into this page; it describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/stats/mod.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, <code>src/capture/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017, 0019, 0021 and 0022, the committed Baselines, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="tonemapping-pass.html">Previous: The tonemapping pass</a><a href="index.html">All field guides</a><a href="bench.html">Next: The bench</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
