@@ -11,7 +11,12 @@ use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
 use crate::render::shaders;
 
 /// Largest difference allowed between a result and its expectation. Results
-/// land within 2e-7 of theirs on the M4 Pro.
+/// land within 2e-7 of theirs on the M4 Pro. WGSL floors, worst first: D's
+/// peak 16/π, about 1.7e-6 under a 2.5 ULP division, over this, and 4.4e-7
+/// correctly rounded; `tangent_space_normal`, about 6e-7 (1.2e-6, over this,
+/// under round toward zero); `fresnel_weight`, 7 roundings on values at most
+/// 1, about 4.2e-7 (8.3e-7); Smith's G, V's 7.8e-7; `relative_luminance`,
+/// 3.6e-7 (7e-7); `dither_noise`, its root's 2.7e-7.
 const TOLERANCE: f32 = 1e-6;
 
 /// Schlick adds (1 − |cos θ|)⁵ of the light the base reflectance misses:
@@ -106,7 +111,8 @@ fn distribution_ggx_integrates_to_one_over_the_hemisphere() {
             .sum::<f64>()
             * std::f64::consts::TAU;
         // The sums land within 2e-7 of 1 on the M4 Pro; the sampling alone
-        // is off by under 1e-7.
+        // is off by under 1e-7. WGSL floor: each D within about 1.1e-6
+        // relative, so the sum within about 1.2e-6 with the sampling.
         assert!(
             (integral - 1.0).abs() <= 1e-5,
             "roughness {roughness}: D integrates to {integral}, expected 1"
@@ -484,12 +490,15 @@ fn reflected_luminance_follows_the_brdf_and_a_white_metal_reflects_at_most_what_
 }
 
 /// How far a white furnace's sum may stray from the reference's over the same
-/// cells: they land within 2e-7 of each other on the M4 Pro.
+/// cells: they land within 2e-7 of each other on the M4 Pro. WGSL floor:
+/// about 2e-6, each cell within 1e-6 to 2e-6 relative, their weights
+/// summing to at most about 1.
 const FURNACE_SUM_TOLERANCE: f64 = 1e-5;
 
 /// How far a white furnace's sum may pass its bound: sums over the cells
 /// land within 7.1e-4 of sums over cells half or a quarter their size, low
-/// where the lobe is narrow.
+/// where the lobe is narrow. A bound on the quadrature, not on rounding: the
+/// sums' WGSL floor, about 2e-6, is two thousandths of it.
 const QUADRATURE_TOLERANCE: f64 = 1e-3;
 
 /// A point light's attenuation is KHR_lights_punctual's
@@ -532,6 +541,8 @@ fn point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range() {
         let tolerance = RELATIVE_TOLERANCE * inverse_square;
         assert_close(result[0], window * inverse_square, tolerance, case);
         if distance_squared >= range * range {
+            // Exact past the range, where the clamp gives 0; at it, only where
+            // d² over an equal r² is 1, as a correctly rounded division gives.
             assert_eq!(result[0], 0.0, "{case}");
         }
     }
@@ -603,6 +614,9 @@ fn point_light_luminance_attenuates_the_intensity_it_reflects() {
         for channel in 0..3 {
             let reflected = brdf[channel] * f64::from(intensity[channel]) * normal_dot_light;
             let case = format_args!("a light {distance} m off along {light}, channel {channel}");
+            // WGSL floor: about 4e-6 of the value at roughness 0.5, the
+            // BRDF's 2.5e-6, the attenuation's 8e-7 and the direction's 4e-7
+            // length error through D and V.
             let tolerance = DIRECTION_TOLERANCE * reflected * inverse_square;
             assert_close(
                 result[channel],
@@ -610,6 +624,8 @@ fn point_light_luminance_attenuates_the_intensity_it_reflects() {
                 tolerance,
                 case,
             );
+            // Exact: the window clamps to 0, the one case at the range has
+            // d² = r² = 16 exactly, and a zero direction gives N·L = 0.
             if distance >= f64::from(range) || distance == 0.0 {
                 assert_eq!(result[channel], 0.0, "{case}");
             }
@@ -748,6 +764,8 @@ fn the_weighted_resolve_undone_averages_samples_by_one_over_one_plus_luminance()
         .iter()
         .map(|result| [result[0], result[1], result[2]])
         .collect();
+    // Exact: 1/65504 rounds down in f32, so a correctly rounded 1 over it is
+    // 65504, which min keeps; a 2.5 ULP division may land a step under.
     assert_eq!(limits, [[65504.0; 3], [65504.0; 3], [0.0, 65504.0, 0.0]]);
 }
 
@@ -826,6 +844,7 @@ fn pq_encodes_as_st_2084_and_decodes_back() {
             case,
         );
     }
+    // ST 2084's 0.508078 to three places, 7.8e-5 off; the WGSL floor adds 4e-5.
     assert_close(encoded[4][0], 0.508, 1e-3, format_args!("PQ of 100 cd/m²"));
     assert_close(
         encoded[7][0],
@@ -878,6 +897,8 @@ fn ictcp_holds_a_grey_in_its_intensity_and_converts_back() {
         for channel in 0..3 {
             let expected = f64::from(color[channel]);
             let case = format_args!("channel {channel} of {color:?} through ICtCp");
+            // WGSL floor: PQ's own round trip, 1e-4 typical and 4.5e-4 by the
+            // worst case, plus the six-digit inverse's 2e-5.
             assert_close(
                 round_trip[index][channel],
                 expected,
@@ -1019,7 +1040,12 @@ const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
 /// buffer relative above 1. On the M4 Pro, GT7 lands within 7e-5 of them,
 /// PQ's exponents amplifying f32 rounding, and `tonemap` within 2.3e-4,
 /// where its conversion back to Rec. 709 subtracts near-equal terms for
-/// saturated green: a fifth of an 8-bit step.
+/// saturated green: a fifth of an 8-bit step. WGSL floors, worst first: PQ's
+/// round trip, 4.0e-4 to 5.4e-4 relative at frame-buffer 1 to 10 by `log2`'s
+/// 3 ULP, over this; `tonemap`, 2.3e-4 typical; `gt7_tonemap`, 2e-4 typical;
+/// `pq_encode`, 4e-5 at signal 0.5; `gt7_curve`, 5e-6 with the sample's own
+/// f32; a grey's ICtCp chroma, 2e-6, and intensity, 3e-7; PQ of 10,000
+/// cd/m², exact.
 const GT7_TOLERANCE: f64 = 3e-4;
 
 /// IEC 61966-2-1's sRGB encoding, as the Khronos Data Format Specification
@@ -1050,7 +1076,8 @@ fn srgb_encode_follows_iec_61966_2_1() {
 }
 
 /// Largest difference allowed between the shader's sRGB encoding and the
-/// standard's in f64: a thousandth of an 8-bit step.
+/// standard's in f64: a thousandth of an 8-bit step. WGSL floor: about 1e-6,
+/// from Metal's 16 ulp `pow` at 1.0 or Vulkan's 3 ULP `log2` through `exp2`.
 const SRGB_TOLERANCE: f64 = 4e-6;
 
 /// The dither's noise from each of the mask's 256 levels, k/255 as the
@@ -1082,6 +1109,9 @@ fn dither_noise_is_the_triangular_inverse_cdf_of_each_mask_level() {
     }
     let mean = noise.iter().sum::<f64>() / noise.len() as f64;
     let variance = noise.iter().map(|value| value * value).sum::<f64>() / noise.len() as f64;
+    // WGSL floor: the mean is exactly 0, levels k and 255 − k giving opposite
+    // values; the bin centres' variance is 0.166585, 8.2e-5 under 1/6, and the
+    // GPU adds at most 6e-7.
     assert!(mean.abs() <= 1e-6, "mean {mean}");
     assert!((variance - 1.0 / 6.0).abs() <= 1e-4, "variance {variance}");
 }
@@ -1168,7 +1198,9 @@ fn the_display_ramp_holds_the_display_transforms_values() {
 
 /// Largest display-linear difference allowed between one GPU's display
 /// values and the ramp's, recorded on another: each lands within
-/// GT7_TOLERANCE of the sample implementation.
+/// GT7_TOLERANCE of the sample implementation. WGSL floor: each within
+/// `tonemap`'s 2.3e-4, so 4.6e-4 between two, plus the file's seven decimals,
+/// under 1.2e-7.
 const DISPLAY_RAMP_TOLERANCE: f64 = 2.0 * GT7_TOLERANCE;
 
 /// The sRGB EOTF, the inverse of IEC 61966-2-1's sRGB encoding
@@ -1188,7 +1220,13 @@ const GOLD: [f32; 3] = [1.0, 0.71, 0.29];
 
 /// Largest error allowed between a result and its f64 reference, relative to
 /// the reference, or to a scale the test names. Results land within 2e-6 of
-/// theirs on the M4 Pro.
+/// theirs on the M4 Pro. WGSL floors, worst first: `metallic_roughness_brdf`,
+/// about 2.5e-6 where the specular lobe dominates (5e-6, over this, under
+/// round toward zero); the resolve undone, 1.7e-6 (3.4e-6);
+/// `distribution_ggx`, 1.1e-6; `point_light_attenuation`, 8e-7 of the inverse
+/// square; `smith_visibility`, 7.8e-7; `specular_antialiased_roughness`,
+/// 5.5e-7; `ambient_luminance`, 5e-7; the BRDF with light and view swapped,
+/// about 2u, from a fused multiply-add alone.
 const RELATIVE_TOLERANCE: f64 = 4e-6;
 
 /// The same for shading from unit vectors. Smith V at a grazing view sets
@@ -1370,6 +1408,9 @@ fn the_neutral_normal_layer_decodes_to_the_flat_normal_exactly() {
         "vec4<f32>(tangent_space_normal(unpack2x16float(bitcast<u32>(input.x)), input.y), 0.0)",
         &inputs,
     );
+    // WGSL floor 0: binary16 widens exactly, 0.5 · 2 − 1 is 0 and 1 − 0 is 1,
+    // but z is sqrt(1), exact only where sqrt rounds correctly, which Vulkan's
+    // allowance, inherited from 1/inversesqrt, does not require.
     assert_eq!(results, [[0.0, 0.0, 1.0, 0.0]; 4]);
 }
 
@@ -1479,6 +1520,9 @@ fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
     let emissives = decode("vec4<f32>({surface}.emissive, 0.0)");
 
     let floor = minimum_roughness(&context);
+    // WGSL floor 0 for the products; the first case's roughness 0.375 comes
+    // back through sqrt(sqrt(81/4096)), exact only where sqrt rounds
+    // correctly, which Vulkan's allowance does not require.
     assert_eq!(colours, [[0.25, 0.25, 0.25, 0.375]; 2]);
     assert_eq!(
         scalars,
@@ -1505,7 +1549,8 @@ fn minimum_roughness(context: &GpuContext) -> f32 {
 /// bitangent sign it was cooked from, both signs and frames near the half
 /// turns whose w rounds towards zero included. A rotated axis is a product
 /// of two quaternions, each component off by at most half a Snorm16 step,
-/// plus the nudge that keeps w a whole step: within 4 steps.
+/// plus the nudge that keeps w a whole step: within 4 steps, to which the
+/// f32 decode's WGSL floor, about 20u, adds under a tenth of a step.
 #[cfg(feature = "cook")]
 #[test]
 fn cooked_vertices_decode_to_their_position_uv_and_tangent_frame() {
@@ -1621,6 +1666,7 @@ fn a_packed_index_holds_its_meshlet_record_above_six_bits_of_vertex() {
         }),
     );
 
+    // WGSL floor 0: integer shifts and masks, on halves f32 holds exactly.
     for ((record, vertex, index), (unpacked, packed)) in
         cases.into_iter().zip(unpacked.into_iter().zip(packed))
     {
@@ -1699,6 +1745,9 @@ fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
         let homogeneous = inverse * device;
         let expected = homogeneous.truncate() / homogeneous.w;
         let gpu = glam::Vec3::from_slice(&result).as_dvec3();
+        // WGSL floor: about 41u · w over the three components, 2.5e-6 · w
+        // (4.9e-6 · w under round toward zero), 2.6 to 6.4 times this bound:
+        // tight, passing where the roundings do not align.
         let bound = expected.abs().max_element() * 2f64.powi(-20);
         assert!(
             gpu.distance(expected) <= bound,
@@ -1771,6 +1820,9 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
         &stored,
     );
 
+    // The 8-bit rounding's bound, half a step per coordinate over a vector no
+    // shorter than 1/√3, is 0.951°, which this takes to three figures; f32
+    // adds about 2e-6 rad.
     let largest_8_bit_error = 0.95f64.to_radians();
     for (((direction, coordinates), full), quantised) in directions
         .iter()
@@ -1778,11 +1830,15 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
         .zip(decoded)
         .zip(decoded_from_8_bits)
     {
+        // Exact where the division rounds correctly: |x| is at most the
+        // rounded sum it is divided by.
         assert!(
             coordinates[0].abs().max(coordinates[1].abs()) <= 1.0,
             "{direction} encodes to {coordinates:?}, outside [-1, 1]²"
         );
         let full = glam::Vec3::from_slice(&full).as_dvec3();
+        // WGSL floor: about 30u on the direction, 1.8e-6 (3.6e-6 under round
+        // toward zero).
         assert!(
             full.distance(*direction) <= 4.0 * f64::from(TOLERANCE),
             "{direction} decodes back as {full}"
@@ -1798,7 +1854,12 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
 }
 
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
-/// view, for a point 0.3 m from the camera, is 0.043 mm.
+/// view, for a point 0.3 m from the camera, is 0.043 mm. WGSL floors:
+/// `camera_relative_position`, 192.6u per axis in its written order, 2.0e-5 m
+/// (4.0e-5 under round toward zero), and 256u in the worst other order,
+/// 2.6e-5 m (5.3e-5, over this, if a GPU both reorders and rounds toward
+/// zero); `point_light_position`, with no local position, 64.3u per axis,
+/// 6.6e-6 m (1.3e-5), and 128.3u in the worst other order, 1.3e-5 m (2.7e-5).
 const PRECISION_BAR: f64 = 4.3e-5;
 
 /// Camera coordinates on each axis for the precision oracles: cell corners,
