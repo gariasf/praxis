@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
-    cooked::{CookedMesh, CookedVertex},
+    cooked::{AssetId, CookedMesh, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
 };
 
@@ -13,7 +15,7 @@ pub const MESH_CAPACITY: u32 = 1 << 16;
 
 /// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
 /// trace it through its BLAS, or both.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
@@ -29,7 +31,7 @@ pub enum MeshUse {
 
 impl MeshUse {
     /// Whether the main pass draws it, so it needs Meshlets.
-    fn drawn(self) -> bool {
+    pub(crate) fn drawn(self) -> bool {
         self != MeshUse::Traced
     }
 
@@ -37,6 +39,12 @@ impl MeshUse {
     /// BLAS is built from.
     fn traced(self) -> bool {
         self != MeshUse::Drawn
+    }
+
+    /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
+    /// Renderable's own, as the GPU writes its vertices.
+    fn shared(self) -> bool {
+        matches!(self, MeshUse::DrawnAndTraced | MeshUse::Traced)
     }
 }
 
@@ -60,6 +68,8 @@ pub struct MeshBlas {
 pub struct MeshPool {
     device: wgpu::Device,
     meshes: Vec<Mesh>,
+    /// The Handle of each Mesh loaded by Asset ID for a shared use.
+    asset_handles: HashMap<(AssetId, MeshUse), MeshHandle>,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
@@ -89,6 +99,7 @@ impl MeshPool {
         Self {
             device: device.clone(),
             meshes: Vec::new(),
+            asset_handles: HashMap::new(),
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
             refitted_blases: Vec::new(),
@@ -128,6 +139,7 @@ impl MeshPool {
     }
 
     /// Loads `mesh` to be drawn and traced, as `load_for` loads it.
+    #[cfg(test)]
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
@@ -135,6 +147,33 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
     ) -> Option<MeshHandle> {
         self.load_for(staging, mesh, materials, MeshUse::DrawnAndTraced)
+    }
+
+    /// The Handle of the Mesh `id` that `load_asset` loaded for `mesh_use`,
+    /// unless a bent Mesh's use, which no two Renderables share.
+    pub fn handle(&self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
+        self.asset_handles.get(&(id, mesh_use)).copied()
+    }
+
+    /// The Handle of `mesh`, the Mesh `id`, for `mesh_use`: the one `handle`
+    /// returns, or else a load as `load_for` does, kept for `handle` unless
+    /// the Mesh is bent.
+    pub fn load_asset(
+        &mut self,
+        staging: &mut LoadStaging,
+        id: AssetId,
+        mesh: &CookedMesh,
+        materials: &[Option<MaterialHandle>],
+        mesh_use: MeshUse,
+    ) -> Option<MeshHandle> {
+        if let Some(handle) = self.handle(id, mesh_use) {
+            return Some(handle);
+        }
+        let handle = self.load_for(staging, mesh, materials, mesh_use)?;
+        if mesh_use.shared() {
+            self.asset_handles.insert((id, mesh_use), handle);
+        }
+        Some(handle)
     }
 
     /// Writes `mesh` through `staging` into one range of each Arena, and its
@@ -612,6 +651,37 @@ pub(crate) mod tests {
             indices,
             bounds: [[0.0; 3]; 2],
         }
+    }
+
+    #[test]
+    fn a_mesh_loaded_twice_keeps_one_entry_unless_it_is_bent() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let triangle = mesh(3, vec![0, 1, 2]);
+        let mut load = |id, mesh_use| {
+            pool.load_asset(&mut staging, AssetId(id), &triangle, &[None], mesh_use)
+                .expect("a triangle fits")
+                .0
+        };
+        let handles = [
+            MeshUse::DrawnAndTraced,
+            MeshUse::DrawnAndTraced,
+            MeshUse::Traced,
+            MeshUse::Traced,
+            MeshUse::Drawn,
+            MeshUse::Drawn,
+            MeshUse::Refitted,
+            MeshUse::Refitted,
+        ]
+        .map(|mesh_use| load(1, mesh_use));
+        let other = load(2, MeshUse::DrawnAndTraced);
+
+        assert_eq!(handles, [0, 0, 1, 1, 2, 3, 4, 5]);
+        assert_eq!(other, 6);
+        assert_eq!(pool.meshes.len(), 7);
     }
 
     /// A Mesh of two Primitives, loaded after another Mesh, reaches the

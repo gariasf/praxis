@@ -145,6 +145,8 @@ pub struct MaterialPool {
     channels: [ChannelTextures; 5],
     /// Each loaded Texture's Layer in its Channel, which its Asset ID names.
     texture_layers: HashMap<AssetId, u32>,
+    /// Each loaded Material's Handle, which its Asset ID names.
+    material_handles: HashMap<AssetId, MaterialHandle>,
     colour_sampler: wgpu::Sampler,
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -232,6 +234,7 @@ impl MaterialPool {
             materials_buffer,
             channels,
             texture_layers: HashMap::new(),
+            material_handles: HashMap::new(),
             colour_sampler,
             data_sampler,
             bind_group_layout,
@@ -273,7 +276,7 @@ impl MaterialPool {
         Some(handle)
     }
 
-    /// Loads the Material `id` from `cache`, and each Texture it samples once
+    /// Loads the Material `id` from `cache`, and each Texture it samples, once
     /// per Asset ID, written through `staging`, and returns its Handle, or
     /// the SSBO's refusal when it is full. A Channel the Material lacks
     /// samples Layer 0, as does one already full.
@@ -284,6 +287,9 @@ impl MaterialPool {
         cache: &CookedCache,
         id: AssetId,
     ) -> anyhow::Result<MaterialHandle> {
+        if let Some(&handle) = self.material_handles.get(&id) {
+            return Ok(handle);
+        }
         let material = cache.material(id)?;
         let mut layers = [Self::DEFAULT_LAYER; 5];
         for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
@@ -309,6 +315,7 @@ impl MaterialPool {
         let handle = self
             .insert(staging, data)
             .with_context(|| format!("the Material pool refused Material {id}"))?;
+        self.material_handles.insert(id, handle);
         tracing::debug!(material = %id, ?layers, "Material loaded");
         Ok(handle)
     }
