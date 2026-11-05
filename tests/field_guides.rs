@@ -13,21 +13,12 @@ use std::process::Command;
 /// The volumes that narrated how each mechanism was built, each kept, and
 /// passed over by the page checks, until the page that absorbs it lands.
 const VOLUMES: &[&str] = &[
-    "anisotropy.html",
     "bench-history.html",
-    "box-leakage.html",
     "crowd-shadows.html",
     "distant-textures.html",
     "frame-timing.html",
-    "gpu-ordering.html",
     "instance-buffer-explained.html",
-    "instance-culling.html",
-    "meshlet-culling.html",
-    "msaa-fragment-merging.html",
     "town.html",
-    "visibility-buffer.html",
-    "visibility-prepass.html",
-    "waiting-on-the-gpu.html",
 ];
 
 /// The values of `attribute` in `html`, in order. Only whole attribute names

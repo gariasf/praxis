@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Camera-relative placement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; concept &middot; <code>src/render/instance.rs</code></div>
+  <h1>Camera-relative placement</h1>
+  <p class="definition">World positions are f64, and the GPU never holds one in f32: each position reaches it as an <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span>, the integer coordinates of its 64 m grid cell, plus an f32 offset from the cell's corner, and every shader composes the position relative to the camera, so f32 only ever holds magnitudes near the camera (ADR 0014).</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on; a change to how positions reach the GPU rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="prepare.html">Prepare</a>, <a href="instance-buffer.html#anchor">The Instance buffer</a>, <a href="static-tlas.html#anchor">The static TLAS</a>, <a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="shadow-mask.html#ray">The shadow mask pass</a>, <a href="culling-pass.html#frustum">The culling pass</a>, <a href="froxel-pass.html">The Froxel pass</a>, <a href="lit-pass.html">The lit pass</a>.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">In the frame</h2>
+    <dl>
+      <dt>The grid</dt><dd>Cells of <code>ANCHOR_CELL_SIZE</code>, 64 m. <code>anchor_and_offset</code> in <code>src/render/instance.rs</code> splits an f64 World position into its cell and its f32 offset; every shader module declares the cell size from the Rust constant.</dd>
+      <dt>Who carries one</dt><dd>Each <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span>, as <code>InstanceData</code>'s <code>anchor</code> and <code>offset</code> (128 bytes an Instance); the camera, as <code>CameraUniform</code>'s <code>anchor</code>, <code>offset</code> and <code>tlas_anchor</code> (144 bytes); each point light, as <code>LightData</code>'s <code>anchor</code> and <code>offset</code> (48 bytes a light). Prepare writes all three from <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>.</dd>
+      <dt>Who composes</dt><dd><code>camera_relative_position</code> in <code>common.wgsl</code>: the vertex shader's <code>vertex_output</code> for every vertex, the culling pass's <code>clip_space_bounds</code> for each Mesh's bounds centre, <code>point_light_position</code> for the Froxel pass, the lit pass, the light count pass and the shadow mask pass, and <code>shadowed</code> once more, to move a point into the frame both TLAS share. On the CPU, <code>anchored_transform</code> places each entry of either TLAS from the same Anchor.</dd>
+      <dt>Frame stats</dt><dd>Nothing of its own: the structs that carry Anchors are counted in <code>uploaded_bytes</code> as the frame writes them.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#split">1 &middot; The split on the CPU</a>
+    <a href="#compose">2 &middot; Composing relative to the camera</a>
+    <a href="#tlas">3 &middot; The frame both TLAS share</a>
+    <a href="#lights">4 &middot; Point lights</a>
+    <a href="#tests">5 &middot; How it is tested</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#why">7 &middot; Why this way</a>
+    <a href="#limits">8 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="split">
+  <div class="part-mark">1 &middot; <code>anchor_and_offset</code> &middot; <code>src/render/instance.rs</code></div>
+  <h2>The split on the CPU</h2>
+  <p class="key-idea">An f32 holds about seven significant digits, so a position stored as one f32 rounds by up to 0.03 mm at 512 m from its origin and by 3.9 mm at 100 km. Praxis keeps World positions in f64 and lets the GPU see each one only as a cell on a 64 m grid, which is exact, plus an offset under 64 m, which an f32 holds to a few micrometres.</p>
+  <p>A <code>Transform</code> holds its translation as an f64 <code>DVec3</code> and its rotation and scale in f32, 64 bytes in all; a child's composes with its ancestors' into a World transform in f64. Nothing on the CPU rounds a position until prepare hands it to the GPU, and then it splits it rather than rounds it:</p>
+<pre class="code"><code>/// Edge of the grid World positions are anchored to on the GPU, in metres
+/// (ADR 0014); every shader module declares it from this one.
+pub const ANCHOR_CELL_SIZE: f64 = 64.0;
+
+/// Splits a World position into the integer anchor of its grid cell and its
+/// f32 offset from that anchor's corner, so no World position reaches the GPU
+/// in f32 (ADR 0014).
+pub fn anchor_and_offset(position: glam::DVec3) -> ([i32; 3], [f32; 3]) {
+    let anchor = (position / ANCHOR_CELL_SIZE).floor();
+    let offset = position - anchor * ANCHOR_CELL_SIZE;
+    (anchor.as_ivec3().to_array(), offset.as_vec3().to_array())
+}</code></pre>
+  <p class="code-source"><code>src/render/instance.rs</code>. The floor puts every position in the cell at or below it on each axis, so an offset is always in [0, 64) m, and its rounding to f32 is at most 2<sup>&minus;19</sup> m, about 1.9 &micro;m.</p>
+  <p>Prepare calls it three times a frame: once for the camera, once per Instance it writes, and once per point light:</p>
+<pre class="code"><code>let (anchor, offset) = anchor_and_offset(camera_position);
+let exposure = camera.exposure();
+frame.camera = CameraUniform {
+    view_proj: view_proj.to_cols_array_2d(),
+    anchor,
+    exposure,
+    offset,
+    ..CameraUniform::default()
+};</code></pre>
+<pre class="code"><code>let transform = current.drawn(previous, blend_weight);
+let rotation_scale = transform.0.matrix3.as_mat3();
+let (anchor, offset) = anchor_and_offset(transform.translation());
+frame.write_instance(
+    slot,
+    InstanceData {
+        rotation_scale: padded_columns(rotation_scale),
+        normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+        anchor,
+        material_id: material_ref
+            .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
+        offset,
+        mesh: mesh_ref.0.0,
+    },
+    previous.is_some(),
+);</code></pre>
+  <p class="code-source"><code>src/render/prepare.rs</code>, the camera and an Instance. <code>view_proj</code> is the projection times the view's rotation alone: the camera sits at the origin of the frame the shaders work in, so the matrix holds no translation.</p>
+  <p>The structs the GPU reads carry the two halves side by side. An Instance's Anchor and offset do not change as the camera moves, so camera motion dirties no Instance (ADR 0003):</p>
+<pre class="code"><code>pub struct InstanceData {
+    pub rotation_scale: [[f32; 4]; 3],
+    pub normal_matrix: [[f32; 4]; 3],
+    pub anchor: [i32; 3],
+    pub material_id: u32,
+    pub offset: [f32; 3],
+    pub mesh: u32,
+}</code></pre>
+<pre class="code"><code>pub struct CameraUniform {
+    /// Projection times the view rotation: positions reach it relative to
+    /// the camera (ADR 0014).
+    pub view_proj: [[f32; 4]; 4],
+    /// The camera's position as an anchor plus offset (`anchor_and_offset`),
+    /// from which the shader composes Instances relative to the camera.
+    pub anchor: [i32; 3],
+    /// What the lit pass scales luminance by (`Camera::exposure`).
+    pub exposure: f32,
+    pub offset: [f32; 3],
+    pub _pad_offset: u32,
+    /// The Anchor whose corner is the origin of the static TLAS's frame
+    /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
+    /// camera's Anchor in the first Frame data.
+    pub tlas_anchor: [i32; 3],
+    /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
+    pub dynamic_tlas_entries: u32,
+    /// A box in the TLAS's frame that holds every triangle of the dynamic
+    /// TLAS's entries, its lowest corner then its highest: shadow rays that
+    /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
+    pub dynamic_tlas_bounds_min: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_min: u32,
+    pub dynamic_tlas_bounds_max: [f32; 3],
+    pub _pad_dynamic_tlas_bounds_max: u32,
+}</code></pre>
+  <p class="code-source"><code>src/render/uniforms.rs</code>. The derive lines are left out. <code>src/render/shader_tests.rs</code> compares each struct, field by field, with its WGSL twin.</p>
+  <h3>The bar, and why 64 m</h3>
+  <p>ADR 0014 sets the bar the split must meet: within 100 km of the origin, a point 0.3 m from the camera lands within 0.25 px at 1440p and a 45&deg; vertical field of view, which is 0.043 mm, of its exact camera-relative position; simulated positions resolve to 0.1 mm, and saves round-trip positions bit-exactly. The ADR measured the composition's worst cases separately, in every evaluation order the compiler may choose and with the f32 rotation of a vertex 128 m from its pivot, and they sum to 0.041 mm on a 64 m grid; on a 128 m grid they sum to 0.045 mm and fail. The cell size is the largest that passes.</p>
+</section>
+
+<section class="part prose" id="compose">
+  <div class="part-mark">2 &middot; <code>camera_relative_position</code> &middot; <code>common.wgsl</code></div>
+  <h2>Composing relative to the camera</h2>
+  <p class="key-idea">Subtract the Anchors first, in integers, where the result is exact; then subtract the offsets, both under 64 m; then add the point's position relative to its pivot. Every f32 in the sum is a magnitude near the camera, however far both are from the origin.</p>
+<pre class="code"><code>// A point's position relative to the camera, from its Instance's anchor and
+// offset, the camera's, and its position relative to the Instance's pivot
+// (ADR 0014). The anchor difference is exact in integers, so f32 only ever
+// holds magnitudes near the camera.
+fn camera_relative_position(
+    anchor: vec3&lt;i32&gt;,
+    offset: vec3&lt;f32&gt;,
+    camera_anchor: vec3&lt;i32&gt;,
+    camera_offset: vec3&lt;f32&gt;,
+    local_position: vec3&lt;f32&gt;
+) -&gt; vec3&lt;f32&gt; {
+    let anchor_position = vec3&lt;f32&gt;(anchor - camera_anchor) * ANCHOR_CELL_SIZE;
+    return anchor_position + (offset - camera_offset) + local_position;
+}</code></pre>
+  <p class="code-source"><code>src/render/shaders/common.wgsl</code>, a shared part every module that reads the frame assembles. <code>ANCHOR_CELL_SIZE</code> is declared into each module from the Rust constant when it is assembled.</p>
+  <p>The cell difference is a small integer where it matters: an Instance in view is within a few cells of the camera, so the product with 64 m is exact in f32 too. The offsets' difference is at most 64 m and rounds at 2<sup>&minus;18</sup> m. The compiler may reorder or fuse the three additions, and the oracle in section 5 sums every order it may choose.</p>
+  <p>The vertex shader composes each vertex this way, with the vertex's cooked position rotated and scaled by its Instance as the local term; <code>view_proj</code> then projects the result with no translation to apply:</p>
+<pre class="code"><code>let position = camera_relative_position(
+    instance.anchor,
+    instance.offset,
+    camera.anchor,
+    camera.offset,
+    instance.rotation_scale * vertex.position
+);
+out.clip_position = camera.view_proj * vec4&lt;f32&gt;(position, 1.0);</code></pre>
+  <p class="code-source"><code>vertex_output</code> in <code>src/render/shaders/main.wgsl</code>, which every main pass vertex entry point calls. The fragment stages read the same position, as <code>camera_relative_position</code> in their inputs, for the view direction, the Froxel's depth and the point lights' distances.</p>
+  <p>The culling pass composes each Instance's bounds centre the same way before it tests the box against the frustum, so the test and the draw agree on where an Instance is:</p>
+<pre class="code"><code>let centre = camera_relative_position(
+    instance.anchor,
+    instance.offset,
+    camera.anchor,
+    camera.offset,
+    instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+);</code></pre>
+  <p class="code-source"><code>clip_space_bounds</code> in <code>src/render/shaders/culling.wgsl</code> (<a href="culling-pass.html#frustum">The culling pass</a>).</p>
+</section>
+
+<section class="part prose" id="tlas">
+  <div class="part-mark">3 &middot; <code>anchored_transform</code> &middot; <code>tlas_anchor</code></div>
+  <h2>The frame both TLAS share</h2>
+  <p class="key-idea">A TLAS entry's transform is twelve f32, so an acceleration structure owns an f32 frame of its own. Its origin is the corner of the camera's Anchor in the first Frame data, and it stays there for the scene; a ray is moved into that frame by the same composition, with the camera in the Instance's place and the TLAS's Anchor in the camera's.</p>
+  <p><code>StaticTlas::update</code> takes its Anchor from the first Frame data it sees and keeps it (<a href="static-tlas.html#anchor">The static TLAS</a>). Each entry's translation is composed from that corner in f64 and rounded once:</p>
+<pre class="code"><code>/// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
+/// its translation from `anchor`'s corner composed in f64, so only the f32
+/// result rounds (ADR 0014).
+fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
+    let [x_axis, y_axis, z_axis] = instance.rotation_scale;
+    let row = |axis: usize| {
+        let cells = i64::from(instance.anchor[axis]) - i64::from(anchor[axis]);
+        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(instance.offset[axis]);
+        [x_axis[axis], y_axis[axis], z_axis[axis], translation as f32]
+    };
+    bytemuck::cast([0, 1, 2].map(row))
+}</code></pre>
+  <p class="code-source"><code>src/render/acceleration_structures.rs</code>. The dynamic TLAS's <code>fill</code> takes the static TLAS's Anchor as its <code>anchor</code> argument, so both structures place their Instances in one frame and a ray composed once can be traced against both (<a href="dynamic-tlas.html">The dynamic TLAS</a>).</p>
+  <p>The Renderer's upload hands the shaders that Anchor as the camera uniform's <code>tlas_anchor</code>. The shadow mask pass knows each point only relative to the camera, so <code>shadowed</code> moves it into the TLAS's frame with the one function of section 2, its arguments cast differently:</p>
+<pre class="code"><code>// The camera stands where an Instance does in this composition, and the
+// TLAS's frame, with no offset from its Anchor, where the camera does.
+let tlas_position = camera_relative_position(
+    camera.anchor,
+    camera.offset,
+    camera.tlas_anchor,
+    vec3&lt;f32&gt;(0.0),
+    position
+);</code></pre>
+  <p class="code-source"><code>shadowed</code> in <code>src/render/shaders/shadow_mask.wgsl</code> (<a href="shadow-mask.html#ray">The shadow mask pass</a>). The ray's origin is then <code>tlas_position</code> moved off the surface.</p>
+  <p>Within the frame, an f32 coordinate steps by 2<sup>&lfloor;log<sub>2</sub> d&rfloor; &minus; 23</sup> m at distance d from the origin: at most 0.122 mm below 2,048 m and 0.244 mm from there to 4,095 m. The Reference scenes stay within about 2 km of their load Anchor, so an entry's translation rounds by at most half of 0.244 mm, where the same entry placed by its raw World position 100 km out would step by 7.8 mm. The frame is never re-anchored in this milestone (section 8).</p>
+</section>
+
+<section class="part prose" id="lights">
+  <div class="part-mark">4 &middot; <code>point_light_position</code> &middot; <code>LightData</code></div>
+  <h2>Point lights</h2>
+  <p class="key-idea">A point light is an Instance with no local position: its Anchor and offset compose the same way, with a zero local term.</p>
+<pre class="code"><code>// A point light's position relative to the camera at `camera_anchor` and
+// `camera_offset`, composed from its Anchor and offset (ADR 0014).
+fn point_light_position(
+    light: LightData,
+    camera_anchor: vec3&lt;i32&gt;,
+    camera_offset: vec3&lt;f32&gt;
+) -&gt; vec3&lt;f32&gt; {
+    return camera_relative_position(
+        light.anchor,
+        light.offset,
+        camera_anchor,
+        camera_offset,
+        vec3&lt;f32&gt;(0.0)
+    );
+}</code></pre>
+  <p class="code-source"><code>src/render/shaders/common.wgsl</code>. The Froxel pass calls it to test each light's sphere against its cells, the lit pass and the light count pass for the vector from the surface to the light, and the shadow mask pass for a point light's ray.</p>
+<pre class="code"><code>pub struct LightData {
+    pub anchor: [i32; 3],
+    /// A point light's range, in metres; 0 for a directional light.
+    pub range: f32,
+    pub offset: [f32; 3],
+    pub _pad_offset: u32,
+    /// Its colour times its intensity: candela for a point light, lux for a
+    /// directional light (ADR 0023).
+    pub intensity: [f32; 3],
+    pub _pad_intensity: u32,
+}</code></pre>
+  <p class="code-source"><code>src/render/uniforms.rs</code>. A directional light has no position: its <code>anchor</code> is zero and its <code>offset</code> holds the direction it shines along, which no shader composes (<a href="froxel-pass.html">The Froxel pass</a>, which opens with the light buffer).</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">5 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>camera_relative_position_meets_the_precision_bar_within_100_km</code></td><td><code>shader_function_tests.rs</code></td><td>a point 0.3 m from a camera anywhere within 100 km lands within 0.043 mm of its f64 position: the GPU runs one evaluation order and the CPU sums every other the compiler may choose; the same points composed from f32 World positions miss the bar</td></tr>
+      <tr><td><code>point_light_position_meets_the_precision_bar_within_100_km</code></td><td><code>shader_function_tests.rs</code></td><td>the same bar for a point light, whose range and intensity hold values no position holds, so a field read in place of another moves the light</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene captured shifted with its camera by <code>FAR_SHIFT</code>, 1,563 whole cells along x and z, 100,032 m, matches its Golden at the origin, so no World position reaches the GPU in f32</td></tr>
+      <tr><td><code>the_static_tlas_holds_each_static_instance_in_its_slot_from_the_load_anchor</code></td><td><code>acceleration_structures.rs</code></td><td>with the load Anchor 100 km out, where an Instance's World position would round in f32 and its offset does not, each static Instance's entry sits in its slot with its rows from the Anchor's corner, and a ray hits it where its transform puts it</td></tr>
+      <tr><td><code>every_light_is_drawn_directional_lights_first_point_lights_anchored</code></td><td><code>prepare.rs</code></td><td>a point light 100 km out reaches Frame data as its Anchor and offset</td></tr>
+      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>renderer.rs</code></td><td>after the first frame anchors the static TLAS, the camera is given from the next Anchor cell over, the same place in other numbers, and the image does not change: both TLAS keep the first frame's Anchor</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The Golden shift is whole cells, so the shifted scene keeps its offsets and composes bit for bit as at the origin; a shift within a cell rounds offsets differently, which the oracle bounds instead.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">6 &middot; <code>uploaded_bytes</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">An Anchor is twelve bytes beside each position, and the composition is an integer subtraction, a multiply and two additions per vertex, light or bounds centre. The frame's uploads carry the structs whole.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Struct</th><th class="n">Bytes</th><th class="n">Of which the Anchor</th><th>Written</th></tr></thead>
+    <tbody>
+      <tr><td><code>InstanceData</code></td><td class="n">128</td><td class="n">12</td><td>once per Instance that changed, into its slot</td></tr>
+      <tr><td><code>CameraUniform</code></td><td class="n">144</td><td class="n">24</td><td>every frame; the camera's Anchor and the TLAS's</td></tr>
+      <tr><td><code>LightData</code></td><td class="n">48</td><td class="n">12</td><td>every frame, per light</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>What a frame uploads, from the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>' <code>uploaded_bytes</code>, in bytes a frame. A still scene uploads the camera, the light uniform and its lights; a scene with Moving Instances adds their Instances and their dynamic TLAS entries, 72 bytes each on Metal and 64 on Vulkan and DX12:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">Bytes a frame</th><th>Of what</th></tr></thead>
+    <tbody>
+      <tr><td><code>pbr-sweep</code></td><td>every adapter</td><td class="n">416</td><td>camera 144, light uniform 32, five lights at 48</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro</td><td class="n">1,416</td><td>the same, five Instances at 128 and five entries at 72</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan and DX12; lavapipe</td><td class="n">1,376</td><td>the same, with entries at 64</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro</td><td class="n">2,049,376</td><td>its lights, the flocks' Instances and their entries</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan and DX12; lavapipe</td><td class="n">1,969,376</td><td>the same, with entries at 64</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>bench/baselines/</code> at the commit above. <code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code> in <code>tests/frame_stats.rs</code> pins the orrery's sum on each backend.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">7 &middot; ADR 0014</div>
+  <h2>Why this way</h2>
+  <p><b>f32 World positions.</b> A Game world of 10 by 10 km or more must render, simulate and save without precision loss, and f32 positions fail the render bar beyond 512 m from their origin (ADR 0014). They are what the oracle shows failing beside the composition that passes.</p>
+  <p><b>A floating origin.</b> Shifting the origin whenever the camera strays 512 m from it rewrites every position the engine holds, in the ECS, physics, GPU buffers and Lua state, at each shift; and entities simulated beyond 1,024 m from the origin still fail the simulation bar (ADR 0014).</p>
+  <p><b>An integer cell plus an f32 position in the ECS.</b> It meets the bar, but every system, script and save would handle two-part positions and move entities between cells. Praxis keeps the split at the GPU's boundary alone: the ECS, Lua and saves see one f64 (ADR 0014).</p>
+  <p><b>f64 rotation and scale.</b> They buy nothing, since the GPU applies rotation in f32 regardless; a <code>Transform</code> keeps them in f32 and stays 64 bytes (ADR 0014).</p>
+  <p><b>f64 on the GPU.</b> Metal has no f64 shaders, and its default fast math may reorder the arithmetic that two-float emulation depends on, so neither a double nor an emulated one is an option on the reference machine (ADR 0014; <a href="metal-quirks.html">Metal quirks</a>).</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">8</div>
+  <h2>Limits</h2>
+  <p><b>Offsets round within a cell.</b> An offset is an f32 under 64 m, so a position moved by less than a cell rounds differently from where it was; the Golden shift is whole cells for that reason, and the oracle bounds the rounding rather than removes it.</p>
+  <p><b>The TLAS frame is never re-anchored.</b> Both TLAS keep the camera's Anchor from the first Frame data for the scene's life. A scene that travels far from it steps more: 0.244 mm per coordinate from 2,048 m out, doubling at each power of two. The Reference scenes stay within about 2 km.</p>
+  <p><b>Rotation in f32.</b> A vertex's position relative to its pivot arrives rotated and rounded, so the error of rotating a vertex far from its pivot lies outside the composition; cooked Meshes stay within 128 m of their pivot, the distance ADR 0014 measured.</p>
+  <p><b>Subsystems that compute in f32.</b> Physics, audio and particles convert at their boundary into a local frame they own, as the acceleration structures do; the physics engine is not yet chosen.</p>
+  <p><b>One Game world at a time.</b> A World position carries no Game world id.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0014-world-positions-are-f64-the-gpu-works-camera-relative.md">ADR 0014, World positions are f64; the GPU works camera-relative</a></dt><dd>the bar, the 64 m grid, the measured worst cases and the options above</dd>
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=25">Metal Shading Language Specification 4.1, &sect;2.1 Scalar Data Types</a></dt><dd>Metal does not support the double type; the registry's msl-4.1-no-double</dd>
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15">Metal Shading Language Specification 4.1, &sect;1.6.3 Math Intrinsics Compiler Options</a></dt><dd>fast math is the default and allows reassociation; <code>msl-4.1-fast-math</code></dd>
+    <dt><a href="https://www.w3.org/TR/WGSL/#floating-point-evaluation">WGSL, floating point evaluation</a></dt><dd>an implementation may reassociate and fuse floating-point operations, which the oracle's evaluation orders cover</dd>
+    <dt><a href="https://docs.rs/glam/0.32.1/glam/f64/struct.DVec3.html">glam, DVec3</a></dt><dd>the f64 vector a Transform's translation is</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">f64 World positions and the Anchor split landed in the first milestone, with the 100 km oracle and the Goldens' shifted captures. The static TLAS brought the shared f32 frame anchored at load and gave the camera uniform its <code>tlas_anchor</code>; the dynamic TLAS took the same Anchor, and the shadow rays moved with their composition from the lit pass into the shadow mask pass. The culling pass composes each Instance's bounds centre the same way, which ADR 0014 records in its amendment of 2026-11-04.</p>
+  <footer class="sources">Written from <code>src/render/instance.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/shaders/common.wgsl</code>, <code>main.wgsl</code>, <code>culling.wgsl</code>, <code>shadow_mask.wgsl</code>, the tests named above, the Baselines, ADR 0014 and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="instance-buffer.html">Previous: Instance Buffer</a><a href="index.html">All field guides</a><a href="instance-buffer-explained.html">Next: Instance Buffer Explained</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
