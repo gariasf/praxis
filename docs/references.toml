@@ -4197,3 +4197,207 @@ url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs
 section = "wgpu-hal 30.0.1, metal/command.rs, CommandState::reset: an encoder's per-pipeline and per-binding state is cleared for reuse, keeping what it allocated"
 quote = '''fn reset(&mut self) { self.storage_buffer_length_map.clear(); self.vertex_buffer_size_map.clear(); self.stage_infos.vs.clear(); [...] self.immediates.clear(); }'''
 checked = 2026-11-01
+
+["apple-metal-residency-set-aggregation"]
+url = "https://developer.apple.com/documentation/metal/mtlresidencyset"
+section = "Apple Metal documentation, MTLResidencySet (macOS 15.0+), Overview: the command encoder methods against residency sets"
+quote = '''These command encoder methods: [...] Require CPU overhead for each resource or heap, which scale up with each one you add [...] Apply to a single command encoder, which means you need to call the methods again for the same resources for each command encoder [...] Residency sets, by contrast: [...] Require minimal CPU overhead by aggregating allocations at little to no cost for each resource or heap [...] Can attach to a command queue with a single call'''
+checked = 2026-11-05
+
+["apple-metal-encoder-residency-at-commit"]
+url = "https://developer.apple.com/documentation/metal/simplifying-gpu-resource-management-with-residency-sets"
+section = "Apple Metal documentation, Simplifying GPU resource management with residency sets, Overview"
+quote = '''However, these methods can impact an app’s runtime performance because each call incurs some CPU overhead. Additionally, Metal makes those resources resident right after your app commits the command buffer, which can delay when the GPU starts working on it. This overhead adds up as the number of resources increases, especially in apps that use many resources for each frame, such as games.'''
+checked = 2026-11-05
+
+["apple-metal-residency-set-request-residency"]
+url = "https://developer.apple.com/documentation/metal/simplifying-gpu-resource-management-with-residency-sets"
+section = "Apple Metal documentation, Simplifying GPU resource management with residency sets, Request residency ahead of time"
+quote = '''To make allocations in a residency set resident (for allocations that aren’t already resident), the Metal framework needs to do some work on the CPU. By default, Metal does this work when you call the commit() method of the first command buffer that’s using the residency set. Making the allocations resident at this time can delay the graphics driver from submitting the command buffer to the GPU.'''
+checked = 2026-11-05
+
+["apple-metal-residency-set-whole-heap"]
+url = "https://developer.apple.com/documentation/metal/simplifying-gpu-resource-management-with-residency-sets"
+section = "Apple Metal documentation, Simplifying GPU resource management with residency sets, Create a residency set (Important)"
+quote = '''Adding a resource allocation that originates from an MTLHeap to a residency set makes that entire heap resident.'''
+checked = 2026-11-05
+
+["apple-metal-use-heap-sampled-textures"]
+url = "https://developer.apple.com/documentation/metal/mtlrendercommandencoder/useheap(_:stages:)"
+section = "Apple Metal documentation, MTLRenderCommandEncoder useHeap(_:stages:), Discussion"
+quote = '''The method ignores any texture that has renderTarget, shaderWrite, or both in its usage property. For all other textures in heap, the method optimizes each texture’s memory layout for rendering with a sampler.'''
+checked = 2026-11-05
+
+["apple-metal-heap-untracked-default"]
+url = "https://developer.apple.com/documentation/metal/mtlheapdescriptor/hazardtrackingmode"
+section = "Apple Metal documentation, MTLHeapDescriptor hazardTrackingMode, Discussion"
+quote = '''This property’s default value is MTLHazardTrackingMode.default, which is equivalent to MTLHazardTrackingMode.untracked for a heap. The resources you allocate from a heap inherit that heap’s hazard tracking mode.'''
+checked = 2026-11-05
+
+["apple-wwdc23-10124-use-resource-expensive"]
+url = "https://developer.apple.com/videos/play/wwdc2023/10124/"
+section = "WWDC23 session 10124, Bring your game to Mac, Part 2: Compile your shaders, transcript 9:27-9:45"
+quote = '''To flag resource residency to Metal, you would call "useResource". However, useResource is an expensive call when used in excess. Use the plural useResources to provide several resources at once, or consider using Metal heaps via useHeap to flag residency of several resources in a single call.'''
+checked = 2026-11-05
+
+["apple-metal4-residency-sets-only"]
+url = "https://developer.apple.com/documentation/metal/understanding-the-metal-4-core-api"
+section = "Apple Metal documentation, Understanding the Metal 4 core API, Command encoders; Barriers"
+quote = '''`MTL4RenderCommandEncoder` differs from `MTLRenderCommandEncoder` by removing methods that manage resource bindings and residency sets, and methods that configure store-action options and tessellation. Instead, `MTL4RenderCommandEncoder` gives you the ability to: [...] Add a residency set to either an encoder’s command buffer, or the command queue [...] In Metal 4, the framework considers all resources untracked.'''
+checked = 2026-11-05
+
+["apple-wwdc25-254-residency-set-guidance"]
+url = "https://developer.apple.com/videos/play/wwdc2025/254/"
+section = "WWDC25 session 254, Explore Metal 4 games, transcript 10:42-11:05"
+quote = '''If a residency set doesn’t change much over time, prefer attaching it to the command queue. If a residency set changes frequently, then attach it to the appropriate command buffers. [...] Prefer having fewer residency sets with more resources each. This improves performance by allowing Metal to process your resources in bulk.'''
+checked = 2026-11-05
+
+["wgpu-core-30-merge-bind-group"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/track/texture.rs#L363-L372"
+section = "wgpu-core 30.0.1, track/texture.rs, TextureUsageScope::merge_bind_group, called from set_bind_group in a render pass (command/pass.rs L111-L117)"
+quote = '''    pub unsafe fn merge_bind_group(
+        &mut self,
+        bind_group: &TextureViewBindGroupState,
+    ) -> Result<(), ResourceUsageCompatibilityError> {
+        for (view, usage) in bind_group.views.iter() {
+            unsafe { self.merge_single(&view.parent, Some(view.selector.clone()), *usage)? };
+        }'''
+checked = 2026-11-05
+
+["wgpu-3637-read-only-usages"]
+url = "https://github.com/gfx-rs/wgpu/issues/3637#issuecomment-2537906091"
+section = "wgpu issue 3637, Bindless Tracking Issue (open), comment of 2024-12-12"
+quote = '''The assumption is that all resources that are bound to bind group are resident always. Yes we need to prevent metal from making resources non-resident, but with residency sets this should be easy. [...] The purpose of the `buffer.set_usages` API, is to allow wgpu to not need to check if every single resource needs a barrier. Those resources with only read only usages can be ignored and just bound indirectly as part of the binding array'''
+checked = 2026-11-05
+
+["gpuweb-bindless-residency"]
+url = "https://github.com/gpuweb/gpuweb/blob/4e829b310ba7381034b93b974eb1a6aabfb464f7/proposals/bindless.md#L44-L51"
+section = "gpuweb proposals/bindless.md, Bindless concepts, Residency (L47-L50) and argument buffers (L132)"
+quote = '''In the bindful model, the driver has close to perfect information of which resources will be used and does that automatically.
+In bindless, applications can use any resource at any time so applications must manage residency by telling the driver which resources must be kept resident when. [...] When using argument buffers, the application must handle residency explicitly by calling `useResource`, `useHeap` (when suballocating resources), or `useResidencySet`.'''
+checked = 2026-11-05
+
+["bevy-0.16-bindless-slab-limit"]
+url = "https://github.com/bevyengine/bevy/blob/v0.16.0/crates/bevy_render/src/render_resource/bindless.rs#L25-L60"
+section = "Bevy 0.16.0, bevy_render render_resource/bindless.rs, AUTO_BINDLESS_SLAB_RESOURCE_LIMIT and BindlessSlabResourceLimit"
+quote = '''#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub const AUTO_BINDLESS_SLAB_RESOURCE_LIMIT: u32 = 64;
+[...]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+pub const AUTO_BINDLESS_SLAB_RESOURCE_LIMIT: u32 = 2048;
+[...]
+/// This limit primarily exists in order to work around `wgpu` performance
+/// problems involving large numbers of bindless resources. Also, some
+/// platforms, such as Metal, currently enforce limits on the number of
+/// resources in use.'''
+checked = 2026-11-05
+
+["moltenvk-2402-residency-set"]
+url = "https://github.com/KhronosGroup/MoltenVK/pull/2402"
+section = "MoltenVK pull request 2402 (merged 2025-02-06, released in 1.3.0), description"
+quote = '''This PR implements execution barriers with Metal fences and puts all resources in a residency set to avoid having to useResource all resources in bound argument buffers. That makes it possible to run programs that use descriptor indexing with large descriptor tables efficiently.'''
+checked = 2026-11-05
+
+["moltenvk-1.4.2-residency-set-queue"]
+url = "https://github.com/KhronosGroup/MoltenVK/blob/v1.4.2/MoltenVK/MoltenVK/GPUObjects/MVKDevice.h#L983-L1004"
+section = "MoltenVK 1.4.2, MVKDevice.h, makeResident and addResidencySet; MVKPipeline.mm L324-L325 emits UseResource only without a residency set"
+quote = '''	void makeResident(id<MTLAllocation> allocation) {
+		@synchronized(_residencySet) {
+			[_residencySet addAllocation: allocation];
+			[_residencySet commit];
+[...]
+	void addResidencySet(id<MTLCommandQueue> queue) {
+#if MVK_XCODE_16
+		if (_residencySet) [queue addResidencySet:_residencySet];'''
+checked = 2026-11-05
+
+["moltenvk-2890-residency-set-wired-limit"]
+url = "https://github.com/KhronosGroup/MoltenVK/issues/2890"
+section = "MoltenVK issue 2890 (open, reported 2026-10-23 against 1.4.2), Summary"
+quote = '''Every command buffer then needs every allocation resident. Once that set passes what IOGPU keeps wired (about 13.7 GiB on this machine), each submission evicts allocations and wires them again for the next command buffer. Committed work waits in the kernel while the GPU is idle.
+
+On an M4 Pro with 24 GB, a game with 11.6 GiB of Metal allocations runs at 2.3-2.9 fps. The same build with the residency set disabled runs at 8.7-8.8 fps. Two games that stay below that level run at the same frame rate both ways.'''
+checked = 2026-11-05
+
+["dawn-metal-resource-table-use-resource"]
+url = "https://github.com/google/dawn/blob/2d3ba313a4f776c10f7f1cc41640f984ab2839c5/src/dawn/native/metal/ResourceTableMTL.mm#L224-L237"
+section = "Dawn at 2d3ba313, native/metal/ResourceTableMTL.mm, ResourceTable::UseResources for a render encoder"
+quote = '''        for (const Ref<TextureView>& view : mTextureViews) {
+            if (view != nullptr && !view->GetTexture()->IsDestroyed() &&
+                view->GetTexture()->HasAccess()) {
+                [encoder useResource:view->GetMTLTexture()
+                               usage:MTLResourceUsageRead
+                              stages:MTLRenderStageVertex | MTLRenderStageFragment];'''
+checked = 2026-11-05
+
+["godot-metal-use-heaps"]
+url = "https://github.com/godotengine/godot/blob/8cc3a574e26e3640227861aef8266f2fd4fbb650/drivers/metal/metal3_objects.cpp#L72-L83"
+section = "Godot at 8cc3a574 (MIT), drivers/metal/metal3_objects.cpp, MDCommandBuffer::_encode_residency"
+quote = '''	MetalAllocator *alloc = device_driver->get_allocator();
+	if (alloc->get_heap_generation() != _resident_heaps_generation) {
+		_resident_heaps.clear();
+		_resident_heaps_generation = alloc->get_heaps(_resident_heaps);
+	}
+	p_enc->useHeaps(_resident_heaps.ptr(), _resident_heaps.size(), MTL::RenderStageVertex | MTL::RenderStageFragment);'''
+checked = 2026-11-05
+
+["the-forge-metal-use-heaps"]
+url = "https://github.com/ConfettiFX/The-Forge/blob/cd5046893faba2dc7869243873bf01f02a6f0df9/Common_3/Graphics/Metal/MetalRenderer.mm#L5272"
+section = "The Forge at cd504689 (Apache-2.0), Graphics/Metal/MetalRenderer.mm, util_set_heaps_graphics; one MTLHeap per device memory block at L1824"
+quote = '''void util_set_heaps_graphics(Cmd* pCmd) { [pCmd->pRenderEncoder useHeaps:pCmd->pRenderer->pHeaps count:pCmd->pRenderer->mHeapCount]; }'''
+checked = 2026-11-05
+
+["wicked-metal-residency-set-queue"]
+url = "https://github.com/turanszkij/WickedEngine/blob/d2fa9019e315ba69f20a3330a59036ddb45d0120/WickedEngine/wiGraphicsDevice_Metal.cpp#L1673-L1801"
+section = "Wicked Engine at d2fa9019 (MIT), wiGraphicsDevice_Metal.cpp, device creation (L1673-L1801): bindless capacity (100,000 on iOS) and the queues' residency set"
+quote = '''		const uint64_t real_bindless_resource_capacity = 100000; // ios residency set creation limit
+[...]
+		queues[QUEUE_GRAPHICS].queue->addResidencySet(allocationhandler->residency_set.get());'''
+checked = 2026-11-05
+
+["arb-bindless-texture-residency"]
+url = "https://registry.khronos.org/OpenGL/extensions/ARB/ARB_bindless_texture.txt"
+section = "ARB_bindless_texture, revision 5 (2017-02-13), Overview"
+quote = '''To access texture or image resources using handles, the handles must first be made resident. [...] this extension provides API calls allowing applications to manage overall texture memory consumption by making a texture resident and non-resident as required.'''
+checked = 2026-11-05
+
+["everitt-2014-azdo-texture-arrays"]
+url = "https://web.archive.org/web/20170218064304/http://www.slideshare.net/CassEveritt/approaching-zero-driver-overhead"
+section = "Everitt, Foley, Sellers, McDonald, Approaching Zero Driver Overhead in OpenGL, GDC 2014, slides 37, 41 and 121 of the SlideShare transcript"
+quote = '''Array groups textures with same shape [...] Dimensions, format, mips, MSAA [...] Texture Array ~5x Less Overhead [...] Container contains <=2048 same-shape textures [...] Shape is height, width, mipmapcount, format'''
+checked = 2026-11-05
+
+["d3dx12-residency-set-per-command-list"]
+url = "https://github.com/microsoft/DirectX-Graphics-Samples/blob/b550a78e815bbc8b7a0fd948efab11c01d9a1ed2/Libraries/D3DX12Residency/readme.md#L47"
+section = "D3D12 Residency Starter Library (MIT) at b550a78e, readme.md L47; d3dx12Residency.h L163-L165"
+quote = '''Use a D3DX12Residency::ResidencySet to track which heaps will be used in a particular command list (it will be a 1:1 relationship)'''
+checked = 2026-11-05
+
+["ms-d3d12-residency-object-lifetime"]
+url = "https://github.com/MicrosoftDocs/win32/blob/5156035d7ee038808019648161f61910ef6fd4ff/desktop-src/direct3d12/residency.md#L22-L32"
+section = "Microsoft Learn source at 5156035d, Direct3D 12, Residency, L22 and L30-L32"
+quote = '''That GPU-accessible memory is made resident during the creation of the API object, and evicted on API object destruction. [...] A heap is the lowest level unit to manage physical memory'''
+checked = 2026-11-05
+
+["vulkan-descriptor-indexing-large-sets"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/appendices/VK_EXT_descriptor_indexing.adoc"
+section = "Vulkan-Docs at b94f8bd2, appendix VK_EXT_descriptor_indexing, Description"
+quote = '''enable applications to create large descriptor sets containing substantially all of their resources'''
+checked = 2026-11-05
+
+["apple-metal-argument-buffer-residency"]
+url = "https://developer.apple.com/documentation/metal/managing-groups-of-resources-with-argument-buffers"
+section = "Apple Metal documentation, Managing groups of resources with argument buffers, Enable the GPU memory of resources in the argument buffer"
+quote = '''However, when the renderer encodes resources into an argument buffer, setting the argument buffer doesn’t set each of its resources individually. Metal doesn’t determine what resource’s memory to make accessible to the GPU by inspecting the argument buffer. Instead, the renderer calls the useResource(_:usage:stages:) method to explicitly make a specific resource’s memory accessible to the GPU.'''
+checked = 2026-11-05
+
+["wgpu-types-30-max-texture-array-layers-default"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L426"
+section = "wgpu-types 30.0.1, limits.rs, Limits::defaults"
+quote = '''    pub const fn defaults() -> Self {
+        Self {
+            max_texture_dimension_1d: 8192,
+            max_texture_dimension_2d: 8192,
+            max_texture_dimension_3d: 2048,
+            max_texture_array_layers: 256,'''
+checked = 2026-11-05
