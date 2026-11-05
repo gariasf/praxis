@@ -523,7 +523,9 @@ impl Exported<'_> {
         let (file, index) = match &mesh.source {
             MeshSource::Generated(primitives) => {
                 let file = format!("meshes/{}.glb", file_name(&mesh.name));
-                let glb = mesh_glb(&mesh.name, &super::mesh::cook(primitives))?;
+                let cooked = super::mesh::cook(primitives)
+                    .with_context(|| format!("cooking Mesh {}", mesh.name))?;
+                let glb = mesh_glb(&mesh.name, &cooked)?;
                 self.write(&file, &glb)?;
                 (file, 0)
             }
@@ -1109,7 +1111,8 @@ mod tests {
                 .iter()
                 .map(|(geometry, _)| (geometry.clone(), Some(AssetId(1))))
                 .collect::<Vec<_>>(),
-        );
+        )
+        .unwrap();
         assert_eq!(read_back.primitives().len(), cooked.primitives.len());
         for (index, (primitive, cooked_primitive)) in
             read_back.primitives().zip(&cooked.primitives).enumerate()

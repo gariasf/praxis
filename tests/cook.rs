@@ -384,6 +384,58 @@ fn a_texture_size_not_a_multiple_of_4_or_above_8192_is_refused() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
+/// Writes `reach.gltf` and its buffer: a Mesh named `reach` of one
+/// triangle, one vertex `reach_metres` along +X from its pivot.
+fn write_reaching_mesh(assets: &Path, reach_metres: f32) {
+    let positions = [[0.0, 0.0, 0.0], [reach_metres, 0.0, 0.0], [0.0, 0.0, -1.0]];
+    let normals = [[0.0f32, 1.0, 0.0]; 3];
+    let uvs = [[0.0f32, 0.0], [1.0, 0.0], [0.0, 1.0]];
+    let mut buffer: Vec<u8> = Vec::new();
+    for value in positions.iter().chain(&normals).flatten() {
+        buffer.extend(value.to_le_bytes());
+    }
+    for value in uvs.iter().flatten() {
+        buffer.extend(value.to_le_bytes());
+    }
+    let gltf = json!({
+        "asset": {"version": "2.0"},
+        "buffers": [{"uri": "reach.bin", "byteLength": buffer.len()}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 72, "byteLength": 24},
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
+             "min": [0.0, 0.0, -1.0], "max": [reach_metres, 0.0, 0.0]},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+        ],
+        "meshes": [{"name": "reach", "primitives": [
+            {"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}},
+        ]}],
+    });
+    write_sources(assets, "reach.gltf", &gltf.to_string());
+    fs::write(assets.join("reach.bin"), buffer).unwrap();
+}
+
+#[test]
+fn a_mesh_reaching_past_128_m_from_its_pivot_is_refused() {
+    let directory = scratch("pivot");
+    let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
+    let cache = CookedCache::new(&cache);
+    write_reaching_mesh(&assets, 128.0);
+    cook(&assets, &cache).unwrap();
+
+    write_reaching_mesh(&assets, 128.1);
+    let error = format!("{:#}", cook(&assets, &cache).unwrap_err());
+    assert!(
+        error.contains("\"reach\"") && error.contains("128.1 m"),
+        "{error}"
+    );
+    fs::remove_dir_all(&directory).unwrap();
+}
+
 #[test]
 fn a_changed_cook_setting_re_cooks_exactly_the_assets_it_covers() {
     let directory = scratch("setting");

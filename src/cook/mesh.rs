@@ -8,8 +8,8 @@ use glam::{Mat3, Quat, Vec3};
 use sha2::{Digest, Sha256};
 
 use crate::cooked::{
-    AssetId, AssetKind, AssetSource, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex,
-    MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES,
+    AssetId, AssetKind, AssetName, AssetSource, CookedMesh, CookedMeshlet, CookedPrimitive,
+    CookedVertex, MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES,
     QTANGENT_SMALLEST_W, hex,
 };
 use crate::scenes::Geometry;
@@ -69,8 +69,22 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
     hex(&hasher.finalize())
 }
 
-/// Cooks one Mesh from its Primitives' geometry and Material Asset IDs.
-pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
+/// The farthest a cooked vertex may lie from its Mesh's pivot: ADR 0014's
+/// bound, within which f32 rotation keeps its precision bar.
+const MAX_PIVOT_DISTANCE_METRES: f32 = 128.0;
+
+/// Cooks one Mesh from its Primitives' geometry and Material Asset IDs, or
+/// refuses one with a vertex past `MAX_PIVOT_DISTANCE_METRES` from its pivot.
+pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh> {
+    let farthest_metres = primitives
+        .iter()
+        .flat_map(|(geometry, _)| &geometry.positions)
+        .map(|position| Vec3::from(*position).length())
+        .fold(0.0, f32::max);
+    anyhow::ensure!(
+        farthest_metres <= MAX_PIVOT_DISTANCE_METRES,
+        "a vertex lies {farthest_metres:.1} m from the Mesh's pivot, past ADR 0014's {MAX_PIVOT_DISTANCE_METRES} m"
+    );
     let mut mesh = CookedMesh {
         vertices: Vec::new(),
         indices: Vec::new(),
@@ -114,7 +128,7 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> CookedMesh {
         corners.clone().fold(Vec3::INFINITY, Vec3::min).into(),
         corners.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
     ];
-    mesh
+    Ok(mesh)
 }
 
 /// One Primitive's vertices and indices, welded, re-split and ordered for
@@ -326,14 +340,14 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
         .map(|component| (component * i16::MAX as f32).round() as i16)
 }
 
-/// Every Mesh of a glTF file, in mesh-local space, with each Primitive's
-/// geometry and the Asset ID of its Material, named as the Material cook
-/// names it; a Primitive on glTF's default Material names none.
-pub(super) fn gltf_meshes(
+/// Every Mesh of a glTF file, with its name, in mesh-local space, with each
+/// Primitive's geometry and the Asset ID of its Material, named as the
+/// Material cook names it; a Primitive on glTF's default Material names none.
+pub(super) fn gltf_meshes<'document>(
     guid: u128,
-    document: &gltf::Document,
+    document: &'document gltf::Document,
     buffers: &[gltf::buffer::Data],
-) -> anyhow::Result<Vec<(AssetId, Vec<SourcePrimitive>)>> {
+) -> anyhow::Result<Vec<(AssetId, AssetName<'document>, Vec<SourcePrimitive>)>> {
     let source = AssetSource::File(guid);
     let material_names = super::asset_names(document.materials().map(|material| material.name()));
     let mesh_names = super::asset_names(document.meshes().map(|mesh| mesh.name()));
@@ -376,7 +390,11 @@ pub(super) fn gltf_meshes(
             };
             primitives.push((geometry, material));
         }
-        meshes.push((AssetId::new(source, AssetKind::Mesh, name), primitives));
+        meshes.push((
+            AssetId::new(source, AssetKind::Mesh, name),
+            name,
+            primitives,
+        ));
     }
     Ok(meshes)
 }
@@ -492,7 +510,7 @@ pub(crate) mod tests {
             bounds: None,
         };
         assert_eq!(weld(&soup).positions.len(), 4);
-        assert_eq!(cook(&[(soup, None)]).vertices.len(), 4);
+        assert_eq!(cook(&[(soup, None)]).unwrap().vertices.len(), 4);
     }
 
     /// The plane's `u` grows along +X and its `v` along +Z, down the image,
@@ -500,7 +518,7 @@ pub(crate) mod tests {
     /// −Z: cross(+Y, +X) times a bitangent sign of +1.
     #[test]
     fn a_plane_has_its_uv_aligned_tangent_frame() {
-        let mesh = cook(&[(crate::scenes::ground_plane(2.0, 1.0), None)]);
+        let mesh = cook(&[(crate::scenes::ground_plane(2.0, 1.0), None)]).unwrap();
         for vertex in &mesh.vertices {
             let (normal, tangent, sign) = decode(vertex.qtangent);
             assert!(
@@ -526,7 +544,7 @@ pub(crate) mod tests {
             };
             let base = std::path::Path::new(path).parent();
             let buffers = gltf::import_buffers(&gltf.document, base, gltf.blob.clone()).unwrap();
-            for (_, primitives) in gltf_meshes(0, &gltf.document, &buffers).unwrap() {
+            for (_, _, primitives) in gltf_meshes(0, &gltf.document, &buffers).unwrap() {
                 meshes.push((path, primitives));
             }
         }
@@ -670,7 +688,7 @@ pub(crate) mod tests {
             })
         });
         for (id, (name, primitives)) in procedural.chain(reference_gltf_meshes()).enumerate() {
-            let mesh = cook(&primitives);
+            let mesh = cook(&primitives).unwrap();
             let id = AssetId(id as u128);
             cache.write(id, "key", &mesh.to_blob().unwrap()).unwrap();
             let decoded = cache.mesh(id).unwrap();
