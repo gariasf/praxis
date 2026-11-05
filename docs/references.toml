@@ -4413,3 +4413,502 @@ quote = '''    pub const fn defaults() -> Self {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,'''
 checked = 2026-11-05
+
+["apers-2024-gibs-async-as-build"]
+url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=33"
+section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF p. 33, notes"
+quote = '''The async queue may be used for tracing when the frame allows for overlap with a geometry stage. We always overlap our BLAS and TLAS building in async with our gbuffer laydown, after which we can spawn surfels and trace them immediately.'''
+checked = 2026-11-05
+
+["apers-2024-gibs-rebraiding"]
+url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=30"
+section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF p. 30, notes; savings on p. 55 (Skate, Xbox Series X, 1440p, p. 53)"
+quote = '''Some platforms allow us to precompute the Bottom Level Acceleration Structure offline, we observe a 15% improvement to ray traversal when using this for static geometry. Similarly, rebraiding can be used to improve ray traversal further, we compute a set of heuristics for each mesh offline, and based on a adjustable threshold we allow additional, or fewer instances of those meshes to be rebraided. Doing this selectively adds another 5% improvement on top.'''
+cost = '''Offline BLAS and selective rebraiding shave off 0.35ms together. (p. 55; Skate flythrough on XBSX at 1440p, p. 53)'''
+checked = 2026-11-05
+
+["apple-wwdc23-10128-multi-level-instancing"]
+url = "https://developer.apple.com/videos/play/wwdc2023/10128/"
+section = "Apple, Your guide to Metal ray tracing, WWDC23 session 10128, transcript, multi-level instancing"
+quote = '''You can take advantage of this structure using the new multi-level instancing feature. With multi-level instancing, an instance acceleration structure can contain not just primitive acceleration structures, but also other instance acceleration structures.'''
+checked = 2026-11-05
+
+["benthin-2017-partial-rebraiding"]
+url = "https://www.sci.utah.edu/~wald/Publications/2017/rebraiding/rebraiding.pdf#page=1"
+section = "Benthin, Woop, Wald and Afra (Intel), Improved Two-Level BVHs using Partial Re-Braiding, HPG 2017, p. 1, Figure 1 caption and Abstract"
+quote = '''While being nearly as fast to build as traditional two-level BVHs, using our partially merged two-level BVH leads to lower spatial overlap, which in the shown models results in 1.2 × −2.1× higher rendering performance. [...] our new top-level BVH build approach selectively re-braids (opens and merges) object BVHs during the build process to reduce overlap and improve SAH quality.'''
+checked = 2026-11-05
+
+["benthin-2023-micro-poly-hlod-rt"]
+url = "https://momentsingraphics.de/Media/HPG2023/benthin2023-real_time_ray_tracing_of_micro_poly_geometry_with_hlod-paper.pdf#page=1"
+section = "Benthin and Peters (Intel), Real-Time Ray Tracing of Micro-Poly Geometry with Hierarchical Level of Detail, Computer Graphics Forum 42(8), HPG 2023, doi:10.1111/cgf.14868, author's version, Figure 1 caption and abstract (p. 1), Introduction (pp. 1-2)"
+quote = '''For each frame a LOD subset of clusters (∼ 16 − 40 M triangles) are decompressed, converted and fused together into a BVH suitable for hardware-accelerated ray tracing. [...] Since the LOD mechanism in Nanite makes major changes to the mesh topology, the BLAS would need to be rebuilt completely each frame, which simply takes too much time. [...] Because of that, our current implementation is specific to Intel hardware but with sufficiently low-level access to hardware BVH layouts, the same methods could work on any other GPU (Sec. 7).'''
+checked = 2026-11-05
+cost = '''rendered with a diffuse path tracer at 1920 × 1080 with > 20 fps (1 spp, denoising included). [...] With a per-frame overhead of just 5.7 − 9 ms, our approach is suitable for real-time applications. [...] Intel Arc A770'''
+
+["benthin-2024-hploc-tlas"]
+url = "https://gpuopen.com/download/publications/HPLOC.pdf#page=12"
+section = "Benthin, Meister, Barczak, Mehalwal, Tsakok and Kensler (AMD), H-PLOC, Proc. ACM Comput. Graph. Interact. Tech. 7(3), HPG 2024, p. 12, Section 4.1 and Fig. 4 (hardware: Section 4, p. 9)"
+quote = '''An instance, in our case, requires 128 bytes (storing world-to-object transform and its inverse). Figure 4 shows H-PLOC and LBVH build times with an increasing number of randomly sized and placed instances. [...] In terms of absolute build times, H-PLOC builds a BVH4 over half a million instances in 1.1 ms and requires just 2.2 ms for a million instances.'''
+cost = '''H-PLOC builds a BVH4 over half a million instances in 1.1 ms and requires just 2.2 ms for a million instances [...] 2.21 ms vs 1.96 ms for a lower quality LBVH (AMD Radeon 7900 XT, HIP, ROCm 5.7.3)'''
+checked = 2026-11-05
+
+["deligiannis-2019-bfv-as-culling"]
+url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s91023-it-just-works-ray-traced-reflections-in-battlefield-v.pdf#page=63"
+section = "Deligiannis and Schmid (EA DICE), It Just Works: Ray-Traced Reflections in Battlefield V, GTC 2019, PDF p. 63, Culling - Results (first pass on p. 57: Rotterdam, 20200 TLAS instances, 5000 BLAS rebuilds, GPU rebuild 64 ms)"
+quote = '''4 deg culling [...] 5000 -> 400 BLAS rebuilds each frame [...] 20000 -> 2800 TLAS instances [...] TLAS + BLAS build (GPU): 64 ms -> 14.5 ms [...] Cons [...] Occasional popping [...] Missing objects'''
+cost = '''TLAS + BLAS build (GPU): 64 ms -> 14.5 ms (20000 -> 2800 TLAS instances, 5000 -> 400 BLAS rebuilds; GPU not stated)'''
+checked = 2026-11-05
+
+["deligiannis-2019-bfv-as-staggered-cost"]
+url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s91023-it-just-works-ray-traced-reflections-in-battlefield-v.pdf#page=65"
+section = "Deligiannis and Schmid (EA DICE), Battlefield V, GTC 2019, PDF p. 65 (slide 78), results"
+quote = '''TLAS + BLAS build (GPU): 14.5 ms -> 1.15 ms [...] RayGen (GPU): 0.71 ms -> 0.81 ms (staggered refit + flags)'''
+cost = '''TLAS + BLAS build (GPU): 14.5 ms -> 1.15 ms [...] RayGen (GPU): 0.71 ms -> 0.81 ms (staggered refit + flags); GPU not stated'''
+checked = 2026-11-05
+
+["dxr-2026-clusters-support"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L112-L153"
+section = "DirectX Raytracing (DXR) Functional Spec, Part 2 (preview), Intro and Clustered geometry, lines 112-153"
+quote = '''This set of features can work well on any hardware with existing raytracing support given a driver update. [...] If some older devices don't get support it will likely be a resourcing tradeoff the hardware vendor needed to make. [...] Example scenarios include new geometry being streamed in from disk, high numbers of animated objects, level-of-detail systems, or dynamic tessellation. [...] An application might use this for seamless streaming or level of detail systems, where CLAS of different geometric densities are dynamically combined into a single BLAS.'''
+checked = 2026-11-05
+
+["dxr-2026-ptlas-overview"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L390-L418"
+section = "DirectX Raytracing (DXR) Functional Spec, Part 2 (preview), Partitioned Top Level Acceleration Structures; Partitioned TLAS overview, lines 390-418"
+quote = '''The design of the Top Level Acceleration Structure API requires the entire data structure to be rebuilt even if only a small number of instances are modified. [...] Instances can be assigned an explicit bounding box, allowing their BLAS pointer to be replaced without the cost of a rebuild. This particularly facilitates LOD techniques, where objects of which the conservative common bounds are known are swapped out against each other. - Partitions may be assigned a translation vector that can be updated efficiently while otherwise retaining the contents of the partition. This is particularly useful for applications that periodically re-center the scene around the origin to avoid floating point precision issues. [...] Spatial overlap between partition bounds will have a negative effect on trace performance on most implementations, similar to instance overlap in existing TLAS. Generally small partitions (100-1000 instances) should offer the majority of build speed improvements with the smallest trace performance impact.'''
+checked = 2026-11-05
+
+["dxr-2026-ptlas-partition-translation"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L447-L455"
+section = "DirectX Raytracing 2 spec (D3D12_RAYTRACING_TIER_2_0, in preview), Partition translation (spec text CC-BY-4.0); design properties at L407-L416"
+quote = '''In order to assist titles with large worlds that require more precision than 32-bit floating point numbers can provide, the Partitioned TLAS supports the efficient translation of partitions. [...] The expected use of this feature is for the application to store instance transforms relative to the partitions they are assigned to. Then, the partition translation is added to the stored transform to arrive at the desired world position for each instance. [...] When the user wishes to re-center the world space coordinates of all objects, the position translations can be updated efficiently without triggering a rebuild of the entire Partitioned TLAS. Use of the Partition Translation requires additional memory for storing the un-translated version of instance transforms and must be enabled with a flag when constructing the Partitioned TLAS.'''
+checked = 2026-11-05
+
+["ize-2007-async-bvh-swap"]
+url = "https://www.sci.utah.edu/~thiago/papers/async_bvh_build.pdf#page=3"
+section = "Ize, Wald and Parker, Asynchronous BVH Construction for Ray Tracing Dynamic Scenes on Parallel Multi-Core Architectures, EGPGV 2007, p. 3, Section 3.1 and Figure 1"
+quote = '''Instead, by building the BVH from the last finished frame’s vertex positions, the vertex and BVH buffers can be switched quickly with two pointer swaps, and the builder, application, and render threads can immediately continue. Furthermore, since it will likely take several frames before the new BVH is available anyways, that BVH will already be outdated by the time it is finished'''
+checked = 2026-11-05
+
+["leblanc-conte-2025-acs-bvh-stats"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=126"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slide Performance: Statistics (p. 126, printed 129), slide and speaker notes"
+quote = '''Typical urban scene • 2k+ BLAS • 30K+ instances • 300 MB BLAS Data • 20 MB TLAS Data [...] On the BVH side, during runtime, we have around 2 thousand BLASes loaded and around 30 thousand TLAS instances. Taking up 320 megabytes total in memory. [...] Those numbers were taking on an Xbox Series X.'''
+checked = 2026-11-05
+
+["leblanc-conte-2025-acs-far-cubemap"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=72"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slide Per-pixel indirect specular: Sky approximation and missing objects (p. 72, printed 71), speaker notes"
+quote = '''We can see missing far geometries not contained in our BVH. To get back some of those missing data, we replaced the sky texture approximation by a dynamic fallback cubemap containing the terrain, sky, clouds and far entities. [...] This cubemap is 128x128 and update one face per frame.'''
+checked = 2026-11-05
+
+["leblanc-conte-2025-acs-rt-scene"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=28"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering, slides Ray tracing scene description (p. 28) and How it's built (p. 34), speaker notes"
+quote = '''As mentionned previously, our scene description used for ray tracing is a coarse representation of the rasterized version. We use low LODs as much as possible without incurring visible artefacts. There is no vertex animation support, so no skinning (no character) or moving vegetation. We cull as much as possible small geometries such as small vegetations and clutter. [...] Each frame, we update our BVH representation. We add and remove instances depending on the streaming around the camera. [...] Finally, we cull all instances from the point of view of the camera. We start at a fixed distance and remove instances having a smaller solid angle than a threshold. Since we have a lot of instances, we time slice the culling to make it faster. [...] We rebuilt every frame the TLAS in the async queue'''
+checked = 2026-11-05
+
+["leblanc-conte-2025-acs-tlas-async"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin%27s%20Creed%20Shadows.pdf#page=34"
+section = "Leblanc and Conte (Ubisoft Montreal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, PDF p. 34, Ray tracing scene description: How it's built, slide and notes"
+quote = '''Each frame, we update our BVH representation. We add and remove instances depending on the streaming around the camera. We update the transform matrix of moving objects. [...] Finally, we cull all instances from the point of view of the camera. We start at a fixed distance and remove instances having a smaller solid angle than a threshold. Since we have a lot of instances, we time slice the culling to make it faster. It takes less than a second to complete the full scene. [...] We rebuilt every frame the TLAS in the async queue'''
+checked = 2026-11-05
+
+["lloyd-2020-stochastic-lod-dxr"]
+url = "https://developer.nvidia.com/blog/implementing-stochastic-lod-with-microsoft-dxr/"
+section = "Lloyd, Klehm and Stich (NVIDIA), Implementing Stochastic Levels of Detail with Microsoft DirectX Raytracing, NVIDIA Technical Blog, 15 June 2020, Discrete LOD; Stochastic LOD transitions; Limitations; Results"
+quote = '''Any secondary ray starting from a primary hit must “see” the same LODs for objects as the primary ray (or rasterizer) did. Failure to guarantee this means that secondary rays might miss intersections or find spurious hits due to the mismatch in scene representations between the primary and secondary rays (Figure 3). This in turn can lead to visual artifacts like light leaks, objects disappearing in reflections, or incorrectly shadowed areas. [...] We include both LODs in the TLAS, but we need a way to choose which of the two LODs to intersect for each pixel. [...] We use this instance mask feature to stochastically select between two adjacent LODs. [...] One limitation is that the instance and ray masks only consist of 8 bits, which means that we only get eight levels for stochastic LOD transitions [...] Our implementation of stochastic LOD also doubles the number of instances in the TLAS, which slightly increases TLAS build time.'''
+checked = 2026-11-05
+cost = '''Figure 5 shows the render timings that we obtained on an NVIDIA GeForce RTX 2080Ti with 64×60 instances and eight LODs. [...] up to 2.2x for the top view where almost all the objects are rendered at a low LOD. [...] We saw an average LOD selection time of 0.018 ms and TLAS build time of 0.22 ms. [...] At a maximum of about 10%, however, this cost is limited. When the transition interval is 0 [...] you still have two instances per object in the TLAS instead of one. This accounts for only a 1.6% increase in render time.'''
+
+["meister-2021-bvh-star-two-level"]
+url = "https://meistdan.github.io/publications/bvh_star/paper.pdf#page=11"
+section = "Meister, Ogaki, Benthin, Doyle, Guthe and Bittner, A Survey on Bounding Volume Hierarchies for Ray Tracing, Computer Graphics Forum 40(2), Eurographics 2021 STAR, p. 11, 5.3.3 Two-level Hierarchy"
+quote = '''Wald et al. [WBS03] proposed a two-level hierarchy where a separate bottom-level BVH is first built for each object in the scene, and then a single top-level BVH is built over all objects. [...] The efficiency of the two-level hierarchy heavily depends on the quality of the top-level BVH. Largely overlapping objects (in world space), which are common in real-world scenarios, can quickly reduce the culling efficiency of the top-level BVH, as a ray intersecting the overlapping region will need to sequentially intersect all overlapping objects. For reducing the overlap, Benthin et al. [BWWA17] proposed to apply partial re-braiding.'''
+checked = 2026-11-05
+
+["metal-feature-set-tables-instancing-levels"]
+url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9"
+section = "Metal Feature Set Tables (2026-05-21), GPU implementation limits, ray-tracing levels row (p. 9), note 12 (p. 10); M4-series is Apple9 (p. 2)"
+quote = '''GPU family 1 Apple2 Apple3 Apple4 Apple5 Apple6 Apple7 Apple8 Apple9 Apple10 [...] Largest number of levels a ray-tracing intersection query can traverse in an acceleration structure 12: Not available: Not available: Not available: Not available: 16: 16: 16: 16: 16 [...] 12. The value includes one level for the primitive acceleration structure, which leaves the remaining levels for instance acceleration structures. [...] M4-series: Metal 3 & 4: Apple9'''
+checked = 2026-11-05
+
+["microsoft-2026-clas-ptlas-preview"]
+url = "https://devblogs.microsoft.com/directx/clas-ptlas-preview/"
+section = "Microsoft DirectX Developer Blog, DXR Clustered Geometry and Partitioned TLAS preview (Agility SDK 1.722-preview), 28 October 2026, motivation; Partitioned TLAS; Availability and prerequisites; samples"
+quote = '''One benefit of more efficient builds is it can become practical to raytrace the same full-detail geometry used for rasterization, rather than simplified proxies, so ray-traced shadows and reflections match the visible scene. [...] These features don’t require new hardware capabilities beyond existing raytracing support. [...] Supported hardware: All RTX GPUs [...] Supported hardware: AMD Radeon™ RX 9000 series GPUs [...] UPDATE_INSTANCE changes only the referenced BLAS address and hit-group-table contribution, for example when swapping LODs. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms.  PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
+checked = 2026-11-05
+cost = '''In the pair of images below running on an AMD RX 9070 [...] Per-frame GPU AS preparation/build: 788 ms: 3.11 ms: ~254x less time; Per-frame GPU raytracing: 72.6 ms: 9.27 ms: ~7.8x less time [...] DO NOT ASSUME GAMES WILL SEE THIS MAGNITUDE OF WINS, THIS IS JUST A TEST PLAYGROUND'''
+
+["microsoft-2026-ptlas-preview-domino"]
+url = "https://devblogs.microsoft.com/directx/clas-ptlas-preview/"
+section = "Amar Patel (Microsoft), [PREVIEW] Raytracing: Clustered Geometry, Partitioned TLAS, Indirect Acceleration Structure Builds, DirectX Developer Blog, 28 October 2026, D3D12 Partitioned TLAS domino sample (sample: D3D12RaytracingPartitionedTLAS in microsoft/DirectX-Graphics-Samples, MIT; its Vulkan original nvpro-samples/vk_partitioned_tlas, Apache-2.0; 170000 dominoes on 1.2 million static objects per its README)"
+quote = '''At scene wide scope, updating a top-level acceleration structure (TLAS) can be costly for large worlds even if only a few instances changed. Partitioned TLAS focuses update costs on changed scene regions while retaining acceleration-structure data elsewhere. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms. PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
+cost = '''TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms (GPU not stated)'''
+checked = 2026-11-05
+
+["microsoft-dxr-build-flags"]
+url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing.md#L4211-L4214"
+section = "DirectX Raytracing functional spec, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS, ALLOW_UPDATE, PREFER_FAST_TRACE, PREFER_FAST_BUILD"
+quote = '''This option may result in increased memory consumption, build times and lower raytracing performance. Future updates, however, should be faster than building the equivalent acceleration structure from scratch. [...] Construct a high quality acceleration structure that maximizes raytracing performance at the expense of additional build time. A rough rule of thumb is the implementation should take about 2-3 times the build time than default in order to get better tracing performance. [...] Construct a lower quality acceleration structure, trading raytracing performance for build speed. A rough rule of thumb is the implementation should take about 1/2 to 1/3 the build time than default at a sacrifice in tracing performance.'''
+checked = 2026-11-05
+
+["netzel-costa-2022-rtow-build-vs-instances"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
+section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 34 Tracing with Far Field, table and speaker notes"
+quote = '''1.5M instances (not using Far Field) 100K instances (using Far Field) 3.47 ms 2.63 ms 100K instances (Near Field only) 2.43 ms Build -> Trace -> 13 ms 2 ms 2 ms [...] Here we can see a performance comparison between brute force representation using 1.5 million instances compared to using near field only which is significantly faster but only covers 150m radius around the player and finally using near field and far field, which adds some overhead but is still much faster than the brute force approach while providing similar coverage.'''
+cost = '''Build: 13 ms (1.5M instances), 2 ms (100K, near field only), 2 ms (100K, near and far field); Trace: 3.47 ms, 2.43 ms, 2.63 ms; The Matrix Awakens, platform of this table not stated'''
+checked = 2026-11-05
+
+["netzel-costa-2022-rtow-far-field-tlas"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
+section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 33, How to setup TLAS to trace against each field separately?, speaker notes"
+quote = '''However a better solution is to simply build each representation in a separate TLAS. And depending on the ray type, select the appropriate TLAS to trace against. [...] And since each TLAS is built separately this completely avoid the traversal overhead of overlapping instances. This also gives us the option to rebuild the Far Field TLAS at a lower rate, potentially even just build it once during loading.'''
+checked = 2026-11-05
+
+["netzel-costa-2022-rtow-gpu-instance-buffer"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
+section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slides 41-42, TLAS, speaker notes"
+quote = '''As the player moves around different instances are culled, and transforms for objects like cars can change every frame, so we also need to rebuild the TLAS every frame. This means that we need to fill a buffer with instance descriptors from scratch. This is typically done on CPU, and since we have to gather data for 100 thousands instances from multiple sources and copy it to a GPU buffer every frame, it can end up taking a significant amount of time. [...] In order to avoid part of this CPU cost, what we do now is build the instance buffer using a compute shader.'''
+cost = '''GPU Cost Build Instance Buffer - 0.02ms (100K instances; platform not stated)'''
+checked = 2026-11-05
+
+["netzel-costa-2022-rtow-tlas-async"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
+section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 43, TLAS, bullets and speaker notes"
+quote = '''Building a top level acceleration structure with a large number of instances can take a significant amount of time, in our case it takes around 2 ms to build the TLAS. However we are able to kick off the TLAS rebuild quite early in the frame and use async compute to overlap the build with other work. This reduced the actual impact on overall frame time to around 0.3ms.'''
+cost = '''GPU Cost Build Instance Buffer - 0.02ms Rebuild TLAS - 2 ms On async queue - 0.3 ms (about 100K instances, The Matrix Awakens; platform not stated)'''
+checked = 2026-11-05
+
+["nvidia-2022-rtx-best-practices-as-builds"]
+url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
+section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: General tips; Build preference flags; Dynamic BLASes"
+quote = '''Consider async compute for AS building. Especially in hybrid rendering, where G-buffer or shadow maps are rasterized, it’s potentially beneficial to execute AS building on async compute. [...] Cull instances for TLAS. Typically, including the entire scene in the TLAS is not optimal. Instead, cull instances depending on the situation. [...] For TLAS, consider the PREFER_FAST_TRACE flag and perform only rebuilds. Often, this results in best overall performance. The rationale is that making the TLAS as high quality as possible regardless of the movement occurring in the scene is important and doesn’t cost too much. [...] Distribute rebuilds over frames. Because rebuilds are considerably slower than updates, many rebuilds on a single frame can lead to stuttering. To avoid this, it’s good practice to distribute the rebuilds over frames.'''
+checked = 2026-11-05
+
+["nvidia-2022-rtx-best-practices-lod-culling"]
+url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
+section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: General tips"
+quote = '''Cull instances for TLAS. Typically, including the entire scene in the TLAS is not optimal. Instead, cull instances depending on the situation. [...] You can also consider instance size when culling so that smaller instances are culled at a shorter distance. Use appropriate Level of Detail (LOD) for instances. Like in rasterization, using the most detailed geometry LOD for everything is typically suboptimal. LODs used for far-away objects can be simpler. In hybrid rendering, using the same LOD for rasterization and ray tracing can be considered. It’s an efficient way to avoid self-intersection artifacts such as surface shadowing itself. Also consider using lower-detail LODs in ray tracing, especially to reduce the updating cost of dynamic BLASes. If the LODs between rasterization and ray tracing don’t match, enabling back face culling is often needed in ray tracing to prevent the self-intersections.'''
+checked = 2026-11-05
+
+["ue-5.8-lumen-far-field-and-fallback"]
+url = "https://web.archive.org/web/20261015100109/https://dev.epicgames.com/documentation/en-us/unreal-engine/lumen-technical-details-in-unreal-engine"
+section = "Unreal Engine 5.8 documentation, Lumen Technical Details, Far Field; Hardware Ray Tracing (Fallback Mesh)"
+quote = '''Lumen Hardware Ray Tracing implements Far Field traces, which extend Lumen Global Illumination and Reflections to one kilometer distance from the camera by default. [...] Far Field requires the use of HLOD1 to be built. When Far Field is enabled, it is traced beginning at the Max Trace Distance (default is 200m) and continues to r.LumenScene.FarField.MaxtraceDistance (default is 1 kilometer). [...] the near-field (objects from the camera to the Max Trace Distance) may be culled before the far-field traversal point, which will leave a gap in coverage. [...] Screen Traces are used to cover the mismatch between the full triangle meshes rendered by Nanite and the Fallback Mesh being ray-traced by Lumen. However, there are some cases where the mismatch is too large to be hidden. In these cases, raising the Fallback Relative Error can reduce incorrect self-intersection artifacts.'''
+checked = 2026-11-05
+
+["ue-5.8-rt-perf-tlas-instances-overlap"]
+url = "https://web.archive.org/web/20260913071353/https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Unreal Engine 5.8 documentation, Ray Tracing Performance Guide, Top Level Acceleration Structure Build; Managing Top Level Acceleration Structure Build Cost; Ray Traversal Cost"
+quote = '''In order to achieve a 30 frames per second target on next generation consoles, scenes should generally have 100,000 instances or fewer in the Ray Tracing Scene after culling. [...] The cost of building TLAS typically scales linearly with the number of instances before culling [...] When meshes overlap, the ray must traverse them all independently to find the closest hit, because Ray Tracing uses a two-level acceleration structure. The mesh overlap can cause extremely slow ray traversal in scenes built by piecing different assets together as needed (also called kitbashing). [...] In order for scenes to be compatible with Hardware Ray Tracing, mesh overlap must be kept to a minimum.'''
+checked = 2026-11-05
+
+["unity-6000.6-rtas-relative-origin"]
+url = "https://docs.unity.com/en-us/engine/6000.6/script-reference/unityengine/rendering/raytracingaccelerationstructure/buildsettings/relativeorigin"
+section = "Unity 6000.6 Scripting API, RayTracingAccelerationStructure.BuildSettings.relativeOrigin, Remarks"
+quote = '''The relative origin of ray tracing instances. [...] This value is subtracted from the original instance position to get the final instance position. If you do camera-relative ray tracing, you can use relativeOrigin to get more accurate ray-geometry intersection results.'''
+checked = 2026-11-05
+
+["unity-hdrp-camera-relative-rtas"]
+url = "https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/HDRaytracingManager.HDRTASManager.cs#L366-L372"
+section = "Unity Graphics (HDRP, Unity Companion License), HDRaytracingManager.HDRTASManager.cs, Build: the RTAS is built about the camera position when camera-relative rendering is on; called each frame from HDRaytracingManager.cs BuildRayTracingAccelerationStructure (L640, L690)"
+quote = '''public void Build(HDCamera hdCamera)
+        {
+            if (ShaderConfig.s_CameraRelativeRendering != 0)
+                rtas.Build(hdCamera.mainViewConstants.worldSpaceCameraPos);
+            else
+                rtas.Build();
+        }'''
+checked = 2026-11-05
+
+["unreal-5.8-preview-translation"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/SceneView.cpp#L694-L696"
+section = "Unreal Engine 5.8.4, Engine/Private/SceneView.cpp, FViewMatrices::Init: PreViewTranslation is minus the view origin, each view, each frame; the ray tracing scene takes it per view in RayTracingScene.cpp SetViewParams L218-L221"
+quote = '''// Translate world-space so its origin is at ViewOrigin for improved precision.
+	ViewOrigin = LocalViewOrigin;
+	PreViewTranslation = -LocalViewOrigin;'''
+checked = 2026-11-05
+
+["unreal-5.8-rt-async-build"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp#L1104-L1137"
+section = "Unreal Engine 5.8.4, Renderer/Private/DeferredShadingRenderer.cpp: TLAS update and build passes on async compute when r.RayTracing.AsyncBuild is set (cvar at L314-L319, default 0)"
+quote = '''const bool bRayTracingAsyncBuild = CVarRayTracingAsyncBuild.GetValueOnRenderThread() != 0 && GRHISupportsRayTracingAsyncBuildAccelerationStructure;
+	const ERDGPassFlags ComputePassFlags = bRayTracingAsyncBuild ? ERDGPassFlags::AsyncCompute : ERDGPassFlags::Compute;
+[...]
+		RayTracingScene.Update(GraphBuilder, GetSceneUniforms(), &Scene->GPUScene, ComputePassFlags);
+		RayTracingScene.Build(GraphBuilder, ComputePassFlags | ERDGPassFlags::NeverCull, OutDynamicGeometryScratchBuffer);'''
+checked = 2026-11-05
+
+["unreal-5.8-rt-far-field-layer"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/RayTracing/RayTracingScene.h#L33-L40"
+section = "Unreal Engine 5.8.4, Renderer/Private/RayTracing/RayTracingScene.h, ERayTracingSceneLayer: the far field is its own layer (own TLAS per view)"
+quote = '''enum class ERayTracingSceneLayer : uint8
+{
+	Base = 0,
+	Decals,
+	FarField,
+
+	NUM
+};'''
+checked = 2026-11-05
+
+["unreal-5.8-rt-parallel-gather"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/RayTracing/RayTracing.cpp#L90-L96"
+section = "Unreal Engine 5.8.4, Renderer/Private/RayTracing/RayTracing.cpp: dynamic ray tracing instances gathered on worker tasks"
+quote = '''static int32 GParallelGatherDynamicRayTracingInstancesNumTasks = 4;
+static FAutoConsoleVariableRef CVarParallelGatherDynamicRayTracingInstancesNumTasks(
+	TEXT("r.RayTracing.DynamicInstances.Parallel.NumTasks"),
+	GParallelGatherDynamicRayTracingInstancesNumTasks,
+	TEXT("Controls the number of gather dynamic ray tracing instances tasks to run asynchronously."),'''
+checked = 2026-11-05
+
+["unreal-5.8-rt-translated-world-instances"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Shaders/Private/RayTracing/RayTracingInstanceBufferUtil.usf#L145-L153"
+section = "Unreal Engine 5.8.4, Shaders/Private/RayTracing/RayTracingInstanceBufferUtil.usf, ProcessInstance: each TLAS instance transform written in translated (camera-relative) world space; descriptor written at L245-L250 from LocalToTranslatedWorld"
+quote = '''const FDFVector3 PreViewTranslation = MakeDFVector3(PreViewTranslationHigh, PreViewTranslationLow);
+[...]
+	float4x4 LocalToTranslatedWorld4x4 = DFFastToTranslatedWorld(InstanceSceneData.LocalToWorld, PreViewTranslation);'''
+checked = 2026-11-05
+
+["vulkan-1.4.367-cluster-acceleration-structure"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/accelstructures.adoc#L3424-L3455"
+section = "Vulkan specification v1.4.367, Cluster Level Acceleration Structures (VK_NV_cluster_acceleration_structure), lines 3424-3455"
+quote = '''Acceleration structure build times in ray tracing applications with extensive geometry can: be reduced by introducing alternative acceleration structure types that facilitate bottom-level acceleration structure construction using pre-generated primitive clusters, improving geometry reuse. [...] A CLAS can: only contain a limited number of <<cluster-geometry-limits, triangles and vertices>>. CLAS objects cannot be directly referenced in a top level acceleration structure, instead, they must: be part of a <<acceleration-structure-bottom-level-clas, Cluster Level Bottom Level Acceleration Structure>>.'''
+checked = 2026-11-05
+
+["vulkan-1.4.367-partitioned-tlas"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/accelstructures.adoc#L4845-L4893"
+section = "Vulkan specification v1.4.367, Partitioned Top Level Acceleration Structures (VK_NV_partitioned_acceleration_structure), global partition and partition translation, lines 4845-4893"
+quote = '''Partitioned Top Level Acceleration Structures (PTLAS) allow efficient reuse of previously constructed sections of the top level acceleration structure by eliminating a full rebuild when only a few instances are modified. [...] PTLAS organizes instances into partitions, enabling a two-stage build process: first, it constructs an acceleration structure for each partition by grouping the instances within it, and second, it combines these partition structures into a single acceleration structure [...] The global partition is well-suited for frequently updated instances, such as animated characters. [...] To handle large worlds requiring more precision than 32-bit floating-point numbers offer, PTLAS offers efficient partition translation. [...] World space coordinates can: also be updated efficiently without rebuilding the entire PTLAS.'''
+checked = 2026-11-05
+
+["wald-2003-two-level-toplevel-rebuild"]
+url = "https://www.sci.utah.edu/~wald/Publications/2003/Dynamic/dynamic.pdf#page=3"
+section = "Wald, Benthin and Slusallek, Distributed Interactive Ray Tracing of Dynamic Scenes, IEEE PVG 2003, p. 3, Section 3 (top level is a BSP/kd-tree over instances, not a BVH)"
+quote = '''hierarchical animation still invalidates the toplevel BSP, and as such makes it very likely that this toplevel structure has to be rebuilt every frame. However, the cost for rebuilding this toplevel BSP only depends on the number of objects in a scene, and is totally independent of the actual number of triangles contained in these objects.'''
+checked = 2026-11-05
+
+["wgpu-30-as-size-info-private"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2676-L2685"
+section = "wgpu-core 30.0.1, resource.rs, struct Tlas (struct Blas likewise at L2527-L2531): the sizes and the instance buffer are crate-private; wgpu's Blas and Tlas (wgpu/src/api/blas.rs, tlas.rs) have no size getter (searched)"
+quote = '''pub struct Tlas { pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>, pub(crate) device: Arc<Device>, pub(crate) size_info: hal::AccelerationStructureBuildSizes, pub(crate) max_instance_count: u32, [...] pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,'''
+checked = 2026-11-05
+
+["wgpu-30-blas-compacted-size-private"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518"
+section = "wgpu-core 30.0.1, resource.rs, enum BlasCompactState (crate-private); the compacted size reaches only a log line, device/queue.rs L2036-L2042"
+quote = '''pub(crate) enum BlasCompactState { [...] /// Ready to be compacted Ready { size: wgt::BufferAddress },'''
+checked = 2026-11-05
+
+["wgpu-30-command-encoder-send-sync"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L27"
+section = "wgpu 30.0.1, api/command_encoder.rs; Tlas is WasmNotSendSync (api/tlas.rs L28), Queue Send + Sync (api/queue.rs L19)"
+quote = '''static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);'''
+checked = 2026-11-05
+
+["wgpu-30-device-as-hal"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L667-L673"
+section = "wgpu 30.0.1, api/device.rs, Device::as_hal: the route to wgpu-hal's Device, and through it get_acceleration_structure_build_sizes"
+quote = '''pub unsafe fn as_hal<A: hal::Api>( &self, ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {'''
+checked = 2026-11-05
+
+["wgpu-30-encode-at-finish"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/mod.rs#L1283-L1285"
+section = "wgpu-core 30.0.1, command/mod.rs, encode_commands, which CommandEncoder finish runs (L1320-L1328): the recorded build is encoded, and its instances converted and staged, only at finish"
+quote = '''ArcCommand::BuildAccelerationStructures { blas, tlas } => { ray_tracing::build_acceleration_structures(&mut state, blas, tlas)?; }'''
+checked = 2026-11-05
+
+["wgpu-30-encode-snatch-read"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/mod.rs#L1093-L1098"
+section = "wgpu-core 30.0.1, command/mod.rs, encode_commands: finish holds the device's snatch lock for reading while it encodes"
+quote = '''fn encode_commands( device: &Arc<Device>, cmd_buf_data: &mut CommandBufferMutable, ) -> Result<(), CommandEncoderError> { device.check_is_valid()?; let snatch_guard = device.snatchable_lock.read();'''
+checked = 2026-11-05
+
+["wgpu-30-lowest-unmodified-unused"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs#L95-L110"
+section = "wgpu 30.0.1, api/tlas.rs, Tlas::get_mut_slice tracks lowest_unmodified; wgpu-core 30.0.1 only copies it (command/ray_tracing.rs L184) and never reads it in the build (searched), so every filled entry is re-staged each build"
+quote = '''/// All elements from the lowest accessed index up are marked as modified. // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.'''
+checked = 2026-11-05
+
+["wgpu-30-poll-snatch-write"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L719-L736"
+section = "wgpu-core 30.0.1, device/resource.rs, deferred_resource_destruction, run by every device poll, which locks only when a destroy left resources to free (L793-L804); Buffer::destroy (resource.rs L1074-L1080) and Texture::destroy (L1632-L1638) also take the lock for writing"
+quote = '''/// Destroying the resources requires taking a write lock on the device's snatch lock, [...] let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write())'''
+checked = 2026-11-05
+
+["wgpu-30-prefer-fast-build-metal"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L486-L491"
+section = "wgpu-hal 30.0.1, metal/conv.rs: AccelerationStructureFlags mapped to MTLAccelerationStructureUsage (flag defined in wgpu-types 30.0.1 ray_tracing.rs L140-L142)"
+quote = '''if flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+        usage |= MTLAccelerationStructureUsage::Refit;
+    }
+    if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+        usage |= MTLAccelerationStructureUsage::PreferFastBuild;
+    }'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-barrier-before-build"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L1194-L1205"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_blas, run before every TLAS build: one global acceleration structure barrier from shader reads to build writes, not per structure"
+quote = '''if tlas_present { source_usage |= hal::AccelerationStructureUses::SHADER_INPUT; destination_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT; } unsafe { cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-binding-at-creation"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L3219-L3252"
+section = "wgpu-core 30.0.1, device/resource.rs, create_tlas_binding: a bind group holds the Tlas Arc and its raw structure from creation"
+quote = '''used.acceleration_structures.insert_single(tlas.clone()); [...] Ok(tlas.try_raw(snatch_guard)?)'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-instance-blas-only"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L82"
+section = "wgpu 30.0.1, api/blas.rs, TlasInstance::new: an instance references a Blas, never a Tlas (no multi-level instancing); wgpu-types features.rs has no partitioned or cluster acceleration structure feature (searched)"
+quote = '''pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-instance-buffer"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L268-L282"
+section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_tlas: a persistent device buffer of capacity x backend instance record, beside the TLAS"
+quote = '''let instance_buffer_size = self .alignments .raw_tlas_instance_size .checked_mul(desc.max_instances.max(1)) [...] label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-instances-capacity-vec"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L777-L784"
+section = "wgpu 30.0.1, api/device.rs, Device::create_tlas: the CPU-side instance list is allocated at capacity"
+quote = '''pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas { let tlas = self.inner.create_tlas(desc); Tlas { inner: tlas, instances: vec![None; desc.max_instances as usize], lowest_unmodified: 0, }'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-scratch-per-build"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L224-L314"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_acceleration_structures: scratch sized by the TLAS's creation-time build_scratch_size (its capacity), a new buffer per build call (scratch.rs L16-L27 creates it through wgpu-hal), freed when the submission retires (L460-L462)"
+quote = '''scratch_buffer_tlas_size = scratch_buffer_tlas_size.saturating_add(align_to( tlas.size_info.build_scratch_size, [...] let scratch_buffer = ScratchBuffer::new(state.device, scratch_size)?;'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-size-at-create"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L242-L266"
+section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_tlas: the TLAS is sized once, by wgpu-hal, for max_instances"
+quote = '''let size_info = unsafe { self.raw().get_acceleration_structure_build_sizes( [...] count: desc.max_instances, [...] size: size_info.acceleration_structure_size, format: hal::AccelerationStructureFormat::TopLevel,'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-staging-per-build"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L377-L384"
+section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_acceleration_structures: a new mapped staging buffer per build, of the filled records' bytes, then copied into the TLAS's instance buffer (L432-L436)"
+quote = '''let staging_buffer = if !instance_buffer_staging_source.is_empty() { let mut staging_buffer = StagingBuffer::new( state.device, wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(), )?; staging_buffer.write(&instance_buffer_staging_source);'''
+checked = 2026-11-05
+
+["wgpu-30-tlas-tracker-stateless"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/track/mod.rs#L635-L636"
+section = "wgpu-core 30.0.1, track/mod.rs, Tracker: TLASes carry no usage state between commands or submissions"
+quote = '''pub blas_s: BlasTracker, pub tlas_s: StatelessTracker<resource::Tlas>,'''
+checked = 2026-11-05
+
+["wgpu-hal-30-as-raw-private"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L1389-L1392"
+section = "wgpu-hal 30.0.1, metal/mod.rs, struct AccelerationStructure: its MTLAccelerationStructure is private with no public accessor; vulkan/mod.rs L795-L800 likewise (raw, buffer, allocation all private)"
+quote = '''pub struct AccelerationStructure { raw: Retained<ProtocolObject<dyn MTLAccelerationStructure>>, }'''
+checked = 2026-11-05
+
+["wgpu-hal-30-build-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1194-L1197"
+section = "wgpu-hal 30.0.1, lib.rs, trait Device::get_acceleration_structure_build_sizes"
+quote = '''unsafe fn get_acceleration_structure_build_sizes( &self, desc: &GetAccelerationStructureBuildSizesDescriptor<<Self::A as Api>::Buffer>, ) -> AccelerationStructureBuildSizes;'''
+checked = 2026-11-05
+
+["wgpu-hal-30-dx12-build-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/device.rs#L2573-L2584"
+section = "wgpu-hal 30.0.1, dx12/device.rs, get_acceleration_structure_build_sizes (fn at L2461)"
+quote = '''device5.GetRaytracingAccelerationStructurePrebuildInfo( &acceleration_structure_inputs, &mut info, ) }; crate::AccelerationStructureBuildSizes { acceleration_structure_size: info.ResultDataMaxSizeInBytes, update_scratch_size: info.UpdateScratchDataSizeInBytes, build_scratch_size: info.ScratchDataSizeInBytes,'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-as-barrier-empty"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1877-L1881"
+section = "wgpu-hal 30.0.1, metal/command.rs, place_acceleration_structure_barrier, whose body is empty (DX12 issues a null-resource UAV barrier, dx12/command.rs L1793-L1815; Vulkan a global memory barrier, vulkan/command.rs L747-L772)"
+quote = '''unsafe fn place_acceleration_structure_barrier( &mut self, _barriers: crate::AccelerationStructureBarrier, ) { }'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-build-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2076-L2091"
+section = "wgpu-hal 30.0.1, metal/device.rs, get_acceleration_structure_build_sizes"
+quote = '''.accelerationStructureSizesWithDescriptor(&acceleration_structure_descriptor); crate::AccelerationStructureBuildSizes { acceleration_structure_size: info.accelerationStructureSize as u64, update_scratch_size: info.refitScratchBufferSize as u64, build_scratch_size: info.buildScratchBufferSize as u64, }'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-instances-buffer-unwrap"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L384-L390"
+section = "wgpu-hal 30.0.1, metal/conv.rs, map_acceleration_structure_descriptor, also used by the size query: an instances entry must carry a buffer on Metal"
+quote = '''crate::AccelerationStructureEntries::Instances(instances) => { let descriptor = MTLInstanceAccelerationStructureDescriptor::new(); descriptor.setInstanceDescriptorType( MTLAccelerationStructureInstanceDescriptorType::Indirect, ); descriptor.setInstanceCount(instances.count as usize); descriptor.setInstanceDescriptorBuffer(Some(&instances.buffer.unwrap().raw));'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-one-queue"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L75-L79"
+section = "wgpu-hal 30.0.1, metal/adapter.rs, Adapter::open: one MTLCommandQueue per device (Queue::as_raw returns it, metal/mod.rs L492-L494)"
+quote = '''let queue = self .shared .device .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS) .unwrap();'''
+checked = 2026-11-05
+
+["wgpu-hal-30-vulkan-build-sizes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/device.rs#L2760-L2776"
+section = "wgpu-hal 30.0.1, vulkan/device.rs, get_acceleration_structure_build_sizes (fn at L2629)"
+quote = '''.acceleration_structure .get_acceleration_structure_build_sizes( vk::AccelerationStructureBuildTypeKHR::DEVICE, &geometry_info, &primitive_counts, &mut raw, ) [...] acceleration_structure_size: raw.acceleration_structure_size,'''
+checked = 2026-11-05
+
+["wgpu-issue-10450"]
+url = "https://github.com/gfx-rs/wgpu/issues/10450"
+section = "gfx-rs/wgpu issue 10450, [ray tracing] Seperate tlas instance uploading and building (open, 2026-09-24)"
+quote = '''Because of this *every* tlas instance is uploaded which can be slow with large numbers of instances (see #9946). [...] Remove all CPU accessible instances, instead have `queue.write_instances` to assign to the instances and `command_encoder.copy_tlas_instances` for copying tlas instances'''
+checked = 2026-11-05
+
+["wgpu-issue-10512"]
+url = "https://github.com/gfx-rs/wgpu/issues/10512"
+section = "gfx-rs/wgpu issue 10512, Add indirect building of TLASes (open, 2026-10-01)"
+quote = '''The only part of the tlas instance that needs to be validated on the CPU are the blases. We should have a way of building where only the blases are passed from the cpu and combined using an internal shader with a buffer containing tlas instances with indexes into the blas array'''
+checked = 2026-11-05
+
+["wgpu-issue-6762"]
+url = "https://github.com/gfx-rs/wgpu/issues/6762"
+section = "gfx-rs/wgpu issue 6762, Ray Tracing Tracking Issue (open, updated 2026-10-03), Acceleration structures: Features and Nice to have"
+quote = '''- [ ] Update instead of build if possible and preferred. [...] - [ ] [Partitioned TLASes](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_partitioned_acceleration_structure.html) - PTLAS -  (may not require any / much API change) [...] - [ ] [Cluster geometry](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html) (CLASes)'''
+checked = 2026-11-05
+
+["wgpu-issue-9946"]
+url = "https://github.com/gfx-rs/wgpu/issues/9946"
+section = "gfx-rs/wgpu issue 9946, Optimise TLAS building (open, 2026-07-27)"
+quote = '''Currently large `TLAS`es (on the order of hundreds of thousands of instances) can take multiple milliseconds on the CPU. [...] Currently a TLAS build loops over every `TlasInstance`, validates it, converts it to a hal `RawTlasInstance` which gets mapped into the raw bytes by the hal device and then appended each time to the bytes vector.'''
+cost = '''A quick benchmark suggests that an average TLAS build + submission (I used a single duplicated BLAS so this is only build speed) takes 60-80 ms with 100,000 instances and scales roughly linearly (9ms for 10,000 and 1ms for 1,000) [...] those numbers are from debug builds, but I checked and release builds have the same properties (but are 3-4x faster). (hardware not stated)'''
+checked = 2026-11-05
+
+["wgpu-pr-10187"]
+url = "https://github.com/gfx-rs/wgpu/pull/10187"
+section = "gfx-rs/wgpu pull request 10187, Add raw_handle method on vulkan::AccelerationStructure (merged into trunk 2026-08-30, after v30.0.1)"
+quote = '''I'm trying to get NVIDIA's RTX Mega Geometry (`VK_NV_cluster_acceleration_structure`) working on wgpu. [...] What I can't do is build the TLAS over those cluster BLASes. [...] `wgpu_hal::vulkan::AccelerationStructure` keeps its handle private and exposes no way to get it.'''
+checked = 2026-11-05
+
+["wgpu-types-30-tlas-binding-array"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/features.rs#L1450-L1462"
+section = "wgpu-types 30.0.1, features.rs, Features::ACCELERATION_STRUCTURE_BINDING_ARRAY (advertised by dx12/adapter.rs L627 and vulkan/adapter.rs L979, not Metal)"
+quote = '''/// - `var tlas: binding_array<acceleration_structure, 10>` (WGSL) /// /// This capability allows them to exist and to be indexed by dynamically uniform values. /// /// Supported platforms: /// - DX12 /// - Vulkan'''
+checked = 2026-11-05
+
+["wright-2022-lumen-fallback-self-intersection"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=109"
+section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides Tracing with Nanite (p. 109) and Avoiding Self-Intersection (p. 112), speaker notes"
+quote = '''We use Nanite fallback meshes as simplified representations of the rasterized geometry and store them in bottom-level acceleration structures. These fallback meshes bring their own set of challenges, as they do not provide any topological guarantee with the base mesh. Tracing directly from the GBuffer presents some obvious challenges when working with Nanite fallback meshes. The approximate shape creates the potential for self-intersections that cannot easily be overcome with a traditional ray bias. [...] Unfortunately, a proper implementation was too expensive for our budget. Instead, we modified our traversal algorithm to first cast a short ray, to some defined epsilon-distance, ignoring back faces. Only after successfully traversing this distance did we cast a long ray, without any sidedness properties.'''
+checked = 2026-11-05
+
+["wright-2022-lumen-far-field-hlod"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=119"
+section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides Dealing with Instance and Geometric Complexity (p. 119) and Tracing with Far-Field (p. 120), speaker notes"
+quote = '''We chose to utilize the world partition system and its HLOD representation to accomplish this goal. Under the HLOD system, meshes are both simplified and merged together, creating amalgamations for geometry in the distance. In the typical case, HLOD representations are direct replacements for rasterized geometry; however, due to limitations with performant trace distance, we needed to incorporate the HLOD representation before the rasterizer would typically need this substitution. [...] To overcome this inconsistency, we submit both representations, but force mutual exclusion during ray traversal with a ray-mask. We tag the HLOD meshes as belonging to the "far-field" set of geometry. [...] For ordered traversal, we first trace against the near-field geometry to a distance aligned with our mesh culling distance. Rays that miss the near-field are re-queued for traversal against the far-field. We reverse the order of operations for shadow rays that do not require ordered traversal. We choose to do this because the far-field representation contains fewer instances and less geometry than the near-field.'''
+checked = 2026-11-05
+
+["wright-2022-lumen-far-field-overlap"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=123"
+section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides \"The Matrix Awakens\" - UE5 demo, PS5, 1080p (pp. 123-124), tables and speaker notes"
+quote = '''Submitting both near-field and far-field representations to the same top-level acceleration structure is NOT ideal. Doing so creates needless geometric overlap. While the ray-mask removes unnecessary traversal, the damage to the top-level acceleration structure build is substantial. Our early experiments with overlaying the far-field representation revealed a show-stopping 44% penalty to all near-field traversal costs. A proper solution would be to support multiple top-level acceleration structures, which would also avoid the need to use the ray-mask mentioned previously. [...] In the end, we do suffer a penalty for incorporating the geometry within the same acceleration structure, but the translational offset significantly reduces the overhead cost.'''
+checked = 2026-11-05
+cost = '''"The Matrix Awakens" - UE5 demo PS5, 1080p: Baseline: Overlapping: Translated; Near-Field: 1.65 ms: 2.37 ms: 1.77 ms; Far-Field: N/A: 1.04 ms: 0.60 ms'''
+
+["wright-2022-lumen-tlas-instance-limit"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=118"
+section = "Wright et al. (Epic Games), Lumen: Real-time Global Illumination in Unreal Engine 5, SIGGRAPH 2022 Advances, PDF p. 118, Dealing with Instance and Geometric Complexity, slide and notes"
+quote = '''TLAS complexity ○ Rebuilt every frame ○ 100K instance limit, but 1M expected instances [...] Our system rebuilds the top-level acceleration structure every frame and early experiments suggested that our model would be limited to 100K instances. At the time of the experiment, content dressing was approaching 500k active instances, with the intention of reaching 1M.'''
+checked = 2026-11-05
