@@ -98,7 +98,7 @@ A Chunk in and out as entities costs 1.9 to 2.2 ms of main-thread work at town d
 
 ## Load radius candidates
 
-Chunks whose nearest point lies within the radius of the camera, over 256 camera positions in a Chunk; arrivals per second at 50 m/s over 60 s, with the most in any one second in brackets (computed). Instances assume town density everywhere, the worst case; the world scene is sparse between settlements (map decision 9). Praxis's capacities today: 524,288 Instance slots, 262,144 static TLAS Instances.
+Chunks whose nearest point lies within the radius of the camera, over 256 camera positions in a Chunk; arrivals per second at 50 m/s over 60 s, with the most in any one second in brackets (computed). Instances assume town density everywhere, the worst case; the world scene is sparse between settlements (map decision 9). Praxis's capacities today: 524,288 Instance slots, 262,144 static TLAS Instances. [Survey 4](acceleration-structures-for-streamed-worlds.md) counts static Instances only, 16,008 per Chunk, with the same Chunk counts, and gives each radius's TLAS rebuild cost.
 
 | Load radius | Chunks loaded | Instances at town density, at most | Arrivals per second along an axis | Along the diagonal |
 |---|---|---|---|---|
