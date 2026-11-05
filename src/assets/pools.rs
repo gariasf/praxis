@@ -521,11 +521,12 @@ impl MeshPool {
     }
 
     fn charge_blases(&mut self) {
+        let bytes = self.acceleration_structure_bytes.blases(
+            self.compacted_blas_triangles,
+            self.uncompacted_blas_triangles,
+        );
         self.blas_charge
-            .set(self.acceleration_structure_bytes.blases(
-                self.compacted_blas_triangles,
-                self.uncompacted_blas_triangles,
-            ));
+            .set(GpuMemoryKind::AccelerationStructures, bytes);
     }
 
     /// Bytes of the Arenas that hold Meshes.
@@ -666,7 +667,7 @@ pub(crate) mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
         let triangle = mesh(3, vec![0, 1, 2]);
         let mut load = |id, mesh_use| {
             pool.load_asset(&mut staging, AssetId(id), &triangle, &[None], mesh_use)

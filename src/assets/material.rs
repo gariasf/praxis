@@ -116,9 +116,8 @@ impl ChannelTextures {
             height: texture.height,
             depth_or_array_layers: 1,
         };
-        let gpu_texture = self.memory.create_texture(
+        let gpu_texture = self.memory.create_material_texture(
             device,
-            GpuMemoryKind::TexturePool,
             &wgpu::TextureDescriptor {
                 label: Some(self.label),
                 size,
@@ -469,9 +468,13 @@ mod tests {
 
         let mut staging = LoadStaging::new(context.device.clone());
         let memory = gpu_memory(&context);
-        let texture_pool_bytes = || memory.bytes_by_kind()[GpuMemoryKind::TexturePool as usize];
+        let texture_bytes = || {
+            let bytes = memory.bytes_by_kind();
+            bytes[GpuMemoryKind::TexturePool as usize]
+                + bytes[GpuMemoryKind::ResidentTails as usize]
+        };
         let mut pool = MaterialPool::new(&context.device, &memory, &mut staging);
-        let neutral_bytes = texture_pool_bytes();
+        let neutral_bytes = texture_bytes();
         let occlusion_layers: Vec<u32> = (1..=3)
             .map(|id| {
                 let handle = pool
@@ -480,7 +483,7 @@ mod tests {
                 pool.materials[handle.index() as usize].layers[3]
             })
             .collect();
-        assert_eq!(texture_pool_bytes() - neutral_bytes, 3 * 8);
+        assert_eq!(texture_bytes() - neutral_bytes, 3 * 8);
         assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
         assert!(
             pool.materials

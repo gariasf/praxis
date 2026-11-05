@@ -289,29 +289,35 @@ impl Renderer {
             switches,
         );
 
-        let buffer = |label, size, usage| {
-            let descriptor = wgpu::BufferDescriptor {
-                label: Some(label),
-                size,
-                usage,
+        let camera_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Camera Buffer"),
+                size: std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
-            };
-            memory.create_buffer(&device, GpuMemoryKind::SceneAndPassBuffers, &descriptor)
-        };
-        let camera_buffer = buffer(
-            "Camera Buffer",
-            std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            },
         );
-        let light_uniform_buffer = buffer(
-            "Light Uniform Buffer",
-            std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        let light_uniform_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Light Uniform Buffer"),
+                size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
         );
-        let light_buffer = buffer(
-            "Light Buffer",
-            u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        let light_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Light Buffer"),
+                size: u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
         );
         let froxel_pass = FroxelPass::new(
             &device,
@@ -344,15 +350,20 @@ impl Renderer {
         );
 
         // Created at its fixed capacity; it never grows.
-        let instance_buffer = buffer(
-            "Instance Buffer",
-            u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        let instance_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Instance Buffer"),
+                size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
         );
         let mesh_pool = MeshPool::new(&device, &memory, ARENA_CAPACITY_BYTES);
         let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
         // The most a frame uploads: every buffer `upload` writes, in full.
-        let uploaded: [&wgpu::Buffer; 6] = [
+        let uploaded_buffers: [&wgpu::Buffer; 6] = [
             &camera_buffer,
             &light_uniform_buffer,
             &light_buffer,
@@ -360,8 +371,10 @@ impl Renderer {
             culling_pass.instance_slot_count(),
             bend_pass.bends(),
         ];
-        let frame_staging =
-            FrameStaging::new(&memory, uploaded.iter().map(|buffer| buffer.size()).sum());
+        let frame_staging = FrameStaging::new(
+            &memory,
+            uploaded_buffers.iter().map(|buffer| buffer.size()).sum(),
+        );
 
         let static_tlas = StaticTlas::new(&device, &memory, STATIC_TLAS_CAPACITY);
         let dynamic_tlas = DynamicTlas::new(&device, &memory, &queue, context.backend());

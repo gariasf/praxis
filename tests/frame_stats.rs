@@ -74,11 +74,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     .iter()
     .sum::<u64>();
     // GPU memory by kind. The geometry Arenas: the Mesh pool's five of
-    // 16 MiB. The texture pool: five 1×1 neutral Textures, one per Channel
-    // (the spheres sample no other), RGBA8 but the normal Channel's
-    // RGBA16F. No Resident tail apart from them.
+    // 16 MiB. The Resident tails: five 1×1 neutral Textures, one per
+    // Channel (the spheres sample no other), RGBA8 but the normal Channel's
+    // RGBA16F, each a mip of 64 KiB or less; so nothing in the texture pool.
     let geometry_arenas = 5 * 16 * MEBIBYTE;
-    let texture_pool = 4 * 4 + 8;
+    let resident_tails = 4 * 4 + 8;
     // The render targets: the 160×90 Depth32Float texture at 4 samples, its
     // 4x RGBA16F colour, which Apple GPUs keep in tile memory, so it counts
     // nothing on Metal, the RGBA16F HDR target it resolves into, the
@@ -144,8 +144,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         + 4096 * 20;
     let by_kind = [
         (GpuMemoryKind::GeometryArenas, geometry_arenas),
-        (GpuMemoryKind::TexturePool, texture_pool),
-        (GpuMemoryKind::ResidentTails, 0),
+        (GpuMemoryKind::TexturePool, 0),
+        (GpuMemoryKind::ResidentTails, resident_tails),
         (GpuMemoryKind::RenderTargets, render_targets),
         (
             GpuMemoryKind::AccelerationStructures,
