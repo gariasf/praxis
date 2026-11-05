@@ -259,7 +259,7 @@ fn point_light_luminance(
 }
 
 // The luminance a surface point reflects from a constant ambient
-// illuminance E, a stand-in for ADR 0020's irradiance probes (M5), which
+// illuminance E, a stand-in for ADR 0020's irradiance probes (M6), which
 // light diffuse and rough specular reflection alike: E/π times its base
 // colour, as a white-lit dielectric's diffuse lobe or a metal's specular
 // one about reflects, darkened by occlusion, which glTF applies to

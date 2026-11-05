@@ -101,7 +101,7 @@ pub struct RenderSwitches {
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
-/// 0020): the proxies M7 builds on, and refit and its oracle, rebuild, kept
+/// 0020): the proxies M8 builds on, and refit and its oracle, rebuild, kept
 /// behind the switch as the shapes' reference.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CrowdForm {
