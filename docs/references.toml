@@ -2586,8 +2586,8 @@ checked = 2026-10-27
 ["barb-2017-tf2-async-io"]
 url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=19"
 section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Asynchronous I/O, p. 19"
-quote = '''Reads occur in 64kiB chunks for interruptibility.'''
-checked = 2026-10-27
+quote = '''Asynchronous I/O ● Async thread ● 2 requests in flight ● Multiple priority queues ● Textures low ● Sound high ● Reads occur in 64kiB chunks for interruptibility.'''
+checked = 2026-11-05
 
 ["barb-2017-tf2-streaming-budget"]
 url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=27"
@@ -4911,4 +4911,488 @@ cost = '''"The Matrix Awakens" - UE5 demo PS5, 1080p: Baseline: Overlapping: Tra
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=118"
 section = "Wright et al. (Epic Games), Lumen: Real-time Global Illumination in Unreal Engine 5, SIGGRAPH 2022 Advances, PDF p. 118, Dealing with Instance and Geometric Complexity, slide and notes"
 quote = '''TLAS complexity ○ Rebuilt every frame ○ 100K instance limit, but 1M expected instances [...] Our system rebuilds the top-level acceleration structure every frame and early experiments suggested that our model would be limited to 100K instances. At the time of the experiment, content dressing was approaching 500k active instances, with the intention of reaching 1M.'''
+
+["decima-2017-static-tiles"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=21"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 21"
+quote = '''To cull all this data we needed some spatial structure. At the top level we split the world into StaticTiles, which are sometimes true spatial tiles, and sometimes other things like settlements or encounters. These are defined by the streaming system, and the StaticScene doesn’t get to choose. The tiles are created immutable and can’t be updated, which simplifies things.'''
+checked = 2026-11-05
+
+["decima-2017-static-tile-build"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=25"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 25 (with p. 22)"
+quote = '''Our streaming system loads and unloads objects on a background thread, since loading can happen over several frames. The StaticScene receives sets of added and removed objects, with the adds and removes guaranteed to match up so we don’t have to deal with partial unloads. Generally a group of added objects creates a single StaticTile, but if the tile would have a lot of QueryInstances (more than 24K) we split it up. Likewise if it would have very few (under 1K) we add these to a special “orphan” tile. All the heavy lifting (spatial partitioning, memory allocation etc.) happens on the streaming thread, the main thread just has to make tiles active when they’re available. [...] (p. 22) A tile is mostly flat buffers of GPU data, with a list of clusters used on the CPU for first-pass culling.'''
+checked = 2026-11-05
+
+["decima-2017-static-scene-scale"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=46"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 46"
+quote = '''The static scene handles a lot of data – usually 500K up to 1.5 million instances which could potentially be visible to a single camera position.'''
+checked = 2026-11-05
+
+["fahner-2023-hzd-tile-rings"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=38"
+section = "Fahner, Streaming the World of Horizon Zero Dawn, Guerrilla Games publication (2023-03-21), slide TileBased Streaming Strategy, PDF p. 38"
+quote = '''TileBased Streaming Strategy • Loads/unloads tiles around player • Four tile resolutions: – 9 High, full resolution tiles – 9 Medium, medium res geometry and physics mesh – 9 Low, low res baked geometry – 12 Very low, always loaded'''
+checked = 2026-11-05
+
+["fahner-2023-hzd-area-hulls"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=40"
+section = "Fahner, Streaming the World of Horizon Zero Dawn, Guerrilla Games publication (2023-03-21), slide AreaBased Streaming Strategy, PDF p. 40"
+quote = '''AreaBased Streaming Strategy • Primary hull around player for loading hint • Secondary hull around player for activation hint • Used for quests, scenes, other dynamic encounters'''
+checked = 2026-11-05
+
+["ruskin-2015-sunset-overdrive-region-radius"]
+url = "https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=69"
+section = "Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, speaker notes, PDF p. 69"
+quote = '''A region (hex) is simply a point, a radius, and a list of zones. When the player steps into that radius, we load the zones. When the player steps outside the radius, we unload the zones.'''
+checked = 2026-11-05
+
+["ruskin-2015-sunset-overdrive-hex-speed"]
+url = "https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=124"
+section = "Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, speaker notes, PDF p. 124"
+quote = '''Most of our hexes are about 110 meters in diameter, and we budgeted things for a top player speed of 14 meters per second (although sometimes it can be a little higher than that). So, if the player is running forward, that means that you need to load a hex every eight seconds, right?'''
+checked = 2026-11-05
+
+["ruskin-2015-sunset-overdrive-hex-deadline"]
+url = "https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=126"
+section = "Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, speaker notes, PDF p. 126"
+quote = '''Really it’s three. So you’ve got to load an instantiate an entire hex in two and a half seconds… continually. [...] let’s say that all of a hex needs to stream in 1.6 seconds. We can multiply that by the hard drive’s throughput and know how big each of our hexes is allowed to be.” But it turns out that disk I/O was not the limiting factor on streaming.'''
+checked = 2026-11-05
+
+["ruskin-2015-sunset-overdrive-init-cost"]
+url = "https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=129"
+section = "Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, speaker notes, PDF pp. 127, 129 and 133"
+quote = '''(p. 127) The limiting factor on how fast we could stream the world was runtime initialization, not file IO. [...] (p. 129) Lets say the typical zone has 2000 actors in it. [...] The average time to stream a hex is about 2 seconds, so we were on average initializing 1000 entities per second or 33 per frame [...] Ultimately we found a way to time-slice actor initialization, so that we amortized that once-per-hex 180ms hitch into a 3ms- per-frame cost. [...] (p. 133) We never did manage to timeslice destruction. All the objects in a zone get purged in the same frame.'''
+cost = '''180 ms hitch per hex, time-sliced to 3 ms per frame (Xbox One per p. 7; 30 Hz frame budget of 33.3 ms per p. 127)'''
+checked = 2026-11-05
+
+["ruskin-2015-sunset-overdrive-teleport"]
+url = "https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=151"
+section = "Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, speaker notes, PDF p. 151"
+quote = '''If we teleport the player (or the camera) to a location outside the currently loaded zones, he’ll find himself surrounded by low- res stand-ins and no ground to stand on. The engine has to scramble to immediately load *all seven* of the surrounding zones at once rather than streaming just two or three as happens during normal movement.'''
+checked = 2026-11-05
+
+["ue-5.7-world-partition-grid"]
+url = "https://web.archive.org/web/20251205223725/https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition-in-unreal-engine"
+section = "Unreal Engine 5.7 documentation, World Partition, Using World Partition and Runtime Grid Settings"
+quote = '''The World Partition system works by storing your world in a single persistent Level file and subdividing the space into streamable grid cells using a configurable runtime grid. These cells are loaded and unloaded at runtime by the presence of streaming sources, such as the player. [...] Cell Size Determines the size of the grid cells that are used to generate the streaming Levels. In the example, the Cell Size is 256m x 256m x 256m. Loading Range Determines the range from a streaming source where cells are loaded. In the image above, the Loading Range is a 768 meter radius around a streaming source. Block on Slow Streaming Blocks loading in situations where grid cells are not loading fast enough.'''
+checked = 2026-11-05
+
+["ue-5.6-fast-geometry-streaming"]
+url = "https://web.archive.org/web/20260128223238/https://www.unrealengine.com/en-US/news/unreal-engine-5-6-is-now-available"
+section = "Epic Games, Unreal Engine 5.6 is now available (news post), section Powerful, high-fidelity 60 FPS open worlds"
+quote = '''In addition, we’ve made significant improvements to the overall Unreal Engine performance when streaming static content in and out at runtime. With the Fast Geometry Streaming Plugin (Experimental), you can have a greater amount of immutable static geometry in your worlds that will load faster with constant frame rates. Additionally, all projects will benefit from further improvements over content streaming such as asynchronous physics state creation and destruction.'''
+checked = 2026-11-05
+
+["unity-entities-1.3-exclusive-entity-transaction"]
+url = "https://docs.unity3d.com/Packages/com.unity.entities@1.3/api/Unity.Entities.ExclusiveEntityTransaction.html"
+section = "Unity Entities 1.3 scripting API, ExclusiveEntityTransaction, Remarks"
+quote = '''The intended use case for this interface is to let a worker thread stream Entity data into a staging World and perform any necessary post-processing structural changes, prior to moving the final data into the main simulation world using MoveEntitiesFrom(EntityManager) . This lets the main thread continue to safely process the primary world while the new data is loading in, and not require a main-thread sync point until the new Entities are fully loaded and ready to be injected.'''
+checked = 2026-11-05
+
+["openmw-0.49-cell-preload"]
+url = "https://openmw.readthedocs.io/en/openmw-0.49.0/reference/modding/settings/cells.html"
+section = "OpenMW 0.49.0 documentation, Settings, Cells: prediction time, cache expiry delay, target framerate, preload fast travel"
+quote = '''prediction time Type : floating point Range : >=0 Default : 1 The amount of time (in seconds) in the future to predict the player position for. This predicted position is used to preload any cells and/or distant terrain required at that position. [...] cache expiry delay Type : floating point Range : >=0 Default : 5 The amount of time (in seconds) that a preloaded texture or object will stay in cache after it is no longer referenced or required, for example, when all cells containing this texture have been unloaded. target framerate Type : floating point Range : >0 Default : 60 Affects the time to be set aside each frame for graphics preloading operations. The game will distribute the preloading over several frames so as to not go under the specified framerate. [...] preload fast travel [...] Because the game can not predict the destination that the player will choose, all possible destinations will be preloaded. This setting is disabled by default due to the adverse effect on memory usage caused by the preloading of all possible destinations.'''
+checked = 2026-11-05
+
+["ogre-14.3-hold-radius"]
+url = "https://github.com/OGRECave/ogre/blob/bb8b7565cd4c6fd010ed2c04d6e762afab75a369/Components/Terrain/include/OgreTerrainPaging.h#L90-L93"
+section = "OGRE 14.3.0, TerrainPaging::createWorldSection (MIT); defaults mLoadRadius(2000)/mHoldRadius(3000) at Components/Paging/src/OgreGrid2DPageStrategy.cpp L54-L55; unload after a '5-frame tolerance' at Components/Paging/src/OgrePage.cpp L107-L108"
+quote = '''@param loadRadius The radius from the camera at which terrain pages will be loaded
+        @param holdRadius The radius from the camera at which terrain pages will be held in memory
+            but not loaded if they're not already. This must be larger than loadRadius and is used
+            to minimise thrashing if the camera goes backwards and forwards at the loading border.'''
+checked = 2026-11-05
+
+["funkhouser-1992-walkthrough-prefetch"]
+url = "https://www.cs.princeton.edu/courses/archive/spr01/cs598b/papers/funkhouser92.pdf#page=7"
+section = "Funkhouser, Séquin, Teller, Management of Large Amounts of Data in Interactive Building Walkthroughs, I3D 1992 (doi:10.1145/147156.147158), §5.2 Memory Management, p. 17"
+quote = '''However, since it takes a relatively large amount of time to swap data from disk into memory, we must also predict which objects might be rendered in future frames and begin swapping them into memory in advance. [...] To take advantage of the relative efficiency of large IO operations, we always load all objects incident upon the same cell into memory together at the same level of detail.'''
+checked = 2026-11-05
+
+["funkhouser-1996-observer-range"]
+url = "https://graphicsinterface.org/wp-content/uploads/gi1996-1.pdf#page=4"
+section = "Funkhouser, Database Management for Interactive Display of Large Architectural Models, Graphics Interface 1996 (doi:10.20380/GI1996.01), §4 Observer Lookahead"
+quote = '''if the observer is allowed to move and turn in any direction, but is constrained by maximum positional and rotational velocities, vp and vr , the upper bound on the observer range during the next N frames is a sphere centered at the observer eye position with radius Nvp . [...] Since there is usually coherence in observer motion from frame to frame, the current direction of observer movement can be used to help predict future observer eye positions by weighting the observer range in the direction of travel.'''
+checked = 2026-11-05
+
+["funkhouser-1996-read-and-release"]
+url = "https://graphicsinterface.org/wp-content/uploads/gi1996-1.pdf#page=5"
+section = "Funkhouser, Graphics Interface 1996, §4 Cache Management"
+quote = '''since a new lookahead set is constructed during every frame, and lookahead sets computed during later frames have more up-to-date predictive power, it is pointless (and even counterproductive) to start loading all such lookahead objects into memory during the current frame, since they may take several frame times to transfer from disk. Instead, during each frame, we load into memory only as many objects as can be read from disk in a single frame time. [...] Our object replacement algorithm closely resembles a least recently used (LRU) policy. [...] Objects in the release set are removed from memory before objects in the read set are loaded so that memory is never overburdened.'''
+checked = 2026-11-05
+
+["funkhouser-1996-results"]
+url = "https://graphicsinterface.org/wp-content/uploads/gi1996-1.pdf#page=7"
+section = "Funkhouser, Graphics Interface 1996, §5 Results"
+quote = '''the algorithms described in this paper were used to pre-fetch objects asynchronously up to 16 frames in advance. [...] the longest frame time was 5.78 seconds. [...] The mean frame time was 0.063 seconds with a standard deviation of 0.035 seconds and a maximum frame time of 0.263 seconds. [...] This situation is encountered more frequently as the observer velocity is increased.'''
+cost = '''The lookahead determination and cache management computations took 4ms per frame on average, while the database input/output operations took 28ms per frame. (Silicon Graphics Power Series 320, 128MB, two 33MHz R3000, Reality Engine1, local disk; 137MB model)'''
+checked = 2026-11-05
+
+["varadhan-2002-expanded-frustum"]
+url = "https://techreports.cs.unc.edu/papers/02-028.pdf#page=4"
+section = "Varadhan, Manocha, Out-of-Core Rendering of Massive Geometric Environments, IEEE Visualization 2002 (doi:10.1109/VISUAL.2002.1183759), §4.2.2 Visibility Events"
+quote = '''We avoid such misses by letting PI use an expanded view frustum for prefetching (FI ) that bounds the view frustum used for rendering (FR ) (see Fig 4). The size of FI can be adapted based on the rate at which the user pans across the scene.'''
+checked = 2026-11-05
+
+["varadhan-2002-replacement"]
+url = "https://techreports.cs.unc.edu/papers/02-028.pdf#page=5"
+section = "Varadhan, Manocha, IEEE Vis 2002, §4.3 Replacement Policy"
+quote = '''We use a variation of the standard LRU (least recently used) policy. It ensures that we do not remove the object-reps that belong to the front or object-reps that were recently fetched from the disk.'''
+checked = 2026-11-05
+
+["correa-2003-lookahead-extrapolation"]
+url = "https://www.sci.utah.edu/~csilva/papers/pvg2003.pdf#page=3"
+section = "Corrêa, Klosowski, Silva, Visibility-Based Prefetching for Interactive Out-Of-Core Rendering, IEEE PVG 2003 (doi:10.1109/PVGS.2003.1249035), From-Point Visibility-Based Prefetching"
+quote = '''the look-ahead thread (Figure 2g) predicts the next camera position by simply extrapolating the current position and the camera’s linear and angular speeds. [...] If there are no fetch requests pending, and if the maximum amount of geometry that can be prefetched per frame has not been reached, a prefetch thread will pop a request from the prefetch queue, and read the requested node from disk (if necessary) (Figure 2j). If the cache is full, the least recently used nodes are evicted from memory.'''
+checked = 2026-11-05
+
+["correa-2003-speed-vs-bandwidth"]
+url = "https://www.sci.utah.edu/~csilva/papers/pvg2003.pdf#page=6"
+section = "Corrêa, Klosowski, Silva, PVG 2003, Results (Figure 9 discussion)"
+quote = '''Figure 9 shows that the user speed is another important parameter in the system, and has to be adjusted to the disk bandwidth. When the user speed increases, the changes in the visible set are larger. [...] Thus, caching and prefetching are more effective if the user moves at speeds compatible with the disk bandwidth.'''
+checked = 2026-11-05
+
+["semenov-2021-prefetch-degradation"]
+url = "https://ceur-ws.org/Vol-3027/paper10.pdf#page=6"
+section = "Semenov, Shutkin, Zolotov, Conservative Out-of-Core Rendering of Large Dynamic Scenes Using HDLODs, GraphiCon 2021 (doi:10.20948/graphicon-2021-3027-105-115), §3 Out-of-core HDLOD algorithm, PDF p. 6"
+quote = '''the experiments done have found situations where prefetching can lead to significant degradation of the total performance, thereby offsetting minor acceleration effects. For example, such situations happen if the memory cache is completely consumed for rendering clusters on the current frame and there is no extra space to preload clusters that presumably will be needed in the next frames. [...] other scenarios (for example, navigation after a long stay) are poorly predicted and will most likely lead to additional unproductive costs for loading unnecessary clusters. [...] Since the technique cannot be straightforwardly used and widely recommended, we did not use it in the experiments'''
+checked = 2026-11-05
+
+["tsai-2025-l3gs-viewport-prediction"]
+url = "https://arxiv.org/pdf/2504.05517v1#page=8"
+section = "Tsai, Zhang, Li, Chen, L3GS: Layered 3D Gaussian Splats for Efficient 3D Scene Delivery, ACM MobiCom 2025 (doi:10.1145/3680207.3723485), §3.3 User Viewport Predictor"
+quote = '''During runtime, the model is continuously fitted to the data points from the recent history window (ℎ𝑤) and then used to forecast future positions in the prediction window (𝑝𝑤). [...] In practice, we set ℎ𝑤 = 0.5 s and 𝑝𝑤 = 1 s.'''
+checked = 2026-11-05
+
+["windisch-2026-lod-gaussians-lru"]
+url = "https://arxiv.org/pdf/2507.01110v4#page=5"
+section = "Windisch et al., A LoD of Gaussians: Out-of-Core Training and Rendering for Seamless Ultra-Large Scene Reconstruction, arXiv 2507.01110v4, §4.4 Caching on the GPU"
+quote = '''Uncached SPTs are streamed from RAM. After each training iteration, newly loaded SPTs are added to the cache. To bound VRAM usage, we use a least-recently-used (LRU) writeback policy. When a memory threshold is exceeded, entries are written back to RAM.'''
+checked = 2026-11-05
+
+["cesium-1.123-tile-cache-budget"]
+url = "https://github.com/CesiumGS/cesium/blob/57857b0d563d0d7592fe6254080c22130ce8d3ed/packages/engine/Source/Scene/Cesium3DTileset.js#L77-L83"
+section = "CesiumJS 1.123, Cesium3DTileset constructor options (Apache-2.0)"
+quote = '''@property {number} [cacheBytes=536870912] The size (in bytes) to which the tile cache will be trimmed, if the cache contains tiles not needed for the current view.
+ * @property {number} [maximumCacheOverflowBytes=536870912] The maximum additional memory (in bytes) to allow for cache headroom, if more than {@link Cesium3DTileset#cacheBytes} are needed for the current view. [...]
+ * @property {boolean} [preloadFlightDestinations=true] Optimization option. Preload tiles at the camera's flight destination while the camera is in flight.'''
+checked = 2026-11-05
+
+["cesium-1.123-cull-requests-while-moving"]
+url = "https://github.com/CesiumGS/cesium/blob/57857b0d563d0d7592fe6254080c22130ce8d3ed/packages/engine/Source/Scene/Cesium3DTilesetTraversal.js#L154-L180"
+section = "CesiumJS 1.123, isOnScreenLongEnough (Apache-2.0); default cullRequestsWhileMovingMultiplier=60.0 at Cesium3DTileset.js L81"
+quote = '''Prevent unnecessary loads while camera is moving by getting the ratio of travel distance to tile size. [...]
+  // How do n frames of this movement compare to the tile's physical size.
+  const diameter = Math.max(tile.boundingSphere.radius * 2.0, 1.0);
+  const movementRatio =
+    (tileset.cullRequestsWhileMovingMultiplier * deltaMagnitude) / diameter;
+
+  return movementRatio < 1.0;'''
+checked = 2026-11-05
+
+["bevy-0.18.1-strong-handle-drop"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_asset/src/handle.rs#L79-L101"
+section = "Bevy v0.18.1, bevy_asset handle.rs L79-L101: StrongHandle and its Drop; Handle docs L126-L127"
+quote = '''/// The internal "strong" [`Asset`] handle storage for [`Handle::Strong`] and [`UntypedHandle::Strong`]. When this is dropped,
+/// the [`Asset`] will be freed.
+[...]
+impl Drop for StrongHandle {
+    fn drop(&mut self) {
+        let _ = self.drop_sender.send(DropEvent {'''
+checked = 2026-11-05
+
+["bevy-0.18.1-track-assets"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_asset/src/assets.rs#L566-L586"
+section = "Bevy v0.18.1, bevy_asset assets.rs L566-L586: Assets::track_assets, added in PreUpdate (lib.rs L666-L667)"
+quote = '''/// A system that synchronizes the state of assets in this collection with the [`AssetServer`]. This manages
+/// [`Handle`] drop events.
+pub fn track_assets(mut assets: ResMut<Self>, asset_server: Res<AssetServer>) {
+[...]
+    while let Ok(drop_event) = assets.handle_provider.drop_receiver.try_recv() {
+[...]
+        assets.remove_dropped(drop_event.index.index);'''
+checked = 2026-11-05
+
+["unity-addressables-2.5-refcount-unload"]
+url = "https://docs.unity3d.com/Packages/com.unity.addressables@2.5/manual/MemoryManagement.html"
+section = "Unity Addressables 2.5 manual, Memory management overview; Memory leaks; Memory clearance"
+quote = '''When the reference count of an Addressable returns to zero, it can be unloaded. [...] However, Unity doesn't unload released assets from memory immediately, as the memory that an asset uses isn't freed until the AssetBundle it belongs to is also unloaded. [...] When a bundle's reference count returns to zero, that means none of the assets contained in the bundle are still in use. Unity then unloads the bundle and all the assets contained in it from memory. [...] You can load an AssetBundle, or its partial contents, but you can't unload part of an AssetBundle.'''
+checked = 2026-11-05
+
+["unity-addressables-2.5-asset-churn"]
+url = "https://docs.unity3d.com/Packages/com.unity.addressables@2.5/manual/MemoryManagement.html"
+section = "Unity Addressables 2.5 manual, Memory management overview, Avoid asset churn"
+quote = '''Asset churn happens if you release an object that's the last item in an AssetBundle, and then immediately reload either that asset or another asset in the bundle. [...] When Unity releases boat , Addressables unloads texture cammo . Then, when Unity load plane , Addressables immediately reloads cammo .'''
+checked = 2026-11-05
+
+["ue-5.6-texture-streaming-retention"]
+url = "https://web.archive.org/web/20250810013810/https://dev.epicgames.com/documentation/en-us/unreal-engine/texture-streaming-configuration-in-unreal-engine"
+section = "Unreal Engine 5.6 documentation, Texture Streaming Configuration, console variables r.Streaming.HiddenPrimitiveScale, r.Streaming.DropMips"
+quote = '''r.Streaming.HiddenPrimitiveScale This controls a scale applied to the "wanted" resolution when the component referring to a texture is not visible (i.e. its bounding box is occluded). [...] r.Streaming.DropMips This is a debug option used to prevent keeping mips in memory even if the streaming pool allows it: 0 : Drop no mips. 1 : Drop cached mips. 2 : Drop cached and hidden mips.'''
+checked = 2026-11-05
+
+["ue-5.6-texture-streaming-pool-vram"]
+url = "https://web.archive.org/web/20250810013810/https://dev.epicgames.com/documentation/en-us/unreal-engine/texture-streaming-configuration-in-unreal-engine"
+section = "Unreal Engine 5.6 documentation, Texture Streaming Configuration, console variables r.Streaming.PoolSize, r.Streaming.UseFixedPoolSize, r.Streaming.FramesForFullUpdate, r.Streaming.LimitPoolSizeToVRAM"
+quote = '''This pool contains UI textures, NeverStream textures, cubemaps and streaming textures. On some platforms, this pool can also hold non texture resouces like GPU particle buffers and vertex buffers. When set to 0, the pool size will be unlimited. r.Streaming.UseFixedPoolSize When using a non-zero value, the texture pool size can be changed at runtime. r.Streaming.FramesForFullUpdate The number of frames between each full update of the texture streamer. [...] r.Streaming.LimitPoolSizeToVRAM If enabled, the texture pool size will be limited to how much GPU memory is available.'''
+checked = 2026-11-05
+
+["ue-5.7-scalability-texture-pool"]
+url = "https://web.archive.org/web/20251221042229/https://dev.epicgames.com/documentation/en-us/unreal-engine/scalability-reference-for-unreal-engine"
+section = "Unreal Engine 5.7 documentation, Scalability Reference, Textures - sg.TextureQuality (levels 0 to 3)"
+quote = '''You can instruct the streaming system to manage more aggressively (smaller pool size, culling unused textures) or to have less or more detail in the mip level computation. [...] r.Streaming.MipBias=2.5 r.MaxAnisotropy=0 r.Streaming.PoolSize=200 [...] r.Streaming.MipBias=1 r.MaxAnisotropy=2 r.Streaming.PoolSize=400 [...] r.Streaming.MipBias=0 r.MaxAnisotropy=4 r.Streaming.PoolSize=700 [...] r.Streaming.MipBias=0 r.MaxAnisotropy=8 r.Streaming.PoolSize=1000'''
+checked = 2026-11-05
+
+["barb-2017-tf2-drop-list"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=16"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Code – Prioritization, p. 16"
+quote = '''If used this frame: non-resident mips are added to ‘add list’, with metric. resident mips are added to ‘drop list’ with same metric. If not used this frame: all mips added to ‘drop list’ with metric of ( -metric + -frames_unused.)'''
+checked = 2026-11-05
+
+["barb-2017-tf2-add-drop"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=17"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide Code – Add/Drop, p. 17"
+quote = '''for ( ; ( (shouldDropAllUnused && tDrop->metric < 0.0f) || s_usedMemory[0] > s_memoryTarget) && droppedSoFar < 16MiB && tDrop != taskList.dropEnd; ++tDrop ) { drop tDrop, increase droppedSoFar; } [...] } else for ( ;; ) { // Look for ‘drop items’ to get rid of until we'll have enough room.'''
+checked = 2026-11-05
+
+["barb-2017-tf2-pool-tiers"]
+url = "https://media.gdcvault.com/gdc2017/Presentations/Barb_Chad_EfficientTextureStreaming.pdf#page=27"
+section = "Barb, Efficient Texture Streaming in Titanfall 2, GDC 2017, slide How Much RAM do we Need?, p. 27 (the settings listed)"
+quote = '''PC: 0, 375, 750, 1250, 5860MiB (“insane”) [...] Console: 928MiB [...] Plus around 0.43MiB housekeeping overhead'''
+checked = 2026-11-05
+
+["bevy-0.18.1-io-task-pool"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/README.md?plain=1#L32-L35"
+section = "Bevy v0.18.1, crates/bevy_tasks/README.md, Usage, lines 32-35 (the IoTaskPool doc comment, crates/bevy_tasks/src/usages.rs L71-L72, gives only the first clause)"
+quote = '''For IO-intensive work (tasks that spend very little time in a "woken" state) we have an [`IoTaskPool`] whose tasks are expected to complete very quickly. Generally speaking, they should just await receiving data from somewhere (i.e. disk) and signal other systems when the data is ready for consumption. (likely via channels)'''
+checked = 2026-11-05
+
+["bevy-0.18.1-io-pool-threads"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_app/src/task_pool_plugin.rs#L119-L126"
+section = "Bevy v0.18.1, crates/bevy_app/src/task_pool_plugin.rs, TaskPoolOptions::default, lines 119-126"
+quote = '''// Use 25% of cores for IO, at least 1, no more than 4
+            io: TaskPoolThreadAssignmentPolicy {
+                min_threads: 1,
+                max_threads: 4,
+                percent: 0.25,'''
+checked = 2026-11-05
+
+["bevy-0.18.1-asset-load-on-io-pool"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_asset/src/server/mod.rs#L565-L568"
+section = "Bevy v0.18.1, crates/bevy_asset/src/server/mod.rs, lines 565-568 (spawn) and 1542 (loader.load awaited in load_with_settings_loader_and_reader, called from load_internal L829)"
+quote = '''let task = IoTaskPool::get().spawn(async move {
+            if let Err(err) = server
+                .load_internal(Some(owned_handle), path, false, None)
+                .await [...] AssertUnwindSafe(loader.load(reader, settings, load_context))'''
+checked = 2026-11-05
+
+["bevy-0.18.1-asset-file-reader"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_asset/src/io/file/file_asset.rs#L5-L47"
+section = "Bevy v0.18.1, crates/bevy_asset/src/io/file/file_asset.rs, lines 5, 28-32 and 37-47 (module chosen by the multi_threaded feature, io/file/mod.rs L4-L7; sync_file_asset.rs uses std::fs)"
+quote = '''use async_fs::{read_dir, File}; [...] // Set to OS default limit / 2
+// macos & ios: 256
+// linux & android: 1024
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+static OPEN_FILE_LIMITER: Semaphore = Semaphore::new(128); [...]
+    let timeout_future = Timer::after(Duration::from_millis(500)); [...]
+        future::Either::Right((_, _)) => None,'''
+checked = 2026-11-05
+
+["bevy-0.18.1-licence"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/README.md?plain=1#L104-L112"
+section = "Bevy v0.18.1, README, License"
+quote = '''Except where noted (below and/or in individual files), all code in this repository is dual-licensed under either: [...] MIT License [...] Apache License, Version 2.0 [...] at your option.'''
+checked = 2026-11-05
+
+["blocking-1.6.2-thread-pool"]
+url = "https://github.com/smol-rs/blocking/blob/v1.6.2/src/lib.rs#L1-L16"
+section = "smol-rs/blocking v1.6.2, src/lib.rs, crate docs, lines 1-16"
+quote = '''A thread pool for isolating blocking I/O in async programs. [...] Consider files or stdin, which have weak async support on modern operating systems. While [IOCP], [AIO], and [io_uring] are possible solutions, they're not always available or ideal. [...] Since blocking is not allowed inside futures, we must move blocking I/O onto a special thread pool provided by this crate. The pool dynamically spawns and stops threads depending on the current number of running I/O jobs. [...] The default number of threads (set to 500) can be altered by setting BLOCKING_MAX_THREADS environment variable with value between 1 and 10000.'''
+checked = 2026-11-05
+
+["blocking-1.6.2-unblock-pipe"]
+url = "https://github.com/smol-rs/blocking/blob/v1.6.2/src/lib.rs#L407-L411"
+section = "smol-rs/blocking v1.6.2, src/lib.rs, Unblock docs lines 407-411 and default capacity line 829"
+quote = '''[`Unblock`] communicates with I/O operations on the thread pool through a pipe. That means an async read/write operation simply receives/sends some bytes from/into the pipe. When in reading mode, the thread pool reads bytes from the I/O handle and forwards them into the pipe until it becomes full. [...] let (reader, mut writer) = pipe(self.cap.unwrap_or(8 * 1024 * 1024)); // 8 MB'''
+checked = 2026-11-05
+
+["blocking-1.6.2-licence"]
+url = "https://github.com/smol-rs/blocking/blob/v1.6.2/Cargo.toml#L11"
+section = "smol-rs/blocking v1.6.2, Cargo.toml line 11 (README License, L80-L87, same terms)"
+quote = '''license = "Apache-2.0 OR MIT"'''
+checked = 2026-11-05
+
+["async-fs-2.2.0-blocking"]
+url = "https://github.com/smol-rs/async-fs/blob/v2.2.0/src/lib.rs#L1-L7"
+section = "smol-rs/async-fs v2.2.0, src/lib.rs, crate docs, lines 1-7 (Cargo.toml: license = \"Apache-2.0 OR MIT\")"
+quote = '''Async filesystem primitives. [...] This crate is an async version of [`std::fs`]. [...] This crate uses [`blocking`] to offload blocking I/O onto a thread pool.'''
+checked = 2026-11-05
+
+["zstd-1.5.7-decompression-speed-by-level"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/README.md?plain=1#L62-L65"
+section = "zstd v1.5.7, README, Benchmarks, lines 62-65"
+quote = '''Zstd can also offer stronger compression ratios at the cost of compression speed. Speed vs Compression trade-off is configurable by small increments. Decompression speed is preserved and remains roughly the same at all settings, a property shared by most LZ compression algorithms, such as [zlib] or lzma.'''
+checked = 2026-11-05
+
+["zstd-1.5.7-multithreading-compression-only"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/lib/zstd.h#L465-L474"
+section = "zstd v1.5.7, lib/zstd.h, ZSTD_cParameter multi-threading parameters, lines 465-476; ZSTD_dParameter (lines 640-668) lists no worker parameter"
+quote = '''/* multi-threading parameters */
+    /* These parameters are only active if multi-threading is enabled (compiled with build macro ZSTD_MULTITHREAD). [...] ZSTD_c_nbWorkers=400,    /* Select how many threads will be spawned to compress in parallel.'''
+checked = 2026-11-05
+
+["zstd-1.5.7-decompression-context-per-thread"]
+url = "https://github.com/facebook/zstd/blob/v1.5.7/lib/zstd.h#L297-L302"
+section = "zstd v1.5.7, lib/zstd.h, Decompression context, lines 297-302"
+quote = '''/*= Decompression context
+ *  When decompressing many times,
+ *  it is recommended to allocate a context only once,
+ *  and reuse it for each successive compression operation.
+ *  This will make workload friendlier for system's memory.
+ *  Use one context per thread for parallel execution. */'''
+checked = 2026-11-05
+
+["liburing-2.15-io-uring"]
+url = "https://github.com/axboe/liburing/blob/d41bf9220ec39277ff235379e9089d9e0fd6c2a5/man/io_uring.7#L15-L23"
+section = "liburing 2.15 (d41bf92), man/io_uring.7, DESCRIPTION, lines 15-23 and 45-46 (roff markup removed); licence README L114-L117: LGPL and MIT"
+quote = '''io_uring is a Linux-specific API for asynchronous I/O. It allows the user to submit one or more I/O requests, which are processed asynchronously without blocking the calling process. io_uring gets its name from ring buffers which are shared between user space and kernel space. [...] You place I/O requests you want to make on the SQ, while the kernel places the results of those operations on the CQ.'''
+checked = 2026-11-05
+
+["libdispatch-1542-dispatch-io"]
+url = "https://github.com/apple-oss-distributions/libdispatch/blob/701f4d1a24ae9c6863901bbbb22624b7d1b87321/dispatch/io.h#L34-L39"
+section = "Apple libdispatch-1542.100.32 (701f4d1), dispatch/io.h, header doc lines 34-39 and DISPATCH_IO_RANDOM lines 184-186; LICENSE: Apache License 2.0"
+quote = '''Dispatch I/O provides both stream and random access asynchronous read and write operations on file descriptors. [...] DISPATCH_IO_RANDOM	A dispatch I/O channel representing a random access file. Read and write operations on a channel of this type may be performed concurrently and read/write data at the specified offset.'''
+checked = 2026-11-05
+
+["xnu-12377-fcntl-rdadvise-nocache"]
+url = "https://github.com/apple-oss-distributions/xnu/blob/ac9718fb1af618d5ce8678d0dc6e8a58f252216f/bsd/man/man2/fcntl.2#L179-L195"
+section = "Apple xnu-12377.121.6 (ac9718f), bsd/man/man2/fcntl.2 (.Dd August 12, 2021), lines 179-195 (mdoc markup removed)"
+quote = '''F_RDADVISE Issue an advisory read async with no copy to user. [...] F_NOCACHE Turns data caching off/on. A non-zero value in arg turns data caching off. A value of zero in arg turns data caching on.'''
+checked = 2026-11-05
+
+["ms-kb156932-async-disk-io-synchronous"]
+url = "https://learn.microsoft.com/en-us/previous-versions/troubleshoot/windows/win32/asynchronous-disk-io-synchronous"
+section = "Microsoft Learn (archived), Asynchronous disk I/O appears synchronous, KB 156932 (ms.date 2020-03-13), sections Compression, Cache, Data is not in cache, Don't use the cache"
+quote = '''The file system driver will not access compressed files asynchronously; instead all operations are made synchronous. [...] For a disk device, typically, an I/O request can be completed immediately when the data is cached in memory. [...] the request will be handled by a limited pool of worker threads. [...] If you issue numerous I/O operations for data that is not in the cache, the cache manager and memory manager become saturated and your requests are made synchronous. [...] The FILE_FLAG_NO_BUFFERING flag has the most effect on the behavior of the file system for asynchronous operation. It is the best way to guarantee that I/O requests are asynchronous.'''
+checked = 2026-11-05
+
+["directstorage-developer-guidance-queues"]
+url = "https://github.com/microsoft/DirectStorage/blob/c53f1499d5f67a61b69a1a348d22dcd2b4cb4ede/Docs/DeveloperGuidance.md?plain=1#L51-L53"
+section = "Microsoft DirectStorage (c53f149), Docs/DeveloperGuidance.md, Queues and Operations L51-L53, NumSubmitThreads L190, NumBuiltInCpuDecompressionThreads L193-L197, Size your queues correctly L216-L218"
+quote = '''If Enqueue is called when there are no free slots then it will block until a slot becomes available. [...] Requests are also automatically submitted when the queue is half full. Submitting will wake up the worker thread, so care should be taken to avoid calling it more than necessary. [...] DirectStorage uses a separate submission thread. By default DirectStorage uses 1 submission thread. [...] Specifying DSTORAGE_DISABLE_BUILTIN_CPU_DECOMPRESSION means no decompression threads will be created and the title is fully responsible for performing the decompression. [...] The suspension could easily be several milliseconds. [...] The recommendation is ~2x your expected maximum number of elements in the queue at a single point in time.'''
+checked = 2026-11-05
+
+["ue-5.6-async-loading-thread"]
+url = "https://web.archive.org/web/20250912184119/https://dev.epicgames.com/documentation/en-us/unreal-engine/streaming-settings-of-the-unreal-engine-project-settings"
+section = "Epic, Streaming Settings of the Unreal Engine Project Settings, Unreal Engine 5.6 documentation (web.archive.org snapshot 2025-09-12), Package Streaming"
+quote = '''Async Loading Thread Enabled Enables separate thread for package streaming. Changing this setting requires restarting Unreal Engine.'''
+checked = 2026-11-05
+
+["tremblay-2024-cyberpunk-threads"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Tremblay_Charles_Anatomy_of_a.pdf#page=15"
+section = "Tremblay, Anatomy of a Frame in Cyberpunk 2077: Phantom Liberty, GDC 2024, slide Threads, p. 15 (measurements p. 7: i9-13950HX, RTX 4090 Laptop, job workers limited to 5)"
+quote = '''Threads Main Thread • Only schedules beginning of frame and waits for completion • Acts as a regular job worker while waiting Job Thread / Worker • Scale well to up to 12 Async IO Middlewares Telemetry'''
+checked = 2026-11-05
+
+["tremblay-2024-cyberpunk-streaming-jobs"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Tremblay_Charles_Anatomy_of_a.pdf#page=25"
+section = "Tremblay, Anatomy of a Frame in Cyberpunk 2077: Phantom Liberty, GDC 2024, slide What about resource streaming?, p. 25"
+quote = '''Deserialization & Decompression on Jobs • At the lowest job priority Throttle the amount of resource processed at any given time All render resources are created asynchronously No frame dependent job chain can wait on any resource streaming.'''
+checked = 2026-11-05
+
+["wgpu-types-30-memory-budget-thresholds"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/instance.rs#L335-L351"
+section = "wgpu-types 30.0.1, instance.rs L335-L351: MemoryBudgetThresholds, the field memory_budget_thresholds of InstanceDescriptor (L47), re-exported by wgpu (wgpu/src/lib.rs L290)"
+quote = '''/// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
+///
+/// Currently only the D3D12 and (optionally) Vulkan backends support these options.
+[...]
+    /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
+    /// This is a percent of the memory budget reported by native APIs.
+[...]
+    pub for_resource_creation: Option<u8>,
+[...]
+    /// Threshold at which devices will become lost due to memory pressure.
+[...]
+    pub for_device_loss: Option<u8>,'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-check-if-oom-todo"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2165-L2169"
+section = "wgpu-hal 30.0.1, metal/device.rs L2165-L2169: Device::check_if_oom on Metal; wgpu-hal/src/metal has no recommendedMaxWorkingSetSize or currentAllocatedSize call (searched)"
+quote = '''    fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        // TODO: see https://github.com/gfx-rs/wgpu/issues/7460
+
+        Ok(())
+    }'''
+checked = 2026-11-05
+
+["wgpu-hal-30-metal-raw-device"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L457-L459"
+section = "wgpu-hal 30.0.1, metal/device.rs L457-L459: Device::raw_device, reachable through wgpu::Device::as_hal::<Metal> (wgpu/src/api/device.rs L668); wgpu-hal does not re-export objc2-metal"
+quote = '''pub fn raw_device(&self) -> &Retained<ProtocolObject<dyn MTLDevice>> {
+    &self.shared.device
+}'''
+checked = 2026-11-05
+
+["wgpu-hal-30-dx12-query-video-memory-info"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/auxil/dxgi/factory.rs#L61-L69"
+section = "wgpu-hal 30.0.1, auxil/dxgi/factory.rs L61-L69: DxgiAdapter::query_video_memory_info (module auxil::dxgi is pub(super), auxil/mod.rs L4-L5); returned by dx12 Adapter::raw_adapter (dx12/adapter.rs L60), which derefs to IDXGIAdapter3"
+quote = '''pub fn query_video_memory_info(
+    &self,
+    group: Dxgi::DXGI_MEMORY_SEGMENT_GROUP,
+) -> Result<Dxgi::DXGI_QUERY_VIDEO_MEMORY_INFO, crate::DeviceError> {
+    let mut info = Dxgi::DXGI_QUERY_VIDEO_MEMORY_INFO::default();
+    unsafe { self.QueryVideoMemoryInfo(0, group, &mut info) }'''
+checked = 2026-11-05
+
+["wgpu-issue-7460-oom-detection"]
+url = "https://github.com/gfx-rs/wgpu/issues/7460"
+section = "gfx-rs/wgpu issue #7460, Implement out of memory detection (open), description"
+quote = '''We should use QueryVideoMemoryInfo on D3D12, VK_EXT_memory_budget on Vulkan and currentAllocatedSize + recommendedMaxWorkingSetSize on Metal to query the current memory usage and the budget then: - when we create buffers, textures, query sets and acceleration structures, return an OOM error if we will end up over 90% of the budget - on submit and poll, lose the device if our current usage exceeds 95% of the budget (this is needed since the budget can change over the lifetime of the application)'''
+checked = 2026-11-05
+
+["apple-mtldevice-recommended-max-working-set-size"]
+url = "https://developer.apple.com/documentation/metal/mtldevice/recommendedmaxworkingsetsize"
+section = "Apple Metal documentation, MTLDevice.recommendedMaxWorkingSetSize, abstract and discussion (read via the page's JSON)"
+quote = '''An approximation of how much memory, in bytes, this GPU device can allocate without affecting its runtime performance. [...] You can help the GPU maintain its performance by keeping the total memory footprint of its resources and heaps less than this threshold value.'''
+checked = 2026-11-05
+
+["vulkan-ext-memory-budget-interval"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/193ebe195f47ffc5004683d1659e71c725658c4d/appendices/VK_EXT_memory_budget.adoc#L24-L41"
+section = "Vulkan specification at 193ebe1, appendices/VK_EXT_memory_budget.adoc, Description"
+quote = '''The slink:VkPhysicalDeviceMemoryBudgetPropertiesEXT::pname:heapBudget values
+can be used as a guideline for how much total memory from each heap the
+**current process** can use at any given time, before allocations may start
+failing or causing performance degradation.
+The values may change based on other activity in the system that is outside
+the scope and control of the Vulkan implementation.
+[...]
+With this information, the idea is for an application at some interval (once
+per frame, per few seconds, etc) to query pname:heapBudget and
+pname:heapUsage.
+From here the application can notice if it is over budget and decide how it
+wants to handle the memory situation (free it, move to host memory, changing
+mipmap levels, etc).'''
+checked = 2026-11-05
+
+["ms-dxgi-query-video-memory-info-budget"]
+url = "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/ns-dxgi1_4-dxgi_query_video_memory_info"
+section = "Microsoft Learn, DXGI_QUERY_VIDEO_MEMORY_INFO structure (dxgi1_4.h), Members: Budget"
+quote = '''Specifies the OS-provided video memory budget, in bytes, that the application should target. If *CurrentUsage* is greater than *Budget*, the application may incur stuttering or performance penalties due to background activity by the OS to provide other applications with a fair usage of video memory.'''
+checked = 2026-11-05
+
+["ms-dxgi-budget-change-notification"]
+url = "https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/nf-dxgi1_4-idxgiadapter3-registervideomemorybudgetchangenotificationevent"
+section = "Microsoft Learn, IDXGIAdapter3::RegisterVideoMemoryBudgetChangeNotificationEvent (dxgi1_4.h), Parameters and Remarks"
+quote = '''A handle to the event object that the operating system sets when memory budgets change. [...] Instead of calling QueryVideoMemoryInfo regularly, applications can use CPU synchronization objects to efficiently wake threads when budget changes occur.'''
+checked = 2026-11-05
+
+["ms-d3d12-residency-budget-fluctuates"]
+url = "https://learn.microsoft.com/en-us/windows/win32/direct3d12/residency"
+section = "Microsoft Learn, Direct3D 12, Residency: Residency budget; Programming residency management"
+quote = '''The budget can fluctuate noticeably as background processes wake-up and sleep; and fluctuate dramatically when the user switches away to another application. [...] Simple applications may be able to get by merely creating committed resources until experiencing out-of-memory failures. Upon failure, the application can destroy other committed resources or API objects to enable further resource creations to succeed. But, even simple applications are strongly recommended to watch for negative budget changes and destroy unused API objects roughly once a frame.'''
 checked = 2026-11-05
