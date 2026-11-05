@@ -120,8 +120,8 @@ struct Sources {
     /// Each Material with its Cook key.
     materials: Vec<(AssetId, String, CookedMaterial)>,
     textures: Vec<TextureSource>,
-    /// Each Mesh with its Cook key and its Primitives.
-    meshes: Vec<(AssetId, String, Vec<mesh::SourcePrimitive>)>,
+    /// Each Mesh with its name, its Cook key and its Primitives.
+    meshes: Vec<(AssetId, String, String, Vec<mesh::SourcePrimitive>)>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
     /// as the source, or an image it names, is absent.
@@ -201,13 +201,13 @@ fn cook_sources(
             report.cooked.push(*id);
         }
     }
-    for (id, cook_key, primitives) in &sources.meshes {
+    for (id, name, cook_key, primitives) in &sources.meshes {
         if is_fresh(cache, *id, cook_key) {
             report.unchanged.push(*id);
         } else {
             let blob = mesh::cook(primitives)
-                .to_blob()
-                .with_context(|| format!("cooking Mesh {id}"))?;
+                .and_then(|mesh| mesh.to_blob())
+                .with_context(|| format!("cooking Mesh {name} ({id})"))?;
             cache.write(*id, cook_key, &blob)?;
             report.cooked.push(*id);
         }
@@ -246,7 +246,7 @@ fn cook_sources(
         let textures = material.textures.iter().flatten();
         textures.map(|texture| (Referrer::Material(*id), *texture))
     });
-    let material_references = sources.meshes.iter().flat_map(|(id, _, primitives)| {
+    let material_references = sources.meshes.iter().flat_map(|(id, _, _, primitives)| {
         let materials = primitives.iter().filter_map(|(_, material)| *material);
         materials.map(|material| (Referrer::Mesh(*id), material))
     });
@@ -383,9 +383,9 @@ fn read_sources(
                     (geometry, material)
                 })
                 .collect();
-            sources
-                .meshes
-                .push((id, mesh::cook_key(&primitives), primitives));
+            let name = format!("{} {name}", scene.name());
+            let cook_key = mesh::cook_key(&primitives);
+            sources.meshes.push((id, name, cook_key, primitives));
         }
     }
     Ok(sources)
@@ -533,10 +533,13 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
         let cook_key = material_cook_key(&material.to_blob());
         sources.materials.push((id, cook_key, material));
     }
-    for (id, primitives) in mesh::gltf_meshes(guid, &document, &buffers)? {
-        sources
-            .meshes
-            .push((id, mesh::cook_key(&primitives), primitives));
+    for (id, name, primitives) in mesh::gltf_meshes(guid, &document, &buffers)? {
+        let name = match name {
+            AssetName::Name(name) => format!("{} {name:?}", path.display()),
+            AssetName::Index(index) => format!("{} mesh {index}", path.display()),
+        };
+        let cook_key = mesh::cook_key(&primitives);
+        sources.meshes.push((id, name, cook_key, primitives));
     }
     // A normal Texture a metallic-roughness Texture depends on is read twice.
     let mut absent_images = absent_images.into_inner();

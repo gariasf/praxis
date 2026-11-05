@@ -7,53 +7,53 @@
   "height": 360,
   "measured_frames": 64,
   "cpu_frame_microseconds": {
-    "median": 28098.18,
-    "p95": 30036.304
+    "median": 35444.69,
+    "p95": 38356.822
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.561,
-    "p95": 0.74
+    "median": 0.733,
+    "p95": 1.092
   },
   "gpu_frame_microseconds": {
-    "median": 27937.112,
-    "p95": 30016.245
+    "median": 35389.296,
+    "p95": 37710.333
   },
   "gate_microseconds": {
-    "median": 13810.366,
-    "p95": 14648.587
+    "median": 21647.331,
+    "p95": 22466.428
   },
   "shadow_ray_microseconds": {
-    "median": 10350.985,
-    "p95": 12374.896
+    "median": 10521.698000000004,
+    "p95": 13485.704999999998
   },
   "lit_pass_wait_microseconds": {
-    "median": 114.48899999999999,
-    "p95": 146.46599999999998
+    "median": 106.29,
+    "p95": 138.369
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "median": 541.129,
-      "p95": 684.141
+      "median": 858.188,
+      "p95": 938.359
     },
     "culling_phase_two": {
-      "median": 277.11,
-      "p95": 313.313
+      "median": 457.332,
+      "p95": 509.34000000000003
     },
     "depth_prepass": {
-      "median": 741.105,
-      "p95": 791.02
+      "median": 1975.9180000000001,
+      "p95": 2072.609
     },
     "depth_pyramid_pass": {
-      "median": 2531.22,
-      "p95": 3080.7619999999997
+      "median": 2565.875,
+      "p95": 3096.892
     },
     "froxel_pass": {
-      "median": 368.524,
-      "p95": 487.401
+      "median": 231.34,
+      "p95": 263.599
     },
     "lit_pass": {
-      "median": 8926.911,
-      "p95": 9391.408000000001
+      "median": 15135.315999999999,
+      "p95": 15639.693
     }
   },
   "gpu_pass_microseconds": {
@@ -66,82 +66,82 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 704.04,
-      "p95": 764.89
+      "median": 957.142,
+      "p95": 1064.118
     },
     "culling_phase_two": {
-      "median": 290.179,
-      "p95": 338.199
+      "median": 454.127,
+      "p95": 512.514
     },
     "depth_prepass": {
-      "median": 1617.1499999999999,
-      "p95": 1808.702
+      "median": 3372.698,
+      "p95": 3612.967
     },
     "depth_pyramid_pass": {
-      "median": 2482.3979999999997,
-      "p95": 3017.93
+      "median": 2461.571,
+      "p95": 3207.108
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 371.74,
-      "p95": 447.58200000000005
+      "median": 233.28199999999998,
+      "p95": 309.34799999999996
     },
     "lit_pass": {
-      "median": 10671.299,
-      "p95": 11477.8
+      "median": 17151.237999999998,
+      "p95": 18362.395
     },
     "phase_two_depth_pass": {
-      "median": 102.032,
-      "p95": 131.544
+      "median": 96.891,
+      "p95": 115.711
     },
     "shadow_mask_pass": {
-      "median": 7224.676,
-      "p95": 8428.494
+      "median": 6586.256,
+      "p95": 8180.3369999999995
     },
     "tonemapping_pass": {
-      "median": 3886.853,
-      "p95": 4471.786999999999
+      "median": 3341.366,
+      "p95": 3871.166
     }
   },
   "draw_calls": 4,
-  "instances_drawn": 2,
-  "triangles_drawn": 4,
+  "instances_drawn": 1416,
+  "triangles_drawn": 2832,
   "instances_overflowed": 0,
   "uploaded_bytes": 416,
-  "gpu_memory_bytes": 404020452,
+  "gpu_memory_bytes": 405590244,
   "arena_bytes_in_use": 176,
-  "heap_allocations": 341,
+  "heap_allocations": 350,
   "counter_frames": {
     "frames": {
       "start": 8,
       "end": 72
     },
     "draw_calls": 4,
-    "instances_drawn": 2,
-    "triangles_drawn": 4,
+    "instances_drawn": 1416,
+    "triangles_drawn": 2832,
     "instances_overflowed": 0,
     "uploaded_bytes": 416,
-    "gpu_memory_bytes": 404020452,
+    "gpu_memory_bytes": 405590244,
     "arena_bytes_in_use": 176,
-    "heap_allocations": 341
+    "heap_allocations": 350
   },
   "provenance": {
-    "source_hash": "a51401c4e1fcc674d87557afd6d938c64b0b6a7b",
-    "commit": "0d1792a7b2918a8befc9bb320c456694f1412482",
+    "source_hash": "b2a236bc344b27fe42d549174a272c995484ce5b",
+    "commit": "7ec172728de606c08479237e2a7d0f687d435daa",
     "dirty": false,
     "branch": "HEAD",
     "driver": "llvmpipe",
     "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.4 (LLVM 20.1.2)",
     "harness_version": 10,
-    "scene_content_hash": "d9512ea1552dc0091920ca4880a03f30d35b4a80598e365e5229aaf9d172aefd",
+    "scene_content_hash": "f2a95d2cb0847e87fd07ec8d10ab78fbcd4e65f195c3c4ca6a068dc15b87d7cc",
     "gpu_load_percent": null,
-    "one_minute_load_average": 1.65,
+    "one_minute_load_average": 1.27,
     "other_processes": [],
-    "gpu_frame_p95_over_median": 1.0744219015909733,
+    "gpu_frame_p95_over_median": 1.0655858483310885,
     "quiet": false,
-    "started_unix_seconds": 1793893619
+    "started_unix_seconds": 1793907164
   }
 }

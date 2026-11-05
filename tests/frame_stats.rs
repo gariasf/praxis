@@ -11,8 +11,8 @@ const MEBIBYTE: u64 = 1 << 20;
 
 /// town's Instances and their triangles, as its generator places them
 /// (`src/scenes/town.rs`).
-const TOWN_INSTANCES: u32 = 254_256;
-const TOWN_TRIANGLES: u32 = 9_994_190;
+const TOWN_INSTANCES: u32 = 254_319;
+const TOWN_TRIANGLES: u32 = 9_994_316;
 
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
@@ -281,12 +281,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// On every Reference scene, each frame reads back from the GPU the
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn.
-/// town hides most of its Instances, so it is drawn with culling off,
-/// which its Goldens compare with culling on: the frame's draw holds the
-/// whole town. After the first frame, each frame writes the Instances of
-/// what moves alone, town's 10,000 birds among them, and leaves no Moving
-/// Instance out of the dynamic TLAS; town's birds fill it, each uploading
-/// its entry every frame.
+/// far-coplanar's tiles and town lie partly out of any one view, so both
+/// are drawn with culling off, which their Goldens compare with culling
+/// on: the frame's draw holds every tile and the whole town. After the
+/// first frame, each frame writes the Instances of what moves alone, town's
+/// 10,000 birds among them, and leaves no Moving Instance out of the
+/// dynamic TLAS; town's birds fill it, each uploading its entry every
+/// frame.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {
@@ -313,7 +314,7 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             continue;
         }
         let switches = praxis::RenderSwitches {
-            culling: scene != ReferenceScene::Town,
+            culling: !matches!(scene, ReferenceScene::Town | ReferenceScene::FarCoplanar),
             ..praxis::RenderSwitches::default()
         };
         let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
@@ -324,7 +325,8 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             ReferenceScene::PbrSweep => (10, 10 * sphere_triangles, 0),
             ReferenceScene::UvGrid | ReferenceScene::Minification => (1, plane_triangles, 0),
             ReferenceScene::NormalTangent => (1, normal_tangent_triangles, 0),
-            ReferenceScene::FarCoplanar => (2, 2 * plane_triangles, 0),
+            // Two planes of 32 × 32 tiles.
+            ReferenceScene::FarCoplanar => (2_048, 2_048 * plane_triangles, 0),
             ReferenceScene::Orrery => (5, 5 * sphere_triangles, 5),
             ReferenceScene::TextureWall => (100, 100 * plane_triangles, 0),
             // One Mesh of a ground plane and a sphere.

@@ -34,8 +34,9 @@ pub enum ReferenceScene {
     /// Khronos NormalTangentTest, committed in `assets/`, seen face on: real
     /// bumps beside normal-mapped quads that should shade the same.
     NormalTangent,
-    /// Two ground planes of contrasting colour 1 cm apart, 4 km square and
-    /// centred 2 km in front of the camera, seen at a grazing angle: the upper plane covers the lower one everywhere
+    /// Two ground planes of contrasting colour 1 cm apart, 4 km square in
+    /// tiles of 125 m and centred 2 km in front of the camera, seen at a
+    /// grazing angle: the upper plane covers the lower one everywhere
     /// under reversed depth, and they interleave under standard depth.
     FarCoplanar,
     /// Five textured spheres, each circling and spinning in its parent's
@@ -278,8 +279,8 @@ impl ReferenceScene {
             Self::PbrSweep => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), None)])],
             Self::UvGrid => vec![("plane", vec![(ground_plane(4.0, 2.0), Some("grid"))])],
             Self::FarCoplanar => {
-                let plane = ground_plane(FAR_COPLANAR_DISTANCE as f32, 1.0);
-                vec![("plane", vec![(plane, None)])]
+                let tile = ground_plane((FAR_COPLANAR_TILE_METRES / 2.0) as f32, 1.0);
+                vec![("plane", vec![(tile, None)])]
             }
             Self::Orrery => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), Some("grid"))])],
             Self::Minification => {
@@ -589,6 +590,12 @@ const FAR_COPLANAR_DISTANCE: f64 = 2000.0;
 const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
 const FAR_COPLANAR_GAP: f64 = 0.01;
+/// Each plane is `FAR_COPLANAR_TILES_PER_SIDE` square tiles a side, each
+/// `FAR_COPLANAR_TILE_METRES` on a side, so no vertex lies past 128 m from
+/// its tile's centre (ADR 0014).
+const FAR_COPLANAR_TILES_PER_SIDE: u32 = 32;
+const FAR_COPLANAR_TILE_METRES: f64 =
+    2.0 * FAR_COPLANAR_DISTANCE / FAR_COPLANAR_TILES_PER_SIDE as f64;
 /// The upper plane's base colour, then the lower one's.
 #[cfg(feature = "cook")]
 const FAR_COPLANAR_COLORS: [[f32; 4]; 2] = [[0.8, 0.1, 0.1, 1.0], [0.1, 0.8, 0.1, 1.0]];
@@ -599,15 +606,18 @@ pub(crate) fn spawn_far_coplanar(
     world: &mut World,
     loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
-    let plane = loader.mesh(ReferenceScene::FarCoplanar.mesh_id("plane"))?;
+    let tile = loader.mesh(ReferenceScene::FarCoplanar.mesh_id("plane"))?;
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
     for (height, name) in [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")] {
         let material = loader.material(ReferenceScene::FarCoplanar.material_id(name))?;
-        world.spawn((
-            Transform::from_translation(centre + glam::DVec3::Y * height),
-            MeshRef(plane),
-            MaterialRef(material),
-        ));
+        let tiles = ground_tile_centres(FAR_COPLANAR_TILE_METRES, FAR_COPLANAR_TILES_PER_SIDE);
+        world.spawn_batch(tiles.map(|tile_centre| {
+            (
+                Transform::from_translation(centre + tile_centre + glam::DVec3::Y * height),
+                MeshRef(tile),
+                MaterialRef(material),
+            )
+        }));
     }
     Ok(())
 }
@@ -1186,6 +1196,21 @@ fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Ge
         }
     }
     geometry
+}
+
+/// The centres of `tiles_per_side` × `tiles_per_side` square tiles, each
+/// `tile_size_metres` on a side, that together make a square centred on the origin,
+/// row by row along +Z.
+pub(crate) fn ground_tile_centres(
+    tile_size_metres: f64,
+    tiles_per_side: u32,
+) -> impl Iterator<Item = glam::DVec3> {
+    let centre = move |index: u32| {
+        tile_size_metres * (f64::from(index) - f64::from(tiles_per_side - 1) / 2.0)
+    };
+    (0..tiles_per_side).flat_map(move |row| {
+        (0..tiles_per_side).map(move |column| glam::dvec3(centre(column), 0.0, centre(row)))
+    })
 }
 
 /// A square in the XZ plane, facing +Y, `half_size` metres from the origin
