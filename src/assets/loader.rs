@@ -54,11 +54,7 @@ impl AssetLoader for PoolLoader<'_> {
     }
 
     fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
-        let mesh = self.cache.mesh(id)?;
-        let materials = self.materials(id, &mesh)?;
-        self.mesh_pool
-            .load(self.staging, &mesh, &materials)
-            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+        self.mesh_for(id, MeshUse::DrawnAndTraced)
     }
 
     fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
@@ -70,69 +66,60 @@ impl AssetLoader for PoolLoader<'_> {
     }
 
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
-        let mesh = self.cache.mesh(id)?;
-        let materials = vec![None; mesh.primitives.len()];
-        self.mesh_pool
-            .load_for(self.staging, &mesh, &materials, MeshUse::Traced)
-            .with_context(|| format!("the Mesh pool refused Mesh {id}"))
+        self.mesh_for(id, MeshUse::Traced)
     }
 }
 
 impl PoolLoader<'_> {
-    /// Loads the Mesh `id` as `mesh` does, for `mesh_use`.
+    /// Loads the Mesh `id` for `mesh_use`, once per Asset ID unless it is
+    /// bent, with the Materials its Primitives name unless no pass draws it.
     fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
+        if let Some(handle) = self.mesh_pool.loaded(id, mesh_use) {
+            return Ok(handle);
+        }
         let mesh = self.cache.mesh(id)?;
-        let materials = self.materials(id, &mesh)?;
+        let materials = if mesh_use == MeshUse::Traced {
+            vec![None; mesh.primitives.len()]
+        } else {
+            self.materials(id, &mesh)?
+        };
         self.mesh_pool
-            .load_for(self.staging, &mesh, &materials, mesh_use)
+            .load_asset(self.staging, id, &mesh, &materials, mesh_use)
             .with_context(|| format!("the Mesh pool refused Mesh {id}"))
     }
 
-    /// The Materials `mesh`'s Primitives name, Mesh `id`'s, each loaded once.
+    /// The Materials `mesh`'s Primitives name, Mesh `id`'s.
     fn materials(
         &mut self,
         id: AssetId,
         mesh: &CookedMesh,
     ) -> anyhow::Result<Vec<Option<MaterialHandle>>> {
-        let mut materials = Vec::with_capacity(mesh.primitives.len());
-        for (index, primitive) in mesh.primitives.iter().enumerate() {
-            let earlier = mesh.primitives[..index]
-                .iter()
-                .position(|earlier| earlier.material == primitive.material);
-            let material = match (earlier, primitive.material) {
-                (Some(earlier), _) => materials[earlier],
-                (None, Some(material)) => Some(
-                    self.material(material)
-                        .with_context(|| format!("loading a Material of Mesh {id}"))?,
-                ),
-                (None, None) => None,
-            };
-            materials.push(material);
-        }
-        Ok(materials)
+        mesh.primitives
+            .iter()
+            .map(|primitive| {
+                primitive
+                    .material
+                    .map(|material| {
+                        self.material(material)
+                            .with_context(|| format!("loading a Material of Mesh {id}"))
+                    })
+                    .transpose()
+            })
+            .collect()
     }
 }
 
 #[cfg(all(test, feature = "cook"))]
 mod tests {
-    use std::io::Write;
-
     use super::*;
     use crate::assets::ARENA_CAPACITY_BYTES;
-    use crate::assets::pools::tests::logged;
+    use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::{CookedMaterial, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
-    use crate::gpu::GpuContext;
 
     #[test]
-    fn a_mesh_loads_each_material_its_primitives_name_once_without_a_warning() {
-        let context = match pollster::block_on(GpuContext::headless()) {
-            Ok(context) => context,
-            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
-                // Not `eprintln!`, which libtest captures from passing tests.
-                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-                return;
-            }
-            Err(error) => panic!("headless GPU context failed: {error:#}"),
+    fn an_asset_loaded_twice_keeps_one_entry_and_a_bent_mesh_its_own() {
+        let Some(context) = gpu_context() else {
+            return;
         };
         let directory =
             std::env::temp_dir().join(format!("praxis-asset-loader-{}", std::process::id()));
@@ -145,7 +132,7 @@ mod tests {
             normal_scale: 1.0,
             textures: [None; 5],
         };
-        for id in [1, 2] {
+        for id in [1, 2, 6] {
             cache
                 .write(AssetId(id), "key", &material.to_blob())
                 .unwrap();
@@ -184,21 +171,40 @@ mod tests {
             mesh_pool: &mut mesh_pool,
             material_pool: &mut material_pool,
         };
-        let ((), log) = logged(|| {
-            loader.mesh(AssetId(3)).unwrap();
-            loader.mesh(AssetId(4)).unwrap();
+        let (handles, log) = logged(|| {
+            let mesh = loader.mesh(AssetId(3)).unwrap();
+            let arena_bytes = loader.mesh_pool.arena_bytes_in_use();
+            assert!(loader.mesh(AssetId(3)).unwrap() == mesh);
+            assert_eq!(loader.mesh_pool.arena_bytes_in_use(), arena_bytes);
+            let proxy = loader.shadow_proxy(AssetId(3)).unwrap();
+            assert!(loader.shadow_proxy(AssetId(3)).unwrap() == proxy);
+            let bent = [
+                loader.bent_mesh(AssetId(3)).unwrap(),
+                loader.bent_mesh(AssetId(3)).unwrap(),
+                loader.refitted_mesh(AssetId(3)).unwrap(),
+                loader.refitted_mesh(AssetId(3)).unwrap(),
+            ];
+            let next = loader.mesh(AssetId(4)).unwrap();
+            [mesh, proxy]
+                .into_iter()
+                .chain(bent)
+                .chain([next])
+                .map(|handle| handle.0)
+                .collect::<Vec<_>>()
         });
         let Err(missing) = loader.mesh(AssetId(5)) else {
             panic!("Mesh 5 loaded without its second Primitive's Material");
         };
 
         assert!(!log.contains("WARN"), "{log}");
-        // Each Primitive's Material loads, a Mesh's repeated one once:
-        // Material 1 for Mesh 3, then 2 and 1 for Mesh 4, and 2 for Mesh 5,
-        // before its second Primitive's fails.
+        // Mesh 3 and its shadow proxy hold one entry each however often
+        // they load, and each bent Mesh its own, so Mesh 4 takes the next.
+        assert_eq!(handles, [0, 1, 2, 3, 4, 5, 6]);
         assert!(format!("{missing:#}").contains("loading a Material of Mesh"));
-        let next = loader.material(AssetId(1)).unwrap();
-        assert_eq!(next.index(), 4);
+        // Materials 1 and 2 load once each, however many Primitives name
+        // them, so Material 6 takes the third entry.
+        let materials = [1, 2, 1, 6].map(|id| loader.material(AssetId(id)).unwrap().index());
+        assert_eq!(materials, [0, 1, 0, 2]);
         std::fs::remove_dir_all(&directory).ok();
     }
 }

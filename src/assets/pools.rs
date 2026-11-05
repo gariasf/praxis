@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
-    cooked::{CookedMesh, CookedVertex},
+    cooked::{AssetId, CookedMesh, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
 };
 
@@ -13,7 +15,7 @@ pub const MESH_CAPACITY: u32 = 1 << 16;
 
 /// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
 /// trace it through its BLAS, or both.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
@@ -38,6 +40,12 @@ impl MeshUse {
     fn traced(self) -> bool {
         self != MeshUse::Drawn
     }
+
+    /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
+    /// Renderable's own, as the GPU writes its vertices.
+    fn shared(self) -> bool {
+        matches!(self, MeshUse::DrawnAndTraced | MeshUse::Traced)
+    }
 }
 
 /// The flags a refitted Mesh's BLAS is built with, which its refits repeat.
@@ -60,6 +68,8 @@ pub struct MeshBlas {
 pub struct MeshPool {
     device: wgpu::Device,
     meshes: Vec<Mesh>,
+    /// The Handle of each Mesh loaded by Asset ID for a shared use.
+    asset_handles: HashMap<(AssetId, MeshUse), MeshHandle>,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
@@ -89,6 +99,7 @@ impl MeshPool {
         Self {
             device: device.clone(),
             meshes: Vec::new(),
+            asset_handles: HashMap::new(),
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
             refitted_blases: Vec::new(),
@@ -128,6 +139,7 @@ impl MeshPool {
     }
 
     /// Loads `mesh` to be drawn and traced, as `load_for` loads it.
+    #[cfg(test)]
     pub fn load(
         &mut self,
         staging: &mut LoadStaging,
@@ -135,6 +147,29 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
     ) -> Option<MeshHandle> {
         self.load_for(staging, mesh, materials, MeshUse::DrawnAndTraced)
+    }
+
+    /// The Handle of the Mesh `id` that `load_asset` loaded for `mesh_use`,
+    /// unless a bent Mesh's use, which no two Renderables share.
+    pub fn loaded(&self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
+        self.asset_handles.get(&(id, mesh_use)).copied()
+    }
+
+    /// Loads `mesh`, the Mesh `id`, as `load_for` does, and keeps its Handle
+    /// for `loaded` to return.
+    pub fn load_asset(
+        &mut self,
+        staging: &mut LoadStaging,
+        id: AssetId,
+        mesh: &CookedMesh,
+        materials: &[Option<MaterialHandle>],
+        mesh_use: MeshUse,
+    ) -> Option<MeshHandle> {
+        let handle = self.load_for(staging, mesh, materials, mesh_use)?;
+        if mesh_use.shared() {
+            self.asset_handles.insert((id, mesh_use), handle);
+        }
+        Some(handle)
     }
 
     /// Writes `mesh` through `staging` into one range of each Arena, and its
