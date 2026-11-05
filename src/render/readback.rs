@@ -751,24 +751,20 @@ mod tests {
         let microseconds = Duration::from_micros;
         let expected_passes: [(&str, Duration); TIMED_PASSES.len()] =
             std::array::from_fn(|pass| (TIMED_PASSES[pass], microseconds(pass_microseconds[pass])));
-        assert_eq!(
-            times.pass_times, expected_passes,
-            "{shape:?}, shadow rays {shadow_rays}"
-        );
-        assert_eq!(times.frame_time, microseconds(frame_microseconds));
-        assert_eq!(times.gate_time, microseconds(gate_microseconds));
-        assert_eq!(
-            times.lit_pass_wait,
-            microseconds(lit_pass_wait_microseconds)
-        );
-        assert_eq!(times.last_pass_end, 1314);
+        let kind = format!("{shape:?}, shadow rays {shadow_rays}");
+        assert_eq!(times.pass_times, expected_passes, "{kind}");
+        assert_eq!(times.frame_time, microseconds(frame_microseconds), "{kind}");
+        assert_eq!(times.gate_time, microseconds(gate_microseconds), "{kind}");
+        let lit_pass_wait = microseconds(lit_pass_wait_microseconds);
+        assert_eq!(times.lit_pass_wait, lit_pass_wait, "{kind}");
+        assert_eq!(times.last_pass_end, 1314, "{kind}");
     }
 
     #[test]
     fn a_frame_that_neither_builds_nor_bends_spans_its_last_submission() {
         let shape = FrameShape::default();
-        let all = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 84, 74, 6);
+        let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 84, 74, 6);
         let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 84, 74, 26);
     }
@@ -779,8 +775,8 @@ mod tests {
             dynamic_tlas_built: true,
             ..FrameShape::default()
         };
-        let all = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 87, 74, 6);
+        let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 87, 74, 6);
         let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 87, 74, 26);
     }
@@ -794,8 +790,8 @@ mod tests {
             bent: true,
             ..FrameShape::default()
         };
-        let all = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 204, 74, 6);
+        let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 204, 74, 6);
         let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 204, 74, 26);
     }
@@ -807,8 +803,8 @@ mod tests {
             bent: true,
             blas_refitted: false,
         };
-        let all = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 207, 74, 6);
+        let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 207, 74, 6);
         let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 207, 74, 26);
     }
@@ -821,8 +817,8 @@ mod tests {
             bent: true,
             blas_refitted: true,
         };
-        let all = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 95, 74, 6);
+        let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 95, 74, 6);
         let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 95, 74, 26);
     }
@@ -834,8 +830,8 @@ mod tests {
             bent: true,
             blas_refitted: true,
         };
-        let all = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, all, 98, 74, 6);
+        let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(shape, true, with_shadow_rays, 98, 74, 6);
         let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
         assert_spread_frame(shape, false, without_shadow_rays, 98, 74, 26);
     }
