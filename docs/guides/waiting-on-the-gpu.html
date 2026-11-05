@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
-<title>Waiting on the GPU Explained</title>
+<title>Waiting on the GPU</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: a lab notebook, volume 27 of the series, after Shadow Edge Rays Explained. One reading column; figures, demos and tables break out wider. */
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
 :root {
   --paper: #f5f6f8;
   --panel: #ffffff;
@@ -20,9 +20,6 @@
   --accent-wash: rgba(44, 86, 201, 0.13);
   --warm: #c9771a;
   --warm-wash: rgba(201, 119, 26, 0.14);
-  --bad: #c43a31;
-  --bad-wash: rgba(196, 58, 49, 0.14);
-  --good: #23855a;
   --figure-bg: #eceff4;
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Serif 4", Georgia, "Times New Roman", serif;
@@ -32,95 +29,43 @@
   :root:not([data-theme="light"]) {
     --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
     --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
-    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
-    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
   --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
-  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
-  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
 }
-body {
-  margin: 0;
-  background: var(--paper); color: var(--ink);
-  font-family: var(--body); font-size: 18px; line-height: 1.6;
-}
-.sheet {
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 0 64px;
-}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
 a { color: var(--accent); text-underline-offset: 2px; }
-a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
 .page { max-width: 1040px; margin: 0 auto; }
 .prose { max-width: 680px; margin: 0 auto; }
-header.intro { padding-block: 56px 24px; }
+header.intro { padding-block: 56px 8px; }
 .eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
 h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
 h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
 p { margin: 0 0 16px; }
-.lede { font-size: 21px; color: var(--ink-soft); }
-.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
-.status b { color: var(--ink); font-weight: 600; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
 code, .num { font-family: var(--mono); font-size: 0.84em; }
 sup, sub { line-height: 0; }
-section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
-.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
 nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
 nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
 nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
 figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
 figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
 figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
 figcaption b { color: var(--ink); }
-.fluid svg { display: block; width: 100%; height: auto; }
-.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
-.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
-.keypoints li { padding-left: 22px; position: relative; }
-.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.keypoints li { min-width: 0; }
-.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
 .formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
-
-svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
-svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
-svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
-svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
-svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
-svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
-svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
-svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
-svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
-
-.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
-.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
-.btn:hover { border-color: var(--accent); }
-.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
-.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
-.control-label { color: var(--ink-soft); }
-output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
-input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
-.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
-.readout b { color: var(--ink); font-weight: 600; }
-canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
-.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
-.canvas-frame canvas { border-radius: 0; }
-canvas.demo { touch-action: none; cursor: crosshair; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
-.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
-.legend i.dashed { border-top: 2.5px dashed var(--warm); }
-.legend i.thin { border-top: 1.5px solid var(--ink); }
-.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
-.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
-.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-.demo-grid > div { min-width: 0; }
-
 .table-wrap { overflow-x: auto; }
 table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
 table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
@@ -130,37 +75,23 @@ table.facts tr.focus td { background: var(--accent-wash); }
 table.compact { font-size: 14px; }
 table.compact th, table.compact td { padding: 5px 8px; }
 .prose.table-wrap { margin-bottom: 16px; }
-
-pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
 pre.code code { font-size: inherit; }
 pre.code .comment { color: var(--ink-soft); }
-
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
-.figures div { min-width: 0; }
-.figures dt { color: var(--ink-soft); font-size: 12px; }
-.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
-
-.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
-.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
-.reading h3 { margin: 0 0 10px; font-size: 18px; }
-.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
-.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
-.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
-.reading li span { color: var(--ink-soft); }
-.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
-.glossary div { min-width: 0; }
-.glossary dt { font-family: var(--display); font-weight: 700; }
-.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
-footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
-
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 640px) {
-  body { font-size: 17px; }
-  figure { padding: 12px; }
-  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .formula { font-size: 13px; }
-}
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
 .concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
 .concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
 .concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
@@ -168,130 +99,123 @@ footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; bord
 .series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
 nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
 .series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
-.meter { display: grid; gap: 14px; }
-.meter-row { display: grid; gap: 5px; min-width: 0; }
-.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
-.meter-label b { color: var(--ink); font-weight: 600; }
-.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
-.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
-.meter-fill { left: 0; background: var(--accent); }
-.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
-.meter-fill.over { background: var(--bad); }
-.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
-.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
-.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
-.meter-axis span.first { transform: none; }
-.meter-axis span.last { transform: translateX(-100%); }
-.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
-
-
-/* The series parts this volume shares with Shadow Edge Rays Explained. */
-p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
-.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
-.legend .dot.one { background: var(--accent); border-color: var(--accent); }
-.legend .dot.two { background: var(--warm); border-color: var(--warm); }
-.legend .dot.ring { background: transparent; border-color: var(--bad); }
-.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 .note { font-size: 15px; color: var(--ink-soft); }
-.bad-text { color: var(--bad); }
-.good-text { color: var(--good); }
-.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
-details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
-details.check summary { cursor: pointer; font-weight: 600; }
-details.check[open] summary { margin-bottom: 8px; }
-details.check p { margin: 0; }
-.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
-.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
-.in-brief p { margin: 0 0 12px; }
-.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
-.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
-.in-brief li { margin: 2px 0; }
-.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
-.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
-.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
-.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
-.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-.demo-canvas { width: 100%; }
-.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
-@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
-
-/* This volume's own parts: the cores, the timeline's lanes, the runs' markers. */
-.cores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.cluster { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; min-width: 0; }
-.cluster.performance { border-top: 3px solid var(--accent); }
-.cluster.efficiency { border-top: 3px solid var(--warm); }
-.cluster-name { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); margin: 0 0 8px; }
-.cluster-cores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-.cluster-cores span { display: block; text-align: center; font-family: var(--mono); font-size: 13px; padding: 6px 0; border: 1px solid var(--rule); border-radius: 3px; background: var(--figure-bg); min-width: 0; }
-.cluster-l2 { margin-top: 6px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); border: 1px dashed var(--rule); border-radius: 3px; padding: 3px 0; }
-.legend .swatch { display: inline-block; width: 16px; height: 12px; border: 1px solid var(--rule); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
-.legend .swatch.work { background: var(--accent); border-color: var(--accent); }
-.legend .swatch.asleep { background: transparent; border: 1.5px dashed var(--ink-soft); }
-.legend .swatch.spinning { background: var(--warm); border-color: var(--warm); }
-.legend .swatch.gpu { background: var(--accent-wash); border-color: var(--accent); }
-.legend .dot.default { background: var(--accent); border-color: var(--accent); }
-.legend .dot.spin { background: var(--good); border-color: var(--good); }
-.legend .dot.one { background: var(--warm); border-color: var(--warm); }
-.legend .dot.priority { background: transparent; border-color: var(--ink); }
-.legend i.reference-line { border-top: 2px dashed var(--ink); }
-.ratio-table { border-collapse: collapse; font-family: var(--mono); font-size: 13.5px; width: 100%; margin-top: 12px; }
-.ratio-table th, .ratio-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--rule); }
-.ratio-table th { font-weight: 600; color: var(--ink-soft); font-size: 12.5px; }
-.ratio-table td.n, .ratio-table th.n { text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 640px) {
-  .cores { grid-template-columns: minmax(0, 1fr); }
-  .ratio-table th, .ratio-table td { padding: 5px 4px; }
-}
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="sheet">
 <div class="page">
 <header class="intro prose">
-  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
-  <div class="eyebrow">Praxis &middot; M3 &middot; ticket #381 &middot; PR #400</div>
-  <h1>Waiting on the GPU Explained</h1>
-  <aside class="in-brief" aria-labelledby="in-brief">
-    <h2 id="in-brief">In brief</h2>
-    <p>When <code>town</code> is GPU-bound, the main thread blocks each frame for the oldest frame in flight; in three of the four default runs on the M4 Pro, a fixed timed piece of work showed its core running about 30% slower for the whole frame, so <code>prepare_frame</code> took about 1.4 times as long. The bench spin-waits, so its CPU lines measure the work at full clock; the window keeps blocking, as Apple asks. The idea to keep: a CPU time measured behind a GPU-bound frame can measure the clock, not the work.</p>
-    <p class="in-brief-label">You'll learn</p>
-    <ul>
-      <li>Where the main thread waits with two frames in flight, and how blocking differs from spin-waiting</li>
-      <li>How Apple silicon groups its cores into clusters, each with its own L2 and a frequency the kernel sets</li>
-      <li>How to read a core's speed without counters: time a fixed chain of dependent multiply-adds</li>
-      <li>What nine runs of <code>town</code> ruled in and out: the clock, blocking, migration, priority and QoS</li>
-      <li>Why the bench spin-waits while the window blocks, and what M3's CPU ceilings measure</li>
-    </ul>
-    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html#frame">Frame Timing Explained</a>, for frames in flight and the CPU and GPU frame; optionally <a href="town.html">Town Explained</a>, for the scene measured here, and <a href="dynamic-tlas.html">The dynamic TLAS</a>, for the dynamic TLAS's CPU line.</p>
-    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at 958ed4e9 (PR #400, 2026-10-30). <b>Since then:</b> PR #401 (515c33be, docs only) recorded in <code>docs/performance.md</code> why queued <code>town</code> frames keep their pass overlap; no code this guide describes changed, as of main at 515c33be.</p>
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; concept &middot; <code>src/capture/mod.rs</code></div>
+  <h1>Waiting on the GPU</h1>
+  <p class="definition">With two frames in flight, the main thread, which alone records, submits, polls and presents (ADR 0016), waits for the GPU in three places: for a swapchain texture, in the window; for the oldest frame in flight, in <code>render_frames</code>; and inside a frame wherever a GPU write must finish before the CPU or a later submission reads it. A queue orders when its command buffers start, not when they finish, so each such wait is explicit, and how the thread waits changes what its clock does next.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">In the frame</h2>
+    <dl>
+      <dt>Frames in flight</dt><dd><code>FRAMES_IN_FLIGHT</code>, 2: "Frames submitted but not finished on the GPU when the next one starts, at most: the window's swapchain latency and capture's queue. Per-frame staging and the GPU stats readback are sized by it." The window asks the surface for the same, as <code>desired_maximum_frame_latency</code>.</dd>
+      <dt>The oldest frame</dt><dd><code>render_frames</code>, which the bench, <code>praxis capture</code> and the Goldens render through, waits for it as its <code>FrameWait</code> says: <code>Block</code>, asleep until the GPU signals, or <code>Spin</code>, polling on its core. <code>bench::run</code> picks <code>Spin</code> on a hardware adapter and <code>Block</code> on a <code>DeviceType::Cpu</code>; capture and the Goldens pass <code>Block</code>. The window never goes through it: it waits in <code>get_current_texture</code>.</dd>
+      <dt>Inside a frame, on the CPU</dt><dd><code>compact_blases</code> waits for the BLAS builds, then for the compaction copies, in a frame that loads Meshes; <code>FrameStaging::write</code> waits when every staging slot is still in flight; <code>BlasRefit::submit</code> waits for the refits where Metal makes no shared event (<code>waits_on_cpu</code>).</dd>
+      <dt>Inside a frame, on the GPU</dt><dd>The dynamic TLAS's build is submitted in a command buffer ahead of the frame's; the crowd's refits signal a shared event their submission completes, and the build's command buffer waits for it.</dd>
+      <dt>Frame stats</dt><dd>The <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, the GPU frame total, ADR 0019's gate, draw calls, Instances and triangles drawn, bytes uploaded, GPU memory and heap allocations, among others. (Shortened.)">CPU frame</span> runs from <code>FrameRecorder::begin</code>, which <code>State::update</code> calls after the wait for the oldest frame, to <code>FrameRecorder::end</code>, after the frame's submit, so it counts the in-frame waits and not that one. <code>heap_allocations</code> counts the frame's allocations between the same two points, and the bench fails any increase.</dd>
+    </dl>
   </aside>
-  <p class="lede">Every CPU stage of <code>town</code>, the dense <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>, read 20 to 40% slower once the GPU became the longer half of the frame, stages that touch no acceleration structure alike. The dynamic TLAS's CPU line read over its 1.1 ms ceiling and the CPU frame over M3's 6 ms. This volume follows ticket #381's search for the cause: where the main thread waits, how Apple silicon sets a core's clock, how to read that clock without counters, what nine runs ruled in and out, and what PR #400 changed. Two live demos show a frame's timeline under each way of waiting, and the nine runs' stages against the clock.</p>
-  <p class="status"><b>Provenance.</b> The code is main at 958ed4e9, PR #400, which closes ticket #381. The measurements are <code>docs/performance.md</code>'s section of 2026-10-30, taken on an Apple M4 Pro (8 performance and 4 efficiency cores), macOS 27.0.1, wgpu 30.0.1 on Metal, from a release build of 102b22c3 with a measurement patch that was not committed. Where the guide quotes Apple or kernel source, it names and links it.</p>
-  <nav class="toc" aria-label="Chapters">
-    <a href="#waits">1 &middot; Where the CPU waits</a>
-    <a href="#clusters">2 &middot; Cores, clusters and clocks</a>
-    <a href="#chain">3 &middot; A clock without counters</a>
-    <a href="#runs">4 &middot; What the runs showed</a>
-    <a href="#bench">5 &middot; What the bench does now</a>
-    <a href="#check">Check yourself</a>
-    <a href="#reading">Reading list</a>
-    <a href="#glossary">Glossary</a>
+  <nav class="toc" aria-label="Sections">
+    <a href="#flight">1 &middot; Two frames in flight</a>
+    <a href="#order">2 &middot; A queue is an order</a>
+    <a href="#places">3 &middot; Where the main thread waits</a>
+    <a href="#clock">4 &middot; Blocking lowers the clock</a>
+    <a href="#late">5 &middot; Mapping late</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
   </nav>
 </header>
 
-<section class="chapter" id="waits">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 1 &middot; <code>src/capture/mod.rs</code> &middot; <code>render_frames</code></div>
-    <h2>Where the CPU waits</h2>
-    <p class="key-idea"><b>Key idea.</b> With two frames in flight and a GPU-bound frame, the main thread waits for the oldest frame in every frame; it can wait by blocking, asleep until the GPU signals, or by spinning, polling on its core.</p>
-    <p class="plain">The CPU records a frame and hands it to the GPU, then starts the next. It may run ahead by a fixed number of frames. When the GPU is the slower of the two, the CPU reaches that limit every frame and has to wait.</p>
-    <p>Praxis lets two frames be in flight. <code>FRAMES_IN_FLIGHT</code> is 2, in <code>src/render/mod.rs</code>: "Frames submitted but not finished on the GPU when the next one starts, at most: the window's swapchain latency and capture's queue." While the GPU runs frame N, the CPU records frame N+1 beside it (<a href="frame-timing.html#frame">Frame Timing Explained</a>). Before it starts N+2, frame N must be done.</p>
-    <p>On <code>town</code> at 2560&times;1440 with 4x MSAA, the GPU frame is now 20.1 ms, since the sun's shadow edge rays (<a href="shadow-mask.html#edges">The shadow mask pass</a>). Spin-waiting, the CPU frame reads 4,977 &micro;s. So the main thread spends most of each frame waiting.</p>
-    <h3>Two places, two ways</h3>
-    <p>The window and the bench wait in different places. The window waits in the surface's <code>get_current_texture</code>, in <code>src/lib.rs</code>, for a swapchain texture to come free. <code>praxis bench</code>, <code>praxis capture</code> and the Goldens all render through <code>render_frames</code> in <code>src/capture/mod.rs</code>, which keeps a queue of submissions and, when two are in flight, waits for the oldest with <code>device.poll</code>:</p>
-<pre class="code"><code><span class="comment">// src/capture/mod.rs at 958ed4e9, render_frames.</span>
-if in_flight.len() == FRAMES_IN_FLIGHT {
+<section class="part prose" id="flight">
+  <div class="part-mark">1 &middot; <code>FRAMES_IN_FLIGHT</code> &middot; <code>src/render/mod.rs</code></div>
+  <h2>Two frames in flight</h2>
+  <p class="key-idea">The CPU records frame N+1 while the GPU runs frame N, and may submit N+1 before N's last pass ends. Before it starts N+2, N must be done. Whatever the CPU writes for a frame has to outlive that frame on the GPU, so every per-frame ring is sized by the frames in flight.</p>
+  <p>The CPU records a frame's commands and hands them to the GPU, then starts the next frame. It may run ahead by a fixed number of frames; when the GPU is the slower of the two, the CPU reaches that limit in every frame and has to wait. Praxis lets two frames be in flight, and the window asks the surface for no more:</p>
+<pre class="code"><code>/// Frames submitted but not finished on the GPU when the next one starts, at
+/// most: the window's swapchain latency and capture's queue. Per-frame
+/// staging and the GPU stats readback are sized by it.
+pub const FRAMES_IN_FLIGHT: usize = 2;</code></pre>
+  <p class="code-source"><code>src/render/mod.rs</code>. The window's surface configuration sets <code>desired_maximum_frame_latency</code> to the same constant (<code>src/lib.rs</code>), the balance wgpu's documentation recommends between latency and throughput, which ADR 0016 keeps at 2.</p>
+  <p>Three structures follow from it. Per-frame staging has <code>SLOT_COUNT</code> slots, <code>FRAMES_IN_FLIGHT + 1</code>: the two frames the GPU may still be copying from, plus the one the CPU is writing (<a href="staging.html#turn">Staging</a>). The GPU stats readback is a ring of seven mapped buffers, sized by when a frame's timestamps can be copied and when their copy can be seen complete:</p>
+<pre class="code"><code>/// Frames after its own by which a frame's submission has completed: those
+/// in flight and the one being recorded. Its timestamps resolve then.
+const COMPLETION_LAG: u64 = FRAMES_IN_FLIGHT as u64 + 1;
+
+/// Frames after the frame copying a slot's timestamps when its map is
+/// requested at the earliest, once that copy completed. The bench has
+/// waited for that frame by then, so each frame requests one map whatever
+/// the GPU's timing, and the frame's first submission maps it
+/// [ref:wgpu-30-submit-maintains]. A map requested with the copy maps in
+/// whichever submission or poll first sees the copy complete
+/// [ref:wgpu-30-map-after-submission], and wgpu allocates for it there
+/// [ref:wgpu-30-handle-mapping]: inside a frame or between two, as the GPU's
+/// timing falls.
+const MAP_LAG: u64 = FRAMES_IN_FLIGHT as u64;
+
+/// A slot's timestamps are copied `COMPLETION_LAG` frames after its frame.
+/// A window polls only through its submissions, so the copy may be seen
+/// complete as late as the submissions `MAP_LAG` frames after it; its map is
+/// then requested in the next frame and done by that frame's submissions,
+/// and the slot is read, and reused, in the frame after.
+const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;</code></pre>
+  <p class="code-source"><code>src/render/readback.rs</code>. Section 5 is about why the map is requested that late.</p>
+  <p>The third is the accounting. A stretch of GPU time can belong to two frames at once, since N+1's first submission may start before N's last pass ends, and the Frame stats have to give it to one of them: the GPU frame total takes, for each submission of a frame's passes, the span from its earliest start to its latest end, and counts the dynamic TLAS's build from the end of the frame before's last pass. That rule, and the one a render pass's own line follows, are the Frame stats page's; this page is about the waits.</p>
+</section>
+
+<section class="part prose" id="order">
+  <div class="part-mark">2 &middot; <code>Queue::submit</code> &middot; <code>device.poll</code></div>
+  <h2>A queue is an order, not a timeline</h2>
+  <p class="key-idea">The GPU starts each command buffer after the ones ahead of it in the queue have started, not finished. Work that reads what earlier work writes waits only where something tells the GPU so: a barrier the application records, or, on Metal, hazard tracking of a resource the work binds directly. Where neither reaches, the CPU has to wait, or order the pair itself.</p>
+  <p>The CPU records GPU work into command buffers and submits them to a queue. The queue keeps them in the order they were submitted, and that order is its whole promise. Apple's documentation says it in two places: a command queue "maintains an ordered list of command buffers", and of committing one, "The GPU starts the command buffer after it starts any command buffers that are ahead of it in the same command queue." Starts, not finishes. Its overview of resource synchronization opens with "By design, GPUs can run multiple commands in parallel", and wgpu's Metal backend says it as plainly in a doc comment: "Metal allows independent command buffers in a queue to overlap on the GPU".</p>
+  <p>In wgpu, a command buffer is what <code>CommandEncoder::finish</code> returns, and <code>Queue::submit</code> sends a batch of them as one submission. wgpu-core adds command buffers of its own: one of resource transitions ahead of each of yours, and one of copies that need no encoder, such as those of <code>Queue::write_buffer</code> and of a BLAS's compaction, which it keeps as its pending writes and puts ahead of them all in the next submission. The CPU learns that work has finished only by asking: <code>device.poll</code> with <code>PollType::wait_indefinitely</code> blocks the calling thread until the most recent submission has finished, and with a submission index, until that submission has.</p>
+  <h3>Read after write</h3>
+  <p>When one piece of GPU work writes memory that a later piece reads, the reader has to wait until the writer is done, or it may read old or half-written data. Vulkan and Direct3D 12 leave that to the application, which records a barrier between the two. Metal can handle it for you: for the resources it tracks, and that the work binds directly, it holds back work that reads what earlier work is still writing. Either way, something has to know that the second piece reads what the first one writes.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th></th><th>Vulkan</th><th>Direct3D 12</th><th>Metal</th></tr></thead>
+    <tbody>
+      <tr><td>Who orders a read after a write</td><td>The application, with a pipeline barrier</td><td>The application, with a resource barrier</td><td>Metal itself, for tracked resources the work binds directly; the application for anything else, with a barrier, a fence between passes or an event between command buffers</td></tr>
+      <tr><td>At an acceleration-structure barrier, in wgpu 30.0.1</td><td>wgpu-core asks for a barrier; wgpu-hal records a pipeline barrier</td><td>wgpu-core asks for a barrier; wgpu-hal records a UAV barrier</td><td>wgpu-core asks for a barrier; wgpu-hal's function is empty</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From Apple's Resource synchronization and wgpu-hal 30.0.1's acceleration-structure barrier in its Vulkan, Direct3D 12 and Metal command recorders.</p>
+  <p>Metal's tracking has an edge, and Praxis's two CPU waits for acceleration structures sit on it. A TLAS is built from its BLASes, so its build has to come after whatever writes them. On Metal, wgpu-hal builds every TLAS from a buffer of entries that name their BLASes by resource ID, the indirect instance layout; the build's descriptor names the buffer, not the BLASes, so Metal's tracking never learns that the build reads them. wgpu-core does know, and asks the backend for a barrier at that point; on Metal the function it calls records nothing. So nothing orders a TLAS build after a BLAS's compaction copy, or after its refit, beyond whatever the GPU happens to do (<a href="metal-quirks.html#hazards">Metal quirks</a>). The pair can be ordered three ways:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Route</th><th>Who waits</th><th>In wgpu 30.0.1</th><th>The catch</th></tr></thead>
+    <tbody>
+      <tr><td>A CPU wait after the last write</td><td>The main thread, which records and submits each frame</td><td>Works on every backend: <code>compact_blases</code> at load</td><td>The thread does nothing until the GPU has finished the submission it waits for</td></tr>
+      <tr><td>A fence between the acceleration-structure passes</td><td>The GPU</td><td>Not in a release: wgpu's fix is an open draft</td><td>Needs a wgpu release with it, and a version bump is the owner's call</td></tr>
+      <tr><td>An event: signal after the write, wait before the build, through wgpu-hal</td><td>The GPU</td><td>Available through <code>Queue::as_hal</code>: the crowd's refits</td><td>Staging is queue-wide, and by default the wait gates nothing that shares no tracked resource with it</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Three ways to order a write to a BLAS before the TLAS build that reads it, on Metal with wgpu 30.0.1. Metal's own barrier between passes, added in its 26 releases, is a fourth that wgpu-hal does not record.</p>
+</section>
+
+<section class="part prose" id="places">
+  <div class="part-mark">3 &middot; <code>render_frames</code> &middot; <code>FrameWait</code> &middot; <code>compact_blases</code></div>
+  <h2>Where the main thread waits</h2>
+  <p class="key-idea">Four waits are explicit in the code: the oldest frame in flight, every frame; a staging slot, only when the CPU has lapped the GPU; the compaction copies, in a frame that loads Meshes; and the refits, only where Metal makes no shared event. The window has a fifth, the swapchain's, that wgpu owns.</p>
+  <p>The bench, <code>praxis capture</code> and the Goldens render through <code>render_frames</code>, which keeps a queue of submission indices and, when two are in flight, waits for the oldest before it updates the next frame:</p>
+<pre class="code"><code>if in_flight.len() == FRAMES_IN_FLIGHT {
     let oldest = in_flight.pop_front();
     let timeout = match wait {
         FrameWait::Block =&gt; None,
@@ -308,627 +232,193 @@ if in_flight.len() == FRAMES_IN_FLIGHT {
         }
     }
 }</code></pre>
-    <ul class="keypoints" style="margin-top: 16px">
-      <li><b>Blocking</b>, <code>timeout: None</code>. On Metal, wgpu-hal 30's fence wait is a <code>parking_lot</code> condition variable that the command buffer's completion handler signals. The thread sleeps until the frame is done: no sleep loop, no polling. Its core is free for other work, or to go idle.</li>
-      <li><b>Spinning</b>, <code>timeout: Some(Duration::ZERO)</code>. Each poll returns at once with <code>PollError::Timeout</code> until the frame is done, and the loop polls again, with <code>std::hint::spin_loop()</code> between. The thread never leaves its core.</li>
-    </ul>
-    <p>Before PR #400, <code>render_frames</code> always blocked, as the window does. Neither way changes what the GPU does: it gets the same frames in the same order. What the measurements in chapter 4 found is that the choice changes how fast the CPU's next frame runs.</p>
-  </div>
-  <figure class="wide" id="demo-timeline">
-    <div class="canvas-frame"><canvas id="w-canvas" class="demo-canvas" role="img" aria-label="A timeline of the CPU and GPU over 60 milliseconds, showing each frame's CPU work, the CPU's wait and the GPU's frames."></canvas></div>
-    <div class="legend">
-      <span><span class="swatch work"></span>CPU work</span>
-      <span><span class="swatch asleep"></span>waiting, blocked: the thread asleep</span>
-      <span><span class="swatch spinning"></span>waiting, spinning: the core busy</span>
-      <span><span class="swatch gpu"></span>GPU frame</span>
-    </div>
-    <div class="control-rows">
-      <div>
-        <span class="control-label">Wait</span>
-        <div class="seg" role="group" aria-label="How the CPU waits" id="w-mode">
-          <button type="button" data-mode="block" aria-pressed="true">block, 2 in flight</button>
-          <button type="button" data-mode="spin" aria-pressed="false">spin, 2 in flight</button>
-          <button type="button" data-mode="one" aria-pressed="false">block, 1 in flight</button>
-        </div>
-      </div>
-    </div>
-    <div class="sliders">
-      <label for="w-gpu" class="control-label">GPU frame <output id="w-gpu-out" for="w-gpu"></output></label>
-      <input type="range" id="w-gpu" min="8" max="25" step="0.1" value="20.1">
-    </div>
-    <dl class="figures">
-      <div><dt>CPU frame, as the bench reads it</dt><dd id="w-cpu"></dd></div>
-      <div><dt>Waiting each frame</dt><dd id="w-wait"></dd></div>
-      <div><dt>Frame to frame</dt><dd id="w-period"></dd></div>
-      <div><dt>GPU idle each frame</dt><dd id="w-idle"></dd></div>
-    </dl>
-    <p class="readout" id="w-note" aria-live="polite" style="margin-top: 12px"></p>
-    <figcaption><b>Live demo.</b> This page's model, in measured numbers where it has them: the CPU's work at full clock is spin-waiting's CPU frame, 4,977 &micro;s, and a blocking wait with two frames in flight stretches it by 1.40, the chain's 2.75 &micro;s against 1.96 (chapter 4). The GPU frame is yours to set; <code>town</code>'s is 20.1 ms. Simplified: the GPU starts a frame when the CPU's frame ends, so with one frame in flight the model's wait is the whole GPU frame, where the measured runs waited about 15 ms a frame; with one frame in flight the model runs the CPU at full clock, where the measured runs were slow at the frame's start and fast by the end of <code>update</code>; and the slider stops at 8 ms, so the frame stays GPU-bound, the only case measured.</figcaption>
-  </figure>
-</section>
-
-<section class="chapter" id="clusters">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 2 &middot; Apple silicon</div>
-    <h2>Cores, clusters and clocks</h2>
-    <p class="key-idea"><b>Key idea.</b> This M4 Pro's cores sit in clusters of four that share an L2 cache, and the kernel's scheduler may adjust each cluster's frequency depending on its workload, its thermal pressure and other factors; how it weighs a thread that sleeps for most of each frame is not published.</p>
-    <p>This M4 Pro has 12 cores of two kinds. <code>sysctl</code> reports them by performance level:</p>
-<pre class="code"><code>hw.perflevel0.name: Performance
-hw.perflevel0.logicalcpu: 8
-hw.perflevel0.cpusperl2: 4
-hw.perflevel1.name: Efficiency
-hw.perflevel1.logicalcpu: 4
-hw.perflevel1.cpusperl2: 4</code></pre>
-    <p style="margin-top: 16px">Eight performance cores in two clusters of four, and four efficiency cores in one; each cluster shares one L2. The core numbers below are the ones the measurement patch read (chapter 3).</p>
-  </div>
-  <figure class="prose" aria-label="The M4 Pro's three clusters">
-    <div class="cores">
-      <div class="cluster efficiency"><p class="cluster-name">Efficiency</p><div class="cluster-cores"><span>0</span><span>1</span><span>2</span><span>3</span></div><div class="cluster-l2">shared L2</div></div>
-      <div class="cluster performance"><p class="cluster-name">Performance</p><div class="cluster-cores"><span>4</span><span>5</span><span>6</span><span>7</span></div><div class="cluster-l2">shared L2</div></div>
-      <div class="cluster performance"><p class="cluster-name">Performance</p><div class="cluster-cores"><span>8</span><span>9</span><span>10</span><span>11</span></div><div class="cluster-l2">shared L2</div></div>
-    </div>
-    <figcaption><b>The M4 Pro's clusters</b>, numbered as the measurement patch's core numbers came out on this machine: cores 0 to 3 ran the chain slower, so they are the efficiency cluster; 4 to 7 and 8 to 11 are the two performance clusters.</figcaption>
-  </figure>
-  <div class="prose">
-    <h3>Who sets the clock</h3>
-    <p>Apple's Tech Talk <i>Tune CPU job scheduling for Apple silicon games</i> says: "Each cluster may be independently activated or have its frequency adjusted by the kernel's scheduler -- depending on the current workload, the current thermal pressure for that cluster, and other factors." A core's speed is therefore not fixed: the same code can run faster or slower depending, in Apple's words, on the workload, the thermal pressure and other factors.</p>
-    <p>The same talk names two costs of a thread that waits. "[W]hen a CPU core has nothing to do for quite some time, it goes idle to save energy. And reactivating an idle core takes a little bit of time. That is our first cost, the core wake-up cost." And: "When you signal and wait for threads, that generally means some will be scheduled on the CPU core and some will be blocked and moved off core. Doing that many times is a performance pitfall."</p>
-    <p>What the talk does not say, and what no Apple source the ticket found says, is how the scheduler weighs a thread that blocks for most of each frame and runs for the rest. This guide does not guess. It reports what the chain's timing shows the core's speed did, and leaves the rule that set it unexplained.</p>
-    <h3>QoS and priority</h3>
-    <p>A thread on macOS also carries a quality-of-service (QoS) class and a scheduler priority. Either could, in principle, keep a thread off a slow core or a slow clock. The ticket named the QoS class as a suspect, with frequency scaling and migration to an efficiency core. Chapter 4 tests QoS, priority and migration.</p>
-  </div>
-</section>
-
-<section class="chapter" id="chain">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 3 &middot; the measurement patch</div>
-    <h2>Measuring a clock without counters</h2>
-    <p class="key-idea"><b>Key idea.</b> Without access to the clock, time a fixed piece of work: if the work never changes, a change in its time is a change in the core's speed.</p>
-    <p>macOS's <code>powermetrics</code> reports each cluster's frequency, but it needs root, which the measurement did not have. So the patch read the clock through work. It timed a fixed chain of 2,000 dependent multiply-adds on the main thread:</p>
-<pre class="code"><code><span class="comment">// The measurement patch, not committed.</span>
-fn work() -&gt; f64 {
-    let started = std::time::Instant::now();
-    let mut value = 0x1234_5678u64;
-    for _ in 0..2_000 {
-        value = value.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-    }
-    std::hint::black_box(value);
-    started.elapsed().as_secs_f64() * 1e6
-}</code></pre>
-    <ul class="keypoints" style="margin-top: 16px">
-      <li><b>Dependent.</b> Each step needs the value the step before produced, so the core cannot run steps side by side; <code>black_box</code> keeps the compiler from removing a result nothing reads. The chain does the same work every time it runs.</li>
-      <li><b>Three points a frame.</b> The patch ran it at each frame's start, after the wait; after <code>update</code>; and after <code>render</code>. A clock that changes within a frame shows as a difference between the three.</li>
-      <li><b>About 2.0 &micro;s at full clock.</b> Spin-waiting, the chain's medians read 1.92 to 2.04 &micro;s at all three points.</li>
-    </ul>
-    <h3>Which core</h3>
-    <p>A slow chain could mean a slow clock on a performance core or a run on an efficiency core, so the patch also recorded the core. It read the low 12 bits of the arm64 register <code>TPIDR_EL0</code>, which gave 0 to 11 on this machine, and mapped the numbers to clusters by timing the same chain on each core: 0 to 3 were slower, the efficiency cluster; 4 to 7 and 8 to 11 the two performance clusters. Apple documents no such use of the register. Read it as what the patch did on this machine, an observation, not an interface to build on.</p>
-    <p>The patch also logged each CPU stage's median, and switched by environment variable the frames in flight, a spin-wait (<code>device.poll</code> with a zero timeout, in a loop) and a priority of 45 set with <code>pthread_setschedparam</code> under the default time-sharing policy. Its core counts span every frame after the first 100: 1,948 a run.</p>
-  </div>
-</section>
-
-<section class="chapter" id="runs">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 4 &middot; <code>docs/performance.md</code>, 2026-10-30</div>
-    <h2>What the runs showed</h2>
-    <p class="key-idea"><b>Key idea.</b> <code>prepare_frame</code> and <code>propagate_world_transforms</code> slowed by the chain's own ratio when the thread blocked beside a busy GPU, on the same performance cluster and at priority 45 too: the clock fell; the work did not grow.</p>
-    <p>Nine runs of <code>praxis bench &lt;dir&gt; --skip-aliasing town</code> at 2560&times;1440 with 4x MSAA, 1,800 measured frames each, no other GPU work. Medians in &micro;s, from the patch's log rather than <code>praxis report</code>, whose tables hold neither stages nor the chain. The chain's medians are with rays on, at the frame's start, after <code>update</code> and after <code>render</code>. Runs in the order they ran; the default's first run was the only one with a fast clock.</p>
-  </div>
-  <div class="page table-wrap">
-    <table class="facts compact">
-      <thead><tr><th>Run</th><th class="n">CPU frame</th><th class="n">Dynamic TLAS, CPU</th><th class="n">GPU frame</th><th class="n"><code>prepare_frame</code></th><th class="n"><code>propagate_world_transforms</code></th><th class="n"><code>encode</code></th><th class="n"><code>submit</code></th><th class="n">Chain: start, update, render</th></tr></thead>
-      <tbody>
-        <tr><td>Default (2 in flight)</td><td class="n">5,985.8</td><td class="n">1,136.2</td><td class="n">20,155.0</td><td class="n">1,324.5</td><td class="n">362.2</td><td class="n">283.2</td><td class="n">2,710.1</td><td class="n">2.04, 1.96, 2.04</td></tr>
-        <tr><td>1 in flight</td><td class="n">4,913.6</td><td class="n">911.5</td><td class="n">20,630.5</td><td class="n">1,285.7</td><td class="n">344.4</td><td class="n">166.7</td><td class="n">2,129.0</td><td class="n">2.46, 1.92, 2.00</td></tr>
-        <tr class="focus"><td>Default</td><td class="n">7,278.5</td><td class="n">1,325.5</td><td class="n">20,150.9</td><td class="n">1,804.0</td><td class="n">481.7</td><td class="n">242.1</td><td class="n">3,311.2</td><td class="n">2.67, 2.58, 2.92</td></tr>
-        <tr><td>Spin-wait</td><td class="n">4,977.5</td><td class="n">937.2</td><td class="n">20,119.1</td><td class="n">1,307.2</td><td class="n">351.5</td><td class="n">201.2</td><td class="n">2,072.5</td><td class="n">2.00, 1.92, 2.00</td></tr>
-        <tr><td>Priority 45</td><td class="n">6,904.2</td><td class="n">1,301.9</td><td class="n">20,135.0</td><td class="n">1,811.1</td><td class="n">488.2</td><td class="n">244.7</td><td class="n">2,935.3</td><td class="n">2.75, 2.75, 3.17</td></tr>
-        <tr class="focus"><td>Default</td><td class="n">6,877.1</td><td class="n">1,301.7</td><td class="n">20,136.3</td><td class="n">1,812.3</td><td class="n">483.4</td><td class="n">244.9</td><td class="n">2,918.0</td><td class="n">2.75, 2.75, 3.04</td></tr>
-        <tr><td>1 in flight</td><td class="n">5,347.5</td><td class="n">963.3</td><td class="n">20,638.9</td><td class="n">1,259.7</td><td class="n">310.1</td><td class="n">165.2</td><td class="n">2,568.9</td><td class="n">2.25, 1.96, 2.04</td></tr>
-        <tr><td>Spin-wait</td><td class="n">4,976.1</td><td class="n">931.0</td><td class="n">20,140.8</td><td class="n">1,306.5</td><td class="n">353.2</td><td class="n">204.7</td><td class="n">2,066.9</td><td class="n">2.00, 1.96, 2.04</td></tr>
-        <tr class="focus"><td>Default</td><td class="n">6,907.4</td><td class="n">1,307.8</td><td class="n">20,140.1</td><td class="n">1,812.4</td><td class="n">482.7</td><td class="n">245.2</td><td class="n">2,928.0</td><td class="n">2.75, 2.75, 3.00</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="prose">
-    <p class="note" style="margin-top: 12px">Copied from <code>docs/performance.md</code>; the default runs with a slow clock are shaded. The <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate, draw calls, Instances and triangles drawn, bytes uploaded, heap allocations, GPU memory and more. Shortened here; CONTEXT.md lists every field.">Frame stats</span> give the CPU frame and the stages; the chain is the patch's.</p>
-  </div>
-  <figure class="wide" id="demo-runs">
-    <div class="demo-grid">
-      <div>
-        <div class="canvas-frame"><canvas id="r-canvas" class="demo-canvas" role="img" aria-label="A scatter of the nine runs: the chain's time on the horizontal axis, the chosen stage's median on the vertical, with a line from the origin through the spin-wait runs."></canvas></div>
-        <div class="legend">
-          <span><span class="dot default"></span>default, blocking</span>
-          <span><span class="dot spin"></span>spin-wait</span>
-          <span><span class="dot one"></span>1 in flight</span>
-          <span><span class="dot priority"></span>priority 45</span>
-          <span><i class="reference-line"></i>same work as spin-waiting, at the chain's speed</span>
-        </div>
-      </div>
-      <div>
-        <div class="control-rows">
-          <div>
-            <span class="control-label">Chain at</span>
-            <div class="seg" role="group" aria-label="Chain at" id="r-point">
-              <button type="button" data-point="0" aria-pressed="true">start</button>
-              <button type="button" data-point="1" aria-pressed="false">update</button>
-              <button type="button" data-point="2" aria-pressed="false">render</button>
-            </div>
-          </div>
-          <div>
-            <span class="control-label">Stage or system</span>
-            <div class="seg" role="group" aria-label="Stage or system" id="r-stage">
-              <button type="button" data-stage="prepare" aria-pressed="true">prepare_frame</button>
-              <button type="button" data-stage="propagate" aria-pressed="false">propagate</button>
-              <button type="button" data-stage="encode" aria-pressed="false">encode</button>
-              <button type="button" data-stage="submit" aria-pressed="false">submit</button>
-              <button type="button" data-stage="cpu" aria-pressed="false">CPU frame</button>
-            </div>
-          </div>
-        </div>
-        <table class="ratio-table">
-          <thead><tr><th>Run</th><th class="n">Chain &divide; spin</th><th class="n">Median &divide; spin</th></tr></thead>
-          <tbody id="r-ratios"></tbody>
-        </table>
-      </div>
-    </div>
-    <p class="readout" id="r-note" aria-live="polite" style="margin-top: 12px"></p>
-    <figcaption><b>Live demo.</b> The nine runs of the table above, each a point: the chain's median at the chosen point of the frame across, the chosen stage's or system's median up. The dashed line runs from the origin through the two spin-wait runs' means: a run on it does spin-waiting's work at the speed its chain shows. The ratios divide each run's medians by the spin-wait runs' mean. All numbers are the table's; the ratios and the line are this page's arithmetic on them.</figcaption>
-  </figure>
-  <div class="prose">
-    <h3>What the measurements say about the cause</h3>
-    <ul class="keypoints">
-      <li><b>The clock, not the work.</b> The chain does the same work in every frame, so its time is the core's speed. Where it reads 2.75 &micro;s, 1.38 to 1.42 times the spin-wait runs' mean at the same point, the <code>prepare_frame</code> stage and the <code>propagate_world_transforms</code> system read 1.39 and 1.37 times their spin-wait medians: 1,812 against 1,307 &micro;s, and 483 against 352.</li>
-      <li><b>Blocking, not the GPU's load.</b> Spin-waiting leaves the GPU as busy, two frames in flight and the GPU frame within 40 &micro;s, 20,119 to 20,141 against the default's 20,136 to 20,155, yet the chain stays at 1.92 to 2.04 &micro;s.</li>
-      <li><b>The wait's length and timing.</b> With one frame in flight the thread blocks for longer, about 15 ms a frame, and the chain is slow at the frame's start, 2.25 to 2.46 &micro;s, but fast again by the end of <code>update</code>, 1.92 to 1.96. The frame then runs while the GPU is idle. With two in flight it runs beside the GPU and stays slow throughout.</li>
-      <li><b>Not migration.</b> In every run, at most 1 of 1,948 frames started on an efficiency core, and at most 14 changed performance cluster between one frame's <code>render</code> and the next frame's start. With one exception, a few hundred changed core within a cluster, which shares its L2, so the L2 stays warm.</li>
-      <li><b>Not QoS or priority.</b> The main thread of a process started from a shell reports <code>QOS_CLASS_USER_INTERACTIVE</code> (<code>0x21</code>) from <code>qos_class_self()</code>, but <code>ps -M</code> shows it at priority 31, the default class's, whichever class a QoS call asks for. xnu's task policy has a rule that would produce the gap. For an app-type task, its switch on the task's role ends in a default case whose comment reads "Apps that don't have an application role get USER_INTERACTIVE and USER_INITIATED squashed to LEGACY" (<a href="https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task_policy.c#L879-L883"><code>osfmk/kern/task_policy.c</code></a>, lines 879 to 883, inside the condition at 833 to 834). The patch did not read the process's app type or role, so this fits what was measured without being shown to be the cause. Then the patch tried part of what Apple recommends for a game's render thread. At WWDC18, in <i>Metal Game Performance Optimization</i>, Apple said: "We recommend the render set priority to be fixed to 45" (the transcript's "render set" is the render thread), and "we need to opt out of the scheduler's quality of service in order to prevent priority decay". The patch set priority 45 with <code>pthread_setschedparam</code> under the default time-sharing policy, <code>SCHED_OTHER</code>, which Apple's Tech Talk calls "compatible with QoS classes" and of which it says: "Threads using it may be subject to priority decay." It did not try the round-robin policy, <code>SCHED_RR</code>, whose priority is fixed. Priority 45 took effect and left the stages as slow as the default: CPU frame 6,904.2 &micro;s, chain 2.75, 2.75 and 3.17.</li>
-      <li><b>Not all of it.</b> The first default run kept a fast clock, its chain 1.96 to 2.04 &micro;s, yet its <code>encode</code> and <code>submit</code> read 283 and 2,710 &micro;s against spin-waiting's 201 to 205 and 2,067 to 2,073, and its CPU frame 5,986. Blocking costs about 1 ms there that the clock does not explain. The measurements do not find what; nor does this guide.</li>
-    </ul>
-    <p>Shipped code takes other routes. SDL gives a high-priority thread on Apple platforms the round-robin policy and priority 45; Godot and Chromium map their thread priorities and types to QoS classes (links in the reading list). On this machine a QoS call left the thread at priority 31, and priority 45 under the time-sharing policy left the clock as slow; the round-robin route was not measured.</p>
-    <h3>A clock that changes run to run</h3>
-    <p>The clock was fast in one run and slow in the next three, with the same binary: the first default run kept it, the three after it did not. The machine also read slower an hour later: when <code>town</code>'s <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> was re-recorded, the blocking build's CPU frame read 8,180 &micro;s where it had read 6,877 to 7,279. No chain ran then, so that drift is the CPU frame's, not a measured clock. With rays off, the GPU frame is shorter but still longer than the CPU frame, and the default runs' chain reads 2.54 &micro;s at the start, the fast first run's included. A CPU line read behind a GPU-bound frame, then, carries a clock that the work does not set, and that does not hold still.</p>
-  </div>
-</section>
-
-<section class="chapter" id="bench">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 5 &middot; PR #400 &middot; <code>FrameWait</code> &middot; <code>bench::run</code></div>
-    <h2>What the bench does now</h2>
-    <p class="key-idea"><b>Key idea.</b> M3's CPU ceilings price the main thread's work when it is on the critical path, so the bench spin-waits to measure that work at full clock, and the window keeps blocking, leaving the core, its energy and its heat to the frame.</p>
-    <p>M3's exit criteria hold the CPU to two ceilings: the CPU frame under 6 ms at the median and the p95 (criterion 1), and the dynamic TLAS's CPU line under 1.1 ms at the median (criterion 6), the <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, which caps what that kind may hold (ADR 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budgets</span> beside them in <code>praxis report</code>'s tables. They are about the main thread's cost when it is on the critical path, when the frame waits on the CPU. Blocked behind a GPU-bound frame it is not, and its clock falls because it has the time.</p>
-    <h3>The options the owner chose from</h3>
-  </div>
-  <div class="prose table-wrap">
-    <table class="facts compact">
-      <thead><tr><th>Option</th><th>What it costs</th></tr></thead>
-      <tbody>
-        <tr class="focus"><td>1. The bench spin-waits; the window keeps blocking (chosen)</td><td>No extra run; the busy-wait burns a P-core for the bench's few minutes only. The CPU lines read the work at full clock and the GPU lines are unchanged. The bench then differs from the window in how it waits.</td></tr>
-        <tr><td>2. The CPU lines come from a run with one frame in flight</td><td>The thread blocks, as Apple asks, and the lines read 4,914 to 5,348 &micro;s and 912 to 963 &micro;s, but the clock's ramp after each wait stays in them, and each scene runs a third time.</td></tr>
-        <tr><td>3. The engine spin-waits everywhere</td><td>The window's CPU frame would read the bench's, against Apple's advice: a busy-wait holds a P-core and spends the thermal headroom a GPU-bound frame needs.</td></tr>
-        <tr><td>4. No change</td><td>The CPU lines keep reading the slowed clock whenever <code>town</code> is GPU-bound, over both ceilings, for a cost the frame does not pay.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="prose">
-    <p class="note">From <code>docs/performance.md</code>'s options, shortened.</p>
-    <p>Apple's advice against option 3 is plain, in the same Tech Talk: "Avoid busy waits. They potentially lock a P core, instead of doing something useful with it. They also prevents the scheduler from promoting a thread from and E to a P core. You are also wasting energy and producing unnecessary heat, eating away your thermal headroom." This guide infers, beyond Apple's words, that a GPU-bound game needs that headroom for its GPU. The bench is not a game: it runs for minutes, and what it must report is the work.</p>
-    <h3>The code</h3>
-    <p><code>render_frames</code> now takes a <code>FrameWait</code>:</p>
-<pre class="code"><code><span class="comment">// src/capture/mod.rs at 958ed4e9.</span>
-<span class="comment">/// How `render_frames` waits for the oldest frame in flight.</span>
+<pre class="code"><code>/// How `render_frames` waits for the oldest frame in flight.
 #[derive(Clone, Copy)]
 pub(crate) enum FrameWait {
-    <span class="comment">/// Blocks, as a window does in `get_current_texture`.</span>
+    /// Blocks, as a window does in `get_current_texture`.
     Block,
-    <span class="comment">/// Polls until the frame is done. [&hellip;]</span>
+    /// Polls until the frame is done. Behind a GPU-bound frame, the M4 Pro
+    /// runs a main thread that blocks markedly slower for the whole next
+    /// frame (measured: `docs/performance.md`, Measurements behind the
+    /// code), so its CPU times would measure the clock, not the work. Apple
+    /// asks games not to busy-wait, which holds a P-core and spends thermal
+    /// headroom [ref:apple-tech-talk-110147-busy-waits], so only the bench
+    /// spins, on a hardware adapter.
     Spin,
 }</code></pre>
-    <p style="margin-top: 16px"><code>bench::run</code> picks <code>Spin</code>, except on a software adapter:</p>
-<pre class="code"><code><span class="comment">// src/bench/mod.rs at 958ed4e9, run.</span>
-<span class="comment">// A software rasterizer's threads would share the CPU with the spin.</span>
+  <p class="code-source"><code>src/capture/mod.rs</code>, <code>render_frames</code> and <code>FrameWait</code>. With <code>Block</code>, the poll's timeout is none: on Metal, wgpu-hal's fence wait is a condition variable that the command buffer's completion handler signals, so the thread sleeps until the frame is done and its core is free for other work, or to go idle. With <code>Spin</code>, each poll returns at once with <code>PollError::Timeout</code> until the frame is done, and the loop polls again with <code>spin_loop</code> between: the thread never leaves its core. Neither changes what the GPU does.</p>
+<pre class="code"><code>// A software rasterizer's threads would share the CPU with the spin.
 let wait = match context.adapter.get_info().device_type {
     wgpu::DeviceType::Cpu =&gt; FrameWait::Block,
     _ =&gt; FrameWait::Spin,
 };</code></pre>
-    <ul class="keypoints" style="margin-top: 16px">
-      <li><b>CI's lavapipe blocks.</b> Its rasterizer runs on the CPU, where a spinning main thread would take a core from it.</li>
-      <li><b>Everything else blocks too.</b> <code>capture</code> and <code>capture_frames</code>, and so the Goldens, pass <code>FrameWait::Block</code>; the window never goes through <code>render_frames</code> and waits in <code>get_current_texture</code> as before.</li>
-      <li><b>One Baseline moved.</b> Only <code>town</code>'s M4 Pro Baseline was re-recorded, the only one whose CPU lines moved: every other scene's compare passes on its CPU lines. The RTX 2070 SUPER's Baselines were recorded blocking.</li>
-    </ul>
-    <h3>After the change</h3>
-    <p>The re-recorded run against the previous Baseline, from <code>praxis report</code>, in &micro;s:</p>
-  </div>
-  <div class="prose table-wrap">
-    <table class="facts compact">
-      <thead><tr><th>Time</th><th class="n">Median</th><th class="n">p95</th><th class="n">Baseline median</th><th class="n">Ratio</th><th class="n">Budget</th></tr></thead>
-      <tbody>
-        <tr class="focus"><td>CPU frame</td><td class="n">5,597.8</td><td class="n">6,149.2</td><td class="n">8,223.8</td><td class="n">0.681</td><td class="n">6,000.0</td></tr>
-        <tr class="focus"><td>Dynamic TLAS, CPU</td><td class="n">1,018.9</td><td class="n">1,210.1</td><td class="n">1,566.1</td><td class="n">0.651</td><td class="n">1,100.0</td></tr>
-        <tr><td>GPU frame</td><td class="n">20,153.0</td><td class="n">20,775.0</td><td class="n">20,489.1</td><td class="n">0.984</td><td class="n">12,000.0</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="prose">
-    <p class="note">From <code>docs/performance.md</code>'s "After the change", rows trimmed, the Baseline's p95 and the &Delta; columns left out.</p>
-    <p>The Baseline comes from a full run; two full runs read the CPU frame at 5,529 to 5,598 &micro;s spin-waiting. An interleaved pair from one build, run with <code>--skip-aliasing</code> and switched between the two waits by a patch, reads it at 4,977 to 5,127. Blocking: CPU frame 8,180.0 &micro;s, dynamic TLAS 1,567.8, GPU frame 20,473.1. Spin-waiting: 4,977.2, 943.5 and 20,759.1. That pair's GPU frame is 1.4% longer spin-waiting, where the earlier runs' were within 40 &micro;s. <code>docs/performance.md</code> notes that a busy P-core may take power the GPU would otherwise have, and that judging GPU lines needs that in mind.</p>
-    <h3>What is still over, and still open</h3>
-    <ul class="keypoints">
-      <li><b>The CPU frame's p95.</b> Criterion 1 judges the CPU frame at the median and the p95: 5,597.8 &micro;s is under 6 ms, 6,149.2 is not. The dynamic TLAS's ceiling is judged at the median, 1,018.9, under 1.1 ms; its p95 reads 1,210.1.</li>
-      <li><b>The ticket's 5%.</b> Ticket #381 asked for stages and systems within 5% of their medians when the GPU is idle at the frame's start. Against the runs with one frame in flight, spin-waiting's <code>prepare_frame</code> reads 1,307 against 1,260 to 1,286 &micro;s, within 4%, but the <code>propagate_world_transforms</code> system is up to 14% over and <code>encode</code> 21 to 24% over; <code>submit</code>, 2,067 to 2,073 against 2,129 to 2,569, is under. The ticket's 5% holds for <code>prepare_frame</code> and <code>submit</code>, not for <code>propagate_world_transforms</code> or <code>encode</code>.</li>
-      <li><b>The remainder.</b> The first default run's ~1 ms that its fast clock does not explain is still unexplained.</li>
-    </ul>
-  </div>
-</section>
-
-<section class="chapter" id="check">
-  <div class="prose">
-    <div class="chapter-mark">Review</div>
-    <h2>Check yourself</h2>
-    <details class="check"><summary>Two runs of one build on <code>town</code> read <code>prepare_frame</code> at 1,812 and 1,307 &micro;s, with the GPU frame at 20.1 ms in both. Did <code>prepare_frame</code> get slower in the first?</summary><p>Its work did not. The chain, a fixed piece of work, read 2.75 &micro;s after <code>update</code> in the first and 1.96 in the second, a ratio of 1.40; <code>prepare_frame</code>'s ratio is 1.39. The same work ran on a slower clock: the first run blocked for the oldest frame, the second spin-waited. A CPU line measured behind a GPU-bound frame needs the clock checked before the code is blamed.</p></details>
-    <details class="check"><summary>Spin-waiting kept the clock up. Why does the window not spin-wait too?</summary><p>Behind a GPU-bound frame the CPU is not on the critical path, so a slower clock costs the frame nothing, while a busy-wait holds a P-core, can keep the scheduler from promoting a thread from an E to a P core, and wastes energy and thermal headroom, as Apple's Tech Talk warns; headroom that, this guide infers, a GPU-bound frame needs. The ceilings price the work, which the bench measures by spinning; the frame the player sees is set by the GPU either way.</p></details>
-    <details class="check"><summary>With one frame in flight the thread still blocks, as Apple asks, and its CPU frame read 4,914 to 5,348 &micro;s, close to spin-waiting's. Why not read the CPU lines from such a run?</summary><p>That was option 2. The clock is slow at the frame's start, the chain at 2.25 to 2.46 &micro;s, and recovers only by the end of <code>update</code>, so the ramp stays in the lines. The frame also runs while the GPU is idle, which is not how the engine runs, and each scene would need a third run.</p></details>
-  </div>
-</section>
-
-<section class="chapter" id="reading">
-  <div class="prose">
-    <div class="chapter-mark">Reference</div>
-    <h2>Reading list</h2>
-    <p>Grouped by source, each with what it is good for here. Code links are pinned to 958ed4e9.</p>
-  </div>
-  <div class="reading page">
-    <article>
-      <h3>This ticket</h3>
-      <h4>In the repo</h4>
-      <ul>
-        <li><a href="https://github.com/gariasf/praxis/issues/381">Ticket #381</a> and <a href="https://github.com/gariasf/praxis/pull/400">PR #400</a> <span>the slowed stages, the options, the owner's choice and the change</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/958ed4e95e324dae835aa777b8ac2b000e3a3528/docs/performance.md"><code>docs/performance.md</code></a> <span>the section of 2026-10-30: every measurement on this page, the nine runs and the tables after the change</span></li>
-        <li><a href="https://github.com/gariasf/praxis/issues/378">Ticket #378</a> <span>the split of <code>submit</code> that left the CPU outrunning the GPU on <code>town</code></span></li>
-      </ul>
-      <h4>The code, at 958ed4e9</h4>
-      <ul>
-        <li><a href="https://github.com/gariasf/praxis/blob/958ed4e95e324dae835aa777b8ac2b000e3a3528/src/capture/mod.rs"><code>src/capture/mod.rs</code></a> <span><code>render_frames</code>, its wait for the oldest frame, and <code>FrameWait</code></span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/958ed4e95e324dae835aa777b8ac2b000e3a3528/src/bench/mod.rs"><code>src/bench/mod.rs</code></a> <span><code>run</code>, which picks <code>Spin</code> except on a software adapter</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/958ed4e95e324dae835aa777b8ac2b000e3a3528/src/render/mod.rs"><code>src/render/mod.rs</code></a> <span><code>FRAMES_IN_FLIGHT</code></span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/958ed4e95e324dae835aa777b8ac2b000e3a3528/src/lib.rs"><code>src/lib.rs</code></a> <span>the window's wait in <code>get_current_texture</code></span></li>
-      </ul>
-      <h4>Earlier volumes</h4>
-      <ul>
-        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>frames in flight, and the CPU and GPU frame</span></li>
-        <li><a href="town.html">Town Explained</a> <span>the scene these runs measured</span></li>
-        <li><a href="dynamic-tlas.html">The dynamic TLAS</a> <span>the build whose CPU line has the 1.1 ms ceiling</span></li>
-      </ul>
-    </article>
-    <article>
-      <h3>Apple, the kernel and other engines</h3>
-      <ul>
-        <li>Apple, <a href="https://developer.apple.com/videos/play/tech-talks/110147/">&ldquo;Tune CPU job scheduling for Apple silicon games&rdquo;</a>, Tech Talk 110147 <span>clusters and their frequency, the core wake-up cost, signal-and-wait, <code>SCHED_OTHER</code>'s priority decay against <code>SCHED_RR</code>, and why to avoid busy waits</span></li>
-        <li>Apple, <a href="https://developer.apple.com/videos/play/wwdc2018/612/">&ldquo;Metal Game Performance Optimization&rdquo;</a>, WWDC18 session 612 <span>a render thread at a fixed priority of 45, out of the scheduler's QoS</span></li>
-        <li>Apple, xnu, <a href="https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task_policy.c#L879-L883"><code>osfmk/kern/task_policy.c</code>, lines 879&ndash;883</a>, at f6217f89, APSL 2.0 <span>the QoS ceiling of an app-type task without an application role; cited, not copied</span></li>
-        <li>wgpu-hal 30.0.1, <a href="https://docs.rs/crate/wgpu-hal/30.0.1/source/src/metal/device.rs"><code>src/metal/device.rs</code></a>, lines 2017&ndash;2051, and <a href="https://docs.rs/crate/wgpu-hal/30.0.1/source/src/metal/mod.rs"><code>src/metal/mod.rs</code></a>, lines 738&ndash;742, MIT or Apache-2.0 <span>the Metal fence's <code>wait</code> on a condition variable, and the completion handler that sets the fence's value and notifies it</span></li>
-        <li>SDL, <code>src/thread/pthread/SDL_systhread.c</code>, <a href="https://github.com/libsdl-org/SDL/blob/4bb5020be2a3e3f7a963b84c95f49fe7ef5d35a4/src/thread/pthread/SDL_systhread.c#L217-L222">lines 217&ndash;222</a> and <a href="https://github.com/libsdl-org/SDL/blob/4bb5020be2a3e3f7a963b84c95f49fe7ef5d35a4/src/thread/pthread/SDL_systhread.c#L271-L278">271&ndash;278</a>, zlib <span>a high-priority thread on Apple platforms: "Apple requires SCHED_RR for high priority threads", and priority 45</span></li>
-        <li>Godot, <a href="https://github.com/godotengine/godot/blob/7be59b463a4798834d72d6d0a2942ddd01d920ee/drivers/apple/thread_apple.cpp#L97-L106"><code>drivers/apple/thread_apple.cpp</code></a>, MIT <span>thread priorities mapped to QoS classes</span></li>
-        <li>Chromium, <a href="https://github.com/chromium/chromium/blob/e6c8cec4ff8c36f514fceda3e0a98dcb5922a23f/base/threading/platform_thread_apple.mm#L305-L316"><code>base/threading/platform_thread_apple.mm</code></a>, BSD-3-Clause <span>thread types mapped to QoS classes</span></li>
-      </ul>
-      <h3 style="margin-top: 18px">Books</h3>
-      <ul>
-        <li>Jason Gregory, <i>Game Engine Architecture</i>, 3rd ed., chapter 4, Parallelism and Concurrent Programming, &sect;4.4 Operating System Fundamentals and &sect;4.6 Thread Synchronization Primitives <span>threads, the scheduler, and how a thread waits</span></li>
-        <li>The same book, chapter 8, The Game Loop and Real-Time Simulation, &sect;8.6 Multiprocessor Game Loops <span>a game loop split across threads and processors. Chapters and sections from the book's <a href="https://www.gameenginebook.com/toc.html">contents</a>.</span></li>
-      </ul>
-    </article>
-  </div>
-</section>
-
-<section class="chapter" id="glossary">
-  <div class="prose">
-    <div class="chapter-mark">Reference</div>
-    <h2>Glossary</h2>
-    <p>Reference scene and Baseline are <code>CONTEXT.md</code>'s definitions; Budget and the Frame stats tooltip are its definitions, shortened; frames in flight quotes the code. The rest are this guide's own.</p>
-  </div>
-  <dl class="glossary page">
-    <div><dt>Frames in flight</dt><dd>Frames submitted but not finished on the GPU when the next one starts, at most: the window's swapchain latency and capture's queue. Two in Praxis.</dd></div>
-    <div><dt>Blocking wait</dt><dd>A wait in which the thread sleeps until it is signalled, leaving its core; the window's, capture's and so the Goldens', and the bench's before PR #400.</dd></div>
-    <div><dt>Spin-wait</dt><dd>A wait in which the thread polls in a loop on its core until the frame is done; a busy-wait. The bench's on a hardware adapter since PR #400.</dd></div>
-    <div><dt>Cluster</dt><dd>A group of cores of one kind that share an L2 cache and a frequency; this M4 Pro has two clusters of four performance cores and one of four efficiency cores.</dd></div>
-    <div><dt>Fixed chain</dt><dd>A piece of work whose steps each need the one before, run unchanged at chosen points, so its time reads the core's speed.</dd></div>
-    <div><dt>QoS class</dt><dd>A thread's quality-of-service class on Apple's systems, such as user-interactive; the kernel can cap it below what the thread asks for.</dd></div>
-    <div><dt>Critical path</dt><dd>The work that sets the frame's length; behind a GPU-bound frame, the GPU's, not the main thread's.</dd></div>
-    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
-    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.</dd></div>
-    <div><dt>Budget</dt><dd>A numeric limit on one metric of a Reference scene (CPU ms, GPU ms, GPU memory, Input latency) that a change must not regress. (Shortened.)</dd></div>
-  </dl>
-  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/381">#381</a>, PR <a href="https://github.com/gariasf/praxis/pull/400">#400</a> at 958ed4e9, <code>docs/performance.md</code>, <code>CONTEXT.md</code> and the sources in the reading list. Every measurement is <code>docs/performance.md</code>'s own, on one Apple M4 Pro. The timeline demo is this page's model; the runs demo plots the measured table.</footer>
-</section>
-<nav class="series" aria-label="Praxis field guides"><a href="frame-timing.html">Previous: Frame Timing Explained</a><a href="index.html">All field guides</a><a href="bench-history.html">Next: Bench History Explained</a></nav>
-</div>
-</div>
-
-<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
-
-<script>
-(function () {
-  "use strict";
-  // ---- Demo 1's model: one frame's timeline under each way of waiting.
-  // The CPU's work at full clock: spin-waiting's CPU frame median, 4,977 µs.
-  const FULL_CLOCK_CPU_MS = 4.977;
-  // The chain where blocked, 2.75 µs, against spin-waiting's 1.96: 1.40.
-  const BLOCKING_STRETCH = 2.75 / 1.96;
-  // M3's CPU frame ceiling, criterion 1.
-  const CPU_CEILING_MS = 6;
-  // The frame in steady state: how long the CPU works, waits and how the GPU fills.
-  function timeline(mode, gpuMs) {
-    const workMs = mode === "block" ? FULL_CLOCK_CPU_MS * BLOCKING_STRETCH : FULL_CLOCK_CPU_MS;
-    if (mode === "one") {
-      // The CPU records a frame only after the GPU finishes the one before.
-      return { workMs: workMs, waitMs: gpuMs, periodMs: workMs + gpuMs, gpuIdleMs: workMs, spinning: false };
-    }
-    // Two in flight: the CPU records frame N+1 beside the GPU's frame N, then waits.
-    return { workMs: workMs, waitMs: Math.max(gpuMs - workMs, 0), periodMs: Math.max(gpuMs, workMs), gpuIdleMs: 0, spinning: mode === "spin" };
-  }
-
-  // ---- Demo 2's data: docs/performance.md's nine runs, in the order they ran.
-  const RUNS = [
-    { kind: "default", name: "Default, run 1", cpu: 5985.8, prepare: 1324.5, propagate: 362.2, encode: 283.2, submit: 2710.1, chain: [2.04, 1.96, 2.04] },
-    { kind: "one", name: "1 in flight", cpu: 4913.6, prepare: 1285.7, propagate: 344.4, encode: 166.7, submit: 2129.0, chain: [2.46, 1.92, 2.00] },
-    { kind: "default", name: "Default", cpu: 7278.5, prepare: 1804.0, propagate: 481.7, encode: 242.1, submit: 3311.2, chain: [2.67, 2.58, 2.92] },
-    { kind: "spin", name: "Spin-wait", cpu: 4977.5, prepare: 1307.2, propagate: 351.5, encode: 201.2, submit: 2072.5, chain: [2.00, 1.92, 2.00] },
-    { kind: "priority", name: "Priority 45", cpu: 6904.2, prepare: 1811.1, propagate: 488.2, encode: 244.7, submit: 2935.3, chain: [2.75, 2.75, 3.17] },
-    { kind: "default", name: "Default", cpu: 6877.1, prepare: 1812.3, propagate: 483.4, encode: 244.9, submit: 2918.0, chain: [2.75, 2.75, 3.04] },
-    { kind: "one", name: "1 in flight", cpu: 5347.5, prepare: 1259.7, propagate: 310.1, encode: 165.2, submit: 2568.9, chain: [2.25, 1.96, 2.04] },
-    { kind: "spin", name: "Spin-wait", cpu: 4976.1, prepare: 1306.5, propagate: 353.2, encode: 204.7, submit: 2066.9, chain: [2.00, 1.96, 2.04] },
-    { kind: "default", name: "Default", cpu: 6907.4, prepare: 1812.4, propagate: 482.7, encode: 245.2, submit: 2928.0, chain: [2.75, 2.75, 3.00] },
-  ];
-  const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
-  // Each run's chain and stage over the spin-wait runs' means.
-  function ratios(point, stage) {
-    const spins = RUNS.filter((run) => run.kind === "spin");
-    const spinChain = mean(spins.map((run) => run.chain[point]));
-    const spinStage = mean(spins.map((run) => run[stage]));
-    return {
-      spinChain: spinChain, spinStage: spinStage,
-      runs: RUNS.map((run) => ({ run: run, chain: run.chain[point] / spinChain, stage: run[stage] / spinStage })),
+  <p class="code-source"><code>src/bench/mod.rs</code>, <code>run</code>. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
+  <h3>Inside a frame</h3>
+  <p><b>The compaction copies, at load.</b> <code>compact_blases</code> waits twice, on every backend: once for the BLAS builds, so that each BLAS can say its compacted size, and once for the copies into the compacted BLASes, which wgpu-core keeps in its pending writes until something submits:</p>
+<pre class="code"><code>// The copies wait in the queue's pending writes until a submit.
+queue.submit(std::iter::empty());
+if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+    tracing::error!(%error, "waiting for BLAS compaction failed");
+}</code></pre>
+  <p class="code-source"><code>src/assets/pools.rs</code>, the end of <code>compact_blases</code>. The empty submit is what makes the poll useful: a poll waits only for work already submitted, so it sends the pending writes as a submission of their own, and the poll then waits for it. The wait is there because no barrier orders a TLAS build after the copies on Metal, and the static TLAS is rebuilt in the frame that loads (<a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>). It runs only in frames that load Meshes, which today means the first.</p>
+  <p><b>A staging slot, when the CPU has lapped the GPU.</b> Each frame writes its uploads into the next staging slot. If that slot is not mapped again yet, the GPU is still copying from it, two frames on, and the thread waits for every submission so far:</p>
+<pre class="code"><code>if !slot.is_mapped.load(Ordering::Acquire) {
+    // Every slot is in flight: wait for the GPU to finish this one.
+    slot.request_map();
+    if let Err(error) = device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for a frame staging slot failed");
+    }</code></pre>
+  <p class="code-source"><code>src/render/staging.rs</code>, <code>FrameStaging::write</code>. Through <code>render_frames</code> it never happens, since the wait for the oldest frame comes first; a window could reach it if the surface let more frames in flight than the slots cover.</p>
+  <p><b>The refits, where there is no shared event.</b> In the crowd's refit form, each frame's BLAS refits are submitted ahead of the dynamic TLAS's build, which reads them, and <code>metal::Order</code> orders the pair on the GPU: the refits' submission signals a shared event as it completes, and wgpu-hal's strict event sync holds every command buffer encoded after it, the build's among them, until the event reaches that value (<a href="blas-refit.html#order">The BLAS refit</a>). Where Metal makes no shared event, <code>BlasRefit::new</code> logs it and every frame waits on the CPU instead:</p>
+<pre class="code"><code>if self.waits_on_cpu {
+    let wait = wgpu::PollType::Wait {
+        submission_index: Some(submission),
+        timeout: None,
     };
-  }
-
-  if (typeof module !== "undefined") {
-    module.exports = { timeline, ratios, RUNS, FULL_CLOCK_CPU_MS, BLOCKING_STRETCH };
-    return;
-  }
-
-  const ratio = () => Math.min(window.devicePixelRatio || 1, 2);
-  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  // A canvas as wide as its frame, its height `aspect` of that, at the device's resolution.
-  function sizeCanvas(canvas, aspect, minimumHeight) {
-    const width = Math.max(240, Math.floor(canvas.parentElement.clientWidth));
-    const height = Math.max(Math.round(width * aspect), minimumHeight || 0);
-    const scale = ratio();
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
-    canvas.style.height = height + "px";
-    const context = canvas.getContext("2d");
-    context.setTransform(scale, 0, 0, scale, 0, 0);
-    return { context: context, width: width, height: height };
-  }
-  function segmented(group, attribute, onChange) {
-    const buttons = Array.from(group.querySelectorAll("button"));
-    buttons.forEach((button) => button.addEventListener("click", () => {
-      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
-      onChange(button.dataset[attribute]);
-    }));
-  }
-  const scheme = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-  function onResize(element, draw) {
-    if (window.ResizeObserver) {
-      let last = 0;
-      new ResizeObserver(() => {
-        const width = element.clientWidth;
-        if (width !== last) { last = width; draw(); }
-      }).observe(element);
-    } else {
-      window.addEventListener("resize", draw);
+    if let Err(error) = device.poll(wait) {
+        tracing::error!(%error, "waiting for BLAS updates failed");
     }
-    if (scheme && scheme.addEventListener) scheme.addEventListener("change", draw);
-  }
-  const milliseconds = (value) => value.toFixed(2) + " ms";
+}</code></pre>
+  <p class="code-source"><code>src/render/blas_refit.rs</code>, <code>BlasRefit::submit</code>. Correct and slow: the main thread stops in every frame until the refits are done. The refit form is behind a Render switch; the crowd ships with per-bone proxies, which refit nothing.</p>
+  <p>The dynamic TLAS's build itself needs no wait. The Renderer submits it in a command buffer of its own ahead of the frame's commands, in a frame that has <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span> and once more, empty, when the last one goes; the shadow mask pass that queries it binds it directly, so Metal's tracking orders the query after the build (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>).</p>
+</section>
 
-  // ---- Demo 1: the timeline.
-  (function () {
-    const canvas = document.getElementById("w-canvas");
-    if (!canvas) return;
-    const slider = document.getElementById("w-gpu");
-    let mode = "block";
-    const SPAN_MS = 60;
-    function draw() {
-      const gpuMs = Number(slider.value);
-      document.getElementById("w-gpu-out").textContent = gpuMs.toFixed(1) + " ms";
-      const frame = timeline(mode, gpuMs);
-      const view = sizeCanvas(canvas, 0, 150);
-      const context = view.context;
-      context.fillStyle = css("--panel");
-      context.fillRect(0, 0, view.width, view.height);
-      const left = 44, right = view.width - 12;
-      const x = (ms) => left + (right - left) * ms / SPAN_MS;
-      const laneHeight = Math.min(42, (view.height - 50) / 2);
-      const cpuTop = 14, gpuTop = cpuTop + laneHeight + 14;
-      const ink = css("--ink"), soft = css("--ink-soft"), accent = css("--accent"), warm = css("--warm");
-      context.font = "12px " + css("--mono");
-      context.textBaseline = "middle";
-      context.fillStyle = soft;
-      context.fillText("CPU", 6, cpuTop + laneHeight / 2);
-      context.fillText("GPU", 6, gpuTop + laneHeight / 2);
-      context.save();
-      context.beginPath();
-      context.rect(left, 0, right - left, view.height);
-      context.clip();
-      function box(fromMs, toMs, top, fill, stroke, dashed, label, labelColour) {
-        const from = x(fromMs), to = x(toMs);
-        if (to <= from) return;
-        if (fill) { context.fillStyle = fill; context.fillRect(from, top, to - from, laneHeight); }
-        context.setLineDash(dashed ? [4, 3] : []);
-        context.strokeStyle = stroke;
-        context.lineWidth = 1.5;
-        context.strokeRect(from + 0.75, top + 0.75, to - from - 1.5, laneHeight - 1.5);
-        context.setLineDash([]);
-        if (label && to - from > 26) {
-          context.fillStyle = labelColour;
-          context.fillText(label, from + 6, top + laneHeight / 2);
-        }
-      }
-      // Frames numbered from the one the GPU runs first on screen.
-      for (let index = 0; index * frame.periodMs < SPAN_MS; index++) {
-        if (mode === "one") {
-          const start = index * frame.periodMs;
-          box(start, start + frame.workMs, cpuTop, accent, accent, false, String(index + 1), css("--paper"));
-          box(start + frame.workMs, start + frame.periodMs, cpuTop, null, soft, true, "", soft);
-          box(start + frame.workMs, start + frame.periodMs, gpuTop, css("--accent-wash"), accent, false, String(index + 1), ink);
-        } else {
-          const start = index * frame.periodMs;
-          box(start, start + frame.workMs, cpuTop, accent, accent, false, String(index + 1), css("--paper"));
-          box(start + frame.workMs, start + frame.periodMs, cpuTop, frame.spinning ? warm : null, frame.spinning ? warm : soft, !frame.spinning, "", soft);
-          box(start, start + frame.periodMs, gpuTop, css("--accent-wash"), accent, false, String(index), ink);
-        }
-      }
-      context.restore();
-      // The axis, every 10 ms.
-      context.fillStyle = soft;
-      context.textBaseline = "top";
-      for (let ms = 0; ms <= SPAN_MS; ms += 10) {
-        const position = x(ms);
-        context.fillRect(position, gpuTop + laneHeight + 4, 1, 5);
-        context.textAlign = ms === 0 ? "left" : ms === SPAN_MS ? "right" : "center";
-        context.fillText(ms === SPAN_MS ? ms + " ms" : String(ms), position, gpuTop + laneHeight + 11);
-      }
-      context.textAlign = "left";
-      const over = frame.workMs > CPU_CEILING_MS;
-      document.getElementById("w-cpu").textContent = milliseconds(frame.workMs) + (over ? ", over the 6 ms ceiling" : ", under the 6 ms ceiling");
-      document.getElementById("w-wait").textContent = milliseconds(frame.waitMs) + (frame.spinning ? ", spinning" : ", asleep");
-      document.getElementById("w-period").textContent = milliseconds(frame.periodMs);
-      document.getElementById("w-idle").textContent = milliseconds(frame.gpuIdleMs);
-      const notes = {
-        block: "Blocking with two in flight: the thread sleeps through the wait, and in most measured runs its next frame ran on a slower clock. The frame-to-frame time is the GPU's, so the stretched CPU frame costs the player nothing. Measured on town: CPU frame 6,877 to 7,279 µs in the three runs whose clock fell, 5,986 in the one that kept it.",
-        spin: "Spin-waiting with two in flight: the core stays busy through the wait and the clock stayed up. Same frame-to-frame time; the CPU line reads the work. Measured on town: CPU frame 4,976 to 4,978 µs.",
-        one: "Blocking with one in flight: the CPU records only after the GPU finishes, so the GPU idles while it does and each frame takes both. Measured on town: CPU frame 4,914 to 5,348 µs, and a wait of about 15 ms a frame.",
-      };
-      document.getElementById("w-note").textContent = notes[mode];
-    }
-    slider.addEventListener("input", draw);
-    segmented(document.getElementById("w-mode"), "mode", (value) => { mode = value; draw(); });
-    onResize(canvas.parentElement, draw);
-    draw();
-  })();
+<section class="part prose" id="clock">
+  <div class="part-mark">4 &middot; <code>FrameWait::Spin</code> &middot; Apple silicon</div>
+  <h2>Blocking lowers the clock</h2>
+  <p class="key-idea">Behind a GPU-bound frame, a main thread that blocks for the oldest frame ran its P-core about 30% slower for the whole next frame on the M4 Pro, and every CPU stage with it. The work did not grow; the clock fell. A CPU time measured behind a GPU-bound frame can measure the clock, not the work, which is why the bench spins and the window does not.</p>
+  <p>Apple's Tech Talk on CPU scheduling for Apple silicon games says that each cluster of cores "may be independently activated or have its frequency adjusted by the kernel's scheduler -- depending on the current workload, the current thermal pressure for that cluster, and other factors." A core's speed is not fixed, and how the scheduler weighs a thread that sleeps for most of each frame and runs for the rest is not published. What the measurement in <code>docs/performance.md</code>, "town's CPU stages slow because the P-core clocks down while the main thread waits", found is this:</p>
+  <p><b>The clock, not the work.</b> Without root, the core's frequency cannot be read, so a measurement patch read it through work: a fixed chain of 2,000 dependent multiply-adds, timed on the main thread at three points of each frame. In the runs that blocked, the chain took 2.58 to 3.04 µs against 1.92 to 2.04 µs spin-waiting, and <code>prepare_frame</code>, which does the same work in every frame, 1,812 against 1,307 µs: the same ratio. Spin-waiting leaves the GPU as busy, with the GPU frame within 40 µs, so the load is not the cause; the wait's kind is.</p>
+  <p><b>Not migration, not priority.</b> The thread never ran on an efficiency core and stayed on one performance cluster, whose cores share an L2, across the wait. A thread priority of 45 under the time-sharing policy took effect and left the stages as slow; a quality-of-service call left the thread at priority 31, which fits the ceiling xnu's task policy puts on an app-type task without an application role, though the patch did not read the role. The round-robin policy, which SDL gives a high-priority thread on Apple platforms, was not measured.</p>
+  <p><b>Not all of it.</b> One blocking run kept a fast clock and still read its CPU frame about a millisecond over spin-waiting's, in its encode and submit stages. The measurements do not find what that is.</p>
+  <p>With one frame in flight the thread blocks for longer, about the whole GPU frame, and the chain is slow at the frame's start and fast again by the end of the frame's update: the frame then runs while the GPU is idle. With two in flight it runs beside the GPU and stays slow throughout. The clock also changes run to run with the same binary: one of four blocking runs kept it fast.</p>
+  <p>So the bench spins. Its CPU ceilings price the main thread's work when it is on the critical path, which is when the frame waits on the CPU; blocked behind a GPU-bound frame it is not, and its clock falls because it has the time. The window keeps blocking, as Apple asks: "Avoid busy waits. They potentially lock a P core, instead of doing something useful with it. They also prevents the scheduler from promoting a thread from and E to a P core. You are also wasting energy and producing unnecessary heat, eating away your thermal headroom." A GPU-bound game needs that headroom for its GPU, by this page's reading; the bench is not a game, runs for minutes, and must report the work. How the bench uses <code>FrameWait</code>, and what its spin may cost the GPU frame, is the bench page's.</p>
+</section>
 
-  // ---- Demo 2: the runs against the clock.
-  (function () {
-    const canvas = document.getElementById("r-canvas");
-    if (!canvas) return;
-    let point = 0, stage = "prepare";
-    const STAGE_NAMES = { prepare: "prepare_frame", propagate: "propagate_world_transforms", encode: "encode", submit: "submit", cpu: "CPU frame" };
-    const POINT_NAMES = ["the frame's start", "after update", "after render"];
-    const grouped = (value) => value.toLocaleString("en-GB", { maximumFractionDigits: 1 });
-    function draw() {
-      const result = ratios(point, stage);
-      const view = sizeCanvas(canvas, 0.78, 240);
-      const context = view.context;
-      context.fillStyle = css("--panel");
-      context.fillRect(0, 0, view.width, view.height);
-      const ink = css("--ink"), soft = css("--ink-soft"), rule = css("--rule");
-      const colours = { default: css("--accent"), spin: css("--good"), one: css("--warm"), priority: css("--ink") };
-      const left = 58, bottom = view.height - 36, top = 12, right = view.width - 12;
-      const chainMax = 3.5;
-      const stageMax = Math.max(...RUNS.map((run) => run[stage])) * 1.15;
-      const x = (chain) => left + (right - left) * chain / chainMax;
-      const y = (value) => bottom - (bottom - top) * value / stageMax;
-      // Axes and gridlines.
-      context.strokeStyle = rule;
-      context.lineWidth = 1;
-      context.font = "11px " + css("--mono");
-      context.fillStyle = soft;
-      context.textBaseline = "middle";
-      context.textAlign = "right";
-      const step = Math.pow(10, Math.floor(Math.log10(stageMax / 2)));
-      const tick = stageMax / step > 10 ? step * 5 : stageMax / step > 4 ? step * 2 : step;
-      for (let value = 0; value <= stageMax; value += tick) {
-        context.beginPath(); context.moveTo(left, y(value)); context.lineTo(right, y(value)); context.stroke();
-        context.fillText(grouped(value), left - 6, y(value));
-      }
-      context.textAlign = "center";
-      context.textBaseline = "top";
-      for (let chain = 0; chain <= chainMax + 1e-9; chain += 0.5) {
-        context.beginPath(); context.moveTo(x(chain), top); context.lineTo(x(chain), bottom); context.stroke();
-        context.fillText(chain.toFixed(1), x(chain), bottom + 5);
-      }
-      context.fillText("chain at " + POINT_NAMES[point] + ", µs", (left + right) / 2, bottom + 20);
-      context.save();
-      context.translate(12, (top + bottom) / 2);
-      context.rotate(-Math.PI / 2);
-      context.textBaseline = "middle";
-      context.fillText(STAGE_NAMES[stage] + ", µs", 0, 0);
-      context.restore();
-      // Spin-waiting's work at each chain speed: a line from the origin.
-      const slope = result.spinStage / result.spinChain;
-      context.save();
-      context.beginPath();
-      context.rect(left, top, right - left, bottom - top);
-      context.clip();
-      context.setLineDash([6, 4]);
-      context.strokeStyle = ink;
-      context.lineWidth = 1.5;
-      context.beginPath(); context.moveTo(x(0), y(0)); context.lineTo(x(chainMax), y(slope * chainMax)); context.stroke();
-      context.restore();
-      context.setLineDash([]);
-      // The runs, priority 45's open ring last so a default run at its chain does not hide it.
-      for (const run of RUNS.slice().sort((one, other) => (one.kind === "priority") - (other.kind === "priority"))) {
-        const px = x(run.chain[point]), py = y(run[stage]);
-        context.beginPath();
-        context.arc(px, py, 6, 0, 2 * Math.PI);
-        context.lineWidth = 2;
-        context.strokeStyle = colours[run.kind];
-        if (run.kind !== "priority") { context.fillStyle = colours[run.kind]; context.fill(); }
-        context.stroke();
-      }
-      const first = RUNS[0];
-      context.fillStyle = ink;
-      context.textAlign = "left";
-      context.textBaseline = "middle";
-      context.fillText("run 1", x(first.chain[point]) + 9, y(first[stage]));
-      // The ratios, one row per kind of run.
-      const rows = document.getElementById("r-ratios");
-      rows.replaceChildren();
-      result.runs.forEach((entry, index) => {
-        const row = document.createElement("tr");
-        const name = document.createElement("td");
-        name.textContent = (index + 1) + ". " + entry.run.name;
-        name.style.color = colours[entry.run.kind];
-        const chain = document.createElement("td");
-        chain.className = "n";
-        chain.textContent = entry.chain.toFixed(2);
-        const stageCell = document.createElement("td");
-        stageCell.className = "n";
-        stageCell.textContent = entry.stage.toFixed(2);
-        row.append(name, chain, stageCell);
-        rows.append(row);
-      });
-      const prepareNotes = [
-        "At the frame's start, the blocking runs' prepare_frame sits on the line: the chain reads 1.33 to 1.38 times spin-waiting's, the stage 1.38 to 1.39. The 1-in-flight runs sit below it, the chain 1.13 to 1.23 times and the stage 0.96 to 0.98: their clock is slow at the start and fast by the end of update.",
-        "After update, the blocking runs' prepare_frame sits on the line: the chain reads 1.33 to 1.42 times spin-waiting's, the stage 1.38 to 1.39. The same work, at the clock the chain shows.",
-        "After render, the blocking runs' chain reads slower still, 1.45 to 1.57 times spin-waiting's, while prepare_frame stays at 1.38 to 1.39, so those runs sit right of the line.",
-      ];
-      const notes = {
-        prepare: prepareNotes[point],
-        propagate: "propagate_world_transforms, an ECS system, follows prepare_frame: 1.37 times spin-waiting's in the default runs whose chain reads 2.75 µs at the start and after update.",
-        encode: "encode does not follow the clock: the blocked runs sit below the line, 1.19 to 1.21 times spin-waiting's against a chain of 1.33 to 1.57 times, and run 1, which blocked on a fast clock, sits far above it: 283 µs against spin-waiting's 201 to 205.",
-        submit: "submit is above the line in run 1 too: 2,710 µs against 2,067 to 2,073. Part of blocking's cost is not the clock.",
-        cpu: "The CPU frame: run 1 read 5,986 µs on a fast clock, about 1 ms over spin-waiting's, a remainder the measurements do not explain.",
-      };
-      document.getElementById("r-note").textContent = notes[stage];
-    }
-    segmented(document.getElementById("r-point"), "point", (value) => { point = Number(value); draw(); });
-    segmented(document.getElementById("r-stage"), "stage", (value) => { stage = value; draw(); });
-    onResize(canvas.parentElement, draw);
-    draw();
-  })();
-})();
-</script>
+<section class="part prose" id="late">
+  <div class="part-mark">5 &middot; <code>FrameStaging</code> &middot; <code>MAP_LAG</code> &middot; <code>prepare_encoder</code></div>
+  <h2>Mapping late, so allocations never depend on the GPU's timing</h2>
+  <p class="key-idea">wgpu maps a buffer, and allocates for the map, in the first submission or poll that finds the buffer's last submission finished: inside a frame or between two, as the GPU's timing falls. A map requested as soon as it could be done lands in a frame the GPU picks, and the frame's heap allocation count changes run to run. Three mechanisms request theirs a fixed number of frames later than they could, when the frame that copied from the buffer has certainly been waited for.</p>
+  <p>The bench holds <code>heap_allocations</code>, the main thread's allocations between a frame's begin and its end, to its <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> and fails on any increase, as a counter that is the same on every run. For that to hold, nothing a frame allocates may depend on when the GPU finished the frames before it. wgpu's own bookkeeping is where it could: a map waits on the latest pending submission that uses the buffer, every submission ends by maintaining the device, which retires finished submissions and maps the buffers that waited on them, and each maintenance that finds buffers ready to map allocates the list of their callbacks. Per-frame staging requests each slot's map two writes after it was filled, when it is the next to be filled:</p>
+<pre class="code"><code>/// Staging memory for the per-frame uploads, reused every frame, where
+/// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
+/// slots grow on demand, never past the most one frame uploads. Each frame
+/// fills the next slot in turn, copies it into its targets, and requests the
+/// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
+/// before. The fixed turn keeps the frame's heap allocations the same on
+/// every run: wgpu grows an encoder's tracking by each buffer's tracker
+/// index, so which slot a frame takes changes its allocation count. So does
+/// the late map, for the reason the GPU stats readback maps late: the bench
+/// has waited for the frame that copied from the slot, so the frame's own
+/// submission maps it, whatever the GPU's timing
+/// [ref:wgpu-30-handle-mapping].
+pub struct FrameStaging {</code></pre>
+  <p class="code-source"><code>src/render/staging.rs</code>. The GPU stats readback does the same with <code>MAP_LAG</code> (section 1): a slot's map is requested two frames after the frame that copied its timestamps, by which time <code>render_frames</code> has waited for that frame, so the requesting frame's first submission maps it. Each frame then requests exactly one map, which its own submission completes, and the allocation lands in the same frame on every run. The ring grew by one slot for it, to seven.</p>
+  <p>The dynamic TLAS's encoder is the third. A new command encoder reuses the encoder the GPU finished with last, and the state Metal keeps per encoder grows to the largest pipeline and bindings it recorded and never shrinks. The Renderer creates the build's encoder before the frame's, in <code>DynamicTlas::prepare_encoder</code>, so that the two swap roles every frame and each has recorded the frame's passes, and grown, within its first two frames; created in the other order, the passes would reuse the build's encoder in a frame the GPU's timing picks, and grow it there (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>). Its doc comment gives the whole argument.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery allocates as often with the GPU's work retired by a poll between frames as with it left finished for the frame's own submissions to retire</td></tr>
+      <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>eight threads, each with its own device, load and trace a triangle 25 times; the wait for the copies holds under load</td></tr>
+      <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>the dynamic TLAS's build follows the refits, through the shared event or the CPU wait</td></tr>
+      <tr><td><code>a_frame_spans_its_passes_earliest_start_and_latest_end</code></td><td><code>src/render/readback.rs</code></td><td>the GPU frame counts overlapping passes once</td></tr>
+      <tr><td><code>the_lit_pass_waits_from_the_latest_end_before_it</code></td><td><code>src/render/readback.rs</code></td><td>the lit pass's wait is measured from the passes it waits on</td></tr>
+      <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>a frame with Moving Instances uploads its entries, in the build submitted ahead of it</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">No test pins what blocking does to the clock: that is a measurement of one machine, in <code>docs/performance.md</code>, and the bench's spin is its consequence, not a tested rule.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>bench/baselines</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">On the M4 Pro every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> is GPU-bound, so the main thread waits for the oldest frame in every frame. On the RTX 2070 SUPER two scenes on DX12 are CPU-bound, and there the GPU waits instead.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame, µs</th><th class="n">GPU frame, µs</th><th>The longer</th></tr></thead>
+    <tbody>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,734.8</td><td class="n">19,935.0</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,138.5</td><td class="n">15,975.0</td><td>GPU</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">744.5</td><td class="n">3,747.5</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">186.1</td><td class="n">6,689.1</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">181.6</td><td class="n">3,851.5</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,194.9</td><td class="n">9,395.0</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,181.9</td><td class="n">1,207.2</td><td>GPU</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,469.2</td><td class="n">2,169.8</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">362.8</td><td class="n">2,736.3</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">342.1</td><td class="n">1,692.5</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">8,122.8</td><td class="n">9,279.4</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,539.8</td><td class="n">1,095.3</td><td>CPU</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,085.5</td><td class="n">1,970.2</td><td>CPU</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.8</td><td class="n">2,717.7</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.0</td><td class="n">1,611.1</td><td>GPU</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Medians from <code>bench/baselines/&lt;adapter&gt;/&lt;scene&gt;.json</code> at the commit above, at 2560&times;1440 with 4x MSAA. Every row was recorded spin-waiting, since the bench spins on any hardware adapter and each of these Baselines postdates that change; CI's lavapipe Baselines, not shown, block. The CPU frame leaves out the wait for the oldest frame, so the two columns do not add up to a frame's period: where the GPU is the longer, the main thread spends the difference waiting.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADR 0016</div>
+  <h2>Why this way</h2>
+  <p><b>The bench spins; the window blocks.</b> The owner chose it over three others. CPU lines from a run with one frame in flight read close to spin-waiting's, but the clock's ramp after each wait stays in them, the frame runs while the GPU is idle, which is not how the engine runs, and each scene would run a third time. Spinning everywhere would read the window's CPU frame as the bench's, against Apple's advice, holding a P-core and spending the thermal headroom a GPU-bound frame needs. No change would keep the CPU lines reading the slowed clock whenever <code>town</code> is GPU-bound, over both of their ceilings, for a cost the frame does not pay. The chosen option costs no extra run and burns a P-core for the bench's few minutes only; it leaves the bench differing from the window in how it waits.</p>
+  <p><b>One thread submits, presents and polls.</b> ADR 0016 keeps map and work-done callbacks at a known point of the frame, and wgpu-hal's Metal acquire sends a main-thread-only message on the calling thread, so a render thread would need a hand-off of the surface texture. One submitting thread is also what makes the event route safe: no worker can take a staged signal or wait between the refits' submission and the build's.</p>
+  <p><b>Two frames in flight.</b> wgpu's documentation recommends 2 as the balance between latency and throughput, and ADR 0016 keeps it there; ADR 0013's Input latency budget of two frames leaves no room for more. Every per-frame ring is sized by the constant, so changing it changes staging's slots and the readback's ring with it.</p>
+  <p><b>A CPU wait at load, the GPU's order each frame.</b> A wait suits work that happens once: the compaction copies cost it about a third of a millisecond at load, in three timed runs of their day, and no bench measures a load frame. Work in every frame could not pay that way, so the crowd's refits took the event route on the GPU, with the CPU wait as the fallback where no shared event can be made.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>One machine measured.</b> The clock's fall behind a blocking wait was measured on one M4 Pro; other Apple GPUs, other operating system releases and other vendors' machines may do otherwise, and the rule the scheduler follows is not published.</p>
+  <p><b>A remainder.</b> The one blocking run that kept a fast clock still cost about a millisecond that the clock does not explain.</p>
+  <p><b>A CPU wait in every frame that loads Meshes.</b> Today that is the first frame; once Meshes stream during play, each load frame stalls on the GPU twice, and the wait can go only when a wgpu release orders a TLAS build after compaction copies on every backend.</p>
+  <p><b>The event route is delicate.</b> wgpu-hal's event staging is queue-wide: whichever submission comes next takes a staged signal or wait, and wgpu-core can submit on its own, as when it flushes pending writes to map a buffer. <code>metal::Order</code> relies on nothing submitting in between, which only one submitting thread can promise.</p>
+  <p><b>A software adapter blocks.</b> lavapipe's rasterizer runs on the CPU, where a spinning main thread would take a core from it, so CI's CPU lines read the clock as a blocking thread's.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://developer.apple.com/videos/play/tech-talks/110147/">Apple, Tune CPU job scheduling for Apple silicon games, Tech Talk 110147</a></dt><dd>clusters and their frequency; why to avoid busy waits; <code>apple-tech-talk-110147-busy-waits</code></dd>
+    <dt><a href="https://developer.apple.com/videos/play/wwdc2018/612/">Apple, Metal Game Performance Optimization, WWDC18 session 612</a></dt><dd>a render thread at a fixed priority of 45, out of the scheduler's quality of service</dd>
+    <dt><a href="https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/kern/task_policy.c#L879-L883">xnu, osfmk/kern/task_policy.c</a></dt><dd>the quality-of-service ceiling of an app-type task without an application role; cited, not copied</dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlcommandbuffer/commit()">Apple, MTLCommandBuffer.commit()</a></dt><dd>the GPU starts a command buffer after it starts those ahead of it in the queue</dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/resource-synchronization">Apple, Resource synchronization</a></dt><dd>hazards, and what tracking covers for the resources a command binds</dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default">Apple, MTLHazardTrackingMode.default</a></dt><dd>resources made from the device are tracked by default; <code>metal-hazard-tracking-default</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">Apple, MTLIndirectAccelerationStructureInstanceDescriptor</a></dt><dd>a TLAS entry that names its BLAS by resource ID; <code>metal-indirect-instance-descriptor</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592">wgpu-hal 30.0.1, metal/command.rs</a></dt><dd>the empty barriers on Metal; <code>wgpu-30-metal-barriers-empty</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>the open upstream report, with the fence fix in draft; <code>wgpu-issue-9215</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556">wgpu-hal 30.0.1, metal/mod.rs, add_wait_event</a></dt><dd>event staging is queue-wide; <code>wgpu-30-metal-event-staging</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1287-L1304">wgpu-core 30.0.1, device/queue.rs, flush_writes_for_buffer</a></dt><dd>mapping a buffer with pending writes submits them; <code>wgpu-30-core-flush-submit</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L236-L250">wgpu-core 30.0.1, device/life.rs, map</a></dt><dd>a map waits on the latest pending submission that uses the buffer; <code>wgpu-30-map-after-submission</code>, <code>wgpu-core-30-map-after-last-submission</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1536-L1541">wgpu-core 30.0.1, device/queue.rs, submit</a></dt><dd>every submission ends by maintaining the device, which maps the buffers ready to map; <code>wgpu-30-submit-maintains</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413">wgpu-core 30.0.1, device/life.rs, handle_mapping</a></dt><dd>each maintenance that finds buffers ready to map allocates; <code>wgpu-30-handle-mapping</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/allocator.rs#L32-L51">wgpu-core 30.0.1, command/allocator.rs</a></dt><dd>a new encoder takes the free encoder released last; <code>wgpu-30-command-encoder-pool</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L432-L441">wgpu-hal 30.0.1, metal/command.rs, CommandState::reset</a></dt><dd>an encoder's state is cleared for reuse, keeping what it allocated; <code>wgpu-hal-30-metal-command-state</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/surface.rs#L947-L948">wgpu-types 30.0.1, desired_maximum_frame_latency</a></dt><dd>2 as the balance between latency and throughput</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2017-L2051">wgpu-hal 30.0.1, metal/device.rs, the fence's wait</a></dt><dd>a blocking poll sleeps on a condition variable the completion handler notifies</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0016-the-main-thread-runs-the-frame.md">ADR 0016</a></dt><dd>one thread records, submits, polls and presents; two frames in flight</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/performance.md">docs/performance.md, Measurements behind the code</a></dt><dd>the nine runs behind section 4, and the queued-frame and compaction measurements</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The wait for the compaction copies came from a test that flaked at load, a TLAS built right after a compaction copy missing its BLAS in a few of eighty iterations while other devices loaded the GPU; the eight-device test is its regression test. The crowd's refit, the same pair in every frame, took the event route on the GPU with the CPU wait as its fallback. The bench began spin-waiting when <code>town</code>'s CPU stages read 20 to 40% slower once the GPU became the longer half of its frame, and the measurement found the clock. The late maps and the encoder swap came together, on 2026-11-01, when a frame's heap allocations were made independent of the GPU's timing.</p>
+  <footer class="sources">Written from <code>src/capture/mod.rs</code>, <code>src/bench/mod.rs</code>, <code>src/lib.rs</code>, <code>src/render/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, ADR 0016, <code>docs/performance.md</code> and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="static-tlas.html">Previous: Static TLAS</a><a href="index.html">All field guides</a><a href="prepare.html">Next: Prepare</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
 <script>
 (function () {
   "use strict";
@@ -972,7 +462,6 @@ let wait = match context.adapter.get_info().device_type {
   document.addEventListener("click", hide);
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
   window.addEventListener("scroll", hide, { passive: true });
-  window.addEventListener("resize", hide);
 })();
 </script>
 </body>

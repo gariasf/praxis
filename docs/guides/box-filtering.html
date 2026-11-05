@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Box filtering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; concept &middot; <code>src/assets/material.rs</code></div>
+  <h1>Box filtering</h1>
+  <p class="definition">Averaging what a pixel covers with equal weights is a box filter: the cooker's mips take the mean of each 2&times;2 box of texels, and the sampler's anisotropic filtering averages equal-weight probes along the pixel's footprint. A box's frequency response is a sinc, which never cuts cleanly at the Nyquist limit, so detail finer than a pixel leaks through as a small signed residue, and one sample per pixel of that residue beats into moir&eacute;.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on; a change to how Praxis filters Textures, in the cooker or the samplers, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="lit-pass.html#sampling">The lit pass</a>, <a href="cook-texture.html#mips">Texture cooking</a>. <b>Read first:</b> <a href="msaa.html#samples">MSAA</a>, for samples per pixel.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">In the frame</h2>
+    <dl>
+      <dt>Cook time</dt><dd>Each mip of a <span class="concept" data-term="Texture" data-tip="One Channel's image with its mips. A Layer refers to one Texture.">Texture</span> is the mean of a 2&times;2 box of the level above, in linear light: <code>Level::downsample</code> and <code>Level::reduce</code> in <code>src/cook/texture.rs</code>.</dd>
+      <dt>Lit pass</dt><dd>Two trilinear, repeating samplers, <code>trilinear_sampler</code> in <code>src/assets/material.rs</code>: <code>COLOUR_ANISOTROPY</code> 16 for albedo and emissive, <code>DATA_ANISOTROPY</code> 4 for normal, metallic-roughness and occlusion. The hardware's anisotropic filtering takes up to that many probes along the footprint's major axis, each with the same weight.</dd>
+      <dt>The one fact</dt><dd>Colour Textures allow 16 probes; data Textures 4, so that their mips carry the roughness Toksvig widened for them.</dd>
+      <dt>Measured by</dt><dd>The bench's <code>Aliasing</code> counters, <code>aliasing_rmse</code> and <code>aliasing_p99</code>: the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>'s frame against the same frame rendered at three times the size and box-filtered in linear light, in every <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> but lavapipe's.</dd>
+      <dt>Open</dt><dd>No filter beyond the box is chosen. The exact reference, every candidate's measurement and the options are in <a href="https://github.com/gariasf/praxis/blob/main/docs/research/minification-filtering.md">the research note on minification filtering</a>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#nyquist">1 &middot; Sampling and Nyquist</a>
+    <a href="#box">2 &middot; The pixel as a box</a>
+    <a href="#sidelobes">3 &middot; Sidelobes</a>
+    <a href="#arcs">4 &middot; From residue to arcs</a>
+    <a href="#sampler">5 &middot; The sampler is a box too</a>
+    <a href="#light">6 &middot; Averaging in light</a>
+    <a href="#reference">7 &middot; A supersampled reference</a>
+    <a href="#gaussian">8 &middot; A Gaussian instead</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="nyquist">
+  <div class="part-mark">1 &middot; <code>minification</code></div>
+  <h2>Sampling and Nyquist</h2>
+  <p class="key-idea">Samples one pixel apart can hold only patterns whose period is longer than two pixels. Finer detail does not vanish: it folds back and shows up as a coarser pattern that was never in the texture.</p>
+  <p>Sampling at a spacing of one pixel represents frequencies below half a cycle per pixel, the Nyquist limit: a period of two pixels. Energy above it folds back. A sinusoid of f cycles per pixel, read at whole pixels, gives the same values as one of f &minus; n cycles for any whole number n, so it shows up at its distance from the nearest whole number. A period of 0.9 px, 1.11 cycles per pixel, reads as 0.11 cycles per pixel: a slow wave with a period of about 9 pixels. That is aliasing, and Mitchell and Netravali name the checkerboard as the typical source of conspicuous moir&eacute; from it.</p>
+  <p>A texture is an image wrapped onto a surface, and its own pixels, texels, rarely line up with the screen's. Up close one texel covers several pixels, and reading one texel per pixel is right. Far away one pixel covers many texels, and reading one of them gives black or white by luck of position, so neighbouring pixels disagree at random. What the eye expects is their average: an even grey. The textbook cure is to remove the detail before sampling, with a prefilter. Mips are that prefilter, taken once at cook time, and one sample per pixel of a checker floor that dissolves into rings near the horizon settles into grey once each pixel reads the mip whose texels are about one pixel big (<a href="cook-texture.html#mips">Texture cooking</a>).</p>
+  <p>The <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> <code>minification</code> is a checker floor stretching to the horizon, its period 1/8 m. On its far band, rows 495 to 599 of a 2560&times;1440 frame, the floor runs from about 60 m to 15 m out and is two problems at once. Across the view the checker's period stays about 4 to 14 pixels, inside the limit, so the checks are resolved across. Along the floor one pixel's footprint spans 14 to 0.9 periods, so everything there is past Nyquist, and the checks are unresolved along. Averaging each pixel's footprint is exactly the prefilter the textbook asks for. The rest of this page is why the average still shows moir&eacute;.</p>
+</section>
+
+<section class="part prose" id="box">
+  <div class="part-mark">2</div>
+  <h2>The pixel as a box</h2>
+  <p class="key-idea">Averaging a pixel's footprint is a box filter as wide as the footprint, followed by one sample per pixel. A box of width w keeps a sinusoid of period p's shape and scales its amplitude by sinc(w/p).</p>
+  <p>A pixel that averages its footprint weighs every point of it equally and ignores everything outside. Along the floor that is a box of width w, the footprint's length, centred on the pixel's centre c. Its effect on one sinusoid takes one integral:</p>
+  <div class="formula">average of cos(2&pi;x/p) over [c &minus; w/2, c + w/2]
+  = (p / (&pi;w)) &middot; sin(&pi;w/p) &middot; cos(2&pi;c/p)
+  = sinc(w/p) &middot; cos(2&pi;c/p),      sinc(x) = sin(&pi;x) / (&pi;x)</div>
+  <p>The box hands back the same sinusoid, read at the pixel's centre, scaled by sinc(w/p). That factor is the box's frequency response, and a checker is a sum of such sinusoids, each scaled by its own factor. For a footprint much shorter than a period, w/p near 0, sinc is near 1 and the detail passes: the near floor, where the checks should stay sharp. A filter that cut cleanly at Nyquist would pass everything with a period over two pixels and nothing below. The box does not, and how it fails is the subject of the next two sections.</p>
+</section>
+
+<section class="part prose" id="sidelobes">
+  <div class="part-mark">3</div>
+  <h2>Sidelobes: a residue that never settles</h2>
+  <p class="key-idea">sinc(w/p) is zero only when the footprint holds a whole number of periods. Between those it flips sign, and its envelope falls only as p/(&pi;w), so a box over 14 periods still passes about 2% of the checker's contrast.</p>
+  <p>The whole periods inside the box average to zero. What is left is the part of a period that does not fit, divided by the whole width. The integral of a cosine over any stretch is at most p/&pi;, the area of half a period's hump, so the residue is at most p/(&pi;w) of the original: an envelope that falls as one over the width, not faster.</p>
+  <ul>
+    <li>It is zero only when w is an exact multiple of p.</li>
+    <li>It changes sign between multiples: a footprint that gains or loses part of a period flips the residue from lighter to darker.</li>
+    <li>The first sidelobe peaks at w &asymp; 1.43 p, at about 0.217 of the original, &minus;13 dB.</li>
+    <li>At w = 14 p the envelope is 1/(14&pi;) &asymp; 0.023: up to about 2% of the contrast, with either sign.</li>
+  </ul>
+  <p>Pharr, Jakob and Humphreys call the box "just about the worst filter possible", because its frequency response lets high frequencies leak into the result; Heckbert calls its response "far from ideal, with high side lobes".</p>
+</section>
+
+<section class="part prose" id="arcs">
+  <div class="part-mark">4</div>
+  <h2>From residue to arcs</h2>
+  <p class="key-idea">Neighbouring footprints tile the floor, so from one pixel to the next the residue's phase steps by w/p periods, which folds back to its distance from the nearest whole number. As w changes smoothly across the screen, that slow beat draws smooth bands: arcs.</p>
+  <p>A residue of 2% would be harmless if it were the same in every pixel: a slightly lighter or darker grey. It is not. Each pixel samples sinc(w/p) &middot; cos(2&pi;c/p) at its own centre c, and footprints that tile the floor put neighbouring centres w apart. Along a run of pixels with about the same w, pixel k reads:</p>
+  <div class="formula">residue(k) = sinc(w/p) &middot; cos(2&pi; k &middot; w/p + phase)</div>
+  <p>That is a sinusoid of w/p cycles per pixel, sampled once per pixel, and section 1's folding applies: it shows up at w/p's distance from the nearest whole number. Where the footprint holds nearly a whole number of periods the beat is slow and wide but faint, since sinc is near zero there. Near a whole number and a half the beat is at Nyquist, alternating from pixel to pixel, at a sidelobe's peak. Across the screen the footprint's length changes smoothly with distance and with the angle across the view, and so do the beat's size, sign and frequency: smooth bands of lighter and darker grey that follow how the footprint's length changes over the floor, and curve into arcs.</p>
+  <p>On <code>minification</code> the arcs are in a reference that averages the checker exactly over each pixel's footprint, box-filtered in linear light, at the same places and strength as in the capture, which lies 1.68 8-bit steps RMSE from it on the band's sides; the sampler, the box mips and their BC encoding each move the band by less than a step, the 16x clamp by 1.3 steps, and none of them makes or removes the arcs. The reference and the figures are the research note's. No step of the texture path aliases them: averaging over the pixel's footprint lets them through.</p>
+</section>
+
+<section class="part prose" id="sampler">
+  <div class="part-mark">5 &middot; <code>trilinear_sampler</code> &middot; <code>COLOUR_ANISOTROPY</code> &middot; <code>DATA_ANISOTROPY</code></div>
+  <h2>The sampler is a box too</h2>
+  <p class="key-idea">Hardware anisotropic filtering averages N equal-weight probes along the footprint's major axis. Equal weights along a line make a box, with the same sidelobes.</p>
+  <p>The Vulkan specification leaves anisotropic filtering to the implementation and describes one approach: N isotropic probes along the footprint's major axis, each weighted equally, each reading the mip whose texels match the footprint's width:</p>
+  <div class="formula">N      = &lceil;major / minor&rceil;        the probes, up to the sampler's limit
+weight = 1 / N                      each probe's share
+LOD    = log2(major / N)            the mip they read</div>
+  <p>Spread evenly with equal weights, the probes make a box as long as the major axis, smoothed a little by each probe's own width. Along the floor that is section 2's box again. McCormack and colleagues' Feline paper says of equal-weight probes that they give "poor high-frequency rejection along the major axis". The M4 Pro's sampler matched a software filter built from the rule to 0.23 steps on this floor, which is why the capture and the exact box reference share their arcs.</p>
+<pre class="code"><code>const COLOUR_ANISOTROPY: u16 = 16;
+const DATA_ANISOTROPY: u16 = 4;</code></pre>
+<pre class="code"><code>fn trilinear_sampler(device: &amp;wgpu::Device, label: &amp;str, anisotropy: u16) -&gt; wgpu::Sampler {
+    device.create_sampler(&amp;wgpu::SamplerDescriptor {
+        label: Some(label),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        anisotropy_clamp: anisotropy,
+        ..Default::default()
+    })
+}</code></pre>
+  <p class="code-source"><code>src/assets/material.rs</code>. The lit pass samples the colour Channels through the first sampler and the data Channels through the second (<a href="lit-pass.html#sampling">The lit pass</a>). wgpu clamps every sampler's anisotropy to 1 on an adapter without the anisotropic filtering downlevel flag, so the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> requires it.</p>
+  <p>Past the cap the level follows the length divided by the cap, coarser than the width needs, and the Texture blurs across. That is the one fact of Praxis's own here: colour Textures allow the full 16 probes, so the checker's albedo keeps its detail along the floor; data Textures allow 4, so a normal probe reads the coarser mip whose roughness Toksvig widened for the normals it averaged (section 7).</p>
+</section>
+
+<section class="part prose" id="light">
+  <div class="part-mark">6 &middot; <code>Level::downsample</code> &middot; <code>Level::reduce</code></div>
+  <h2>Averaging in light, not in numbers</h2>
+  <p class="key-idea">Whatever the box averages, it averages light. Image files store brightness through the sRGB curve, which spends more numbers on dark shades; a mean of the stored numbers is not the mean of the light they encode, and displays too dark.</p>
+  <p>Average the stored numbers of black, 0, and white, 255, and the result is 128, which displays noticeably darker than the mid grey a fine checker blends to from a distance. Average the light and the result is half the light, which sRGB stores as about 188. The cooker therefore decodes each colour Channel to linear light before it reduces, and reduces every mip from the level above by the mean of each 2&times;2 box:</p>
+<pre class="code"><code>/// The next mip: each texel the mean of a 2×2 box.
+fn downsample(&amp;self) -&gt; Level {
+    self.reduce(|box_texels, values| {
+        values.extend((0..self.components).map(|component| {
+            box_texels.iter().map(|texel| texel[component]).sum::&lt;f32&gt;() / 4.0
+        }));
+    })
+}</code></pre>
+<pre class="code"><code>fn reduce(&amp;self, combine: impl Fn([&amp;[f32]; 4], &amp;mut Vec&lt;f32&gt;)) -&gt; Level {
+    let (width, height) = ((self.width / 2).max(1), (self.height / 2).max(1));
+    let components = self.components;
+    let at = |x: u32, y: u32| {
+        let (x, y) = (x.min(self.width - 1), y.min(self.height - 1));
+        &amp;self.values[(y * self.width + x) as usize * components..][..components]
+    };
+    let mut values = Vec::with_capacity((width * height) as usize * components);
+    for y in 0..height {
+        for x in 0..width {
+            let box_texels = [
+                at(2 * x, 2 * y),
+                at(2 * x + 1, 2 * y),
+                at(2 * x, 2 * y + 1),
+                at(2 * x + 1, 2 * y + 1),
+            ];
+            combine(box_texels, &amp;mut values);
+        }
+    }</code></pre>
+  <p class="code-source"><code>src/cook/texture.rs</code>, the head of <code>Level::reduce</code>. A cook test checks for the 188 (<a href="cook-texture.html#linear">Texture cooking</a>). A box in linear light is still a box: each mip removes detail finer than its texel with the same sinc, and the research note found the cooked mips within 0.49 steps of the exact mean.</p>
+  <p>The bench's supersampled reference is built the same way. <code>Aliasing::between</code> decodes the Golden's frame and the same frame at three times its width and height through the sRGB curve, averages each 3&times;3 block of the larger in linear light, and takes each pixel's error as the root mean square of its three channels' differences; <code>aliasing_rmse</code> is the root mean square of every pixel's error and <code>aliasing_p99</code> the 99th percentile pixel error, both in millionths, so they compare as integers.</p>
+</section>
+
+<section class="part prose" id="reference">
+  <div class="part-mark">7 &middot; <code>Aliasing</code> &middot; <code>measure_aliasing</code></div>
+  <h2>A supersampled reference rewards blur on glints</h2>
+  <p class="key-idea">A reference rendered at three times the size and box-filtered in linear light is the engine's own render with more samples. On a fixed pattern it measures filtering fairly. In a highlight it resolves glints that no one-sample render can place, and RMSE then scores the blurriest candidate best.</p>
+  <p>The reference is not the physics of a real floor: it is Praxis's own 16x render with nine samples per pixel, so a distance from it measures how a candidate filters against more samples of the same shading. The checker is fixed in texture space, so the reference and every candidate show it in the same place, and its error measures filtering: the sampler's probe counts were chosen this way, with 16 probes everywhere closest on the checker.</p>
+  <p>In the highlight the reference holds glints, since it samples each pixel nine times and catches the bumps' reflections where they are. A one-sample render's glints land wherever its single sample happens to fall. RMSE squares every difference, so a glint in the wrong place costs twice, once where it should be and once where it is, while a blur that never commits costs less. The smoothest settings score best there, and the highlight was judged by eye instead:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Candidate</th><th class="n">Band</th><th class="n">Highlight</th><th class="n">Checker</th></tr></thead>
+    <tbody>
+      <tr><td>16 probes, every Channel</td><td class="n">16.09</td><td class="n">33.89</td><td class="n">2.98</td></tr>
+      <tr><td>colour 16, data 1</td><td class="n">13.42</td><td class="n">27.65</td><td class="n">3.59</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">RMSE in 8-bit steps against the reference over <code>minification</code>'s far band, its highlight and its checker, two of the nine candidates measured when the probe counts were chosen, a measurement of its day. The blurrier candidate wins the highlight and loses the checker.</p>
+  <p>Data Textures at 4 probes came out of that judgment. Sixteen probes everywhere left single-pixel sparkle along the highlight, from normals the probes took at finer mips than the cooked roughness was widened for; at 4 the data probes read coarser mips, whose roughness carries the spread, so the sparkle went and the pass cost less, while the checker's albedo, still at 16, moved 3% further from the reference (<a href="lit-pass.html#specular">The lit pass</a>, <a href="cook-texture.html#toksvig">Texture cooking</a>). The same bias holds for the bench's counters: a change that blurs a highlight lowers <code>aliasing_rmse</code>, so a lower figure is not by itself a better image.</p>
+</section>
+
+<section class="part prose" id="gaussian">
+  <div class="part-mark">8</div>
+  <h2>A Gaussian instead</h2>
+  <p class="key-idea">A Gaussian of standard deviation &sigma; keeps exp(&minus;2&pi;&sup2;&sigma;&sup2;/p&sup2;) of a sinusoid of period p: no sidelobes, no sign flips, and a fall far faster than the box's. Its price is blur: it also dims detail the box keeps. No filter beyond the box is chosen.</p>
+  <div class="formula">Gaussian of &sigma;:  exp(&minus;2&pi;&sup2; &sigma;&sup2; / p&sup2;) &middot; cos(2&pi;c/p)
+box of w:        sinc(w/p)          &middot; cos(2&pi;c/p)</div>
+  <p>The Gaussian's factor is always positive and only falls, so a pixel can never show a residue of the wrong sign, and once it is small it stays small. That removes both halves of section 4's mechanism. The cost shows on detail that is resolved: at &sigma; = 0.75 px a sinusoid with a period of 4 px keeps about 0.50 of its contrast, against the box's sinc(1/4) &asymp; 0.90. The Gaussian halves checks that the box keeps nearly whole. That is the trade every candidate faces: the far band's moir&eacute; against the near band's sharpness.</p>
+  <p>A LOD bias, the first knob most engines reach for, barely helps here. It reads a coarser mip for every probe, which widens each probe across the footprint, while section 5's rule still spaces N probes along the footprint's length: the box along stays as long as it was, with the same sinc. On this floor a bias of +1 moved the research note's moir&eacute; score from 5.31 to 5.00 and left the arcs.</p>
+  <p>The research note measured the candidates, among them Gaussian-weighted probes along the major axis, a footprint widened through explicit gradients, per-sample shading with a wide resolve, exact EWA and wider mip prefilters, and ends in options for the owner. Stochastic texture filtering, which resolves its noise over frames, is ruled out by ADR 0008. Praxis keeps the box until that choice is made.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_black_and_white_checker_filters_in_linear_light</code></td><td><code>tests/cook.rs</code></td><td>an 8&times;8 one-texel checker's first mip decodes within 2 of 188 in each colour: the mean is taken in light</td></tr>
+      <tr><td><code>the_supersampled_render_is_box_filtered_in_linear_light</code></td><td><code>src/bench/mod.rs</code></td><td>a block of three white and six black pixels averages to a third, not to the encoded 85</td></tr>
+      <tr><td><code>an_image_matching_its_supersampled_render_has_no_aliasing</code></td><td><code>src/bench/mod.rs</code></td><td>an image equal to its 3x render's box reads 0 on both counters</td></tr>
+      <tr><td><code>aliasing_fails_past_its_tolerance_against_its_baseline</code></td><td><code>src/bench/mod.rs</code></td><td><code>check_aliasing</code> judges each counter by <code>WARN_RATIO</code> and <code>FAIL_RATIO</code> with no noise floor, so a rise past them is a change of the image</td></tr>
+      <tr><td><code>skipped_aliasing_passes_and_aliasing_without_a_baseline_fails</code></td><td><code>src/bench/mod.rs</code></td><td>a run that skipped the counters compares the rest; one measured against a Baseline without them fails until it is re-recorded</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td><code>minification</code>'s and <code>texture-wall</code>'s Goldens, the checker floor and the Texture-dense wall, pixel for pixel per backend</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">10 &middot; <code>aliasing_rmse</code> &middot; <code>aliasing_p99</code></div>
+  <h2>What it costs</h2>
+  <p>A box costs nothing beyond the hardware's probes and the cooker's means. What it lets through is in the Baselines' aliasing counters, each run's Golden frame against its own 3x render, box-filtered in linear light, in millionths of the linear range:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">RMSE</th><th class="n">p99</th></tr></thead>
+    <tbody>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">32,960</td><td class="n">143,799</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">35,304</td><td class="n">145,354</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">35,459</td><td class="n">147,720</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">18,973</td><td class="n">35,784</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">20,044</td><td class="n">38,865</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">18,883</td><td class="n">35,523</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">10,958</td><td class="n">15,042</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">10,954</td><td class="n">15,100</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">11,001</td><td class="n">15,019</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,558</td><td class="n">33,364</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,340</td><td class="n">49,559</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">7,112</td><td class="n">35,657</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,078</td><td class="n">15,451</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5,092</td><td class="n">15,431</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">5,097</td><td class="n">15,455</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,221</td><td class="n">13,754</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,219</td><td class="n">13,744</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,220</td><td class="n">13,728</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>bench/baselines/</code> at the commit above, every scene at 2560&times;1440; CI's lavapipe Baselines record no aliasing. <code>minification</code>'s figures are the checker's residue and the highlight's sparkle together; <code>uv-grid</code> differs most between adapters, whose samplers round the probe count differently. What each candidate filter would cost the frame is the research note's table, and no Baseline carries one.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">11 &middot; ADRs 0008, 0019</div>
+  <h2>Why this way</h2>
+  <p><b>The box, today.</b> It is what the hardware's probes and the cooker's means do for free, and the exact reference shows the arcs are its own residue, not a defect of any step in the texture path. Keeping it is option A of the research note, until the owner chooses.</p>
+  <p><b>A Gaussian pixel filter over supersamples.</b> The offline answer, pbrt's default, reaches the exact Gaussian reference within about a step. It needs samples inside the pixel, so it means shading per sample, which ADR 0019's lit pass does not do: it shades once per pixel under 4x MSAA, and per-sample shading cost <code>town</code>'s gate more than the whole gate reads today.</p>
+  <p><b>A wide MSAA resolve.</b> A Gaussian over the finished image removes the arcs, but blurs every edge, highlight and texture alike, and filters residue the box already aliased into each pixel rather than the texture. ADR 0008 also keeps screen-space history out of the frame, so no resolve can borrow neighbouring frames' samples.</p>
+  <p><b>Gaussian-weighted probes along the major axis.</b> Feline's and Mavridis and Papaioannou's shader-side probes fit the lit pass as it is: explicit-gradient samples in <code>fs_main</code>, no new wgpu feature, no history. They remove the arcs at the Gaussian's blur and a measurable cost to the gate; whether to pay it, and at which &sigma;, is the open choice.</p>
+  <p><b>Temporal and stochastic filtering.</b> Stochastic texture filtering applies any kernel at a fixed cost and resolves its noise over frames; ADR 0008 rules out temporal accumulation, so it is out.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">12</div>
+  <h2>Limits</h2>
+  <p><b>No fix chosen.</b> The far band keeps its arcs, as the exact box reference has them.</p>
+  <p><b>One floor measured.</b> Only <code>minification</code>'s checker was compared with an exact reference; the other scenes' counters measure their Golden frames against the engine's 3x render alone.</p>
+  <p><b>The reference is Praxis's own render.</b> It filters more samples of the same shading, not a real floor, so it cannot show a bias every sample shares.</p>
+  <p><b>RMSE favours blur on glints.</b> A sharper highlight can score worse than a blurred one; the counters measure aliasing, not blur, and a drop in them needs the image looked at.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sampling_Theory.html#IdealSamplingandReconstruction">Pharr, Jakob and Humphreys, Physically Based Rendering, 4th ed., &sect;8.1.2 Ideal Sampling and Reconstruction</a></dt><dd>Nyquist, aliasing, and the box's spectrum, which neither isolates the signal nor rejects frequencies past the limit</dd>
+    <dt><a href="https://pbr-book.org/4ed/Sampling_and_Reconstruction/Image_Reconstruction.html#BoxFilter">The same, &sect;8.8.3 Box Filter, and &sect;8.8.5 Gaussian Filter</a></dt><dd>the box as "just about the worst filter possible"; the Gaussian's slight blur, which masks remaining aliasing</dd>
+    <dt><a href="https://doi.org/10.1145/54852.378514">Mitchell and Netravali, Reconstruction Filters in Computer Graphics, SIGGRAPH 1988</a></dt><dd>postaliasing, and the checkerboard's moir&eacute;</dd>
+    <dt><a href="https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf">Heckbert, Fundamentals of Texture Mapping and Image Warping, UCB/CSD 89/516, 1989</a></dt><dd>texture filtering as resampling, the box's side lobes, and elliptical Gaussian filters</dd>
+    <dt><a href="https://graphicon.ru/oldgr/library/siggraph/99/papers/mccormac/mccormac.pdf">McCormack, Perry, Farkas and Jouppi, Feline: Fast Elliptical Lines for Anisotropic Texture Mapping, SIGGRAPH 1999</a></dt><dd>Gaussian-weighted probes along the major axis, and what equal weights lose</dd>
+    <dt><a href="https://graphics.cs.aueb.gr/graphics/docs/papers/I3D11_EllipticalFiltering_draft.pdf">Mavridis and Papaioannou, High Quality Elliptical Texture Filtering on GPU, I3D 2011</a></dt><dd>Gaussian-weighted hardware probes approximating an elliptical filter, in a shader</dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/b94f8bd2d004d2949469d8a5071ee10eb7d23566/chapters/textures.adoc#L2769-L2826">Vulkan specification, Texel Anisotropic Filtering</a></dt><dd>the implementation-dependent example: N equal-weight probes along the major axis; its Scale Factor and LOD operations give N and the level</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L2318-L2328">wgpu-core 30.0.1, <code>Device::create_sampler</code></a></dt><dd>anisotropy clamped to 1 on an adapter without the anisotropic filtering downlevel flag; <code>wgpu-core-30-anisotropy-clamp</code></dd>
+    <dt><a href="https://bartwronski.com/2021/02/15/bilinear-down-upsampling-pixel-grids-and-that-half-pixel-offset/">Wronski, Bilinear down/upsampling, aligning pixel grids, and that infamous GPU half pixel offset, 2021</a></dt><dd>a 2&times;2 box downsample both blurs and leaves aliasing</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0008-stable-image-without-temporal-tricks.md">ADR 0008</a></dt><dd>no screen-space history, which rules out temporal and stochastic filtering</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a></dt><dd>the lit pass shades once per pixel under 4x MSAA</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/research/minification-filtering.md">The research note on minification filtering</a></dt><dd>the exact reference, every candidate's measurement on the M4 Pro, and the options</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The arcs were found during the third milestone's work on <code>minification</code>, in an exact reference that averages the checker over each pixel's footprint, so no step of the texture path was to blame. The sampler's probe counts, 16 for colour and 4 for data, were chosen earlier against a supersampled reference, where the reference's bias toward blur on glints was noticed. The candidate filters were then measured and left as options in the research note, no fix chosen, and the bench gained its aliasing counters so that a change of the image shows against its Baseline.</p>
+  <footer class="sources">Written from <code>src/cook/texture.rs</code>, <code>src/assets/material.rs</code>, <code>src/bench/mod.rs</code>, <code>tests/cook.rs</code>, the Baselines, <code>docs/research/minification-filtering.md</code>, ADRs 0008 and 0019, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="cook-texture.html">Previous: Texture Cooking</a><a href="index.html">All field guides</a><a href="distant-textures.html">Next: Distant Textures Explained</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

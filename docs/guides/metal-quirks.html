@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Metal quirks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; concept &middot; <code>docs/performance.md</code></div>
+  <h1>Metal quirks</h1>
+  <p class="definition">Metal on the Apple M4 Pro, through wgpu 30.0.1, behaves in nine measured ways no specification promises, from merging two triangles' fragments in a pixel to running a whole frame's passes one after another once frames queue, and Praxis's code carries one answer to each: a flat input read to no effect, a scan in place of atomics, a Taylor series in place of a sine, a shared event in place of a barrier, an indirect dispatch at the head of a pass.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on: what the reference machine's Metal backend does that the specifications do not promise, each measured on the Apple M4 Pro and each with the code that answers it; a new measurement or a change to that code rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="depth-prepass.html#flat">The depth pre-pass</a>, <a href="msaa.html#inputs">MSAA</a>, <a href="lit-pass.html#specular">The lit pass</a>, <a href="culling-pass.html#order">The culling pass</a>, <a href="bend-pass.html#vertex">The bend pass</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="shadow-mask.html#surface">The shadow mask pass</a>, <a href="depth-pyramid-pass.html#level-zero">The depth pyramid pass</a>. <b>Read first:</b> <a href="msaa.html">MSAA</a>, for samples and fragments.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">In the frame</h2>
+    <dl>
+      <dt>Merging</dt><dd>Every main pass fragment stage reads the flat <code>material_id</code>; <code>fs_surface_normals</code> compares it with <code>NO_MATERIAL - 1</code>, which no Material has, so the compiler keeps the read.</dd>
+      <dt>Derivatives</dt><dd>The lit pass widens roughness from <code>dpdx(normal)</code> and <code>dpdy(normal)</code>, which the M4 Pro takes once per 2&times;2 quad, and <code>fs_surface_normals</code> takes the triangle's normal from the position's derivatives.</dd>
+      <dt>Draw order</dt><dd>The culling pass places each Instance's records and indices by <code>exclusive_scan</code>, in slot order; atomics count only what no order changes.</dd>
+      <dt>Fast math</dt><dd><code>sinc</code> in <code>bend.wgsl</code> takes its Taylor series below 0.5 rad, and the dynamic TLAS grows each box by <code>BEND_ROUNDING_SHARE</code>; each Instance is tested in one entry point.</dd>
+      <dt>Rounding and facing</dt><dd>The shadow mask's margins cover a Unorm store that rounds to either neighbour, and <code>shadowed</code> reads each hit's <code>front_face</code> itself.</dd>
+      <dt>Hazards</dt><dd><code>compact_blases</code> waits on the CPU for the copies at load; the crowd's refit signals a shared event that the dynamic TLAS's build waits on, through <code>Order</code> in <code>blas_refit.rs</code>.</dd>
+      <dt>Queued frames</dt><dd>The shadow mask pass dispatches <code>trace_second_surfaces</code> and <code>trace_shadow_edges</code> indirectly, which keeps the frame's passes overlapping when frames queue.</dd>
+      <dt>The compiler</dt><dd><code>pixel_minimum</code> and <code>build_shadow_mask</code> load the four samples by index; the lit pass shades the first directional light without a branch; <code>final_depth_attachment</code> discards depth unless a later pass reads it.</dd>
+      <dt>The kernel</dt><dd>No answer yet: the time the kernel spends scheduling the lit pass's command buffer, which grows faster than its distinct Textures, is reported as the lit pass's wait in Frame stats.</dd>
+      <dt>Measured on</dt><dd>One Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal. Every other GPU family is unmeasured.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#merging">1 &middot; Merging</a>
+    <a href="#derivatives">2 &middot; Derivatives</a>
+    <a href="#order">3 &middot; Draw order</a>
+    <a href="#fast-math">4 &middot; Fast math</a>
+    <a href="#rounding">5 &middot; Rounding and facing</a>
+    <a href="#hazards">6 &middot; Hazards</a>
+    <a href="#overlap">7 &middot; Queued frames</a>
+    <a href="#compiler">8 &middot; The compiler</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="merging">
+  <div class="part-mark">1 &middot; <code>fs_surface_normals</code> &middot; <code>coverage_tests.rs</code></div>
+  <h2>Index-sharing fragments merge unless a flat input is read</h2>
+  <p class="key-idea">Under 2x or 4x MSAA, when a fragment stage reads no flat-interpolated input, the M4 Pro can merge the fragments of nearby triangles of one draw that share vertex indices in a pixel both cover: one fragment, with one triangle's interpolated inputs, writes the samples of both. The samples covered stay exact; which triangle's inputs they receive does not. Reading any flat input stops it.</p>
+  <p>A fragment's inputs come from its triangle's vertices. Most are interpolated across the triangle; a flat input, declared <code>@interpolate(flat)</code>, is not, and every fragment of a triangle reads the value one vertex wrote. A <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).">Meshlet</span>'s triangles share vertices, and two that meet along an edge name the same two vertex indices; Praxis's packed indices carry the Meshlet record in their high bits, so triangles of different Meshlets or <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> never share an index.</p>
+  <h3>How it was measured</h3>
+  <p><code>coverage_tests.rs</code> draws quads with sides of 0.3 to 1.5 px into a 256&times;256 multisampled ID target. The fragment stage writes each sample's triangle ID, and a compute pass reads the target back per sample. The flat scene's 4,096 quads do not overlap, so an analytic oracle knows every sample's owner; it leaves out samples within 0.01 px of an edge, where rounding could go either way. Each quad is drawn as the cooker draws one, 0 1 2 then 0 2 3, so its two triangles, partners, share two indices, and each carries a weight that only its first triangle interpolates and one that only its partner does, so a fragment's smooth inputs alone say which triangle they were interpolated over.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Draw of the flat scene</th><th class="n">4x</th><th class="n">2x</th><th class="n">1x</th></tr></thead>
+    <tbody>
+      <tr><td>Partner with its own indices, as another Meshlet or Instance</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+      <tr class="focus"><td>Partner sharing two indices, as within a Meshlet</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+      <tr><td>The same, sample-rate shading</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+      <tr><td>The same, IDs from smooth inputs alone</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+      <tr><td>The same, <code>primitive_index</code> beside a smooth input</td><td class="n">1,421</td><td class="n">268</td><td class="n">0</td></tr>
+      <tr><td>The same, <code>primitive_index</code> beside a flat input</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+      <tr><td>Every other quad removed</td><td class="n">760</td><td class="n">145</td><td class="n">0</td></tr>
+      <tr><td>One triangle between partners</td><td class="n">1,286</td><td class="n">257</td><td class="n">0</td></tr>
+      <tr><td>Every partner after every first triangle</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+      <tr><td>Partners in another draw call</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Samples whose ID departs from the oracle, a selection of the rows in <code>docs/performance.md</code>'s section on index-sharing fragments. Every departure went to the partner, never to another quad or to an empty sample, and every count was identical over three runs.</p>
+  <p><b>Fragments, not just the index.</b> IDs built from smooth inputs alone depart exactly where <code>primitive_index</code> does, so a merged fragment carries one triangle's interpolated inputs onto the other's samples. <b>A flat input stops it.</b> Every row that reads one departs nowhere, even where the flat value is the same for both triangles: what matters is that the stage reads one, not what it holds. <b>What triggers it.</b> No flat input, shared vertex indices, nearness in the draw and more than one sample per pixel; one triangle between partners still merges most, a partner thousands of triangles later or in another draw call never, and sample-rate shading does not stop it. <b>Coverage is exact.</b> The samples the two triangles cover together do not change; only their attribution moves, and how it moves depends on what else the draw holds, so removing every other quad turns 1,421 into 760.</p>
+  <p>Fatahalian and colleagues proposed something like it in 2010, as a way to cut the shading cost of small triangles: gather the fragments of adjacent triangles of a mesh and shade them once, with inputs chosen from one of them. Their paper says nothing about flat inputs, and no Apple documentation, talk or forum answer describes the M4 Pro's behaviour. The resemblance is a reading, not a source; a plausible explanation, which no source confirms, is that inputs interpolated across a triangle can be evaluated for a neighbour, while a flat input belongs to one primitive and cannot be shared.</p>
+  <h3>What the code does</h3>
+  <p>A pass that decides from which triangle a sample shows, and a pair of passes that must agree on it, read a flat input. The depth passes write each sample's surface normals that the shadow mask pass traces from, and the lit pass shades the same sample from its own fragment's triangle; the lit pass has always read a flat <code>material_id</code>, so its fragments never merged, and the depth passes read one too, to no effect:</p>
+<pre class="code"><code>struct DepthNormalsOutput {
+    @builtin(position) @invariant clip_position: vec4&lt;f32&gt;,
+    @location(0) camera_relative_position: vec3&lt;f32&gt;,
+    @location(1) normal: vec3&lt;f32&gt;,
+    @location(2) @interpolate(flat) material_id: u32,
+}</code></pre>
+<pre class="code"><code>    <span class="comment">// Reads the flat input, so the stage has one the compiler cannot drop,
+    // to no effect: Material IDs index the Material table, far below
+    // NO_MATERIAL - 1.</span>
+    return select(encoded_normals, vec4&lt;f32&gt;(0.0), in.material_id == NO_MATERIAL - 1u);</code></pre>
+  <p class="code-source"><code>main.wgsl</code>, the depth passes' vertex output and the end of <code>fs_surface_normals</code>. An input the shader never reads can be dropped by the compiler, and then the stage reads no flat input after all; the comparison with <code>NO_MATERIAL - 1</code>, which is one below the largest u32, never holds for an ID that indexes a table of <code>MATERIAL_CAPACITY</code> Materials, but the compiler cannot bound a value read from a vertex output, so it keeps the read (<a href="depth-prepass.html#flat">The depth pre-pass</a>, <a href="msaa.html#inputs">MSAA</a>).</p>
+  <p>Invariance could not do it. <code>clip_position</code> is <code>@invariant</code> in every main pass entry point, and wgpu turns on Metal's preserved invariance, but WGSL's attribute and Apple's option cover the position output alone: they make both passes compute the same depth, which they did. The disagreement was over which triangle owns a sample at that depth, and Vulkan's invariance appendix, the most explicit of the three specifications, promises identical fragments only for identical pipelines or across a listed set of state changes; a different fragment shader is not among them.</p>
+</section>
+
+<section class="part prose" id="derivatives">
+  <div class="part-mark">2 &middot; <code>dpdx</code> &middot; <code>decode_surface</code></div>
+  <h2>Derivatives are one difference per 2&times;2 quad</h2>
+  <p class="key-idea">A fragment shader never runs alone: the GPU runs its invocations in 2&times;2 quads, so each can take a derivative by subtracting a neighbour's value. On the M4 Pro, <code>dpdx</code> and <code>dpdy</code> in the lit pass behave as one difference for the whole quad, from its top left pixel, not as each pixel's own difference.</p>
+  <p>Where a triangle covers only some of a quad's pixels, the GPU fills the rest with helper invocations, which compute values only so their neighbours can difference against them and whose outputs are discarded. A triangle about a pixel across can occupy a whole quad to shade one pixel, and a pixel on the edge between two triangles is shaded in two quads. WGSL leaves the form open: <code>dpdx</code> returns the same as either its fine form, which differences within each row and column of the quad, or its coarse form, which may use fewer unique positions.</p>
+  <p>Which form the M4 Pro takes was measured by a prototype that shaded <code>town</code> from per-sample triangle IDs in a compute pass, where no quad exists and the gradients have to be computed by hand. Differencing each pixel against its own right and lower neighbours left 132 to 2,054 pixels of 230,400 more than one 8-bit step from the lit pass's image, over the Goldens' eight frames; differencing from the quad's top left pixel, shared by the quad, left 5 to 617. The per-quad form cut the differences by a factor of 2 to 30, so the lit pass's derivatives are per quad, and a compute pass that must match it differences across the quad. The prototype's image, at its best, differed from the lit pass's at a few thousand pixels on the silhouettes of geometry under a pixel wide.</p>
+  <p>What relies on it on <code>main</code> is the lit pass's specular filter, which widens roughness by how fast the shading normal turns across the pixel:</p>
+<pre class="code"><code>    <span class="comment">// The normal's change across a pixel widens roughness. The lit pass
+    // shades once per pixel under 4x MSAA, not per sample, so these
+    // derivatives are per pixel, the footprint the filter assumes.</span>
+    let surface = decode_surface(
+        material,
+        albedo,
+        metallic_roughness,
+        occlusion,
+        emissive,
+        dpdx(normal),
+        dpdy(normal)
+    );</code></pre>
+  <p class="code-source"><code>main.wgsl</code>, in <code>fs_main</code>. The same quad gives <code>fs_surface_normals</code> its triangle normal, from the cross product of the camera-relative position's two derivatives, a plane the quad's four invocations share (<a href="lit-pass.html#specular">The lit pass</a>).</p>
+</section>
+
+<section class="part prose" id="order">
+  <div class="part-mark">3 &middot; <code>exclusive_scan</code> &middot; <code>culling.wgsl</code></div>
+  <h2>Which triangles precede others changes the image</h2>
+  <p class="key-idea">On the M4 Pro, implicit derivatives at triangle edges depend on how the GPU batches a draw's triangles, so two draws of the same triangles in different orders give different images. The frame's draw is built in slot order within each culling phase, never in the order atomics land, so every run draws the same index stream.</p>
+  <p>The culling pass's first version appended each Instance's Meshlet records and packed indices through a shared atomic count, so an Instance's place in the draw depended on when its workgroup reached the count. Metal captures of the <code>orrery</code> then moved 64 to 97 pixels from run to run, and equal arguments no longer gave equal images. The geometry was the same in every run: each Meshlet triangle mapped back to the cooked index stream, 2,208 of 2,208, corners in order. With the mip level named explicitly, through a level-sampling call in place of the implicit one, the scene rendered bit-identical three runs out of three. What moved was the implicit derivatives at triangle edges, computed from neighbouring invocations in a quad, which on the M4 Pro depend on how the GPU batches the draw's triangles.</p>
+  <p>So the pass works each position out from the slots' order and counts alone, with a running sum over each block of slots and one more over the blocks:</p>
+<pre class="code"><code><span class="comment">// The culling pass's entry points, after the shared parts: they append the
+// Meshlets of the Instances they draw to the frame's draw in slot order,
+// which the main pass draws with one indirect call per phase and depth
+// pipeline, and one of both phases for the lit pipeline (ADR 0019).</span></code></pre>
+<pre class="code"><code><span class="comment">// The sum of `value` over the workgroup's invocations before this one, which
+// they all call together: a Hillis and Steele scan
+// [ref:hillis-steele-partial-sums], read one place back.</span>
+fn exclusive_scan(invocation: u32, value: vec2&lt;u32&gt;) -&gt; vec2&lt;u32&gt; {
+    scan[invocation] = value;
+    for (var stride = 1u; stride &lt; SCAN_BLOCK_SIZE; stride *= 2u) {
+        workgroupBarrier();
+        var before = vec2&lt;u32&gt;(0u);
+        if invocation &gt;= stride {
+            before = scan[invocation - stride];
+        }
+        workgroupBarrier();
+        scan[invocation] = saturating_add(scan[invocation], before);
+    }</code></pre>
+  <p class="code-source"><code>culling.wgsl</code>, its opening comment and the head of <code>exclusive_scan</code>. Atomics remain where order cannot matter: the draw's index count is an <code>atomicMax</code>, its Instance counts <code>atomicAdd</code>, and phase two's visibility words <code>atomicOr</code>, each of which ends at the same value whatever order the invocations run in (<a href="culling-pass.html#order">The culling pass</a>).</p>
+  <p>Slot order still moved one <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span> once: with all five of the orrery's spheres in one draw, the M4 Pro batched their triangles differently than before, and 80 of the capture's 230,400 pixels moved by more than one step, at most 24, all on the grid texture's lines at triangle edges; software Vulkan's Goldens did not move. The owner accepted the rewritten Metal Golden and the rule, which the review checklist in <code>CLAUDE.md</code> carries: the GPU builds the frame's draw in slot order within each culling phase, never in the order atomics land.</p>
+</section>
+
+<section class="part prose" id="fast-math">
+  <div class="part-mark">4 &middot; <code>sinc</code> &middot; <code>BEND_ROUNDING_SHARE</code></div>
+  <h2>Fast math across entry points, and in sine</h2>
+  <p class="key-idea">Metal compiles shaders with fast math by default, and wgpu-hal sets no math mode. The compiler may then reassociate sums and fuse a multiply and an add, so two entry points that test the same value can disagree at its boundary, and sine is accurate only to an absolute error, not to a share of its result.</p>
+  <p>The Metal Shading Language specification says of its math mode that the default is fast, which lets the compiler assume no NaNs or infinities and allow reassociation and fast floating-point contraction. In f32, (x + y) + z and x + (y + z) can round to different values, and a fused multiply-add rounds once where a multiply then an add round twice. Two entry points compiled separately can each choose. A Meshlet culling prototype met this: counting an Instance's kept indices in one dispatch and writing them in another, each testing the same cone against the same numbers, the count could say kept and the write say dropped for a Meshlet within a rounding step of its boundary, leaving a gap of indices nothing wrote, or an overrun. The prototype tested each Meshlet once and wrote the answer down; the culling pass on <code>main</code> tests each Instance once, in the dispatch that counts its records, and every later step reads its result.</p>
+  <p>Sine's bound is in the same specification's table of accuracy under fast math: for angles within &plusmn;&pi;, the absolute error is at most 2<sup>&minus;13</sup>, and larger outside. An absolute error divided by a small angle is magnified, so the bend pass's sin(x)/x, whose argument is half a figure's bend angle, takes its Taylor series where the angle is small:</p>
+<pre class="code"><code><span class="comment">// sin(angle) / angle, sinc, by its Taylor series below 0.5 radians, whose
+// first term left out, angle⁸ / 9!, is under 1.1e-8 there: Metal compiles
+// with fast math [ref:msl-4.1-fast-math], which leaves sin an absolute
+// error [ref:msl-4.1-sin-fast-accuracy] that dividing by a small angle
+// would magnify.</span>
+fn sinc(angle: f32) -&gt; f32 {
+    let squared = angle * angle;
+    let series = 1.0 - squared / 6.0 * (1.0 - squared / 20.0 * (1.0 - squared / 42.0));
+    return select(sin(angle) / angle, series, abs(angle) &lt; 0.5);
+}</code></pre>
+  <p class="code-source"><code>bend.wgsl</code>. The crowd never leaves the series: its largest half angle, half of <code>CROWD_SWAY_CURVATURE</code> times <code>CROWD_FIGURE_HEIGHT</code>, is 0.315 rad (<a href="bend-pass.html#vertex">The bend pass</a>).</p>
+  <p>The error that remains reaches the dynamic TLAS. Each bent vertex is built from a few sines and cosines, so it lands off its exact shape by a few times 2<sup>&minus;13</sup> of its distance from the Mesh's origin, and the box that lets a shadow ray skip the dynamic TLAS has to hold the rounded vertex too:</p>
+<pre class="code"><code><span class="comment">/// The share of a Mesh's largest coordinate its box grows by before it is
+/// placed, for the bend pass's rounding: under Metal's fast math, sine errs
+/// by up to 2^-13 within ±π [ref:msl-4.1-sin-fast-accuracy], and a bent
+/// vertex, built from a few sines and cosines over its height and its
+/// distance from the middle, lands off its exact shape by a few times that
+/// share of its distance from the Mesh's origin, by estimate, as no
+/// specification bounds cosine or angles past ±π, which an azimuth can be.
+/// Every Mesh grows, as which ones bend is not known here.</span>
+const BEND_ROUNDING_SHARE: f32 = 0.00390625; <span class="comment">// 2^-8</span></code></pre>
+  <p class="code-source"><code>acceleration_structures.rs</code> (<a href="dynamic-tlas.html#box">The dynamic TLAS</a>).</p>
+</section>
+
+<section class="part prose" id="rounding">
+  <div class="part-mark">5 &middot; <code>octahedral_decode</code> &middot; <code>front_face</code></div>
+  <h2>Unorm rounds to nearest, and a front face is what the shader reads</h2>
+  <p class="key-idea">Metal rounds a Unorm store to the nearest step; Vulkan only recommends it and may round to either neighbour, which roughly doubles the error of a stored normal. Neither Metal's documented default winding nor naga settles which side of a triangle a ray query calls its front, so the shader reads the answer and a test decides it.</p>
+  <p>The depth passes store each sample's two normals as octahedral coordinates in an <code>Rgba8Unorm</code> target, 8 bits per coordinate, which hold a direction within 0.95&deg; where the store rounds to nearest. The Metal Shading Language specification allows either round-to-nearest-even or round-toward-zero for single-precision operations, and Vulkan's Unorm conversion is a recommendation; so the shadow mask's margins are sized for both:</p>
+<pre class="code"><code><span class="comment">// The cosines, of a light's angle from a plane, past which a sample's normals
+// face the light or turn from it: sin 2° for the first two, the stored
+// normals' error, and sin 10° for the third. The surface normals'
+// 8-bit octahedral coordinates hold each within 0.95° where the store rounds
+// to the nearest step, as Metal's does, and about twice that where it may
+// round to either (`octahedral_decode`).</span></code></pre>
+  <p class="code-source"><code>shadow_mask.wgsl</code>, above <code>INTERPOLATED_TURN_MARGIN</code>, <code>AGREEING_TRIANGLE_TURN_MARGIN</code> and <code>TRIANGLE_TURN_MARGIN</code> (<a href="depth-prepass.html#normals">The depth pre-pass</a>).</p>
+  <p>A triangle's front face is the side its normal, taken from its vertices in index order, points toward, and a ray query reports whether the ray met it in <code>front_face</code>. The Vulkan specification decides facing in the BLAS's own space, so a mirrored Instance does not flip it. On Metal, the shading language documents a clockwise default winding and naga sets none, which would seem to invert it; the sources do not settle it. Culling back faces in the traversal was not an option either: naga's Metal backend ignores the cull-back-facing ray flag. So <code>shadowed</code> reads the face itself, and uses it to tell a ray leaving its own mesh from one that met an occluder:</p>
+<pre class="code"><code>    var flags = select(0u, RAY_FLAG_TERMINATE_ON_FIRST_HIT, leaves_surface);
+    var start_distance = 0.0;
+    var hidden = false;
+    loop {
+        let hit = first_intersection(flags, origin, direction, start_distance, distance);
+        let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
+        let any_hit = (flags &amp; RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
+        if any_hit || !found || hit.front_face || hit.t + offset &gt;= distance {
+            hidden = found &amp;&amp; (any_hit || hit.front_face);
+            break;
+        }
+        flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+        start_distance = hit.t + offset;
+    }</code></pre>
+  <p class="code-source"><code>shadow_mask.wgsl</code>, the end of <code>shadowed</code>. A ray that starts inside the surface passes the first back face it meets, where it leaves its mesh, and traces on; a front face there is an occluder. An inverted <code>front_face</code> would hide the sun across every terminator band, and <code>tests/shadows.rs</code> would fail on Metal and on lavapipe alike (<a href="shadow-mask.html#ray">The shadow mask pass</a>).</p>
+</section>
+
+<section class="part prose" id="hazards">
+  <div class="part-mark">6 &middot; <code>compact_blases</code> &middot; <code>Order</code></div>
+  <h2>Tracking orders only what a command names</h2>
+  <p class="key-idea">Metal orders a read after a write by itself, but only for tracked resources a command binds directly. A TLAS build names its BLASes by resource ID inside a buffer, so Metal never learns that the build reads them, and wgpu-hal records no barrier on Metal in their place. Praxis orders the pair itself: on the CPU at load, and with a shared event in the frame.</p>
+  <p>A queue is an order, not a timeline: the GPU starts each command buffer after the ones ahead of it have started, not finished, and work that does not depend on earlier work, as far as the GPU knows, runs alongside it. Vulkan and Direct3D 12 leave the read-after-write hazard to the application, which records a barrier. Metal tracks it for the resources made from the device, the default, and only where a command binds such a resource directly; a resource the work reaches any other way, such as through an ID stored in a buffer, is outside it.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th></th><th>Vulkan</th><th>Direct3D 12</th><th>Metal</th></tr></thead>
+    <tbody>
+      <tr><td>Who orders a read after a write</td><td>the application, with a pipeline barrier</td><td>the application, with a resource barrier</td><td>Metal, for tracked resources the work binds directly; the application for anything else, with a barrier, a fence or an event</td></tr>
+      <tr><td>wgpu-hal 30.0.1 at an acceleration-structure barrier</td><td>records a pipeline barrier</td><td>records a UAV barrier</td><td>records nothing: the function is empty</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From Apple's resource synchronization documentation and wgpu-hal 30.0.1's acceleration-structure barrier in each backend.</p>
+  <p>wgpu-hal builds every TLAS on Metal in the indirect instance layout, where each entry holds its BLAS's acceleration structure ID and the descriptor names no BLAS, so a build after a BLAS write, or after the copy that compacts one, is ordered by nothing but chance. wgpu-core does know, and asks the backend for a barrier before and after the builds; on Metal the request arrives and no command is recorded. The residency set wgpu-hal makes per submission keeps the BLASes in memory and orders nothing, as Apple's documentation of residency sets says. The upstream report, 9215, is still open, with a fence-based fix in review.</p>
+  <p>At load, the Mesh pool waits on the CPU, once per frame that loads Meshes, for the compaction copies the static TLAS's build reads:</p>
+<pre class="code"><code>        <span class="comment">// The copies wait in the queue's pending writes until a submit.</span>
+        queue.submit(std::iter::empty());
+        if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+            tracing::error!(%error, "waiting for BLAS compaction failed");
+        }</code></pre>
+  <p class="code-source"><code>pools.rs</code>, the end of <code>compact_blases</code>. The empty submit is what makes the poll useful: the copies sit in wgpu-core's pending writes until something submits, and a poll waits only for submitted work (<a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>).</p>
+  <p>In the frame, a CPU wait would stall the main thread, which records and submits every frame, behind the GPU. The crowd's refit form, which updates each figure's BLAS every frame through wgpu-hal, orders the dynamic TLAS's build after the refits on the GPU instead: the submission that holds the refits signals a Metal shared event as it completes, and wgpu-hal's strict event sync holds every command buffer encoded after it, the build's among them, until the event reaches that value. Staging is queue-wide, as wgpu-hal's documentation warns: whichever submit runs next takes a staged signal or wait, and in Praxis only the main thread submits, presents or polls (ADR 0016), and the Renderer submits nothing between the refits and the build, nor calls what makes wgpu-core submit on its own, such as mapping a buffer with pending writes. Where Metal makes no shared event, the frame falls back to the CPU wait (<a href="blas-refit.html#order">The BLAS refit</a>).</p>
+</section>
+
+<section class="part prose" id="overlap">
+  <div class="part-mark">7 &middot; <code>dispatch_workgroups_indirect</code> &middot; <code>shadow_mask_pass.rs</code></div>
+  <h2>Queued frames stop passes overlapping, unless a pass dispatches indirectly</h2>
+  <p class="key-idea">With the GPU idle at a frame's start, Metal runs the Froxel pass beside culling phase one and the lit pass's vertex work beside the shadow mask pass. Once the CPU outpaces the GPU and each frame queues behind the one running, the whole frame ran one pass after another, unless the shadow mask pass holds an indirect dispatch, even one of zero workgroups, ahead of its direct ones. The mechanism is the driver's, and Apple does not document it.</p>
+  <p>Hazard tracking promises that commands after a write wait for it, and Apple GPUs can make a pass's fragment stage wait while its vertex stage runs; neither says when Metal runs a command buffer's passes one after another. The loss was first seen when the TLASes left the lit pass's bind group: the CPU frame fell by more than half, the GPU became the bottleneck, and with two frames in flight the frame's passes spanned more than with one, the lit pass no longer starting beside the shadow mask pass nor the Froxel pass beside culling. The raw timestamps showed the whole queued frame running pass after pass, the lit pass starting 11 &micro;s after the shadow mask pass ended, and the next frame's culling waiting for this frame's tonemapping.</p>
+  <p>Bisected, the overlap came back with the commit that gave the shadow mask pass its first indirect dispatch, and ablated on <code>main</code>, leaving both indirect dispatches out brings the loss back while an indirect dispatch of zero workgroups at the pass's start, launching nothing, removes it again. An empty shadow mask pass keeps the overlap and a doubled one loses it, so the pass's length is not the cause; nor is the per-submission residency set, since one set held for the queue's lifetime loses it too, nor the dynamic TLAS's build in its own submission. With shadow rays off there is no shadow mask pass, and queued frames keep the overlap.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Shadow mask pass on <code>main</code>, <code>town</code></th><th class="n">In flight</th><th class="n">GPU frame, &micro;s</th><th>Froxel pass</th><th>Lit pass</th></tr></thead>
+    <tbody>
+      <tr><td>Direct dispatches only, round 1</td><td class="n">2</td><td class="n">17,491.7</td><td>892 to 1,277</td><td>11,167 to 17,123</td></tr>
+      <tr><td>The same with an indirect dispatch of zero workgroups first</td><td class="n">2</td><td class="n">17,114.6</td><td>&minus;3 to 583</td><td>3,879 to 16,625</td></tr>
+      <tr><td>Direct dispatches only</td><td class="n">1</td><td class="n">17,305.2</td><td>55 to 590</td><td>3,758 to 16,073</td></tr>
+      <tr><td>Direct dispatches only, round 2</td><td class="n">2</td><td class="n">17,563.5</td><td>893 to 1,278</td><td>11,232 to 17,192</td></tr>
+      <tr><td>The same with an indirect dispatch of zero workgroups first</td><td class="n">2</td><td class="n">16,431.6</td><td>&minus;3 to 598</td><td>3,784 to 16,059</td></tr>
+      <tr><td>Direct dispatches only</td><td class="n">1</td><td class="n">16,958.4</td><td>55 to 582</td><td>3,734 to 15,914</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>docs/performance.md</code>'s section on queued <code>town</code> frames keeping their pass overlap: two interleaved rounds at 2560&times;1440 with shadow rays on, 1,800 measured frames each; the pass columns give the median start and end, in &micro;s, from culling phase one's start. The machine ran slower over the afternoon, so rows compare within a round.</p>
+  <p>On <code>main</code> the shadow mask pass records four dispatches: <code>build_shadow_mask</code> over the screen's tiles, <code>trace_second_surfaces</code> through <code>dispatch_workgroups_indirect</code> over the frame's list of edge pixels, <code>list_shadow_edges</code> over the tiles, and <code>trace_shadow_edges</code> indirectly over the list of shadow-edge pixels. The second and fourth keep the overlap, which a pass with direct dispatches alone would cost <code>town</code>'s queued frames again, as the table shows. What the span rule makes of the overlap, that a frame's GPU time runs from its passes' earliest start to their latest end rather than summing them, is the Frame stats page's matter.</p>
+  <h3>The kernel's scheduling of bound Textures</h3>
+  <p>One more Metal cost sits on the CPU, in the kernel, and no code answers it yet. The roughly 11 ms of <code>texture-wall</code>'s gate that no pass times is the time the kernel's GPU driver spends scheduling the Metal command buffer that holds the lit pass, between its commit and its start, which Apple's command buffer exposes as its kernel start and end times. The cost grows with the distinct Textures in the lit pass's material bind group, each of which wgpu-hal passes to Metal's residency call for the encoder, and grows faster than their count: with one distinct Texture bound, the gate reads about a twentieth of its Baseline. It does not depend on which Textures the quads sample, the depth passes, which bind the same group, add nothing, and the work grows with the machine's load, as CPU work in the kernel does. The bench reports the stretch as the lit pass's wait.</p>
+</section>
+
+<section class="part prose" id="compiler">
+  <div class="part-mark">8 &middot; <code>pixel_minimum</code> &middot; <code>final_depth_attachment</code></div>
+  <h2>What the compiler does not do</h2>
+  <p class="key-idea">Metal's shader compiler does not unroll a loop over a texture's four samples, a uniform branch around a term costs more than the term, a depth pass that stores writes the whole 4x target back, and ray-query code in a fragment shader costs even where no ray is traced. Each is answered where it was measured.</p>
+  <p><b>Loops over the samples.</b> Both passes that read every sample of the depth target load the four by index:</p>
+<pre class="code"><code><span class="comment">// The minimum depth of the depth target's four samples at `pixel`, which
+// Rust asserts it has (SAMPLE_COUNT), loaded together: Metal's compiler
+// does not unroll a loop over them.</span>
+fn pixel_minimum(pixel: vec2&lt;u32&gt;) -&gt; f32 {
+    return min(
+        min(textureLoad(depth, pixel, 0), textureLoad(depth, pixel, 1)),
+        min(textureLoad(depth, pixel, 2), textureLoad(depth, pixel, 3))
+    );
+}</code></pre>
+<pre class="code"><code>    <span class="comment">// The four samples Rust asserts the depth target has (SAMPLE_COUNT),
+    // loaded together: Metal's compiler does not unroll a loop over them.</span>
+    let depths = vec4&lt;f32&gt;(
+        textureLoad(depth_target, pixel, 0),
+        textureLoad(depth_target, pixel, 1),
+        textureLoad(depth_target, pixel, 2),
+        textureLoad(depth_target, pixel, 3)
+    );</code></pre>
+  <p class="code-source"><code>depth_pyramid.wgsl</code>, level 0's reduction, and <code>shadow_mask.wgsl</code>, in <code>build_shadow_mask</code>; a Rust assertion holds <code>SAMPLE_COUNT</code> at four for both (<a href="depth-pyramid-pass.html#level-zero">The depth pyramid pass</a>).</p>
+  <p><b>A branch around a light.</b> A uniform branch around the first directional light's shading slowed the lit pass on the M4 Pro, so the light is shaded whether or not the light buffer holds one, with inputs selected to keep the term finite and zero:</p>
+<pre class="code"><code>    <span class="comment">// The first directional light is shaded whether or not the light buffer
+    // holds one, since a branch around it slowed the lit pass on the M4 Pro
+    // (measured: `docs/performance.md`, Measurements behind the code):
+    // without one, its illuminance is zero and a fixed direction keeps the
+    // term finite. Any others follow.</span>
+    let has_directional_light = light.directional_light_count &gt; 0u;
+    let first = lights[0];
+    let first_direction = select(
+        vec3&lt;f32&gt;(0.0, 1.0, 0.0),
+        normalize(-first.offset),
+        has_directional_light
+    );</code></pre>
+  <p class="code-source"><code>main.wgsl</code>, in <code>fs_main</code> (<a href="lit-pass.html#lights">The lit pass</a>).</p>
+  <p><b>Storing depth.</b> A pass that writes depth and stores it writes the whole 4x target back from tile memory, a measurable cost at 1440p, so the frame's last depth-writing pass discards it unless a later pass reads it, which only the light count pass does, behind a Render switch that ships off:</p>
+<pre class="code"><code>    <span class="comment">/// The depth target as the attachment of the frame's last pass that
+    /// draws depth: loaded, and discarded unless `kept` for a later pass to
+    /// read. A pass that writes depth and stores it writes the whole target
+    /// back, a measurable cost at 1440p on the M4 Pro (measured:
+    /// `docs/performance.md`, Measurements behind the code).</span>
+    pub fn final_depth_attachment(&amp;self, kept: bool) -&gt; wgpu::RenderPassDepthStencilAttachment&lt;'_&gt; {
+        wgpu::RenderPassDepthStencilAttachment {
+            view: &amp;self.depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: if kept {
+                    wgpu::StoreOp::Store
+                } else {
+                    wgpu::StoreOp::Discard
+                },
+            }),
+            stencil_ops: None,
+        }
+    }</code></pre>
+  <p class="code-source"><code>targets.rs</code> (<a href="depth-prepass.html#phase-two">The depth pre-pass</a>).</p>
+  <p><b>Ray queries in a fragment shader.</b> When shadow rays moved from the lit pass to the shadow mask pass, a first version kept an inline ray query in <code>fs_main</code> as a fallback for lights past the mask's bits, which no Reference scene reached. With that code present and never run, the lit pass took 1,362 to 4,611 &micro;s against 429 to 754 &micro;s without it, over two rounds on four scenes. The owner chose a fixed capacity of lights per pixel over the fallback, with the overflow counted and warned, and the lit pass holds no ray-query code (<a href="shadow-mask.html#frame">The shadow mask pass</a>).</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_draw_of_whole_index_sharing_groups_keeps_every_sample</code></td><td><code>coverage_tests.rs</code></td><td>drawing whole index-sharing groups keeps every sample; on the M4 Pro, drawing the named triangles alone still loses some, so the merging is still there</td></tr>
+      <tr><td><code>coverage_experiments</code></td><td><code>coverage_tests.rs</code></td><td>ignored; prints the departure table above for each draw and sample count</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each scene culled matches itself unculled within <code>HARDWARE_UNCULLED_PIXELS</code>, which is 0: the flat read keeps every sample's normals from the lit pass's triangle, whichever draws hold the Instances</td></tr>
+      <tr><td><code>the_draw_holds_each_drawn_instances_meshlets_and_their_cooked_corners_in_slot_order</code></td><td><code>renderer.rs</code></td><td>each frame's draw holds, in slot order within each phase, a record per Meshlet of each Instance drawn and its triangles' cooked corners</td></tr>
+      <tr><td><code>the_bend_pass_bends_each_mesh_from_its_rest_mesh</code></td><td><code>bend_pass.rs</code></td><td>three Meshes bent straight, forward and back take their bent shapes within f32's and Snorm16's rounding, through <code>sinc</code>'s series</td></tr>
+      <tr><td><code>octahedral_coordinates_decode_to_the_unit_vector_they_encode</code></td><td><code>shader_function_tests.rs</code></td><td>4,110 directions decode back from 8-bit unorms within 0.95&deg;, the bound the shadow mask's margins take</td></tr>
+      <tr><td><code>shadow_rays_darken_exactly_the_spheres_analytic_shadows</code></td><td><code>tests/shadows.rs</code></td><td>the spheres' shadows fall where the analytic ones do, up to each light's terminator; an inverted <code>front_face</code> would fail it</td></tr>
+      <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>pools.rs</code></td><td>eight threads, each with its own device, load and trace a triangle 25 times; the CPU wait keeps the compaction copy ahead of the TLAS build</td></tr>
+      <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>on Metal, the crowd captured by several devices at once in the refit form matches the rebuild form's capture: the shared event orders the build after the refits</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens/metal</code></td><td>every Reference scene's frame on Metal, which slot order keeps the same from run to run</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">10 &middot; <code>bench/baselines</code></div>
+  <h2>What it costs</h2>
+  <p>The answers cost little of their own: a flat read the compiler keeps, a scan the pass needed anyway, a series below half a radian, one CPU wait in a frame that loads Meshes, one extra command buffer per submission in the refit form, which ships off. What Metal costs is in the Baselines, beside the same scenes on another backend:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">GPU frame</th><th class="n">Gate</th><th class="n">Depth pre-pass</th><th class="n">Shadow mask pass</th><th class="n">Lit pass</th></tr></thead>
+    <tbody>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">19,935.0</td><td class="n">8,612.1</td><td class="n">2,156.0</td><td class="n">11,924.1</td><td class="n">3,762.6</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,395.0</td><td class="n">4,991.8</td><td class="n">1,082.6</td><td class="n">3,582.8</td><td class="n">2,995.3</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,689.1</td><td class="n">1,210.1</td><td class="n">238.9</td><td class="n">4,972.3</td><td class="n">808.5</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,736.3</td><td class="n">865.1</td><td class="n">135.2</td><td class="n">1,614.3</td><td class="n">481.3</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,747.5</td><td class="n">1,297.0</td><td class="n">384.0</td><td class="n">1,950.3</td><td class="n">712.5</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,169.8</td><td class="n">840.5</td><td class="n">179.9</td><td class="n">838.4</td><td class="n">423.9</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">15,975.0</td><td class="n">14,109.0</td><td class="n">398.6</td><td class="n">2,973.2</td><td class="n">607.2</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,207.2</td><td class="n">513.6</td><td class="n">50.6</td><td class="n">503.7</td><td class="n">199.4</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,003.5</td><td class="n">835.2</td><td class="n">159.5</td><td class="n">1,694.2</td><td class="n">528.5</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,846.3</td><td class="n">634.8</td><td class="n">83.0</td><td class="n">920.8</td><td class="n">387.1</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Medians in &micro;s from <code>bench/baselines/</code> at the commit above, at 2560&times;1440 with 4x MSAA, 1,800 measured frames; the shadow mask pass with shadow rays on, the gate with them off. A pass's time on Metal includes the time it waits on the pass before it, since a pass's first timestamp lands as it is scheduled, so the shadow mask pass's column holds part of the depth passes; the Frame stats page's span rule counts shared time once. <code>texture-wall</code>'s gate on the M4 Pro holds the kernel's scheduling of section 7, which no pass times.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">11 &middot; ADRs 0016, 0019, 0020</div>
+  <h2>Why this way</h2>
+  <p><b>A flat read, over invariance or a visibility buffer.</b> ADR 0019 records the rule: two passes that must agree on a sample's triangle both read a flat input. Invariance covers the position output alone, so it could not help. Writing the normals in one draw of both phases at depth equal would cost about one more geometry pass and would still rest on two different fragment shaders agreeing. Storing a triangle ID per sample and deriving the normals from it, as a visibility buffer does, is exact by construction and portable, and is the fallback if another GPU merges under other conditions; it is a larger change, and the prototype that built one did not move the main pass's gate.</p>
+  <p><b>Slot order, over atomics.</b> Appending through an atomic count is simpler and the records land in any order; on the M4 Pro any order is a different image. The scan costs a dispatch over the blocks' totals and makes every run's draw identical, which the Goldens and the culled-against-unculled check both need; ADR 0019's draw is one indirect call per phase over that stream.</p>
+  <p><b>A series, over a math mode.</b> wgpu-hal passes no math mode to Metal's compiler, and a safe mode would slow every shader for one function's sake. The Taylor series below 0.5 rad costs three multiplies and holds the bend within 1.1 &times; 10<sup>&minus;8</sup>; the dynamic TLAS's box carries the rest of sine's error as a margin.</p>
+  <p><b>A shared event, over a CPU wait each frame.</b> ADR 0016 keeps the main thread recording and submitting every frame, so a CPU wait on the refits each frame would stall it behind the GPU. A fence between acceleration-structure passes is upstream's fix and not in a release; wgpu-hal's events are available now, and strict event sync makes a staged wait an order rather than a hope. The CPU wait stays at load, where it costs a frame that loads Meshes about a third of a millisecond, and as the fallback where no shared event can be made (ADR 0020).</p>
+  <p><b>An indirect dispatch found, not a fix made.</b> The queued-frame overlap was bisected to the commit that gave the shadow mask pass its indirect dispatch and confirmed by ablation on <code>main</code>; the mechanism is the driver's. The pass dispatches indirectly for its own reasons, the second surfaces and the shadow edges being minority pixels listed by the frame, so nothing was added for the overlap's sake, and a bench against the Baseline would show the loss if a change took the indirect dispatches away.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">12</div>
+  <h2>Limits</h2>
+  <p><b>One GPU, one macOS.</b> Everything here was measured on one Apple M4 Pro under macOS 27.0.1 and wgpu 30.0.1. Other Apple GPU families, other releases and the RTX 2070 SUPER's drivers may merge, batch, round or schedule otherwise; nobody has measured them.</p>
+  <p><b>No vendor documentation.</b> Apple documents neither the merging, nor the loss of overlap behind queued frames, nor when a waiting core's clock falls. Each rule rests on its measurement, and the guards are the tests above: the merging test fails if the M4 Pro stops merging, and the Goldens if slot order stops being enough.</p>
+  <p><b>The kernel's scheduling.</b> The time the kernel spends scheduling a command buffer with thousands of distinct Textures is measured and reported, not answered; <code>texture-wall</code>'s gate carries it.</p>
+  <p><b>Unorm on Vulkan.</b> Where a store may round to either neighbour, the stored normals' error doubles, and the shadow mask's margins are sized for that; a tighter margin would need Vulkan's rounding pinned.</p>
+  <p><b>Every new pass.</b> A later pass that decides from which triangle a sample shows reads a flat input or keeps whole Meshlets; a later pass that writes a BLAS orders the TLAS build after it by event or by wait; a later compute pass in the frame may change which passes overlap once frames queue, and only a bench would show it.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15">Metal Shading Language Specification 4.1, &sect;1.6.3 Math Intrinsics Compiler Options</a></dt><dd>the default math mode is fast: no NaNs or infinities, reassociation and contraction allowed; <code>msl-4.1-fast-math</code></dd>
+    <dt><a href="https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=372">The same, &sect;8.4, Table 8.2</a></dt><dd>sine's absolute error under fast math, at most 2<sup>&minus;13</sup> within &plusmn;&pi;; <code>msl-4.1-sin-fast-accuracy</code></dd>
+    <dt><a href="https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf">The same, &sect;8.2 Rounding Mode</a></dt><dd>either round ties to even or round toward zero may be supported; <code>msl-4.1-rounding</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L272-L278">wgpu-hal 30.0.1, metal/device.rs, compile options</a></dt><dd>no math mode is set, and invariance is preserved; <code>wgpu-hal-30-metal-compile-options</code></dd>
+    <dt><a href="https://www.microsoft.com/en-us/research/?p=159994">Fatahalian et al., Reducing Shading on GPUs using Quad-Fragment Merging, SIGGRAPH 2010</a></dt><dd>merging adjacent triangles' fragments, which the M4 Pro's behaviour resembles</dd>
+    <dt><a href="https://www.w3.org/TR/WGSL/#dpdx-builtin">WGSL: dpdx</a></dt><dd>the same as either the fine or the coarse form, which the implementation chooses</dd>
+    <dt><a href="https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#invariance">Vulkan specification, appendix Invariance</a></dt><dd>identical results only for identical pipelines and listed state changes</dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default">Apple Metal, MTLHazardTrackingMode.default</a></dt><dd>resources made from the device are tracked by default; <code>metal-hazard-tracking-default</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/tracked">Apple Metal, MTLHazardTrackingMode.tracked</a></dt><dd>what tracking delays, for the resources a command binds</dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">Apple Metal, MTLIndirectAccelerationStructureInstanceDescriptor</a></dt><dd>an entry that names its BLAS by resource ID; <code>metal-indirect-instance-descriptor</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592">wgpu-hal 30.0.1, metal/command.rs, the empty barriers</a></dt><dd>no barrier is recorded on Metal; <code>wgpu-30-metal-barriers-empty</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu, 9215: Metal BLAS to TLAS builds need synchronisation</a></dt><dd>the upstream report, open; <code>wgpu-issue-9215</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556">wgpu-hal 30.0.1, metal/mod.rs, event staging</a></dt><dd>staging is queue-wide: the next submit takes it; <code>wgpu-30-metal-event-staging</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlfence">Apple Metal, MTLFence</a></dt><dd>a pass's fragment stage can wait while its vertex stage runs; <code>apple-metal-fence-per-stage</code></dd>
+    <dt><a href="https://developer.apple.com/documentation/metal/mtlcommandbuffer/kernelstarttime">Apple Metal, MTLCommandBuffer, kernelStartTime</a></dt><dd>the host time at which the kernel begins to schedule a command buffer, and the end time beside it</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1145-L1147">wgpu-hal 30.0.1, metal/command.rs, the residency call per bound resource</a></dt><dd>every texture and buffer a bind group holds is declared to the encoder</dd>
+    <dt><a href="https://developer.apple.com/videos/play/tech-talks/110147/">Apple Tech Talk, Tune CPU job scheduling for Apple silicon games</a></dt><dd>busy waits hold a P-core and spend thermal headroom; <code>apple-tech-talk-110147-busy-waits</code></dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0016-the-main-thread-runs-the-frame.md">ADR 0016</a></dt><dd>only the main thread submits, presents or polls</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0019-clustered-forward-main-pass-with-4x-msaa.md">ADR 0019</a></dt><dd>the merging rule in its Consequences, and the draw in slot order</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0020-ray-traced-probe-gi-and-hard-ray-traced-shadows.md">ADR 0020</a></dt><dd>the static and dynamic TLAS, whose builds the hazards section orders</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The merging was found when a prototype's ID pass credited samples to a triangle's neighbour and the culled and unculled frames of <code>town</code> disagreed at a few edge pixels; the flat read followed, and the Goldens moved at single pixels. Slot order came when the orrery's capture moved from run to run under the first culling pass. The sine series and the box's margin came with the crowd's bend. The ordering gap was found at load, when a flaky test built a TLAS right after a compaction copy while eight devices loaded the GPU, and again with the crowd's per-frame refit, which took the event route. The loss of overlap behind queued frames appeared when the TLASes left the lit pass's bind group and the CPU outpaced the GPU, and its lever was found by bisection and ablation. The compiler's loops, the branch and the depth store were measured while the shadow mask and the depth pyramid were built, and the ray-query cost when the rays left the lit pass.</p>
+  <footer class="sources">Written from <code>src/render/shaders/main.wgsl</code>, <code>culling.wgsl</code>, <code>bend.wgsl</code>, <code>shadow_mask.wgsl</code>, <code>depth_pyramid.wgsl</code>, <code>src/render/coverage_tests.rs</code>, <code>shadow_mask_pass.rs</code>, <code>targets.rs</code>, <code>blas_refit.rs</code>, <code>acceleration_structures.rs</code>, <code>src/assets/pools.rs</code>, the tests named above, <code>docs/performance.md</code>, the Baselines, ADRs 0016, 0019 and 0020, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="msaa.html">Previous: MSAA</a><a href="index.html">All field guides</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
