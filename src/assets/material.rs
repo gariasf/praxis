@@ -7,7 +7,7 @@ use crate::cooked::{AssetId, CookedCache, CookedTexture};
 use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
 use crate::render::LoadStaging;
 use crate::render::bind_groups::MATERIALS;
-use crate::stats::texture_bytes;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Textures each Channel's binding array can hold: the Channels split the
 /// Capability floor's binding-array elements per stage (ADR 0021), 13,107
@@ -79,14 +79,16 @@ pub struct MaterialData {
 struct ChannelTextures {
     /// Its binding's name in `MATERIALS`, which labels its Textures too.
     label: &'static str,
-    textures: Vec<wgpu::Texture>,
+    memory: GpuMemory,
+    textures: Vec<Counted<wgpu::Texture>>,
     views: Vec<wgpu::TextureView>,
 }
 
 impl ChannelTextures {
-    fn new(label: &'static str) -> Self {
+    fn new(label: &'static str, memory: &GpuMemory) -> Self {
         Self {
             label,
+            memory: memory.clone(),
             textures: Vec::new(),
             views: Vec::new(),
         }
@@ -114,16 +116,20 @@ impl ChannelTextures {
             height: texture.height,
             depth_or_array_layers: 1,
         };
-        let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(self.label),
-            size,
-            mip_level_count: texture.levels.len() as u32,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: texture.format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+        let gpu_texture = self.memory.create_texture(
+            device,
+            GpuMemoryKind::TexturePool,
+            &wgpu::TextureDescriptor {
+                label: Some(self.label),
+                size,
+                mip_level_count: texture.levels.len() as u32,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: texture.format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+        );
         for (level, bytes) in texture.levels.iter().enumerate() {
             staging.write_texture(&gpu_texture, level as u32, bytes);
         }
@@ -141,7 +147,7 @@ impl ChannelTextures {
 /// each Channel's array at the Layer stored in `layers`.
 pub struct MaterialPool {
     materials: Vec<MaterialData>,
-    materials_buffer: wgpu::Buffer,
+    materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
     /// Each loaded Texture's Layer in its Channel, which its Asset ID names.
     texture_layers: HashMap<AssetId, u32>,
@@ -194,13 +200,17 @@ impl MaterialPool {
         }
     }
 
-    pub fn new(device: &wgpu::Device, staging: &mut LoadStaging) -> Self {
-        let materials_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("materials_buffer"),
-            size: MATERIAL_CAPACITY * std::mem::size_of::<MaterialData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, staging: &mut LoadStaging) -> Self {
+        let materials_buffer = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("materials_buffer"),
+                size: MATERIAL_CAPACITY * std::mem::size_of::<MaterialData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
 
         // Ordered as `MaterialChannel`.
         let mut channels = [
@@ -210,7 +220,7 @@ impl MaterialPool {
             "occlusion_textures",
             "emissive_textures",
         ]
-        .map(ChannelTextures::new);
+        .map(|label| ChannelTextures::new(label, memory));
 
         for channel in MaterialChannel::ALL {
             channels[channel as usize].push(device, staging, &Self::neutral_texture(channel));
@@ -241,17 +251,6 @@ impl MaterialPool {
             bind_group,
             bind_group_is_stale: false,
         }
-    }
-
-    /// Bytes of the SSBO and every Channel's Textures.
-    pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
-        let texture_bytes: u64 = self
-            .channels
-            .iter()
-            .flat_map(|channel| &channel.textures)
-            .map(|texture| texture_bytes(texture, transient_saves_memory))
-            .sum();
-        self.materials_buffer.size() + texture_bytes
     }
 
     /// Registers a material in the SSBO through `staging`, returning its
@@ -425,6 +424,7 @@ mod tests {
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::CookedMaterial;
     use crate::gpu::GpuContext;
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// Two Materials sampling one Texture load it once, and a Material
     /// without that Channel samples Layer 0; each carries its normal scale.
@@ -468,8 +468,10 @@ mod tests {
         }
 
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MaterialPool::new(&context.device, &mut staging);
-        let neutral_bytes = pool.gpu_memory_bytes(false);
+        let memory = gpu_memory(&context);
+        let texture_pool_bytes = || memory.bytes_by_kind()[GpuMemoryKind::TexturePool as usize];
+        let mut pool = MaterialPool::new(&context.device, &memory, &mut staging);
+        let neutral_bytes = texture_pool_bytes();
         let occlusion_layers: Vec<u32> = (1..=3)
             .map(|id| {
                 let handle = pool
@@ -478,7 +480,7 @@ mod tests {
                 pool.materials[handle.index() as usize].layers[3]
             })
             .collect();
-        assert_eq!(pool.gpu_memory_bytes(false) - neutral_bytes, 3 * 8);
+        assert_eq!(texture_pool_bytes() - neutral_bytes, 3 * 8);
         assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
         assert!(
             pool.materials
@@ -497,7 +499,7 @@ mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MaterialPool::new(&context.device, &mut staging);
+        let mut pool = MaterialPool::new(&context.device, &gpu_memory(&context), &mut staging);
         let material = MaterialData {
             base_color: [1.0; 4],
             metallic_roughness: [0.0, 1.0, 1.0, 0.0],

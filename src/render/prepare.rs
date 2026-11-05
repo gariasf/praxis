@@ -659,6 +659,7 @@ mod tests {
     use crate::components::Transform;
     use crate::gpu::GpuContext;
     use crate::render::{DYNAMIC_TLAS_CAPACITY, LoadStaging};
+    use crate::stats::gpu_memory::tests::gpu_memory;
     use crate::transform::propagate_world_transforms;
 
     /// The Material `Frames::mesh` draws with.
@@ -688,7 +689,8 @@ mod tests {
                 Err(error) => panic!("headless GPU context failed: {error:#}"),
             };
             let mut staging = LoadStaging::new(context.device.clone());
-            let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+            let mut mesh_pool =
+                MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
             let mesh = mesh_pool
                 .load(
                     &mut staging,

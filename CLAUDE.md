@@ -115,7 +115,8 @@ src/
                                  history/suspects.rs, which Series
                                  records are Suspects
   stats/                       # frame stats: CPU and GPU times, counts,
-                                 GPU memory, counting allocator
+                                 the GPU memory ledger by kind,
+                                 counting allocator
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's
@@ -370,11 +371,11 @@ When reviewing changes, check for:
       phase, never in the order atomics land: on the M4 Pro, which
       triangles precede others in a draw changes implicit derivatives, so
       captures would differ run to run
-- [ ] Frame stats still see new work: GPU buffers and textures join
-      their owner's `gpu_memory_bytes`, and so do acceleration
-      structures, by the measured per-adapter estimate
-      (`AccelerationStructureBytes`); the GPU stats readback's buffers
-      stay out, as they measure the frame (ADR 0013); per-frame GPU
+- [ ] Frame stats still see new work: GPU buffers, textures and
+      acceleration structures are created through the GPU memory
+      ledger (`GpuMemory`) under their kind, acceleration structures at
+      the measured per-adapter estimate (`AccelerationStructureBytes`);
+      the GPU stats readback's buffers stay out, as they measure the frame (ADR 0013); per-frame GPU
       writes add to `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the `StagingBelt`, never

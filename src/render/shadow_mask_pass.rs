@@ -19,6 +19,7 @@ use crate::render::froxel_pass::FROXEL_SLICES;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The shadow mask pass's label, and its name in frame stats.
 pub(crate) const SHADOW_MASK_PASS: &str = "shadow_mask_pass";
@@ -86,16 +87,16 @@ pub struct ShadowMaskPass {
     /// The lights that reach a surface of a pixel past its bits, summed over
     /// the surfaces of every pixel:
     /// cleared before the pass, copied to the GPU stats readback after it.
-    shadow_mask_lights_overflowed: wgpu::Buffer,
+    shadow_mask_lights_overflowed: Counted<wgpu::Buffer>,
     /// The second dispatch's workgroups, which the first writes: cleared
     /// before the pass.
-    second_surface_dispatch: wgpu::Buffer,
+    second_surface_dispatch: Counted<wgpu::Buffer>,
     /// The last dispatch's workgroups, which the third writes: cleared
     /// before the pass.
-    shadow_edge_dispatch: wgpu::Buffer,
+    shadow_edge_dispatch: Counted<wgpu::Buffer>,
     /// Bound in place of either while a dispatch reads it, as no group
     /// bound then may write it.
-    stand_in_dispatch: wgpu::Buffer,
+    stand_in_dispatch: Counted<wgpu::Buffer>,
     /// The render targets' lists of second surfaces and of shadow edges,
     /// whose counts are cleared before the pass.
     second_surfaces: wgpu::Buffer,
@@ -116,6 +117,7 @@ impl ShadowMaskPass {
     /// mask of `render_targets`, with its Froxel lookups as `switches` set.
     pub fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         static_tlas: &StaticTlas,
         dynamic_tlas: &DynamicTlas,
         buffers: [(&'static str, &wgpu::Buffer); 4],
@@ -146,21 +148,29 @@ impl ShadowMaskPass {
             compute_pipeline(device, &pipeline_layout, &shader, entry_point, &constants)
         };
         let buffers = buffers.map(|(name, buffer)| (name, buffer.clone()));
-        let shadow_mask_lights_overflowed = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shadow Mask Overflow Buffer"),
-            size: size_of::<u32>() as u64,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let dispatch = |label, usage| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: size_of::<wgpu::util::DispatchIndirectArgs>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | usage,
+        let shadow_mask_lights_overflowed = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Shadow Mask Overflow Buffer"),
+                size: size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
-            })
+            },
+        );
+        let dispatch = |label, usage| {
+            memory.create_buffer(
+                device,
+                GpuMemoryKind::SceneAndPassBuffers,
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size: size_of::<wgpu::util::DispatchIndirectArgs>() as u64,
+                    usage: wgpu::BufferUsages::STORAGE | usage,
+                    mapped_at_creation: false,
+                },
+            )
         };
         let second_surface_dispatch = dispatch(
             "Second Surface Dispatch Buffer",
@@ -382,15 +392,6 @@ impl ShadowMaskPass {
     pub fn shadow_mask_lights_overflowed(&self) -> &wgpu::Buffer {
         &self.shadow_mask_lights_overflowed
     }
-
-    /// Bytes of its overflow count and dispatch buffers; the mask, the
-    /// directional verdicts and the lists are render targets.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.shadow_mask_lights_overflowed.size()
-            + self.second_surface_dispatch.size()
-            + self.shadow_edge_dispatch.size()
-            + self.stand_in_dispatch.size()
-    }
 }
 
 #[cfg(test)]
@@ -398,6 +399,7 @@ mod tests {
     use super::*;
     use crate::assets::pools::tests::gpu_context;
     use crate::render::depth_pyramid_pass::tests::{draw_depth, read_depth_samples};
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// One triangle over the whole target, its depth rising across it and
     /// down it: each sample of the depth target holds the triangle's depth
@@ -410,7 +412,8 @@ mod tests {
             return;
         };
         let (width, height) = (37, 23);
-        let render_targets = RenderTargets::new(&context.device, width, height);
+        let render_targets =
+            RenderTargets::new(&context.device, &gpu_memory(&context), width, height);
         // Clip-space corners, w 1, so depth is z: a triangle past each side.
         let corners = [
             [-1.0, -1.0, 0.2, 1.0],

@@ -1,11 +1,11 @@
 use std::io::Write;
 use std::time::Duration;
 
-use praxis::ReferenceScene;
 use praxis::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, COOKED_CACHE_DIRECTORY, CookedCache,
 };
 use praxis::gpu::GpuContext;
+use praxis::{GpuMemoryKind, ReferenceScene};
 
 const MEBIBYTE: u64 = 1 << 20;
 
@@ -73,82 +73,98 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     .map(|bytes| bytes.round() as u64)
     .iter()
     .sum::<u64>();
-    assert_eq!(
-        last.estimated_acceleration_structure_bytes,
-        acceleration_structure_bytes
-    );
-    // The acceleration structures, five 1×1 neutral Textures, one per
-    // Channel (the spheres sample no other), RGBA8 but the normal Channel's
-    // RGBA16F, the Mesh pool's five 16 MiB
-    // Arenas and its Mesh table of 65,536 Meshes of 40 bytes, 256 Materials
-    // of 80 bytes, the camera and light uniforms, the light buffer of 4,096
-    // lights of 48 bytes, 524,288 Instances of 128
-    // bytes, the culling pass's 4-byte Instance slot count and 8-byte
-    // offsets for each slot and block of 256 slots and of the phase's
-    // records, and visibility bit for
-    // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^25
-    // packed indices of 4 bytes and 72 bytes of both phases' indirect
-    // arguments, counts, phase two's offsets and the phase's dispatch, and
-    // its 72-byte stand-in, the 160×90 Depth32Float
-    // texture at 4 samples, its 4x RGBA16F colour, which Apple GPUs keep in
-    // tile memory, so it counts nothing on Metal, the RGBA16F HDR target it
-    // resolves into, the R32Float depth pyramid from 80×45 down to 1×1
-    // (80×45, 40×22, 20×11, 10×5, 5×2, 2×1, 1×1), the shadow mask of two
-    // u32s a pixel for each of two surfaces, a u32 a pixel of the samples
-    // that show the second, the list of second surfaces, a u32 a pixel
-    // after its count, the directional verdicts, a u32 a pixel, the list of
-    // shadow edges, as the second surfaces', the pass's 4-byte overflow
-    // count and its two 12-byte dispatches and stand-in, the surface
-    // normals' 4
-    // bytes at each of 4 samples a pixel, three staging slots of the
-    // first frame's 1700 uploaded bytes rounded up to 2048, the tonemapping
-    // pass's 64×64 R8 dither mask, the Froxel pass's lists,
-    // 32 × 18 × 32 of 128 u32s, and its 16 bytes of light counts, the
-    // dynamic TLAS's markers' 4-byte result, and the bend pass's 4,096 bends
-    // of 20 bytes. The load's staging is gone.
+    // GPU memory by kind. The geometry Arenas: the Mesh pool's five of
+    // 16 MiB. The texture pool: five 1×1 neutral Textures, one per Channel
+    // (the spheres sample no other), RGBA8 but the normal Channel's
+    // RGBA16F. No Resident tail apart from them.
+    let geometry_arenas = 5 * 16 * MEBIBYTE;
+    let texture_pool = 4 * 4 + 8;
+    // The render targets: the 160×90 Depth32Float texture at 4 samples, its
+    // 4x RGBA16F colour, which Apple GPUs keep in tile memory, so it counts
+    // nothing on Metal, the RGBA16F HDR target it resolves into, the
+    // R32Float depth pyramid from 80×45 down to 1×1 (80×45, 40×22, 20×11,
+    // 10×5, 5×2, 2×1, 1×1), the shadow mask of two u32s a pixel for each of
+    // two surfaces, a u32 a pixel of the samples that show the second, the
+    // list of second surfaces, a u32 a pixel after its count, the
+    // directional verdicts, a u32 a pixel, the list of shadow edges, as the
+    // second surfaces', and the surface normals' 4 bytes at each of 4
+    // samples a pixel.
     let multisampled_color = match context.backend() {
         wgpu::Backend::Metal => 0,
         _ => 160 * 90 * 4 * 8,
     };
+    let render_targets = 160 * 90 * 4 * 4
+        + multisampled_color
+        + 160 * 90 * 8
+        + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
+        + 2 * 160 * 90 * 8
+        + 160 * 90 * 4
+        + (160 * 90 + 1) * 4
+        + 160 * 90 * 4
+        + (160 * 90 + 1) * 4
+        + 160 * 90 * 4 * 4;
+    // Staging: three slots of the first frame's 1700 uploaded bytes rounded
+    // up to 2048. The load's staging is gone.
+    let staging = 3 * 2048;
+    // The scene and pass buffers: the Mesh table of 65,536 Meshes of 40
+    // bytes, 256 Materials of 80 bytes, the camera and light uniforms, the
+    // light buffer of 4,096 lights of 48 bytes, 524,288 Instances of 128
+    // bytes, the culling pass's 4-byte Instance slot count and 8-byte
+    // offsets for each slot and block of 256 slots and of the phase's
+    // records, and visibility bit for each slot, the frame's draw of 2^20
+    // Meshlet records of 12 bytes, 2^25 packed indices of 4 bytes and 72
+    // bytes of both phases' indirect arguments, counts, phase two's offsets
+    // and the phase's dispatch, and its 72-byte stand-in, the shadow mask
+    // pass's 4-byte overflow count and its two 12-byte dispatches and
+    // stand-in, the tonemapping pass's 64×64 R8 dither mask, the Froxel
+    // pass's lists, 32 × 18 × 32 of 128 u32s, and its 16 bytes of light
+    // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
+    // 4,096 bends of 20 bytes.
+    let scene_and_pass_buffers = 65_536 * 40
+        + 256 * 80
+        + 144
+        + 32
+        + 4096 * 48
+        + 524_288 * 128
+        + 4
+        + (524_288 + 2048 + 1) * 8
+        + 524_288 / 8
+        + (1 << 20) * 12
+        + (1 << 25) * 4
+        + 72
+        + 72
+        + 4
+        + 12
+        + 12
+        + 12
+        + 64 * 64
+        + 32 * 18 * 32 * 128 * 4
+        + 16
+        + 4
+        + 4096 * 20;
+    let by_kind = [
+        (GpuMemoryKind::GeometryArenas, geometry_arenas),
+        (GpuMemoryKind::TexturePool, texture_pool),
+        (GpuMemoryKind::ResidentTails, 0),
+        (GpuMemoryKind::RenderTargets, render_targets),
+        (
+            GpuMemoryKind::AccelerationStructures,
+            acceleration_structure_bytes,
+        ),
+        (GpuMemoryKind::Staging, staging),
+        (GpuMemoryKind::SceneAndPassBuffers, scene_and_pass_buffers),
+    ];
+    for (kind, bytes) in by_kind {
+        assert_eq!(
+            last.gpu_memory_bytes_by_kind[kind as usize],
+            bytes,
+            "{}",
+            kind.name()
+        );
+    }
     assert_eq!(
         last.gpu_memory_bytes,
-        acceleration_structure_bytes
-            + 4 * 4
-            + 8
-            + 5 * 16 * MEBIBYTE
-            + 65_536 * 40
-            + 256 * 80
-            + 144
-            + 32
-            + 4096 * 48
-            + 524_288 * 128
-            + 4
-            + (524_288 + 2048 + 1) * 8
-            + 524_288 / 8
-            + (1 << 20) * 12
-            + (1 << 25) * 4
-            + 72
-            + 72
-            + 160 * 90 * 4 * 4
-            + multisampled_color
-            + 160 * 90 * 8
-            + (3600 + 880 + 220 + 50 + 10 + 2 + 1) * 4
-            + 2 * 160 * 90 * 8
-            + 160 * 90 * 4
-            + (160 * 90 + 1) * 4
-            + 160 * 90 * 4
-            + (160 * 90 + 1) * 4
-            + 4
-            + 12
-            + 12
-            + 12
-            + 160 * 90 * 4 * 4
-            + 3 * 2048
-            + 64 * 64
-            + 32 * 18 * 32 * 128 * 4
-            + 16
-            + 4
-            + 4096 * 20
+        by_kind.iter().map(|&(_, bytes)| bytes).sum::<u64>()
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only

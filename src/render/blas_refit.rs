@@ -12,6 +12,9 @@
 
 use crate::assets::MeshPool;
 use crate::render::CrowdForm;
+#[cfg(target_vendor = "apple")]
+use crate::stats::Counted;
+use crate::stats::GpuMemory;
 
 /// The BLAS refit's timing in the GPU stats: from the end of the bend pass
 /// to the start of the marker after the refits.
@@ -25,7 +28,9 @@ pub struct BlasRefit {
     /// they share, created for the BLASes the first refit finds: one loaded
     /// later is not refitted, as logged.
     #[cfg(target_vendor = "apple")]
-    scratch: Option<(wgpu::Buffer, Vec<u64>)>,
+    scratch: Option<(Counted<wgpu::Buffer>, Vec<u64>)>,
+    #[cfg(target_vendor = "apple")]
+    memory: GpuMemory,
     /// What orders the dynamic TLAS's build after the update on Metal, or
     /// None where the build waits for it on the CPU instead.
     #[cfg(target_vendor = "apple")]
@@ -49,6 +54,7 @@ impl BlasRefit {
     /// as logged.
     pub fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         queue: &wgpu::Queue,
         backend: wgpu::Backend,
         form: CrowdForm,
@@ -65,7 +71,7 @@ impl BlasRefit {
             .then(|| metal::Order::new(device, queue))
             .flatten();
         #[cfg(not(target_vendor = "apple"))]
-        let _ = (device, queue);
+        let _ = (device, memory, queue);
         #[cfg(target_vendor = "apple")]
         let waits_on_cpu = backend == wgpu::Backend::Metal && order.is_none();
         #[cfg(not(target_vendor = "apple"))]
@@ -78,9 +84,11 @@ impl BlasRefit {
             #[cfg(target_vendor = "apple")]
             scratch: None,
             #[cfg(target_vendor = "apple")]
+            memory: memory.clone(),
+            #[cfg(target_vendor = "apple")]
             order,
             #[cfg(target_vendor = "apple")]
-            marker: (form == CrowdForm::Refit).then(|| metal::RefitMarker::new(device)),
+            marker: (form == CrowdForm::Refit).then(|| metal::RefitMarker::new(device, memory)),
             #[cfg(target_vendor = "apple")]
             refusal_logged: false,
             waits_on_cpu,
@@ -146,24 +154,6 @@ impl BlasRefit {
         refit_timed
     }
 
-    /// Bytes of its scratch buffer and its marker's.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        #[cfg(target_vendor = "apple")]
-        {
-            let scratch = self
-                .scratch
-                .as_ref()
-                .map_or(0, |(scratch, _)| scratch.size());
-            let marker = self
-                .marker
-                .as_ref()
-                .map_or(0, metal::RefitMarker::gpu_memory_bytes);
-            scratch + marker
-        }
-        #[cfg(not(target_vendor = "apple"))]
-        0
-    }
-
     /// A command buffer of `device`'s, encoded through wgpu-hal alone, that
     /// refits each of `mesh_pool`'s refitted BLASes in place from what its
     /// Arena ranges hold.
@@ -188,7 +178,7 @@ impl BlasRefit {
             }
         };
         if self.scratch.is_none() {
-            self.scratch = metal::scratch(device, mesh_pool);
+            self.scratch = metal::scratch(device, &self.memory, mesh_pool);
         }
         let Some((scratch, offsets)) = &self.scratch else {
             refuse("no scratch: an Arena is not Metal's");
@@ -293,6 +283,7 @@ mod metal {
     use crate::cooked::CookedVertex;
     use crate::render::bind_groups::{BLAS_REFIT_MARKERS, compute_pipeline, pipeline_layout};
     use crate::render::shaders;
+    use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
     /// Scratch regions start this far apart at least: a margin over the
     /// one-byte alignment wgpu-hal reports for Metal
@@ -347,8 +338,9 @@ mod metal {
     /// and the regions' offsets; None if a handle is not Metal's.
     pub(super) fn scratch(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         mesh_pool: &MeshPool,
-    ) -> Option<(wgpu::Buffer, Vec<u64>)> {
+    ) -> Option<(Counted<wgpu::Buffer>, Vec<u64>)> {
         // SAFETY: the handles are Metal's, as `BlasRefit::new` checked, and
         // the Mesh pool holds the Arenas past this call (`unguarded`).
         let sizes: Vec<u64> = unsafe {
@@ -376,12 +368,16 @@ mod metal {
             .iter()
             .scan(0, |next, size| Some(std::mem::replace(next, *next + size)))
             .collect();
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("BLAS Refit Scratch"),
-            size: sizes.iter().sum::<u64>().max(SCRATCH_ALIGNMENT),
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
+        let buffer = memory.create_buffer(
+            device,
+            GpuMemoryKind::AccelerationStructures,
+            &wgpu::BufferDescriptor {
+                label: Some("BLAS Refit Scratch"),
+                size: sizes.iter().sum::<u64>().max(SCRATCH_ALIGNMENT),
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            },
+        );
         Some((buffer, offsets))
     }
 
@@ -393,14 +389,14 @@ mod metal {
         pipeline: wgpu::ComputePipeline,
         layout: wgpu::BindGroupLayout,
         /// What it read, which nothing reads.
-        result: wgpu::Buffer,
+        result: Counted<wgpu::Buffer>,
         /// Its group 3 (`BLAS_REFIT_MARKERS`), made for the scratch the
         /// first refit makes, which no later refit replaces.
         bind_group: Option<wgpu::BindGroup>,
     }
 
     impl RefitMarker {
-        pub(super) fn new(device: &wgpu::Device) -> Self {
+        pub(super) fn new(device: &wgpu::Device, memory: &GpuMemory) -> Self {
             let layout = BLAS_REFIT_MARKERS.layout(device);
             let shader = device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor());
             let groups = [(&BLAS_REFIT_MARKERS, &layout)];
@@ -408,12 +404,16 @@ mod metal {
             let pipeline_layout = pipeline_layout(device, label, &groups);
             let pipeline =
                 compute_pipeline(device, &pipeline_layout, &shader, "mark_blas_refit", &[]);
-            let result = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("BLAS Refit Marker Result"),
-                size: size_of::<u32>() as u64,
-                usage: wgpu::BufferUsages::STORAGE,
-                mapped_at_creation: false,
-            });
+            let result = memory.create_buffer(
+                device,
+                GpuMemoryKind::SceneAndPassBuffers,
+                &wgpu::BufferDescriptor {
+                    label: Some("BLAS Refit Marker Result"),
+                    size: size_of::<u32>() as u64,
+                    usage: wgpu::BufferUsages::STORAGE,
+                    mapped_at_creation: false,
+                },
+            );
             Self {
                 pipeline,
                 layout,
@@ -452,10 +452,6 @@ mod metal {
             pass.dispatch_workgroups(1, 1, 1);
             drop(pass);
             encoder.finish()
-        }
-
-        pub(super) fn gpu_memory_bytes(&self) -> u64 {
-            self.result.size()
         }
     }
 

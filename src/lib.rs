@@ -43,7 +43,7 @@ pub use capture::{
 pub use render::{CrowdForm, RenderSwitches};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
-pub use stats::{FrameStats, GpuFrameStats};
+pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 pub use threading::init_compute_pool;
 
 impl ApplicationHandler for App {

@@ -4,6 +4,7 @@ use crate::assets::{MeshHandle, MeshPool};
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::{FrameData, InstanceData, shaders};
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Slots the static TLAS covers: a static Instance in a higher slot is left
 /// out, so it casts no shadow, and is counted and warned about. Sized for
@@ -107,23 +108,26 @@ impl AccelerationStructureBytes {
 /// not, so rays can always query it, and rebuilt in a frame that changes a
 /// static Instance or frees one's slot.
 pub struct StaticTlas {
-    tlas: wgpu::Tlas,
+    tlas: Counted<wgpu::Tlas>,
     anchor: Option<[i32; 3]>,
     /// Slots past its capacity that hold a static Instance.
     left_out: HashSet<u32>,
 }
 
 impl StaticTlas {
-    /// An empty static TLAS of `capacity` slots.
-    pub fn new(device: &wgpu::Device, capacity: u32) -> Self {
+    /// An empty static TLAS of `capacity` slots, counted in `memory`.
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, capacity: u32) -> Self {
         Self {
-            tlas: device.create_tlas(&wgpu::CreateTlasDescriptor {
-                label: Some("Static TLAS"),
-                max_instances: capacity,
-                // Rebuilt only when its Instances change, traced every frame.
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-            }),
+            tlas: memory.create_tlas(
+                device,
+                &wgpu::CreateTlasDescriptor {
+                    label: Some("Static TLAS"),
+                    max_instances: capacity,
+                    // Rebuilt only when its Instances change, traced every frame.
+                    flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                    update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+                },
+            ),
             anchor: None,
             left_out: HashSet::new(),
         }
@@ -177,7 +181,7 @@ impl StaticTlas {
             );
         }
         if changed {
-            encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
+            encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&*self.tlas));
         }
         changed
     }
@@ -197,15 +201,6 @@ impl StaticTlas {
     pub fn instances_left_out(&self) -> u32 {
         self.left_out.len() as u32
     }
-
-    /// Its bytes, as `acceleration_structure_bytes` estimates them for its
-    /// capacity, whatever it holds.
-    pub fn estimated_bytes(
-        &self,
-        acceleration_structure_bytes: &AccelerationStructureBytes,
-    ) -> u64 {
-        acceleration_structure_bytes.tlas(self.tlas.get().len())
-    }
 }
 
 /// The dynamic TLAS (ADR 0020): the Moving Instances that Frame data lists,
@@ -216,7 +211,7 @@ impl StaticTlas {
 /// submit are timed on their own, between two markers that time it on the
 /// GPU.
 pub struct DynamicTlas {
-    tlas: wgpu::Tlas,
+    tlas: Counted<wgpu::Tlas>,
     /// Entries its last fill filled, from the first.
     filled: usize,
     /// The bytes the build of its last fill uploads, until `record` records
@@ -234,7 +229,7 @@ pub struct DynamicTlas {
     /// Its group 3 (`DYNAMIC_TLAS_MARKERS`).
     marker_bind_group: wgpu::BindGroup,
     /// What the markers found, which nothing reads.
-    marker_result: wgpu::Buffer,
+    _marker_result: Counted<wgpu::Buffer>,
     /// The encoder `prepare_encoder` created for the next `record`.
     encoder: Option<wgpu::CommandEncoder>,
 }
@@ -243,24 +238,36 @@ impl DynamicTlas {
     /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries on
     /// `backend`, built through `queue` at once, so a marker never queries it
     /// unbuilt.
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, backend: wgpu::Backend) -> Self {
-        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
-            label: Some("Dynamic TLAS"),
-            max_instances: DYNAMIC_TLAS_CAPACITY,
-            // Traced at every lit pixel, as the static TLAS is; ADR 0020's
-            // per-frame cost was measured with this flag.
-            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-        });
+    pub fn new(
+        device: &wgpu::Device,
+        memory: &GpuMemory,
+        queue: &wgpu::Queue,
+        backend: wgpu::Backend,
+    ) -> Self {
+        let tlas = memory.create_tlas(
+            device,
+            &wgpu::CreateTlasDescriptor {
+                label: Some("Dynamic TLAS"),
+                max_instances: DYNAMIC_TLAS_CAPACITY,
+                // Traced at every lit pixel, as the static TLAS is; ADR 0020's
+                // per-frame cost was measured with this flag.
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            },
+        );
         let mut encoder = create_encoder(device);
-        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&tlas));
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&*tlas));
         queue.submit(std::iter::once(encoder.finish()));
-        let marker_result = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Dynamic TLAS Marker Result"),
-            size: size_of::<u32>() as u64,
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
+        let marker_result = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Dynamic TLAS Marker Result"),
+                size: size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            },
+        );
         let layout = DYNAMIC_TLAS_MARKERS.layout(device);
         let marker_bind_group = DYNAMIC_TLAS_MARKERS.bind_group(
             device,
@@ -292,7 +299,7 @@ impl DynamicTlas {
             },
             marker_pipeline,
             marker_bind_group,
-            marker_result,
+            _marker_result: marker_result,
             encoder: None,
         }
     }
@@ -360,7 +367,7 @@ impl DynamicTlas {
             .unwrap_or_else(|| create_encoder(device));
         let [before, after] = timestamps.map_or([None, None], |writes| writes.map(Some));
         self.mark(&mut encoder, before);
-        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&self.tlas));
+        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&*self.tlas));
         self.mark(&mut encoder, after);
         Some((encoder.finish(), uploaded_bytes))
     }
@@ -410,21 +417,6 @@ impl DynamicTlas {
     /// Its binding, which stays valid as it is rebuilt in place.
     pub fn binding(&self) -> wgpu::BindingResource<'_> {
         self.tlas.as_binding()
-    }
-
-    /// Its bytes, as `acceleration_structure_bytes` estimates them for its
-    /// capacity, whatever it holds.
-    pub fn estimated_bytes(
-        &self,
-        acceleration_structure_bytes: &AccelerationStructureBytes,
-    ) -> u64 {
-        acceleration_structure_bytes.tlas(self.tlas.get().len())
-    }
-
-    /// Bytes of its buffers: the markers' result, as the TLAS's own are
-    /// estimated.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.marker_result.size()
     }
 }
 
@@ -492,6 +484,7 @@ mod tests {
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{InstanceWrite, MovingInstance};
     use crate::render::{CameraUniform, LoadStaging, NO_MATERIAL, NO_MESH};
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// The camera's Anchor in the first frame: 100 km out, where an
     /// Instance's World position would round in f32 and its offset from the
@@ -557,7 +550,8 @@ mod tests {
                 Err(error) => panic!("headless GPU context failed: {error:#}"),
             };
             let mut staging = LoadStaging::new(context.device.clone());
-            let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+            let mut mesh_pool =
+                MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
             let mut load = |mesh| mesh_pool.load(&mut staging, &mesh, &[None]);
             load(mesh(3, vec![0, 1, 2])).expect("a triangle fits");
             let mesh = load(triangle_about_x()).expect("a triangle fits");
@@ -647,7 +641,8 @@ mod tests {
             return;
         };
         // The first Frame data builds it, even with only Moving Instances.
-        let mut empty = StaticTlas::new(&triangle.context.device, 8);
+        let memory = gpu_memory(&triangle.context);
+        let mut empty = StaticTlas::new(&triangle.context.device, &memory, 8);
         let moving = triangle.instance(LOAD_ANCHOR, [0.0; 3], glam::Mat3::IDENTITY);
         assert!(triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
         assert_eq!(
@@ -656,7 +651,7 @@ mod tests {
         );
         assert!(!triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
 
-        let mut tlas = StaticTlas::new(&triangle.context.device, 8);
+        let mut tlas = StaticTlas::new(&triangle.context.device, &memory, 8);
         // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
         let turned_and_doubled = glam::Mat3::from_cols(
             glam::vec3(0.0, 2.0, 0.0),
@@ -729,7 +724,12 @@ mod tests {
             return;
         };
         let context = &triangle.context;
-        let mut tlas = DynamicTlas::new(&context.device, &context.queue, context.backend());
+        let mut tlas = DynamicTlas::new(
+            &context.device,
+            &gpu_memory(context),
+            &context.queue,
+            context.backend(),
+        );
         // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
         let turned_and_doubled = glam::Mat3::from_cols(
             glam::vec3(0.0, 2.0, 0.0),
@@ -787,7 +787,7 @@ mod tests {
         let Some(triangle) = Triangle::new() else {
             return;
         };
-        let mut tlas = StaticTlas::new(&triangle.context.device, 2);
+        let mut tlas = StaticTlas::new(&triangle.context.device, &gpu_memory(&triangle.context), 2);
         let instance = triangle.instance(LOAD_ANCHOR, [0.0; 3], glam::Mat3::IDENTITY);
         let ((), log) = logged(|| {
             let writes = (0..4).map(|slot| (slot, instance, false)).collect();

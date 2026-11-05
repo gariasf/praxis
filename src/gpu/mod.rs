@@ -897,6 +897,7 @@ mod tests {
         let reference = crate::bench::Configuration::REFERENCE;
         let _targets = crate::render::targets::RenderTargets::new(
             &context.device,
+            &crate::stats::gpu_memory::tests::gpu_memory(&context),
             reference.width,
             reference.height,
         );

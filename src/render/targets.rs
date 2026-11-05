@@ -6,7 +6,7 @@
 //! colour weighted by 1/(1 + luminance), so the resolve averages it in
 //! display space (`resolve_weighted`, hdr.wgsl).
 
-use crate::stats::texture_bytes;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The depth target's format.
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -63,15 +63,15 @@ pub const LUMINANCE_COEFFICIENTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
 /// bind groups that read targets in one function, which it calls at
 /// creation and after every resize.
 pub struct RenderTargets {
-    depth: wgpu::TextureView,
+    depth: Counted<wgpu::TextureView>,
     /// A transient attachment, memoryless where the adapter allows: the pass
     /// that clears it resolves it into `hdr` before it ends.
-    color: wgpu::TextureView,
+    color: Counted<wgpu::TextureView>,
     /// The lit pass's colour, resolved, which the tonemapping pass reads.
-    hdr: wgpu::TextureView,
+    hdr: Counted<wgpu::TextureView>,
     /// The depth pyramid, every level, as phase two of the culling pass reads
     /// it.
-    depth_pyramid: wgpu::TextureView,
+    depth_pyramid: Counted<wgpu::TextureView>,
     /// A view of each level of the depth pyramid, the Hi-Z pyramid that
     /// holds the minimum depth over each share of the screen: level 0 half
     /// the targets' size, rounded down, and each level half the one below,
@@ -80,29 +80,34 @@ pub struct RenderTargets {
     depth_pyramid_levels: Vec<wgpu::TextureView>,
     /// Which lights the shadow mask pass found hidden at each pixel, from
     /// each of its surfaces, which the lit pass reads.
-    shadow_mask: wgpu::TextureView,
+    shadow_mask: Counted<wgpu::TextureView>,
     /// Which samples of each pixel show the shadow mask's second surface,
     /// and the first directional lights' verdicts at each sample of the
     /// pixel's nearest surface.
-    shadow_mask_samples: wgpu::TextureView,
+    shadow_mask_samples: Counted<wgpu::TextureView>,
     /// The shadow mask pass's list of the pixels whose samples show a second
     /// surface: a count, then an entry per pixel at most.
-    second_surfaces: wgpu::Buffer,
+    second_surfaces: Counted<wgpu::Buffer>,
     /// The shadow mask pass's word per pixel of the first directional
     /// lights' verdicts at its nearest surface, which it compares with the
     /// neighbours' to find shadow edges.
-    directional_verdicts: wgpu::Buffer,
+    directional_verdicts: Counted<wgpu::Buffer>,
     /// The shadow mask pass's list of the pixels at a shadow edge, as
     /// `second_surfaces`.
-    shadow_edges: wgpu::Buffer,
+    shadow_edges: Counted<wgpu::Buffer>,
     /// Each sample's surface normals, which the depth passes write with
     /// shadow rays on and the shadow mask pass reads.
-    surface_normals: wgpu::TextureView,
+    surface_normals: Counted<wgpu::TextureView>,
 }
 
 impl RenderTargets {
-    /// Targets `width` × `height`, both non-zero.
-    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> RenderTargets {
+    /// Targets `width` × `height`, both non-zero, counted in `memory`.
+    pub fn new(
+        device: &wgpu::Device,
+        memory: &GpuMemory,
+        width: u32,
+        height: u32,
+    ) -> RenderTargets {
         // The second surfaces' list holds a pixel's row in 14 bits
         // (`shadow_mask.wgsl`).
         assert!(height <= 1 << 14, "targets {height} pixels tall");
@@ -111,58 +116,79 @@ impl RenderTargets {
                 sample_count == 1 || MULTISAMPLED_FORMATS.contains(&format),
                 "{label} is multisampled in {format:?}, which the Capability floor does not check"
             );
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: layers,
+            let texture = memory.create_texture(
+                device,
+                GpuMemoryKind::RenderTargets,
+                &wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: layers,
+                    },
+                    mip_level_count: 1,
+                    sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format,
+                    usage,
+                    view_formats: &[],
                 },
-                mip_level_count: 1,
-                sample_count,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage,
-                view_formats: &[],
-            });
+            );
             let dimension = if layers > 1 {
                 wgpu::TextureViewDimension::D2Array
             } else {
                 wgpu::TextureViewDimension::D2
             };
-            texture.create_view(&wgpu::TextureViewDescriptor {
-                dimension: Some(dimension),
-                ..wgpu::TextureViewDescriptor::default()
+            texture.map(|texture| {
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    dimension: Some(dimension),
+                    ..wgpu::TextureViewDescriptor::default()
+                })
             })
         };
         let target = |label, format, sample_count, usage| {
             layered_target(label, format, sample_count, 1, usage)
         };
         // A count, then an entry per pixel at most.
+        let buffer = |label, size, usage| {
+            memory.create_buffer(
+                device,
+                GpuMemoryKind::RenderTargets,
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                },
+            )
+        };
         let pixel_list = |label| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
+            buffer(
+                label,
+                (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            )
         };
         let pyramid_size = wgpu::Extent3d {
             width: (width / 2).max(1),
             height: (height / 2).max(1),
             depth_or_array_layers: 1,
         };
-        let depth_pyramid = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Depth Pyramid"),
-            size: pyramid_size,
-            mip_level_count: pyramid_size.max_mips(wgpu::TextureDimension::D2),
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_PYRAMID_FORMAT,
-            // Each level is written as storage, then read to reduce the next.
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
+        let depth_pyramid = memory.create_texture(
+            device,
+            GpuMemoryKind::RenderTargets,
+            &wgpu::TextureDescriptor {
+                label: Some("Depth Pyramid"),
+                size: pyramid_size,
+                mip_level_count: pyramid_size.max_mips(wgpu::TextureDimension::D2),
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: DEPTH_PYRAMID_FORMAT,
+                // Each level is written as storage, then read to reduce the next.
+                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            },
+        );
         RenderTargets {
             // Bound by the depth pyramid, shadow mask and light count passes.
             depth: target(
@@ -183,7 +209,6 @@ impl RenderTargets {
                 1,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
-            depth_pyramid: depth_pyramid.create_view(&wgpu::TextureViewDescriptor::default()),
             depth_pyramid_levels: (0..depth_pyramid.mip_level_count())
                 .map(|level| {
                     depth_pyramid.create_view(&wgpu::TextureViewDescriptor {
@@ -193,6 +218,8 @@ impl RenderTargets {
                     })
                 })
                 .collect(),
+            depth_pyramid: depth_pyramid
+                .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default())),
             // Written as storage, then read by the lit pass.
             shadow_mask: layered_target(
                 "Shadow Mask",
@@ -208,12 +235,11 @@ impl RenderTargets {
                 wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             ),
             second_surfaces: pixel_list("Second Surfaces Buffer"),
-            directional_verdicts: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Directional Verdicts Buffer"),
-                size: u64::from(width) * u64::from(height) * size_of::<u32>() as u64,
-                usage: wgpu::BufferUsages::STORAGE,
-                mapped_at_creation: false,
-            }),
+            directional_verdicts: buffer(
+                "Directional Verdicts Buffer",
+                u64::from(width) * u64::from(height) * size_of::<u32>() as u64,
+                wgpu::BufferUsages::STORAGE,
+            ),
             shadow_edges: pixel_list("Shadow Edges Buffer"),
             surface_normals: target(
                 "Surface Normals",
@@ -368,25 +394,6 @@ impl RenderTargets {
                 store: wgpu::StoreOp::Discard,
             },
         }
-    }
-
-    /// Bytes of the targets' textures and buffers.
-    pub fn gpu_memory_bytes(&self, transient_saves_memory: bool) -> u64 {
-        [
-            &self.depth,
-            &self.color,
-            &self.hdr,
-            &self.depth_pyramid_levels[0],
-            &self.shadow_mask,
-            &self.shadow_mask_samples,
-            &self.surface_normals,
-        ]
-        .into_iter()
-        .map(|view| texture_bytes(view.texture(), transient_saves_memory))
-        .sum::<u64>()
-            + self.second_surfaces.size()
-            + self.directional_verdicts.size()
-            + self.shadow_edges.size()
     }
 }
 

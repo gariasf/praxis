@@ -4,6 +4,7 @@ use crate::{
     assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     cooked::{AssetId, CookedMesh, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
+    stats::{Charge, Counted, GpuMemory, GpuMemoryKind},
 };
 
 /// Bytes of each Arena: one provisional capacity for the app, tests, bench
@@ -81,19 +82,24 @@ pub struct MeshPool {
     /// Triangles of the BLASes compacted, and of the others.
     compacted_blas_triangles: u64,
     uncompacted_blas_triangles: u64,
+    /// The BLASes' bytes, as `acceleration_structure_bytes` estimates them
+    /// for those triangles.
+    blas_charge: Charge,
+    acceleration_structure_bytes: AccelerationStructureBytes,
     vertex_arena: Arena,
     index_arena: Arena,
     meshlet_arena: Arena,
     meshlet_vertex_arena: Arena,
     meshlet_triangle_arena: Arena,
-    mesh_table: wgpu::Buffer,
+    mesh_table: Counted<wgpu::Buffer>,
 }
 
 impl MeshPool {
-    /// A Mesh pool whose Arenas hold `arena_bytes` each.
-    pub fn new(device: &wgpu::Device, arena_bytes: u64) -> Self {
+    /// A Mesh pool whose Arenas hold `arena_bytes` each, counted in
+    /// `memory`.
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, arena_bytes: u64) -> Self {
         let arena = |label, usage, element_bytes| {
-            Arena::new(device, label, usage, element_bytes, arena_bytes)
+            Arena::new(device, memory, label, usage, element_bytes, arena_bytes)
         };
         let u32_bytes = size_of::<u32>() as u64;
         Self {
@@ -105,6 +111,8 @@ impl MeshPool {
             refitted_blases: Vec::new(),
             compacted_blas_triangles: 0,
             uncompacted_blas_triangles: 0,
+            blas_charge: memory.charge(GpuMemoryKind::AccelerationStructures, 0),
+            acceleration_structure_bytes: memory.acceleration_structure_bytes(),
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
             vertex_arena: arena(
                 "Vertex Arena",
@@ -129,12 +137,16 @@ impl MeshPool {
                 wgpu::BufferUsages::STORAGE,
                 u32_bytes,
             ),
-            mesh_table: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Mesh Table"),
-                size: u64::from(MESH_CAPACITY) * size_of::<MeshData>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }),
+            mesh_table: memory.create_buffer(
+                device,
+                GpuMemoryKind::SceneAndPassBuffers,
+                &wgpu::BufferDescriptor {
+                    label: Some("Mesh Table"),
+                    size: u64::from(MESH_CAPACITY) * size_of::<MeshData>() as u64,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            ),
         }
     }
 
@@ -382,6 +394,7 @@ impl MeshPool {
             self.awaiting_compaction.push((handle, blas_triangles));
         }
         self.uncompacted_blas_triangles += blas_triangles;
+        self.charge_blases();
         Some(handle)
     }
 
@@ -456,6 +469,7 @@ impl MeshPool {
             self.uncompacted_blas_triangles -= triangles;
             self.compacted_blas_triangles += triangles;
         }
+        self.charge_blases();
         // The copies wait in the queue's pending writes until a submit.
         queue.submit(std::iter::empty());
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
@@ -506,25 +520,12 @@ impl MeshPool {
         ]
     }
 
-    /// Bytes of the Arenas and the Mesh table, whatever they hold.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.arenas()
-            .iter()
-            .map(|arena| arena.buffer.size())
-            .sum::<u64>()
-            + self.mesh_table.size()
-    }
-
-    /// Bytes of the BLASes, as `acceleration_structure_bytes` estimates
-    /// them.
-    pub fn estimated_blas_bytes(
-        &self,
-        acceleration_structure_bytes: &AccelerationStructureBytes,
-    ) -> u64 {
-        acceleration_structure_bytes.blases(
-            self.compacted_blas_triangles,
-            self.uncompacted_blas_triangles,
-        )
+    fn charge_blases(&mut self) {
+        self.blas_charge
+            .set(self.acceleration_structure_bytes.blases(
+                self.compacted_blas_triangles,
+                self.uncompacted_blas_triangles,
+            ));
     }
 
     /// Bytes of the Arenas that hold Meshes.
@@ -562,7 +563,7 @@ fn allocate_all<const N: usize>(
 /// A GPU buffer of fixed capacity, never grown, sub-allocated in ranges of
 /// elements by `offset-allocator` (ADR 0017).
 struct Arena {
-    buffer: wgpu::Buffer,
+    buffer: Counted<wgpu::Buffer>,
     allocator: offset_allocator::Allocator,
     element_bytes: u64,
     bytes_in_use: u64,
@@ -571,6 +572,7 @@ struct Arena {
 impl Arena {
     fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         label: &str,
         usage: wgpu::BufferUsages,
         element_bytes: u64,
@@ -583,12 +585,16 @@ impl Arena {
             "an Arena of {capacity_bytes} bytes is past 2^31 - 1"
         );
         Self {
-            buffer: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: capacity_bytes,
-                usage: usage | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            }),
+            buffer: memory.create_buffer(
+                device,
+                GpuMemoryKind::GeometryArenas,
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size: capacity_bytes,
+                    usage: usage | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            ),
             allocator: offset_allocator::Allocator::new((capacity_bytes / element_bytes) as u32),
             element_bytes,
             bytes_in_use: 0,
@@ -631,6 +637,7 @@ pub(crate) mod tests {
     use crate::capture::submit_and_map;
     use crate::cooked::{CookedMeshlet, CookedPrimitive};
     use crate::gpu::GpuContext;
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// Room for four 28-byte vertices, or 28 indices.
     const CAPACITY: u64 = 4 * 28;
@@ -694,7 +701,7 @@ pub(crate) mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
         // Each vertex's x is its index, so a pulled vertex names itself.
@@ -768,17 +775,20 @@ pub(crate) mod tests {
             per_compacted_blas_triangle: 50.0,
             per_tlas_instance: 0.0,
         };
+        let memory = GpuMemory::new(false, bytes);
+        let acceleration_structure_bytes =
+            || memory.bytes_by_kind()[GpuMemoryKind::AccelerationStructures as usize];
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
         pool.load(&mut staging, &mesh(3, vec![0, 0, 0]), &[None])
             .expect("a triangle fits");
         let handle = pool
             .load(&mut staging, &triangle_about_x(), &[None])
             .expect("a triangle fits");
-        assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 100);
+        assert_eq!(acceleration_structure_bytes(), 2 * 100);
         staging.submit(&context.queue);
         pool.compact_blases(&context.queue);
-        assert_eq!(pool.estimated_blas_bytes(&bytes), 2 * 50);
+        assert_eq!(acceleration_structure_bytes(), 2 * 50);
 
         let blas = pool.blas(handle).expect("the triangle's BLAS");
         assert_eq!(
@@ -802,7 +812,7 @@ pub(crate) mod tests {
             let mut staging = LoadStaging::new(context.device.clone());
             // Room for its 25 triangles; eight pools of full Arenas would
             // take 660 MiB.
-            let mut pool = MeshPool::new(&context.device, 4 << 10);
+            let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), 4 << 10);
             (0..25)
                 .map(|_| {
                     let handle = pool
@@ -1043,10 +1053,11 @@ pub(crate) mod tests {
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, CAPACITY);
+        let memory = gpu_memory(&context);
+        let mut pool = MeshPool::new(&context.device, &memory, CAPACITY);
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
-        let gpu_memory_bytes = pool.gpu_memory_bytes();
+        let gpu_memory_bytes = memory.bytes_by_kind();
         let arena_bytes_in_use = pool.arena_bytes_in_use();
 
         // One vertex past the vertex Arena, then one index past the index
@@ -1055,7 +1066,7 @@ pub(crate) mod tests {
             let (handle, log) = logged(|| pool.load(&mut staging, &past_capacity, &[None]));
             assert!(handle.is_none(), "a Mesh past capacity loaded");
             assert!(log.contains("Mesh refused"), "not logged: {log:?}");
-            assert_eq!(pool.gpu_memory_bytes(), gpu_memory_bytes);
+            assert_eq!(memory.bytes_by_kind(), gpu_memory_bytes);
             assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
         }
         // The second refusal gave back the last vertex it took.

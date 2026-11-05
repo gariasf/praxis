@@ -115,6 +115,7 @@ mod tests {
     use crate::assets::ARENA_CAPACITY_BYTES;
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::{CookedMaterial, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     #[test]
     fn an_asset_loaded_twice_keeps_one_entry_and_a_bent_mesh_its_own() {
@@ -162,8 +163,9 @@ mod tests {
         }
 
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut mesh_pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
-        let mut material_pool = MaterialPool::new(&context.device, &mut staging);
+        let memory = gpu_memory(&context);
+        let mut mesh_pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
+        let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging);
         let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,

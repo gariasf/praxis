@@ -6,7 +6,7 @@ use crate::render::LoadStaging;
 use crate::render::bind_groups::{TONEMAPPING_INPUT, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
-use crate::stats::texture_bytes;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The tonemapping pass's label, and its name in frame stats.
 pub(crate) const TONEMAPPING_PASS: &str = "tonemapping_pass";
@@ -30,7 +30,7 @@ const DITHER_MASK: &[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
 pub struct TonemappingPass {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
-    dither_mask: wgpu::TextureView,
+    dither_mask: Counted<wgpu::TextureView>,
     /// Its group 3 (`TONEMAPPING_INPUT`), built from the render targets by
     /// `new`, and again by `bind_render_targets`.
     input: wgpu::BindGroup,
@@ -43,6 +43,7 @@ impl TonemappingPass {
     /// `staging`.
     pub fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         target_format: wgpu::TextureFormat,
         render_targets: &RenderTargets,
         staging: &mut LoadStaging,
@@ -82,22 +83,27 @@ impl TonemappingPass {
             multiview_mask: None,
             cache: None,
         });
-        let dither_mask = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Dither Mask"),
-            size: wgpu::Extent3d {
-                width: DITHER_MASK_SIDE,
-                height: DITHER_MASK_SIDE,
-                depth_or_array_layers: 1,
+        let dither_mask = memory.create_texture(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::TextureDescriptor {
+                label: Some("Dither Mask"),
+                size: wgpu::Extent3d {
+                    width: DITHER_MASK_SIDE,
+                    height: DITHER_MASK_SIDE,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+        );
         staging.write_texture(&dither_mask, 0, DITHER_MASK);
-        let dither_mask = dither_mask.create_view(&wgpu::TextureViewDescriptor::default());
+        let dither_mask =
+            dither_mask.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let input = Self::input_bind_group(device, &layout, render_targets, &dither_mask);
         TonemappingPass {
             pipeline,
@@ -138,11 +144,6 @@ impl TonemappingPass {
         )
     }
 
-    /// Bytes of its dither mask.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        texture_bytes(self.dither_mask.texture(), false)
-    }
-
     /// Records the pass into `encoder`: every pixel of `target`, a view in
     /// this pass's format and the render targets' size, takes its display
     /// colour, timed into `timestamp_writes`.
@@ -180,6 +181,7 @@ mod tests {
     use super::*;
     use crate::assets::pools::tests::gpu_context;
     use crate::capture::{TARGET_FORMAT, read_back};
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// The mask the pass dithers with is the red channel of Peters's
     /// `assets/BlueNoise/LDR_LLL1_0.png` as committed, rows top first, and
@@ -222,9 +224,10 @@ mod tests {
             height: 3,
             depth_or_array_layers: 1,
         };
-        let render_targets = RenderTargets::new(device, size.width, size.height);
+        let memory = gpu_memory(&context);
+        let render_targets = RenderTargets::new(device, &memory, size.width, size.height);
         let mut staging = LoadStaging::new(device.clone());
-        let pass = TonemappingPass::new(device, format, &render_targets, &mut staging);
+        let pass = TonemappingPass::new(device, &memory, format, &render_targets, &mut staging);
         staging.submit(&context.queue);
         let target = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Tonemapping Test Target"),
@@ -298,9 +301,16 @@ mod tests {
             height: DITHER_MASK_SIDE,
             depth_or_array_layers: 1,
         };
-        let render_targets = RenderTargets::new(device, size.width, size.height);
+        let memory = gpu_memory(&context);
+        let render_targets = RenderTargets::new(device, &memory, size.width, size.height);
         let mut staging = LoadStaging::new(device.clone());
-        let pass = TonemappingPass::new(device, TARGET_FORMAT, &render_targets, &mut staging);
+        let pass = TonemappingPass::new(
+            device,
+            &memory,
+            TARGET_FORMAT,
+            &render_targets,
+            &mut staging,
+        );
         staging.submit(&context.queue);
         let target = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Dither Test Target"),

@@ -306,11 +306,10 @@ impl State {
 
     /// The stats of the last frame, from `update` through `render`.
     pub fn frame_stats(&self) -> FrameStats {
+        let gpu_memory_bytes_by_kind = self.renderer.gpu_memory_bytes_by_kind();
         FrameStats {
-            gpu_memory_bytes: self.renderer.gpu_memory_bytes(),
-            estimated_acceleration_structure_bytes: self
-                .renderer
-                .estimated_acceleration_structure_bytes(),
+            gpu_memory_bytes: gpu_memory_bytes_by_kind.iter().sum(),
+            gpu_memory_bytes_by_kind,
             arena_bytes_in_use: self.renderer.mesh_pool.arena_bytes_in_use(),
             allocator_report_bytes: self.renderer.allocator_report_bytes(),
             ..self.recorder.stats()
