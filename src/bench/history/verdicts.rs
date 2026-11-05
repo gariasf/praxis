@@ -448,7 +448,7 @@ pub trait IssueTracker {
     /// The issue, open or closed, titled exactly `title`, if any.
     fn titled(&mut self, title: &str) -> anyhow::Result<Option<u64>>;
 
-    /// Opens an issue labelled `TRIAGE_LABEL`, and returns its number.
+    /// Opens a `needs-triage` issue, and returns its number.
     fn open(&mut self, title: &str, body: &str) -> anyhow::Result<u64>;
 }
 
@@ -819,6 +819,8 @@ fn holds(shift: f64, good_median: f64, bad_median: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::super::ON_SERIES;
+    use super::super::tests::{Fixture, commit};
     use super::*;
 
     #[test]
@@ -1214,9 +1216,6 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
         // Held but not pinned yet, or cleared: no Regression.
         assert_eq!(filing(&night(), &[]), Filing::Done);
     }
-
-    use super::super::ON_SERIES;
-    use super::super::tests::{Fixture, commit};
 
     const ADAPTER: &str = "Apple M4 Pro";
     const BACKEND: &str = "metal";
