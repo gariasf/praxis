@@ -32,7 +32,7 @@ pub struct TonemappingPass {
     layout: wgpu::BindGroupLayout,
     dither_mask: wgpu::TextureView,
     /// Its group 3 (`TONEMAPPING_INPUT`), built from the render targets by
-    /// `bind_render_targets`.
+    /// `new`, and again by `bind_render_targets`.
     input: wgpu::BindGroup,
 }
 
@@ -107,8 +107,8 @@ impl TonemappingPass {
         }
     }
 
-    /// Builds the bind group that reads `render_targets`: at creation, and
-    /// after every resize, which creates them again.
+    /// Builds the bind group that reads `render_targets` again, as `new`
+    /// builds it: after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
         self.input =
             Self::input_bind_group(device, &self.layout, render_targets, &self.dither_mask);

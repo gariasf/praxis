@@ -10,8 +10,8 @@
     <string>/bin/bash</string>
     <string>@SWEEP@/scripts/sweep.sh</string>
   </array>
-  <!-- Unset, launchd throttles a job's CPU and I/O as a background one,
-       and the sweep's CPU times would not compare with a session's. -->
+  <!-- Unset, launchd applies light resource limits that throttle a job's
+       CPU and I/O, and the sweep's CPU times would not compare with a session's. -->
   <key>ProcessType</key>
   <string>Interactive</string>
   <key>StartCalendarInterval</key>

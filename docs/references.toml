@@ -31,8 +31,14 @@ checked = 2026-10-26
 ["vulkan-spirv-precision"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/appendices/spirvenv.adoc#spirvenv-precision-core-table"
 section = "Vulkan specification, appendix SPIR-V Environment, table Precision of Core SPIR-V Instructions"
-quote = '''OpFAdd: Correctly rounded. [...] OpFMul, OpVectorTimesScalar, OpMatrixTimesScalar: Correctly rounded. [...] OpDot(x, y): Inherited from Σᵢ₌₀ⁿ⁻¹ xᵢ × yᵢ.'''
-checked = 2026-10-26
+quote = '''OpFAdd: Correctly rounded. [...] OpFMul, OpVectorTimesScalar, OpMatrixTimesScalar: Correctly rounded. [...] OpDot(x, y): Inherited from Σᵢ₌₀ⁿ⁻¹ xᵢ × yᵢ. [...] OpFDiv(x,y): 2.5 ULP for |y| = 0 or |y| in the range [2⁻¹²⁶, 2¹²⁶].'''
+checked = 2026-11-05
+
+["vulkan-glsl-std-450-precision"]
+url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/8c9361ba8180c1f4164c0bf79de2f6e817770b0d/appendices/spirvenv.adoc#precision-of-glsl-std-450-instructions"
+section = "Vulkan specification, appendix SPIR-V Environment, table Precision of GLSL.std.450 Instructions, single precision"
+quote = '''exp(x), exp2(x): 3 + 2 × |x| ULP. [...] log(), log2(): 3 ULP outside the range [0.5, 2.0]. Absolute error < 2⁻²¹ inside the range [0.5, 2.0]. [...] pow(x, y): Inherited from exp2(y × log2(x)). sqrt(): Inherited from 1.0 / inversesqrt(). inversesqrt(): 2 ULP.'''
+checked = 2026-11-05
 
 ["vulkan-vendor-id-mesa"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml"
@@ -54,16 +60,22 @@ checked = 2026-10-26
 
 ["msl-4.1-fast-math"]
 url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=15"
-section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, p. 15, and §8.4 Table 8.2, pp. 370-371"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §1.6.3 Math Intrinsics Compiler Options, p. 15, and §8.4 Table 8.2, pp. 370-372"
 quote = '''-fmetal-math-mode=<fast, relaxed, safe> [...] The default is fast. If you set the option to fast, it lets the compiler make aggressive, potentially lossy assumptions about floating-point math. These include no NaNs, no INFs, no signed zeros, allow reciprocal, allow reassociation, and FP contract to be fast. [...]
-Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded [...] fma: Correctly rounded'''
-checked = 2026-10-26
+Table 8.2. Accuracy of single-precision operations and functions with fast math enabled [...] x + y: Correctly rounded [...] x - y: Correctly rounded [...] x * y: Correctly rounded [...] x / y: <= 2.5 ulp for y in the domain of 2⁻¹²⁶ to 2¹²⁶ [...] exp2(x): <= 3 + floor(fabs(2 * x)) ulp [...] fma: Correctly rounded [...] log2(x): For x in the domain [0.5, 2], the maximum absolute error is <= 2⁻²²; otherwise if x > 0 the maximum error is <= 2 ulp; otherwise the results are undefined. [...] pow(x, y): Implemented as exp2(y * log2(x)). Undefined for x = 0 and y = 0. [...] rsqrt: <= 2 ulp [...] sqrt(x): Implemented as x * rsqrt(x) with special cases handled correctly.'''
+checked = 2026-11-05
 
 ["msl-4.1-rounding"]
 url = "https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf"
 section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.2 Rounding Mode, p. 368"
 quote = '''Either round ties to even or round toward zero rounding mode may be supported for single-precision, half-precision, and brain floating-point operations.'''
 checked = 2026-10-26
+
+["wgsl-2026-float-accuracy"]
+url = "https://www.w3.org/TR/2026/CRD-WGSL-20261026/#concrete-float-accuracy"
+section = "W3C, WebGPU Shading Language, Candidate Recommendation Draft 2026-10-26, §15.7.4.1 Accuracy of Concrete Floating Point Expressions, tables Accuracy of concrete floating point operations and built-in functions, f32"
+quote = '''x + y: Correctly rounded [...] x * y: Correctly rounded [...] x / y: 2.5 ULP for |y| in the range [2⁻¹²⁶, 2¹²⁶] [...] exp2(x): 3 + 2 * |x| ULP [...] inverseSqrt(x): 2 ULP [...] log2(x): Absolute error at most 2⁻²¹ when x is in the interval [0.5, 2.0]. 3 ULP when x is outside the interval [0.5, 2.0]. [...] pow(x, y): Inherited from exp2(y * log2(x)) [...] sqrt(x): Inherited from 1.0 / inverseSqrt(x)'''
+checked = 2026-11-05
 
 ["gltf-2.0-specular-brdf"]
 url = "https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc#L3675-L3730"

@@ -28,6 +28,173 @@ its commit.
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 
+## M3.5 exit (2026-11-05, #528)
+
+**Verdict.** Every scene's GPU frame and gate hold within 3.5% of the
+Baselines M3.5 inherited, and no timed pass moved more than 5% since the
+audit's frozen commit. The CPU lines rose instead: `town`'s CPU frame
+now exceeds its 6 ms Budget at the median, 6.39 to 6.60 ms, and its
+dynamic TLAS line its 1.1 ms ceiling, 1.17 to 1.23 ms, on a quiet
+machine (#603). The top three offenders are texture-wall's gate and GPU
+frame (#183), `town`'s GPU frame and gate (#602), and `town`'s CPU frame
+(#603). Every timed pass is within 2x of its hardware floor or named
+below.
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`a7a5f65f` for the first round and of `8a1bfc2c` for the others, whose
+source differs only in comments and tests; the tree held further test,
+comment and doc edits, so every Provenance reads `dirty`. `praxis bench
+<dir> --no-publish` at 2560×1440 with 4x MSAA, 248 warm-up and 1,800
+measured frames per scene, rays on then off, under `caffeinate -dims`,
+AC power, battery charged, no other praxis process. Three rounds of
+every scene, each started once preflight read quiet: 15:31, 16:24 and
+16:46 UTC, at one-minute load averages of 1.35, 1.47 and 1.82 by
+preflight (1.56, 1.47 and 1.82 in the Provenance, read as each bench
+began) and GPU loads of 1, 2 and 0%. The load rose to about 3 during
+each round from the bench's own threads, and Bitdefender's daemon read
+20 to 150% of a core when sampled. Three earlier rounds started under
+load (2.06 to 2.88, two of them with the GPU 86 to 92% busy from the
+round before) and are left out; their CPU lines read up to 1.7 times the
+first round's and their GPU frames up to 7% higher. Of the 33 runs kept,
+24 are stamped quiet; the other nine fail only the p95 over median rule:
+`town` and crowd in the first and last rounds, texture-wall in the
+second and last, and shadows, minification and the orrery in the last.
+The Baselines are the second round's, all eleven scenes from one run, so
+they share a pass level (L3-L02), texture-wall's is its slow one
+(L3-D08), and every scene but texture-wall is stamped quiet. No round
+stamped all eleven quiet; this one has `town` and crowd quiet, which the
+first round lacks, at the cost of texture-wall's p95 over median, 1.133.
+The llvmpipe Baselines are CI's `bench-publish` artifact from [run
+42058149199](https://github.com/gariasf/praxis/actions/runs/42058149199)
+(PR #600), every counter identical to the ones before.
+
+### Measurements
+
+The three rounds' medians and p95s, against the Baselines recorded
+before this exit:
+
+| Scene | CPU median µs | CPU p95 µs | GPU frame median µs | Gate median µs | Shadow-ray time median µs | Dynamic TLAS CPU median µs | CPU / GPU Baseline before, µs |
+|---|---|---|---|---|---|---|---|
+| crowd | 935.2 / 922.9 / 959.3 | 1,167.5 / 1,032.6 / 1,188.6 | 3,758.1 / 3,754.9 / 3,758.9 | 1,253.3 / 1,252.2 / 1,252.5 | 2,171.6 / 2,170.0 / 2,174.5 | 378.3 / 369.4 / 389.0 | 744.5 / 3,747.5 |
+| far-coplanar | 201.9 / 204.7 / 208.4 | 246.3 / 300.6 / 388.0 | 2,599.2 / 2,598.3 / 2,624.8 | 680.2 / 678.0 / 681.3 | 1,595.6 / 1,597.5 / 1,617.8 | 0.1 / 0.1 / 0.1 | 185.8 / 2,598.5 |
+| helmet | 201.0 / 207.2 / 190.8 | 394.2 / 448.5 / 275.5 | 6,684.8 / 6,687.7 / 6,618.8 | 1,213.9 / 1,215.0 / 1,212.5 | 5,147.3 / 5,147.9 / 5,083.1 | 0.1 / 0.1 / 0.1 | 186.1 / 6,689.1 |
+| minification | 211.8 / 213.2 / 222.6 | 342.7 / 460.8 / 505.7 | 3,002.3 / 3,006.1 / 3,008.5 | 840.9 / 847.0 / 838.0 | 1,838.2 / 1,834.0 / 1,846.8 | 0.1 / 0.1 / 0.1 | 192.7 / 3,003.5 |
+| normal-tangent | 186.9 / 197.1 / 213.0 | 218.0 / 416.9 / 423.8 | 3,662.6 / 3,683.6 / 3,704.3 | 820.2 / 820.8 / 819.7 | 2,518.3 / 2,539.1 / 2,559.2 | 0.1 / 0.1 / 0.1 | 208.6 / 3,664.5 |
+| orrery | 377.0 / 384.3 / 379.7 | 487.2 / 602.2 / 697.6 | 2,921.3 / 2,928.0 / 2,945.7 | 641.8 / 647.5 / 644.2 | 1,955.6 / 1,954.5 / 1,976.3 | 185.0 / 186.0 / 185.2 | 358.8 / 2,917.3 |
+| pbr-sweep | 189.4 / 197.5 / 190.8 | 249.0 / 305.0 / 268.1 | 3,863.8 / 3,871.0 / 3,876.1 | 775.8 / 776.9 / 779.2 | 2,761.5 / 2,767.0 / 2,770.0 | 0.1 / 0.1 / 0.1 | 181.6 / 3,851.5 |
+| shadows | 279.2 / 278.1 / 290.9 | 370.3 / 338.8 / 449.5 | 4,119.0 / 4,120.1 / 4,122.2 | 846.9 / 849.5 / 848.0 | 2,948.3 / 2,946.8 / 2,950.2 | 0.1 / 0.1 / 0.1 | 265.9 / 4,094.7 |
+| texture-wall | 2,080.3 / 2,265.0 / 2,186.4 | 2,292.0 / 2,968.1 / 3,117.5 | 15,748.7 / 15,460.0 / 15,546.0 | 13,697.8 / 13,630.1 / 13,859.2 | 451.7 / 369.7 / 180.5 | 0.1 / 0.3 / 0.3 | 2,138.5 / 15,975.0 |
+| town | 6,498.0 / 6,386.8 / 6,595.2 | 7,037.3 / 6,833.5 / 7,224.7 | 19,945.0 / 19,981.5 / 20,077.3 | 8,663.6 / 8,650.8 / 8,667.1 | 10,788.3 / 10,779.2 / 11,000.2 | 1,204.5 / 1,173.1 / 1,229.3 | 4,734.8 / 19,935.0 |
+| uv-grid | 196.0 / 193.2 / 202.0 | 221.2 / 298.5 / 389.7 | 2,921.6 / 2,933.0 / 2,929.9 | 766.1 / 764.9 / 766.2 | 1,834.1 / 1,843.1 / 1,839.5 | 0.1 / 0.1 / 0.1 | 184.0 / 2,917.0 |
+
+`town`'s second round in full, its Baseline now, against the Baseline
+before:
+
+**town** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
+
+| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 6,386.8 | 6,833.5 | 4,734.8 | 5,088.3 | +1,652.0 | 1.349 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,173.1 | 1,325.5 | 1,097.4 | 1,181.7 | +75.7 | 1.069 | 1,100.0 |
+| GPU frame | 19,981.5 | 20,558.4 | 19,935.0 | 20,132.9 | +46.5 | 1.002 | 12,000.0 |
+| Gate, rays off | 8,650.8 | 9,048.2 | 8,612.1 | 8,878.4 | +38.7 | 1.004 | 6,000.0 |
+| Shadow-ray time | 10,779.2 | 11,695.8 | 10,792.9 | 11,345.0 | -13.7 | 0.999 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 1,163.7 | 1,211.0 | 1,145.2 | 1,181.2 | +18.5 | 1.016 | — |
+| `culling_phase_two` | 174.5 | 186.2 | 169.2 | 187.4 | +5.2 | 1.031 | — |
+| `depth_prepass` | 2,144.8 | 2,241.5 | 2,156.0 | 2,246.0 | -11.2 | 0.995 | — |
+| `depth_pyramid_pass` | 214.2 | 219.9 | 219.7 | 226.0 | -5.5 | 0.975 | — |
+| `dynamic_tlas_build` | 0.0 | 68.8 | 0.0 | 89.8 | +0.0 | — | 1,000.0 |
+| `froxel_pass` | 602.8 | 627.6 | 579.5 | 597.7 | +23.2 | 1.040 | — |
+| `lit_pass` | 3,779.5 | 3,935.1 | 3,762.6 | 3,890.5 | +16.9 | 1.004 | — |
+| `phase_two_depth_pass` | 56.8 | 109.5 | 56.3 | 109.7 | +0.5 | 1.009 | — |
+| `shadow_mask_pass` | 11,971.8 | 12,578.3 | 11,924.1 | 12,359.3 | +47.8 | 1.004 | — |
+| `tonemapping_pass` | 324.5 | 370.8 | 324.7 | 372.5 | -0.2 | 0.999 | — |
+
+Against ADR 0013's Budgets:
+
+- **GPU frame, 12 ms**: `town` 19.9 to 20.1 ms (166 to 167%), 10.8 to
+  11.0 ms of it shadow rays; texture-wall 15.5 to 15.7 ms (129 to
+  131%); the helmet's 6.6 to 6.7 ms is the next, every other scene at
+  most 4.2 ms.
+- **ADR 0019's gate, 6 ms**: texture-wall 13.6 to 13.9 ms, about 11 ms
+  of it the lit pass's wait; `town` 8.65 to 8.67 ms, accepted until LOD;
+  every other scene at most 1.3 ms.
+- **CPU frame, 6 ms**: `town` 6.39 to 6.60 ms at the median and 6.83 to
+  7.22 ms at p95, over at both in every round; texture-wall 2.1 to 2.3
+  ms; every other scene at most 0.96 ms.
+- **Dynamic TLAS, 1.1 ms CPU and 1.0 ms GPU**: `town`'s CPU reads 1.17
+  to 1.23 ms, over in every round, which answers triage 2's question on
+  L3-D03: it breaches quiet as well as loaded. Its build reads 0 at the
+  median.
+- **GPU memory, 8 GB**: `town` 764,009,624 B (9.6%), unchanged.
+
+### Passes against their floors
+
+Each timed pass on each scene against the hardware floor lane 3 computed
+(`docs/audit/m3.5/performance.md`), at the median of the three rounds:
+77 of 100 scene and pass rows are within 2x, 11 are phase two's depth
+pass, which lane 3 floors nowhere and which reads under 0.1 ms, and 12
+are not plainly within:
+
+- **`town`'s culling phase one**, 2.28 times its 510 µs bandwidth floor.
+  Its line also counts the time it runs beside the Froxel pass, which
+  starts with it; its stages measured apart sum to 1.74 times the floor.
+  Placed at M4's charting with LOD, which cuts the packed-index writes
+  that dominate it (L3-D09).
+- **`town`'s Froxel pass**, 4.37 times only its bandwidth floor. Its
+  bound is 18.9 million light-against-Froxel tests, for which Apple
+  publishes no rate, so no floor can be computed; timing the pass apart
+  from culling phase one is what would settle it.
+- **`town`'s depth pre-pass and lit pass**, 2.47 and 2.52 times the
+  floor that pulls every vertex once, and within the one that pulls each
+  index's vertex anew. Which bound the M4 Pro meets stays open until a
+  vertex stage that pulls a constant is timed, with the gate's fix.
+- **The helmet's shadow mask pass**, 3.29 times a floor built on a ray
+  rate measured on two triangles; no rate on a BLAS of its 257,000
+  triangles exists apart from the scene, so its floor cannot be computed.
+- **texture-wall's depth pre-pass, depth pyramid, tonemapping and shadow
+  mask passes**, 3.05 to 13.44 times their floors, and its culling
+  phases and Froxel pass, 3.1 to 3.7 times the dispatch cost the light
+  scenes read. All sit on the scene's slow pass level, which comes with
+  the kernel scheduling its lit pass's command buffer for 10,005 bound
+  Textures (#183; the note of 2026-11-04 below). `town` does the
+  pyramid's and tonemapping's identical work in a quarter of the time.
+
+Over twice a source's scaled cost but within 2x of its floor, an
+architectural note and not a failure: the depth pyramid on the ten
+scenes but texture-wall, 0.87 to 0.92 of its floor and 1.90 to 2.02 and
+2.78 to 2.96 times its two sources, which reduce tile metadata or a
+16-bit single-sample buffer, not four 32-bit samples a pixel.
+
+### Top three offenders
+
+Ranked by their share of the Budget each breaches:
+
+1. **texture-wall's gate, 13.6 to 13.9 ms, and GPU frame, 15.5 to 15.7
+   ms** (227 to 231% and 129 to 131%): the kernel's scheduling of its
+   10,005 bound Textures, CPU work that grows with load. #183
+2. **`town`'s GPU frame, 19.9 to 20.1 ms, and gate, 8.65 to 8.67 ms**
+   (166 to 167% and 144%): shadow rays and the triangles drawn, placed
+   at M4's charting with LOD. #602
+3. **`town`'s CPU frame, 6.39 to 6.60 ms at the median** (106 to 110%),
+   with the dynamic TLAS's CPU over its ceiling in every round:
+   wgpu-core's TLAS bookkeeping and the Tick blend's slerp of 10,000
+   Moving Instances on the main thread. The Budget regresses here, so
+   the ticket carries the owner's decision. #603
+
+### Also seen
+
+- At the median of the three rounds, the CPU frame reads over its
+  Baseline before this exit on ten of the eleven scenes, from 2% on
+  texture-wall to 26% on the crowd and 37% on `town`, while the GPU
+  frames hold; normal-tangent's reads 5% under. The Bench history's
+  quiet `town` records read 5,442.5 µs before the Tick blend's slerp and
+  6,274.8 µs after it, against a Baseline of 4,734.8.
+- No timed pass moved more than 5% against lane 3's figures at the
+  frozen commit; the largest is `town`'s depth pyramid, 3.2% faster.
+
 ## texture-wall's untimed stretch is the kernel scheduling the lit pass's command buffer (2026-11-04, #565)
 
 **Verdict.** The roughly 11 ms of texture-wall's gate that no pass timed is

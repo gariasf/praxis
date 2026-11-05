@@ -7,9 +7,9 @@ use crate::threading::single_threaded_schedule;
 
 #[derive(Resource, Default)]
 pub struct Time {
-    // Seconds since the previous frame, zero on the first. Injected through
-    // `State::update`: the window measures it, a capture fixes it. Per frame
-    // only: the fixed schedule never reads it (ADR 0022).
+    // Seconds the frame advances by, written by `Simulation::simulate`: the
+    // window measures it, zero on its first frame; a capture or an export
+    // fixes it. Per frame only: the fixed schedule never reads it (ADR 0022).
     pub delta_time: f32,
 }
 

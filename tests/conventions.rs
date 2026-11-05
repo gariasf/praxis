@@ -464,6 +464,7 @@ fn a_depth_clear_passes_only_as_a_zero_literal() {
 fn render_unwraps(path: &str, source: &str) -> Vec<usize> {
     // The files `src/render/mod.rs` declares under `#[cfg(test)]`.
     let test_files = [
+        "src/render/coverage_tests.rs",
         "src/render/shader_function_tests.rs",
         "src/render/shader_tests.rs",
     ];

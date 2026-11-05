@@ -12,7 +12,7 @@ use std::process::Command;
 
 /// The volumes that narrated how each mechanism was built, each kept, and
 /// passed over by the page checks, until the page that absorbs it lands.
-const VOLUMES: &[&str] = &["crowd-shadows.html"];
+const VOLUMES: &[&str] = &[];
 
 /// The values of `attribute` in `html`, in order. Only whole attribute names
 /// count: `id` does not match inside `data-id`.
