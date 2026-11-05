@@ -12,10 +12,11 @@ use crate::render::shaders;
 
 /// Largest difference allowed between a result and its expectation. Results
 /// land within 2e-7 of theirs on the M4 Pro. WGSL floors, worst first: D's
-/// peak 16/π, about 1.7e-6 under a 2.5 ULP division, over this, and 4.4e-7
-/// correctly rounded; `tangent_space_normal`, about 6e-7 (1.2e-6, over this,
-/// under round toward zero); `fresnel_weight`, 7 roundings on values at most
-/// 1, about 4.2e-7 (8.3e-7); Smith's G, V's 7.8e-7; `relative_luminance`,
+/// peak 16/π, about 1.3e-6 under a 2.5 ULP division
+/// [ref:wgsl-2026-float-accuracy], over this, and 4.4e-7 correctly rounded;
+/// `tangent_space_normal`, about 6e-7 (1.2e-6, over this, under round toward
+/// zero [ref:msl-4.1-rounding]); `fresnel_weight`, 7 roundings on values at
+/// most 1, about 4.2e-7 (8.3e-7); Smith's G, V's 7.8e-7; `relative_luminance`,
 /// 3.6e-7 (7e-7); `dither_noise`, its root's 2.7e-7.
 const TOLERANCE: f32 = 1e-6;
 
@@ -1042,10 +1043,10 @@ const TONEMAP_REFERENCE: [([f32; 3], [f32; 3]); 14] = [
 /// where its conversion back to Rec. 709 subtracts near-equal terms for
 /// saturated green: a fifth of an 8-bit step. WGSL floors, worst first: PQ's
 /// round trip, 4.0e-4 to 5.4e-4 relative at frame-buffer 1 to 10 by `log2`'s
-/// 3 ULP, over this; `tonemap`, 2.3e-4 typical; `gt7_tonemap`, 2e-4 typical;
-/// `pq_encode`, 4e-5 at signal 0.5; `gt7_curve`, 5e-6 with the sample's own
-/// f32; a grey's ICtCp chroma, 2e-6, and intensity, 3e-7; PQ of 10,000
-/// cd/m², exact.
+/// 3 ULP [ref:vulkan-glsl-std-450-precision], over this; `tonemap`, 2.3e-4
+/// typical; `gt7_tonemap`, 2e-4 typical; `pq_encode`, 4e-5 at signal 0.5;
+/// `gt7_curve`, 5e-6 with the sample's own f32; a grey's ICtCp chroma, 2e-6,
+/// and intensity, 3e-7; PQ of 10,000 cd/m², exact.
 const GT7_TOLERANCE: f64 = 3e-4;
 
 /// IEC 61966-2-1's sRGB encoding, as the Khronos Data Format Specification
@@ -1076,8 +1077,11 @@ fn srgb_encode_follows_iec_61966_2_1() {
 }
 
 /// Largest difference allowed between the shader's sRGB encoding and the
-/// standard's in f64: a thousandth of an 8-bit step. WGSL floor: about 1e-6,
-/// from Metal's 16 ulp `pow` at 1.0 or Vulkan's 3 ULP `log2` through `exp2`.
+/// standard's in f64: a thousandth of an 8-bit step. WGSL floor: under 1e-6,
+/// about 6e-7 near 1, from `pow` as exp2(y · log2(x)), which Metal's fast
+/// math implements [ref:msl-4.1-fast-math] and Vulkan's allowance inherits
+/// [ref:vulkan-glsl-std-450-precision]: `log2`'s 2⁻²¹ near 1 (2⁻²² on Metal)
+/// or 3 ULP below 0.5, then `exp2`'s 3 to 10 ULP.
 const SRGB_TOLERANCE: f64 = 4e-6;
 
 /// The dither's noise from each of the mask's 256 levels, k/255 as the
@@ -1410,7 +1414,8 @@ fn the_neutral_normal_layer_decodes_to_the_flat_normal_exactly() {
     );
     // WGSL floor 0: binary16 widens exactly, 0.5 · 2 − 1 is 0 and 1 − 0 is 1,
     // but z is sqrt(1), exact only where sqrt rounds correctly, which Vulkan's
-    // allowance, inherited from 1/inversesqrt, does not require.
+    // allowance, inherited from 1/inversesqrt
+    // [ref:vulkan-glsl-std-450-precision], does not require.
     assert_eq!(results, [[0.0, 0.0, 1.0, 0.0]; 4]);
 }
 
@@ -1522,7 +1527,8 @@ fn decode_surface_scales_each_texel_by_its_factor_and_floors_roughness() {
     let floor = minimum_roughness(&context);
     // WGSL floor 0 for the products; the first case's roughness 0.375 comes
     // back through sqrt(sqrt(81/4096)), exact only where sqrt rounds
-    // correctly, which Vulkan's allowance does not require.
+    // correctly, which Vulkan's allowance [ref:vulkan-glsl-std-450-precision]
+    // does not require.
     assert_eq!(colours, [[0.25, 0.25, 0.25, 0.375]; 2]);
     assert_eq!(
         scalars,
@@ -1856,10 +1862,11 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm. WGSL floors:
 /// `camera_relative_position`, 192.6u per axis in its written order, 2.0e-5 m
-/// (4.0e-5 under round toward zero), and 256u in the worst other order,
-/// 2.6e-5 m (5.3e-5, over this, if a GPU both reorders and rounds toward
+/// (4.0e-5 under round toward zero), and 384.9u in the worst other order,
+/// (offset + local position) − camera offset and the anchor term last,
+/// 3.97e-5 m (7.9e-5, over this, if a GPU both reorders and rounds toward
 /// zero); `point_light_position`, with no local position, 64.3u per axis,
-/// 6.6e-6 m (1.3e-5), and 128.3u in the worst other order, 1.3e-5 m (2.7e-5).
+/// 6.6e-6 m (1.3e-5), and 64.6u in the worst other order, 6.7e-6 m (1.3e-5).
 const PRECISION_BAR: f64 = 4.3e-5;
 
 /// Camera coordinates on each axis for the precision oracles: cell corners,
@@ -2192,6 +2199,12 @@ fn a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box() {
     );
 
     for ((name, (.., expected)), result) in cases.iter().zip(results) {
+        // WGSL floor: a verdict flips only where a case's exact margin from
+        // the separating boundary is under about 24 × 2⁻²⁴ times its largest
+        // coordinate from the box's centre, below 6e-5 box units here and
+        // 1.4e-3 for the ray from 1000 away. Every margin is at least 1, or
+        // the case lies exactly on a face, where the deciding comparison is
+        // exact.
         assert_eq!(result[0] == 1.0, *expected, "{name}");
     }
 }

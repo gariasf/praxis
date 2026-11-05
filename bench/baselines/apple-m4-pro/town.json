@@ -7,53 +7,53 @@
   "height": 1440,
   "measured_frames": 1800,
   "cpu_frame_microseconds": {
-    "median": 6498.0419999999995,
-    "p95": 7037.2919999999995
+    "median": 6386.833,
+    "p95": 6833.5419999999995
   },
   "dynamic_tlas_cpu_microseconds": {
-    "median": 1204.5,
-    "p95": 1347.9160000000002
+    "median": 1173.083,
+    "p95": 1325.459
   },
   "gpu_frame_microseconds": {
-    "median": 19944.959000000003,
-    "p95": 21287.791
+    "median": 19981.5,
+    "p95": 20558.416999999998
   },
   "gate_microseconds": {
-    "median": 8663.625,
-    "p95": 9155.75
+    "median": 8650.792,
+    "p95": 9048.208
   },
   "shadow_ray_microseconds": {
-    "median": 10788.250000000002,
-    "p95": 12308.000000000002
+    "median": 10779.165999999997,
+    "p95": 11695.75
   },
   "lit_pass_wait_microseconds": {
     "median": 9.042000000000002,
-    "p95": 10.292000000000002
+    "p95": 10.208
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "median": 1145.416,
-      "p95": 1180.6670000000001
+      "median": 1150.334,
+      "p95": 1205.708
     },
     "culling_phase_two": {
-      "median": 171.917,
-      "p95": 186.541
+      "median": 172.625,
+      "p95": 188.209
     },
     "depth_prepass": {
-      "median": 1764.083,
-      "p95": 1821.083
+      "median": 1761.292,
+      "p95": 1846.625
     },
     "depth_pyramid_pass": {
-      "median": 207.167,
-      "p95": 215.542
+      "median": 207.75,
+      "p95": 215.58300000000003
     },
     "froxel_pass": {
-      "median": 572.6659999999999,
-      "p95": 598.416
+      "median": 582.334,
+      "p95": 617.917
     },
     "lit_pass": {
-      "median": 5330.541,
-      "p95": 5762.583
+      "median": 5334.0419999999995,
+      "p95": 5647.375
     }
   },
   "gpu_pass_microseconds": {
@@ -66,44 +66,44 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 1165.25,
-      "p95": 1206.333
+      "median": 1163.709,
+      "p95": 1210.959
     },
     "culling_phase_two": {
-      "median": 173.292,
-      "p95": 186.792
+      "median": 174.459,
+      "p95": 186.167
     },
     "depth_prepass": {
-      "median": 2146.2920000000004,
-      "p95": 2236.458
+      "median": 2144.792,
+      "p95": 2241.5
     },
     "depth_pyramid_pass": {
-      "median": 214.5,
-      "p95": 223.708
+      "median": 214.25,
+      "p95": 219.91600000000003
     },
     "dynamic_tlas_build": {
       "median": 0.0,
-      "p95": 80.125
+      "p95": 68.792
     },
     "froxel_pass": {
-      "median": 603.4169999999999,
-      "p95": 630.167
+      "median": 602.7909999999999,
+      "p95": 627.5840000000001
     },
     "lit_pass": {
-      "median": 3776.458,
-      "p95": 4199.040999999999
+      "median": 3779.458,
+      "p95": 3935.1250000000005
     },
     "phase_two_depth_pass": {
-      "median": 56.417,
-      "p95": 112.667
+      "median": 56.791,
+      "p95": 109.542
     },
     "shadow_mask_pass": {
-      "median": 11925.166,
-      "p95": 13080.375
+      "median": 11971.834,
+      "p95": 12578.292
     },
     "tonemapping_pass": {
-      "median": 322.5,
-      "p95": 372.0
+      "median": 324.5,
+      "p95": 370.75
     }
   },
   "draw_calls": 4,
@@ -131,19 +131,19 @@
   "aliasing_rmse": 5098,
   "aliasing_p99": 15501,
   "provenance": {
-    "source_hash": "a51401c4e1fcc674d87557afd6d938c64b0b6a7b",
-    "commit": "a7a5f65f14ef61ec94c613d9aa15ec36b85f1256",
+    "source_hash": "919be01e8a3eda4d6c8d6ab6e56f3f079cde58e7",
+    "commit": "8a1bfc2c1db284626d0ec4f9a957840ad8d13c26",
     "dirty": true,
     "branch": "exit/m3.5",
     "driver": "",
     "driver_info": "",
     "harness_version": 10,
     "scene_content_hash": "a1be4c5882044dde73928763be5b8cf0552a87c9f2ad7b11d42f7dd6ae31435e",
-    "gpu_load_percent": 0,
-    "one_minute_load_average": 1.56,
+    "gpu_load_percent": 3,
+    "one_minute_load_average": 1.47,
     "other_processes": [],
-    "gpu_frame_p95_over_median": 1.067326886959256,
-    "quiet": false,
-    "started_unix_seconds": 1793892851
+    "gpu_frame_p95_over_median": 1.0288725571153317,
+    "quiet": true,
+    "started_unix_seconds": 1793896048
   }
 }

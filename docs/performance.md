@@ -33,31 +33,39 @@ its commit.
 **Verdict.** Every scene's GPU frame and gate hold within 3.5% of the
 Baselines M3.5 inherited, and no timed pass moved more than 5% since the
 audit's frozen commit. The CPU lines rose instead: `town`'s CPU frame
-now passes its 6 ms Budget at the median, 6.39 to 6.60 ms, and its
-dynamic TLAS line its 1.1 ms ceiling, 1.17 to 1.23 ms, on a quiet machine (#603). The top
-three offenders are texture-wall's gate and GPU frame (#183), `town`'s
-GPU frame and gate (#602), and `town`'s CPU frame (#603). Every timed
-pass is within 2x of its hardware floor or named below.
+now exceeds its 6 ms Budget at the median, 6.39 to 6.60 ms, and its
+dynamic TLAS line its 1.1 ms ceiling, 1.17 to 1.23 ms, on a quiet
+machine (#603). The top three offenders are texture-wall's gate and GPU
+frame (#183), `town`'s GPU frame and gate (#602), and `town`'s CPU frame
+(#603). Every timed pass is within 2x of its hardware floor or named
+below.
 
-Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release build of
-`a7a5f65f` (the runs' tree also held test and doc edits, so their
-Provenance reads `dirty`). `praxis bench <dir> --no-publish` at
-2560×1440 with 4x MSAA, 248 warm-up and 1,800 measured frames per scene,
-rays on then off, under `caffeinate -dims`, AC power, battery charged, no
-other praxis process. Three rounds of every scene, each started once
-preflight read quiet: 15:31, 16:24 and 16:46 UTC, at one-minute load
-averages of 1.35, 1.47 and 1.82 and GPU loads of 1, 2 and 0%. The load
-rose to about 3 during each round from the bench's own threads, and
-Bitdefender's daemon read 20 to 150% of a core when sampled. Three
-earlier rounds started under load (2.06 to 2.88, two of them with the GPU
-86 to 92% busy from the round before) and are left out; their CPU lines
-read up to 1.7 times the first round's and their GPU frames up to 7%
-higher. Of the 33 runs kept, 24 are stamped quiet; `town`, crowd,
-texture-wall, and in the last round shadows, minification and the
-orrery fail only the p95 over median rule. The Baselines are the first round's, all eleven scenes
-from one run, so they share a pass level (L3-L02) and texture-wall's is
-its slow one (L3-D08). The llvmpipe Baselines are CI's `bench-publish`
-artifact from [run 42058149199](https://github.com/gariasf/praxis/actions/runs/42058149199)
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, release builds of
+`a7a5f65f` for the first round and of `8a1bfc2c` for the others, whose
+source differs only in comments and tests; the tree held further test,
+comment and doc edits, so every Provenance reads `dirty`. `praxis bench
+<dir> --no-publish` at 2560×1440 with 4x MSAA, 248 warm-up and 1,800
+measured frames per scene, rays on then off, under `caffeinate -dims`,
+AC power, battery charged, no other praxis process. Three rounds of
+every scene, each started once preflight read quiet: 15:31, 16:24 and
+16:46 UTC, at one-minute load averages of 1.35, 1.47 and 1.82 by
+preflight (1.56, 1.47 and 1.82 in the Provenance, read as each bench
+began) and GPU loads of 1, 2 and 0%. The load rose to about 3 during
+each round from the bench's own threads, and Bitdefender's daemon read
+20 to 150% of a core when sampled. Three earlier rounds started under
+load (2.06 to 2.88, two of them with the GPU 86 to 92% busy from the
+round before) and are left out; their CPU lines read up to 1.7 times the
+first round's and their GPU frames up to 7% higher. Of the 33 runs kept,
+24 are stamped quiet; the other nine fail only the p95 over median rule:
+`town` and crowd in the first and last rounds, texture-wall in the
+second and last, and shadows, minification and the orrery in the last.
+The Baselines are the second round's, all eleven scenes from one run, so
+they share a pass level (L3-L02), texture-wall's is its slow one
+(L3-D08), and every scene but texture-wall is stamped quiet. No round
+stamped all eleven quiet; this one has `town` and crowd quiet, which the
+first round lacks, at the cost of texture-wall's p95 over median, 1.133.
+The llvmpipe Baselines are CI's `bench-publish` artifact from [run
+42058149199](https://github.com/gariasf/praxis/actions/runs/42058149199)
 (PR #600), every counter identical to the ones before.
 
 ### Measurements
@@ -79,29 +87,30 @@ before this exit:
 | town | 6,498.0 / 6,386.8 / 6,595.2 | 7,037.3 / 6,833.5 / 7,224.7 | 19,945.0 / 19,981.5 / 20,077.3 | 8,663.6 / 8,650.8 / 8,667.1 | 10,788.3 / 10,779.2 / 11,000.2 | 1,204.5 / 1,173.1 / 1,229.3 | 4,734.8 / 19,935.0 |
 | uv-grid | 196.0 / 193.2 / 202.0 | 221.2 / 298.5 / 389.7 | 2,921.6 / 2,933.0 / 2,929.9 | 766.1 / 764.9 / 766.2 | 1,834.1 / 1,843.1 / 1,839.5 | 0.1 / 0.1 / 0.1 | 184.0 / 2,917.0 |
 
-`town`'s first round in full, against the Baseline before:
+`town`'s second round in full, its Baseline now, against the Baseline
+before:
 
 **town** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
 
 | Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| CPU frame | 6,498.0 | 7,037.3 | 4,734.8 | 5,088.3 | +1,763.3 | 1.372 | 6,000.0 |
-| Dynamic TLAS, CPU | 1,204.5 | 1,347.9 | 1,097.4 | 1,181.7 | +107.1 | 1.098 | 1,100.0 |
-| GPU frame | 19,945.0 | 21,287.8 | 19,935.0 | 20,132.9 | +9.9 | 1.000 | 12,000.0 |
-| Gate, rays off | 8,663.6 | 9,155.8 | 8,612.1 | 8,878.4 | +51.5 | 1.006 | 6,000.0 |
-| Shadow-ray time | 10,788.3 | 12,308.0 | 10,792.9 | 11,345.0 | -4.6 | 1.000 | — |
+| CPU frame | 6,386.8 | 6,833.5 | 4,734.8 | 5,088.3 | +1,652.0 | 1.349 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,173.1 | 1,325.5 | 1,097.4 | 1,181.7 | +75.7 | 1.069 | 1,100.0 |
+| GPU frame | 19,981.5 | 20,558.4 | 19,935.0 | 20,132.9 | +46.5 | 1.002 | 12,000.0 |
+| Gate, rays off | 8,650.8 | 9,048.2 | 8,612.1 | 8,878.4 | +38.7 | 1.004 | 6,000.0 |
+| Shadow-ray time | 10,779.2 | 11,695.8 | 10,792.9 | 11,345.0 | -13.7 | 0.999 | — |
 | `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
 | `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
-| `culling_phase_one` | 1,165.2 | 1,206.3 | 1,145.2 | 1,181.2 | +20.0 | 1.017 | — |
-| `culling_phase_two` | 173.3 | 186.8 | 169.2 | 187.4 | +4.1 | 1.024 | — |
-| `depth_prepass` | 2,146.3 | 2,236.5 | 2,156.0 | 2,246.0 | -9.7 | 0.995 | — |
-| `depth_pyramid_pass` | 214.5 | 223.7 | 219.7 | 226.0 | -5.2 | 0.976 | — |
-| `dynamic_tlas_build` | 0.0 | 80.1 | 0.0 | 89.8 | +0.0 | — | 1,000.0 |
-| `froxel_pass` | 603.4 | 630.2 | 579.5 | 597.7 | +23.9 | 1.041 | — |
-| `lit_pass` | 3,776.5 | 4,199.0 | 3,762.6 | 3,890.5 | +13.9 | 1.004 | — |
-| `phase_two_depth_pass` | 56.4 | 112.7 | 56.3 | 109.7 | +0.1 | 1.002 | — |
-| `shadow_mask_pass` | 11,925.2 | 13,080.4 | 11,924.1 | 12,359.3 | +1.1 | 1.000 | — |
-| `tonemapping_pass` | 322.5 | 372.0 | 324.7 | 372.5 | -2.2 | 0.993 | — |
+| `culling_phase_one` | 1,163.7 | 1,211.0 | 1,145.2 | 1,181.2 | +18.5 | 1.016 | — |
+| `culling_phase_two` | 174.5 | 186.2 | 169.2 | 187.4 | +5.2 | 1.031 | — |
+| `depth_prepass` | 2,144.8 | 2,241.5 | 2,156.0 | 2,246.0 | -11.2 | 0.995 | — |
+| `depth_pyramid_pass` | 214.2 | 219.9 | 219.7 | 226.0 | -5.5 | 0.975 | — |
+| `dynamic_tlas_build` | 0.0 | 68.8 | 0.0 | 89.8 | +0.0 | — | 1,000.0 |
+| `froxel_pass` | 602.8 | 627.6 | 579.5 | 597.7 | +23.2 | 1.040 | — |
+| `lit_pass` | 3,779.5 | 3,935.1 | 3,762.6 | 3,890.5 | +16.9 | 1.004 | — |
+| `phase_two_depth_pass` | 56.8 | 109.5 | 56.3 | 109.7 | +0.5 | 1.009 | — |
+| `shadow_mask_pass` | 11,971.8 | 12,578.3 | 11,924.1 | 12,359.3 | +47.8 | 1.004 | — |
+| `tonemapping_pass` | 324.5 | 370.8 | 324.7 | 372.5 | -0.2 | 0.999 | — |
 
 Against ADR 0013's Budgets:
 
@@ -169,7 +178,7 @@ Ranked by their share of the Budget each breaches:
 2. **`town`'s GPU frame, 19.9 to 20.1 ms, and gate, 8.65 to 8.67 ms**
    (166 to 167% and 144%): shadow rays and the triangles drawn, placed
    at M4's charting with LOD. #602
-3. **`town`'s CPU frame, 6.39 to 6.60 ms at the median** (107 to 110%),
+3. **`town`'s CPU frame, 6.39 to 6.60 ms at the median** (106 to 110%),
    with the dynamic TLAS's CPU over its ceiling in every round:
    wgpu-core's TLAS bookkeeping and the Tick blend's slerp of 10,000
    Moving Instances on the main thread. The Budget regresses here, so

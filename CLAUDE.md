@@ -42,8 +42,7 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   each with its section and a verbatim quote; code, ADRs and notes cite
   its keys (`[ref:<key>]`) beside the prose citation.
 - `docs/guides/` — the field guides: the engine's reference, a page per
-  mechanism, and until each page exists the volumes that explained the
-  concepts tickets introduced, which GitHub Pages serves from `main`. Read
+  mechanism and per concept, which GitHub Pages serves from `main`. Read
   when you need one of those concepts; `docs/agents/workflow.md` says when
   to write or rewrite one.
 - `docs/bench/` — the page that draws the Bench history's Series from
