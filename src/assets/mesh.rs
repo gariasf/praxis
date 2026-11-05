@@ -11,7 +11,7 @@ pub struct Mesh {
     pub bounds: [[f32; 3]; 2],
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MeshHandle(pub u32);
 
 /// A Mesh as the Mesh table holds it, at its Handle's index: its Meshlets,

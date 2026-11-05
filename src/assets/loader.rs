@@ -74,14 +74,14 @@ impl PoolLoader<'_> {
     /// Loads the Mesh `id` for `mesh_use`, once per Asset ID unless it is
     /// bent, with the Materials its Primitives name unless no pass draws it.
     fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
-        if let Some(handle) = self.mesh_pool.loaded(id, mesh_use) {
+        if let Some(handle) = self.mesh_pool.handle(id, mesh_use) {
             return Ok(handle);
         }
         let mesh = self.cache.mesh(id)?;
-        let materials = if mesh_use == MeshUse::Traced {
-            vec![None; mesh.primitives.len()]
-        } else {
+        let materials = if mesh_use.drawn() {
             self.materials(id, &mesh)?
+        } else {
+            vec![None; mesh.primitives.len()]
         };
         self.mesh_pool
             .load_asset(self.staging, id, &mesh, &materials, mesh_use)
@@ -174,10 +174,10 @@ mod tests {
         let (handles, log) = logged(|| {
             let mesh = loader.mesh(AssetId(3)).unwrap();
             let arena_bytes = loader.mesh_pool.arena_bytes_in_use();
-            assert!(loader.mesh(AssetId(3)).unwrap() == mesh);
+            assert_eq!(loader.mesh(AssetId(3)).unwrap(), mesh);
             assert_eq!(loader.mesh_pool.arena_bytes_in_use(), arena_bytes);
             let proxy = loader.shadow_proxy(AssetId(3)).unwrap();
-            assert!(loader.shadow_proxy(AssetId(3)).unwrap() == proxy);
+            assert_eq!(loader.shadow_proxy(AssetId(3)).unwrap(), proxy);
             let bent = [
                 loader.bent_mesh(AssetId(3)).unwrap(),
                 loader.bent_mesh(AssetId(3)).unwrap(),

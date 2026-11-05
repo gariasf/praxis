@@ -31,7 +31,7 @@ pub enum MeshUse {
 
 impl MeshUse {
     /// Whether the main pass draws it, so it needs Meshlets.
-    fn drawn(self) -> bool {
+    pub(crate) fn drawn(self) -> bool {
         self != MeshUse::Traced
     }
 
@@ -151,12 +151,13 @@ impl MeshPool {
 
     /// The Handle of the Mesh `id` that `load_asset` loaded for `mesh_use`,
     /// unless a bent Mesh's use, which no two Renderables share.
-    pub fn loaded(&self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
+    pub fn handle(&self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
         self.asset_handles.get(&(id, mesh_use)).copied()
     }
 
-    /// Loads `mesh`, the Mesh `id`, as `load_for` does, and keeps its Handle
-    /// for `loaded` to return.
+    /// The Handle of `mesh`, the Mesh `id`, for `mesh_use`: the one `handle`
+    /// returns, or else a load as `load_for` does, kept for `handle` unless
+    /// the Mesh is bent.
     pub fn load_asset(
         &mut self,
         staging: &mut LoadStaging,
@@ -165,6 +166,9 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
         mesh_use: MeshUse,
     ) -> Option<MeshHandle> {
+        if let Some(handle) = self.handle(id, mesh_use) {
+            return Some(handle);
+        }
         let handle = self.load_for(staging, mesh, materials, mesh_use)?;
         if mesh_use.shared() {
             self.asset_handles.insert((id, mesh_use), handle);
@@ -647,6 +651,37 @@ pub(crate) mod tests {
             indices,
             bounds: [[0.0; 3]; 2],
         }
+    }
+
+    #[test]
+    fn a_mesh_loaded_twice_keeps_one_entry_unless_it_is_bent() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MeshPool::new(&context.device, ARENA_CAPACITY_BYTES);
+        let triangle = mesh(3, vec![0, 1, 2]);
+        let mut load = |id, mesh_use| {
+            pool.load_asset(&mut staging, AssetId(id), &triangle, &[None], mesh_use)
+                .expect("a triangle fits")
+                .0
+        };
+        let handles = [
+            MeshUse::DrawnAndTraced,
+            MeshUse::DrawnAndTraced,
+            MeshUse::Traced,
+            MeshUse::Traced,
+            MeshUse::Drawn,
+            MeshUse::Drawn,
+            MeshUse::Refitted,
+            MeshUse::Refitted,
+        ]
+        .map(|mesh_use| load(1, mesh_use));
+        let other = load(2, MeshUse::DrawnAndTraced);
+
+        assert_eq!(handles, [0, 0, 1, 1, 2, 3, 4, 5]);
+        assert_eq!(other, 6);
+        assert_eq!(pool.meshes.len(), 7);
     }
 
     /// A Mesh of two Primitives, loaded after another Mesh, reaches the
