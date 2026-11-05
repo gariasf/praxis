@@ -16,11 +16,10 @@ use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
-    AccelerationStructureBytes, CameraUniform, DynamicTlas, FrameData, FrameStaging,
-    INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY, LightData, LightUniform, LoadStaging,
-    STATIC_TLAS_CAPACITY, StaticTlas,
+    CameraUniform, DynamicTlas, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
+    LIGHT_CAPACITY, LightData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
 };
-use crate::stats::{FrameRecorder, GpuFrameStats};
+use crate::stats::{Counted, FrameRecorder, GpuFrameStats, GpuMemory, GpuMemoryKind};
 
 /// The passes `render` records, in order, each timed from its start, or a
 /// render pass from the latest end of the passes before it that it waits on
@@ -192,29 +191,27 @@ pub struct Renderer {
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
     light_count_pass: Option<LightCountPass>,
-    camera_buffer: wgpu::Buffer,
-    light_uniform_buffer: wgpu::Buffer,
+    camera_buffer: Counted<wgpu::Buffer>,
+    light_uniform_buffer: Counted<wgpu::Buffer>,
     /// Created at its fixed capacity; it never grows.
-    light_buffer: wgpu::Buffer,
+    light_buffer: Counted<wgpu::Buffer>,
     /// The camera, the lights and the Froxel lists (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
-    instance_buffer: wgpu::Buffer,
+    instance_buffer: Counted<wgpu::Buffer>,
     /// The Instances, the vertex Arena and the Mesh pool's tables
     /// (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
     static_tlas: StaticTlas,
     dynamic_tlas: DynamicTlas,
-    /// What its acceleration structures are estimated to take.
-    acceleration_structure_bytes: AccelerationStructureBytes,
+    memory: GpuMemory,
     /// Set when a frame's uploads failed after it queued Instance writes,
     /// which then never landed: the next prepare must write every Instance.
     lost_instance_writes: bool,
     /// The Instance slot count the culling pass reads, as last uploaded.
     uploaded_instance_slot_count: u32,
-    transient_saves_memory: bool,
     frame_staging: FrameStaging,
     /// The frame's encoder from `upload`, holding its upload copies, until
     /// `render` takes it to record the frame's passes and submit them.
@@ -256,6 +253,7 @@ impl Renderer {
 
         let device = context.device.clone();
         let queue = context.queue.clone();
+        let memory = GpuMemory::for_adapter(&context.adapter.get_info());
         let frame_bind_group_layout = FRAME.layout(&device);
         let scene_geometry_bind_group_layout = SCENE_GEOMETRY.layout(&device);
 
@@ -263,11 +261,12 @@ impl Renderer {
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let mut load_staging = LoadStaging::new(device.clone());
-        let material_pool = MaterialPool::new(&device, &mut load_staging);
+        let material_pool = MaterialPool::new(&device, &memory, &mut load_staging);
 
-        let render_targets = RenderTargets::new(&device, width, height);
+        let render_targets = RenderTargets::new(&device, &memory, width, height);
         let culling_pass = CullingPass::new(
             &device,
+            &memory,
             &[
                 (&FRAME, &frame_bind_group_layout),
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
@@ -290,26 +289,39 @@ impl Renderer {
             switches,
         );
 
-        let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Camera Buffer"),
-            size: std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let light_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Light Uniform Buffer"),
-            size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let light_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Light Buffer"),
-            size: u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let camera_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Camera Buffer"),
+                size: std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
+        let light_uniform_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Light Uniform Buffer"),
+                size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
+        let light_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Light Buffer"),
+                size: u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let froxel_pass = FroxelPass::new(
             &device,
+            &memory,
             &camera_buffer,
             &light_uniform_buffer,
             &light_buffer,
@@ -338,32 +350,41 @@ impl Renderer {
         );
 
         // Created at its fixed capacity; it never grows.
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Instance Buffer"),
-            size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let mesh_pool = MeshPool::new(&device, ARENA_CAPACITY_BYTES);
-        let bend_pass = BendPass::new(&device, mesh_pool.vertex_arena());
+        let instance_buffer = memory.create_buffer(
+            &device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Instance Buffer"),
+                size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
+        let mesh_pool = MeshPool::new(&device, &memory, ARENA_CAPACITY_BYTES);
+        let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
         // The most a frame uploads: every buffer `upload` writes, in full.
+        let uploaded_buffers: [&wgpu::Buffer; 6] = [
+            &camera_buffer,
+            &light_uniform_buffer,
+            &light_buffer,
+            &instance_buffer,
+            culling_pass.instance_slot_count(),
+            bend_pass.bends(),
+        ];
         let frame_staging = FrameStaging::new(
-            [
-                &camera_buffer,
-                &light_uniform_buffer,
-                &light_buffer,
-                &instance_buffer,
-                culling_pass.instance_slot_count(),
-                bend_pass.bends(),
-            ]
-            .iter()
-            .map(|buffer| buffer.size())
-            .sum(),
+            &memory,
+            uploaded_buffers.iter().map(|buffer| buffer.size()).sum(),
         );
 
-        let static_tlas = StaticTlas::new(&device, STATIC_TLAS_CAPACITY);
-        let dynamic_tlas = DynamicTlas::new(&device, &queue, context.backend());
-        let blas_refit = BlasRefit::new(&device, &queue, context.backend(), switches.crowd_form);
+        let static_tlas = StaticTlas::new(&device, &memory, STATIC_TLAS_CAPACITY);
+        let dynamic_tlas = DynamicTlas::new(&device, &memory, &queue, context.backend());
+        let blas_refit = BlasRefit::new(
+            &device,
+            &memory,
+            &queue,
+            context.backend(),
+            switches.crowd_form,
+        );
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -385,6 +406,7 @@ impl Renderer {
 
         let shadow_mask_pass = ShadowMaskPass::new(
             &device,
+            &memory,
             &static_tlas,
             &dynamic_tlas,
             [
@@ -397,8 +419,13 @@ impl Renderer {
             switches,
         );
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
-        let tonemapping_pass =
-            TonemappingPass::new(&device, target_format, &render_targets, &mut load_staging);
+        let tonemapping_pass = TonemappingPass::new(
+            &device,
+            &memory,
+            target_format,
+            &render_targets,
+            &mut load_staging,
+        );
         let gpu_stats = GpuStatsReadback::new(
             &device,
             queue.get_timestamp_period(),
@@ -409,7 +436,6 @@ impl Renderer {
             },
         );
 
-        let adapter_info = context.adapter.get_info();
         Self {
             mesh_pool,
             material_pool,
@@ -437,10 +463,9 @@ impl Renderer {
             scene_geometry_bind_group,
             static_tlas,
             dynamic_tlas,
-            acceleration_structure_bytes: AccelerationStructureBytes::estimate(&adapter_info),
+            memory,
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
-            transient_saves_memory: adapter_info.transient_saves_memory == Some(true),
             frame_staging,
             frame_encoder: None,
             gpu_stats,
@@ -451,7 +476,7 @@ impl Renderer {
     pub fn resize(&mut self, width: u32, height: u32) {
         // A pass whose bind groups read a target rebuilds them here, after
         // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, width, height);
+        self.render_targets = RenderTargets::new(&self.device, &self.memory, width, height);
         self.depth_pyramid_pass
             .bind_render_targets(&self.device, &self.render_targets);
         self.culling_pass
@@ -520,7 +545,7 @@ impl Renderer {
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
             (
-                &self.instance_buffer,
+                &*self.instance_buffer,
                 u64::from(write.first_slot) * instance_size,
                 bytemuck::cast_slice(&frame.instances[write.instances.clone()]),
             )
@@ -531,7 +556,7 @@ impl Renderer {
                 (buffer, 0, bytemuck::bytes_of(&frame.instance_slot_count))
             });
         let light_upload = (!frame.lights.is_empty())
-            .then(|| (&self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
+            .then(|| (&*self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
         let bend_upload = (!frame.bends.is_empty()).then(|| {
             (
                 self.bend_pass.bends(),
@@ -540,9 +565,9 @@ impl Renderer {
             )
         });
         let uploads = [
-            (&self.camera_buffer, 0, bytemuck::bytes_of(&camera)),
+            (&*self.camera_buffer, 0, bytemuck::bytes_of(&camera)),
             (
-                &self.light_uniform_buffer,
+                &*self.light_uniform_buffer,
                 0,
                 bytemuck::bytes_of(&frame.light),
             ),
@@ -762,47 +787,12 @@ impl Renderer {
     }
 
     /// Bytes of the buffers and textures this Renderer created, its Pools
-    /// included, and of its acceleration structures, estimated; the render
-    /// target is the caller's. The GPU stats readback's buffers are left
-    /// out, since they measure the frame rather than hold it.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        let buffers = [
-            &self.camera_buffer,
-            &self.light_uniform_buffer,
-            &self.light_buffer,
-            &self.instance_buffer,
-        ];
-        buffers.iter().map(|buffer| buffer.size()).sum::<u64>()
-            + self
-                .render_targets
-                .gpu_memory_bytes(self.transient_saves_memory)
-            + self.bend_pass.gpu_memory_bytes()
-            + self
-                .blas_refit
-                .as_ref()
-                .map_or(0, BlasRefit::gpu_memory_bytes)
-            + self.froxel_pass.gpu_memory_bytes()
-            + self.shadow_mask_pass.gpu_memory_bytes()
-            + self.culling_pass.gpu_memory_bytes()
-            + self.mesh_pool.gpu_memory_bytes()
-            + self.estimated_acceleration_structure_bytes()
-            + self.dynamic_tlas.gpu_memory_bytes()
-            + self
-                .material_pool
-                .gpu_memory_bytes(self.transient_saves_memory)
-            + self.frame_staging.gpu_memory_bytes()
-            + self.tonemapping_pass.gpu_memory_bytes()
-    }
-
-    /// Bytes of its acceleration structures, estimated from the sizes
-    /// measured on the adapter `AccelerationStructureBytes::estimate` picks
-    /// for this one, since wgpu exposes no acceleration-structure size (ADR
-    /// 0017).
-    pub fn estimated_acceleration_structure_bytes(&self) -> u64 {
-        let bytes = &self.acceleration_structure_bytes;
-        self.mesh_pool.estimated_blas_bytes(bytes)
-            + self.static_tlas.estimated_bytes(bytes)
-            + self.dynamic_tlas.estimated_bytes(bytes)
+    /// included, and of its acceleration structures, estimated, by kind in
+    /// `GpuMemoryKind::ALL`'s order; the render target is the caller's. The
+    /// GPU stats readback's buffers are left out, since they measure the
+    /// frame rather than hold it.
+    pub fn gpu_memory_bytes_by_kind(&self) -> [u64; GpuMemoryKind::COUNT] {
+        self.memory.bytes_by_kind()
     }
 }
 
@@ -2165,7 +2155,9 @@ pub(crate) mod tests {
             ..frame_of(Vec::new())
         };
         let unstaged_bytes = |renderer: &Renderer| {
-            renderer.gpu_memory_bytes() - renderer.frame_staging.gpu_memory_bytes()
+            let mut bytes = renderer.gpu_memory_bytes_by_kind();
+            bytes[GpuMemoryKind::Staging as usize] = 0;
+            bytes.iter().sum::<u64>()
         };
         let created_bytes = unstaged_bytes(&renderer);
         let ((_, _, gpu), log) =

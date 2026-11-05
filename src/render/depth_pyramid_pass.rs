@@ -122,6 +122,7 @@ pub(crate) mod tests {
     use crate::assets::pools::tests::{gpu_context, read_storage};
     use crate::gpu::GpuContext;
     use crate::render::targets;
+    use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// The pass, rebound to render targets created again at an odd size, so
     /// each level rounds down and some texels cover three below them, and at
@@ -137,7 +138,8 @@ pub(crate) mod tests {
             return;
         };
         let device = &context.device;
-        let mut pass = DepthPyramidPass::new(device, &RenderTargets::new(device, 16, 16));
+        let render_targets = RenderTargets::new(device, &gpu_memory(&context), 16, 16);
+        let mut pass = DepthPyramidPass::new(device, &render_targets);
         for (width, height) in [(37, 23), (64, 48)] {
             assert_pyramid_holds_minimum_depths(&context, &mut pass, width, height);
         }
@@ -153,7 +155,7 @@ pub(crate) mod tests {
         height: u32,
     ) {
         let device = &context.device;
-        let render_targets = RenderTargets::new(device, width, height);
+        let render_targets = RenderTargets::new(device, &gpu_memory(context), width, height);
         pass.bind_render_targets(device, &render_targets);
         // Each triangle's centre, half its width and its depth, in clip space.
         let triangles = [

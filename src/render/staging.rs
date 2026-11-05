@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::render::FRAMES_IN_FLIGHT;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Slots the per-frame uploads cycle through: the frames in flight, plus the
 /// one being written. A fixed count keeps `gpu_memory_bytes` the same on
@@ -21,6 +22,7 @@ const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
 /// submission maps it, whatever the GPU's timing
 /// [ref:wgpu-30-handle-mapping].
 pub struct FrameStaging {
+    memory: GpuMemory,
     slots: Vec<StagingSlot>,
     slot_size: u64,
     /// The most one frame uploads, which no slot grows past.
@@ -29,7 +31,7 @@ pub struct FrameStaging {
 }
 
 struct StagingSlot {
-    buffer: wgpu::Buffer,
+    buffer: Counted<wgpu::Buffer>,
     /// Set by the map callback once `buffer` is mapped for writing again.
     is_mapped: Arc<AtomicBool>,
     /// Whether its map was requested since it was last written.
@@ -37,9 +39,11 @@ struct StagingSlot {
 }
 
 impl FrameStaging {
-    /// Staging for frames that each upload at most `max_slot_size` bytes.
-    pub fn new(max_slot_size: u64) -> Self {
+    /// Staging for frames that each upload at most `max_slot_size` bytes,
+    /// counted in `memory`.
+    pub fn new(memory: &GpuMemory, max_slot_size: u64) -> Self {
         Self {
+            memory: memory.clone(),
             slots: Vec::new(),
             slot_size: 0,
             max_slot_size,
@@ -118,22 +122,21 @@ impl FrameStaging {
         needed
     }
 
-    /// Bytes of the staging slots.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.slots.len() as u64 * self.slot_size
-    }
-
     /// Replaces the slots with `SLOT_COUNT` of `slot_size` bytes, mapped. A
     /// replaced slot still in flight lives until the GPU is done with it.
     fn resize(&mut self, device: &wgpu::Device, slot_size: u64) {
         self.slots = (0..SLOT_COUNT)
             .map(|_| StagingSlot {
-                buffer: device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Frame Staging Slot"),
-                    size: slot_size,
-                    usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-                    mapped_at_creation: true,
-                }),
+                buffer: self.memory.create_buffer(
+                    device,
+                    GpuMemoryKind::Staging,
+                    &wgpu::BufferDescriptor {
+                        label: Some("Frame Staging Slot"),
+                        size: slot_size,
+                        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                        mapped_at_creation: true,
+                    },
+                ),
                 is_mapped: Arc::new(AtomicBool::new(true)),
                 map_requested: false,
             })

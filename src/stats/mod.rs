@@ -5,6 +5,10 @@ use std::time::{Duration, Instant};
 
 use crate::render::TIMED_PASSES;
 
+pub(crate) mod gpu_memory;
+
+pub use gpu_memory::{Charge, Counted, GpuMemory, GpuMemoryKind};
+
 /// What one frame cost.
 #[derive(Clone, Debug, Default)]
 pub struct FrameStats {
@@ -45,10 +49,10 @@ pub struct FrameStats {
     /// readback's are left out, since they measure the frame rather than
     /// hold it.
     pub gpu_memory_bytes: u64,
-    /// Of `gpu_memory_bytes`, the acceleration structures', estimated from
-    /// the bytes measured on the backend, since wgpu exposes no
-    /// acceleration-structure size (ADR 0017).
-    pub estimated_acceleration_structure_bytes: u64,
+    /// Of `gpu_memory_bytes`, each kind's, in `GpuMemoryKind::ALL`'s order;
+    /// acceleration structures' are estimated from the bytes measured on the
+    /// backend, since wgpu exposes no acceleration-structure size (ADR 0017).
+    pub gpu_memory_bytes_by_kind: [u64; GpuMemoryKind::COUNT],
     /// Bytes of the Arenas that hold Meshes, which `gpu_memory_bytes`
     /// counts whole whatever they hold.
     pub arena_bytes_in_use: u64,
@@ -174,34 +178,16 @@ impl std::fmt::Display for FrameStats {
         let allocator_report_bytes = self
             .allocator_report_bytes
             .map_or("none".to_owned(), |bytes| bytes.to_string());
+        write!(formatter, "gpu_memory bytes={}", self.gpu_memory_bytes)?;
+        for (kind, bytes) in GpuMemoryKind::ALL.iter().zip(self.gpu_memory_bytes_by_kind) {
+            write!(formatter, " {}={bytes}", kind.name())?;
+        }
         writeln!(
             formatter,
-            "gpu_memory bytes={} estimated_acceleration_structure_bytes={} arena_bytes_in_use={} allocator_report_bytes={allocator_report_bytes}",
-            self.gpu_memory_bytes,
-            self.estimated_acceleration_structure_bytes,
+            " arena_bytes_in_use={} allocator_report_bytes={allocator_report_bytes}",
             self.arena_bytes_in_use
         )
     }
-}
-
-/// Bytes of `texture`'s mip chain at every sample, as ADR 0013 counts GPU
-/// memory. A transient attachment counts 0 where the adapter keeps it in tile
-/// memory (memoryless on Apple GPUs).
-pub(crate) fn texture_bytes(texture: &wgpu::Texture, transient_saves_memory: bool) -> u64 {
-    if transient_saves_memory
-        && texture
-            .usage()
-            .contains(wgpu::TextureUsages::TRANSIENT_ATTACHMENT)
-    {
-        return 0;
-    }
-    let mip_chain_bytes: u64 = (0..texture.mip_level_count())
-        .map(|level| {
-            let size = texture.size().mip_level_size(level, texture.dimension());
-            texture.format().theoretical_memory_footprint(size)
-        })
-        .sum();
-    mip_chain_bytes * u64::from(texture.sample_count())
 }
 
 /// Measures the frame in progress for `State`, without allocating once the

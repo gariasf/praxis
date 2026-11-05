@@ -21,6 +21,7 @@ use crate::render::prepare::FrameData;
 use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// A phase of the culling pass.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,22 +137,22 @@ pub struct CullingPass {
 /// The buffers of the pass's group 3, which holds the depth pyramid besides.
 struct FrameDrawBuffers {
     /// The Instance slots in use, which the CPU writes when they change.
-    instance_slot_count: wgpu::Buffer,
+    instance_slot_count: Counted<wgpu::Buffer>,
     /// Each slot's first Meshlet record and packed index within its block of
     /// `SCAN_BLOCK_SIZE` slots, then each block's.
-    instance_offsets: wgpu::Buffer,
-    meshlet_records: wgpu::Buffer,
-    packed_indices: wgpu::Buffer,
+    instance_offsets: Counted<wgpu::Buffer>,
+    meshlet_records: Counted<wgpu::Buffer>,
+    packed_indices: Counted<wgpu::Buffer>,
     /// The draw's indirect arguments and counts (`FrameDraw`).
-    frame_draw: wgpu::Buffer,
+    frame_draw: Counted<wgpu::Buffer>,
     /// What `append_triangles`'s group binds in `frame_draw`'s place, which
     /// it does not read: a dispatch cannot take its arguments from a buffer
     /// its bindings write, as they and its indirect buffer are one usage
     /// scope [ref:wgpu-core-30-dispatch-usage-scope].
-    frame_draw_stand_in: wgpu::Buffer,
+    frame_draw_stand_in: Counted<wgpu::Buffer>,
     /// A bit per Instance slot, set where phase two found its Instance
     /// visible, which phase one reads the next frame.
-    instance_visibility: wgpu::Buffer,
+    instance_visibility: Counted<wgpu::Buffer>,
 }
 
 impl CullingPass {
@@ -160,6 +161,7 @@ impl CullingPass {
     /// testing Instances against the depth pyramid of `render_targets`.
     pub fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         capacity: DrawCapacity,
         switches: RenderSwitches,
@@ -172,12 +174,16 @@ impl CullingPass {
             device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
         );
         let buffer = |label, size, usage| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size,
-                usage,
-                mapped_at_creation: false,
-            })
+            memory.create_buffer(
+                device,
+                GpuMemoryKind::SceneAndPassBuffers,
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                },
+            )
         };
         let instance_slot_count = buffer(
             "Instance Slot Count Buffer",
@@ -343,17 +349,6 @@ impl CullingPass {
     pub fn frame_draw(&self) -> &wgpu::Buffer {
         &self.buffers.frame_draw
     }
-
-    /// Bytes of the frame's draw and its stand-in, and of the Instance slot
-    /// count, offsets and visibility.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.buffers
-            .named()
-            .iter()
-            .map(|(_, buffer)| buffer.size())
-            .sum::<u64>()
-            + self.buffers.frame_draw_stand_in.size()
-    }
 }
 
 impl FrameDrawBuffers {
@@ -379,7 +374,7 @@ fn frame_draw_bind_groups(
     buffers: &FrameDrawBuffers,
     render_targets: &RenderTargets,
 ) -> [wgpu::BindGroup; 2] {
-    [&buffers.frame_draw, &buffers.frame_draw_stand_in].map(|frame_draw| {
+    [&*buffers.frame_draw, &*buffers.frame_draw_stand_in].map(|frame_draw| {
         let buffers = buffers.named().map(|(name, buffer)| {
             let buffer = if name == "frame_draw" {
                 frame_draw

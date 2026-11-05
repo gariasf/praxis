@@ -8,6 +8,7 @@
 
 use crate::render::bind_groups::{BENDS, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The bend pass's label, and its name in frame stats.
 pub(crate) const BEND_PASS: &str = "bend_pass";
@@ -44,18 +45,22 @@ pub struct BendPass {
     bind_group: wgpu::BindGroup,
     /// The frame's bends, which the CPU writes: created at its fixed
     /// capacity, it never grows.
-    bends: wgpu::Buffer,
+    bends: Counted<wgpu::Buffer>,
 }
 
 impl BendPass {
     /// The pass, bending Meshes within `vertex_arena`, the Mesh pool's.
-    pub fn new(device: &wgpu::Device, vertex_arena: &wgpu::Buffer) -> BendPass {
-        let bends = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Bend Buffer"),
-            size: u64::from(BEND_CAPACITY) * size_of::<BendData>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, vertex_arena: &wgpu::Buffer) -> BendPass {
+        let bends = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Bend Buffer"),
+                size: u64::from(BEND_CAPACITY) * size_of::<BendData>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let layout = BENDS.layout(device);
         let bind_group = BENDS.bind_group(
             device,
@@ -102,11 +107,6 @@ impl BendPass {
     /// The frame's bends, `BendData` that the CPU writes.
     pub fn bends(&self) -> &wgpu::Buffer {
         &self.bends
-    }
-
-    /// Bytes of the bends' buffer.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.bends.size()
     }
 }
 

@@ -5,6 +5,7 @@
 
 use crate::render::bind_groups::{FROXEL_LISTS, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
+use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The Froxel pass's label, and its name in frame stats.
 pub(crate) const FROXEL_PASS: &str = "froxel_pass";
@@ -49,10 +50,10 @@ pub struct FroxelPass {
     bind_group: wgpu::BindGroup,
     /// Each Froxel's list: how many lights it holds, then their indices in
     /// the light buffer, in light order.
-    froxel_lists: wgpu::Buffer,
+    froxel_lists: Counted<wgpu::Buffer>,
     /// `LightCounts`: cleared before the pass, copied to the GPU stats
     /// readback at the frame's end.
-    light_counts: wgpu::Buffer,
+    light_counts: Counted<wgpu::Buffer>,
 }
 
 impl FroxelPass {
@@ -60,25 +61,35 @@ impl FroxelPass {
     /// them, seen by `camera`: the Renderer's buffers.
     pub fn new(
         device: &wgpu::Device,
+        memory: &GpuMemory,
         camera: &wgpu::Buffer,
         light: &wgpu::Buffer,
         lights: &wgpu::Buffer,
     ) -> FroxelPass {
         // Created at their fixed capacities; they never grow.
-        let froxel_lists = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Froxel List Buffer"),
-            size: u64::from(FROXEL_COUNT * (FROXEL_LIGHT_CAPACITY + 1)) * size_of::<u32>() as u64,
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
-        let light_counts = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Light Count Buffer"),
-            size: size_of::<LightCounts>() as u64,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
+        let froxel_lists = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Froxel List Buffer"),
+                size: u64::from(FROXEL_COUNT * (FROXEL_LIGHT_CAPACITY + 1))
+                    * size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            },
+        );
+        let light_counts = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Light Count Buffer"),
+                size: size_of::<LightCounts>() as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            },
+        );
         let layout = FROXEL_LISTS.layout(device);
         let bind_group = FROXEL_LISTS.bind_group(
             device,
@@ -131,10 +142,5 @@ impl FroxelPass {
     /// count pass adds.
     pub fn light_counts(&self) -> &wgpu::Buffer {
         &self.light_counts
-    }
-
-    /// Bytes of the lists and the light counts.
-    pub fn gpu_memory_bytes(&self) -> u64 {
-        self.froxel_lists.size() + self.light_counts.size()
     }
 }

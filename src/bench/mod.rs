@@ -25,7 +25,7 @@ use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
-use crate::stats::{FrameStats, GpuFrameStats};
+use crate::stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
@@ -190,6 +190,10 @@ pub struct Measurements {
     pub gate_pass_microseconds: BTreeMap<String, Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
+    /// Of the measured frames' `gpu_memory_bytes`, each kind's median, by
+    /// its name. Absent from Baselines recorded before results carried it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub gpu_memory_bytes_by_kind: BTreeMap<String, u64>,
     #[serde(flatten)]
     pub counters: Counters,
     pub counter_frames: CounterFrames,
@@ -616,6 +620,18 @@ fn measure(
         )),
         gate_pass_microseconds,
         gpu_pass_microseconds,
+        gpu_memory_bytes_by_kind: GpuMemoryKind::ALL
+            .iter()
+            .map(|&kind| {
+                let bytes = measured
+                    .iter()
+                    .map(|stats| stats.gpu_memory_bytes_by_kind[kind as usize] as f64);
+                (
+                    kind.name().to_owned(),
+                    percentile(bytes.collect(), 0.5) as u64,
+                )
+            })
+            .collect(),
         counters: Counters::of(measured),
         counter_frames: CounterFrames {
             frames: COUNTER_FRAMES,
@@ -1041,6 +1057,7 @@ mod tests {
             },
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            gpu_memory_bytes_by_kind: BTreeMap::new(),
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
                 .map(|(pass, median)| {
@@ -1550,6 +1567,11 @@ mod tests {
                     }),
                     draw_calls: if counted { 10 } else { 99 },
                     heap_allocations: if counted { 50 } else { 999 },
+                    gpu_memory_bytes_by_kind: if warming_up {
+                        [9; GpuMemoryKind::COUNT]
+                    } else {
+                        [1, 2, 3, 4, 5, 6, 7]
+                    },
                     ..FrameStats::default()
                 }
             })
@@ -1613,6 +1635,20 @@ mod tests {
             })
         );
         assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
+        assert_eq!(
+            reference.gpu_memory_bytes_by_kind,
+            [
+                ("geometry_arenas", 1),
+                ("texture_pool", 2),
+                ("resident_tails", 3),
+                ("render_targets", 4),
+                ("acceleration_structures", 5),
+                ("staging", 6),
+                ("scene_and_pass_buffers", 7),
+            ]
+            .map(|(kind, bytes)| (kind.to_owned(), bytes))
+            .into()
+        );
         assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
         // The gate's passes with shadow rays off: culling phase one to the
         // lit pass, less the passes only shadow rays run.

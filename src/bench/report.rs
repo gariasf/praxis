@@ -287,6 +287,7 @@ mod tests {
             shadow_ray_microseconds: spread(-3.2, 40.5),
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            gpu_memory_bytes_by_kind: BTreeMap::new(),
             gpu_pass_microseconds: passes
                 .into_iter()
                 .map(|(pass, time)| (pass.to_owned(), time))

@@ -117,16 +117,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/stats/mod.rs</code> &middot; <code>src/render/readback.rs</code></div>
   <h1>Frame stats</h1>
   <p class="definition"><span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> are what one frame cost, measured by the engine itself: on the CPU, a clock around each ECS system and each renderer stage, the thread's allocation count and the counters the frame's own code keeps; on the GPU, a timestamp at each end of every timed pass and the counts the passes wrote, which come back through a ring of mapped buffers seven frames later and are turned into a time per pass, a GPU frame total that is a span rather than a sum, ADR 0019's gate and the lit pass's wait.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 9493ec8d (2026-11-05). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
       <dt>Recorded</dt><dd>The CPU side from <code>FrameRecorder::begin</code>, the first line of <code>State::update</code>, to <code>FrameRecorder::end</code>, the last of <code>State::render</code>. The GPU side as the passes run: <code>GpuStatsReadback::begin_frame</code> hands the frame's encoder its timestamp queries, <code>end_frame</code> copies the counts the GPU wrote into the frame's slot, and the slot is read seven frames later by <code>begin_frame</code>, or by <code>flush</code> at the end of a run. <code>State::frame_stats</code> returns the last frame's.</dd>
-      <dt>Reads</dt><dd>On the CPU, the clock around each stage, the spans bevy_ecs enters around each system, the thread's allocation count, the preparer's refusals and each owner's byte sum. On the GPU, the query set's timestamps, the culling pass's <code>FrameDraw</code>, the Froxel pass's <code>LightCounts</code> and the shadow mask pass's overflow count.</dd>
+      <dt>Reads</dt><dd>On the CPU, the clock around each stage, the spans bevy_ecs enters around each system, the thread's allocation count, the preparer's refusals and the GPU memory ledger's totals by kind. On the GPU, the query set's timestamps, the culling pass's <code>FrameDraw</code>, the Froxel pass's <code>LightCounts</code> and the shadow mask pass's overflow count.</dd>
       <dt>Writes</dt><dd>One <code>FrameStats</code> per frame, whose <code>gpu</code> is <code>None</code> until that frame's <code>GpuFrameStats</code> come back, and for good if their readback was skipped.</dd>
       <dt>Buffers</dt><dd>One query set of 168 timestamps, 24 per slot; a 192-byte resolve buffer, since queries resolve only into a buffer the CPU cannot map; and seven slots of 288 bytes each, <code>MAP_READ</code> and <code>COPY_DST</code>, holding a frame's draw, its light counts, its overflow count and then its timestamps. ADR 0013 leaves all of them out of <code>gpu_memory_bytes</code>, since they measure the frame rather than hold it.</dd>
       <dt>Counted</dt><dd>Of itself, only <code>gpu_readbacks_skipped</code>, the slots that were still copying or mapping when their frame came round. Every other field is another mechanism's cost; <code>praxis capture</code> writes the last frame's to standard output, and <code>praxis bench</code> reduces every measured frame's into a <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span>'s form (<a href="bench.html">The bench</a>). The window shell reads none of them.</dd>
-      <dt>Where in the code</dt><dd><code>src/stats/mod.rs</code>: <code>FrameStats</code>, <code>GpuFrameStats</code>, <code>FrameRecorder</code>, <code>SystemTimer</code>, <code>CountingAllocator</code>, <code>texture_bytes</code>. <code>src/render/readback.rs</code>: <code>GpuStatsReadback</code>, <code>FrameTimestamps</code>, <code>FrameShape</code>, <code>frame_times</code>. <code>TIMED_PASSES</code> and <code>RENDER_PASSES</code> in <code>src/render/renderer.rs</code>, whose <code>render</code> hands each pass its queries; the stages in <code>src/state.rs</code> and <code>renderer.rs</code>; the sums in each owner's <code>gpu_memory_bytes</code>.</dd>
+      <dt>Where in the code</dt><dd><code>src/stats/mod.rs</code>: <code>FrameStats</code>, <code>GpuFrameStats</code>, <code>FrameRecorder</code>, <code>SystemTimer</code>, <code>CountingAllocator</code>. <code>src/stats/gpu_memory.rs</code>: <code>GpuMemory</code>, <code>GpuMemoryKind</code>, <code>Counted</code>, <code>Charge</code>, <code>texture_bytes</code>. <code>src/render/readback.rs</code>: <code>GpuStatsReadback</code>, <code>FrameTimestamps</code>, <code>FrameShape</code>, <code>frame_times</code>. <code>TIMED_PASSES</code> and <code>RENDER_PASSES</code> in <code>src/render/renderer.rs</code>, whose <code>render</code> hands each pass its queries; the stages in <code>src/state.rs</code> and <code>renderer.rs</code>; each owner's creation through the ledger in its constructor.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -196,7 +196,7 @@ pub struct FrameStats {
       <tr><td><code>instances_written</code></td><td>the <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> the frame wrote; none for a camera move alone</td><td><code>Renderer::upload</code>, only when the upload landed</td></tr>
       <tr><td><code>renderables_refused</code>, <code>lights_overflowed</code>, <code>moving_instances_left_out</code>, <code>bends_left_out</code></td><td>what prepare had no slot, light buffer entry, dynamic TLAS entry or bend for</td><td><code>State::update</code>, from the preparer</td></tr>
       <tr><td><code>static_instances_left_out</code></td><td>static Instances past the static TLAS's capacity</td><td><code>Renderer::upload</code></td></tr>
-      <tr><td><code>gpu_memory_bytes</code>, <code>estimated_acceleration_structure_bytes</code>, <code>arena_bytes_in_use</code>, <code>allocator_report_bytes</code></td><td>the GPU memory sums of section 2</td><td><code>State::frame_stats</code>, when asked</td></tr>
+      <tr><td><code>gpu_memory_bytes</code>, <code>gpu_memory_bytes_by_kind</code>, <code>arena_bytes_in_use</code>, <code>allocator_report_bytes</code></td><td>the GPU memory ledger's totals and the Arenas' use, section 2</td><td><code>State::frame_stats</code>, when asked</td></tr>
       <tr><td><code>heap_allocations</code></td><td>allocations and reallocations on the frame's thread between <code>begin</code> and <code>end</code></td><td><code>FrameRecorder::end</code></td></tr>
       <tr><td><code>dropped_time</code></td><td>simulated time the <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span> skipped past their cap</td><td><code>State::update</code>, from <code>simulate</code></td></tr>
       <tr><td><code>gpu_readbacks_skipped</code></td><td>slots not ready when their frame came round</td><td><code>GpuStatsReadback::begin_frame</code></td></tr>
@@ -348,43 +348,58 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;</code></pre>
   <h3>Bytes uploaded</h3>
   <p><code>uploaded_bytes</code> is what the frame's writes cost the GPU in bytes. <code>Renderer::upload</code> hands the frame's camera and light uniforms, its light buffer, its bends, the Instances it writes and, when it changed, the Instance slot count to the per-frame staging ring (<a href="staging.html">Staging</a>), which returns the bytes it copied; 0 means the slot failed to map and the frame's Instance writes are lost, to be written again. The dynamic TLAS's build adds the bytes of the entries it uploads. Loads stage outside the ring and count nothing here.</p>
   <h3>GPU memory</h3>
-  <p><code>gpu_memory_bytes</code> is the engine's own ledger, summed the same way on every backend, because wgpu-hal's default allocator report is <code>None</code> and Metal keeps the default (ADR 0013). <code>Renderer::gpu_memory_bytes</code> adds the camera and light uniforms, the light buffer and the Instance buffer, then asks each owner: the render targets, the bend pass, the BLAS refit, the Froxel pass, the shadow mask pass, the culling pass, the Mesh <span class="concept" data-term="Pool" data-tip="The central store of one kind of resource (Mesh pool, Material pool). It hands out Handles; components never own resources.">Pool</span>, the acceleration structures' estimate, the dynamic TLAS, the Material pool, the per-frame staging and the tonemapping pass.</p>
-  <div class="code-source"><code>Renderer::gpu_memory_bytes</code>, <code>src/render/renderer.rs</code></div>
-<pre class="code"><code>    /// Bytes of the buffers and textures this Renderer created, its Pools
-    /// included, and of its acceleration structures, estimated; the render
-    /// target is the caller's. The GPU stats readback's buffers are left
-    /// out, since they measure the frame rather than hold it.
-    pub fn gpu_memory_bytes(&amp;self) -&gt; u64 {
-        let buffers = [
-            &amp;self.camera_buffer,
-            &amp;self.light_uniform_buffer,
-            &amp;self.light_buffer,
-            &amp;self.instance_buffer,
-        ];
-        buffers.iter().map(|buffer| buffer.size()).sum::&lt;u64&gt;()
-            + self
-                .render_targets
-                .gpu_memory_bytes(self.transient_saves_memory)
-            + self.bend_pass.gpu_memory_bytes()
-            + self
-                .blas_refit
-                .as_ref()
-                .map_or(0, BlasRefit::gpu_memory_bytes)
-            + self.froxel_pass.gpu_memory_bytes()
-            + self.shadow_mask_pass.gpu_memory_bytes()
-            + self.culling_pass.gpu_memory_bytes()
-            + self.mesh_pool.gpu_memory_bytes()
-            + self.estimated_acceleration_structure_bytes()
-            + self.dynamic_tlas.gpu_memory_bytes()
-            + self
-                .material_pool
-                .gpu_memory_bytes(self.transient_saves_memory)
-            + self.frame_staging.gpu_memory_bytes()
-            + self.tonemapping_pass.gpu_memory_bytes()
-    }</code></pre>
-  <p>A buffer counts its size. A texture counts through <code>texture_bytes</code>: the theoretical footprint of each level of its mip chain, summed and multiplied by its sample count, except a transient attachment on an adapter that keeps one in tile memory, which counts 0; the lit pass's 4x colour attachment is memoryless on Apple GPUs. Acceleration structures have no size wgpu exposes, so each is estimated from bytes measured once per adapter and kept in <code>estimated_acceleration_structure_bytes</code> beside the total (ADR 0017).</p>
-  <div class="code-source"><code>texture_bytes</code>, <code>src/stats/mod.rs</code></div>
-<pre class="code"><code>pub(crate) fn texture_bytes(texture: &amp;wgpu::Texture, transient_saves_memory: bool) -&gt; u64 {
+  <p><code>gpu_memory_bytes</code> is the engine's own ledger, kept the same way on every backend, because wgpu-hal's default allocator report is <code>None</code> and Metal keeps the default (ADR 0013). <code>Renderer::new</code> makes one <code>GpuMemory</code> for its adapter and hands it to every owner it creates: the render targets, the passes, the Mesh and Material <span class="concept" data-term="Pool" data-tip="The central store of one kind of resource (Mesh pool, Material pool). It hands out Handles; components never own resources.">Pools</span>, both TLAS, the BLAS refit and the per-frame staging. Each creates its buffers and textures through it, under one of ADR 0017's kinds of GPU memory, and keeps the <code>Counted</code> resource it gets back in place of wgpu's. The ledger holds a running total per kind, so <code>State::frame_stats</code> reads seven numbers and adds them, walking no resource and no mip chain.</p>
+  <div class="code-source"><code>GpuMemory::create_buffer</code>, <code>GpuMemory::create_material_texture</code> and <code>Charge</code>, <code>src/stats/gpu_memory.rs</code></div>
+<pre class="code"><code>    pub fn create_buffer(
+        &amp;self,
+        device: &amp;wgpu::Device,
+        kind: GpuMemoryKind,
+        descriptor: &amp;wgpu::BufferDescriptor&lt;'_&gt;,
+    ) -&gt; Counted&lt;wgpu::Buffer&gt; {
+        let buffer = device.create_buffer(descriptor);
+        Counted {
+            charge: self.charge(kind, buffer.size()),
+            resource: buffer,
+        }
+    }
+…
+    pub fn create_material_texture(
+        &amp;self,
+        device: &amp;wgpu::Device,
+        descriptor: &amp;wgpu::TextureDescriptor&lt;'_&gt;,
+    ) -&gt; Counted&lt;wgpu::Texture&gt; {
+        let texture = device.create_texture(descriptor);
+        let tail_bytes: u64 = level_bytes(&amp;texture)
+            .filter(|&amp;bytes| bytes &lt;= RESIDENT_TAIL_LEVEL_BYTES)
+            .sum();
+        let pool_bytes = level_bytes(&amp;texture).sum::&lt;u64&gt;() - tail_bytes;
+        let mut charge = self.charge(GpuMemoryKind::TexturePool, pool_bytes);
+        charge.set(GpuMemoryKind::ResidentTails, tail_bytes);
+        Counted {
+            charge,
+            resource: texture,
+        }
+    }
+…
+impl Charge {
+    pub fn set(&amp;mut self, kind: GpuMemoryKind, bytes: u64) {
+        let total = &amp;self.totals[kind as usize];
+        total.fetch_add(bytes, Ordering::Relaxed);
+        total.fetch_sub(self.bytes[kind as usize], Ordering::Relaxed);
+        self.bytes[kind as usize] = bytes;
+    }
+}
+
+impl Drop for Charge {
+    fn drop(&amp;mut self) {
+        for kind in GpuMemoryKind::ALL {
+            self.set(kind, 0);
+        }
+    }
+}</code></pre>
+  <p>A <code>Charge</code> adds its bytes to its kinds' totals when made and takes them back when dropped, so a resize's new render targets replace the old ones' bytes as the old ones go. A Material Texture's charge spans two kinds: its mips of <code>RESIDENT_TAIL_LEVEL_BYTES</code>, 64 KiB, and smaller are its <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span>, the rest the texture pool's. A buffer counts its size. A texture counts through <code>texture_bytes</code>, once, at creation: the theoretical footprint of each level of its mip chain, summed and multiplied by its sample count, except a transient attachment on an adapter that keeps one in tile memory, which counts 0; the lit pass's 4x colour attachment is memoryless on Apple GPUs. Acceleration structures have no size wgpu exposes, so each TLAS is charged the estimate for its capacity, from bytes measured once per adapter, and the Mesh pool keeps one <code>Charge</code> for its BLASes, set again from its compacted and uncompacted triangles at each load and compaction (ADR 0017).</p>
+  <div class="code-source"><code>texture_bytes</code> and <code>level_bytes</code>, <code>src/stats/gpu_memory.rs</code></div>
+<pre class="code"><code>fn texture_bytes(texture: &amp;wgpu::Texture, transient_saves_memory: bool) -&gt; u64 {
     if transient_saves_memory
         &amp;&amp; texture
             .usage()
@@ -392,14 +407,31 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;</code></pre>
     {
         return 0;
     }
-    let mip_chain_bytes: u64 = (0..texture.mip_level_count())
-        .map(|level| {
-            let size = texture.size().mip_level_size(level, texture.dimension());
-            texture.format().theoretical_memory_footprint(size)
-        })
-        .sum();
-    mip_chain_bytes * u64::from(texture.sample_count())
+    level_bytes(texture).sum::&lt;u64&gt;() * u64::from(texture.sample_count())
+}
+
+/// Bytes of each level of `texture`'s mip chain at one sample.
+fn level_bytes(texture: &amp;wgpu::Texture) -&gt; impl Iterator&lt;Item = u64&gt; + '_ {
+    (0..texture.mip_level_count()).map(|level| {
+        let size = texture.size().mip_level_size(level, texture.dimension());
+        texture.format().theoretical_memory_footprint(size)
+    })
 }</code></pre>
+  <p><code>gpu_memory_bytes_by_kind</code> holds each kind's total, in <code>GpuMemoryKind::ALL</code>'s order, and the bench keeps each kind's median under its name beside the counters.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Kind</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td><code>geometry_arenas</code></td><td>the Mesh pool's five Arenas, whole, whatever they hold</td></tr>
+      <tr><td><code>texture_pool</code></td><td>every Material Texture's mips larger than 64 KiB</td></tr>
+      <tr><td><code>resident_tails</code></td><td>every Material Texture's mips of 64 KiB and smaller, its Resident tail</td></tr>
+      <tr><td><code>render_targets</code></td><td>everything <code>RenderTargets::new</code> creates: the targets and the shadow mask pass's per-pixel lists</td></tr>
+      <tr><td><code>acceleration_structures</code></td><td>the BLASes and both TLAS, estimated, and the BLAS refit's scratch</td></tr>
+      <tr><td><code>staging</code></td><td>the per-frame staging ring's slots</td></tr>
+      <tr><td><code>scene_and_pass_buffers</code></td><td>the camera and light uniforms, the light and Instance buffers, the Mesh and Material tables, the culling pass's draw, the Froxel lists, the bends, the shadow mask pass's dispatches, the markers' results and the dither mask</td></tr>
+    </tbody>
+  </table>
+  </div>
   <p>Three things the engine creates stay out of the sum, each for a reason ADR 0013 records. The GPU stats readback's query set, resolve buffer and slots measure the frame rather than hold it. The target the frame is presented into is the caller's: a window's surface textures are the surface's, not the engine's, and capture's stand-in for them is left out so that a capture counts what a windowed run counts. Capture's read-back buffer is the caller's for the same reason. The load staging belt lives only until its copies have run and never counts. <code>arena_bytes_in_use</code> is the Mesh pool's <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>' occupied bytes, kept beside the total because the total counts each Arena whole whatever it holds. <code>allocator_report_bytes</code> is wgpu's own report where a backend has one, a diagnostic that the bench records nowhere.</p>
   <h3>Dropped time</h3>
   <p><code>State::update</code> runs the Ticks the frame's delta completes, under a cap, and <code>simulate</code> returns the simulated time past the cap it skipped; the recorder keeps it as <code>dropped_time</code>, the amount the game slowed by (ADR 0022).</p>
@@ -726,14 +758,15 @@ enum SlotState {
       <tr><td><code>a_render_pass_counts_from_the_end_of_the_passes_before_it</code></td><td><code>readback.rs</code></td><td>the lit and tonemapping passes count past the passes before them; the Froxel pass keeps its own time; a pass that did not run bounds nothing; neither the frame nor the gate moves</td></tr>
       <tr><td><code>a_depth_pass_counts_past_the_froxel_pass_it_does_not_read</code></td><td><code>readback.rs</code></td><td>both depth passes keep their own time past a Froxel pass that ends after them; the lit pass counts from its end</td></tr>
       <tr><td><code>readbacks_not_ready_are_skipped_and_counted</code></td><td><code>readback.rs</code></td><td>on a GPU: frames never submitted skip their timestamps from <code>COMPLETION_LAG</code> on, counted, and none is read; a slot whose copy was dropped is skipped once the ring comes round and the next slot is read</td></tr>
-      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> at 160&times;90: the draw calls, the first and a later frame's uploaded bytes, no dropped time, the acceleration structures' estimate, <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> to the byte, every system and stage named, their sum within the frame, no readback skipped, the twelve pass names, each pass's time within the frame, allocations counted, the printout within five lines</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> at 160&times;90: the draw calls, the first and a later frame's uploaded bytes, no dropped time, each kind of GPU memory, <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> to the byte, every system and stage named, their sum within the frame, no readback skipped, the twelve pass names, each pass's time within the frame, allocations counted, the printout within five lines</td></tr>
       <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s <code>instances_drawn</code> and <code>triangles_drawn</code> equal its closed-form counts, none overflowed; after the first frame only what moves is written; <code>town</code>'s uploaded bytes</td></tr>
       <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>the orrery's entries join <code>uploaded_bytes</code> every frame, and its build never exceeds the frame</td></tr>
       <tr><td><code>camera_motion_writes_no_instances</code></td><td><code>tests/frame_stats.rs</code></td><td>on the scenes whose camera moves, <code>instances_written</code> is 0 after the first frame</td></tr>
       <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery's <code>heap_allocations</code> per frame are equal whether each frame's work was retired by a poll between frames or left finished for the next frame's submissions</td></tr>
-      <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a refused Mesh leaves the pool's <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> as they were</td></tr>
-      <tr><td><code>a_texture_two_materials_share_loads_once</code></td><td><code>src/assets/material.rs</code></td><td>a shared texture grows the pool's <code>gpu_memory_bytes</code> once</td></tr>
-      <tr><td><code>each_froxel_lists_the_point_lights_whose_range_reaches_into_its_bounds</code></td><td><code>renderer.rs</code></td><td>a rendered frame leaves <code>gpu_memory_bytes</code>, beside the staging ring, as creation left it</td></tr>
+      <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a refused Mesh leaves the ledger's totals and <code>arena_bytes_in_use</code> as they were</td></tr>
+      <tr><td><code>a_buffer_created_through_the_ledger_counts_in_its_kind_until_dropped</code></td><td><code>src/stats/gpu_memory.rs</code></td><td>a buffer created through the ledger adds its size to its kind alone, and dropping it takes the total back to 0</td></tr>
+      <tr><td><code>a_texture_two_materials_share_loads_once</code></td><td><code>src/assets/material.rs</code></td><td>a shared texture grows the texture pool's total once</td></tr>
+      <tr><td><code>each_froxel_lists_the_point_lights_whose_range_reaches_into_its_bounds</code></td><td><code>renderer.rs</code></td><td>a rendered frame leaves every kind of GPU memory but staging as creation left it</td></tr>
     </tbody>
   </table>
   </div>
@@ -749,37 +782,37 @@ enum SlotState {
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame</th><th class="n">GPU frame</th><th class="n">Gate</th><th class="n">Heap allocations</th><th class="n">GPU memory bytes</th><th class="n">Uploaded bytes</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">265.9</td><td class="n">4,094.7</td><td class="n">849.5</td><td class="n">345</td><td class="n">663,385,447</td><td class="n">272</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">278.1</td><td class="n">4,120.1</td><td class="n">849.5</td><td class="n">345</td><td class="n">663,385,447</td><td class="n">272</td></tr>
       <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">482.6</td><td class="n">2,338.8</td><td class="n">672.9</td><td class="n">351</td><td class="n">767,625,381</td><td class="n">272</td></tr>
       <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">707.4</td><td class="n">2,341.4</td><td class="n">750.5</td><td class="n">348</td><td class="n">767,625,381</td><td class="n">272</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">186.1</td><td class="n">6,689.1</td><td class="n">1,210.1</td><td class="n">347</td><td class="n">683,925,801</td><td class="n">416</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">207.2</td><td class="n">6,687.7</td><td class="n">1,215.0</td><td class="n">347</td><td class="n">683,925,801</td><td class="n">416</td></tr>
       <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">362.8</td><td class="n">2,736.3</td><td class="n">865.1</td><td class="n">353</td><td class="n">787,821,023</td><td class="n">416</td></tr>
       <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.8</td><td class="n">2,717.7</td><td class="n">908.4</td><td class="n">350</td><td class="n">787,821,023</td><td class="n">416</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">181.6</td><td class="n">3,851.5</td><td class="n">773.8</td><td class="n">347</td><td class="n">663,389,964</td><td class="n">416</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">197.5</td><td class="n">3,871.0</td><td class="n">776.9</td><td class="n">347</td><td class="n">663,389,964</td><td class="n">416</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">342.1</td><td class="n">1,692.5</td><td class="n">548.0</td><td class="n">353</td><td class="n">767,629,931</td><td class="n">416</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.0</td><td class="n">1,611.1</td><td class="n">571.4</td><td class="n">350</td><td class="n">767,629,931</td><td class="n">416</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">208.6</td><td class="n">3,664.5</td><td class="n">818.2</td><td class="n">345</td><td class="n">683,213,657</td><td class="n">416</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">197.1</td><td class="n">3,683.6</td><td class="n">820.8</td><td class="n">345</td><td class="n">683,213,657</td><td class="n">416</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">355.0</td><td class="n">1,680.2</td><td class="n">565.2</td><td class="n">351</td><td class="n">787,362,898</td><td class="n">416</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">528.3</td><td class="n">1,639.2</td><td class="n">595.9</td><td class="n">348</td><td class="n">787,362,898</td><td class="n">416</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">184.0</td><td class="n">2,917.0</td><td class="n">763.0</td><td class="n">345</td><td class="n">668,878,951</td><td class="n">416</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">193.2</td><td class="n">2,933.0</td><td class="n">764.9</td><td class="n">345</td><td class="n">668,878,951</td><td class="n">416</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">354.6</td><td class="n">1,747.0</td><td class="n">537.6</td><td class="n">351</td><td class="n">773,154,875</td><td class="n">416</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.9</td><td class="n">1,685.5</td><td class="n">563.1</td><td class="n">348</td><td class="n">773,154,875</td><td class="n">416</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">192.7</td><td class="n">3,003.5</td><td class="n">835.2</td><td class="n">345</td><td class="n">663,547,207</td><td class="n">272</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">213.2</td><td class="n">3,006.1</td><td class="n">847.0</td><td class="n">345</td><td class="n">663,547,207</td><td class="n">272</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">336.6</td><td class="n">1,846.3</td><td class="n">634.8</td><td class="n">351</td><td class="n">767,823,131</td><td class="n">272</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.2</td><td class="n">1,819.8</td><td class="n">720.9</td><td class="n">348</td><td class="n">767,823,131</td><td class="n">272</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">185.8</td><td class="n">2,598.5</td><td class="n">677.2</td><td class="n">345</td><td class="n">663,286,519</td><td class="n">416</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">204.7</td><td class="n">2,598.3</td><td class="n">678.0</td><td class="n">345</td><td class="n">663,286,519</td><td class="n">416</td></tr>
       <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">327.6</td><td class="n">1,594.7</td><td class="n">715.6</td><td class="n">351</td><td class="n">767,562,443</td><td class="n">416</td></tr>
       <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.3</td><td class="n">1,622.2</td><td class="n">870.4</td><td class="n">348</td><td class="n">767,562,443</td><td class="n">416</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">358.8</td><td class="n">2,917.3</td><td class="n">642.6</td><td class="n">455</td><td class="n">668,982,396</td><td class="n">1,416</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">384.3</td><td class="n">2,928.0</td><td class="n">647.5</td><td class="n">455</td><td class="n">668,982,396</td><td class="n">1,416</td></tr>
       <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">915.3</td><td class="n">1,424.8</td><td class="n">422.4</td><td class="n">471</td><td class="n">773,222,363</td><td class="n">1,376</td></tr>
       <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,169.5</td><td class="n">1,110.5</td><td class="n">448.5</td><td class="n">462</td><td class="n">773,222,363</td><td class="n">1,376</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,138.5</td><td class="n">15,975.0</td><td class="n">14,109.0</td><td class="n">350</td><td class="n">663,812,599</td><td class="n">224</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,265.0</td><td class="n">15,460.0</td><td class="n">13,630.1</td><td class="n">350</td><td class="n">663,812,599</td><td class="n">224</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,181.9</td><td class="n">1,207.2</td><td class="n">513.6</td><td class="n">357</td><td class="n">768,088,523</td><td class="n">224</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,539.8</td><td class="n">1,095.3</td><td class="n">558.9</td><td class="n">353</td><td class="n">768,088,523</td><td class="n">224</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">744.5</td><td class="n">3,747.5</td><td class="n">1,297.0</td><td class="n">2,099</td><td class="n">664,077,523</td><td class="n">322,224</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">922.9</td><td class="n">3,754.9</td><td class="n">1,252.2</td><td class="n">2,099</td><td class="n">664,077,523</td><td class="n">322,224</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,469.2</td><td class="n">2,169.8</td><td class="n">840.5</td><td class="n">2,115</td><td class="n">768,350,709</td><td class="n">309,424</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,085.5</td><td class="n">1,970.2</td><td class="n">924.8</td><td class="n">2,106</td><td class="n">768,350,709</td><td class="n">309,424</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,734.8</td><td class="n">19,935.0</td><td class="n">8,612.1</td><td class="n">10,498</td><td class="n">764,009,624</td><td class="n">2,049,376</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,386.8</td><td class="n">19,981.5</td><td class="n">8,650.8</td><td class="n">10,498</td><td class="n">764,009,624</td><td class="n">2,049,376</td></tr>
       <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,194.9</td><td class="n">9,395.0</td><td class="n">4,991.8</td><td class="n">10,514</td><td class="n">868,263,022</td><td class="n">1,969,376</td></tr>
       <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">8,122.8</td><td class="n">9,279.4</td><td class="n">5,306.9</td><td class="n">10,505</td><td class="n">868,263,022</td><td class="n">1,969,376</td></tr>
     </tbody>
