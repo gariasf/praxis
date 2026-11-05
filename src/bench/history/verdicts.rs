@@ -443,15 +443,80 @@ pub fn bisect(
 /// The label a Regression's issue opens with.
 const TRIAGE_LABEL: &str = "needs-triage";
 
-/// Opens one `needs-triage` issue, with `gh` in `repository`, per scene
-/// and commit the Verdicts of `adapter` on `backend` pinned that no
-/// re-recorded Baseline covers, and records each issue's number on its
-/// Verdicts on the remote's `bench-history`, so a later run opens none.
-/// Returns each Verdict's scene, pinned commit and issue, opened or shared.
+/// Where a Regression's issue opens.
+pub trait IssueTracker {
+    /// The issue, open or closed, titled exactly `title`, if any.
+    fn titled(&mut self, title: &str) -> anyhow::Result<Option<u64>>;
+
+    /// Opens a `needs-triage` issue, and returns its number.
+    fn open(&mut self, title: &str, body: &str) -> anyhow::Result<u64>;
+}
+
+/// The issues of `repository`'s GitHub repository, or of `GH_REPO`'s when
+/// set, through the `gh` process.
+pub struct GitHubIssues<'repository> {
+    pub repository: &'repository Path,
+}
+
+impl IssueTracker for GitHubIssues<'_> {
+    fn titled(&mut self, title: &str) -> anyhow::Result<Option<u64>> {
+        #[derive(serde::Deserialize)]
+        struct Listed {
+            number: u64,
+            title: String,
+        }
+        let listed: Vec<Listed> = serde_json::from_str(&gh(
+            self.repository,
+            &[
+                "issue",
+                "list",
+                "--state",
+                "all",
+                "--search",
+                &format!("\"{title}\" in:title"),
+                "--json",
+                "number,title",
+            ],
+        )?)?;
+        Ok(listed
+            .into_iter()
+            .find(|issue| issue.title == title)
+            .map(|issue| issue.number))
+    }
+
+    fn open(&mut self, title: &str, body: &str) -> anyhow::Result<u64> {
+        let url = gh(
+            self.repository,
+            &[
+                "issue",
+                "create",
+                "--label",
+                TRIAGE_LABEL,
+                "--title",
+                title,
+                "--body",
+                body,
+            ],
+        )?;
+        // gh prints the new issue's URL, which ends in its number.
+        url.trim()
+            .rsplit('/')
+            .next()
+            .and_then(|number| number.parse().ok())
+            .with_context(|| format!("an issue number at the end of {url:?}"))
+    }
+}
+
+/// Opens one `needs-triage` issue in `tracker` per scene and commit the
+/// Verdicts of `adapter` on `backend` pinned that no re-recorded Baseline
+/// covers, and records each issue's number on its Verdicts on the remote's
+/// `bench-history`, so a later run opens none. Returns each Verdict's
+/// scene, pinned commit and issue, opened or shared.
 pub fn file_regressions(
     repository: &Path,
     adapter: &str,
     backend: &str,
+    tracker: &mut impl IssueTracker,
 ) -> anyhow::Result<Vec<(String, String, u64)>> {
     let Some(tip) = remote_tip(repository)? else {
         return Ok(Vec::new());
@@ -483,9 +548,9 @@ pub fn file_regressions(
                 )?;
                 let issue = issue(verdict, &key, &subject).context("a Regression is pinned")?;
                 // An issue opened by a night that then failed to record it.
-                match opened_issue(repository, &issue.title)? {
+                match tracker.titled(&issue.title)? {
                     Some(number) => number,
-                    None => open_issue(repository, &issue)?,
+                    None => tracker.open(&issue.title, &issue.body)?,
                 }
             }
         };
@@ -495,57 +560,6 @@ pub fn file_regressions(
         filed.push((verdict.scene.clone(), commit, issue));
     }
     Ok(filed)
-}
-
-/// Opens `issue` with `gh` in `repository`, labelled `TRIAGE_LABEL`, and
-/// returns its number.
-fn open_issue(repository: &Path, issue: &Issue) -> anyhow::Result<u64> {
-    let url = gh(
-        repository,
-        &[
-            "issue",
-            "create",
-            "--label",
-            TRIAGE_LABEL,
-            "--title",
-            &issue.title,
-            "--body",
-            &issue.body,
-        ],
-    )?;
-    // gh prints the new issue's URL, which ends in its number.
-    url.trim()
-        .rsplit('/')
-        .next()
-        .and_then(|number| number.parse().ok())
-        .with_context(|| format!("an issue number at the end of {url:?}"))
-}
-
-/// The issue in `repository`'s GitHub repository, open or closed, titled
-/// exactly `title`, if any.
-fn opened_issue(repository: &Path, title: &str) -> anyhow::Result<Option<u64>> {
-    #[derive(serde::Deserialize)]
-    struct Listed {
-        number: u64,
-        title: String,
-    }
-    let listed: Vec<Listed> = serde_json::from_str(&gh(
-        repository,
-        &[
-            "issue",
-            "list",
-            "--state",
-            "all",
-            "--search",
-            &format!("\"{title}\" in:title"),
-            "--json",
-            "number,title",
-        ],
-    )?)?;
-    Ok(listed
-        .into_iter()
-        .find(|issue| issue.title == title)
-        .map(|issue| issue.number))
 }
 
 /// The standard output of `gh` with `arguments` in `repository`.
@@ -805,6 +819,8 @@ fn holds(shift: f64, good_median: f64, bad_median: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::super::ON_SERIES;
+    use super::super::tests::{Fixture, commit};
     use super::*;
 
     #[test]
@@ -1199,5 +1215,361 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
         assert_eq!(filing(&covered, &[]), Filing::Done);
         // Held but not pinned yet, or cleared: no Regression.
         assert_eq!(filing(&night(), &[]), Filing::Done);
+    }
+
+    const ADAPTER: &str = "Apple M4 Pro";
+    const BACKEND: &str = "metal";
+    const KEY: &str = "apple-m4-pro-metal";
+
+    fn head(checkout: &Path) -> String {
+        git(checkout, &["rev-parse", "HEAD"], None).unwrap()
+    }
+
+    /// A fixture whose `main` runs from a to f, each a source of its own,
+    /// the commit named `rerecords_baseline` also re-recording town's M4 Pro
+    /// Baseline, with town's Series holding records of a, b and c at one
+    /// CPU frame median and of f 10% slower: a Suspect after c. Returns it
+    /// with its commits in order.
+    fn stepped(name: &str, rerecords_baseline: &str) -> (Fixture, Vec<String>) {
+        let fixture = Fixture::new(name);
+        let checkout = &fixture.checkout;
+        let mut commits = vec![head(checkout)];
+        for letter in ["b", "c", "d", "e", "f"] {
+            if letter == rerecords_baseline {
+                let baseline = checkout.join("bench/baselines/apple-m4-pro/town.json");
+                std::fs::create_dir_all(baseline.parent().unwrap()).unwrap();
+                std::fs::write(baseline, format!("{{\"recorded_at\": \"{letter}\"}}")).unwrap();
+            }
+            commit(checkout, &format!("src/{letter}.rs"), letter);
+            commits.push(head(checkout));
+        }
+        git(checkout, &["push", "--quiet", "origin", "main"], None).unwrap();
+        let records = [(0, 10_000.0), (1, 10_000.0), (2, 10_000.0), (5, 11_000.0)];
+        push(checkout, "Record town", |worktree| {
+            for (index, median) in records {
+                let source_hash = source_hash(checkout, &commits[index])?;
+                let record = serde_json::json!({
+                    "adapter": ADAPTER,
+                    "committed_unix_seconds": index,
+                    "provenance": {
+                        "commit": commits[index],
+                        "source_hash": source_hash,
+                        "harness_version": 10,
+                        "scene_content_hash": "content",
+                    },
+                    "measured_frames": 1800,
+                    "cpu_frame_microseconds": { "median": median, "p95": median },
+                });
+                let path = worktree
+                    .directory
+                    .join(format!("{ON_SERIES}/{KEY}/town/{source_hash}.json"));
+                std::fs::create_dir_all(path.parent().unwrap())?;
+                std::fs::write(path, record.to_string())?;
+            }
+            worktree.rebuild_every_series()?;
+            Ok(Publication::default())
+        })
+        .unwrap();
+        (fixture, commits)
+    }
+
+    /// The directory of a night of `fixture`'s, beside its checkout.
+    fn night_directory(fixture: &Fixture, name: &str) -> PathBuf {
+        fixture.checkout.with_file_name(name)
+    }
+
+    /// Takes `bisect`'s steps until the night is done, each run benching the
+    /// commit it names, at the CPU and GPU frame medians `level` gives that
+    /// commit, 100 µs higher on each later run of it. Returns the commits
+    /// benched, in order.
+    fn sweep(checkout: &Path, night: &Path, level: impl Fn(&str) -> (f64, f64)) -> Vec<String> {
+        let mut benched: Vec<String> = Vec::new();
+        while let Some((scene, commit)) = bisect(checkout, ADAPTER, BACKEND, night).unwrap() {
+            let (cpu_median, gpu_median) = level(&commit);
+            let later = benched.iter().filter(|each| **each == commit).count() as f64 * 100.0;
+            let run = night.join(format!("{:03}", benched.len() + 1));
+            std::fs::create_dir_all(&run).unwrap();
+            let result = serde_json::json!({
+                "provenance": { "commit": commit },
+                "cpu_frame_microseconds": { "median": cpu_median + later },
+                "gpu_frame_microseconds": { "median": gpu_median + later },
+            });
+            std::fs::write(run.join(format!("{scene}.json")), result.to_string()).unwrap();
+            benched.push(commit);
+            assert!(benched.len() < 20, "a night that never ends: {benched:?}");
+        }
+        benched
+    }
+
+    /// Bisects `stepped`'s Suspect in a night where e and f run 10% slower
+    /// on the CPU and GPU. Returns the commits' letters as benched, the
+    /// night's `verdict.json` and the Verdict on the remote.
+    fn bisected(name: &str, rerecords_baseline: &str) -> (Vec<char>, Verdict, Verdict) {
+        let (fixture, commits) = stepped(name, rerecords_baseline);
+        let letter = |commit: &str| {
+            let index = commits.iter().position(|each| each == commit).unwrap();
+            "abcdef".chars().nth(index).unwrap()
+        };
+        let night = night_directory(&fixture, "night");
+        let benched = sweep(&fixture.checkout, &night, |commit| {
+            if letter(commit) >= 'e' {
+                (11_000.0, 8_800.0)
+            } else {
+                (10_000.0, 8_000.0)
+            }
+        });
+        let started =
+            serde_json::from_slice(&std::fs::read(night.join(NIGHT_VERDICT)).unwrap()).unwrap();
+        let suspect_source = source_hash(&fixture.checkout, &commits[5]).unwrap();
+        let recorded = serde_json::from_str(
+            &fixture.read(&format!("{VERDICTS}/{KEY}/town/{suspect_source}.json")),
+        )
+        .unwrap();
+        let letters = benched.iter().map(|commit| letter(commit)).collect();
+        let named = |verdict: Verdict| Verdict {
+            good: letter(&verdict.good).to_string(),
+            bad: letter(&verdict.bad).to_string(),
+            pinned: verdict.pinned.map(|pinned| Pinned {
+                commit: Commit {
+                    commit: letter(&pinned.commit.commit).to_string(),
+                    ..pinned.commit
+                },
+                measured: Measured {
+                    good: letter(&pinned.measured.good).to_string(),
+                    bad: letter(&pinned.measured.bad).to_string(),
+                    ..pinned.measured
+                },
+                ..pinned
+            }),
+            ..verdict
+        };
+        (letters, named(started), named(recorded))
+    }
+
+    #[test]
+    fn a_night_bisects_from_where_it_started_and_pins_with_each_timings_medians() {
+        let (benched, started, recorded) = bisected("bisect-pins", "d");
+        // The ends interleaved, then the middle source e, then d.
+        assert_eq!(benched, ['c', 'f', 'c', 'f', 'e', 'd']);
+        assert_eq!(
+            (started.state, started.good.as_str(), started.bad.as_str()),
+            (None, "c", "f")
+        );
+        assert_eq!(
+            (
+                recorded.state,
+                recorded.good.as_str(),
+                recorded.bad.as_str()
+            ),
+            (Some(State::Held), "d", "e")
+        );
+        let pinned = recorded.pinned.unwrap();
+        assert_eq!(pinned.commit.commit, "e");
+        // d re-recorded town's Baseline, not e.
+        assert!(!pinned.covered_by_baseline);
+        assert_eq!(
+            (pinned.measured.good.as_str(), pinned.measured.bad.as_str()),
+            ("c", "f")
+        );
+        assert_eq!(
+            pinned.measured.medians,
+            [
+                (
+                    "cpu_frame_microseconds".to_owned(),
+                    Ends {
+                        good_median: 10_050.0,
+                        bad_median: 11_050.0
+                    }
+                ),
+                (
+                    "gpu_frame_microseconds".to_owned(),
+                    Ends {
+                        good_median: 8_050.0,
+                        bad_median: 8_850.0
+                    }
+                ),
+            ]
+            .into()
+        );
+    }
+
+    #[test]
+    fn a_pinned_commit_that_re_recorded_its_scenes_baseline_is_covered() {
+        let (_, _, recorded) = bisected("bisect-covered", "e");
+        assert!(recorded.pinned.unwrap().covered_by_baseline);
+    }
+
+    #[test]
+    fn a_held_verdict_resumes_ahead_of_a_new_suspect() {
+        let (fixture, commits) = stepped("bisect-resumes", "d");
+        let checkout = &fixture.checkout;
+        let first_night = night_directory(&fixture, "first-night");
+        assert_eq!(
+            bisect(checkout, ADAPTER, BACKEND, &first_night).unwrap(),
+            Some(("town".to_owned(), commits[2].clone()))
+        );
+        let commit = |index: usize| Commit {
+            commit: commits[index].clone(),
+            source_hash: source_hash(checkout, &commits[index]).unwrap(),
+        };
+        let held = Verdict {
+            state: Some(State::Held),
+            ..Verdict::of(Suspect {
+                scene: "crowd".to_owned(),
+                metric: "gpu_frame_microseconds".to_owned(),
+                shift: 0.10,
+                suspect: commit(1),
+                predecessor: commit(0),
+                committed_unix_seconds: 1,
+            })
+        };
+        record(checkout, KEY, &held).unwrap();
+        let second_night = night_directory(&fixture, "second-night");
+        assert_eq!(
+            bisect(checkout, ADAPTER, BACKEND, &second_night).unwrap(),
+            Some(("crowd".to_owned(), commits[0].clone()))
+        );
+        let started: Verdict =
+            serde_json::from_slice(&std::fs::read(second_night.join(NIGHT_VERDICT)).unwrap())
+                .unwrap();
+        assert_eq!(started, held);
+    }
+
+    /// Issues recorded in memory, numbered from 1 in the order opened; each
+    /// open fails while `failing`.
+    #[derive(Default)]
+    struct RecordedIssues {
+        titles: Vec<String>,
+        failing: bool,
+    }
+
+    impl IssueTracker for RecordedIssues {
+        fn titled(&mut self, title: &str) -> anyhow::Result<Option<u64>> {
+            Ok(self
+                .titles
+                .iter()
+                .position(|each| each == title)
+                .map(|index| index as u64 + 1))
+        }
+
+        fn open(&mut self, title: &str, _body: &str) -> anyhow::Result<u64> {
+            anyhow::ensure!(!self.failing, "gh issue: could not reach GitHub");
+            self.titles.push(title.to_owned());
+            Ok(self.titles.len() as u64)
+        }
+    }
+
+    /// A fixture with a Verdict recorded on its remote per scene and
+    /// Suspect source of `verdicts`, each pinned, uncovered, to the commit
+    /// it returns.
+    fn regressions(name: &str, verdicts: &[(&str, &str)]) -> (Fixture, String) {
+        let fixture = Fixture::new(name);
+        commit(&fixture.checkout, "src/slow.rs", "fn slow() {}");
+        git(
+            &fixture.checkout,
+            &["push", "--quiet", "origin", "main"],
+            None,
+        )
+        .unwrap();
+        let pinned_commit = head(&fixture.checkout);
+        for &(scene, suspect_source) in verdicts {
+            let mut verdict = regression();
+            verdict.scene = scene.to_owned();
+            verdict.suspect.source_hash = suspect_source.to_owned();
+            verdict.pinned.as_mut().unwrap().commit.commit = pinned_commit.clone();
+            record(&fixture.checkout, KEY, &verdict).unwrap();
+        }
+        (fixture, pinned_commit)
+    }
+
+    /// The scene, Suspect source and issue of each Verdict on the remote.
+    fn recorded_issues(fixture: &Fixture) -> Vec<(String, String, Option<u64>)> {
+        let tip = remote_tip(&fixture.checkout).unwrap().unwrap();
+        stored(&fixture.checkout, &tip, VERDICTS)
+            .unwrap()
+            .into_iter()
+            .map(|verdict| (verdict.scene, verdict.suspect.source_hash, verdict.issue))
+            .collect()
+    }
+
+    fn title(scene: &str, pinned_commit: &str) -> String {
+        format!(
+            "Regression in {scene} on {KEY} from {}",
+            &pinned_commit[..8]
+        )
+    }
+
+    #[test]
+    fn a_regression_opens_one_issue_per_scene_and_commit_shared_by_its_verdicts() {
+        let (fixture, pinned) = regressions(
+            "filing-shared",
+            &[("town", "1"), ("town", "2"), ("crowd", "3")],
+        );
+        let checkout = &fixture.checkout;
+        let mut tracker = RecordedIssues::default();
+        let filed = file_regressions(checkout, ADAPTER, BACKEND, &mut tracker).unwrap();
+        assert_eq!(
+            tracker.titles,
+            [title("crowd", &pinned), title("town", &pinned)]
+        );
+        let issue = |scene: &str, number| (scene.to_owned(), pinned.clone(), number);
+        assert_eq!(
+            filed,
+            [issue("crowd", 1), issue("town", 2), issue("town", 2)]
+        );
+        let recorded =
+            |scene: &str, source: &str, number| (scene.to_owned(), source.to_owned(), Some(number));
+        assert_eq!(
+            recorded_issues(&fixture),
+            [
+                recorded("crowd", "3", 1),
+                recorded("town", "1", 2),
+                recorded("town", "2", 2)
+            ]
+        );
+        // The next night finds each issue recorded.
+        assert_eq!(
+            file_regressions(checkout, ADAPTER, BACKEND, &mut tracker).unwrap(),
+            []
+        );
+        assert_eq!(tracker.titles.len(), 2);
+    }
+
+    #[test]
+    fn an_issue_opened_but_not_recorded_is_found_by_its_title() {
+        let (fixture, pinned) = regressions("filing-found", &[("town", "1")]);
+        let mut tracker = RecordedIssues {
+            titles: vec!["Another issue".to_owned(), title("town", &pinned)],
+            ..RecordedIssues::default()
+        };
+        let filed = file_regressions(&fixture.checkout, ADAPTER, BACKEND, &mut tracker).unwrap();
+        assert_eq!(filed, [("town".to_owned(), pinned, 2)]);
+        assert_eq!(tracker.titles.len(), 2);
+        assert_eq!(
+            recorded_issues(&fixture),
+            [("town".to_owned(), "1".to_owned(), Some(2))]
+        );
+    }
+
+    #[test]
+    fn a_failed_issue_leaves_its_verdict_for_the_next_run() {
+        let (fixture, pinned) = regressions("filing-failed", &[("town", "1")]);
+        let checkout = &fixture.checkout;
+        let mut tracker = RecordedIssues {
+            failing: true,
+            ..RecordedIssues::default()
+        };
+        assert!(file_regressions(checkout, ADAPTER, BACKEND, &mut tracker).is_err());
+        assert_eq!(
+            recorded_issues(&fixture),
+            [("town".to_owned(), "1".to_owned(), None)]
+        );
+        tracker.failing = false;
+        let filed = file_regressions(checkout, ADAPTER, BACKEND, &mut tracker).unwrap();
+        assert_eq!(filed, [("town".to_owned(), pinned, 1)]);
+        assert_eq!(
+            recorded_issues(&fixture),
+            [("town".to_owned(), "1".to_owned(), Some(1))]
+        );
     }
 }

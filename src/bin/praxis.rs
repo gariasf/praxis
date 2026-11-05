@@ -588,9 +588,13 @@ fn bisect(night: &str) -> anyhow::Result<()> {
 fn regressions() -> anyhow::Result<()> {
     let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
     let mut stdout = std::io::stdout();
-    for (scene, commit, issue) in
-        praxis::bench::file_regressions(Path::new("."), &adapter.name, adapter.backend.to_str())?
-    {
+    let repository = Path::new(".");
+    for (scene, commit, issue) in praxis::bench::file_regressions(
+        repository,
+        &adapter.name,
+        adapter.backend.to_str(),
+        &mut praxis::bench::GitHubIssues { repository },
+    )? {
         writeln!(stdout, "{scene} {commit} #{issue}")?;
     }
     Ok(())
