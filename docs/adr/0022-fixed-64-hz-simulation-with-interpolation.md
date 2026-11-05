@@ -21,4 +21,4 @@ Simulation advances in fixed Ticks of 1/64 s (15.625 ms), decoupled from rendere
 - Input latency ends at the first present that shows the consumed state at full blend weight, so the Tick's trail counts. ADR 0013's budget splits, judged at p95 once Input latency is measured: input that drives the camera at most 2 frame periods (33.3 ms at 60 fps), input consumed by the simulation at most 2 frame periods plus one Tick (49.0 ms).
 - The blend reads two simulation states, never screen-space history, so it is not a temporal technique under ADR 0008.
 - Budgets stay judged at 60 Hz, the display the measurements ran on; the step model must also stay judder-free at refresh rates that do not divide 64 Hz (120, 144, variable).
-- A physics engine chosen in M7 steps once per Tick, substepping inside it if it needs to.
+- A physics engine chosen in M8 steps once per Tick, substepping inside it if it needs to.

@@ -52,6 +52,10 @@ _Avoid_: Pointer, resource ID
 A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.
 _Avoid_: Mega-buffer, heap
 
+**Resident**:
+Held in GPU memory now: said of streamed data, a Texture's mips and a Mesh's Arena ranges. A Chunk is loaded, not Resident; Instances and lights are neither.
+_Avoid_: Loaded (for GPU data), in memory, streamed in
+
 **Material ID**:
 The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.
 _Avoid_: Material index
@@ -147,8 +151,20 @@ The playable space, divided into Chunks.
 _Avoid_: Level, map, world (unqualified)
 
 **Chunk**:
-A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit.
+A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk's edge.
 _Avoid_: Cell, tile, sector
+
+**Load radius**:
+The horizontal distance from the camera within which Chunks are loaded.
+_Avoid_: Streaming radius, active area, grid size
+
+**Late Chunk**:
+A Chunk the camera came within the Load radius of before it was loaded.
+_Avoid_: Pop-in, streaming miss
+
+**View distance**:
+How far from the camera the Game world is drawn: 2 km at target scale (ADR 0013), never less than the Load radius.
+_Avoid_: Draw distance, far plane (depth has none, ADR 0015), LOD distance
 
 **World position**:
 A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.
@@ -175,6 +191,10 @@ _Avoid_: Test scene, benchmark
 **Golden**:
 A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
+
+**Settled frame**:
+A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them once Chunks stream.
+_Avoid_: Blocking load, sync mode
 
 **Render switches**:
 The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the `crowd` scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.

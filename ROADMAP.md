@@ -86,7 +86,7 @@ considered and rejected as overkill for gameplay scripting.
   events the engine fires. Per-frame logic stays in Rust. This rule is
   what makes the boundary scale.
 
-**Required engine subsystems** (built in M7, Gameplay core, on the
+**Required engine subsystems** (built in M8, Gameplay core, on the
 milestone ladder):
 
 - **Event bus.** Engine systems fire events; Lua handlers subscribe

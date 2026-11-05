@@ -55,12 +55,13 @@ desktop only: Windows, Linux, macOS
 | M1 | Frame foundations: f64 positions, reverse-Z, threading, fixed step | done |
 | M2 | Cooked assets | done |
 | M3 | Main pass: culling, MSAA, lighting, ray-traced shadows, HDR | done |
-| M4 | Streamed world: LOD and streaming | |
-| M5 | Global illumination: ray-traced probes | |
-| M6 | World content | |
-| M7 | Gameplay core and physics | |
-| M8 | Audio and AI | |
-| M9 | Editor | |
+| M4 | Streamed world: Chunk streaming and texture residency | |
+| M5 | Far field: LOD, HLOD and the 2 km view | |
+| M6 | Global illumination: ray-traced probes | |
+| M7 | World content | |
+| M8 | Gameplay core and physics | |
+| M9 | Audio and AI | |
+| M10 | Editor | |
 
 A milestone closes when its exit criteria, commands with numbers, have
 been run. The long view is in [ROADMAP.md](ROADMAP.md).
