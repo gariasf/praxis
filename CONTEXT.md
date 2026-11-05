@@ -97,7 +97,7 @@ An Instance whose entity the fixed schedule moves, so the entity carries its pre
 _Avoid_: Dynamic Instance, movable
 
 **Bend**:
-The GPU's stand-in for skinning until M7: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.
+The GPU's stand-in for skinning until M8: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.
 _Avoid_: Deformation, skinning
 
 **Shadow proxy**:

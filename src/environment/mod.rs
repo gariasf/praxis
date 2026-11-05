@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
 /// The light a Scene's surroundings give, constant until ADR 0020's
-/// irradiance probes (M5) and M6's atmosphere replace it: the illuminance
+/// irradiance probes (M6) and M7's atmosphere replace it: the illuminance
 /// every surface receives from all around, and the luminance of the
 /// background, seen wherever nothing is drawn (ADR 0023). The default is
 /// dark.
