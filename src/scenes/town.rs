@@ -166,9 +166,9 @@ const PLASTERS: [BoxMaterial; 4] = [
 ];
 
 /// The ground is `GROUND_TILES_PER_SIDE` square tiles a side, each
-/// `GROUND_TILE` metres, so no vertex lies past 128 m from its tile's centre
-/// (ADR 0014): 1,024 m, the 4 × 4 Chunks the blocks stand on.
-const GROUND_TILE: f64 = 128.0;
+/// `GROUND_TILE_METRES` on a side, so no vertex lies past 128 m from its
+/// tile's centre (ADR 0014): 1,024 m, the 4 × 4 Chunks the blocks stand on.
+const GROUND_TILE_METRES: f64 = 128.0;
 const GROUND_TILES_PER_SIDE: u32 = 8;
 
 /// The town spans ±`TOWN_HALF_SIZE` in X and Z: `BLOCKS_PER_SIDE` blocks a
@@ -346,7 +346,7 @@ fn facing(direction: glam::DVec3) -> glam::Quat {
 /// Every Instance the town places, block by block, then its lamps, poles
 /// and wires, and its lamps' lights.
 fn placements() -> (Vec<TownRenderable>, Vec<glam::DVec3>) {
-    let mut placed: Vec<_> = super::ground_tile_centres(GROUND_TILE, GROUND_TILES_PER_SIDE)
+    let mut placed: Vec<_> = super::ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE)
         .map(|centre| TownRenderable::new(TownMesh::Ground, centre, glam::Quat::IDENTITY))
         .collect();
     let mut corners = Vec::new();
@@ -963,7 +963,7 @@ mod generators {
                 TownMesh::Ground,
                 vec![of(
                     "asphalt",
-                    vec![ground_plane((super::GROUND_TILE / 2.0) as f32, 1.0)],
+                    vec![ground_plane((super::GROUND_TILE_METRES / 2.0) as f32, 1.0)],
                 )],
             ),
             (

@@ -534,7 +534,10 @@ fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> a
         sources.materials.push((id, cook_key, material));
     }
     for (id, name, primitives) in mesh::gltf_meshes(guid, &document, &buffers)? {
-        let name = format!("{} mesh {name:?}", path.display());
+        let name = match name {
+            AssetName::Name(name) => format!("{} {name:?}", path.display()),
+            AssetName::Index(index) => format!("{} mesh {index}", path.display()),
+        };
         let cook_key = mesh::cook_key(&primitives);
         sources.meshes.push((id, name, cook_key, primitives));
     }

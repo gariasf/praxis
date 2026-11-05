@@ -279,7 +279,7 @@ impl ReferenceScene {
             Self::PbrSweep => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), None)])],
             Self::UvGrid => vec![("plane", vec![(ground_plane(4.0, 2.0), Some("grid"))])],
             Self::FarCoplanar => {
-                let tile = ground_plane((FAR_COPLANAR_TILE / 2.0) as f32, 1.0);
+                let tile = ground_plane((FAR_COPLANAR_TILE_METRES / 2.0) as f32, 1.0);
                 vec![("plane", vec![(tile, None)])]
             }
             Self::Orrery => vec![("sphere", vec![(scene_sphere(SPHERE_RADIUS), Some("grid"))])],
@@ -591,10 +591,11 @@ const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
 const FAR_COPLANAR_GAP: f64 = 0.01;
 /// Each plane is `FAR_COPLANAR_TILES_PER_SIDE` square tiles a side, each
-/// `FAR_COPLANAR_TILE` metres, so no vertex lies past 128 m from its tile's
-/// centre (ADR 0014).
+/// `FAR_COPLANAR_TILE_METRES` on a side, so no vertex lies past 128 m from
+/// its tile's centre (ADR 0014).
 const FAR_COPLANAR_TILES_PER_SIDE: u32 = 32;
-const FAR_COPLANAR_TILE: f64 = 2.0 * FAR_COPLANAR_DISTANCE / FAR_COPLANAR_TILES_PER_SIDE as f64;
+const FAR_COPLANAR_TILE_METRES: f64 =
+    2.0 * FAR_COPLANAR_DISTANCE / FAR_COPLANAR_TILES_PER_SIDE as f64;
 /// The upper plane's base colour, then the lower one's.
 #[cfg(feature = "cook")]
 const FAR_COPLANAR_COLORS: [[f32; 4]; 2] = [[0.8, 0.1, 0.1, 1.0], [0.1, 0.8, 0.1, 1.0]];
@@ -609,7 +610,7 @@ pub(crate) fn spawn_far_coplanar(
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
     for (height, name) in [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")] {
         let material = loader.material(ReferenceScene::FarCoplanar.material_id(name))?;
-        let tiles = ground_tile_centres(FAR_COPLANAR_TILE, FAR_COPLANAR_TILES_PER_SIDE);
+        let tiles = ground_tile_centres(FAR_COPLANAR_TILE_METRES, FAR_COPLANAR_TILES_PER_SIDE);
         world.spawn_batch(tiles.map(|tile_centre| {
             (
                 Transform::from_translation(centre + tile_centre + glam::DVec3::Y * height),
@@ -1198,14 +1199,15 @@ fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Ge
 }
 
 /// The centres of `tiles_per_side` × `tiles_per_side` square tiles, each
-/// `tile_size` metres, that together make a square centred on the origin,
+/// `tile_size_metres` on a side, that together make a square centred on the origin,
 /// row by row along +Z.
 pub(crate) fn ground_tile_centres(
-    tile_size: f64,
+    tile_size_metres: f64,
     tiles_per_side: u32,
 ) -> impl Iterator<Item = glam::DVec3> {
-    let centre =
-        move |index: u32| tile_size * (f64::from(index) - f64::from(tiles_per_side - 1) / 2.0);
+    let centre = move |index: u32| {
+        tile_size_metres * (f64::from(index) - f64::from(tiles_per_side - 1) / 2.0)
+    };
     (0..tiles_per_side).flat_map(move |row| {
         (0..tiles_per_side).map(move |column| glam::dvec3(centre(column), 0.0, centre(row)))
     })

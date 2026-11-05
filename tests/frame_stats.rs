@@ -281,12 +281,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// On every Reference scene, each frame reads back from the GPU the
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn.
-/// town and far-coplanar's tiles lie partly out of any one view, so they
-/// are drawn with culling off, which their Goldens compare with culling on:
-/// the frame's draw holds every tile and the whole town. After the first frame, each frame writes the Instances of
-/// what moves alone, town's 10,000 birds among them, and leaves no Moving
-/// Instance out of the dynamic TLAS; town's birds fill it, each uploading
-/// its entry every frame.
+/// far-coplanar's tiles and town lie partly out of any one view, so both
+/// are drawn with culling off, which their Goldens compare with culling
+/// on: the frame's draw holds every tile and the whole town. After the
+/// first frame, each frame writes the Instances of what moves alone, town's
+/// 10,000 birds among them, and leaves no Moving Instance out of the
+/// dynamic TLAS; town's birds fill it, each uploading its entry every
+/// frame.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {
