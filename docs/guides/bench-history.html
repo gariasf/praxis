@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
-<title>Bench History Explained</title>
+<title>The Bench history</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: a lab notebook, volume 28 of the series, after Waiting on the GPU Explained. One reading column; figures, demos and tables break out wider. */
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
 :root {
   --paper: #f5f6f8;
   --panel: #ffffff;
@@ -20,9 +20,6 @@
   --accent-wash: rgba(44, 86, 201, 0.13);
   --warm: #c9771a;
   --warm-wash: rgba(201, 119, 26, 0.14);
-  --bad: #c43a31;
-  --bad-wash: rgba(196, 58, 49, 0.14);
-  --good: #23855a;
   --figure-bg: #eceff4;
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Serif 4", Georgia, "Times New Roman", serif;
@@ -32,95 +29,43 @@
   :root:not([data-theme="light"]) {
     --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
     --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
-    --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
-    --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
   --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
-  --warm-wash: rgba(232, 163, 74, 0.17); --bad: #f07067; --bad-wash: rgba(240, 112, 103, 0.18);
-  --good: #5cc796; --figure-bg: #1f2631; color-scheme: dark;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
 }
-body {
-  margin: 0;
-  background: var(--paper); color: var(--ink);
-  font-family: var(--body); font-size: 18px; line-height: 1.6;
-}
-.sheet {
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 0 64px;
-}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
 a { color: var(--accent); text-underline-offset: 2px; }
-a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
 .page { max-width: 1040px; margin: 0 auto; }
 .prose { max-width: 680px; margin: 0 auto; }
-header.intro { padding-block: 56px 24px; }
+header.intro { padding-block: 56px 8px; }
 .eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
 h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
 h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
 p { margin: 0 0 16px; }
-.lede { font-size: 21px; color: var(--ink-soft); }
-.status { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 0; }
-.status b { color: var(--ink); font-weight: 600; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
 code, .num { font-family: var(--mono); font-size: 0.84em; }
 sup, sub { line-height: 0; }
-section.chapter { padding-block: 48px 8px; border-top: 1px solid var(--rule); margin-top: 32px; }
-.chapter-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
 nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
 nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
 nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
 figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
 figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
 figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
 figcaption b { color: var(--ink); }
-.fluid svg { display: block; width: 100%; height: auto; }
-.callout { border-left: 3px solid var(--warm); padding: 4px 0 4px 16px; margin: 20px 0; }
-.keypoints { display: grid; gap: 10px; padding: 0; list-style: none; margin: 0 0 16px; }
-.keypoints li { padding-left: 22px; position: relative; }
-.keypoints li::before { content: ""; position: absolute; left: 4px; top: 0.7em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.keypoints li { min-width: 0; }
-.prose code, figcaption code, .readout code, .keypoints code { overflow-wrap: anywhere; }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
 .formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
-
-svg .t-title { font: 700 14px var(--display); fill: var(--ink); }
-svg .t-label { font: 12px var(--mono); fill: var(--ink-soft); }
-svg .t-small { font: 11px var(--mono); fill: var(--ink-soft); }
-svg .t-strong { font: 600 12px var(--mono); fill: var(--ink); }
-svg .t-accent { font: 600 12px var(--mono); fill: var(--accent); }
-svg .t-warm { font: 600 12px var(--mono); fill: var(--warm); }
-svg .halo { paint-order: stroke; stroke: var(--figure-bg); stroke-width: 5px; stroke-linejoin: round; }
-svg .s-ink { stroke: var(--ink); } svg .s-soft { stroke: var(--ink-soft); } svg .s-accent { stroke: var(--accent); } svg .s-warm { stroke: var(--warm); }
-svg .f-ink { fill: var(--ink); } svg .f-soft { fill: var(--ink-soft); } svg .f-accent { fill: var(--accent); } svg .f-warm { fill: var(--warm); }
-
-.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
-.btn { font-family: var(--mono); font-size: 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
-.btn:hover { border-color: var(--accent); }
-.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.seg button { font-family: var(--mono); font-size: 13.5px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); padding: 7px 11px; cursor: pointer; }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
-.seg button:focus-visible { outline: 2px solid var(--warm); outline-offset: -2px; }
-.control-label { color: var(--ink-soft); }
-output { font-family: var(--mono); color: var(--ink); font-weight: 600; }
-input[type="range"] { accent-color: var(--accent); width: min(420px, 100%); }
-.readout { font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
-.readout b { color: var(--ink); font-weight: 600; }
-canvas { display: block; max-width: 100%; height: auto; border-radius: 4px; }
-.canvas-frame { border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; background: var(--panel); min-width: 0; }
-.canvas-frame canvas { border-radius: 0; }
-canvas.demo { touch-action: none; cursor: crosshair; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 6px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
-.legend i { display: inline-block; width: 24px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 7px; }
-.legend i.dashed { border-top: 2.5px dashed var(--warm); }
-.legend i.thin { border-top: 1.5px solid var(--ink); }
-.legend i.dotted { border-top: 2.5px dotted var(--ink-soft); }
-.sliders { display: grid; grid-template-columns: max-content minmax(0, 420px); gap: 8px 14px; align-items: center; margin-top: 14px; font-family: var(--mono); font-size: 14px; }
-.demo-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-.demo-grid > div { min-width: 0; }
-
 .table-wrap { overflow-x: auto; }
 table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
 table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
@@ -130,37 +75,23 @@ table.facts tr.focus td { background: var(--accent-wash); }
 table.compact { font-size: 14px; }
 table.compact th, table.compact td { padding: 5px 8px; }
 .prose.table-wrap { margin-bottom: 16px; }
-
-pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
 pre.code code { font-size: inherit; }
 pre.code .comment { color: var(--ink-soft); }
-
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin: 14px 0 0; font-family: var(--mono); font-size: 14px; }
-.figures div { min-width: 0; }
-.figures dt { color: var(--ink-soft); font-size: 12px; }
-.figures dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
-
-.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 8px; }
-.reading article { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; min-width: 0; }
-.reading h3 { margin: 0 0 10px; font-size: 18px; }
-.reading h4 { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 0 4px; }
-.reading ul { margin: 0; padding-left: 18px; font-size: 15.5px; line-height: 1.5; }
-.reading li { margin-bottom: 5px; overflow-wrap: anywhere; }
-.reading li span { color: var(--ink-soft); }
-.glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px; }
-.glossary div { min-width: 0; }
-.glossary dt { font-family: var(--display); font-weight: 700; }
-.glossary dd { margin: 2px 0 0; font-size: 16px; color: var(--ink-soft); }
-footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; border-top: 1px solid var(--rule); padding-top: 16px; }
-
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 760px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 640px) {
-  body { font-size: 17px; }
-  figure { padding: 12px; }
-  .sliders { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .formula { font-size: 13px; }
-}
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
 .concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
 .concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
 .concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
@@ -168,463 +99,1121 @@ footer.sources { font-size: 14px; color: var(--ink-soft); margin-top: 40px; bord
 .series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
 nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
 .series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
-.meter { display: grid; gap: 14px; }
-.meter-row { display: grid; gap: 5px; min-width: 0; }
-.meter-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-family: var(--mono); font-size: 13.5px; color: var(--ink-soft); }
-.meter-label b { color: var(--ink); font-weight: 600; }
-.meter-track { position: relative; height: 20px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
-.meter-fill, .meter-range, .meter-budget { position: absolute; top: 0; bottom: 0; }
-.meter-fill { left: 0; background: var(--accent); }
-.meter-range { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent); }
-.meter-fill.over { background: var(--bad); }
-.meter-range.over { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
-.meter-budget { width: 0; border-left: 2px dashed var(--warm); }
-.meter-axis { position: relative; height: 36px; font-family: var(--mono); font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.meter-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
-.meter-axis span.first { transform: none; }
-.meter-axis span.last { transform: translateX(-100%); }
-.meter-axis span.budget { top: 17px; color: var(--warm); font-weight: 600; }
-
-
-/* The series parts this volume shares with Waiting on the GPU Explained. */
-p.plain { font-size: 19px; line-height: 1.55; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 20px; }
-.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink-soft); vertical-align: -2px; margin-right: 6px; }
-.legend .dot.one { background: var(--accent); border-color: var(--accent); }
-.legend .dot.two { background: var(--warm); border-color: var(--warm); }
-.legend .dot.ring { background: transparent; border-color: var(--bad); }
-.legend .box { display: inline-block; width: 14px; height: 14px; border: 1.5px dashed var(--ink); vertical-align: -2px; margin-right: 6px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 .note { font-size: 15px; color: var(--ink-soft); }
-.bad-text { color: var(--bad); }
-.good-text { color: var(--good); }
-.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
-details.check { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; }
-details.check summary { cursor: pointer; font-weight: 600; }
-details.check[open] summary { margin-bottom: 8px; }
-details.check p { margin: 0; }
-.in-brief { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
-.in-brief h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
-.in-brief p { margin: 0 0 12px; }
-.in-brief .in-brief-label { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
-.in-brief ul { margin: 0 0 12px; padding-left: 1.2em; }
-.in-brief li { margin: 2px 0; }
-.in-brief .in-brief-meta { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 6px; }
-.in-brief .in-brief-meta:last-child { margin-bottom: 0; }
-.control-rows { display: grid; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 14px; }
-.control-rows > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
-.sliders.stacked { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-.demo-canvas { width: 100%; }
-.demo-grid.merge { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
-@media (max-width: 760px) { .demo-grid.merge { grid-template-columns: minmax(0, 1fr); } }
-
-/* This volume's own parts: the key's fields and the demo's marks. */
-.key-parts { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--mono); font-size: 13.5px; margin: 0 0 16px; }
-.key-parts span { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; }
-.key-parts span.path { border-color: var(--accent); }
-.legend .dot.inside { background: var(--accent); border-color: var(--accent); }
-.legend .dot.suspect { background: var(--accent); border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-wash); }
-.legend .swatch.band { display: inline-block; width: 16px; height: 12px; background: var(--accent-wash); border: 1px solid var(--accent); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="sheet">
 <div class="page">
 <header class="intro prose">
-  <div class="series-home"><a href="index.html">&larr; Praxis field guides</a></div>
-  <div class="eyebrow">Praxis &middot; observability track &middot; ticket #435 &middot; PR #487</div>
-  <h1>Bench History Explained</h1>
-  <aside class="in-brief" aria-labelledby="in-brief">
-    <h2 id="in-brief">In brief</h2>
-    <p>A bench run is only worth keeping if a later run can be compared with it. Praxis keeps every run as a Bench record on the <code>bench-history</code> branch, keyed by a hash of the source it measured and labelled with the Harness version that defines its metrics; only quiet runs of <code>main</code> form a Series. Each publish marks a Suspect where a frame median leaves a band around the median of the 8 records before it, ± 4 median absolute deviations or 3%. The idea to keep: compare only like with like, and judge a step against the median and its spread, which one bad run cannot move.</p>
-    <p class="in-brief-label">You'll learn</p>
-    <ul>
-      <li>Why a record is keyed by a hash of five paths, not by its commit</li>
-      <li>What a Harness version is, and why a break in one means the ruler changed, not the engine</li>
-      <li>What makes a run quiet, and which records form a Series</li>
-      <li>How the median and the median absolute deviation set a band one outlier cannot widen, and what a Suspect is</li>
-      <li>What the detector cannot see yet, and what confirms a Suspect</li>
-    </ul>
-    <p class="in-brief-meta"><b>Read first:</b> <a href="frame-timing.html#frame">Frame Timing Explained</a>, for the CPU and GPU frame a Series draws; optionally <a href="waiting-on-the-gpu.html">Waiting on the GPU</a>, for Harness version 8.</p>
-    <p class="in-brief-meta"><b>Status:</b> Describes Praxis at e3a96ae0 (PR #487, 2026-11-02). <b>Since then:</b> #485 built the sweep's re-bench and bisect: <code>praxis history suspects</code> lists the slower Suspects with no Verdict, each night re-benches one beside its predecessor (A B A B) or resumes a bisect, and a Verdict on <code>bench-history</code> records held or cleared, the good and bad commits and the pinned one, which starts its Series' line. #486 then made each pinned commit no re-recorded Baseline covers a Regression: <code>praxis history regressions</code>, run every night, opens one <code>needs-triage</code> issue per scene and commit and records its number on the Verdict. A Baseline re-recorded since the history began is now a record too, marked <code>baseline-rerecorded</code>, which starts its Series' line: <code>praxis history import</code>, which the sweep runs each night, adds it, so the limit below on re-recorded Baselines no longer holds. #566 added the one-minute load average to the quiet test in chapter 3: preflight warns above 2, a run that started above it is tagged not quiet, and the sweep waits up to five minutes for its own build and cook to stop raising it.</p>
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/bench/history.rs</code> &middot; <code>docs/bench/index.html</code></div>
+  <h1>The Bench history</h1>
+  <p class="definition">Every bench run kept as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span> on the orphan <code>bench-history</code> branch, a JSON file at a path that is its key, the source hash of the paths that can change a measurement, the adapter, the backend and the scene; the clean, release-profile, quiet runs of <code>main</code>'s source form each machine's <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order, each holding every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>, which every publish rebuilds and marks its <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspects</span> on, a page draws, and a nightly sweep re-benches, bisects and files as <span class="concept" data-term="Regression" data-tip="A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one needs-triage issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.">Regressions</span>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>After a bench, never during a frame. <code>praxis bench</code> publishes its results as it ends unless given <code>--no-publish</code>; <code>praxis publish &lt;directory&gt;</code> publishes results later; with <code>--experiment &lt;name&gt;</code> either publishes them as that <span class="concept" data-term="Experiment" data-tip="Bench records taken from a branch under a name, kept beside the Series and compared with them, never part of one.">Experiment</span>'s. CI's <code>publish-bench</code> job publishes lavapipe's records and the release build's on every push to <code>main</code>; a pull request's run publishes nothing. The sweep, <code>scripts/sweep.sh</code>, runs at 04:00 on the Apple M4 Pro and the RTX 2070 SUPER: <code>praxis history import</code>, <code>history unrecorded</code>, <code>fetch</code> and <code>cook</code>, <code>preflight</code>, <code>history bisect</code> before each re-bench, <code>history regressions</code>, then the benches <code>unrecorded</code> named.</dd>
+      <dt>Key</dt><dd>Source hash &times; adapter &times; backend &times; scene, as the path <code>records/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/&lt;source hash&gt;.json</code>. The source hash is the git tree of <code>src</code>, <code>assets</code>, <code>Cargo.toml</code>, <code>Cargo.lock</code> and <code>.cargo</code> alone, so a commit that changes none of them has its parent's. The <span class="concept" data-term="Harness version" data-tip="A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.">Harness version</span> is defined under <code>src/</code>, so a source hash names one; the record holds it.</dd>
+      <dt>Reads</dt><dd>The bench's results, one <code>Measurements</code> JSON per scene with its <code>Provenance</code>; the remote's <code>main</code>, fetched, for its source hash and each commit's time; the remote's <code>bench-history</code> tip, fetched into a worktree of its own. The sweep reads the Series rows and the Verdicts; the import reads every Baseline each first-parent commit of <code>main</code> changed.</dd>
+      <dt>Writes</dt><dd>On the branch, in one commit per publish: <code>records/</code> (on a Series), <code>tagged/</code> (every other record, with its <code>tags</code>), <code>experiments/&lt;name&gt;/</code>, <code>records/&lt;adapter&gt;-&lt;backend&gt;/release-build/</code> (CI's release build), <code>series/</code> (one file per Series, every one rebuilt by every publish), <code>verdicts/</code> (the sweep's) and <code>README.md</code>. Never anything on <code>main</code>: the Baselines in <code>bench/baselines/</code> stay chosen by hand.</dd>
+      <dt>Drawn</dt><dd><a href="https://gariasf.github.io/praxis/bench/">gariasf.github.io/praxis/bench/</a>, the page <code>docs/bench/index.html</code>, which lists the branch through GitHub's API and reads its Series, records and Budgets raw in the browser.</dd>
+      <dt>Counted</dt><dd>Nothing in Frame stats: the history keeps what the bench measured. A publish prints what it did, a <code>Publication</code>: records on a Series, tagged, in an Experiment, dropped, re-stamped, and the commit pushed.</dd>
+      <dt>Where in the code</dt><dd><code>src/bench/history.rs</code>: <code>BenchRecord</code>, <code>StoredRecord</code>, <code>SeriesRow</code>, <code>publish</code>, <code>publish_experiment</code>, <code>unrecorded_scenes</code>, the <code>Worktree</code>; <code>src/bench/history/suspects.rs</code>; <code>src/bench/history/verdicts.rs</code>: <code>suspects</code>, <code>bisect</code>, <code>file_regressions</code>; <code>src/bench/history/import.rs</code>: <code>import_baselines</code>; <code>src/bench/provenance.rs</code>: <code>source_hash</code>, <code>HARNESS_VERSION</code>, <code>is_quiet</code>; the commands in <code>src/bin/praxis.rs</code>; <code>scripts/sweep.sh</code>; the <code>publish-bench</code> job in <code>.github/workflows/ci.yml</code>; the page in <code>docs/bench/index.html</code>.</dd>
+    </dl>
   </aside>
-  <p class="lede">Before the observability track, a bench run lived as long as a session's terminal, and the only figures kept were the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> a PR chose to commit. ADR 0024 keeps every run instead, as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span>, so a slow drift or a step between two Baselines can be seen. This volume covers what makes two records comparable, which of them form a line on the <a href="https://gariasf.github.io/praxis/bench/">bench page</a>, and how PR #487 finds the record where a line steps.</p>
-  <p class="status"><b>Provenance.</b> The code is main at e3a96ae0, PR #487, part 1 of ticket #435. Figures about the branch are from <code>bench-history</code> at 438cfe9c, 2026-11-02, and from a rebuild of it with PR #487's binary. The Harness versions are those <code>praxis history import</code> numbers, listed on #427.</p>
-  <nav class="toc" aria-label="Chapters">
-    <a href="#key">1 &middot; The key</a>
-    <a href="#harness">2 &middot; The ruler</a>
-    <a href="#series">3 &middot; Quiet records and the Series</a>
-    <a href="#suspects">4 &middot; Suspects</a>
-    <a href="#next">5 &middot; What a Suspect is not yet</a>
-    <a href="#check">Check yourself</a>
-    <a href="#reading">Reading list</a>
-    <a href="#glossary">Glossary</a>
+  <nav class="toc" aria-label="Sections">
+    <a href="#record">1 &middot; The record and its key</a>
+    <a href="#publish">2 &middot; Publishing</a>
+    <a href="#series">3 &middot; The Series</a>
+    <a href="#import">4 &middot; The import</a>
+    <a href="#suspects">5 &middot; Suspects</a>
+    <a href="#sweep">6 &middot; The sweep, Verdicts and Regressions</a>
+    <a href="#page">7 &middot; The page</a>
+    <a href="#tests">8 &middot; How it is tested</a>
+    <a href="#cost">9 &middot; What it costs</a>
+    <a href="#why">10 &middot; Why this way</a>
+    <a href="#limits">11 &middot; Limits</a>
+    <a href="#sources">Sources</a>
   </nav>
 </header>
 
-<section class="chapter" id="key">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 1 &middot; <code>src/bench/provenance.rs</code> &middot; <code>source_hash</code></div>
-    <h2>The key: what the run measured</h2>
-    <p class="key-idea"><b>Key idea.</b> A record is keyed by a hash of the paths that can change a measurement, so two commits that differ only in docs share one record, and so do a PR's head and its squashed merge when the branch is up to date with main.</p>
-    <p class="plain">To compare two runs you must know they measured the same engine. A commit hash says too little and too much: a README edit makes a new commit, and a squash merge gives the code a commit its PR never had.</p>
-    <p>So a record's key names the source, not the commit. <code>MEASURED_PATHS</code> lists the five top-level paths that can change a measurement: <code>src</code>, <code>assets</code>, <code>Cargo.toml</code>, <code>Cargo.lock</code> and <code>.cargo</code>. The source hash is the git tree built from just those entries:</p>
-<pre class="code"><code><span class="comment">// src/bench/provenance.rs, source_hash: the five paths' tree entries at a revision, as one tree.</span>
-let listing = git(repository, &amp;[&amp;["ls-tree", "--full-tree", revision, "--"][..], &amp;MEASURED_PATHS[..]].concat(), None)?;
-git(repository, &amp;["mktree"], Some(&amp;entries))</code></pre>
-    <ul class="keypoints" style="margin-top: 16px">
-      <li><b>Every path is classified.</b> A test fails when a new top-level path is in neither <code>MEASURED_PATHS</code> nor the twelve <code>UNMEASURED_PATHS</code>, so a new directory cannot slip out of the hash unnoticed.</li>
-      <li><b>A docs-only commit inherits.</b> <code>91fda48b</code> and <code>3f7fd6b5</code>, which changed only <code>README.md</code>, both hash to <code>2d5d1c36</code>. The M4 Pro's sweep, run on the second, logged "nothing to bench: main's source has a record on every Series here".</li>
-    </ul>
-    <p>The full key adds where and how the run measured:</p>
-    <div class="key-parts" aria-label="The key's parts"><span>source hash</span><span>adapter</span><span>backend</span><span>scene</span><span>Harness version</span></div>
-    <p>A record's path is its key, less the Harness version: <code>records/apple-m4-pro-metal/town/2d5d1c36&hellip;.json</code>. The Harness version is defined under <code>src/</code>, so a source hash already names one. When a second record lands on a path that exists, the quieter of the two stays (chapter 3).</p>
+<section class="part prose" id="record">
+  <div class="part-mark">1 &middot; <code>BenchRecord</code>, <code>StoredRecord</code>, <code>src/bench/history.rs</code>; <code>source_hash</code>, <code>src/bench/provenance.rs</code></div>
+  <h2>The record and its key</h2>
+  <p class="key-idea">A record is the bench's own result file, stamped with when its commit was made and with the reasons it is kept off a Series, at a path that is its key: the source it measured, not the commit. Two commits that differ only outside the measured paths share one record, and a path that exists is a duplicate.</p>
+  <div class="code-source"><code>src/bench/provenance.rs</code></div>
+<pre class="code"><code>/// The top-level paths whose changes can change a measurement, which the
+/// source hash covers. Every other tracked top-level path is in the tests'
+/// `UNMEASURED_PATHS`.
+const MEASURED_PATHS: [&amp;str; 5] = ["src", "assets", "Cargo.toml", "Cargo.lock", ".cargo"];
+…
+/// The source hash of `revision` in `repository`: the git tree holding
+/// only its measured paths, so a commit that changes none of them has its
+/// parent's.
+pub fn source_hash(repository: &amp;Path, revision: &amp;str) -&gt; anyhow::Result&lt;String&gt; {
+    let listing = git(
+        repository,
+        &amp;[
+            &amp;["ls-tree", "--full-tree", revision, "--"][..],
+            &amp;MEASURED_PATHS[..],
+        ]
+        .concat(),
+        None,
+    )?;
+    // An empty tree is no input at all: mktree refuses a blank line.
+    let entries = if listing.is_empty() {
+        listing
+    } else {
+        listing + "\n"
+    };
+    git(repository, &amp;["mktree"], Some(&amp;entries))
+}</code></pre>
+  <p>The source hash is a git tree written from the five measured paths' entries at a revision, so it is a 40-digit hash git itself can list. A checkout whose measured paths differ from its commit, untracked files included, hashes its working tree instead, through a temporary index (<code>Checkout::read</code>, <code>working_tree</code>), and is marked <code>dirty</code>. A test in the same file classifies every tracked top-level path as measured or as one of the twelve <code>UNMEASURED_PATHS</code>, so a new top-level directory fails the build until someone says which it is.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// A Bench record to publish: the file the branch keeps under its key, and
+/// what decides between it and a record already there.
+#[derive(Debug)]
+struct BenchRecord {
+    /// `&lt;adapter&gt;-&lt;backend&gt;`, as the branch's paths name them.
+    adapter_key: String,
+    /// The scene measured, or `RELEASE_BUILD`.
+    subject: String,
+    source_hash: String,
+    /// Empty for a record on a Series.
+    tags: Vec&lt;String&gt;,
+    /// The GPU frame p95 over its median; none when not measured.
+    p95_over_median: Option&lt;f64&gt;,
+    /// Whether the first record under its key stays: lavapipe's and a
+    /// release build's, whose Series read no time.
+    publishes_once: bool,
+    /// The Experiment it belongs to, which keeps it off every Series.
+    experiment: Option&lt;String&gt;,
+    /// The file's JSON object.
+    file: serde_json::Map&lt;String, serde_json::Value&gt;,
+}
+…
+    /// The record's path under `directory`, `ON_SERIES` or `TAGGED`: its
+    /// key. The Harness version it holds is not in the path, as it is
+    /// defined under `src/`, so a source hash names one.
+    fn path(&amp;self, directory: &amp;str) -&gt; PathBuf {
+        Path::new(directory)
+            .join(&amp;self.adapter_key)
+            .join(&amp;self.subject)
+            .join(format!("{}.json", self.source_hash))
+    }</code></pre>
+  <p>The adapter key is the adapter's name in lowercase with each run of other characters a hyphen, then the backend (<code>adapter_key</code>, <code>src/bench/mod.rs</code>): the Apple M4 Pro on Metal is <code>apple-m4-pro-metal</code>, the RTX 2070 SUPER on Vulkan <code>nvidia-geforce-rtx-2070-super-vulkan</code> and on DX12 <code>nvidia-geforce-rtx-2070-super-dx12</code>, and CI's lavapipe names itself after its LLVM. <code>BenchRecord::new</code> inserts <code>committed_unix_seconds</code>, the time of the commit measured, which orders a Series, and the <code>tags</code> when there are any.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Directory on the branch</th><th>What lands there</th><th>Stays under its key</th></tr></thead>
+    <tbody>
+      <tr><td><code>records/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/</code></td><td>a record with no tag: clean tree, release profile, <code>main</code>'s source, the Series' configuration, a quiet machine</td><td>the quieter of two, by GPU frame p95 over median; against a tagged one, always</td></tr>
+      <tr><td><code>tagged/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/</code></td><td>every other record, its <code>tags</code> listing why</td><td>the quieter of two; dropped when the key is on a Series</td></tr>
+      <tr><td><code>experiments/&lt;name&gt;/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/</code></td><td>an Experiment's records, with their <code>experiment</code> field: name, <code>merge_base</code>, <code>merge_base_source_hash</code></td><td>the quieter of two</td></tr>
+      <tr><td><code>records/&lt;adapter&gt;-&lt;backend&gt;/release-build/</code></td><td>CI's release build: <code>binary_bytes</code>, <code>build_seconds</code>, the <code>checkout</code> it built</td><td>the first; a source publishes once</td></tr>
+      <tr><td><code>series/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;.json</code></td><td>one row per record in <code>records/</code>, in commit order; rebuilt whole by every publish (section 3)</td><td>rebuilt</td></tr>
+      <tr><td><code>verdicts/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/</code></td><td>the sweep's Verdict on a Suspect, under the Suspect's source hash (section 6)</td><td>rewritten as the sweep advances</td></tr>
+      <tr><td><code>README.md</code></td><td>the <code>README</code> constant, rewritten by every publish</td><td>rewritten</td></tr>
+    </tbody>
+  </table>
   </div>
+  <p class="note">Directories from <code>ON_SERIES</code>, <code>TAGGED</code>, <code>EXPERIMENTS</code>, <code>RELEASE_BUILD</code> and <code>VERDICTS</code> at the commit above; the rules from <code>Worktree::apply</code> (section 2).</p>
+  <p>Whatever wrote a record, a bench or the import (section 4), it is read back as a <code>StoredRecord</code>, which names only what the Series needs and keeps the rest as a map, since a record holds what the bench measured on its day and a metric added later is absent from older ones.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// A Bench record as the branch stores it, whether a bench published it or
+/// the import made it from a Baseline, which lacks every metric added
+/// after it was recorded.
+#[derive(Debug, serde::Deserialize)]
+struct StoredRecord {
+    /// When the measured commit was committed, which orders a Series.
+    committed_unix_seconds: u64,
+    /// The adapter's name, one per Series.
+    adapter: String,
+    provenance: StoredProvenance,
+    measured_frames: u32,
+    cpu_frame_microseconds: Option&lt;Spread&gt;,
+    dynamic_tlas_cpu_microseconds: Option&lt;Spread&gt;,
+    /// Named `gpu_main_pass_microseconds` until the bench renamed it, the
+    /// same span under a new name.
+    #[serde(alias = "gpu_main_pass_microseconds")]
+    gpu_frame_microseconds: Option&lt;Spread&gt;,
+    gate_microseconds: Option&lt;Spread&gt;,
+    shadow_ray_microseconds: Option&lt;Spread&gt;,
+    #[serde(default)]
+    gpu_pass_microseconds: BTreeMap&lt;String, Spread&gt;,
+    counter_frames: Option&lt;StoredCounterFrames&gt;,
+    aliasing_rmse: Option&lt;u64&gt;,
+    aliasing_p99: Option&lt;u64&gt;,
+    /// Whether it holds the key of a re-recorded Baseline it was quieter
+    /// than, or that was quieter than it: the Baseline's mark stays with
+    /// its key.
+    #[serde(default)]
+    rerecorded_baseline: bool,
+    /// Every field not named above, the measured frames' counters among
+    /// them under their names in `Counters::NAMES`: a map, as a record
+    /// holds only the counters its bench counted.
+    #[serde(flatten)]
+    remaining_fields: serde_json::Map&lt;String, serde_json::Value&gt;,
+}
+
+/// What every stored record's provenance holds, whichever form wrote it.
+#[derive(Debug, serde::Deserialize)]
+struct StoredProvenance {
+    commit: String,
+    source_hash: String,
+    harness_version: u32,
+    /// `baseline-commit` for an imported Baseline, `baseline-rerecorded`
+    /// for one re-recorded since; none for a bench's result.
+    source: Option&lt;String&gt;,
+    /// None for an imported Baseline.
+    scene_content_hash: Option&lt;String&gt;,
+    gpu_frame_p95_over_median: Option&lt;f64&gt;,
+}</code></pre>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>A stored record's field</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td><code>adapter</code>, <code>backend</code>, <code>profile</code>, <code>width</code>, <code>height</code>, <code>measured_frames</code></td><td>the run: the Series' configuration is 2560&times;1440 over 1,800 measured frames (<code>Configuration::REFERENCE</code>), CI's 640&times;360 over the 64 counter frames (<code>Configuration::CI_COUNTERS</code>)</td></tr>
+      <tr><td><code>cpu_frame_microseconds</code>, <code>gpu_frame_microseconds</code>, <code>gate_microseconds</code>, <code>shadow_ray_microseconds</code>, <code>dynamic_tlas_cpu_microseconds</code></td><td>each a <code>Spread</code>: the median and the p95 over the measured frames</td></tr>
+      <tr><td><code>gpu_pass_microseconds</code></td><td>a <code>Spread</code> per GPU pass, by the pass's name</td></tr>
+      <tr><td><code>draw_calls</code>, <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>instances_overflowed</code>, <code>uploaded_bytes</code>, <code>gpu_memory_bytes</code>, <code>arena_bytes_in_use</code>, <code>heap_allocations</code></td><td>the eight counters of <code>Counters::NAMES</code> over the measured frames, at the top level</td></tr>
+      <tr><td><code>counter_frames</code></td><td>the same eight counters over frames 8 to 71, the 64 frames of <code>COUNTER_FRAMES</code>, which every configuration renders, with the range itself under <code>frames</code></td></tr>
+      <tr><td><code>aliasing_rmse</code>, <code>aliasing_p99</code></td><td>the Aliasing figures of a run that captured them</td></tr>
+      <tr><td><code>provenance</code></td><td>the <code>Checkout</code> (<code>source_hash</code>, <code>commit</code>, <code>dirty</code>, <code>branch</code>), <code>driver</code> and <code>driver_info</code>, <code>harness_version</code>, <code>scene_content_hash</code> (the Cooked cache's hash over the Blobs the scene loaded), <code>gpu_load_percent</code>, <code>one_minute_load_average</code>, <code>other_processes</code>, <code>gpu_frame_p95_over_median</code>, <code>quiet</code>, <code>started_unix_seconds</code>; an imported Baseline's instead names its <code>source</code> and the <code>baseline</code> file (section 4)</td></tr>
+      <tr><td><code>committed_unix_seconds</code></td><td>when the measured commit was committed, added at publish</td></tr>
+      <tr><td><code>tags</code></td><td>the reasons it is off a Series, when any (section 2)</td></tr>
+      <tr><td><code>experiment</code></td><td>for an Experiment's record: its <code>name</code>, <code>merge_base</code> with <code>main</code> and <code>merge_base_source_hash</code></td></tr>
+      <tr><td><code>rerecorded_baseline</code></td><td>true on a bench's record that holds a re-recorded Baseline's key in its place</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>Measurements</code>, <code>Counters::NAMES</code>, <code>COUNTER_FRAMES</code> and <code>Configuration</code> in <code>src/bench/mod.rs</code>, <code>Provenance</code> in <code>src/bench/provenance.rs</code> and the fields the history adds, at the commit above.</p>
+  <p>The branch's own <code>README.md</code> is the <code>README</code> constant, which every publish rewrites, so what the branch says of itself is what the binary that wrote it does; a test holds the constant to the configurations and the quiet thresholds in code.</p>
+  <div class="code-source"><code>README</code>, <code>src/bench/history.rs</code></div>
+<pre class="code"><code>A machine is quiet when preflight warned of no GPU load over 10%, one-minute
+load average over 2, other praxis process, battery power or busy display at
+the run's start, and the run's GPU frame p95 over its median stayed
+under 1.06.
+…
+A record in `records/` holds its key against a tagged one. Otherwise a record
+whose path exists replaces it only when its GPU frame p95 over its median is
+lower, and a lavapipe or release build record never does: a source publishes
+there once. A bad publish is undone with `git revert`.</code></pre>
 </section>
 
-<section class="chapter" id="harness">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 2 &middot; <code>HARNESS_VERSION</code> &middot; <code>HARNESS_BREAKS</code></div>
-    <h2>The ruler: Harness version</h2>
-    <p class="key-idea"><b>Key idea.</b> When a change alters how a metric is measured, its Harness version rises, and charts break their line there: a jump across a break is the ruler changing, not the engine.</p>
-    <p>A <span class="concept" data-term="Harness version" data-tip="A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.">Harness version</span> names what the bench's metrics mean. It is 10 on main. Before the history existed nobody numbered it, so <code>praxis history import</code> numbers the commits that changed a metric's meaning, and gives each imported Baseline the version in force at its commit:</p>
-  </div>
-  <div class="prose table-wrap">
-    <table class="facts compact">
-      <thead><tr><th class="n">Version</th><th>Starts at</th><th>What changed</th></tr></thead>
-      <tbody>
-        <tr><td class="n">1</td><td><code>591433d7</code>, #83</td><td>the first Baselines</td></tr>
-        <tr><td class="n">2</td><td><code>926fcc18</code>, #230</td><td>the GPU main pass spans the culling pass's start to the main pass's end</td></tr>
-        <tr><td class="n">3</td><td><code>0b29a3c0</code>, #236</td><td>the GPU stats readback ring's own CPU time, allocations and memory join the metrics</td></tr>
-        <tr><td class="n">4</td><td><code>80227bca</code>, #266</td><td>the GPU frame is the dynamic TLAS build plus the span of the frame's passes</td></tr>
-        <tr><td class="n">5</td><td><code>c5a12eb2</code>, #291</td><td>the GPU frame spans its passes' earliest start to their latest end</td></tr>
-        <tr><td class="n">6</td><td><code>800c0d21</code>, #299</td><td>the dynamic TLAS build counts from the end of the previous frame's last pass</td></tr>
-        <tr><td class="n">7</td><td><code>5264094f</code>, #372</td><td>GPU memory leaves out the GPU stats readback</td></tr>
-        <tr><td class="n">8</td><td><code>958ed4e9</code>, #400</td><td>the bench spin-waits on hardware adapters, so CPU times are at full clock</td></tr>
-        <tr><td class="n">9</td><td><code>a5280dce</code>, #410</td><td>a render pass's time counts from the end of the passes before it</td></tr>
-        <tr class="focus"><td class="n">10</td><td><code>a00280dc</code>, #421</td><td>the depth passes count only from the passes they wait on</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div class="prose">
-    <p class="note" style="margin-top: 12px">From #427's list of Harness version changes, metric names in words.</p>
-    <p>What does not raise it matters as much. A renamed field that measures the same span, a counter added beside the old ones, and a new pass inside the frame are not breaks: the last is engine work, and the line should show it. Version 8 is the case to remember: the bench started spin-waiting, and <code>town</code>'s M4 Pro CPU line fell by about 30% with no engine change at all (<a href="waiting-on-the-gpu.html">Waiting on the GPU</a>).</p>
-    <p>A scene's content hash breaks a line the same way: a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> given more Instances measures a different load. On the bench page both breaks shade bands or draw a dashed rule, and no change is measured across them.</p>
-  </div>
-</section>
-
-<section class="chapter" id="series">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 3 &middot; <code>src/bench/history.rs</code> &middot; <code>tags</code></div>
-    <h2>Quiet records and the Series</h2>
-    <p class="key-idea"><b>Key idea.</b> Every run is kept, but only clean, release-profile runs of main's source on a quiet machine form a Series; the rest are tagged with why they are not on one.</p>
-    <p>A <span class="concept" data-term="Series" data-tip="One metric's Bench records for one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.">Series</span> is what a chart draws and what a Regression is found in. A record joins one only if nothing tags it:</p>
-    <ul class="keypoints">
-      <li><b>Clean and release.</b> No uncommitted change, and the release profile.</li>
-      <li><b>Main's source.</b> The source hash is main's, or the commit is on main.</li>
-      <li><b>The Series' configuration.</b> 2560&times;1440 over 1,800 frames; lavapipe's is CI's 640&times;360 over 64.</li>
-      <li><b>A quiet machine.</b> At the run's start preflight warned of no GPU load over 10%, no other praxis process, no battery power and no busy display, and the run's GPU frame p95 over its median stayed under 1.06.</li>
-    </ul>
-    <p>The last rule is the one a night tests. On the evening of 2026-10-31 the RTX 2070 SUPER's second sweep read p95/median from 1.08 to 1.83 on six of eleven scenes, every one started at 0% GPU load; none of those six joined a Series. Two runs of one key keep the quieter, the lower p95/median, so a noisy evening cannot replace a quiet night's record. lavapipe is the exception: its times mean nothing, so the first record under its key stays, quiet or not.</p>
-    <p>On 2026-11-02 at 04:00 the M4 Pro's sweep benched main's new source and put all 11 records on their Series. Each Series still begins with the imported Baselines, which is why most of its points are squares on the bench page:</p>
-  </div>
-  <div class="prose table-wrap">
-    <table class="facts compact">
-      <thead><tr><th>M4 Pro Series</th><th class="n">Imported Baselines</th><th class="n">Benched since</th></tr></thead>
-      <tbody>
-        <tr><td><code>helmet</code></td><td class="n">38</td><td class="n">1</td></tr>
-        <tr><td><code>pbr-sweep</code></td><td class="n">37</td><td class="n">2</td></tr>
-        <tr><td><code>texture-wall</code></td><td class="n">18</td><td class="n">1</td></tr>
-        <tr><td><code>town</code></td><td class="n">13</td><td class="n">2</td></tr>
-        <tr><td><code>crowd</code></td><td class="n">11</td><td class="n">2</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="chapter" id="suspects">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 4 &middot; <code>src/bench/history/suspects.rs</code> &middot; <code>suspects</code></div>
-    <h2>Suspects: a band one bad run cannot widen</h2>
-    <p class="key-idea"><b>Key idea.</b> A record is a <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspect</span> when its frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%; only a step's first record is marked.</p>
-    <p class="plain">A fixed percentage alone, say anything 5% off the last record, fires on noisy passes and misses steady ones, so ticket #435 ruled it out. The band has to follow each Series' own noise.</p>
-    <p>The textbook band is the mean ± a few standard deviations, but one outlier pulls the mean and inflates the deviation, widening the band it should fall outside. The median and the median absolute deviation (MAD) do not move that way: half the window must change before the median does. Leys and colleagues' 2013 note puts it in its title: "Do not use standard deviation around the mean, use absolute deviation around the median".</p>
-<pre class="formula">center     = median(window)
-deviation  = median(|value − center| for each value in window)
-tolerance  = max(4 × deviation, 0.03 × center)
-suspect    = |median − center| &gt; tolerance</pre>
-    <ul class="keypoints">
-      <li><b>The window.</b> Up to 8 medians before the record on its line. A line starts at a Harness version, a new scene content or an imported Baseline, and a record with fewer than 3 before it on its line is not judged.</li>
-      <li><b>4 MADs.</b> For normally distributed noise the standard deviation is about 1.4826 MADs, so 4 MADs is about 2.7 standard deviations.</li>
-      <li><b>The 3% floor.</b> Quiet M4 Pro medians can agree to a few tenths of a percent, which makes the MAD tiny; the floor keeps a 1% wobble from reading as a step.</li>
-      <li><b>The first of a step.</b> After a real step, the window's median lags until five of its eight are at the new level, so the next four records also sit outside. A record continues a step flagged among the 8 before it while it stays on the same side, within the flagged record's tolerance of that record's median, even after a noisy record between them fell back inside the band; a second step on the same side is flagged again.</li>
-      <li><b>Which metrics.</b> The CPU and GPU frame medians, on every Series but lavapipe's, whose times measure no GPU. Faster records are marked too; only slower ones are Regressions.</li>
-    </ul>
-    <p>Each publish rebuilds every Series, so each row carries its marks: <code>"suspects": {"gpu_frame_microseconds": 0.052}</code>, the shift as a share of the window's median. The bench page rings them, red when slower and green when faster.</p>
-  </div>
-  <figure class="wide" id="demo-detector">
-    <div class="canvas-frame"><canvas id="d-canvas" class="demo-canvas" role="img" aria-label="A synthetic Series of 28 frame medians with the band each record is judged against, and rings on the Suspects."></canvas></div>
-    <div class="legend">
-      <span><span class="dot inside"></span>a record</span>
-      <span><span class="dot suspect"></span>a Suspect</span>
-      <span><span class="swatch band"></span>the band it was judged against</span>
-    </div>
-    <div class="sliders">
-      <label for="d-noise" class="control-label">Noise <output id="d-noise-out" for="d-noise"></output></label>
-      <input type="range" id="d-noise" min="0" max="6" step="0.1" value="1.2">
-      <label for="d-step" class="control-label">Step at record 16 <output id="d-step-out" for="d-step"></output></label>
-      <input type="range" id="d-step" min="-15" max="15" step="0.5" value="5">
-      <label for="d-outlier" class="control-label">Outlier at record 9 <output id="d-outlier-out" for="d-outlier"></output></label>
-      <input type="range" id="d-outlier" min="0" max="30" step="1" value="12">
-    </div>
-    <div class="controls"><button type="button" class="btn" id="d-reseed">New noise</button></div>
-    <p class="readout" id="d-note" aria-live="polite" style="margin-top: 12px"></p>
-    <figcaption><b>Live demo.</b> A made-up Series around 10 ms, with noise drawn evenly within the chosen ± share, a step from record 16 on, and one outlier at record 9. The detector is this page's copy of <code>suspects</code>: the same window, MAD, floor, nearest-rank median and step rule. Try a 3% step under 1% noise, then under 4%; and see the outlier flagged once while the records after it are judged as before.</figcaption>
-  </figure>
-  <div class="prose">
-    <h3>On the real branch</h3>
-    <p>Rebuilt with PR #487's binary, no live Series has a Suspect: each M4 Pro Series has one or two records benched since its last imported Baseline, and a record needs three before it. Run over the M4 Pro's Baseline history with Baselines not starting lines, a copy of the rule flagged up to 6 records per Series and metric, none on some, each at a commit that re-recorded that Baseline, from 3.5% to 574%. That is the rule finding the steps the Baselines were re-recorded for. It also flagged two CPU frames from the 2026-11-02 night: <code>town</code>'s at 14.2% over the median of the three records before it, and <code>crowd</code>'s at 15.9% faster.</p>
-    <p>One detail of the arithmetic: the median is the bench's own nearest-rank percentile, so for an even window it is the lower of the two middle values. That sets the band a little low, so slowdowns are flagged slightly more readily than speedups.</p>
-  </div>
-</section>
-
-<section class="chapter" id="next">
-  <div class="prose">
-    <div class="chapter-mark">Chapter 5 &middot; tickets #485 and #486</div>
-    <h2>What a Suspect is not yet</h2>
-    <p class="key-idea"><b>Key idea.</b> A Suspect is a candidate, not a Regression: the sweep must re-bench it beside its predecessor on one night, bisect the commits between them, and only then file an issue.</p>
-    <p>Machine state moves medians between nights, as the RTX's evening showed, so a Suspect compared with records from other nights proves little. #485 has the sweep re-bench the Suspect's source and its predecessor's interleaved on the same night. If the shift holds, it bisects the first-parent commits between them with other source hashes until one is pinned, and a pinned commit starts a new line. #486 then files one <code>needs-triage</code> issue per confirmed Regression, naming the commit, its PR, the Series, the delta and the chart.</p>
-    <p>MongoDB's performance team made the same split. They inspected results by hand, then added a threshold-based system, and "neither system was sufficient for finding changes in performance in a timely manner"; their system "built upon the E-Divisive means algorithm" now finds change points for a person to triage (Daly and colleagues, ICPE 2020).</p>
-    <h3>What the detector cannot see</h3>
-    <ul class="keypoints">
-      <li><b>Baselines re-recorded since the history began.</b> Only imported Baselines start a line. A Baseline a PR re-records now does not, so its step will be a Suspect until #485 pins it to that commit and marks it covered.</li>
-      <li><b>A slow drift.</b> A metric that grows 1% a record never leaves a band that follows it. A window of medians finds steps, not slopes.</li>
-      <li><b>A step right after an outlier on the same side.</b> If the outlier sits within the step's tolerance of it, the step reads as continuing the outlier, and the outlier takes the mark. Once #485 clears the outlier, the step should be judged again.</li>
-    </ul>
-  </div>
-</section>
-
-<section class="chapter" id="check">
-  <div class="prose">
-    <div class="chapter-mark">Review</div>
-    <h2>Check yourself</h2>
-    <details class="check"><summary>A commit changes only <code>docs/guides/</code>. Will the nightly sweep bench it?</summary><p>No. The source hash covers only <code>src</code>, <code>assets</code>, <code>Cargo.toml</code>, <code>Cargo.lock</code> and <code>.cargo</code>, so the commit hashes to the same source as the one before it. If that source already has a record on each of the machine's Series, the sweep logs "nothing to bench" and stops.</p></details>
-    <details class="check"><summary><code>town</code>'s M4 Pro CPU line drops by about 30% at one commit, with no engine change. Is that a Suspect?</summary><p>Not if it is a change of method. That commit, #400's spin-wait, starts Harness version 8, and a new Harness version starts a new line, so no record is judged against records measured the old way. If a change of method lands without raising the Harness version, its step would read as a Suspect, which is why the version must rise with it.</p></details>
-    <details class="check"><summary>Eight quiet records read 10.00 to 10.08 ms, then one reads 11.5 ms, then the next eight read 10.00 to 10.08 again. Which are Suspects, and why does the 11.5 not widen the band?</summary><p>Only the 11.5 ms record. The band's centre is a median and its width a median absolute deviation, so a single 11.5 among eight values near 10 moves neither: for the records after it, the median stays near 10.04 and the tolerance at the 3% floor, about 0.3 ms. A mean and standard deviation would have been pulled up by it, and a later real step could have hidden inside the wider band.</p></details>
-  </div>
-</section>
-
-<section class="chapter" id="reading">
-  <div class="prose">
-    <div class="chapter-mark">Reference</div>
-    <h2>Reading list</h2>
-    <p>Grouped by source, each with what it is good for here. Code links are pinned to e3a96ae0.</p>
-  </div>
-  <div class="reading page">
-    <article>
-      <h3>This track</h3>
-      <h4>In the repo</h4>
-      <ul>
-        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/docs/adr/0024-bench-history-is-git-stored-bench-records-keyed-by-engine-source.md">ADR 0024</a> <span>the decision: the key, the quiet rule, Harness version breaks, Suspects, and the options it rejected</span></li>
-        <li><a href="https://github.com/gariasf/praxis/issues/427">Map #427</a> <span>the observability track, and its comment listing the ten Harness versions</span></li>
-        <li><a href="https://github.com/gariasf/praxis/issues/435">Ticket #435</a> and <a href="https://github.com/gariasf/praxis/pull/487">PR #487</a> <span>the detector and its marks; #485 and #486 for what follows</span></li>
-        <li><a href="https://github.com/gariasf/praxis/tree/bench-history"><code>bench-history</code></a> <span>the records, the Series and the branch's README</span></li>
-        <li><a href="https://gariasf.github.io/praxis/bench/">The bench page</a> <span>the Series drawn, with each Suspect ringed</span></li>
-      </ul>
-      <h4>The code, at e3a96ae0</h4>
-      <ul>
-        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/provenance.rs"><code>src/bench/provenance.rs</code></a> <span><code>MEASURED_PATHS</code>, <code>source_hash</code>, <code>HARNESS_VERSION</code>, the quiet threshold</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/history.rs"><code>src/bench/history.rs</code></a> <span><code>tags</code>, the publish, and the Series rows with their marks</span></li>
-        <li><a href="https://github.com/gariasf/praxis/blob/e3a96ae09133ee43ffc5e55a39f22e9ed7a5c2b4/src/bench/history/suspects.rs"><code>src/bench/history/suspects.rs</code></a> <span>the detector and its tests</span></li>
-      </ul>
-      <h4>Earlier volumes</h4>
-      <ul>
-        <li><a href="frame-timing.html">Frame Timing Explained</a> <span>the CPU and GPU frame the Series judge</span></li>
-        <li><a href="waiting-on-the-gpu.html">Waiting on the GPU</a> <span>the previous volume, and the change behind Harness version 8</span></li>
-      </ul>
-    </article>
-    <article>
-      <h3>Robust statistics and regression finding</h3>
-      <ul>
-        <li>C. Leys, C. Ley, O. Klein, P. Bernard and L. Licata, <a href="https://doi.org/10.1016/j.jesp.2013.03.013">&ldquo;Detecting outliers: Do not use standard deviation around the mean, use absolute deviation around the median&rdquo;</a>, <i>Journal of Experimental Social Psychology</i> 49(4), 764&ndash;766, 2013 <span>why the median and the MAD, not the mean and standard deviation, set an outlier's band</span></li>
-        <li>D. Daly, W. Brown, H. Ingo, J. O'Leary and D. Bradford, <a href="https://arxiv.org/abs/2003.00584">&ldquo;Change Point Detection in Software Performance Testing&rdquo;</a>, arXiv 2003.00584, published at ICPE 2020 as &ldquo;The Use of Change Point Detection to Identify Software Performance Regressions in a Continuous Integration System&rdquo; <span>MongoDB's change point detection on its CI's performance history, and why people still triage what it finds</span></li>
-      </ul>
-    </article>
-  </div>
-</section>
-
-<section class="chapter" id="glossary">
-  <div class="prose">
-    <div class="chapter-mark">Reference</div>
-    <h2>Glossary</h2>
-    <p>Bench record, Series, Harness version, Suspect, Reference scene and Baseline are <code>CONTEXT.md</code>'s definitions, Bench record shortened; the rest are this guide's own.</p>
-  </div>
-  <dl class="glossary page">
-    <div><dt>Bench record</dt><dd>One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. (Shortened.)</dd></div>
-    <div><dt>Source hash</dt><dd>The git tree of the five paths that can change a measurement, at a revision: a record's key in place of its commit.</dd></div>
-    <div><dt>Series</dt><dd>One metric's Bench records for one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. What its charts draw and what a Regression is found in.</dd></div>
-    <div><dt>Harness version</dt><dd>A number that names what the bench's metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.</dd></div>
-    <div><dt>Line</dt><dd>A Series' records between two breaks: a new Harness version, a new scene content or an imported Baseline. Only records on one line are compared.</dd></div>
-    <div><dt>Median absolute deviation</dt><dd>The median of each value's distance from the values' median: a spread that one outlier cannot move.</dd></div>
-    <div><dt>Suspect</dt><dd>A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content or imported Baseline judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.</dd></div>
-    <div><dt>Reference scene</dt><dd>A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.</dd></div>
-    <div><dt>Baseline</dt><dd>The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.</dd></div>
-  </dl>
-  <footer class="sources prose">Built from ticket <a href="https://github.com/gariasf/praxis/issues/435">#435</a>, PR <a href="https://github.com/gariasf/praxis/pull/487">#487</a> at e3a96ae0, ADR 0024, <code>CONTEXT.md</code>, the <code>bench-history</code> branch and the sources in the reading list. The demo's Series is made up; its detector is this page's copy of the code's.</footer>
-</section>
-<nav class="series" aria-label="Praxis field guides"><a href="frame-timing.html">Previous: Frame Timing Explained</a><a href="index.html">All field guides</a><a href="light-units.html">Next: Light Units</a></nav>
-</div>
-</div>
-
-<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
-
-<script>
-(function () {
-  "use strict";
-  // ---- The detector: this page's copy of src/bench/history/suspects.rs.
-  const WINDOW_RECORDS = 8;
-  const FEWEST_JUDGING_RECORDS = 3;
-  const MEDIAN_ABSOLUTE_DEVIATIONS = 4;
-  const SMALLEST_SHIFT_FRACTION = 0.03;
-  // The bench's nearest-rank percentile: the smallest value with at least `fraction` of the values at or below it.
-  function percentile(values, fraction) {
-    const sorted = [...values].sort((first, second) => first - second);
-    const rank = Math.ceil(fraction * sorted.length);
-    return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1];
-  }
-  function band(window) {
-    if (window.length < FEWEST_JUDGING_RECORDS) return null;
-    const center = percentile(window, 0.5);
-    const deviation = percentile(window.map((value) => Math.abs(value - center)), 0.5);
-    return { center, tolerance: Math.max(MEDIAN_ABSOLUTE_DEVIATIONS * deviation, SMALLEST_SHIFT_FRACTION * center) };
-  }
-  /** Each median's band and, for a Suspect, its shift; one line, as the demo's Series is. */
-  function judge(medians) {
-    const line = [];
-    // The flagged step: the Suspect that started it.
-    let step = null;
-    return medians.map((median) => {
-      const position = line.length;
-      const judged = band(line.slice(-WINDOW_RECORDS));
-      line.push(median);
-      if (!judged) return { median, band: null, shift: null };
-      if (Math.abs(median - judged.center) <= judged.tolerance) return { median, band: judged, shift: null };
-      const slower = median > judged.center;
-      const continues = step && position - step.position <= WINDOW_RECORDS && step.slower === slower && Math.abs(median - step.median) <= step.tolerance;
-      if (continues) return { median, band: judged, shift: null };
-      step = { position, slower, median, tolerance: judged.tolerance };
-      return { median, band: judged, shift: (median - judged.center) / judged.center };
-    });
-  }
-
-  // ---- The demo's Series.
-  const RECORD_COUNT = 28;
-  // Records count from 1, as the axis and the sliders name them.
-  const STEP_RECORD = 16;
-  const OUTLIER_RECORD = 9;
-  const LEVEL_MS = 10;
-  let seed = 7;
-  // A fixed sequence of uniform draws in [-1, 1), redrawn by "New noise".
-  let draws = [];
-  function redraw() {
-    let state = seed >>> 0;
-    draws = Array.from({ length: RECORD_COUNT }, () => {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      return state / 2 ** 31 - 1;
-    });
-  }
-  redraw();
-
-  const canvas = document.getElementById("d-canvas");
-  const noise = document.getElementById("d-noise");
-  const stepSlider = document.getElementById("d-step");
-  const outlier = document.getElementById("d-outlier");
-  const note = document.getElementById("d-note");
-  const colour = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-  function medians() {
-    const noiseFraction = Number(noise.value) / 100;
-    const stepFraction = Number(stepSlider.value) / 100;
-    const outlierFraction = Number(outlier.value) / 100;
-    return draws.map((draw, index) => {
-      let median = LEVEL_MS * (1 + draw * noiseFraction);
-      if (index + 1 >= STEP_RECORD) median *= 1 + stepFraction;
-      if (index + 1 === OUTLIER_RECORD) median *= 1 + outlierFraction;
-      return median;
-    });
-  }
-
-  function draw() {
-    document.getElementById("d-noise-out").textContent = `±${Number(noise.value).toFixed(1)}%`;
-    document.getElementById("d-step-out").textContent = `${Number(stepSlider.value) > 0 ? "+" : ""}${Number(stepSlider.value).toFixed(1)}%`;
-    document.getElementById("d-outlier-out").textContent = `+${outlier.value}%`;
-    const results = judge(medians());
-    const ratio = window.devicePixelRatio || 1;
-    const widthPixels = Math.max(canvas.parentElement.clientWidth, 280);
-    const heightPixels = widthPixels < 500 ? 240 : 300;
-    canvas.width = widthPixels * ratio;
-    canvas.height = heightPixels * ratio;
-    canvas.style.height = `${heightPixels}px`;
-    const context = canvas.getContext("2d");
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.fillStyle = colour("--panel");
-    context.fillRect(0, 0, widthPixels, heightPixels);
-    const margin = { left: 44, right: 12, top: 24, bottom: 26 };
-    const values = results.flatMap((result) => result.band ? [result.median, result.band.center - result.band.tolerance, result.band.center + result.band.tolerance] : [result.median]);
-    const low = Math.min(...values) * 0.995;
-    const high = Math.max(...values) * 1.005;
-    const xOf = (index) => margin.left + (widthPixels - margin.left - margin.right) * (index + 0.5) / RECORD_COUNT;
-    const yOf = (value) => margin.top + (heightPixels - margin.top - margin.bottom) * (1 - (value - low) / (high - low));
-    const stepPixels = (widthPixels - margin.left - margin.right) / RECORD_COUNT;
-    context.font = "11px " + colour("--mono");
-    context.fillStyle = colour("--ink-soft");
-    context.strokeStyle = colour("--rule");
-    context.lineWidth = 1;
-    for (let tick = 0; tick <= 4; tick += 1) {
-      const value = low + (high - low) * tick / 4;
-      const y = yOf(value);
-      context.beginPath(); context.moveTo(margin.left, y); context.lineTo(widthPixels - margin.right, y); context.stroke();
-      context.textAlign = "right";
-      context.fillText(`${value.toFixed(2)}`, margin.left - 6, y + 4);
+<section class="part prose" id="publish">
+  <div class="part-mark">2 &middot; <code>publish</code>, <code>publish_experiment</code>, <code>push</code>, <code>Worktree::apply</code></div>
+  <h2>Publishing</h2>
+  <p class="key-idea">A publish turns each result into a record, tags it with every reason it is off a Series, writes the records into a worktree of the branch, rebuilds every Series file and pushes one commit. A publish that fails warns and fails no bench; <code>verify</code> never publishes.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>pub fn publish(
+    repository: &amp;Path,
+    results: &amp;[Measurements],
+    release_build: Option&lt;ReleaseBuild&gt;,
+) -&gt; anyhow::Result&lt;Publication&gt; {
+    let root = git(repository, &amp;["rev-parse", "--show-toplevel"], None)?;
+    let repository = Path::new(&amp;root);
+    let main = fetch_main(repository)?;
+    let main_source_hash = source_hash(repository, &amp;main)?;
+    let release_build = release_build
+        .map(|build| release_build_record(repository, results, build, &amp;main, &amp;main_source_hash))
+        .transpose()?;
+    let records: Vec&lt;BenchRecord&gt; =
+        bench_records(repository, results, &amp;main, &amp;main_source_hash, None)
+            .chain(release_build)
+            .collect();
+    push_records(repository, &amp;records)
+}</code></pre>
+  <p><code>fetch_main</code> fetches the remote's <code>main</code> into its remote-tracking ref, so the publish judges against the <code>main</code> everyone shares, not the checkout's. <code>bench_records</code> turns each result into a record through <code>record</code>, skipping with a warning one that has no provenance, which a run outside a git checkout lacks. Each record's tags come from the checkout and the run:</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// Every reason a record is kept off a Series: a dirty tree, a source other
+/// than `main`'s, and for a `run` a profile other than release, a machine
+/// that was not quiet, and a size and frame count other than its Series'
+/// configuration. lavapipe's Series read counters only, which load cannot
+/// change, at the configuration CI benches.
+fn tags(dirty: bool, mains_source: bool, run: Option&lt;Run&gt;) -&gt; Vec&lt;String&gt; {
+    let mut tags = vec![
+        (dirty, "dirty tree".to_owned()),
+        (!mains_source, "source not main's".to_owned()),
+    ];
+    if let Some(Run {
+        adapter,
+        profile,
+        quiet,
+        width,
+        height,
+        measured_frames,
+    }) = run
+    {
+        let lavapipe = is_lavapipe(adapter);
+        let (configuration, configuration_name) = if lavapipe {
+            (Configuration::CI_COUNTERS, "CI's configuration")
+        } else {
+            (Configuration::REFERENCE, "the reference configuration")
+        };
+        tags.extend([
+            (profile != "release", format!("{profile} profile")),
+            (!lavapipe &amp;&amp; !quiet, "machine not quiet".to_owned()),
+            (
+                (width, height, measured_frames)
+                    != (
+                        configuration.width,
+                        configuration.height,
+                        configuration.measured_frames,
+                    ),
+                format!("{width}x{height} over {measured_frames} frames, not {configuration_name}"),
+            ),
+        ]);
     }
-    context.textAlign = "left";
-    context.fillText("ms", 4, 12);
-    context.textAlign = "center";
-    for (let index = 0; index < RECORD_COUNT; index += 3) context.fillText(String(index + 1), xOf(index), heightPixels - 8);
-    results.forEach((result, index) => {
-      if (!result.band) return;
-      const top = yOf(result.band.center + result.band.tolerance);
-      const bottom = yOf(result.band.center - result.band.tolerance);
-      context.fillStyle = colour("--accent-wash");
-      context.fillRect(xOf(index) - stepPixels * 0.35, top, stepPixels * 0.7, bottom - top);
-      context.strokeStyle = colour("--accent");
-      context.beginPath(); context.moveTo(xOf(index) - stepPixels * 0.35, yOf(result.band.center)); context.lineTo(xOf(index) + stepPixels * 0.35, yOf(result.band.center)); context.stroke();
-    });
-    context.strokeStyle = colour("--ink-soft");
-    context.lineWidth = 1.5;
-    context.beginPath();
-    results.forEach((result, index) => { const x = xOf(index), y = yOf(result.median); if (index === 0) context.moveTo(x, y); else context.lineTo(x, y); });
-    context.stroke();
-    results.forEach((result, index) => {
-      const x = xOf(index), y = yOf(result.median);
-      context.fillStyle = colour("--accent");
-      context.beginPath(); context.arc(x, y, 4, 0, Math.PI * 2); context.fill();
-      if (result.shift !== null) {
-        context.strokeStyle = result.shift > 0 ? colour("--bad") : colour("--good");
-        context.lineWidth = 2;
-        context.beginPath(); context.arc(x, y, 8, 0, Math.PI * 2); context.stroke();
-      }
-    });
-    const suspects = results.map((result, index) => ({ index, shift: result.shift })).filter((result) => result.shift !== null);
-    note.innerHTML = suspects.length === 0
-      ? "<b>No Suspect.</b> Every judged record sits inside its band."
-      : `<b>${suspects.length === 1 ? "1 Suspect" : `${suspects.length} Suspects`}:</b> ` + suspects.map(({ index, shift }) => `record ${index + 1}, ${shift > 0 ? "+" : "−"}${Math.abs(shift * 100).toFixed(1)}%`).join("; ") + ". Records 1 to 3 are not judged: a record needs 3 before it.";
-  }
-  [noise, stepSlider, outlier].forEach((input) => input.addEventListener("input", draw));
-  document.getElementById("d-reseed").addEventListener("click", () => { seed = (seed * 48271 + 1) % 2147483647; redraw(); draw(); });
-  window.addEventListener("resize", draw);
-  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
-  draw();
-})();
-</script>
+    tags.into_iter()
+        .filter_map(|(applies, tag)| applies.then_some(tag))
+        .collect()
+}</code></pre>
+  <p>A checkout holds <code>main</code>'s source when its source hash is <code>main</code>'s or its commit is an ancestor of <code>main</code> (<code>mains_source</code>), so a session that benches a commit of <code>main</code> behind the tip still lands on the Series. Whether the machine was quiet is decided by the bench, before the publish, in <code>Provenance</code>:</p>
+  <div class="code-source"><code>src/bench/provenance.rs</code></div>
+<pre class="code"><code>/// A scene's GPU frame p95 over its median at or above which its run was
+/// not quiet, whatever preflight saw at its start.
+pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
+…
+fn is_quiet(
+    gpu_load_percent: Option&lt;u32&gt;,
+    one_minute_load_average: Option&lt;f64&gt;,
+    other_processes: Option&lt;&amp;[String]&gt;,
+    machine_warnings: &amp;[String],
+    gpu_frame_p95_over_median: Option&lt;f64&gt;,
+) -&gt; bool {
+    gpu_load_percent.is_none_or(|percent| percent &lt;= BUSY_GPU_PERCENT)
+        &amp;&amp; one_minute_load_average.is_none_or(|load| load &lt;= BUSY_LOAD_AVERAGE)
+        &amp;&amp; other_processes.is_none_or(&lt;[String]&gt;::is_empty)
+        &amp;&amp; machine_warnings.is_empty()
+        &amp;&amp; gpu_frame_p95_over_median.is_some_and(|ratio| ratio &lt; QUIET_P95_OVER_MEDIAN)
+}</code></pre>
+  <p>The load figures are read once, before the first scene, since a reading right after a scene would include that scene's own work; <code>BUSY_GPU_PERCENT</code> is 10 and <code>BUSY_LOAD_AVERAGE</code> 2.0, preflight's thresholds (<code>src/preflight/mod.rs</code>). A load that could not be read is a preflight note, not a warning, so it passes; a GPU frame spread that could not be computed, from a zero median, does not. lavapipe is the exception: its times measure a shared runner's CPU, its Series read counters, binary size and build time, which load cannot change or moves whatever the test says, so its records join the Series from CI's configuration quiet or not, and the first under a key stays.</p>
+  <p>A publish to an Experiment takes the same records and moves each into a directory of the Experiment's name, with its merge base with <code>main</code> and that commit's source hash, which is the Series record the page compares it with. An Experiment's records join no Series, <code>main</code>'s own clean, quiet source included.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>pub fn publish_experiment(
+    repository: &amp;Path,
+    results: &amp;[Measurements],
+    name: &amp;str,
+) -&gt; anyhow::Result&lt;Publication&gt; {
+    check_experiment_name(name)?;
+    let root = git(repository, &amp;["rev-parse", "--show-toplevel"], None)?;
+    let repository = Path::new(&amp;root);
+    let main = fetch_main(repository)?;
+    let main_source_hash = source_hash(repository, &amp;main)?;
+    let records: Vec&lt;BenchRecord&gt; =
+        bench_records(repository, results, &amp;main, &amp;main_source_hash, Some(name)).collect();
+    Ok(Publication {
+        experiment: Some(name.to_owned()),
+        ..push_records(repository, &amp;records)?
+    })
+}
+
+/// Fails unless `name` can name an Experiment: one directory on the branch,
+/// of ASCII letters, digits, `-` and `_`.
+pub fn check_experiment_name(name: &amp;str) -&gt; anyhow::Result&lt;()&gt; {
+    anyhow::ensure!(
+        !name.is_empty()
+            &amp;&amp; name
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || "-_".contains(character)),
+        "an Experiment's name is ASCII letters, digits, `-` and `_`, not {name:?}"
+    );
+    Ok(())
+}</code></pre>
+  <p>The binary checks the name before it benches, so a bad name fails before any GPU work (<code>src/bin/praxis.rs</code>); <code>--experiment</code> takes no <code>--no-publish</code>, as it exists to publish, and no <code>--release-build-seconds</code>, as a release build publishes beside <code>main</code>'s results only. The records are written through a detached worktree of the branch in a temporary directory, removed on drop, so the checkout's own index and branches stay as they are; with no branch on the remote yet, the worktree starts from an empty tree and the first commit is an orphan.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// How many times a publish pushes: each attempt after the first rebuilds
+/// its commit on the branch's new tip, as another publish pushed first.
+const PUSH_ATTEMPTS: u32 = 5;
+…
+fn push(
+    repository: &amp;Path,
+    message: &amp;str,
+    write: impl Fn(&amp;Worktree) -&gt; anyhow::Result&lt;Publication&gt;,
+) -&gt; anyhow::Result&lt;Publication&gt; {
+    let mut attempt = 1;
+    let mut tip = remote_tip(repository)?;
+    loop {
+        let worktree = Worktree::add(repository, tip.as_deref())?;
+        let mut publication = write(&amp;worktree)?;
+        publication.commit = worktree.commit(tip.as_deref(), message)?;
+        let Some(commit) = &amp;publication.commit else {
+            return Ok(publication);
+        };
+        let pushed = git(
+            repository,
+            &amp;[
+                "push",
+                "--quiet",
+                REMOTE,
+                &amp;format!("{commit}:refs/heads/{BRANCH}"),
+            ],
+            None,
+        );
+        let Err(error) = pushed else {
+            return Ok(publication);
+        };
+        // Only a tip that moved since the fetch is a race worth another try.
+        let current = remote_tip(repository)?;
+        if current == tip || attempt == PUSH_ATTEMPTS {
+            return Err(error);
+        }
+        tracing::info!(
+            attempt,
+            "bench-history moved; publishing again on its new tip"
+        );
+        tip = current;
+        attempt += 1;
+    }
+}</code></pre>
+  <p>Two machines publishing at once race to push; the loser fetches the new tip and writes its records again on it, up to <code>PUSH_ATTEMPTS</code> times, so both land in their own commits. A commit whose tree equals the tip's is not made, and the publish reports nothing changed. The commit message names the adapters: <q>Publish 11 Bench records from apple-m4-pro-metal</q>. Inside the worktree, <code>apply</code> decides each record's fate against what is already under its key:</p>
+  <div class="code-source"><code>Worktree::apply</code>, <code>src/bench/history.rs</code></div>
+<pre class="code"><code>        for record in records {
+            let on_series = record.tags.is_empty() &amp;&amp; record.experiment.is_none();
+            let series_path = self.directory.join(record.path(ON_SERIES));
+            let tagged_path = self.directory.join(record.path(TAGGED));
+            let relative_path = match &amp;record.experiment {
+                Some(name) =&gt; record.path(&amp;format!("{EXPERIMENTS}/{name}")),
+                None if on_series =&gt; record.path(ON_SERIES),
+                None =&gt; record.path(TAGGED),
+            };
+            if !on_series &amp;&amp; record.experiment.is_none() &amp;&amp; series_path.exists() {
+                tracing::info!(
+                    record = %relative_path.display(),
+                    "Bench record dropped: one on a Series holds its key"
+                );
+                publication.dropped += 1;
+                continue;
+            }
+…
+                // serde_json may parse a float back a bit off what it wrote,
+                // so the same record is found by its contents.
+                let stays = json == contents.as_bytes()
+                    || record.publishes_once
+                    || record.p95_over_median()
+                        &gt;= serde_json::from_slice::&lt;StoredRecord&gt;(&amp;json)
+                            .with_context(|| format!("parsing {}", relative_path.display()))?
+                            .p95_over_median();
+…
+            std::fs::write(&amp;path, contents)?;
+            if on_series {
+                if tagged_path.exists() {
+                    std::fs::remove_file(&amp;tagged_path)?;
+                }
+                publication.on_series += 1;
+            } else if record.experiment.is_some() {
+                publication.in_experiment += 1;
+            } else {
+                publication.tagged += 1;
+            }
+        }
+        self.rebuild_every_series()?;
+        std::fs::write(self.directory.join("README.md"), README)?;</code></pre>
+  <p>So under one key the quieter record stays, the one whose GPU frame p95 over its median is lower, and a record that measured no spread is never quieter than one that did; a record on a Series holds its key against any tagged one, and a quiet record arriving at a key a tagged one holds replaces it and removes the tagged file. A re-recorded Baseline's mark (section 4) passes to whichever record of its source holds the key. A lavapipe or release-build record, whose Series read no time, is never replaced: a source publishes there once.</p>
+  <h3>CI's release build</h3>
+  <p>CI benches lavapipe in its configuration on every run that changes the engine and, on a push to <code>main</code> only, publishes those results together with the release build whose binary measured them. The build's wall time is read by the workflow and handed to <code>praxis publish</code>; the binary's size is read by the binary itself, so the command refuses a debug build.</p>
+  <div class="code-source"><code>.github/workflows/ci.yml</code></div>
+<pre class="code"><code>      - name: Build
+        run: |
+          started=$SECONDS
+          cargo build --release
+          echo $((SECONDS - started)) &gt; target/release-build-seconds
+…
+      - name: Bench
+        id: bench
+        run: target/release/praxis bench target/bench --ci-counters --no-publish
+…
+  publish-bench:
+    name: Publish Bench records
+    if: ${{ !cancelled() &amp;&amp; github.event_name == 'push' &amp;&amp; needs.software-bench.outputs.benched == 'success' }}
+    needs: software-bench
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+…
+      - name: Publish
+        env:
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/bench-publish
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          chmod +x "$ARTIFACT_DIRECTORY/release/praxis"
+          "$ARTIFACT_DIRECTORY/release/praxis" publish "$ARTIFACT_DIRECTORY/bench" \
+            --release-build-seconds "$(cat "$ARTIFACT_DIRECTORY/release-build-seconds")"</code></pre>
+  <p>Only the <code>publish-bench</code> job holds write permission on contents, and only a push to <code>main</code> runs it, so code from a pull request never writes the branch; the bench job uploads what it would publish on every run, so a PR's results can be published to a scratch remote by hand, and a failed compare on <code>main</code> still publishes the commit that regressed. The release build's record joins the lavapipe results it ran under their adapter key, in the directory <code>release-build</code> in place of a scene, and must be one adapter's results from one checkout:</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// A release build's cost: its binary's size and its wall time.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ReleaseBuild {
+    pub binary_bytes: u64,
+    pub build_seconds: u64,
+}
+
+/// A release build as a record holds it: under the adapter whose results
+/// its binary measured, from their checkout.
+#[derive(Debug, serde::Serialize)]
+struct ReleaseBuildRecord&lt;'results&gt; {
+    adapter: &amp;'results str,
+    backend: &amp;'results str,
+    checkout: &amp;'results Checkout,
+    #[serde(flatten)]
+    build: ReleaseBuild,
+}</code></pre>
+  <p>Its Series row is the commit, the source hash, the commit's time and the two figures (<code>ReleaseBuildRow</code>); it is tagged only for a dirty tree or a source that is not <code>main</code>'s, carries no Harness version, and no Suspect is ever marked on it.</p>
+</section>
+
+<section class="part prose" id="series">
+  <div class="part-mark">3 &middot; <code>SeriesRow</code>, <code>SeriesRecord::rows</code>, <code>JUDGED_TIMINGS</code>, <code>unrecorded_scenes</code></div>
+  <h2>The Series</h2>
+  <p class="key-idea">A Series file is derived data: one row per record in its <code>records/</code> directory, in the order their commits were made, holding each record's metrics without the rest of its provenance, with the Suspect marks computed over the whole Series. Every publish rebuilds every Series, so rows always take the form the publishing binary writes, whichever bench wrote the records.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>/// One Series file's row: a record's source and its metrics, without the
+/// rest of its provenance. A metric its bench did not measure is null, and
+/// a counter it did not count is absent.
+#[derive(serde::Serialize)]
+struct SeriesRow&lt;'record&gt; {
+    commit: &amp;'record str,
+    source_hash: &amp;'record str,
+    committed_unix_seconds: u64,
+    harness_version: u32,
+    source: Option&lt;&amp;'record str&gt;,
+    /// Whether a re-recorded Baseline's mark passed to its record.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    rerecorded_baseline: bool,
+    scene_content_hash: Option&lt;&amp;'record str&gt;,
+    cpu_frame_microseconds: Option&lt;Spread&gt;,
+    dynamic_tlas_cpu_microseconds: Option&lt;Spread&gt;,
+    gpu_frame_microseconds: Option&lt;Spread&gt;,
+    gate_microseconds: Option&lt;Spread&gt;,
+    shadow_ray_microseconds: Option&lt;Spread&gt;,
+    gpu_pass_median_microseconds: BTreeMap&lt;&amp;'record str, f64&gt;,
+    /// The counter frames' counters.
+    #[serde(flatten)]
+    counters: BTreeMap&lt;&amp;'record str, u64&gt;,
+    /// How many frames `measured_counters` count: the configuration's, so
+    /// two rows' compare only when these match.
+    measured_frames: u32,
+    /// The measured frames' counters, as many as the bench counted.
+    measured_counters: BTreeMap&lt;&amp;'record str, u64&gt;,
+    aliasing_rmse: Option&lt;u64&gt;,
+    aliasing_p99: Option&lt;u64&gt;,
+    /// Each judged timing whose median makes this record a suspect, with its
+    /// shift from the median of the records before it, as a share of that.
+    suspects: BTreeMap&lt;&amp;'static str, f64&gt;,
+}</code></pre>
+  <p>A row carries both kinds of counter: the counter frames' at the top level, under their names, which every configuration counts and so compare across machines, and the measured frames' under <code>measured_counters</code>, which compare only between rows of one <code>measured_frames</code>. A pass's row holds its median only. The rows are sorted by commit time, then commit, and judged for Suspects one timing at a time:</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>        let mut rows: Vec&lt;SeriesRow&gt; = records.iter().map(SeriesRow::of).collect();
+        // A Series is one adapter's, and lavapipe's times mean nothing, so
+        // none of its records is a suspect.
+        if records
+            .first()
+            .is_some_and(|record| !is_lavapipe(&amp;record.adapter))
+        {
+            let starts_line: Vec&lt;bool&gt; = rows
+                .iter()
+                .enumerate()
+                .map(|(index, row)| {
+                    (index &gt; 0 &amp;&amp; !rows[index - 1].same_definition(row))
+                        || row.source.is_some_and(import::is_baseline_source)
+                        || row.rerecorded_baseline
+                        || line_starts.contains(row.source_hash)
+                })
+                .collect();
+            for (metric, median) in JUDGED_TIMINGS {
+                let points: Vec&lt;suspects::Point&gt; = rows
+                    .iter()
+                    .zip(&amp;starts_line)
+                    .map(|(row, &amp;starts_line)| suspects::Point {
+                        median: median(row),
+                        starts_line,
+                    })
+                    .collect();
+                for (row, shift) in rows.iter_mut().zip(suspects::suspects(&amp;points)) {
+                    if let Some(shift) = shift {
+                        row.suspects.insert(metric, shift);
+                    }
+                }
+            }
+        }
+        rows
+…
+/// The timings a Series' records are judged on for suspects, each with its
+/// median in a row.
+const JUDGED_TIMINGS: [(&amp;str, MedianOf); 2] = [
+    ("cpu_frame_microseconds", |row| {
+        row.cpu_frame_microseconds.map(|spread| spread.median)
+    }),
+    ("gpu_frame_microseconds", |row| {
+        row.gpu_frame_microseconds.map(|spread| spread.median)
+    }),
+];</code></pre>
+  <p>A Series is cut into lines, and only records on one line are compared. A line starts where the definition changes, at an imported or re-recorded Baseline, which accepted its level by hand, and at a commit a Verdict pinned (<code>line_starts</code>, read from the Series' Verdicts before each rebuild). Two rows share a definition when they share a Harness version and, where both know it, a scene content hash; the page's test of the same is this function's twin (section 7):</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>    /// Whether `later` measures what this row does: one Harness version, and
+    /// one scene content where both know it, as a chart's line runs: the
+    /// twin of the bench page's `sameDefinition`.
+    fn same_definition(&amp;self, later: &amp;Self) -&gt; bool {
+        self.harness_version == later.harness_version
+            &amp;&amp; (self.scene_content_hash.is_none()
+                || later.scene_content_hash.is_none()
+                || self.scene_content_hash == later.scene_content_hash)
+    }</code></pre>
+  <p>The sweep asks which scenes its night must bench through <code>unrecorded_scenes</code>: those with no record on a Series for the source of the remote's <code>main</code> on this adapter and backend, read from the branch's tree listing without checking it out. A tagged record is no record, and another backend is another machine.</p>
+  <div class="code-source"><code>src/bench/history.rs</code></div>
+<pre class="code"><code>pub fn unrecorded_scenes&lt;'scene&gt;(
+    repository: &amp;Path,
+    adapter: &amp;str,
+    backend: &amp;str,
+    scenes: &amp;[&amp;'scene str],
+) -&gt; anyhow::Result&lt;Vec&lt;&amp;'scene str&gt;&gt; {
+    let main = fetch_main(repository)?;
+    let main_source_hash = source_hash(repository, &amp;main)?;
+    // Git names paths with `/` on every platform.
+    let directory = format!("{ON_SERIES}/{}", adapter_key(adapter, Some(backend)));
+    let recorded = match remote_tip(repository)? {
+        Some(tip) =&gt; git(
+            repository,
+            &amp;["ls-tree", "-r", "--name-only", &amp;tip, "--", &amp;directory],
+            None,
+        )?,
+        None =&gt; String::new(),
+    };
+    let recorded: BTreeSet&lt;&amp;str&gt; = recorded.lines().collect();
+    Ok(scenes
+        .iter()
+        .copied()
+        .filter(|scene| {
+            !recorded.contains(format!("{directory}/{scene}/{main_source_hash}.json").as_str())
+        })
+        .collect())
+}</code></pre>
+</section>
+
+<section class="part prose" id="import">
+  <div class="part-mark">4 &middot; <code>import_baselines</code>, <code>HISTORY_STARTED</code>, <code>HARNESS_BREAKS</code>, <code>src/bench/history/import.rs</code></div>
+  <h2>The import</h2>
+  <p class="key-idea">The Baselines committed to <code>main</code> before the history existed are its first records, each of its commit's source, with the Harness version in force at that commit numbered after the fact; a Baseline re-recorded since is a record too, marked as one, and starts its Series' line. Each import rewrites what an earlier one wrote, so imported records always carry the tags today's rules give them.</p>
+  <div class="code-source"><code>src/bench/history/import.rs</code></div>
+<pre class="code"><code>/// The commit that started publishing Bench records: every Baseline
+/// committed up to it is imported, every bench since has published its
+/// own, and a Baseline committed since is re-recorded.
+const HISTORY_STARTED: &amp;str = "3c6b9d92";
+
+/// The commits on `main` before `HISTORY_STARTED` that changed what a
+/// metric means, oldest first, and what changed. Each starts the Harness
+/// version after the one before it, so a Baseline committed before the
+/// first was measured under version 1.
+const HARNESS_BREAKS: [(&amp;str, &amp;str); 9] = [
+    (
+        "926fcc18",
+        "gpu_main_pass_microseconds spans the culling pass's start to the main pass's end",
+    ),
+    (
+        "0b29a3c0",
+        "the GPU stats readback ring's own CPU time, allocations and memory join the metrics",
+    ),
+    (
+        "80227bca",
+        "gpu_frame_microseconds is the dynamic TLAS build plus the span of the frame's passes",
+    ),
+    (
+        "c5a12eb2",
+        "gpu_frame_microseconds spans its passes' earliest start to their latest end",
+    ),
+    (
+        "800c0d21",
+        "the dynamic TLAS build counts from the end of the frame before's last pass",
+    ),
+    (
+        "5264094f",
+        "gpu_memory_bytes leaves out the GPU stats readback",
+    ),
+    (
+        "958ed4e9",
+        "the bench spin-waits on hardware adapters, so CPU times are at full clock",
+    ),
+    (
+        "a5280dce",
+        "a render pass's time counts from the end of the passes before it",
+    ),
+    (
+        "a00280dc",
+        "the depth passes count only from the passes they wait on",
+    ),
+];</code></pre>
+  <p>Nine breaks make ten eras: a Baseline before the first break was measured under Harness version 1, one at or after the ninth under version 10, which is <code>HARNESS_VERSION</code> on <code>main</code> at the commit above; a test holds the live version to be no older than the last imported era. The import walks <code>main</code>'s first-parent line up to <code>HISTORY_STARTED</code>, raising the version at each break, and makes a record of every Baseline file a commit added or changed, unless the file only gained fields or a rename, which measured nothing again:</p>
+  <div class="code-source"><code>src/bench/history/import.rs</code></div>
+<pre class="code"><code>/// Whether the Baseline `current` measured again what `earlier`, the same
+/// file in the commit before, held: whether any value `earlier` held
+/// differs or is gone, rather than only fields added.
+fn remeasured(earlier: &amp;str, current: &amp;str) -&gt; anyhow::Result&lt;bool&gt; {
+    let earlier: serde_json::Map&lt;String, serde_json::Value&gt; = serde_json::from_str(earlier)?;
+    let current: serde_json::Map&lt;String, serde_json::Value&gt; = serde_json::from_str(current)?;
+    Ok(earlier
+        .iter()
+        .any(|(key, value)| current.get(key) != Some(value)))
+}</code></pre>
+  <p>An imported record is the Baseline file as it was, given a <code>backend</code> where it named none (the M4 Pro ran Metal and lavapipe Vulkan before Baselines were keyed by backend) and a provenance naming its <code>source</code>, <code>baseline-commit</code>, the <code>baseline</code> path, the commit, its source hash, the era's Harness version and the GPU frame spread the file recorded, if any. Baselines were recorded on quiet machines, so only that spread can tag one as not quiet, and one that recorded none counts as quiet unchecked. A Baseline committed after <code>HISTORY_STARTED</code> on the first-parent line is imported the same way with its commit's own <code>HARNESS_VERSION</code>, its source <code>baseline-rerecorded</code>, and goes through <code>apply</code> like any record: it stays under its key only when quieter than the bench's record of the same source, and whichever stays carries the mark, so the line starts there either way. Before writing, the import gives the records a bench published at version 1 before the eras were numbered the version then in force (<code>restamp</code>) and removes every record an earlier import wrote (<code>remove_imported</code>); a second import under the same rules changes nothing and pushes no commit. The sweep runs it every night, so a Baseline a PR re-records is on the branch by the next morning.</p>
+</section>
+
+<section class="part prose" id="suspects">
+  <div class="part-mark">5 &middot; <code>suspects</code>, <code>band</code>, <code>src/bench/history/suspects.rs</code></div>
+  <h2>Suspects</h2>
+  <p class="key-idea">A record is a Suspect on a timing when its median sits outside the median of up to 8 records before it on its line, &plusmn; the larger of 4 median absolute deviations of those medians and 3% of their median. A step is flagged where it starts and not again while the window lags it; a lone outlier is flagged once and outvoted after.</p>
+  <div class="code-source"><code>src/bench/history/suspects.rs</code></div>
+<pre class="code"><code>/// How many records before a record judge it.
+const WINDOW_RECORDS: usize = 8;
+
+/// The fewest records before a record that judge it; with fewer, as at the
+/// start of a line, it is not judged.
+const FEWEST_JUDGING_RECORDS: usize = 3;
+
+/// How many median absolute deviations of its window a median may sit from
+/// the window's median before it is a suspect.
+const MEDIAN_ABSOLUTE_DEVIATIONS: f64 = 4.0;
+
+/// The smallest shift that makes a suspect, as a share of the window's
+/// median, so that a window of near-equal medians does not flag noise.
+const SMALLEST_SHIFT_FRACTION: f64 = 0.03;
+…
+pub(super) fn suspects(points: &amp;[Point]) -&gt; Vec&lt;Option&lt;f64&gt;&gt; {
+    let mut line = Vec::new();
+    let mut step: Option&lt;Step&gt; = None;
+    points
+        .iter()
+        .map(|point| {
+            if point.starts_line {
+                line.clear();
+                step = None;
+            }
+            let median = point.median?;
+            let position = line.len();
+            let window = &amp;line[position.saturating_sub(WINDOW_RECORDS)..];
+            let band = band(window);
+            line.push(median);
+            let (center, tolerance) = band?;
+            if (median - center).abs() &lt;= tolerance {
+                return None;
+            }
+            let slower = median &gt; center;
+            let continues = step.as_ref().is_some_and(|step| {
+                position - step.position &lt;= WINDOW_RECORDS
+                    &amp;&amp; step.slower == slower
+                    &amp;&amp; (median - step.median).abs() &lt;= step.tolerance
+            });
+            if continues {
+                return None;
+            }
+            step = Some(Step {
+                position,
+                slower,
+                median,
+                tolerance,
+            });
+            Some((median - center) / center)
+        })
+        .collect()
+}
+
+/// `window`'s median and how far from it a median may lie, when it holds
+/// enough records to judge.
+fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
+    if window.len() &lt; FEWEST_JUDGING_RECORDS {
+        return None;
+    }
+    let center = percentile(window.to_vec(), 0.5);
+    let deviation = percentile(
+        window.iter().map(|value| (value - center).abs()).collect(),
+        0.5,
+    );
+    Some((
+        center,
+        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(SMALLEST_SHIFT_FRACTION * center),
+    ))
+}</code></pre>
+  <p>The window holds the medians of up to <code>WINDOW_RECORDS</code> records before the point on its line, a record that did not measure the timing contributing nothing, and judges only once it holds <code>FEWEST_JUDGING_RECORDS</code>; the first three records of every line are not judged. The centre and the deviation are the bench's own <code>percentile</code>, a nearest-rank median, so for a window of even length the centre is the lower of the two middle values. The band is the median and the median absolute deviation rather than the mean and the standard deviation because one far record moves neither: half the window must change before the median does. The floor of <code>SMALLEST_SHIFT_FRACTION</code> keeps a window of near-equal medians, whose deviation is nearly zero, from flagging a wobble as a step.</p>
+  <p>After a real step the window's median lags until five of its eight records are at the new level, so the next records would also lie outside; a point that continues a flagged step among the 8 before it, on the same side and within that Suspect's tolerance of its median, is not flagged again, even after a noisy record between them fell back inside the band. A second step on the same side, past the first's tolerance, is flagged again. The shift kept is the point's distance from the centre as a share of it, negative for a faster record; a row's <code>suspects</code> map holds one per judged timing. Faster records are marked too; only slower ones go to the sweep.</p>
+</section>
+
+<section class="part prose" id="sweep">
+  <div class="part-mark">6 &middot; <code>scripts/sweep.sh</code>; <code>suspects</code>, <code>bisect</code>, <code>file_regressions</code>, <code>src/bench/history/verdicts.rs</code></div>
+  <h2>The sweep, Verdicts, bisect and Regressions</h2>
+  <p class="key-idea">Each night a machine re-benches one slower Suspect beside the record before it, interleaved, from release binaries of both commits; a shift that holds is bisected along <code>main</code>'s first-parent commits over as many nights as it takes, and the commit pinned starts its Series' line. A pinned commit no re-recorded Baseline covers is a Regression and opens one issue per scene. Then the night benches the scenes <code>main</code>'s source lacks a record on here.</p>
+  <div class="code-source"><code>scripts/sweep.sh</code></div>
+<pre class="code"><code>  cargo build --release --quiet || fail "cargo build --release"
+  praxis=target/release/praxis
+  # A Baseline re-recorded since the last night becomes its source's record,
+  # which starts a line, before the night reads which scenes lack one.
+  "$praxis" history import || log "praxis history import failed"
+  scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
+  "$praxis" fetch &amp;&amp; "$praxis" cook || fail "fetch and cook"
+…
+  preflight=$("$praxis" preflight)
+  [ -n "$preflight" ] || fail "praxis preflight printed nothing"
+  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | sed 's/  */ /g')
+  if [ -n "$warnings" ]; then
+    log "skipped, the machine is not quiet:"
+    printf '%s\n' "$warnings"
+    exit 0
+  fi
+…
+  while true; do
+    job=$("$praxis" history bisect "$night") || {
+      log "praxis history bisect failed"
+      break
+    }
+    if [ -z "$job" ]; then
+      bisect_done=1
+      break
+    fi
+    read -r scene commit &lt;&lt;&lt;"$job"
+    may_start "the re-bench of $scene at $commit" || break
+    tree=$(tree_at "$commit") || {
+      log "no release binary of $commit"
+      break
+    }
+…
+  # Every night, so one whose `gh` failed is tried again; the issue's number
+  # on the Verdict keeps a later night from opening it twice.
+  "$praxis" history regressions || log "praxis history regressions failed"
+
+  [ -z "$scenes" ] &amp;&amp; log "main's source has a record on every Series here"
+  results="target/sweep/$(date '+%Y%m%dT%H%M%S')"
+  for scene in $scenes; do
+    may_start "$scene" || break
+    "$praxis" bench "$results" --no-publish "$scene" || log "bench of $scene failed"
+  done
+  if compgen -G "$results/*.json" &gt;/dev/null; then
+    "$praxis" publish "$results" || fail "praxis publish $results"
+  fi</code></pre>
+  <p>The sweep runs in a clone of its own, which it moves to <code>main</code> each night and re-executes itself from whenever its checkout moved, as a launchd job at 04:00 on the M4 Pro (<code>scripts/sweep.plist</code>; a job missed asleep runs at the next wake) and a Task Scheduler task at 04:00 on the RTX 2070 SUPER (<code>scripts/sweep-task.xml</code>), <code>WGPU_BACKEND</code> choosing its backend. After its own build and cook it waits up to 300 s for the one-minute load average to fall under preflight's threshold, then runs preflight once and ends the night on any warning. Before every run, <code>may_start</code> stops the night past a cap of 450 s of building, benching and waiting (<code>PRAXIS_SWEEP_CAP_SECONDS</code> overrides it) and waits up to 60 s for the GPU and CPU load to fall, since a utilisation reading lags the work it measures. Each commit the bisect names is built once in a worktree under <code>target/sweep/trees</code>, kept for later nights until no bisect waits, and benched with <code>--no-publish</code> where the binary knows the flag; the night's runs publish together at its end, a run from a binary too old to stamp provenance left out.</p>
+  <h3>What a night does next</h3>
+  <p><code>praxis history bisect &lt;night&gt;</code> is the sweep's state machine, called before every run with the runs so far: it resumes a held Verdict that has not pinned, or else starts on the oldest slower Suspect with no Verdict, keeps the Verdict it started with in the night's directory, and answers the scene and commit to bench next, or nothing when the night is done with this Suspect.</p>
+  <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
+<pre class="code"><code>/// The smallest shift a night's re-bench must still show, as a share of
+/// the good end's median, whatever the Suspect's marked shift.
+const SMALLEST_HELD_SHIFT: f64 = 0.03;
+
+/// How many runs of each end a night benches, interleaved, before it
+/// judges them.
+const END_RUNS: usize = 2;
+…
+/// A Verdict file: one Suspect of one Series, and what the sweep found.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(super) struct Verdict {
+    pub scene: String,
+    /// The judged timing whose median made the record a Suspect.
+    pub metric: String,
+    /// Its marked shift, as a share of the median before it.
+    pub shift: f64,
+    pub suspect: Commit,
+    /// The record before it on its line.
+    pub predecessor: Commit,
+    /// None until a night has judged the re-bench.
+    pub state: Option&lt;State&gt;,
+    /// The last commit known to run at the predecessor's level.
+    pub good: String,
+    /// The first commit known to run at the Suspect's level.
+    pub bad: String,
+    pub pinned: Option&lt;Pinned&gt;,
+    /// The `needs-triage` issue a pinned Regression opened, or shares with
+    /// another Verdict of its scene pinned to its commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue: Option&lt;u64&gt;,
+}
+
+impl Verdict {
+    /// The Verdict a night starts for `suspect`, judged on none yet.
+    pub fn of(suspect: Suspect) -&gt; Self {
+        Self {
+            good: suspect.predecessor.commit.clone(),
+            bad: suspect.suspect.commit.clone(),
+            scene: suspect.scene,
+            metric: suspect.metric,
+            shift: suspect.shift,
+            suspect: suspect.suspect,
+            predecessor: suspect.predecessor,
+            state: None,
+            pinned: None,
+            issue: None,
+        }
+    }
+}</code></pre>
+  <p><code>suspects</code> lists a machine's slower Suspects with no Verdict, oldest first, each with the record before it on the Series and, of a row marked on both timings, its larger shift; a row within a Verdict's span, from the record after its predecessor to its Suspect, is judged by that Verdict, as a bisect's own records land there and may carry the Suspect's mark in its place. <code>praxis history suspects</code> prints them. The night then follows <code>step</code>:</p>
+  <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
+<pre class="code"><code>pub(super) fn step(
+    night_start: &amp;Verdict,
+    runs: &amp;[Run],
+    first_parent: &amp;[Commit],
+) -&gt; (Option&lt;Verdict&gt;, Option&lt;String&gt;) {
+    let (good_runs, bad_runs) = (
+        medians(runs, &amp;night_start.good),
+        medians(runs, &amp;night_start.bad),
+    );
+    if good_runs.len() &lt; END_RUNS || bad_runs.len() &lt; END_RUNS {
+        let next = if good_runs.len() &lt;= bad_runs.len() {
+            &amp;night_start.good
+        } else {
+            &amp;night_start.bad
+        };
+        return (None, Some(next.clone()));
+    }
+    let (good_median, bad_median) = (mean(&amp;good_runs), mean(&amp;bad_runs));
+    let mut verdict = night_start.clone();
+    if !holds(night_start.shift, good_median, bad_median) {
+        // A bisect's held shift was judged once; a night whose ends do not
+        // show it judges no commit and leaves the Verdict for the next.
+        if night_start.state == Some(State::Held) {
+            return (None, None);
+        }
+        verdict.state = Some(State::Cleared);
+        return (Some(verdict), None);
+    }
+    verdict.state = Some(State::Held);
+    for run in runs
+        .iter()
+        .filter(|run| run.commit != night_start.good &amp;&amp; run.commit != night_start.bad)
+    {
+        if (run.median - bad_median).abs() &lt; (run.median - good_median).abs() {
+            verdict.bad.clone_from(&amp;run.commit);
+        } else {
+            verdict.good.clone_from(&amp;run.commit);
+        }
+    }
+…
+/// Whether a re-bench holds a Suspect marked `shift` slower: the bad end's
+/// median `bad_median` is still above the good end's `good_median` by at
+/// least half that shift and by `SMALLEST_HELD_SHIFT`, both as shares of
+/// `good_median`.
+fn holds(shift: f64, good_median: f64, bad_median: f64) -&gt; bool {
+    (bad_median - good_median) / good_median &gt;= (shift / 2.0).max(SMALLEST_HELD_SHIFT)
+}</code></pre>
+  <p>Until each end has <code>END_RUNS</code> runs, the next run is the end with fewer, the good end first, so the night benches good, bad, good, bad before it judges anything; the ends' medians are the means of their runs' medians of the Verdict's metric. A Suspect whose shift does not hold is cleared, and its Verdict is recorded so it is never listed again. A held shift moves each later run's commit to the good or bad end by which end's median it lies nearer, and <code>next_commit</code> picks the commit to bench: among the first-parent commits from the good end to the bad end, a run of commits sharing one source hash is one source, and the first commit of the middle source is next; with no other source between the ends, the commit that changed the source to the bad end's is pinned. A night whose ends no longer show a held shift judges no commit and leaves the Verdict for the next night.</p>
+  <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
+<pre class="code"><code>fn next_commit(commits: &amp;[Commit]) -&gt; Result&lt;&amp;Commit, &amp;Commit&gt; {
+    let changes: Vec&lt;&amp;Commit&gt; = commits
+        .iter()
+        .enumerate()
+        .filter(|&amp;(index, commit)| {
+            index == 0 || commits[index - 1].source_hash != commit.source_hash
+        })
+        .map(|(_, commit)| commit)
+        .collect();
+    match changes.len() {
+        0..=2 =&gt; Err(changes
+            .last()
+            .copied()
+            .unwrap_or(&amp;commits[commits.len() - 1])),
+        count =&gt; Ok(changes[count / 2]),
+    }
+}
+…
+/// `main`'s first-parent commits from `good` to `bad`, each with its
+/// source hash.
+fn first_parent(repository: &amp;Path, good: &amp;str, bad: &amp;str) -&gt; anyhow::Result&lt;Vec&lt;Commit&gt;&gt; {
+    let later = git(
+        repository,
+        &amp;[
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            &amp;format!("{good}..{bad}"),
+        ],
+        None,
+    )?;</code></pre>
+  <p>When a commit is pinned, <code>bisect</code> fills the Verdict's <code>measured</code> with the night's ends and their mean medians of every judged timing the runs hold, and <code>covered_by_baseline</code> with whether the commit changed the scene's Baseline for this adapter and backend, read with <code>git diff --name-only</code> against its parent. Every judged Verdict is pushed to <code>verdicts/&lt;adapter&gt;-&lt;backend&gt;/&lt;scene&gt;/&lt;Suspect's source hash&gt;.json</code> through the same <code>push</code> as a publish, with every Series rebuilt, since a pinned commit now starts a line: the records after it are judged against it, not against the level before.</p>
+  <h3>Regressions</h3>
+  <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
+<pre class="code"><code>/// The label a Regression's issue opens with.
+const TRIAGE_LABEL: &amp;str = "needs-triage";
+…
+/// The bench page, which draws a machine's Series of a scene.
+const BENCH_PAGE: &amp;str = "https://gariasf.github.io/praxis/bench/";
+…
+/// What `verdict` needs, beside `verdicts`, the others of its adapter and
+/// backend: a pinned commit no re-recorded Baseline covers needs an issue,
+/// one per scene and commit.
+pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Filing {
+    let Some(pinned) = &amp;verdict.pinned else {
+        return Filing::Done;
+    };
+    if pinned.covered_by_baseline || verdict.issue.is_some() {
+        return Filing::Done;
+    }
+    verdicts
+        .iter()
+        .filter(|other| other.scene == verdict.scene)
+        .filter(|other| {
+            other.pinned.as_ref().map(|pinned| &amp;pinned.commit.commit) == Some(&amp;pinned.commit.commit)
+        })
+        .find_map(|other| other.issue)
+        .map_or(Filing::Open, Filing::Shared)
+}</code></pre>
+  <p><code>file_regressions</code>, behind <code>praxis history regressions</code>, runs every night whether or not a bisect ran, so an issue whose <code>gh</code> failed is tried again: for each Verdict of this machine that is pinned, uncovered and has no issue, it opens one with <code>gh issue create</code> under <code>TRIAGE_LABEL</code>, or shares the issue another Verdict of the same scene pinned to the same commit opened, or finds one a night opened and then failed to record by its exact title, and writes the number on the Verdict. The title names the scene, the adapter key, the commit's short hash and the PR a squash merge's subject ends in; the body names the commit and its subject, the Series, the chart's URL on <code>BENCH_PAGE</code> with the machine and scene as parameters, and a table of each judged timing the night measured slower at its bad end, the Verdict's own always and any other that shifted by <code>SMALLEST_HELD_SHIFT</code>, with the good and bad medians and the shift. A pinned commit that changed the scene's Baseline is covered: the PR accepted the level by hand, and no issue opens.</p>
+</section>
+
+<section class="part prose" id="page">
+  <div class="part-mark">7 &middot; <code>docs/bench/index.html</code></div>
+  <h2>The page</h2>
+  <p class="key-idea">The page is one HTML file on GitHub Pages that reads the branch in the browser: the tree listing through GitHub's API, each Series file raw, tagged and Experiment records raw and only on request, the Budgets from <code>main</code>, and the subjects of <code>main</code>'s latest commits. It computes nothing a publish already did: it draws the rows, reads their Suspect marks, and judges the Budgets as <code>praxis compare</code> would.</p>
+  <p class="note">The page's script lives under <code>docs/</code>, outside the tree the guides' checks index, so its names are written plain here; the file names each in the order below.</p>
+  <p>Its start fetches the branch's recursive tree listing, the Budgets file <code>bench/budgets.json</code> from <code>main</code> and the closed milestones, reads the machines, scenes and Experiment names from the paths it finds, then loads every machine's Series of every scene and of the release build at once, each machine's display name from one of its records (the adapter's name becomes <q>M4 Pro &middot; Metal</q>, lavapipe's <q>lavapipe</q>) and the subjects and PR numbers of <code>main</code>'s latest 100 commits, so a point names its change without a request of its own. A fetch that fails names its status, or, when GitHub's unauthenticated rate limit is used up, the time it resets. The M4 Pro opens the page when it has a Series, <code>town</code> the scene; the URL's <code>machine</code>, <code>scene</code> and <code>experiment</code> parameters pick others, and the page writes them back as the picks change.</p>
+  <p>A Series' rows become points in source order, by commit time then commit, each knowing the point before it, its segment, and what broke the line at it. The page's test of whether two rows measure the same thing is the twin of <code>SeriesRow::same_definition</code> (section 3): one Harness version, and one scene content hash where both know it; the break is labelled with the later Harness version or <q>scene content</q>. A chart draws a line per segment and labels the break; a change across one is shown uncoloured, as it compares two definitions. Tagged records are fetched raw, one request each, only with the <q>Tagged records</q> box ticked, and turned into rows the way a publish would, the GPU frame read under its first name too; where the machine has a Series, a tagged point's change is from the Series record before it.</p>
+  <p>An Experiment is picked by name, its records fetched raw, and each compared with the Series record whose source hash is its merge base's, on the same machine: a branch's change is measured against the <code>main</code> it started from. With no such record, the table says so and names the merge base, since the sweep benches <code>main</code>'s sources and that commit can be benched by hand. The Experiment table lists each record's machine, commit, base, GPU and CPU frame with their change from the base, how many counters changed and its tags, less <q>source not main's</q>, which every Experiment record carries; a change across a break says which definition differs instead.</p>
+  <p>A Suspect's mark is read from its row, never recomputed, and only a Series point has one; a chart rings it, and the record view states the timing and the shift as a percentage of the median before it. Budgets are judged for the M4 Pro alone, at the newest Harness version its Series hold, against the six Budgets <code>praxis compare</code> checks: the CPU frame, the GPU frame, the gate, the dynamic TLAS's CPU time and its build pass, and the GPU memory of the measured frames. A timing's change is coloured by <code>praxis compare</code>'s rule, with the page's own copies of <code>WARN_RATIO</code>, 1.05, and <code>FAIL_RATIO</code>, 1.10, and noise floors of 10 &micro;s for a CPU timing and 20 &micro;s for a GPU one: a fail past the fail ratio and the floor, a warning past the warn ratio, better when it shrank by more than a warning's share, else flat and grey. Each scene's standing is its latest record's change from the record before it and from the median of up to 8 records before it, both within the latest's segment; this median averages the two middle values of an even count, a summary for the eye, where the Suspect rule's nearest-rank median does not.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>View</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td>Where main stands</td><td>each scene's latest Series record on the picked machine: its GPU and CPU frame medians, against the previous record and the median of the last 8, its Budgets as one cell on the M4 Pro, and its latest commit; a machine that times nothing stands by three counters instead</td></tr>
+      <tr><td>Scene: Frame</td><td>the CPU and GPU frame medians on the picked machine, one line per segment, the Budget drawn on the M4 Pro, tagged and Experiment points when picked, and the Experiment table</td></tr>
+      <tr><td>Scene: Passes</td><td>the 6 largest GPU passes by their summed medians, one line each; the rest in each point's tooltip and record</td></tr>
+      <tr><td>Scene: Counters and memory</td><td>each counter's latest on the measured frames and on the counter frames with its change where it moved, a sparkline, the records whose counter frames' counters changed from the record before them, and the GPU memory chart</td></tr>
+      <tr><td>Scene: Record</td><td>the picked point: its change's name and PR, machine, commit and date, kind (Series, Baseline, tagged, Experiment), Harness version, Suspect marks, its previous record or base, every metric's change from it, and the raw record file</td></tr>
+      <tr><td>Across machines</td><td>each scene's latest frame medians on every machine with a GPU, with the Harness version that measured them, and the two frame charts with every such machine's line</td></tr>
+      <tr><td>Release build</td><td>the release binary's size and build time per commit of <code>main</code>, from the machine that holds a release-build Series</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From the page's markup and script at the commit above; the ratios and floors from its constants, which copy <code>src/bench/mod.rs</code>'s.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">8 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The publish is tested against a bare remote and a clone of it in a temporary directory, through the real git, so what the tests pin is what the branch ends up holding: which files, in how many commits, with which tags and rows. The rules of judgement are tested on made-up medians.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>publishing_the_same_results_twice_leaves_one_record_and_one_commit</code></td><td><code>history.rs</code></td><td>the branch holds the README, the record at its key and the Series file; a second publish drops the record and pushes nothing; the checkout's worktrees are as they were</td></tr>
+      <tr><td><code>a_publish_rebuilds_every_series_so_rows_take_the_current_form</code></td><td><code>history.rs</code></td><td>a Series file an older bench wrote is rewritten by the next publish of another scene; a row holds both kinds of counter</td></tr>
+      <tr><td><code>a_quieter_record_replaces_a_noisier_one_and_a_noisier_one_is_dropped</code></td><td><code>history.rs</code></td><td>the lower p95 over median stays under a key</td></tr>
+      <tr><td><code>a_dirty_or_branch_record_lands_in_tagged_with_its_reasons_and_on_no_series</code></td><td><code>history.rs</code></td><td>a dirty tree, and a branch commit that was not quiet, land in <code>tagged/</code> with those tags and no Series file</td></tr>
+      <tr><td><code>two_publishes_from_different_adapters_racing_to_push_both_land</code></td><td><code>history.rs</code></td><td>two threads behind a barrier publish three scenes each; every Series exists and each publish is its own commit</td></tr>
+      <tr><td><code>a_publish_that_cannot_reach_its_remote_fails</code></td><td><code>history.rs</code></td><td>a moved remote is an error, not a warning</td></tr>
+      <tr><td><code>a_scene_is_unrecorded_until_mains_source_has_a_record_on_its_series</code></td><td><code>history.rs</code></td><td>a tagged record is no record; another backend is another machine; a docs push keeps the source, a source push does not</td></tr>
+      <tr><td><code>a_record_on_a_series_holds_its_key_against_a_tagged_one</code></td><td><code>history.rs</code></td><td>a quiet record replaces a tagged one at its key; neither a noisy run nor a quieter one of another configuration displaces it</td></tr>
+      <tr><td><code>an_experiment_publishes_under_its_name_beside_its_base_and_on_no_series</code></td><td><code>history.rs</code></td><td>the record's path and <code>experiment</code> field; the Series unchanged, even for <code>main</code>'s own source; a dropped duplicate still reads as the Experiment's; four bad names refused</td></tr>
+      <tr><td><code>the_readme_names_the_series_configurations_and_quiet_thresholds</code></td><td><code>history.rs</code></td><td>the <code>README</code> constant names both configurations and the three quiet thresholds as code defines them</td></tr>
+      <tr><td><code>a_run_of_another_configuration_is_tagged_with_it</code>, <code>lavapipe_in_another_configuration_is_tagged_with_it</code></td><td><code>history.rs</code></td><td>the configuration tag's wording, for the reference configuration and for CI's</td></tr>
+      <tr><td><code>an_import_records_each_changed_baseline_once_and_restamps_earlier_records</code></td><td><code>history.rs</code></td><td>the import's records, eras and tags over a made-up <code>main</code>; a record published at version 1 is re-stamped; a release build keeps what it holds</td></tr>
+      <tr><td><code>a_baseline_re_recorded_after_the_history_started_is_marked_as_one</code>, <code>a_re_recorded_baselines_mark_stays_with_its_key_whichever_record_holds_it</code></td><td><code>history.rs</code></td><td>an unpushed Baseline is not yet <code>main</code>'s; the <code>baseline-rerecorded</code> source; the mark carried whether the bench's record or the import's holds the key, and a second import changes nothing</td></tr>
+      <tr><td><code>a_series_marks_a_step_as_a_suspect_unless_a_baseline_a_pinned_commit_or_lavapipe_takes_it</code></td><td><code>history.rs</code></td><td>a 10% step is marked 0.1 on the GPU frame; not when the step is an imported or re-recorded Baseline, a pinned source, or on lavapipe</td></tr>
+      <tr><td><code>lavapipe_in_ci_configuration_joins_its_series_quiet_or_not_and_publishes_once</code></td><td><code>history.rs</code></td><td>a noisy lavapipe run lands on the Series; a quieter one of the same source adds nothing</td></tr>
+      <tr><td><code>a_release_build_lands_beside_its_results_with_a_series_and_publishes_once</code>, <code>a_release_build_needs_results_of_one_adapter_from_one_checkout</code></td><td><code>history.rs</code></td><td>the record and Series row of a release build; two adapters' results or none refuse it, and no branch is created</td></tr>
+      <tr><td><code>noise_alone_is_not_flagged</code>, <code>a_five_percent_step_after_noise_is_flagged_at_the_step_only</code>, <code>a_second_step_on_the_same_side_is_flagged_again</code>, <code>a_step_is_flagged_once_when_a_noisy_record_falls_back_inside_the_band</code>, <code>a_step_down_is_flagged_with_its_sign</code>, <code>a_step_at_a_re_recorded_baseline_is_not_flagged</code>, <code>a_noisy_window_widens_past_the_smallest_shift</code>, <code>a_line_judges_only_from_its_third_record_and_skips_unmeasured_ones</code></td><td><code>suspects.rs</code></td><td>the rule on twelve medians within &plusmn;1.2% of 10 ms: no mark on noise, one at a 5% step with its shift, a second step marked again, a step marked once around a noisy record, a negative shift for a faster record, no mark across a line start, a &plusmn;8% window swallowing a 5% step, and judgement from the fourth measured record</td></tr>
+      <tr><td><code>a_shift_holds_at_half_its_marked_size_and_three_percent</code></td><td><code>verdicts.rs</code></td><td><code>holds</code> at 10% marked: 5% holds, 4.9% does not; at 4% marked, 3% holds, 2.9% does not; faster never holds</td></tr>
+      <tr><td><code>a_bisect_benches_the_middle_source_and_pins_the_commit_that_changed_it</code></td><td><code>verdicts.rs</code></td><td><code>next_commit</code> over commits with lettered sources: the middle source, one source between, commits sharing a source, and the pin when none lies between</td></tr>
+      <tr><td><code>a_night_benches_its_ends_interleaved_before_it_judges</code>, <code>a_held_bisect_waits_for_a_night_whose_ends_show_its_shift</code>, <code>a_re_bench_that_does_not_hold_clears_the_suspect</code>, <code>a_bisect_moves_its_ends_by_the_nearer_median_and_pins_the_commit</code></td><td><code>verdicts.rs</code></td><td><code>step</code>: good, bad, good, bad before any judgement; a held Verdict whose ends no longer show the shift waits; a cleared Verdict; the ends moving by the nearer median until the commit is pinned, measured at the night's ends</td></tr>
+      <tr><td><code>a_nights_runs_are_read_from_the_results_the_bench_writes</code>, <code>a_run_without_provenance_is_of_the_commit_the_sweep_named</code></td><td><code>verdicts.rs</code></td><td><code>night_runs</code> reads the directories in name order, the commit from the result's provenance or the <code>commit</code> file beside it</td></tr>
+      <tr><td><code>a_slower_suspect_is_listed_with_its_predecessor_until_a_verdict_spans_it</code></td><td><code>verdicts.rs</code></td><td>faster marks are not listed, a row takes its larger shift, and a Verdict's span covers the rows between its predecessor and its Suspect</td></tr>
+      <tr><td><code>a_regressions_issue_names_its_commit_pr_series_delta_and_chart</code>, <code>a_commit_with_no_pr_in_its_subject_is_named_alone</code>, <code>one_issue_opens_per_scene_and_pinned_commit_unless_a_baseline_covers_it</code></td><td><code>verdicts.rs</code></td><td>the issue's title and body, the PR line without a PR, and <code>filing</code>: open, shared with a Verdict of the same scene and commit, done when filed, covered, held or cleared</td></tr>
+      <tr><td><code>a_first_era_baseline_becomes_a_record_of_its_commit_with_what_it_measured</code>, <code>a_current_baseline_becomes_a_record_with_every_metric_and_its_spread</code>, <code>a_row_holds_the_measured_frames_counters_beside_the_counter_frames</code></td><td><code>import.rs</code></td><td>the first Baseline file ever committed as a record and a row, nulls for what it lacks; today's Baseline with every metric; <code>town</code>'s row holding both counter kinds</td></tr>
+      <tr><td><code>a_lavapipe_baseline_runs_on_vulkan_and_a_noisy_one_is_tagged</code>, <code>a_lavapipe_baseline_in_ci_configuration_joins_its_series_however_noisy</code></td><td><code>import.rs</code></td><td>the backend given a Baseline that named none, an unknown adapter refused, and lavapipe's exception to the quiet test</td></tr>
+      <tr><td><code>only_a_baseline_whose_held_values_changed_was_measured_again</code>, <code>the_live_harness_version_is_no_older_than_the_last_imported_era</code></td><td><code>import.rs</code></td><td><code>remeasured</code> on a field added, a value changed and a metric renamed; <code>HARNESS_VERSION</code> above the breaks' count</td></tr>
+      <tr><td><code>only_a_measured_path_moves_the_source_hash</code>, <code>two_clean_checkouts_of_a_commit_share_its_source_hash</code>, <code>a_dirty_or_untracked_measured_path_moves_the_source_hash_and_another_path_does_not</code></td><td><code>provenance.rs</code></td><td>the key: a docs change keeps it, a source change moves it, a clone shares it, an uncommitted or untracked change under a measured path moves it</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above, all under <code>src/bench/</code>; <code>cargo test</code> runs them without a GPU.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">9 &middot; <code>git ls-tree -r -l origin/bench-history</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">No Baseline measures the history: it runs after the frames are over. Its cost is the branch's size, a few kilobytes a record, and the nights the sweep spends. The publish's git work is bounded by the records it writes and the Series it rebuilds, all of them, every time.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Directory</th><th class="n">Files</th><th class="n">Bytes</th><th>Of which</th></tr></thead>
+    <tbody>
+      <tr><td><code>records/</code>, scenes</td><td class="n">711</td><td class="n">1,642,127</td><td>370 on the M4 Pro, 269 on lavapipe, 39 on the RTX 2070 SUPER on Vulkan and 33 on DX12</td></tr>
+      <tr><td><code>records/</code>, <code>release-build</code></td><td class="n">26</td><td class="n">9,074</td><td>all under lavapipe's key</td></tr>
+      <tr><td><code>tagged/</code></td><td class="n">443</td><td class="n">866,958</td><td>115 on the M4 Pro, 302 on lavapipe, 26 on the RTX 2070 SUPER on Vulkan</td></tr>
+      <tr><td><code>experiments/</code></td><td class="n">3</td><td class="n">8,853</td><td>one Experiment, three scenes on the M4 Pro</td></tr>
+      <tr><td><code>series/</code></td><td class="n">43</td><td class="n">885,867</td><td>11 on the M4 Pro, 11 on DX12, 10 on Vulkan, 10 scenes and the release build on lavapipe</td></tr>
+      <tr><td><code>verdicts/</code></td><td class="n">0</td><td class="n">0</td><td>no night has judged a Suspect yet</td></tr>
+      <tr><td><code>README.md</code></td><td class="n">1</td><td class="n">5,240</td><td></td></tr>
+      <tr class="focus"><td>the branch</td><td class="n">1,227</td><td class="n">3,418,119</td><td>44 commits</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>git ls-tree -r -l</code> of <code>origin/bench-history</code> at its tip ca85090e, <q>Publish 11 Bench records from apple-m4-pro-metal</q>, committed 2026-11-05, and <code>git rev-list --count</code> of it. Blob sizes, before git's compression.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it bounds</th></tr></thead>
+    <tbody>
+      <tr><td><code>PUSH_ATTEMPTS</code></td><td class="n">5</td><td>pushes a publish tries while the branch's tip keeps moving under it</td></tr>
+      <tr><td><code>END_RUNS</code></td><td class="n">2</td><td>runs of each end a night benches, interleaved, before it judges: four runs of a scene before any bisect run</td></tr>
+      <tr><td><code>SMALLEST_HELD_SHIFT</code></td><td class="n">0.03</td><td>the smallest re-benched shift that holds, whatever was marked</td></tr>
+      <tr><td><code>cap_seconds</code></td><td class="n">450</td><td>seconds of building, benching and waiting a night runs before it leaves the rest to the next</td></tr>
+      <tr><td>the load wait</td><td class="n">300</td><td>seconds the sweep waits for its own build and cook to fall out of the one-minute load average</td></tr>
+      <tr><td>the idle wait</td><td class="n">60</td><td>seconds <code>may_start</code> waits for the GPU and CPU to go idle before a run, or ends the night</td></tr>
+      <tr><td>Suspects a night</td><td class="n">1</td><td><code>bisect</code> keeps to one Verdict per night</td></tr>
+      <tr><td><code>WINDOW_RECORDS</code></td><td class="n">8</td><td>the records before a point that judge it</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">From <code>src/bench/history.rs</code>, <code>src/bench/history/verdicts.rs</code>, <code>src/bench/history/suspects.rs</code> and <code>scripts/sweep.sh</code> at the commit above.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">10 &middot; ADRs 0024, 0013</div>
+  <h2>Why this way</h2>
+  <p><b>Records in git, not a hosted service.</b> ADR 0024 considered Bencher.dev, whose change detection and charts come ready-made, and rejected it: the history would move outside the repository, behind an account and a token every machine and CI would hold, and the key, the quiet rule and the Harness version breaks would still have to be layered on top. On an orphan branch, an agent queries the history with <code>git</code> and <code>jq</code>, and a bad publish is undone with <code>git revert</code>.</p>
+  <p><b>Not github-action-benchmark.</b> It charts results on a <code>gh-pages</code> branch from Actions, so only CI could publish, and CI has no GPU: lavapipe's timings mean nothing. The key, the quiet rule and the breaks would again be the engine's to add.</p>
+  <p><b>Not a time-series database.</b> Grafana over a database is a server to run and back up for a few kilobytes a record, and agents could no longer read the history with <code>git</code> and <code>jq</code>.</p>
+  <p><b>The source hash, not the commit or the tree.</b> PR branches need not be up to date with <code>main</code>, and merges are squashed, so a PR head's commit never lands on <code>main</code>; a docs-only commit gets a new tree, and the sweep would bench it for nothing. A hash over the five paths that can change a measurement lets a docs commit inherit the record before it, and lets a PR's clean, up-to-date run share a key with its squashed merge. The Harness version was first part of the key and then left to the record, since it is defined under <code>src/</code> and a source hash already names one.</p>
+  <p><b>No self-hosted runners.</b> Runners on the two machines would let CI bench real GPUs, but GitHub's own guidance is that self-hosted runners should almost never be used for public repositories, because any user can open a pull request against the repository and compromise the environment. A local scheduled task runs no code from a pull request; it runs <code>main</code>, and only after the machine's own preflight passes.</p>
+  <p><b>The history observes and never gates.</b> ADR 0013's Baselines in <code>bench/baselines/</code> on <code>main</code>, chosen by hand, are what <code>verify</code> and <code>compare</code> judge against, and what CI fails on; the history keeps every run beside them so a drift or a step between two Baselines can be seen. A failed publish warns and the bench still succeeds; <code>verify</code> never publishes; a Suspect is a candidate until a night re-benches it, so no mark blocks anything, and a Regression becomes a <code>needs-triage</code> issue for a person to judge, not a failed check.</p>
+  <p><b>Quiet, and only quiet, on a Series.</b> A GPU median moves with whatever else the machine runs, so a record from a loaded machine would read as a step. Preflight's checks at the run's start and the run's own GPU frame spread tag such a record, which is kept and drawn on request, and when two runs share a key the quieter stays, so a noisy evening cannot displace a quiet night. lavapipe's Series read what load cannot change, so its first record stays.</p>
+  <p><b>Breaks, so a new ruler never reads as a Regression.</b> A change to how a metric is measured raises the Harness version, and a scene given new content hashes differently; a chart's line breaks at either and the Suspect rule starts a new line, so nothing is judged across them. An imported or re-recorded Baseline and a pinned commit start a line too: each is a level someone accepted or the sweep explained.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">11</div>
+  <h2>Limits</h2>
+  <p><b>Steps, not slopes.</b> A timing that grows a little every record never leaves a band that follows it; the rule finds steps.</p>
+  <p><b>A step right after an outlier on the same side.</b> If the outlier sits within the step's tolerance of it, the step reads as continuing the outlier, which takes the mark; the night re-benches the outlier's commit, and a cleared Verdict does not re-judge the step.</p>
+  <p><b>The first three records of a line.</b> They are not judged, so a step at the second record after a Harness version, a new scene content, a Baseline or a pinned commit goes unmarked.</p>
+  <p><b>One Suspect a night, one machine's Verdicts.</b> Each machine judges its own Series, from release binaries it builds itself; the RTX 2070 SUPER's task runs only while the owner is logged on, and the M4 Pro's <code>gh</code> must be logged in for an issue to open. The oldest unjudged Suspect goes first, so a backlog of Suspects takes as many nights.</p>
+  <p><b>What the quiet test cannot see.</b> It reads the load once before the first scene, so load that arrives mid-run is caught only by the GPU frame spread; a CPU frame spread is not judged. An imported Baseline is quiet unless its own GPU frame spread says otherwise.</p>
+  <p><b>Lines pinned by a Verdict are not visible on the page.</b> The page breaks a line at a Harness version or scene content only; a line start at a pinned commit, a Baseline or a re-recorded Baseline shows only through the Suspect marks the publish wrote.</p>
+  <p><b>The page depends on GitHub's API.</b> Its tree listing is capped, and the page says so when it was cut short; its unauthenticated rate limit stops the page for an address that has used it up until the reset; the PR lookup of an Experiment's unpushed commit fails.</p>
+  <p><b>Old records hold less.</b> A metric added after a record was made is null in its row and absent from its tooltip; a release build's record has no Harness version and is never a Suspect.</p>
+  <p><b>Interleaved ends on one night.</b> A shift that holds on one night from two runs of each end is held for good; a night that then fails to show it during a bisect judges nothing, and a slow machine state on the night a commit is pinned goes into the Verdict's <code>measured</code>.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the mechanism rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites. The Suspect rule's median absolute deviation cites nothing: it is written from the code.</p>
+  <dl class="reading">
+    <dt><a href="https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html">Apple, Daemons and Services Programming Guide, Scheduling Timed Jobs, Effects of Sleeping and Powering Off</a></dt><dd>a launchd job scheduled by calendar interval runs at the next wake when the Mac was asleep at its time, and not at all when it was off; why the M4 Pro's sweep is a launchd job at 04:00; <code>apple-launchd-start-calendar-interval-sleep</code></dd>
+    <dt><a href="https://docs.nvidia.com/deploy/nvidia-smi/index.html">NVIDIA, nvidia-smi documentation, GPU Attributes, Utilization</a></dt><dd>the GPU utilisation is the share of the past sample period, 1/6 s to 1 s, during which a kernel ran, so a reading right after a scene still shows it; why each run waits for preflight to see the GPU idle; <code>nvidia-smi-utilization-sample-period</code></dd>
+    <dt><a href="https://docs.github.com/en/actions/reference/security/secure-use">GitHub, Secure use reference, Hardening for self-hosted runners</a></dt><dd>self-hosted runners should almost never be used for public repositories, because any user can open pull requests against the repository and compromise the environment; why CI benches lavapipe and the real GPUs are benched by a local scheduled task. No registry key: ADR 0024 cites the page directly, and <code>docs/references.toml</code> has no entry for it</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The history began as a decision to keep every bench run rather than only the Baselines a PR chose to commit: a record keyed by the source it measured, the Harness version numbered backwards over the Baselines' eras by an import, the quiet rule, the Series the page draws, and a Suspect rule over a window of medians, which the volume that first narrated it covered. The sweep's re-bench and bisect followed, with the Verdict kept on the branch and a pinned commit starting its Series' line, then the filing of a pinned Regression as one issue per scene, the nightly import of Baselines re-recorded since the history started, and the one-minute load average in the quiet test. Experiments, published from a branch under a name against the Series record of their merge base, and the release build's record CI publishes beside lavapipe's, had no volume; the key dropped the Harness version into the record, and the quieter-record rule learnt to hold a Series record against a tagged one. This page describes the mechanism as it is, from the code.</p>
+  <footer class="sources">Written from <code>src/bench/history.rs</code>, <code>src/bench/history/suspects.rs</code>, <code>src/bench/history/verdicts.rs</code>, <code>src/bench/history/import.rs</code>, <code>src/bench/provenance.rs</code>, <code>src/bench/mod.rs</code>, <code>src/bin/praxis.rs</code>, <code>scripts/sweep.sh</code>, <code>.github/workflows/ci.yml</code>, <code>docs/bench/index.html</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013 and 0024, the <code>bench-history</code> branch at ca85090e, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="bench.html">Previous: The bench</a><a href="index.html">All field guides</a><a href="light-units.html">Next: Light units</a></nav>
+
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
 <script>
 (function () {
   "use strict";
@@ -668,7 +1257,6 @@ suspect    = |median − center| &gt; tolerance</pre>
   document.addEventListener("click", hide);
   document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
   window.addEventListener("scroll", hide, { passive: true });
-  window.addEventListener("resize", hide);
 })();
 </script>
 </body>
