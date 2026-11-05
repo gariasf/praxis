@@ -16,7 +16,7 @@ use super::provenance::{Checkout, git, source_hash};
 use super::{Configuration, Counters, Measurements, Spread, adapter_key};
 
 pub use import::import_baselines;
-pub use verdicts::{Suspect, bisect, file_regressions, suspects};
+pub use verdicts::{GitHubIssues, IssueTracker, Suspect, bisect, file_regressions, suspects};
 
 const REMOTE: &str = "origin";
 const BRANCH: &str = "bench-history";
@@ -1199,14 +1199,14 @@ mod tests {
 
     /// A bare remote with `main` holding one commit, and a clone of it to
     /// bench in, in a fresh temporary directory.
-    struct Fixture {
+    pub(super) struct Fixture {
         directory: PathBuf,
         remote: PathBuf,
-        checkout: PathBuf,
+        pub(super) checkout: PathBuf,
     }
 
     impl Fixture {
-        fn new(name: &str) -> Self {
+        pub(super) fn new(name: &str) -> Self {
             let directory =
                 std::env::temp_dir().join(format!("praxis-history-{}-{name}", std::process::id()));
             std::fs::remove_dir_all(&directory).ok();
@@ -1276,7 +1276,7 @@ mod tests {
                 .unwrap()
         }
 
-        fn read(&self, path: &str) -> String {
+        pub(super) fn read(&self, path: &str) -> String {
             git(&self.remote, &["show", &format!("{BRANCH}:{path}")], None).unwrap()
         }
     }
@@ -1287,7 +1287,7 @@ mod tests {
         }
     }
 
-    fn commit(repository: &Path, path: &str, contents: &str) {
+    pub(super) fn commit(repository: &Path, path: &str, contents: &str) {
         let file = repository.join(path);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, contents).unwrap();
