@@ -569,7 +569,7 @@ impl FramePreparer {
 /// `camera_position` first, the rest keeping their query order. Returns how
 /// many are directional, and sets `overflowed` to how many the light buffer
 /// had no room for.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
