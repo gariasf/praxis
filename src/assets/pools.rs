@@ -1,18 +1,65 @@
 use std::collections::HashMap;
 
 use crate::{
-    assets::{MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
+    assets::material::CLASSES_PER_CHANNEL,
+    assets::{MaterialChannel, MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
+    bench::Budgets,
     cooked::{AssetId, CookedMesh, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
-    stats::{Charge, Counted, GpuMemory, GpuMemoryKind},
+    stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
 };
 
-/// Bytes of each Arena: one provisional capacity for the app, tests, bench
-/// and CI until ADR 0013's split of the 8 GB Budget replaces it.
-pub const ARENA_CAPACITY_BYTES: u64 = 16 << 20;
+/// Bytes of the geometry Arenas' Budget per Mesh table entry: 256 per Arena.
+const GEOMETRY_BYTES_PER_MESH: u64 = 1280;
 
-/// Meshes the Mesh table holds, provisional as `ARENA_CAPACITY_BYTES` is.
-pub const MESH_CAPACITY: u32 = 1 << 16;
+/// Bytes of the texture pool's Budget per Material table entry.
+const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 16 << 20;
+
+/// Bytes of a Channel's share of the texture pool's Budget per Texture class.
+const TEXTURE_POOL_BYTES_PER_CLASS: u64 = 64 << 10;
+
+/// What each pool holds, derived from the GPU memory Budgets at device
+/// creation: the geometry Arenas' Budget in equal shares and the Mesh table
+/// beside it, the texture pool's the Material table and each Channel's
+/// Texture classes, up to what the Capability floor binds. The shares are
+/// provisional until the Budget split sets them (ADRs 0013, 0017).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PoolCapacities {
+    pub vertex_arena_bytes: u64,
+    pub index_arena_bytes: u64,
+    pub meshlet_arena_bytes: u64,
+    pub meshlet_vertex_arena_bytes: u64,
+    pub meshlet_triangle_arena_bytes: u64,
+    pub meshes: u32,
+    pub materials: u32,
+    pub texture_classes_per_channel: u32,
+}
+
+impl PoolCapacities {
+    pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
+        let arena_bytes = budgets.geometry_arenas / 5;
+        let entries = |bytes: u64| u32::try_from(bytes).unwrap_or(u32::MAX);
+        let channels = MaterialChannel::ALL.len() as u64;
+        Self {
+            vertex_arena_bytes: arena_bytes,
+            index_arena_bytes: arena_bytes,
+            meshlet_arena_bytes: arena_bytes,
+            meshlet_vertex_arena_bytes: arena_bytes,
+            meshlet_triangle_arena_bytes: arena_bytes,
+            meshes: entries(budgets.geometry_arenas / GEOMETRY_BYTES_PER_MESH),
+            materials: entries(budgets.texture_pool / TEXTURE_POOL_BYTES_PER_MATERIAL),
+            texture_classes_per_channel: entries(
+                budgets.texture_pool / (channels * TEXTURE_POOL_BYTES_PER_CLASS),
+            )
+            .min(CLASSES_PER_CHANNEL),
+        }
+    }
+
+    /// The capacities of `Budgets::checked_in`.
+    pub fn checked_in() -> Self {
+        Self::from_budgets(&Budgets::checked_in().gpu_memory_bytes_by_kind)
+    }
+}
 
 /// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
 /// trace it through its BLAS, or both.
@@ -94,14 +141,14 @@ pub struct MeshPool {
     meshlet_vertex_arena: Arena,
     meshlet_triangle_arena: Arena,
     mesh_table: Counted<wgpu::Buffer>,
+    mesh_capacity: u32,
 }
 
 impl MeshPool {
-    /// A Mesh pool whose Arenas hold `arena_bytes` each, counted in
-    /// `memory`.
-    pub fn new(device: &wgpu::Device, memory: &GpuMemory, arena_bytes: u64) -> Self {
-        let arena = |label, usage, element_bytes| {
-            Arena::new(device, memory, label, usage, element_bytes, arena_bytes)
+    /// A Mesh pool of `capacities`, counted in `memory`.
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, capacities: &PoolCapacities) -> Self {
+        let arena = |label, usage, element_bytes, capacity_bytes| {
+            Arena::new(device, memory, label, usage, element_bytes, capacity_bytes)
         };
         let u32_bytes = size_of::<u32>() as u64;
         Self {
@@ -121,35 +168,45 @@ impl MeshPool {
                 "Vertex Arena",
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::BLAS_INPUT,
                 size_of::<CookedVertex>() as u64,
+                capacities.vertex_arena_bytes,
             ),
             // The cooked index stream, which no pass draws from: BLAS builds
             // read it.
-            index_arena: arena("Index Arena", wgpu::BufferUsages::BLAS_INPUT, u32_bytes),
+            index_arena: arena(
+                "Index Arena",
+                wgpu::BufferUsages::BLAS_INPUT,
+                u32_bytes,
+                capacities.index_arena_bytes,
+            ),
             meshlet_arena: arena(
                 "Meshlet Arena",
                 wgpu::BufferUsages::STORAGE,
                 size_of::<MeshletData>() as u64,
+                capacities.meshlet_arena_bytes,
             ),
             meshlet_vertex_arena: arena(
                 "Meshlet Vertex Arena",
                 wgpu::BufferUsages::STORAGE,
                 u32_bytes,
+                capacities.meshlet_vertex_arena_bytes,
             ),
             meshlet_triangle_arena: arena(
                 "Meshlet Triangle Arena",
                 wgpu::BufferUsages::STORAGE,
                 u32_bytes,
+                capacities.meshlet_triangle_arena_bytes,
             ),
             mesh_table: memory.create_buffer(
                 device,
                 GpuMemoryKind::SceneAndPassBuffers,
                 &wgpu::BufferDescriptor {
                     label: Some("Mesh Table"),
-                    size: u64::from(MESH_CAPACITY) * size_of::<MeshData>() as u64,
+                    size: u64::from(capacities.meshes) * size_of::<MeshData>() as u64,
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 },
             ),
+            mesh_capacity: capacities.meshes,
         }
     }
 
@@ -238,9 +295,9 @@ impl MeshPool {
             meshlet_vertex_count,
             triangle_count,
         ];
-        if self.meshes.full(MESH_CAPACITY) {
+        if self.meshes.full(self.mesh_capacity) {
             tracing::error!(
-                capacity = MESH_CAPACITY,
+                capacity = self.mesh_capacity,
                 "Mesh refused: the Mesh table is full"
             );
             return None;
@@ -854,6 +911,69 @@ pub(crate) mod tests {
     /// Room for four 28-byte vertices, or 28 indices.
     const CAPACITY: u64 = 4 * 28;
 
+    /// The checked-in capacities with every Arena of `bytes`.
+    fn arenas_of(bytes: u64) -> PoolCapacities {
+        PoolCapacities {
+            vertex_arena_bytes: bytes,
+            index_arena_bytes: bytes,
+            meshlet_arena_bytes: bytes,
+            meshlet_vertex_arena_bytes: bytes,
+            meshlet_triangle_arena_bytes: bytes,
+            ..PoolCapacities::checked_in()
+        }
+    }
+
+    #[test]
+    fn the_checked_in_budgets_keep_the_capacities_before_them() {
+        assert_eq!(
+            PoolCapacities::checked_in(),
+            PoolCapacities {
+                vertex_arena_bytes: 16 << 20,
+                index_arena_bytes: 16 << 20,
+                meshlet_arena_bytes: 16 << 20,
+                meshlet_vertex_arena_bytes: 16 << 20,
+                meshlet_triangle_arena_bytes: 16 << 20,
+                meshes: 1 << 16,
+                materials: 256,
+                texture_classes_per_channel: 13_107,
+            }
+        );
+    }
+
+    /// Budgets for two Meshes make a Mesh table of two and five Arenas of
+    /// 512 bytes: a third triangle, which the Arenas have room for, is
+    /// refused and logged.
+    #[test]
+    fn a_mesh_past_the_mesh_table_its_budget_sizes_is_refused() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let capacities = PoolCapacities::from_budgets(&GpuMemoryBudgets {
+            geometry_arenas: 2560,
+            ..GpuMemoryBudgets::each(0)
+        });
+        let mut staging = LoadStaging::new(context.device.clone());
+        let memory = gpu_memory(&context);
+        let mut pool = MeshPool::new(&context.device, &memory, &capacities);
+        let bytes_by_kind = memory.bytes_by_kind();
+        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 2560);
+        assert_eq!(
+            bytes_by_kind[GpuMemoryKind::SceneAndPassBuffers as usize],
+            2 * size_of::<MeshData>() as u64
+        );
+        let triangle = mesh(3, vec![0, 1, 2]);
+        for _ in 0..2 {
+            pool.load(&mut staging, &triangle, &[None])
+                .expect("a triangle fits");
+        }
+        let (handle, log) = logged(|| pool.load(&mut staging, &triangle, &[None]));
+        assert!(handle.is_none(), "a Mesh past the Mesh table loaded");
+        assert!(
+            log.contains("the Mesh table is full"),
+            "not logged: {log:?}"
+        );
+    }
+
     /// A one-Primitive Mesh of `vertex_count` vertices and `indices`, its
     /// whole triangles one Meshlet.
     pub(crate) fn mesh(vertex_count: usize, indices: Vec<u32>) -> CookedMesh {
@@ -878,7 +998,11 @@ pub(crate) mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(
+            &context.device,
+            &gpu_memory(&context),
+            &PoolCapacities::checked_in(),
+        );
         let triangle = mesh(3, vec![0, 1, 2]);
         let mut load = |id, mesh_use| {
             pool.load_asset(&mut staging, AssetId(id), &triangle, &[None], mesh_use)
@@ -913,7 +1037,11 @@ pub(crate) mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(
+            &context.device,
+            &gpu_memory(&context),
+            &PoolCapacities::checked_in(),
+        );
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
         // Each vertex's x is its index, so a pulled vertex names itself.
@@ -987,7 +1115,7 @@ pub(crate) mod tests {
         let acceleration_structure_bytes =
             || memory.bytes_by_kind()[GpuMemoryKind::AccelerationStructures as usize];
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(&context.device, &memory, &PoolCapacities::checked_in());
         let refitted = pool
             .load_for(
                 &mut staging,
@@ -1067,7 +1195,7 @@ pub(crate) mod tests {
         let acceleration_structure_bytes =
             || memory.bytes_by_kind()[GpuMemoryKind::AccelerationStructures as usize];
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
+        let mut pool = MeshPool::new(&context.device, &memory, &PoolCapacities::checked_in());
         pool.load(&mut staging, &mesh(3, vec![0, 0, 0]), &[None])
             .expect("a triangle fits");
         let handle = pool
@@ -1100,7 +1228,14 @@ pub(crate) mod tests {
             let mut staging = LoadStaging::new(context.device.clone());
             // Room for its 25 triangles; eight pools of full Arenas would
             // take 660 MiB.
-            let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), 4 << 10);
+            let mut pool = MeshPool::new(
+                &context.device,
+                &gpu_memory(&context),
+                &PoolCapacities {
+                    meshes: 25,
+                    ..arenas_of(4 << 10)
+                },
+            );
             (0..25)
                 .map(|_| {
                     let handle = pool
@@ -1342,7 +1477,7 @@ pub(crate) mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let memory = gpu_memory(&context);
-        let mut pool = MeshPool::new(&context.device, &memory, CAPACITY);
+        let mut pool = MeshPool::new(&context.device, &memory, &arenas_of(CAPACITY));
         pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
             .expect("a triangle fits");
         let gpu_memory_bytes = memory.bytes_by_kind();

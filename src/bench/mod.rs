@@ -25,7 +25,7 @@ use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
-use crate::stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
+use crate::stats::{FrameStats, GpuFrameStats, GpuMemoryBudgets, GpuMemoryKind};
 use crate::time::SIXTY_HERTZ;
 
 /// The Baselines `compare` reads, `<adapter key>/<scene>.json`: the reference
@@ -467,6 +467,17 @@ pub struct Budgets {
     /// The longest CPU frame and GPU frame allowed: one 60 Hz period.
     pub maximum_frame_microseconds: f64,
     pub gpu_memory_bytes: u64,
+    /// The pools' capacities derive from these at device creation.
+    pub gpu_memory_bytes_by_kind: GpuMemoryBudgets,
+}
+
+impl Budgets {
+    /// `BUDGETS_PATH` as this build was compiled with it.
+    pub fn checked_in() -> Budgets {
+        serde_json::from_str(include_str!("../../bench/budgets.json")).expect(
+            "bench/budgets.json parses, as the_checked_in_gpu_memory_budgets_fit_the_whole checks",
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -762,8 +773,9 @@ impl std::fmt::Display for Measurements {
 /// Compares `current` with its `baseline` and the Budgets. Medians count
 /// against Baselines. Against the Budgets, the CPU frame, the GPU frame and
 /// the gate count at the median and p99, the CPU frame at the p95 too, and
-/// the CPU and GPU frames' maximums against one 60 Hz period; other p95s
-/// are reported only, as they move with one slow frame. Runs that
+/// the CPU and GPU frames' maximums against one 60 Hz period, and GPU
+/// memory in total and by kind; other p95s are reported only, as they move
+/// with one slow frame. Runs that
 /// measured as many frames compare their measured frames' counters; runs of
 /// other lengths compare their counter frames', and only with
 /// `CompareMode::Ci`, as their times cover other frames.
@@ -793,6 +805,12 @@ pub fn compare(
         current.counters.gpu_memory_bytes as f64,
         budgets.gpu_memory_bytes as f64,
     );
+    for kind in GpuMemoryKind::ALL {
+        if let Some(&bytes) = current.gpu_memory_bytes_by_kind.get(kind.name()) {
+            let budget = budgets.gpu_memory_bytes_by_kind.of(kind);
+            check_budget(&mut findings, kind.name(), bytes as f64, budget as f64);
+        }
+    }
     check_aliasing(&mut findings, current.aliasing, baseline.aliasing);
     if mode == CompareMode::Ci {
         return Ok(findings);
@@ -1226,6 +1244,7 @@ mod tests {
         dynamic_tlas_gpu_microseconds: 1000.0,
         maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
+        gpu_memory_bytes_by_kind: GpuMemoryBudgets::each(1 << 30),
     };
 
     fn verdicts(
@@ -1504,6 +1523,37 @@ mod tests {
         assert_eq!(
             verdicts(&current, &over_budget, CompareMode::Local),
             [("cpu_frame_microseconds", Verdict::Fail)]
+        );
+    }
+
+    /// Each kind of GPU memory answers to its own Budget, and runs without
+    /// a kind's median are judged on the others.
+    #[test]
+    fn a_kind_over_its_gpu_memory_budget_fails() {
+        let mut current = baseline();
+        current.gpu_memory_bytes_by_kind = [("staging", (1 << 30) + 1), ("texture_pool", 1 << 30)]
+            .into_iter()
+            .map(|(kind, bytes)| (kind.to_owned(), bytes))
+            .collect();
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Ci),
+            [("staging", Verdict::Fail)]
+        );
+    }
+
+    /// The pools size themselves from the checked-in Budgets, whose kinds
+    /// split the GPU memory Budget.
+    #[test]
+    fn the_checked_in_gpu_memory_budgets_fit_the_whole() {
+        let budgets = Budgets::checked_in();
+        let kinds: u64 = GpuMemoryKind::ALL
+            .into_iter()
+            .map(|kind| budgets.gpu_memory_bytes_by_kind.of(kind))
+            .sum();
+        assert!(
+            kinds <= budgets.gpu_memory_bytes,
+            "{kinds} over {}",
+            budgets.gpu_memory_bytes
         );
     }
 

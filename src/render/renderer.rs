@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::assets::{ARENA_CAPACITY_BYTES, MaterialPool, MeshPool};
+use crate::assets::{MaterialPool, MeshPool, PoolCapacities};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_PASS, BendPass};
@@ -252,9 +252,15 @@ impl Renderer {
         // Material-as-ID: one bind group (SSBO + per-channel texture arrays +
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
+        let pool_capacities = PoolCapacities::checked_in();
         let mut load_staging = LoadStaging::new(device.clone());
-        let material_pool =
-            MaterialPool::new(&device, &memory, &mut load_staging, switches.residency);
+        let material_pool = MaterialPool::new(
+            &device,
+            &memory,
+            &mut load_staging,
+            &pool_capacities,
+            switches.residency,
+        );
 
         let render_targets = RenderTargets::new(&device, &memory, width, height);
         let culling_pass = CullingPass::new(
@@ -353,7 +359,7 @@ impl Renderer {
                 mapped_at_creation: false,
             },
         );
-        let mesh_pool = MeshPool::new(&device, &memory, ARENA_CAPACITY_BYTES);
+        let mesh_pool = MeshPool::new(&device, &memory, &pool_capacities);
         let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
         // The most a frame uploads: every buffer `upload` writes, in full.
         let uploaded_buffers: [&wgpu::Buffer; 6] = [

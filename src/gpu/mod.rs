@@ -794,9 +794,8 @@ mod tests {
     /// `maxStorageBufferRange` [ref:mesa-25.2.8-gallivm-max-shader-buffer-size].
     #[test]
     fn the_vertex_arena_fits_one_storage_binding_of_the_floor() {
-        assert!(
-            crate::assets::ARENA_CAPACITY_BYTES <= floor_limits().max_storage_buffer_binding_size
-        );
+        let capacities = crate::assets::PoolCapacities::checked_in();
+        assert!(capacities.vertex_arena_bytes <= floor_limits().max_storage_buffer_binding_size);
     }
 
     #[test]

@@ -8,7 +8,7 @@ use crate::render::readback::PassLog;
 
 pub(crate) mod gpu_memory;
 
-pub use gpu_memory::{Charge, Counted, GpuMemory, GpuMemoryKind};
+pub use gpu_memory::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind};
 
 /// What one frame cost.
 #[derive(Clone, Debug, Default)]

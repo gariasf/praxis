@@ -248,6 +248,7 @@ mod tests {
 
     use super::*;
     use crate::bench::{Aliasing, CounterFrames, Counters, Spread};
+    use crate::stats::GpuMemoryBudgets;
 
     const COUNTERS: Counters = Counters {
         draw_calls: 4,
@@ -275,6 +276,7 @@ mod tests {
         dynamic_tlas_gpu_microseconds: 1000.0,
         maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
+        gpu_memory_bytes_by_kind: GpuMemoryBudgets::each(1 << 30),
     };
 
     fn spread(median: f64, p95: f64) -> Spread {
