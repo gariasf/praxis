@@ -5408,3 +5408,543 @@ url = "https://tiswww.case.edu/php/chet/bash/NEWS"
 section = "bash NEWS, new features added to bash-4.0 since the release of bash-3.2, item u"
 quote = '''u.  There is a new `mapfile' builtin to populate an array with lines from a given file.  The name `readarray' is a synonym.'''
 checked = 2026-11-06
+
+["activision-2021-collection-hierarchy"]
+url = "https://www.activision.com/cdn/research/reac2021_geometry_pipeline_rendering_architecture_final.pptx"
+section = "Activision, Geometry Rendering Pipeline Architecture, REAC 2021, speaker notes of slides 10 and 19"
+quote = '''And finally, divide all work units into a hierarchy that allows progressive workload expansion, with interstage culling. [...] Initially CPU used to handle model culling and LOD selection. However, in a world of mass instancing and increasingly complex LOD logic, this quickly became the bottleneck. We were looking for a way to offload all this complex logic to GPU, thus introduced simplified model collections and simple hierarchies. [...] All sModels sharing same materials are furthermore prebuilt into AABB hierarchies. We can use them at runtime for: - Rough culling - LOD range selection for collection - Memory residency check'''
+checked = 2026-11-06
+
+["bevy-0.20-visibility-range-dither"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_pbr/src/render/pbr_functions.wesl#L66-L95"
+section = "Bevy v0.20.1, crates/bevy_pbr/src/render/pbr_functions.wesl, visibility_range_dither, lines 66-95"
+quote = '''/// Visibility ranges, also known as HLODs, are crossfades between different
+/// levels of detail.
+///
+/// The `dither` value ranges from [-16, 16]. [...]
+/// Distinguishing between negative and positive values allows the dither
+/// patterns for different LOD levels of a single mesh to mesh together properly. [...]
+    let coords = vec2<u32>(floor(frag_coord.xy)) % 4u;'''
+checked = 2026-11-06
+
+["brucks-2018-billboard-dither-taa"]
+url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
+section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, Traditional Billboards mode, Dither and PixelDepthOffset paragraphs"
+quote = '''Enabling "Dither" is like a masked Fresnel that uses DitherTemporalAA to smoothly hide the cards that are not facing the camera. It helps but TempAA is not an option for all platforms such as mobile, so this option is not reliable. Speedtree billboards use the vertex shader to simply hide the cards that are not facing the camera. Next, PixelDepthOffset (PDO) is enabled in the video. [...] plus it makes TempAA look smeary when parallax does not match for complicated reasons.'''
+checked = 2026-11-06
+
+["brucks-2018-impostor-hlod-cost"]
+url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
+section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, HLOD section"
+quote = '''We use HLOD in UE4 to represent distant levels that are not actually loaded. We tend to refer to those as "Proxy HLODs". Originally, FNBR just used standard simplification for all the trees. [...] popping was quite noticeable. [...] All told, switching to impostors saved ~270,000 verts from being stored in always loaded memory (proxys never unstream) but it cost around 600 draw calls when viewing the whole island. [...] Standing in wailing woods, enabling impostors saved around 500k triangles from rendering.'''
+cost = '''Each impostor in FNBR uses a 2048 basecolor/alpha and 1024 normal/depth. So each tree is 5.4 + 1.4 or 6.8mb of textures. There are currently 12 trees so thats ~81mb of textures. [...] For mobile we limit impostors to 1024 textures across the board. In the ASTC format, the 1024s use 341kb each. (hardware not stated)'''
+checked = 2026-11-06
+
+["brucks-2018-octahedral-impostors"]
+url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
+section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, paragraphs on Hemi-Octahedron layout, frame blending and Fortnite frame counts"
+quote = '''For this version, I am using Octahedra and Hemi Octahedra to handle the mapping. [...] the Hemi-Octahedron still gains significant resolution for cases where you never need to see below the horizon. It is also kind of convenient that it gives a bit of over-sampling to the horizon, which is where trees are seen from in most games. Most trees should use the Hemi-Octahedron layout for that reason. [...] So if we want to blend smoothly across this grid, we need to be able to identify the 3 nearest frames. [...] This comparison shows a 12x12 layout impostor for one of the main Fortnite pine trees. It holds up pretty well at a medium distance. The smallest frame count used in Fortnite is for the smaller farm trees which get by pretty well with only an 8x8 layout.'''
+checked = 2026-11-06
+
+["brucks-impostorbaker-c75d365"]
+url = "https://github.com/ictusbrucks/ImpostorBaker/blob/c75d365bf3a8a2f196502a79840857fbc9f684af/ImpostorBaker.uplugin"
+section = "Ryan Brucks, ImpostorBaker UE4 plugin, ImpostorBaker.uplugin at commit c75d365 (repository has no LICENSE file; GitHub reports no licence)"
+quote = '''"Description": "Generates a variety of Impostors for use as distant mesh LODs.", [...] "CreatedBy": "Ryan Brucks",'''
+checked = 2026-11-06
+
+["cesium-2022-dithered-lod-transitions"]
+url = "https://web.archive.org/web/20260909235459/https://cesium.com/blog/2022/10/20/smoother-lod-transitions-in-cesium-for-unreal/"
+section = "Cesium, Smoother LOD Transitions in Cesium for Unreal with Dithered Opacity Masking (blog, 20 Oct 2022)"
+quote = '''As the name suggests, the "Dither Temporal AA" material node works best with temporal anti-aliasing (TAA). [...] If TAA is enabled, the sampled noise changes every frame [...] the temporal accumulation ends up blending the foreground and background together over several frames [...] the implicit cost of LOD blending remains [...] We chose 0.5 seconds as the default transition length to balance transition smoothness, apparent latency, and GPU spikes.'''
+checked = 2026-11-06
+
+["cesium-unreal-1104-dither-msaa"]
+url = "https://github.com/CesiumGS/cesium-unreal/issues/1104"
+section = "CesiumGS/cesium-unreal issue #1104 (kring, 23 May 2023), DitherFade material layer causes serious artifact with forward rendering / MSAA"
+quote = '''We're using an engine-provided material node that is meant for temporal AA, but it's not clear why it fails so badly with MSAA.'''
+checked = 2026-11-06
+
+["decima-2017-cluster-sort-key"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=26"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 26"
+quote = '''We generate a sort key for each QueryInstance using filter bits, maxmimum LOD range, and Morton number. The filter allows us to quickly discard clusters that aren't relevant to a query, and the LOD range does a similar thing for dense areas of content. Below this the Morton numbers give a degreee of spatial coherence. After sorting, we use the changes in sort keys to define clusters, again with a minimum size of 4K instances to help with load balancing. Each cluster is a potential compute job.'''
+checked = 2026-11-06
+
+["decima-2017-collapsed-lods"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=19"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF pp. 19, 20 and 30"
+quote = '''many of our static resources looked like this, with a top-level LodMeshResource selecting between one or more LODs of building blocks, and one or more LODs of collapsed geometry created by export tools. The building blocks themselves have LOD nodes, but in the collapsed geometry that’s simplified away. [...] The key observation was that two LOD levels were enough to represent all those trees. We call these parent and child [...] A leaf is visible if and only if both parent and child LODs are selected. [...] we do both child LOD and accurate visibility tests since we need both results to update the LOD fade states.'''
+checked = 2026-11-06
+
+["decima-2017-cpu-hierarchy-gpu-jobs"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=28"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 28"
+quote = '''We use the tile and cluster hierarchy to skip as many clusters as possible, and dispatch one compute job for each visible cluster. Then the CPU job waits for compute to finish.'''
+checked = 2026-11-06
+
+["decima-2017-query-time"]
+url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=46"
+section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, slide Statistics (image), PDF p. 46; PS4 from the p. 18 notes"
+quote = '''Typically have 500K – 1.5M StaticInstances StaticScene GPU data uses ~10-30MB Main static query time is ~1-2ms • Some of that time the CPU busy-waits for GPU • Shadow query times generally less'''
+cost = '''Main static query time is ~1-2ms (500K – 1.5M StaticInstances; PS4; resolution not stated)'''
+checked = 2026-11-06
+
+["decoret-2003-billboard-clouds"]
+url = "https://inria.hal.science/inria-00510175/document#page=2"
+section = "Décoret, Durand, Sillion and Dorsey, Billboard Clouds for Extreme Model Simplification, SIGGRAPH 2003 (ACM TOG 22(3), doi:10.1145/882262.882326), HAL inria-00510175, Abstract (PDF p. 2); Section 6 and Table 1 (PDF p. 7); Figure 10 caption (PDF p. 8)"
+quote = '''3D models are simplified onto a set of planes with texture and transparency maps. [...] This method does not require connectivity information, but instead avoids cracks by projecting primitives onto multiple planes when needed. For extreme simplification, our approach combines the strengths of mesh decimation and image-based impostors. [...] In particular, billboard clouds are usually limited by fill rates and the cost of context switching.'''
+cost = '''Table 1: Rendering time (in ms) for different number of billboards in the cloud. Bounding box of screen projection is about 128 [...] 31: 0.068; 60: 0.072; 416: 0.220; 552: 0.208 (Table 1 states no hardware; the caption of Figure 10, for the simplification timings, reads "Timings measured on a 2 GHz Pentium IV processor with NVidia GeForce 4 Ti4600 with 128MB.")'''
+checked = 2026-11-06
+
+["fatahalian-2010-small-triangle-overshade"]
+url = "https://graphics.stanford.edu/papers/fragmerging/shade_sig10.pdf#page=1"
+section = "Fatahalian et al., Reducing Shading on GPUs using Quad-Fragment Merging (SIGGRAPH 2010), abstract and Figure 1 caption, p. 1 (simulated pipeline)"
+quote = '''Current GPUs perform a significant amount of redundant shading when surfaces are tessellated into small triangles. [...] Over-shade in a GPU pipeline increases as scene triangle size shrinks [...] When this scene is tessellated into pixel-sized triangles, each pixel is shaded more than eight times.'''
+checked = 2026-11-06
+
+["frostbite-2019-strand-pixel-width"]
+url = "https://advances.realtimerendering.com/s2019/hair_presentation_final.pdf#page=28"
+section = "Tafuri, Strand-based Hair Rendering in Frostbite, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 28-30 and 34, speaker notes"
+quote = '''Since the strands are very thin, they will usually have a width that is less than that of a screen pixel. We therefore need to take the pixel size into account when tessellating, and increase the width appropriately, or we will risk getting missing or broken up hair strands. [...] this will have another not so nice side effect which can cause the hair to look too thick [...] Just enabling MSAA does unfortunately not solve all problems. While it does improve on aliasing issues [...] It will suffer an even bigger performance hit due to overdraw'''
+cost = '''Regular PS4, 900P, no MSAA, all strands rendered [...] Long hair 10 000 [strands] 240 000 [points] 4.7ms [physics] 4.5ms [render] Short hair 15 000 75 000 0.4ms 1.9ms'''
+checked = 2026-11-06
+
+["garland-1997-qem"]
+url = "https://www.cs.cmu.edu/~garland/Papers/quadrics.pdf#page=1"
+section = "Garland and Heckbert, Surface Simplification Using Quadric Error Metrics (SIGGRAPH 1997, doi:10.1145/258734.258849), abstract and §1, p. 1; timing footnote 4, p. 5"
+quote = '''The algorithm uses iterative contractions of vertex pairs to simplify models and maintains surface error approximations using quadric matrices. By contracting arbitrary vertex pairs (not just edges), our algorithm is able to join unconnected regions of models.'''
+cost = '''our implementation can create a 100 face approximation of a 70,000 face model in 15 seconds. The error approximation is also very compact, requiring only 10 floating point numbers per vertex. [...] This data was collected on an SGI Indigo2 with a 195 MHz R10000 processor and 128 Mbytes of memory.'''
+checked = 2026-11-06
+
+["godot-4.4-lod-generation"]
+url = "https://github.com/godotengine/godot/blob/4.4-stable/scene/resources/3d/importer_mesh.cpp#L450-L506"
+section = "Godot 4.4-stable, ImporterMesh::generate_lods, lines 450-506 (meshopt simplifyWithAttributes, normal weights 2.0, LockBorder)"
+quote = '''unsigned int index_target = 12; // Start with the smallest target, 4 triangles [...] const float max_mesh_error = FLT_MAX; // We don't want to limit by error, just by index target [...] if (new_index_count == 0 || (new_index_count >= (index_count * 0.75f))) { [...] lod.distance = MAX(mesh_error * scale, CMP_EPSILON2); [...] index_target = MAX(new_index_count, index_target) * 2;'''
+checked = 2026-11-06
+
+["godot-4.4-mesh-lod-threshold"]
+url = "https://github.com/godotengine/godot-docs/blob/db50fcf144b7ab3fc3382f93e0351f46caed3c2c/tutorials/3d/mesh_lod.rst?plain=1#L153-L190"
+section = "Godot 4.4 docs, Mesh level of detail, Comparing mesh LOD visuals and performance (L153-L156, L172) and Using mesh LOD with MultiMesh and particles (L185-L190)"
+quote = '''The default mesh LOD threshold of 1 pixel is tuned to look *perceptually* lossless; it provides a significant performance gain with an unnoticeable loss in quality. [...] When rendering the scene, mesh LOD selection uses a screen-space metric. [...] For LOD selection, the point of the node's AABB that is the closest to the camera is used as a basis. [...] this means that all instances will be drawn with the same LOD level at a given time.'''
+checked = 2026-11-06
+
+["godot-4.4-visibility-range-hysteresis"]
+url = "https://github.com/godotengine/godot-docs/blob/db50fcf144b7ab3fc3382f93e0351f46caed3c2c/tutorials/3d/visibility_ranges.rst?plain=1#L111-L116"
+section = "Godot 4.4 docs, Visibility ranges (HLOD), Fade mode, lines 111-116"
+quote = '''Disabled: Uses hysteresis to switch between LOD levels instantly. This prevents situations where LOD levels are switched back and forth quickly when the player moves forward and then backward at the LOD transition point. [...] This mode provides the best performance as it doesn't force rendering to become transparent during the fade transition.'''
+checked = 2026-11-06
+
+["godot-4.5-dithered-lod"]
+url = "https://docs.godotengine.org/en/4.5/tutorials/3d/visibility_ranges.html"
+section = "Godot 4.5 documentation, Visibility ranges (HLOD), Use dithering for LOD transitions"
+quote = '''There are two advantages to using dithering over alpha blending for LOD transitions: Higher performance, as dithering transparency is faster to render compared to alpha blending. No visual glitches due to transparency sorting issues during LOD transitions. The downside of dithering is that a "noisy" pattern is visible during LOD fade transitions. This may not be as noticeable at higher viewport resolutions or when temporal antialiasing is enabled.'''
+checked = 2026-11-06
+
+["golus-2017-alpha-to-coverage"]
+url = "https://web.archive.org/web/20261016230034/https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
+section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage (Medium, 12 Aug 2017), Alpha to Coverage; Fixing the Solution"
+quote = '''Okay, so with 4x MSAA and Alpha to Coverage you get 5 levels of opacity you can play with, 4/4 through 0/4 samples. [...] Two or more overlapping triangles with 50% Alpha to Coverage results in no change in opacity. Only the closest coverage points get rendered. [...] If the output alpha is 50% with 4x MSAA only two coverage samples are written to. But it's going to be the same two coverage samples for everything that renders to that pixel with 50% A2C!'''
+checked = 2026-11-06
+
+["haar-aaltonen-2015-coarse-cpu-cull"]
+url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=13"
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances, Rendering Pipeline Overview, p. 13 (legend colours stages CPU or GPU)"
+quote = '''COARSE FRUSTUM CULLING [...] BATCH DRAWCALLS INSTANCE CULLING (FRUSTUM/OCCLUSION) CLUSTER CHUNK EXPANSION CLUSTER CULLING (FRUSTUM/OCCLUSION/TRIANGLE BACKFACE) INDEX BUFFER COMPACTION MULTI-DRAW [...] - CPU - GPU'''
+checked = 2026-11-06
+
+["hasselgren-2021-appearance-driven-simplification"]
+url = "https://arxiv.org/pdf/2104.03989v1#page=1"
+section = "Hasselgren, Munkberg, Lehtinen, Aittala and Laine, Appearance-Driven Automatic 3D Model Simplification (EGSR 2021, arXiv 2104.03989v1), Fig. 1 caption and §1, p. 1; §5.3, p. 11"
+quote = '''Compared to the reference, we accurately capture the appearance of the scene at just a fraction (0.4%) of the triangle count. [...] Geometric simplification (LOD). Optimizing for the shape of a lower-resolution mesh to combat geometric aliasing and increase rendering efficiency.'''
+cost = '''For the final results, we run optimization at a resolution of 2048×2048 pixels for 10k steps, which typically takes a few hours on a single NVIDIA V100 GPU.'''
+checked = 2026-11-06
+
+["hoppe-1996-geomorph"]
+url = "https://hhoppe.com/pm.pdf#page=3"
+section = "Hoppe, Progressive Meshes (SIGGRAPH 1996, doi:10.1145/237170.237216), §3.2 Geomorphs, p. 3"
+quote = '''Using such geomorphs, an application can smoothly transition from a mesh Mi to meshes Mi+1 or Mi−1 without any visible "snapping" of the meshes. [...] given a finer mesh Mf and a coarser mesh Mc [...] there exists a natural correspondence between their vertices: each vertex of Mf is related to a unique ancestor vertex of Mc by a surjective map Ac obtained by composing a sequence of ecol transformations [...] (In practice, this ancestor information Ac is gathered in a forward fashion as the mesh is refined.)'''
+checked = 2026-11-06
+
+["hoppe-1996-progressive-meshes"]
+url = "https://hhoppe.com/pm.pdf#page=1"
+section = "Hoppe, Progressive Meshes (SIGGRAPH 1996, doi:10.1145/237170.237216), §1 Introduction, p. 1"
+quote = '''A detailed mesh is used when the object is close to the viewer, and coarser approximations are substituted as the object recedes. Since instantaneous switching between LOD meshes may lead to perceptible “popping”, one would like to construct smooth visual transitions, geomorphs, between meshes at different resolutions.'''
+checked = 2026-11-06
+
+["hoppe-1999-attribute-quadrics"]
+url = "https://hhoppe.com/newqem.pdf#page=1"
+section = "Hoppe, New Quadric Metric for Simplifying Meshes with Appearance Attributes (IEEE Visualization 1999, doi:10.1109/VISUAL.1999.809869), abstract, p. 1"
+quote = '''In this paper we present an improved quadric error metric for simplifying meshes with attributes. The new metric, based on geometric correspondence in 3D, requires less storage, evaluates more quickly, and results in more accurate simplified meshes. [...] The new scheme is demonstrated on a variety of meshes with colors and normals.'''
+checked = 2026-11-06
+
+["karis-2021-hierarchy-dependent-dispatches"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=71"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Hierarchical culling - naive approach, p. 71, notes"
+quote = '''Implemented naively looks like this with many passes, each processing a single level of the tree, appending any passing children nodes to a buffer to be processed by the next pass. Each pass depends on the previous, so the GPU is completely drained at every level of the tree. Because the CPU doesn't know how deep the recursion will go, enough dispatches have to be issued to cover the worst case. This means we can very easily end up with empty dispatches that don't do any processing at all!'''
+checked = 2026-11-06
+
+["karis-2021-instance-cull-cost"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=110"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances, Pipeline numbers p. 109 and Performance p. 110; hardware not stated"
+quote = '''Main pass Instances pre-cull 896322 Instances post-cull 3668 [...] Post pass Instances pre-cull 102804 Instances post-cull 365'''
+cost = '''Average ~2496x1404 upsampled to 4k [...] ~2.5ms to draw entire VisBuffer [...] Main Pass: InstanceCull 108ms Main Pass: ClusterCull 406us [...] Post Pass: InstanceCull 125us'''
+checked = 2026-11-06
+
+["karis-2021-instance-cull-single-dispatch"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=15"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide GPU Driven Pipeline, p. 15, slide and notes"
+quote = '''Per view: ● GPU instance cull ● Triangle rasterization [...] For each view we can determine the visible instances in a single dispatch'''
+checked = 2026-11-06
+
+["karis-2021-instances-new-triangles"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=95"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Tiny instances, p. 95, notes"
+quote = '''Since getting their hands on Nanite our artists have pushed instance count just as much if not more so than polycount. Joke around the office is instances are the new triangles.'''
+checked = 2026-11-06
+
+["karis-2021-persistent-threads-scheduling"]
+url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=73"
+section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Persistent Threads - Hierarchy Culling, p. 73"
+quote = '''● Relies on scheduling behavior ● Requires that once a group has started executing, it will not be starved indefinitely ● Scheduling behavior not defined by D3D or HLSL ● Works on consoles and all relevant GPUs we have tested ● An optimization. Not a requirement for Nanite'''
+cost = '''10-60% saving (typically ~25%), depending on scene complexity'''
+checked = 2026-11-06
+
+["kircher-2024-spider-man-2-distant-lods"]
+url = "https://web.archive.org/web/20260818170518/https://gdcvault.com/play/1034212/Applied-Mesh-Analysis-Automating-Distant"
+section = "Scott Kircher (Insomniac Games), Applied Mesh Analysis: Automating Distant-City LODs in 'Marvel's Spider-Man 2', GDC 2024, session overview"
+quote = '''The manual distant-LOD geometry pipeline of Marvel's Spider-Man and Marvel's Spider-Man: Miles Morales was no longer viable. This lecture describes how Insomniac Games transitioned to automated distant-LOD geometry generation. In particular, it covers in-depth the applications of fundamental mesh analysis concepts (dual meshes, the Euler Characteristic, curvature estimation, etc...) to several difficult problems (beyond standard reduction and remeshing)'''
+checked = 2026-11-06
+
+["levien-2021-gpuweb-no-progress-guarantee"]
+url = "https://github.com/gpuweb/gpuweb/issues/2229"
+section = "Raph Levien, gpuweb issue 2229 Atomic concerns (2021-10-30), issue body"
+quote = '''It's more of a forward progress concern, and we're very careful to avoid forward progress guarantees. (Indeed, we now have [empirical evidence](https://arxiv.org/abs/2109.06132) that not all existing GPUs can provide a strong forward progress guarantee).'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-attribute-simplify"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L467-L514"
+section = "meshoptimizer 0.25 README, Attribute-aware simplification (L467) and Permissive simplification (L514)"
+quote = '''This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates) [...] The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-lod-chain"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L521-L554"
+section = "meshoptimizer 0.25 README, Simplification (L521), Simplification with vertex update (L533) and Advanced simplification (L554)"
+quote = '''All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption [...] Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). [...] When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection.'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-lod-selection"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L454-L460"
+section = "meshoptimizer 0.25 README, Basic simplification, LOD selection example, lines 454-460"
+quote = '''The algorithm can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle [...] float d = max(0, distance(camera_position, mesh_center) - mesh_radius); float e = d * (tan(camera_fovy / 2) * 2 / screen_height); // 1px in mesh space bool lod_ok = e * lod_factor >= lod_error;'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-simplify-error"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L446-L452"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), README, Simplification: Basic simplification, lines 446-452"
+quote = '''Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). [...] setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-simplify-original-vertices"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L433-L439"
+section = "meshoptimizer v0.25, src/meshoptimizer.h, meshopt_simplify documentation"
+quote = '''* Mesh simplifier
+ * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible [...]
+ * The resulting index buffer references vertices from the original vertex buffer.'''
+checked = 2026-11-06
+
+["meshoptimizer-0.25-simplify-sloppy"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L452"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which exposes simplify_sloppy), README, Simplification (L452, L544) and experimental API list (L716)"
+quote = '''`meshopt_simplifySloppy`, which doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter because it can merge mesh features that are topologically disjoint but spatially close. [...] `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. [...] - `meshopt_simplifySloppy`'''
+checked = 2026-11-06
+
+["meshoptimizer-1.3-voxel-remesh"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L691"
+section = "meshoptimizer v1.3 README, Voxel remeshing (L691, L704) and experimental API list (L1003); not in the vendored 0.25"
+quote = '''small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution `[4..256]` [...] The resulting mesh is generated as an unindexed array of triangles [...] If mesh attributes such as vertex normals, tangents or texture coordinates are required, they will need to be generated or transferred from the original mesh. [...] - `meshopt_remesh` function and `meshopt_Remesh*` flags'''
+checked = 2026-11-06
+
+["misiak-2021-xr-impostors"]
+url = "https://web.archive.org/web/20260715231257/https://cg.web.th-koeln.de/impostor-based-rendering-acceleration-for-virtual-augmented-and-mixed-reality/"
+section = "Mišiak, Fuhrmann and Latoschik, Impostor-based Rendering Acceleration for Virtual, Augmented, and Mixed Reality, VRST 2021, doi:10.1145/3489849.3489865, abstract on the authors' group page"
+quote = '''Motion parallax of typical head movements is compensated by using a ray marched parallax correction step. Our approach provides a dynamic run-time recreation of impostors as necessary for larger changes in view position. The dynamic run-time recreation is decoupled from the actual rendering process. Hence, its associated processing cost is therefore distributed over multiple frames. [...] our impostors compare favorably against the original mesh representation, as geometric and textural temporal aliasing artifacts are heavily suppressed.'''
+checked = 2026-11-06
+
+["moore-2018-fc5-terrain-quadtree"]
+url = "https://web.archive.org/web/20260513233252/https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=14"
+section = "Jeremy Moore (Ubisoft), Terrain Rendering in Far Cry 5, GDC 2018, speaker notes, PDF pp. 4, 14, 15 and 22"
+quote = '''The Far Cry 5 world is 10km x 10km in size. [...] At the root the world is divided into a set of 2km square tiles which are always resident. [...] Until at the lowest LOD we load all of the nodes and keep them always resident. [...] But we use 6 levels in the Far Cry 5 quad tree.'''
+cost = '''Our target budget was around 2ms GPU for full screen terrain. (PDF p. 4; hardware not stated)'''
+checked = 2026-11-06
+
+["msl-4.1-sample-mask-output"]
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=151"
+section = "Metal Shading Language Specification 4.1 (2026-06-04), §5.2.3.5 Fragment Function Output Attributes, Table 5.7, p. 151"
+quote = '''sample_mask uint Coverage mask. All OS: Metal 1 and later.'''
+checked = 2026-11-06
+
+["msl-4.1-simdgroup-forward-progress"]
+url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=157"
+section = "Apple, Metal Shading Language Specification Version 4.1 (2026-06-04), kernel function attributes, p. 157"
+quote = '''SIMD-groups execute concurrently within a given threadgroup and make independent forward progress with respect to each other, in the absence of threadgroup barrier operations.'''
+checked = 2026-11-06
+
+["niagara-567ebe3-gpu-lod-select"]
+url = "https://github.com/zeux/niagara/blob/567ebe331247e122425eaf1a6319d8c64daf816d/src/shaders/drawcull.comp.glsl#L106-L118"
+section = "Kapoulkine, niagara at 567ebe3 (MIT), drawcull.comp.glsl, per-draw LOD pick in the culling compute shader, lines 106-118; lodTarget set to 1 px in niagara.cpp L1526"
+quote = '''float distance = max(length(center) - radius, 0); float threshold = distance * cullData.lodTarget / drawData.scale; for (uint i = 1; i < mesh.lodCount; ++i) if (mesh.lods[i].error < threshold) lodIndex = i; } MeshLod lod = meshes[meshIndex].lods[lodIndex];'''
+checked = 2026-11-06
+
+["niagara-567ebe3-lod-chain"]
+url = "https://github.com/zeux/niagara/blob/567ebe331247e122425eaf1a6319d8c64daf816d/src/scene.cpp#L243-L268"
+section = "Kapoulkine, niagara at 567ebe3 (MIT), scene.cpp, LOD chain build (L243-L260) and RT LOD pick (L266-L268); MeshLod lods[8] in scene.h"
+quote = '''size_t nextIndicesTarget = (size_t(double(lodIndices.size()) * 0.6) / 3) * 3; [...] if (nextIndices >= size_t(double(lodIndices.size()) * 0.85)) break; [...] lodError = std::max(lodError * 1.5f, nextError); // important! since we start from last LOD, we need to accumulate the error [...] if (mesh.lods[i].error * maxScale < kShadowLodError) mesh.lodRT = i;'''
+checked = 2026-11-06
+
+["nv-alpha-to-coverage-dither-control"]
+url = "https://registry.khronos.org/OpenGL/extensions/NV/NV_alpha_to_coverage_dither_control.txt"
+section = "Khronos OpenGL registry, NV_alpha_to_coverage_dither_control (rev. 1.01, 31 May 2017), modification to §17.3.3"
+quote = '''It is also intended that the algorithm be pseudo-random in nature, to avoid image artifacts due to regular coverage sample locations. The function AlphaToCoverageDitherControlNV() allows to specify the kind of algorithm: If the mode is ALPHA_TO_COVERAGE_DITHER_ENABLE, the algorithm is different at different pixel locations. [...] If the mode is ALPHA_TO_COVERAGE_DITHER_DISABLE, then no dithering should be applied and the same conversion should happen regardless of the pixel coordinates.'''
+checked = 2026-11-06
+
+["nvdiffmodeling-licence"]
+url = "https://github.com/NVlabs/nvdiffmodeling/blob/9b2ba2eff83c7d90127f78c20773b06ddc3ae1db/LICENSE.txt"
+section = "NVlabs nvdiffmodeling at 9b2ba2e, LICENSE.txt, Nvidia Source Code License (1-Way Commercial), §3.3 Use Limitation"
+quote = '''The Work and any derivative works thereof only may be used or intended for use non-commercially. [...] As used herein, "non-commercially" means for research or evaluation purposes only and not for any direct or indirect monetary gain.'''
+checked = 2026-11-06
+
+["osg-3.6.5-small-feature-culling"]
+url = "https://github.com/openscenegraph/OpenSceneGraph/blob/OpenSceneGraph-3.6.5/include/osg/CullingSet#L252-L255"
+section = "OpenSceneGraph 3.6.5 (OSGPL 1.0), CullingSet::isCulled(const BoundingSphere&), L252-L255; default threshold in include/osg/CullSettings L220-L222, default mode L186-L187"
+quote = '''if (_mask&SMALL_FEATURE_CULLING) { if (((bs.center()*_pixelSizeVector)*_smallFeatureCullingPixelSize)>bs.radius()) return true; } [...] Threshold at which small features are culled. \param value Bounding volume size in screen space. Default is 2.0. [...] DEFAULT_CULLING = VIEW_FRUSTUM_SIDES_CULLING| SMALL_FEATURE_CULLING|'''
+checked = 2026-11-06
+
+["persson-2012-landmarks-distant-forest"]
+url = "https://web.archive.org/web/20261004131416/https://humus.name/Articles/Persson_CreatingVastGameWorlds.pdf#page=5"
+section = "Emil Persson (Avalanche Studios), Creating Vast Game Worlds: Experiences from Avalanche Studios, SIGGRAPH 2012 talk notes, PDF pp. 5 and 28"
+quote = '''For performance and memory reasons we can never have the whole world loaded, so only the relatively close locations are in memory. But for key landmarks and locations we have simple landmark models resident at all times. [...] a patch of billboard trees, you may have a hundred trees in there [...] in the far end it could be fading over to the coarse distant forest representation and close up it could be faded over to an actual fully detailed model'''
+checked = 2026-11-06
+
+["persson-2012-phone-wire-aa"]
+url = "https://web.archive.org/web/20260515045315/http://www.humus.name/index.php?page=3D&ID=89"
+section = "Emil Persson (Humus), Phone-wire AA, demo page, 26 June 2012"
+quote = '''A common culprit of aliasing in games is phone wires. Due to the thin geometry they tend to get broken up into a bunch of random disconnected dots after a distance. MSAA helpes reduce the problem but doesn't fully solve it. It merely pushes the problem a factor further into the distance. [...] The idea is to adjust the radius of the wire to make sure it does not get smaller than a pixel wide. If the wire's radius would make it smaller than a pixel, it clamps the width to a pixel and instead fades with an alpha value corresponding to the radius reduction ratio. [...] A similar approach could likely be used on other aliasing prone geometry based on thin geometry, such as antenna towers, pipes and railings.'''
+checked = 2026-11-06
+
+["persson-2012-phone-wire-aa-licence"]
+url = "https://web.archive.org/web/20221218100843/http://www.humus.name/3D/PhoneWireAA.zip"
+section = "Emil Persson, PhoneWireAA.zip, PhoneWireAA/App.cpp header note"
+quote = '''You are free to use the code in any way you like, modified, unmodified or copied into your own work. However, I expect you to respect these points: [...] - For use in anything commercial, please request my approval.'''
+checked = 2026-11-06
+
+["simplygon-10.1-remeshing"]
+url = "https://web.archive.org/web/20251217062512/https://documentation.simplygon.com/SimplygonSDK_10.1.400.0/concepts/remeshing.html"
+section = "Simplygon SDK 10.1.400.0 documentation, Concepts, Remeshing, Overview and Target"
+quote = '''The remeshed object is created and optimized for a certain on-screen pixel size - which means that holes and parts that are close to each other will have their gaps filled if the distance is below a pixel. At default settings, the proxy mesh is assumed to be viewed from the outside. Any interior mesh that cannot be seen is removed. [...] The LOD quality and triangle count is relative to this metric and will generate more triangles at larger values and fewer at lower, while keeping the geometrical error under one pixel for the given screen size.'''
+checked = 2026-11-06
+
+["simplygon-10.4-on-screen-size"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.117.0/api/reference/processingandmaterialcasting/settingsobject/reductionsettings.html"
+section = "Simplygon SDK 10.4.117.0, API reference, ReductionSettings, ReductionTargetOnScreenSize"
+quote = '''ReductionTargetOnScreenSize The OnScreenSize value, used to calculate the maximum surface-deviation allowed, by assuming errors less than 1 pixel onscreen will not be noticeable.'''
+checked = 2026-11-06
+
+["sorensen-2021-apple-obe-violation"]
+url = "https://arxiv.org/pdf/2109.06132v1#page=25"
+section = "Sorensen et al., Specifying and Testing GPU Workgroup Progress Models, OOPSLA 2021, p. 25 (OBE defined p. 2)"
+quote = '''Furthermore, our contacts at Apple provided an additional test that is able to show a violation of OBE on the A12 and A14. This test consists of threads repeatedly acquiring and releasing a mutex using a custom spin-lock (implemented using an atomic compare-and-swap).'''
+checked = 2026-11-06
+
+["sorensen-2021-progress-spec-gap"]
+url = "https://arxiv.org/pdf/2109.06132v1#page=1"
+section = "Sorensen, Salvador, Raval, Evrard, Wickerson, Martonosi and Donaldson, Specifying and Testing GPU Workgroup Progress Models, Proc. ACM Program. Lang. OOPSLA 2021, Article 131, abstract, p. 1"
+quote = '''Unfortunately, many GPU programming specifications (e.g. Vulkan and Metal) say almost nothing about relative forward progress guarantees between workgroups. Although prior work has proposed a spectrum of plausible progress models for GPUs, cross-vendor specifications have yet to commit to any model. [...] Most notably, we find that Apple and ARM GPUs do not support the linear occupancy-bound model'''
+checked = 2026-11-06
+
+["speedtree-runtime-billboard-a2c"]
+url = "https://docs.unity3d.com/speedtree-runtime-sdk/manual/level-of-detail.html"
+section = "SpeedTree Runtime SDK manual, Level of detail, Billboards/impostors and Overhead billboards (no archive snapshot available)"
+quote = '''Once the 3D tree is far enough away from the camera, it will gradually become a billboard. With alpha-to-coverage enabled, this is a smooth transition. The alpha values of the 3D trees gradually become transparent while the billboards gradually fade in with an increasing opacity. As the camera spins around the billboard, the shader will automatically select a billboard from an array of images that best matches the camera's azimuthal angle combined with the rotation of that tree instance. [...] The overhead billboard is cross-faded with the vertical billboards, depending on the camera angle.'''
+checked = 2026-11-06
+
+["strugar-2010-cdlod-morph"]
+url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/cdlod_paper_latest.pdf"
+section = "Strugar, Continuous Distance-Dependent Level of Detail for Rendering Heightmaps (CDLOD) (11 July 2010), Morph implementation, p. 7; Granularity issues, p. 9"
+quote = '''Using CDLOD, each vertex is morphed individually based on its own LOD metric [...] Morph operation is performed in the vertex shader in such way that every block of eight triangles from the more detailed mesh is smoothly morphed into the corresponding block of two triangles on the less detailed mesh by gradual enlargement of the two triangles and reduction of the remaining six triangles into degenerate triangles that are not rasterized. This process produces smooth transitions with no seams or T-junctions [...] One limitation of the algorithm is that a single quadtree node can only support transition between two LOD layers.'''
+checked = 2026-11-06
+
+["tressfx-4.1-strand-expand"]
+url = "https://github.com/GPUOpen-Effects/TressFX/blob/v4.1.0/src/Shaders/TressFXStrands.hlsl#L100-L101"
+section = "AMD TressFX v4.1.0 (MIT), src/Shaders/TressFXStrands.hlsl, GetExpandedTressFXVert, lines 100-101; ComputeCoverage in TressFXRendering.hlsl lines 104-115"
+quote = '''// We always to to expand for faster hair AA, we may want to gauge making this adjustable
+    float expandPixels = 0.71;'''
+checked = 2026-11-06
+
+["ue-5.6-auto-lod-groups"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/static-mesh-automatic-lod-generation-in-unreal-engine?application_version=5.6"
+section = "Unreal Engine 5.6 documentation, Static Mesh Automatic LOD Generation, intro and Using LOD Groups"
+quote = '''Automatic LOD generation uses what is called quadratic mesh simplification [...] It will continue to collapse edges until it reaches the requested target number of triangles. [...] SmallProp=(NumLODs=4,LODPercentTriangles=50,PixelError=10,Name=LOCTEXT("SmallPropLOD","Small Prop")) [...] HighDetail=(NumLODs=6,LODPercentTriangles=50,PixelError=6,Name=LOCTEXT("HighDetailLOD","High Detail"))'''
+checked = 2026-11-06
+
+["ue-5.6-cull-distance-volumes"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/cull-distance-volumes-in-unreal-engine?application_version=5.6"
+section = "Unreal Engine 5.6 documentation, Cull Distance Volumes"
+quote = '''These volumes store any number of size and distance combinations called Cull Distance Pairs . These are mapped to the bounds of an Actor (along its longest dimension) and then assigned to that Actor instance in the level. [...] Additional pair values and testing would improve the "popping" visible in the example.'''
+checked = 2026-11-06
+
+["ue-5.6-lod-screen-size"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-and-using-lods-in-unreal-engine?application_version=5.6"
+section = "Unreal Engine 5.6 documentation, Creating and Using LODs"
+quote = '''Also note that it is not calculated by distance, but by screen size, so if you place a larger instance of the mesh beside a smaller instance of the mesh and start moving an equal distance away from both of them, the smaller instance will switch to the next LOD before the larger instance does.'''
+checked = 2026-11-06
+
+["ue-5.6-skeletal-lod-hysteresis"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/skeletal-mesh-lods-in-unreal-engine?application_version=5.6"
+section = "Unreal Engine 5.6 documentation, Skeletal Mesh LODs, LOD properties table"
+quote = '''LOD Hysteresis This value is used to avoid 'flickering' when crossing a LOD threshold. Only taken into account when transitioning from a complex to a simple LOD. Higher values will increase the hysteresis, or lag, of the perceived model, which can smooth transitions between radically different LODs.'''
+checked = 2026-11-06
+
+["ue-5.8-dithered-lod-transition"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-material-properties?application_version=5.8"
+section = "Unreal Engine 5.8 Documentation, Material Properties, Advanced: Dithered LOD Transition; Dither Opacity Mask"
+quote = '''Dithered LOD Transition Whether meshes rendered with this material should support dithered LOD transitions. Dither Opacity Mask When combined with Temporal Anti-Aliasing, this can provide a form of limited translucency which supports all lighting features.'''
+checked = 2026-11-06
+
+["ue-5.8-hlod-approximate-voxel"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L73-L79"
+section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings (settings of the Approximated Mesh HLOD layer)"
+quote = '''/** Approximation Accuracy in Meters, will determine (eg) voxel resolution */ [...] float ApproximationAccuracy = 1.0f; /** Maximum allowable voxel count along main directions. This is a limit on ApproximationAccuracy. [...] */ [...] int32 ClampVoxelDimension = 1024;'''
+checked = 2026-11-06
+
+["ue-5.8-hlod-layer-defaults"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODLayer.cpp#L34-L39"
+section = "Unreal Engine 5.8.4, Engine/Private/WorldPartition/HLOD/HLODLayer.cpp, UHLODLayer constructor (L34-L39) and GetRuntimeGridName (L266-L268); HLODLayer.h L80-L90 marks the per-layer getters deprecated in 5.7"
+quote = '''	, bIsSpatiallyLoaded(true)
+	, CellSize(25600)
+	, LoadingRange(51200) [...] return *FString::Format(TEXT("HLOD{0}_{1}m_{2}m"), { InLODLevel, int32(InCellSize * 0.01f), int32(InLoadingRange * 0.01f)}); [...] UE_DEPRECATED(5.7, "Deprecated. These streaming grid properties are now specified in the partition's settings.")'''
+checked = 2026-11-06
+
+["ue-5.8-hlod-layer-types"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODLayer.h#L31-L39"
+section = "Unreal Engine 5.8.4, Engine/Public/WorldPartition/HLOD/HLODLayer.h, EHLODLayerType (repository needs an Epic-linked GitHub account)"
+quote = '''enum class EHLODLayerType : uint8
+{
+	Instancing				UMETA(DisplayName = "Instancing"),
+	MeshMerge				UMETA(DisplayName = "Merged Mesh"),
+	MeshSimplify			UMETA(DisplayName = "Simplified Mesh"),
+	MeshApproximate			UMETA(DisplayName = "Approximated Mesh"),
+	Custom					UMETA(DisplayName = "Custom Builder"),
+	CustomHLODActor			UMETA(DisplayName = "Custom HLOD Actor"),
+};'''
+checked = 2026-11-06
+
+["ue-5.8-hlod-swap-warmup"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODRuntimeSubsystem.cpp#L47-L50"
+section = "Unreal Engine 5.8.4, Engine/Private/WorldPartition/HLOD/HLODRuntimeSubsystem.cpp, CVarHLODWarmupNumFrames (L47-L50), IsWarmupEnabled (L194-L221) and the swap in OnCellShown and OnCellHidden (L623-L657)"
+quote = '''TEXT("wp.Runtime.HLOD.WarmupNumFrames"),
+	5,
+	TEXT("Delay unloading of a cell for this amount of frames to ensure HLOD assets are ready to be shown at the proper resolution. Set to 0 to force disable warmup.")); [...] const bool bWarmupNeeded = (bNaniteEnabled && bWarmupNanite) || (bVirtualTextureEnabled && bWarmupVT);'''
+checked = 2026-11-06
+
+["unity-6000-speedtree-geomorph"]
+url = "https://docs.unity3d.com/6000.0/Documentation/Manual/class-LODGroup.html"
+section = "Unity 6 (6000.0) Manual, LOD Group, Working with SpeedTree Models; Blending for SpeedTree Models"
+quote = '''SpeedTree geometries store the next LOD position for each vertex. Every vertex then knows how to interpolate between the current LOD position and the next LOD position. [...] The Speed Tree mode uses the blend factor to interpolate the vertex positions between the current Mesh LOD level and the next Mesh LOD level, and then renders the geometry at that position.'''
+checked = 2026-11-06
+
+["unity-6000.0-layer-cull-distances"]
+url = "https://docs.unity.com/en-us/engine/6000.0/script-reference/unityengine/camera/layerculldistances"
+section = "Unity 6000.0 Scripting API, Camera.layerCullDistances, Remarks"
+quote = '''You can set up some Layers to use smaller culling distances using layerCullDistances. This is very useful to cull small objects early on, if you put them into appropriate layers.'''
+checked = 2026-11-06
+
+["unity-6000.0-lodgroup-transition-height"]
+url = "https://docs.unity.com/en-us/engine/6000.0/manual/analysis/graphics-performance-profiling/simplifying-distant-meshes-with-level-of-detail-lod/class-lodgroup"
+section = "Unity 6000.0 Manual, LOD Group component reference, LOD Group selection bar and Transitioning between LOD levels"
+quote = '''The percentage that appears in each LOD level box represents the threshold at which that level becomes active, based on the ratio of the GameObject's screen space height to the total screen height. [...] Cross-fading is the technique of rendering two levels at the same time, with a weighting of 1 to 0 for the current LOD level and 0 to 1 for the next LOD level [...] Unity usually implements the cross-fading by using either screen-space dithering or transparency. For the last LOD level, there is no cross-fading: the current level just fades out.'''
+checked = 2026-11-06
+
+["unity-graphics-6000.0-cpu-instance-culling-job"]
+url = "https://github.com/Unity-Technologies/Graphics/blob/9808614cd04ae97bda6a5aed91c54b841e585133/Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceCuller.cs#L135-L138"
+section = "Unity Graphics 6000.0/staging at 9808614, com.unity.render-pipelines.core GPUDriven/InstanceCuller.cs, CullingJob L135-L138 and its Schedule at L1613 (Unity Companion License)"
+quote = '''[BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    internal struct CullingJob : IJobParallelFor
+    {
+        public const int k_BatchSize = 32;
+[...]
+            }.Schedule(instanceData.instancesLength, CullingJob.k_BatchSize);'''
+checked = 2026-11-06
+
+["unity-graphics-6000.0-small-mesh-culling"]
+url = "https://github.com/Unity-Technologies/Graphics/blob/9808614cd04ae97bda6a5aed91c54b841e585133/Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceCuller.cs#L296-L310"
+section = "Unity Graphics 6000.0/staging at 9808614, GPUDriven/InstanceCuller.cs, CullingJob.CalculateLODVisibility L296-L310; minScreenRelativeHeight = smallMeshScreenPercentage * 0.01f at L1601"
+quote = '''else if(viewType < BatchCullingViewType.SelectionOutline && (instanceFlags & InstanceFlags.SmallMeshCulling) != 0)
+[...]
+                var worldSpaceSize = math.max(math.max(aabbSize.x, aabbSize.y), aabbSize.z);
+                var maxDist = LODGroupRenderingUtils.CalculateLODDistance(minScreenRelativeHeight, worldSpaceSize);
+[...]
+                lodPercent = math.saturate((maxDist - cameraDist) / fadeOutRange);'''
+checked = 2026-11-06
+
+["unity-graphics-core-lod-dithering-taa"]
+url = "https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl#L1673-L1685"
+section = "Unity Graphics (master at 0efc28e), SRP Core ShaderLibrary/Common.hlsl, LODDitheringTransition, lines 1673-1685"
+quote = '''// LOD0 must use this function with ditherFactor 1..0
+// LOD1 must use this function with ditherFactor -1..0 [...]
+    // Generate a spatially varying pattern.
+    // Unfortunately, varying the pattern with time confuses the TAA, increasing the amount of noise.'''
+checked = 2026-11-06
+
+["unity-hlodsystem-04be7e8-readme"]
+url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/README.md#L7-L22"
+section = "Unity Technologies, HLODSystem (com.unity.hlod), README at commit 04be7e8, overview and results table (L7-L22), licence (L64-L65)"
+quote = '''It can replace multiple Static Mesh Actors with single, combined Static Mesh Actor at long view distances. This helps reduce the number of Actors that need to be rendered for the scene, increasing performance by lowering the number of draw calls per frame. [...] Licensed under the Unity Companion License for Unity-dependent projects'''
+cost = '''DrawCalls: Tris [...] Normal: 5642: 8.0M; HLOD: 952: 3.9M; Rate: 16.87%: 48.75% (hardware not stated)'''
+checked = 2026-11-06
+
+["unity-urp-17-lod-crossfade-dither"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@17.0/manual/universalrp-asset.html"
+section = "Unity URP 17.0 Manual, Universal Render Pipeline Asset, Quality: LOD Cross Fade Dithering Type"
+quote = '''When a LOD group has Fade Mode set to Cross Fade , Unity renders the Renderer's LOD meshes with cross-fade blending between them using either alpha testing or stencil testing. This property defines the dithering pattern of LOD cross-fade. Available options: Bayer Matrix : better performance than the Blue Noise option, but has a repetitive pattern. Blue Noise : uses a precomputed blue noise texture and provides a better look than the Bayer Matrix option, but has a slightly higher performance cost. 2x2 Stencil : Unity uses bits 4 and 8 in the stencil buffer to apply a 2 × 2 dithering pattern, instead of alpha testing.'''
+checked = 2026-11-06
+
+["vk-lod-clusters-persistent-nvidia-only"]
+url = "https://github.com/nvpro-samples/vk_lod_clusters/blob/20352f04a5bce46938ca63871c1389b0fac921fa/README.md#L229"
+section = "nvpro-samples vk_lod_clusters (Apache-2.0) README at 20352f0, Limitations"
+quote = '''The number of threads used in the persistent kernel is based on a crude heuristic for now and was not evaluated to be the optimal amount. The Persistent kernel is deactivated for non-NVIDIA hardware.'''
+checked = 2026-11-06
+
+["webgpu-alpha-to-coverage-mask"]
+url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L17012-L17025"
+section = "WebGPU specification source, Rasterization, Alpha to Coverage"
+quote = '''In alpha-to-coverage mode, an additional alpha-to-coverage mask of MSAA samples is generated based on the alpha component of the fragment shader output value at `@location(0)`. The algorithm of producing the extra mask is platform-dependent and can vary for different pixels. [...] Not all platforms guarantee that the number of bits set to 1 in the mask monotonically increases as alpha increases for a given pixel.'''
+checked = 2026-11-06
+
+["webgpu-sample-mask-vs-alpha-to-coverage"]
+url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L8792-L8794"
+section = "WebGPU specification source, validating GPURenderPipelineDescriptor"
+quote = '''If the [=builtin/sample_mask=] builtin is a [=shader stage output=] of |descriptor|.{{GPURenderPipelineDescriptor/fragment}}: - |descriptor|.{{GPURenderPipelineDescriptor/multisample}}.{{GPUMultisampleState/alphaToCoverageEnabled}} is `false`.'''
+checked = 2026-11-06
+
+["wgpu-30.0.1-alpha-to-coverage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/render.rs#L433-L442"
+section = "wgpu v30.0.1, wgpu-types/src/render.rs, MultisampleState::mask and alpha_to_coverage_enabled"
+quote = '''/// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
+    /// can be enabled using the value `!0`
+    pub mask: u64,
+    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
+    /// is ANDed with the sample mask and the primitive coverage to restrict the set of samples
+    /// affected by a primitive.
+    ///
+    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
+    /// is guaranteed to be all 1-s.
+    pub alpha_to_coverage_enabled: bool,'''
+checked = 2026-11-06
+
+["wihlidal-2024-empty-execute-indirect"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Nanite+GPU+Driven+Materials.pdf#page=114"
+section = "Wihlidal (Epic), Nanite GPU-Driven Materials, GDC 2024, p. 114 (empty-bin trace p. 113)"
+quote = '''On Xbox, an empty ExecuteIndirect on the graphics pipe is roughly 90 nanoseconds on average ● Some of them spike up to 500 nanoseconds (sometimes worse), when the memory location for the indirect args results in a GL2 cache miss [...] ● When the GPU is starved of work, misses are costly'''
+cost = '''roughly 90 nanoseconds on average [per empty ExecuteIndirect, Xbox]; spikes up to 500 nanoseconds'''
+checked = 2026-11-06
