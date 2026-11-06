@@ -11,7 +11,7 @@ use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
-use crate::render::readback::{FrameShape, GpuStatsReadback};
+use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
@@ -29,8 +29,8 @@ use crate::stats::{Counted, FrameRecorder, GpuFrameStats, GpuMemory, GpuMemoryKi
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
-/// shadow mask pass only with shadow rays on (`SHADOW_RAY_PASSES`). The
-/// rebuild form, an oracle, times neither its rebuild nor its build.
+/// shadow mask pass only with shadow rays on. The rebuild form, an oracle,
+/// times neither its rebuild nor its build.
 pub(crate) const TIMED_PASSES: [&str; 12] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
@@ -42,19 +42,6 @@ pub(crate) const TIMED_PASSES: [&str; 12] = [
     CullingPhase::Two.label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
-    LIT_PASS,
-    TONEMAPPING_PASS,
-];
-
-/// The passes only shadow rays run: with them off, each reads as taking no
-/// time.
-pub(crate) const SHADOW_RAY_PASSES: [&str; 2] = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
-
-/// The render passes of `TIMED_PASSES`; the others are compute passes, but
-/// the dynamic TLAS's build and the BLAS refit, which markers time.
-pub(crate) const RENDER_PASSES: [&str; 4] = [
-    DEPTH_PREPASS,
-    PHASE_TWO_DEPTH_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
@@ -426,15 +413,7 @@ impl Renderer {
             &render_targets,
             &mut load_staging,
         );
-        let gpu_stats = GpuStatsReadback::new(
-            &device,
-            queue.get_timestamp_period(),
-            if switches.shadow_rays {
-                &[]
-            } else {
-                &SHADOW_RAY_PASSES
-            },
-        );
+        let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
 
         Self {
             mesh_pool,
@@ -613,30 +592,36 @@ impl Renderer {
             .unwrap_or_else(|| create_frame_encoder(&self.device));
         self.material_pool.refresh_bind_group(&self.device);
 
-        let timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
+        let mut timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
         // Bent Meshes take their shapes before any pass reads their vertices.
-        let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+        let bend_timestamps = timestamps
+            .as_mut()
+            .map(|timestamps| timestamps.pass(BEND_PASS));
         let bent = self
             .bend_pass
             .record(&mut encoder, &frame.bends, bend_timestamps);
         let encoding = started.elapsed();
         // Their BLASes take them too, in a submission of their own, which
         // the dynamic TLAS's build, recorded after it, follows.
-        let mut blas_refitted = false;
         if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
             let started = Instant::now();
             let head = std::mem::replace(&mut encoder, create_frame_encoder(&self.device));
-            let refit_end = timestamps.map(|timestamps| timestamps.marker_after(BLAS_REFIT_PASS));
-            blas_refitted =
-                blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool, refit_end);
+            let refit_end = timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
+            blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool, refit_end);
+            if let Some(timestamps) = &mut timestamps {
+                timestamps.split_submission();
+            }
             recorder.stage(BLAS_REFIT, started);
         }
         // The dynamic TLAS's build, its recording timed apart from the
         // frame's: `encode` resumes after it.
         let started = Instant::now();
         let bracket = timestamps
+            .as_mut()
             .filter(|_| self.marks_dynamic_tlas_build)
-            .map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
+            .map(|timestamps| timestamps.pass(DYNAMIC_TLAS_BUILD));
         let dynamic_tlas_commands =
             self.dynamic_tlas
                 .record(&self.device, bracket)
@@ -655,13 +640,17 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::One,
-            timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::One.label())),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(CullingPhase::One.label()).compute()),
         );
         // After the first culling dispatch, so ADR 0019's gate, which spans
         // from it to the end of the lit pass, counts the lights' culling.
         self.froxel_pass.record(
             &mut encoder,
-            timestamps.map(|timestamps| timestamps.compute_pass(FROXEL_PASS)),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(FROXEL_PASS).compute()),
         );
         let bind_groups = [
             (&FRAME, &self.frame_bind_group),
@@ -673,18 +662,24 @@ impl Renderer {
             &self.render_targets,
             &bind_groups,
             CullingPhase::One,
-            timestamps.map(|timestamps| timestamps.render_pass(DEPTH_PREPASS)),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(DEPTH_PREPASS).render()),
         );
         self.depth_pyramid_pass.record(
             &mut encoder,
-            timestamps.map(|timestamps| timestamps.compute_pass(DEPTH_PYRAMID_PASS)),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(DEPTH_PYRAMID_PASS).compute()),
         );
         self.culling_pass.record(
             &mut encoder,
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
-            timestamps.map(|timestamps| timestamps.compute_pass(CullingPhase::Two.label())),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(CullingPhase::Two.label()).compute()),
         );
         if self.shadow_rays {
             self.main_pass.record_depth_pass(
@@ -692,11 +687,15 @@ impl Renderer {
                 &self.render_targets,
                 &bind_groups,
                 CullingPhase::Two,
-                timestamps.map(|timestamps| timestamps.render_pass(PHASE_TWO_DEPTH_PASS)),
+                timestamps
+                    .as_mut()
+                    .map(|timestamps| timestamps.pass(PHASE_TWO_DEPTH_PASS).render()),
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
-                timestamps.map(|timestamps| timestamps.compute_pass(SHADOW_MASK_PASS)),
+                timestamps
+                    .as_mut()
+                    .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
             );
         }
         self.main_pass.record_lit_pass(
@@ -704,12 +703,16 @@ impl Renderer {
             &self.render_targets,
             &bind_groups,
             frame.background,
-            timestamps.map(|timestamps| timestamps.render_pass(LIT_PASS)),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(LIT_PASS).render()),
         );
         self.tonemapping_pass.record(
             &mut encoder,
             target,
-            timestamps.map(|timestamps| timestamps.render_pass(TONEMAPPING_PASS)),
+            timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(TONEMAPPING_PASS).render()),
         );
         // Untimed, after the passes the frame's GPU time spans.
         if let Some(light_count_pass) = &self.light_count_pass {
@@ -720,16 +723,6 @@ impl Renderer {
         // phases', each with one indirect call; the tonemapping pass draws
         // one triangle.
         recorder.counters.draw_calls += 4;
-        // A frame whose refit went untimed spans its build's submission
-        // from the bend pass, so its build is not counted apart.
-        let refit_untimed = bent && self.blas_refit.is_some() && !blas_refitted;
-        self.gpu_stats.shape(FrameShape {
-            dynamic_tlas_built: dynamic_tlas_commands.is_some()
-                && self.marks_dynamic_tlas_build
-                && !refit_untimed,
-            bent,
-            blas_refitted,
-        });
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),

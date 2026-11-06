@@ -20,7 +20,6 @@ use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::culling_pass::CullingPhase;
 use crate::render::main_pass::LIT_PASS;
-use crate::render::renderer::SHADOW_RAY_PASSES;
 use crate::render::{
     BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
 };
@@ -557,7 +556,11 @@ fn measure(
         position.expect("the gate's first and last passes are timed")
     };
     let gate_passes: Vec<usize> = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
-        .filter(|&pass| !SHADOW_RAY_PASSES.contains(&TIMED_PASSES[pass]))
+        .filter(|&pass| {
+            measured_without_rays
+                .iter()
+                .any(|gpu| gpu.pass_log.get(pass).is_some())
+        })
         .collect();
     let gate_pass_microseconds = pass_spreads(measured_without_rays, &gate_passes);
     Ok(Measurements {
@@ -993,6 +996,7 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::readback::tests::RecordedFrame;
     use crate::stats::GpuFrameStats;
 
     const COUNTERS: Counters = Counters {
@@ -1532,8 +1536,8 @@ mod tests {
     /// CPU time of 900 µs in the warm-up and 100 µs after it, 20 µs of it
     /// refitting BLASes, 30 µs recording the dynamic TLAS's build and 10 µs
     /// submitting it, and on the GPU
-    /// a frame of 300 µs whose passes take 200 µs each, 150 µs of it the
-    /// gate.
+    /// a frame of 300 µs that neither bends nor builds, whose passes take
+    /// 200 µs each, 150 µs of it the gate.
     fn frames(configuration: Configuration) -> Vec<FrameStats> {
         (0..configuration.warm_up_frames + configuration.measured_frames)
             .map(|frame| {
@@ -1551,6 +1555,7 @@ mod tests {
                     .into(),
                     gpu: Some(GpuFrameStats {
                         frame: frame.into(),
+                        pass_log: RecordedFrame::STILL.log(true),
                         pass_times: TIMED_PASSES.map(|pass| (pass, Duration::from_micros(200))),
                         frame_time: Duration::from_micros(300),
                         gate_time: Duration::from_micros(150),
@@ -1586,6 +1591,7 @@ mod tests {
         for (frame, stats) in frames.iter_mut().enumerate() {
             let gpu = stats.gpu.as_mut().expect("every frame has GPU stats");
             let warming_up = frame < configuration.warm_up_frames as usize;
+            gpu.pass_log = RecordedFrame::STILL.log(false);
             gpu.frame_time = Duration::from_micros(if warming_up { 900 } else { 250 });
             gpu.gate_time = Duration::from_micros(140);
             gpu.lit_pass_wait = Duration::from_micros(90);

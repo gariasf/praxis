@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::render::TIMED_PASSES;
+use crate::render::readback::PassLog;
 
 pub(crate) mod gpu_memory;
 
@@ -75,6 +76,9 @@ pub struct FrameStats {
 pub struct GpuFrameStats {
     /// The frame's number: how many frames its Renderer rendered before it.
     pub frame: u64,
+    /// Which of `TIMED_PASSES` it ran, each with how it was timed and the
+    /// submission it was recorded into.
+    pub pass_log: PassLog,
     /// GPU time of each pass, between timestamps at its start and its end,
     /// in the order the passes ran, after the dynamic TLAS's build, between
     /// the markers around it: no time in a frame that does not build it, as

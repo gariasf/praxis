@@ -12,6 +12,7 @@
 
 use crate::assets::MeshPool;
 use crate::render::CrowdForm;
+use crate::render::readback::TimedPass;
 #[cfg(target_vendor = "apple")]
 use crate::stats::Counted;
 use crate::stats::GpuMemory;
@@ -100,16 +101,16 @@ impl BlasRefit {
     /// orders what `queue` submits next after them. The rebuild form records
     /// the update into `head` and submits that one command buffer; the refit
     /// form, on Apple, records it after `head`, in a command buffer of its own
-    /// submitted beside it and followed, when given `refit_end`, by a marker
-    /// that writes it. Returns whether that marker was recorded.
+    /// submitted beside it and followed, when given `timed`, by a marker that
+    /// ends it.
     pub fn submit(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         mut head: wgpu::CommandEncoder,
         mesh_pool: &MeshPool,
-        refit_end: Option<wgpu::ComputePassTimestampWrites<'_>>,
-    ) -> bool {
+        timed: Option<TimedPass<'_, '_>>,
+    ) {
         if self.form == CrowdForm::Rebuild {
             mesh_pool.rebuild_refitted_blases(&mut head);
         }
@@ -119,24 +120,22 @@ impl BlasRefit {
             order.signal_from_next_submit(queue);
         }
         #[cfg(target_vendor = "apple")]
-        let (submission, refit_timed) = if self.form == CrowdForm::Refit {
+        let submission = if self.form == CrowdForm::Refit {
             let refits = self.record_refits(device, mesh_pool);
-            let marker = refit_end
+            let marker = timed
                 .zip(self.marker.as_mut())
                 .zip(self.scratch.as_ref())
-                .map(|((writes, marker), (scratch, _))| marker.record(device, scratch, writes));
-            let refit_timed = marker.is_some();
-            (
-                queue.submit([head, refits].into_iter().chain(marker)),
-                refit_timed,
-            )
+                .map(|((timed, marker), (scratch, _))| {
+                    marker.record(device, scratch, timed.marker())
+                });
+            queue.submit([head, refits].into_iter().chain(marker))
         } else {
-            (queue.submit(std::iter::once(head)), false)
+            queue.submit(std::iter::once(head))
         };
         #[cfg(not(target_vendor = "apple"))]
-        let (submission, refit_timed) = {
-            let _ = refit_end;
-            (queue.submit(std::iter::once(head)), false)
+        let submission = {
+            let _ = timed;
+            queue.submit(std::iter::once(head))
         };
         #[cfg(target_vendor = "apple")]
         if let Some(order) = &self.order {
@@ -151,7 +150,6 @@ impl BlasRefit {
                 tracing::error!(%error, "waiting for BLAS updates failed");
             }
         }
-        refit_timed
     }
 
     /// A command buffer of `device`'s, encoded through wgpu-hal alone, that

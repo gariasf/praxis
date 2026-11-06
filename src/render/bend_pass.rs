@@ -7,6 +7,7 @@
 //! Arena as it pulls any Mesh's.
 
 use crate::render::bind_groups::{BENDS, compute_pipeline, pipeline_layout};
+use crate::render::readback::TimedPass;
 use crate::render::shaders;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -81,22 +82,22 @@ impl BendPass {
         }
     }
 
-    /// Records the pass into `encoder`, timed into `timestamp_writes`, for
-    /// `bends`, as uploaded into its buffer: a row of workgroups per bend,
-    /// an invocation per vertex of the longest. Returns whether it did: with
-    /// no bends there is nothing to record.
+    /// Records the pass into `encoder`, timed by `timed`, for `bends`, as
+    /// uploaded into its buffer: a row of workgroups per bend, an invocation
+    /// per vertex of the longest. Returns whether it did: with no bends
+    /// there is nothing to record, and nothing timed.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         bends: &[BendData],
-        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        timed: Option<TimedPass<'_, '_>>,
     ) -> bool {
         let Some(longest) = bends.iter().map(|bend| bend.vertex_count).max() else {
             return false;
         };
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(BEND_PASS),
-            timestamp_writes,
+            timestamp_writes: timed.map(TimedPass::compute),
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(BENDS.index, &self.bind_group, &[]);

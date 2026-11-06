@@ -296,7 +296,7 @@ const COUNTER_FRAMES: std::ops::Range&lt;u32&gt; = 8..72;</code></pre>
       <tr><td><code>gate_microseconds</code></td><td>rays off</td><td>ADR 0019's gate: from culling phase one's start to the latest end of the passes up to the lit pass</td></tr>
       <tr><td><code>shadow_ray_microseconds</code></td><td>both</td><td>each frame's GPU frame total with rays on, less the same frame's with them off</td></tr>
       <tr><td><code>lit_pass_wait_microseconds</code></td><td>rays off</td><td>the lit pass's wait, which with the gate's passes makes up the gate</td></tr>
-      <tr><td><code>gate_pass_microseconds</code></td><td>rays off</td><td>each pass the gate spans, its own time in those frames; the passes only shadow rays run are left out</td></tr>
+      <tr><td><code>gate_pass_microseconds</code></td><td>rays off</td><td>each pass the gate spans that those frames ran, its own time in them; the passes only shadow rays run are not among them</td></tr>
       <tr><td><code>gpu_pass_microseconds</code></td><td>rays on</td><td>each of the twelve timed passes, its own time, by name</td></tr>
       <tr><td>the eight counters</td><td>rays on</td><td>medians over the measured frames, and under <code>counter_frames</code> over frames 8 to 71</td></tr>
     </tbody>
@@ -305,7 +305,11 @@ const COUNTER_FRAMES: std::ops::Range&lt;u32&gt; = 8..72;</code></pre>
   <p>Shadow-ray time is a difference of two frames that were rendered the same way, since both runs follow one camera path with one injected clock: frame 700 of the second run is frame 700 of the first without its rays. No pass is only the rays, so this is how their whole cost is read. Where the rays cost little, the difference of two noisy totals is centred near zero and its median can be negative; <a href="#compare">section 5</a> says how such a line is judged.</p>
   <div class="code-source"><code>measure</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>    let gate_passes: Vec&lt;usize&gt; = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
-        .filter(|&amp;pass| !SHADOW_RAY_PASSES.contains(&amp;TIMED_PASSES[pass]))
+        .filter(|&amp;pass| {
+            measured_without_rays
+                .iter()
+                .any(|gpu| gpu.pass_log.get(pass).is_some())
+        })
         .collect();
     let gate_pass_microseconds = pass_spreads(measured_without_rays, &amp;gate_passes);
 …

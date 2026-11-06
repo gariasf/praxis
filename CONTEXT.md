@@ -204,6 +204,10 @@ _Avoid_: Render settings, config, options, debug flags
 What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
+**Timed pass**:
+A span of a frame's GPU work that the GPU timestamps at its start and end for Frame stats: a compute or render pass, or a span that markers bound (the dynamic TLAS's build, the BLAS refit). The set and its order are fixed; a frame that does not run one reads it as taking no time.
+_Avoid_: GPU pass (unqualified), timer, query
+
 **Baseline**:
 The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.
 _Avoid_: Benchmark result
