@@ -289,6 +289,7 @@ impl MaterialPool {
     }
 
     /// The data of `handle`'s Material, or None when it was freed.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn get(&self, handle: MaterialHandle) -> Option<&MaterialData> {
         self.generations
             .live(handle.index, handle.generation)
@@ -310,10 +311,10 @@ impl MaterialPool {
         tracing::debug!(?handle, "Material freed");
     }
 
-    /// Materials freed since the pool was made: once it moves, an Instance
-    /// may name an index whose Material is gone.
-    pub fn frees(&self) -> u64 {
-        self.generations.frees()
+    /// Which Material Handles find a Material, and how many Materials were
+    /// freed, as prepare reads them.
+    pub(crate) fn generations(&self) -> &Generations {
+        &self.generations
     }
 
     /// Loads the Material `id` from `cache`, and each Texture it samples, once
@@ -567,7 +568,7 @@ mod tests {
         pool.free(freed);
         assert!(pool.get(freed).is_none());
         assert!(pool.get(kept).is_some());
-        assert_eq!(pool.frees(), 1);
+        assert_eq!(pool.generations().frees(), 1);
         let (_, log) = logged(|| pool.free(freed));
         assert!(log.contains("Material not freed"), "not logged: {log:?}");
 

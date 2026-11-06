@@ -2,7 +2,8 @@ use std::ops::Range;
 
 use bevy_ecs::prelude::*;
 
-use crate::assets::{MaterialPool, MeshPool};
+use crate::assets::LoadedMeshes;
+use crate::assets::pools::Generations;
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
@@ -258,8 +259,8 @@ impl FramePreparer {
     /// fixed schedule moves is drawn blended between its two newest Ticks
     /// (ADR 0022). A Renderable draws each Primitive of its Mesh with its
     /// Material Handle, else with the Material the Primitive names; one whose
-    /// Mesh is not in `mesh_pool`, whose Material Handle finds no Material in
-    /// `material_pool`, or that has no Material Handle where a Primitive names
+    /// Mesh is not in `meshes`, whose Material Handle `material_generations`
+    /// finds no Material for, or that has no Material Handle where a Primitive names
     /// no Material, is skipped with a warning: it keeps its slot, which holds
     /// an Instance with no Mesh until the Renderable is drawn. One that
     /// finds the Instance buffer full is refused, warned about once and
@@ -268,7 +269,7 @@ impl FramePreparer {
     /// World transform; past the dynamic TLAS's capacity, those in the
     /// highest slots are left out of it, counted, and warned about when they
     /// appear. A Renderable with a `Bend` has its Mesh bent from the rest
-    /// Mesh when both are in `mesh_pool` with as many vertices, and is
+    /// Mesh when both are in `meshes` with as many vertices, and is
     /// warned about otherwise, as is a bend that would race with another;
     /// past the bend pass's capacity, the bends of the Meshes highest in the
     /// vertex Arena are left out, counted, and warned about when they
@@ -283,8 +284,8 @@ impl FramePreparer {
     pub fn prepare(
         &mut self,
         world: &mut World,
-        mesh_pool: &MeshPool,
-        material_pool: &MaterialPool,
+        meshes: &LoadedMeshes,
+        material_generations: &Generations,
         aspect_ratio: f32,
     ) -> &FrameData {
         let Self {
@@ -351,7 +352,7 @@ impl FramePreparer {
         }
         *warned_of_overflowed_lights = *lights_overflowed > 0;
 
-        let frees = mesh_pool.frees() + material_pool.frees();
+        let frees = meshes.frees() + material_generations.frees();
         if std::mem::replace(pool_frees, frees) != frees {
             *rewrite_every_instance = true;
         }
@@ -382,7 +383,7 @@ impl FramePreparer {
         let mut visit = |(entity, current, previous, mesh_ref, material_ref): RenderableItem<
             '_,
         >| {
-            let drawn = match mesh_pool.get(mesh_ref.0) {
+            let drawn = match meshes.get(mesh_ref.0) {
                 None => {
                     tracing::warn!(
                         handle = ?mesh_ref.0,
@@ -392,7 +393,7 @@ impl FramePreparer {
                 }
                 Some(_)
                     if material_ref.is_some_and(|material_ref| {
-                        material_pool.get(material_ref.0).is_none()
+                        !material_generations.live(material_ref.0.index, material_ref.0.generation)
                     }) =>
                 {
                     tracing::warn!(
@@ -496,7 +497,7 @@ impl FramePreparer {
         prepare_bends(
             world,
             bend_query,
-            mesh_pool,
+            meshes,
             blend_weight,
             &mut frame.bends,
             bends_left_out,
@@ -603,7 +604,7 @@ fn prepare_lights(
 }
 
 /// Fills `bends` with a bend per Renderable with a `Bend` whose Mesh and
-/// rest Mesh `mesh_pool` holds with as many vertices, its curvature blended
+/// rest Mesh `meshes` holds with as many vertices, its curvature blended
 /// `blend_weight` of the way from the previous Tick's, in the order of the
 /// bent Meshes' ranges of the vertex Arena, up to `BEND_CAPACITY`. The pass
 /// writes each bent Mesh while it reads each rest Mesh, so of two bends of
@@ -613,14 +614,14 @@ fn prepare_lights(
 fn prepare_bends(
     world: &World,
     bend_query: &mut BendQuery,
-    mesh_pool: &MeshPool,
+    meshes: &LoadedMeshes,
     blend_weight: f32,
     bends: &mut Vec<BendData>,
     left_out: &mut u32,
 ) {
     bends.clear();
     for (mesh_ref, bend) in bend_query.iter(world) {
-        let (Some(bent), Some(rest)) = (mesh_pool.get(mesh_ref.0), mesh_pool.get(bend.rest)) else {
+        let (Some(bent), Some(rest)) = (meshes.get(mesh_ref.0), meshes.get(bend.rest)) else {
             tracing::warn!(
                 mesh = ?mesh_ref.0,
                 rest = ?bend.rest,
@@ -673,64 +674,39 @@ fn prepare_bends(
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use super::*;
-    use crate::assets::pools::tests::{logged, mesh};
-    use crate::assets::{ARENA_CAPACITY_BYTES, MaterialHandle, MeshHandle};
+    use crate::assets::pools::tests::logged;
+    use crate::assets::{MaterialHandle, Mesh, MeshHandle};
     use crate::components::Transform;
-    use crate::gpu::GpuContext;
-    use crate::render::{DYNAMIC_TLAS_CAPACITY, LoadStaging};
-    use crate::stats::gpu_memory::tests::gpu_memory;
+    use crate::render::DYNAMIC_TLAS_CAPACITY;
     use crate::transform::propagate_world_transforms;
-
-    /// The Material `Frames::mesh` draws with.
-    const MESH_MATERIAL: MaterialHandle = MaterialHandle {
-        index: 5,
-        generation: 0,
-    };
 
     /// A World of Renderables prepared frame by frame, as `State` does.
     struct Frames {
         world: World,
         propagation: Schedule,
-        staging: LoadStaging,
-        mesh_pool: MeshPool,
+        meshes: LoadedMeshes,
         /// Materials 0 to 7.
-        material_pool: MaterialPool,
-        /// A triangle drawn with `MESH_MATERIAL`.
+        material_generations: Generations,
+        /// Vertices of the Meshes loaded, each Mesh's after the last's.
+        vertices_loaded: u32,
+        /// A Mesh of three vertices whose Primitives each name a Material.
         mesh: MeshHandle,
         preparer: FramePreparer,
     }
 
     impl Frames {
-        /// None, after saying so, when there is no GPU for the Mesh pool.
-        fn new() -> Option<Self> {
-            let context = match pollster::block_on(GpuContext::headless()) {
-                Ok(context) => context,
-                Err(error) if error.is::<wgpu::RequestAdapterError>() => {
-                    // Not `eprintln!`, which libtest captures from passing tests.
-                    writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-                    return None;
-                }
-                Err(error) => panic!("headless GPU context failed: {error:#}"),
-            };
-            let mut staging = LoadStaging::new(context.device.clone());
-            let memory = gpu_memory(&context);
-            let mut mesh_pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
-            let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging);
+        fn new() -> Self {
+            let mut material_generations = Generations::default();
             for _ in 0..8 {
-                material_pool
-                    .insert(&mut staging, bytemuck::Zeroable::zeroed())
-                    .expect("eight Materials fit");
+                material_generations.take();
             }
-            let mesh = mesh_pool
-                .load(
-                    &mut staging,
-                    &mesh(3, vec![0, 1, 2]),
-                    &[Some(MESH_MATERIAL)],
-                )
-                .expect("a triangle fits");
+            let mut meshes = LoadedMeshes::default();
+            let mesh = meshes.insert(Mesh {
+                needs_material_handle: false,
+                vertices: 0..3,
+                bounds: [[0.0; 3]; 2],
+            });
             let mut world = World::new();
             world.insert_resource(Camera::new());
             world.insert_resource(FixedTime::default());
@@ -738,15 +714,15 @@ mod tests {
             let preparer = FramePreparer::new(&mut world);
             let mut propagation = Schedule::default();
             propagation.add_systems(propagate_world_transforms);
-            Some(Self {
+            Self {
                 world,
                 propagation,
-                staging,
-                mesh_pool,
-                material_pool,
+                meshes,
+                material_generations,
+                vertices_loaded: 3,
                 mesh,
                 preparer,
-            })
+            }
         }
 
         fn spawn(&mut self, x: f64) -> Entity {
@@ -765,7 +741,12 @@ mod tests {
         fn prepare(&mut self) -> Vec<u32> {
             self.propagation.run(&mut self.world);
             self.preparer
-                .prepare(&mut self.world, &self.mesh_pool, &self.material_pool, 1.0)
+                .prepare(
+                    &mut self.world,
+                    &self.meshes,
+                    &self.material_generations,
+                    1.0,
+                )
                 .instance_writes
                 .iter()
                 .flat_map(|write| write.first_slot..write.first_slot + write.instances.len() as u32)
@@ -775,9 +756,7 @@ mod tests {
 
     #[test]
     fn renderables_keep_their_slots_and_freed_slots_are_taken_again() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let [first, second, third] = [0.0, 1.0, 2.0].map(|x| frames.spawn(x));
         assert_eq!(frames.prepare(), [0, 1, 2]);
         // Consecutive slots go to the GPU as one copy.
@@ -819,9 +798,7 @@ mod tests {
 
     #[test]
     fn a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let filled: Vec<Entity> = (0..INSTANCE_CAPACITY).map(|_| frames.spawn(0.0)).collect();
         let slots: Vec<u32> = (0..INSTANCE_CAPACITY).collect();
         assert_eq!(frames.prepare(), slots);
@@ -855,9 +832,7 @@ mod tests {
 
     #[test]
     fn a_changed_transform_or_material_writes_exactly_its_slot() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let [_, second, third] = [0.0, 1.0, 2.0].map(|x| frames.spawn(x));
         frames.prepare();
         let child = frames.spawn(1.0);
@@ -930,9 +905,7 @@ mod tests {
 
     #[test]
     fn an_instance_is_moving_while_its_entity_carries_its_previous_world_transform() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let [still, moving] = [0.0, 1.0].map(|x| frames.spawn(x));
         frames
             .world
@@ -977,9 +950,7 @@ mod tests {
     /// holds them in.
     #[test]
     fn the_moving_instance_in_the_highest_slot_past_the_dynamic_tlas_capacity_is_left_out() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let spawn_moving = |frames: &mut Frames| {
             let entity = frames.spawn(0.0);
             let mut entity = frames.world.entity_mut(entity);
@@ -1014,22 +985,12 @@ mod tests {
 
     #[test]
     fn an_instance_names_its_mesh_and_draws_with_its_material_handle_else_its_meshs() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
-        let [other_mesh, bare_mesh] = [
-            Some(MaterialHandle {
-                index: 6,
-                generation: 0,
-            }),
-            None,
-        ]
-        .map(|material| {
-            let mesh =
-                frames
-                    .mesh_pool
-                    .load(&mut frames.staging, &mesh(3, vec![0, 1, 2]), &[material]);
-            mesh.expect("a triangle fits")
+        let mut frames = Frames::new();
+        let other_mesh = load(&mut frames, 3);
+        let bare_mesh = frames.meshes.insert(Mesh {
+            needs_material_handle: true,
+            vertices: 0..0,
+            bounds: [[0.0; 3]; 2],
         });
         let first_mesh = frames.mesh;
         let entity = frames
@@ -1071,9 +1032,7 @@ mod tests {
 
     #[test]
     fn a_renderable_whose_mesh_is_not_in_the_pool_keeps_its_slot_and_draws_there_once_it_loads() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         // The slots the next frame writes, in slot order, and whether each
         // Instance names a Mesh.
         let written = |frames: &mut Frames| -> Vec<(u32, bool)> {
@@ -1090,7 +1049,7 @@ mod tests {
         let switched = frames.spawn(1.0);
         assert_eq!(written(&mut frames), [(0, true), (1, true)]);
 
-        // The handle the pool's next load returns.
+        // The Handle the next load returns.
         let unloaded = MeshHandle {
             index: frames.mesh.index + 1,
             generation: 0,
@@ -1132,9 +1091,7 @@ mod tests {
 
     #[test]
     fn a_renderable_whose_handle_was_freed_is_skipped_with_a_warning_and_keeps_its_slot() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         // The slots the next frame writes, in slot order, whether each
         // Instance names a Mesh, and what the frame logged.
         let written = |frames: &mut Frames| -> (Vec<(u32, bool)>, String) {
@@ -1165,7 +1122,7 @@ mod tests {
         // Unchanged since, each Renderable is visited again once a pool
         // frees an entry, and the one whose Mesh was freed is skipped, though
         // another Mesh took its index.
-        frames.mesh_pool.free(freed_mesh);
+        assert!(frames.meshes.remove(freed_mesh));
         let replacement = load(&mut frames, 3);
         assert_eq!(replacement.index, freed_mesh.index);
         let (slots, log) = written(&mut frames);
@@ -1176,7 +1133,11 @@ mod tests {
         );
         assert!(written(&mut frames).0.is_empty());
 
-        frames.material_pool.free(other_material);
+        assert!(
+            frames
+                .material_generations
+                .free(other_material.index, other_material.generation)
+        );
         let (slots, log) = written(&mut frames);
         assert_eq!(slots, [(0, false), (1, false)]);
         assert!(
@@ -1191,14 +1152,16 @@ mod tests {
         assert_eq!(frames.preparer.frame().instance_slot_count, 3);
     }
 
-    /// Loads a Mesh of a triangle over the first three of `vertex_count`
-    /// vertices into `frames`' pool.
-    fn load(frames: &mut Frames, vertex_count: usize) -> MeshHandle {
-        let triangle = mesh(vertex_count, vec![0, 1, 2]);
-        let loaded = frames
-            .mesh_pool
-            .load(&mut frames.staging, &triangle, &[Some(MESH_MATERIAL)]);
-        loaded.expect("a triangle fits")
+    /// Loads into `frames` a Mesh of `vertex_count` vertices, after the last
+    /// Mesh's in the vertex Arena, whose Primitives each name a Material.
+    fn load(frames: &mut Frames, vertex_count: u32) -> MeshHandle {
+        let first_vertex = frames.vertices_loaded;
+        frames.vertices_loaded += vertex_count;
+        frames.meshes.insert(Mesh {
+            needs_material_handle: false,
+            vertices: first_vertex..frames.vertices_loaded,
+            bounds: [[0.0; 3]; 2],
+        })
     }
 
     /// A bend from `rest` towards azimuth 0.5, its curvature 0.2 after the
@@ -1221,9 +1184,7 @@ mod tests {
     /// a Mesh's own included.
     #[test]
     fn each_bend_reaches_frame_data_from_its_rest_mesh_blended_between_ticks() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let rest = load(&mut frames, 3);
         let [first, second, own, third] = [(); 4].map(|()| load(&mut frames, 3));
         let longer = load(&mut frames, 4);
@@ -1251,7 +1212,7 @@ mod tests {
             frames.prepare();
         });
 
-        let start = |mesh| frames.mesh_pool.get(mesh).expect("loaded").vertices.start;
+        let start = |mesh| frames.meshes.get(mesh).expect("loaded").vertices.start;
         let listed: Vec<(u32, u32, u32, f32)> = frames
             .preparer
             .frame()
@@ -1289,9 +1250,7 @@ mod tests {
     /// once.
     #[test]
     fn the_bend_of_the_highest_mesh_past_the_bend_capacity_is_left_out() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let rest = load(&mut frames, 3);
         let mut firsts: Vec<u32> = (0..=BEND_CAPACITY)
             .map(|_| {
@@ -1299,7 +1258,7 @@ mod tests {
                 frames
                     .world
                     .spawn((Transform::IDENTITY, MeshRef(mesh), bend(rest, 1.0)));
-                frames.mesh_pool.get(mesh).expect("loaded").vertices.start
+                frames.meshes.get(mesh).expect("loaded").vertices.start
             })
             .collect();
         firsts.sort_unstable();
@@ -1324,9 +1283,7 @@ mod tests {
 
     #[test]
     fn a_scene_without_a_directional_light_puts_none_in_frame_data() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         frames.prepare();
         assert_eq!(frames.preparer.frame().light.directional_light_count, 0);
         assert!(frames.preparer.frame().lights.is_empty());
@@ -1334,9 +1291,7 @@ mod tests {
 
     #[test]
     fn a_directional_light_scaled_to_nothing_is_not_drawn() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let flattened = Transform {
             scale: glam::Vec3::ZERO,
             ..Transform::IDENTITY
@@ -1355,9 +1310,7 @@ mod tests {
     /// point light as its Anchor and offset, its colour times its candela.
     #[test]
     fn every_light_is_drawn_directional_lights_first_point_lights_anchored() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let point_light = PointLight {
             color: glam::vec3(1.0, 0.5, 0.25),
             intensity: 4.0,
@@ -1399,9 +1352,7 @@ mod tests {
     /// they fit again.
     #[test]
     fn lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let sun = DirectionalLight {
             color: glam::Vec3::ONE,
             intensity: 1.0,
@@ -1443,9 +1394,7 @@ mod tests {
 
     #[test]
     fn a_directional_light_shines_along_its_forward_axis_blended_between_ticks() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         // A quarter turn about +X takes the forward axis (-Z) straight down;
         // half a Tick on from an unturned Tick, it is drawn half way there.
         frames.world.resource_mut::<FixedTime>().blend_weight = 0.5;
@@ -1474,9 +1423,7 @@ mod tests {
 
     #[test]
     fn rewriting_all_instances_writes_every_slot_once() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         for x in [0.0, 1.0, 2.0] {
             frames.spawn(x);
         }

@@ -1763,7 +1763,12 @@ pub(crate) mod tests {
         // The red pixels of each half of the frame `prepare` makes.
         let mut red_pixels = |world: &mut World, renderer: &mut Renderer| -> [usize; 2] {
             world.run_system_once(propagate_world_transforms).unwrap();
-            let frame = preparer.prepare(world, &renderer.mesh_pool, &renderer.material_pool, 1.0);
+            let frame = preparer.prepare(
+                world,
+                renderer.mesh_pool.meshes(),
+                renderer.material_pool.generations(),
+                1.0,
+            );
             let (image, ..) = render_frame(&context, renderer, frame, SIZE, SIZE);
             [0..SIZE / 2, SIZE / 2..SIZE].map(|columns| {
                 image
