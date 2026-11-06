@@ -149,6 +149,7 @@ mod tests {
                         first_index: 0,
                         index_count: 3,
                         material: Some(AssetId(material)),
+                        texel_density: 0.0,
                         meshlets: vec![CookedMeshlet {
                             vertices: vec![0, 1, 2],
                             triangles: vec![[0, 1, 2]],

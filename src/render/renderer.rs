@@ -2475,6 +2475,7 @@ pub(crate) mod tests {
                     first_index,
                     index_count,
                     material: None,
+                    texel_density: 0.0,
                     meshlets: counts.iter().map(|&count| meshlet(count)).collect(),
                 };
                 first_index += index_count;
@@ -2665,6 +2666,7 @@ pub(crate) mod tests {
                 first_index: 3 * primitive,
                 index_count: 3,
                 material: None,
+                texel_density: 0.0,
                 meshlets: vec![CookedMeshlet {
                     vertices: (3 * primitive..3 * primitive + 3).collect(),
                     triangles: vec![[0, 1, 2]],
@@ -2700,6 +2702,7 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: 6,
                 material: None,
+                texel_density: 0.0,
                 meshlets: vec![CookedMeshlet {
                     vertices: vec![0, 1, 2, 3],
                     triangles: vec![[0, 1, 2], [0, 2, 3]],
@@ -2732,6 +2735,7 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: 6,
                 material: None,
+                texel_density: 0.0,
                 meshlets: vec![CookedMeshlet {
                     vertices: vec![0, 1, 2, 3],
                     triangles: vec![[0, 1, 2], [0, 2, 3]],

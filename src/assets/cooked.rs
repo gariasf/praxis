@@ -34,7 +34,7 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 2;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 3;
 /// The most vertices a Meshlet holds: a packed index carries the vertex
 /// within its Meshlet in six bits (ADR 0019).
 pub(crate) const MESHLET_MAX_VERTICES: usize = 64;
@@ -417,6 +417,12 @@ pub struct CookedPrimitive {
     pub first_index: u32,
     pub index_count: u32,
     pub material: Option<AssetId>,
+    /// UV units per mesh-space metre: the square root of its triangles'
+    /// summed UV area over their summed mesh-space area, zero when either sum
+    /// is, as without UVs; the inverse of [ref:unity-6000-uv-distribution-metric]
+    /// as a length. Times a Texture's side and the Instance's scale it is
+    /// texels per metre, which mip priority reads (ADR 0017).
+    pub texel_density: f32,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,
 }
@@ -517,7 +523,8 @@ impl CookedMesh {
     /// After the magic and version, one zstd frame holding the vertex,
     /// index and Primitive counts as little-endian u32s, the bounds as six
     /// little-endian f32s, each Primitive's first index, index count,
-    /// Material Asset ID (zero for none) and Meshlet count, then a byte per
+    /// Material Asset ID (zero for none), texel density as a little-endian
+    /// f32 and Meshlet count, then a byte per
     /// Meshlet, its triangle count, the byte length of the encoded vertices,
     /// then meshopt's encoded vertices and indices. Each Meshlet's vertices
     /// and triangles are its run of the indices, rebuilt on reading.
@@ -540,6 +547,7 @@ impl CookedMesh {
             payload.extend(primitive.first_index.to_le_bytes());
             payload.extend(primitive.index_count.to_le_bytes());
             payload.extend(primitive.material.map_or(0, |id| id.0).to_be_bytes());
+            payload.extend(primitive.texel_density.to_le_bytes());
             payload.extend((primitive.meshlets.len() as u32).to_le_bytes());
         }
         for meshlet in self
@@ -580,6 +588,7 @@ impl CookedMesh {
             let first_index = take_u32(rest)?;
             let primitive_index_count = take_u32(rest)?;
             let material = u128::from_be_bytes(take(rest, 16)?.try_into().expect("16 bytes"));
+            let texel_density = f32::from_bits(take_u32(rest)?);
             anyhow::ensure!(
                 first_index as usize + primitive_index_count as usize <= index_count,
                 "Mesh Blob has a Primitive past its indices"
@@ -589,6 +598,7 @@ impl CookedMesh {
                 first_index,
                 index_count: primitive_index_count,
                 material: (material != 0).then_some(AssetId(material)),
+                texel_density,
                 meshlets: Vec::new(),
             });
         }

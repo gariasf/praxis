@@ -164,6 +164,7 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: 3 * triangles.len() as u32,
                 material: None,
+                texel_density: 0.0,
                 meshlets: CookedMeshlet::split(&triangles, counts).expect("within the limits"),
             }],
             bounds: [[-0.25, 0.0, -0.25], [0.25, 2.0, 0.25]],
