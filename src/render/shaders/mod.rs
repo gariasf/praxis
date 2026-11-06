@@ -254,7 +254,7 @@ impl ShaderModule {
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const MAX_WORKGROUPS_PER_DIMENSION: u32 = {MAX_WORKGROUPS_PER_DIMENSION}u;\n\
-             const INSTANCE_CAPACITY: u32 = {}u;\n\
+             const INSTANCE_CAPACITY: u32 = {instance_capacity}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
@@ -275,10 +275,10 @@ impl ShaderModule {
              const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
-            capacities.instances,
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
-            LUMINANCE_COEFFICIENTS[2]
+            LUMINANCE_COEFFICIENTS[2],
+            instance_capacity = capacities.instances,
         ));
         let sample_offsets: Vec<String> = SAMPLE_OFFSETS
             .iter()

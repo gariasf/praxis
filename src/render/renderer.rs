@@ -170,9 +170,10 @@ const ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE: u64 = 1 << 10;
 
 /// What the Instance buffer, the light buffer and the static TLAS hold,
 /// derived from the GPU memory Budgets at device creation, which assembles
-/// the shader modules with them: each the largest power of two its share of
-/// its kind's Budget pays for, the Instance slots in whole scan blocks. The
-/// shares are provisional until the Budget split sets them (ADR 0013).
+/// the shader modules with them: each the largest power of two of entries
+/// its kind's Budget gives at a fixed number of bytes per entry, the Instance
+/// slots in whole scan blocks. The bytes per entry keep the capacities the
+/// checked-in Budgets gave before; the Budget split sets them (ADR 0013).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RenderCapacities {
     /// Slots the Instance buffer holds.
@@ -186,12 +187,13 @@ pub struct RenderCapacities {
 }
 
 impl RenderCapacities {
+    /// The capacities `budgets` give.
     pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
         let power_of_two = |bytes: u64, bytes_per_entry: u64| {
             u32::try_from(bytes / bytes_per_entry)
                 .unwrap_or(u32::MAX)
                 .checked_ilog2()
-                .map_or(0, |log| 1 << log)
+                .map_or(0, |exponent| 1 << exponent)
         };
         let scan_block_bytes = SCENE_AND_PASS_BYTES_PER_INSTANCE * u64::from(SCAN_BLOCK_SIZE);
         Self {

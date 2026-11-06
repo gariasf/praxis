@@ -639,6 +639,15 @@ mod tests {
         }
     }
 
+    /// An entry's custom data is its slot, of which wgpu keeps the lower 24
+    /// bits [ref:wgpu-30-tlas-instance-fields].
+    #[test]
+    fn every_slot_the_checked_in_budgets_give_fits_an_entrys_custom_data() {
+        let capacities = RenderCapacities::checked_in();
+        assert!(capacities.instances <= 1 << 24);
+        assert!(capacities.static_tlas_instances <= 1 << 24);
+    }
+
     #[test]
     fn the_static_tlas_holds_each_static_instance_in_its_slot_from_the_load_anchor() {
         let Some(triangle) = Triangle::new() else {

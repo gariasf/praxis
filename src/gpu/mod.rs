@@ -798,6 +798,26 @@ mod tests {
         assert!(capacities.vertex_arena_bytes <= floor_limits().max_storage_buffer_binding_size);
     }
 
+    /// The culling and main passes read the whole Instance buffer, and the
+    /// Froxel and lit passes the whole light buffer, each through one storage
+    /// binding, which the floor holds to 128 MiB as it does the vertex Arena's.
+    #[test]
+    fn the_instance_and_light_buffers_fit_one_storage_binding_of_the_floor() {
+        use crate::render::{InstanceData, LightData, RenderCapacities};
+        let capacities = RenderCapacities::checked_in();
+        let binding_bytes = floor_limits().max_storage_buffer_binding_size;
+        let instance_bytes = u64::from(capacities.instances) * size_of::<InstanceData>() as u64;
+        let light_bytes = u64::from(capacities.lights) * size_of::<LightData>() as u64;
+        assert!(
+            instance_bytes <= binding_bytes,
+            "{instance_bytes} > {binding_bytes}"
+        );
+        assert!(
+            light_bytes <= binding_bytes,
+            "{light_bytes} > {binding_bytes}"
+        );
+    }
+
     #[test]
     fn limits_exactly_at_the_floor_pass() {
         let limits = wgpu::Limits {
