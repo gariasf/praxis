@@ -156,22 +156,28 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <p><code>Renderer::render</code> records the pass into the frame's encoder, which already holds what <code>upload</code> recorded, the bends' copy among it, and the start of the frame's GPU stats; every other pass of the frame follows it in that encoder. The dynamic TLAS's build is not in it: it goes in a command buffer of its own, recorded after the pass on the CPU and submitted before the frame's.</p>
 <pre class="code"><code>let mut timestamps = self.gpu_stats.begin_frame(&amp;mut encoder, recorder);
 // Bent Meshes take their shapes before any pass reads their vertices.
-let bend_timestamps = timestamps
+let bend_queries = timestamps
     .as_mut()
     .map(|timestamps| timestamps.pass(BEND_PASS));
 let bent = self
     .bend_pass
-    .record(&amp;mut encoder, &amp;frame.bends, bend_timestamps);
+    .record(&amp;mut encoder, &amp;frame.bends, bend_queries);
 let encoding = started.elapsed();
 // Their BLASes take them too, in a submission of their own, which
 // the dynamic TLAS's build, recorded after it, follows.
 if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
     let started = Instant::now();
     let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
-    let refit_end = timestamps
+    let refit_queries = timestamps
         .as_mut()
         .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
-    blas_refit.submit(&amp;self.device, &amp;self.queue, head, &amp;self.mesh_pool, refit_end);
+    blas_refit.submit(
+        &amp;self.device,
+        &amp;self.queue,
+        head,
+        &amp;self.mesh_pool,
+        refit_queries,
+    );
     if let Some(timestamps) = &amp;mut timestamps {
         timestamps.split_submission();
     }
@@ -340,14 +346,14 @@ pub struct BendData {
     &amp;self,
     encoder: &amp;mut wgpu::CommandEncoder,
     bends: &amp;[BendData],
-    timed: Option&lt;TimedPass&lt;'_, '_&gt;&gt;,
+    queries: Option&lt;PassQueries&lt;'_, '_&gt;&gt;,
 ) -&gt; bool {
     let Some(longest) = bends.iter().map(|bend| bend.vertex_count).max() else {
         return false;
     };
     let mut pass = encoder.begin_compute_pass(&amp;wgpu::ComputePassDescriptor {
         label: Some(BEND_PASS),
-        timestamp_writes: timed.map(TimedPass::compute),
+        timestamp_writes: queries.map(PassQueries::compute),
     });
     pass.set_pipeline(&amp;self.pipeline);
     pass.set_bind_group(BENDS.index, &amp;self.bind_group, &amp;[]);

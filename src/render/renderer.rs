@@ -594,22 +594,28 @@ impl Renderer {
 
         let mut timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
         // Bent Meshes take their shapes before any pass reads their vertices.
-        let bend_timestamps = timestamps
+        let bend_queries = timestamps
             .as_mut()
             .map(|timestamps| timestamps.pass(BEND_PASS));
         let bent = self
             .bend_pass
-            .record(&mut encoder, &frame.bends, bend_timestamps);
+            .record(&mut encoder, &frame.bends, bend_queries);
         let encoding = started.elapsed();
         // Their BLASes take them too, in a submission of their own, which
         // the dynamic TLAS's build, recorded after it, follows.
         if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
             let started = Instant::now();
             let head = std::mem::replace(&mut encoder, create_frame_encoder(&self.device));
-            let refit_end = timestamps
+            let refit_queries = timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
-            blas_refit.submit(&self.device, &self.queue, head, &self.mesh_pool, refit_end);
+            blas_refit.submit(
+                &self.device,
+                &self.queue,
+                head,
+                &self.mesh_pool,
+                refit_queries,
+            );
             if let Some(timestamps) = &mut timestamps {
                 timestamps.split_submission();
             }
@@ -618,17 +624,16 @@ impl Renderer {
         // The dynamic TLAS's build, its recording timed apart from the
         // frame's: `encode` resumes after it.
         let started = Instant::now();
-        let bracket = timestamps
+        let build_queries = timestamps
             .as_mut()
             .filter(|_| self.marks_dynamic_tlas_build)
             .map(|timestamps| timestamps.pass(DYNAMIC_TLAS_BUILD));
-        let dynamic_tlas_commands =
-            self.dynamic_tlas
-                .record(&self.device, bracket)
-                .map(|(commands, uploaded_bytes)| {
-                    recorder.counters.uploaded_bytes += uploaded_bytes;
-                    commands
-                });
+        let dynamic_tlas_commands = self.dynamic_tlas.record(&self.device, build_queries).map(
+            |(commands, uploaded_bytes)| {
+                recorder.counters.uploaded_bytes += uploaded_bytes;
+                commands
+            },
+        );
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
         let started = Instant::now() - encoding;
         let culling_bind_groups = [

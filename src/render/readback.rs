@@ -119,7 +119,7 @@ pub struct PassLog {
     /// The submission the passes marked now are recorded into.
     submission: u8,
     /// Where in `TIMED_PASSES` the last pass marked in that submission is,
-    /// but a bracket.
+    /// except a bracket.
     last_in_submission: Option<usize>,
 }
 
@@ -180,7 +180,7 @@ pub struct FrameTimestamps<'a> {
 /// The queries of one of `TIMED_PASSES`, which mark it run in its frame's
 /// log as they are turned into its timestamp writes; dropped unturned, they
 /// leave it unmarked.
-pub struct TimedPass<'a, 'log> {
+pub struct PassQueries<'a, 'log> {
     query_set: &'a wgpu::QuerySet,
     first_query: u32,
     position: usize,
@@ -560,9 +560,9 @@ impl PassLog {
 
 impl<'a> FrameTimestamps<'a> {
     /// The queries of `pass`, of `TIMED_PASSES`.
-    pub fn pass(&mut self, pass: &str) -> TimedPass<'a, '_> {
+    pub fn pass(&mut self, pass: &str) -> PassQueries<'a, '_> {
         let position = pass_position(pass);
-        TimedPass {
+        PassQueries {
             query_set: self.query_set,
             first_query: self.first_query + 2 * position as u32,
             position,
@@ -577,7 +577,7 @@ impl<'a> FrameTimestamps<'a> {
     }
 }
 
-impl<'a> TimedPass<'a, '_> {
+impl<'a> PassQueries<'a, '_> {
     /// The timestamp writes of the pass, a compute pass.
     pub fn compute(self) -> wgpu::ComputePassTimestampWrites<'a> {
         self.log.mark(self.position, PassKind::Compute);
@@ -663,9 +663,7 @@ fn frame_times(
     let ran = |pass: usize| log.get(pass).is_some();
     let (bend_pass, blas_refit) = (pass_position(BEND_PASS), pass_position(BLAS_REFIT_PASS));
     let refitted = ran(blas_refit);
-    // A bend pass submitted ahead of the build, with no refit's marker to
-    // end its submission, is spanned to the frame's last pass, the build's
-    // submission included, so the build does not count apart.
+    // An untimed refit leaves the build inside the span from the bend pass.
     let build_spanned = !refitted
         && log
             .get(bend_pass)

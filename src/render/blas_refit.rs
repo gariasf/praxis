@@ -12,7 +12,7 @@
 
 use crate::assets::MeshPool;
 use crate::render::CrowdForm;
-use crate::render::readback::TimedPass;
+use crate::render::readback::PassQueries;
 #[cfg(target_vendor = "apple")]
 use crate::stats::Counted;
 use crate::stats::GpuMemory;
@@ -101,7 +101,7 @@ impl BlasRefit {
     /// orders what `queue` submits next after them. The rebuild form records
     /// the update into `head` and submits that one command buffer; the refit
     /// form, on Apple, records it after `head`, in a command buffer of its own
-    /// submitted beside it and followed, when given `timed`, by a marker that
+    /// submitted beside it and followed, when given `queries`, by a marker that
     /// ends it.
     pub fn submit(
         &mut self,
@@ -109,7 +109,7 @@ impl BlasRefit {
         queue: &wgpu::Queue,
         mut head: wgpu::CommandEncoder,
         mesh_pool: &MeshPool,
-        timed: Option<TimedPass<'_, '_>>,
+        queries: Option<PassQueries<'_, '_>>,
     ) {
         if self.form == CrowdForm::Rebuild {
             mesh_pool.rebuild_refitted_blases(&mut head);
@@ -122,11 +122,11 @@ impl BlasRefit {
         #[cfg(target_vendor = "apple")]
         let submission = if self.form == CrowdForm::Refit {
             let refits = self.record_refits(device, mesh_pool);
-            let marker = timed
+            let marker = queries
                 .zip(self.marker.as_mut())
                 .zip(self.scratch.as_ref())
-                .map(|((timed, marker), (scratch, _))| {
-                    marker.record(device, scratch, timed.marker())
+                .map(|((queries, marker), (scratch, _))| {
+                    marker.record(device, scratch, queries.marker())
                 });
             queue.submit([head, refits].into_iter().chain(marker))
         } else {
@@ -134,7 +134,7 @@ impl BlasRefit {
         };
         #[cfg(not(target_vendor = "apple"))]
         let submission = {
-            let _ = timed;
+            let _ = queries;
             queue.submit(std::iter::once(head))
         };
         #[cfg(target_vendor = "apple")]

@@ -155,16 +155,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   </ol>
   <p>The shadow mask pass is the one pass that reads it, through group 2. With the crowd's refit or rebuild form, a <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span>, a frame that bends Meshes is cut after its bend pass: the commands up to it are submitted first with the BLAS updates, and the build, recorded after them, follows, so its entries place the BLASes as the frame bent them (<a href="blas-refit.html">The BLAS refit</a>). In the default form, the shadow proxies', nothing is cut.</p>
 <pre class="code"><code>let started = Instant::now();
-let bracket = timestamps
+let build_queries = timestamps
+    .as_mut()
     .filter(|_| self.marks_dynamic_tlas_build)
-    .map(|timestamps| timestamps.bracket(DYNAMIC_TLAS_BUILD));
-let dynamic_tlas_commands =
-    self.dynamic_tlas
-        .record(&amp;self.device, bracket)
-        .map(|(commands, uploaded_bytes)| {
-            recorder.counters.uploaded_bytes += uploaded_bytes;
-            commands
-        });
+    .map(|timestamps| timestamps.pass(DYNAMIC_TLAS_BUILD));
+let dynamic_tlas_commands = self.dynamic_tlas.record(&amp;self.device, build_queries).map(
+    |(commands, uploaded_bytes)| {
+        recorder.counters.uploaded_bytes += uploaded_bytes;
+        commands
+    },
+);
 recorder.stage(DYNAMIC_TLAS_RECORDING, started);</code></pre>
   <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>: the recording, after the bend pass and any BLAS update.</p>
 <pre class="code"><code>let started = Instant::now();
@@ -329,16 +329,16 @@ if !segment_meets_box(origin, direction, start_distance, dynamic_end_distance, b
 <pre class="code"><code>pub fn record(
     &amp;mut self,
     device: &amp;wgpu::Device,
-    timestamps: Option&lt;[wgpu::ComputePassTimestampWrites&lt;'_&gt;; 2]&gt;,
+    queries: Option&lt;PassQueries&lt;'_, '_&gt;&gt;,
 ) -&gt; Option&lt;(wgpu::CommandBuffer, u64)&gt; {
     let uploaded_bytes = self.unrecorded_upload_bytes.take()?;
     let mut encoder = self
         .encoder
         .take()
         .unwrap_or_else(|| create_encoder(device));
-    let [before, after] = timestamps.map_or([None, None], |writes| writes.map(Some));
+    let [before, after] = queries.map_or([None, None], |queries| queries.bracket().map(Some));
     self.mark(&amp;mut encoder, before);
-    encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;self.tlas));
+    encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;*self.tlas));
     self.mark(&amp;mut encoder, after);
     Some((encoder.finish(), uploaded_bytes))
 }</code></pre>
