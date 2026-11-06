@@ -31,6 +31,8 @@ mod render;
 mod scenes;
 mod state;
 mod stats;
+#[cfg_attr(not(test), allow(dead_code))]
+mod streaming;
 mod threading;
 mod time;
 mod transform;

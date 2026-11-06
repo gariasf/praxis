@@ -50,7 +50,6 @@ pub(crate) const CHUNK_MAGIC: [u8; 4] = *b"PXCH";
 /// As `MATERIAL_FORMAT_VERSION`, for Chunk Blobs.
 pub(crate) const CHUNK_FORMAT_VERSION: u32 = 1;
 /// A Chunk's edge (ADR 0018): 4 × 4 of ADR 0014's 64 m cells.
-#[cfg(feature = "cook")]
 pub(crate) const CHUNK_EDGE_METRES: f64 = 256.0;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
