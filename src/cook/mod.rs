@@ -418,7 +418,7 @@ fn read_sources(
     let mesh_bounds: HashMap<_, _> = sources
         .meshes
         .iter()
-        .map(|(id, _, _, primitives)| (*id, mesh::source_bounds(primitives)))
+        .map(|(id, _, _, primitives)| (*id, chunk::source_bounds(primitives)))
         .collect();
     for &scene in scenes {
         let (placements, lights) = scene.static_content();

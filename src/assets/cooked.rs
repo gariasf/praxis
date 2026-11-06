@@ -50,7 +50,8 @@ pub(crate) const CHUNK_MAGIC: [u8; 4] = *b"PXCH";
 /// As `MATERIAL_FORMAT_VERSION`, for Chunk Blobs.
 pub(crate) const CHUNK_FORMAT_VERSION: u32 = 1;
 /// A Chunk's edge (ADR 0018): 4 × 4 of ADR 0014's 64 m cells.
-pub const CHUNK_EDGE_METRES: f64 = 256.0;
+#[cfg(feature = "cook")]
+pub(crate) const CHUNK_EDGE_METRES: f64 = 256.0;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
@@ -732,11 +733,17 @@ impl CookedChunk {
                 payload.extend(light.translation[axis].to_le_bytes());
             }
         }
-        for value in 0..5 {
-            for light in &self.lights {
+        let light_values: Vec<[f32; 5]> = self
+            .lights
+            .iter()
+            .map(|light| {
                 let [red, green, blue] = light.color.to_array();
-                let values = [red, green, blue, light.intensity, light.range];
-                payload.extend(values[value].to_le_bytes());
+                [red, green, blue, light.intensity, light.range]
+            })
+            .collect();
+        for field in 0..5 {
+            for values in &light_values {
+                payload.extend(values[field].to_le_bytes());
             }
         }
         payload

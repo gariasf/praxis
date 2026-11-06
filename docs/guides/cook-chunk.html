@@ -170,7 +170,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <pre class="code"><code>let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor());
 let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES;</code></pre>
   <p class="code-source"><code>chunk_holding</code>, <code>src/cook/chunk.rs</code>.</p>
-  <p>The subtraction is not always exact. When the translation from the origin has a larger exponent than the World translation, a pivot at x = &minus;10.1 m becoming 245.9 m in Chunk &minus;1 say, it is rounded to f64's step at that size, at most 2<sup>&minus;45</sup> m, about 3 &times; 10<sup>&minus;14</sup> m, for any translation under 256 m. Adding the origin back can then differ from the World translation in the last bit. <code>town</code>'s 16 Chunks hold 244,319 Placements and 1,024 lights: its 20 &times; 20 blocks span 4 &times; 4 Chunks, and its ground's 8 &times; 8 tiles of 128 m lie four to a Chunk.</p>
+  <p>The subtraction is not always exact. When the translation from the origin has a larger exponent than the World translation, a pivot at x = &minus;10.1 m becoming 245.9 m in Chunk &minus;1 say, it is rounded to f64's step at that size, at most 2<sup>&minus;45</sup> m, about 3 &times; 10<sup>&minus;14</sup> m, for any translation under 256 m. Adding the origin back can then differ from the World translation in its last bits, by at most 2<sup>&minus;46</sup> m, about 1.4 &times; 10<sup>&minus;14</sup> m. <code>town</code>'s 16 Chunks hold 244,319 Placements and 1,024 lights: its 20 &times; 20 blocks span 4 &times; 4 Chunks, and its ground's 8 &times; 8 tiles of 128 m lie four to a Chunk.</p>
 </section>
 
 <section class="part prose" id="bounds">
@@ -240,33 +240,34 @@ let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES
   <p class="key-idea">The Chunk cook costs cook time and bytes, never frame time. <code>town</code>'s 16 Chunks compress from 20.6 MB to 0.69 MB, and a launch whose Chunks are up to date still generates, cuts and hashes them.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th><code>town</code>'s 16 Chunks</th><th class="n">Bytes</th><th class="n">Bytes per Placement</th><th class="n">Compress, ms</th></tr></thead>
+    <thead><tr><th><code>town</code>'s 16 Chunks</th><th class="n">Bytes</th><th class="n">Bytes per Placement</th><th class="n">Time, ms</th></tr></thead>
     <tbody>
-      <tr class="focus"><td>a field at a time, level 9</td><td class="n">689,195</td><td class="n">2.82</td><td class="n">35</td></tr>
-      <tr><td>a Placement at a time, level 19</td><td class="n">1,010,577</td><td class="n">4.14</td><td class="n">3,610</td></tr>
-      <tr><td>a Placement at a time, level 3</td><td class="n">1,417,239</td><td class="n">5.80</td><td class="n">13</td></tr>
+      <tr class="focus"><td>compressed a field at a time, level 9</td><td class="n">689,069</td><td class="n">2.82</td><td class="n">31&ndash;35</td></tr>
+      <tr><td>compressed a Placement at a time, level 19</td><td class="n">1,010,577</td><td class="n">4.14</td><td class="n">3,610</td></tr>
+      <tr><td>compressed a Placement at a time, level 3</td><td class="n">1,417,239</td><td class="n">5.80</td><td class="n">13</td></tr>
       <tr><td>uncompressed</td><td class="n">20,568,748</td><td class="n">84.19</td><td class="n">&mdash;</td></tr>
+      <tr><td>generated, cut and hashed, as an up-to-date launch does</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">37&ndash;64</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Measured once each in a release build on the Apple M4 Pro, all 16 Chunks compressed on one thread; bytes per Placement divide by 244,319 and include the lights' share. One Chunk holds 13,265 to 17,577 Placements and 56 to 72 lights, 39,774 to 47,254 bytes compressed. Generating, cutting and hashing <code>town</code>'s Chunks, what each up-to-date dev launch of <code>town</code> repeats, took 40 to 64 ms over three runs with the machine's load average between 5 and 14.</p>
+  <p class="note">Release builds on the Apple M4 Pro, all 16 Chunks on one thread, with the one-minute load average between 5 and 14, so the ranges are a few runs each; bytes per Placement divide by 244,319 and include the lights' share and each Blob's 8-byte magic and version. The rows a Placement at a time were measured on a layout this cook no longer writes. One Chunk holds 13,265 to 17,577 Placements and 56 to 72 lights, 39,774 to 47,254 bytes compressed.</p>
 </section>
 
 <section class="part prose" id="why">
   <div class="part-mark">8 &middot; ADRs 0014, 0018, 0023</div>
   <h2>Why this way</h2>
   <p><b>f64 from the Chunk's origin.</b> ADR 0018 stores a Placement's translation in f64 because f32 heights fail the simulation bar above 1,024 m; ADR 0014 addresses a Chunk by integer (x, z) with its origin at the edge's multiple, so a Placement's translation stays small however far its Chunk lies.</p>
-  <p><b>The pivot decides.</b> A Placement belongs to one Chunk, the one over its pivot, rather than to every Chunk its Mesh touches, so it loads once; the Chunk's bounds grow instead, and ADR 0014's 128 m pivot bound, which the Mesh cook enforces, keeps that growth within 128 m for a Placement at unit scale.</p>
+  <p><b>The pivot decides.</b> A Placement belongs to one Chunk, the one over its pivot, rather than to every Chunk its Mesh touches, so it loads once; the Chunk's bounds grow instead, and ADR 0014's 128 m pivot bound, which the Mesh cook enforces, keeps a Mesh at unit scale within 128 m of its pivot, though the corners of its rotated box, which the bounds hold, can reach about 222 m along an axis.</p>
   <p><b>A Material per Placement.</b> An Instance's Material overrides its Mesh's, and <code>town</code>'s boxes rely on it: one unit cube drawn as slabs, walls, windows and rails in eight Materials. A Placement carries the same optional override, so the Chunks hold what the spawn places with no Mesh per Material.</p>
   <p><b>A field at a time.</b> Stored a Placement at a time, an Asset ID repeats every 84 bytes among unrelated floats; stored a field at a time, the Asset IDs, the translations along each axis and the unit scales each sit together, and zstd at level 9 compresses them to two thirds of what level 19 reaches the other way, about a hundred times faster.</p>
-  <p><b>Photometric lights.</b> A light keeps ADR 0023's units: colour, intensity in candela and range in metres, as the <code>PointLight</code> it is spawned from.</p>
+  <p><b>Photometric lights.</b> A light keeps the <code>PointLight</code> it is spawned from: a colour, an intensity in candela as ADR 0023 has it, and a range in metres as <code>KHR_lights_punctual</code> defines it.</p>
 </section>
 
 <section class="part prose" id="limits">
   <div class="part-mark">9</div>
   <h2>Limits</h2>
   <p><b>Not loaded yet.</b> The runtime reads no Chunk; <code>town</code> spawns from its generator as before, and the other scenes cook no Chunks.</p>
-  <p><b>The last bit of a translation.</b> A World translation rebuilt from a Chunk's origin and a Placement's translation can differ from the generator's in f64's last bit, about 10<sup>&minus;14</sup> m.</p>
+  <p><b>The last bit of a translation.</b> A World translation rebuilt from a Chunk's origin and a Placement's translation can differ from the generator's in f64's last bits, by at most 2<sup>&minus;46</sup> m.</p>
   <p><b>A Mesh the cook does not read.</b> A Placement whose Mesh no source of the same cook defines grows its Chunk's bounds by its pivot alone; that Mesh is warned of as dangling.</p>
   <p><b>Lights outside the bounds.</b> A light's range does not grow its Chunk's bounds.</p>
   <p><b>No index of Chunks.</b> Nothing lists which Chunks a scene has: a reader finds one by its coordinates.</p>
@@ -278,7 +279,7 @@ let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES
   <p class="note">The Chunk cook relies on no outside source beyond the zstd library the Cooked cache already uses; its rules are the ADRs named above.</p>
   <h3>History</h3>
   <p class="note">Chunks were a line of ADR 0018, a list of Placements with no code behind it. They were first cooked for the streamed world, after the cooker began refusing a Mesh past 128 m from its pivot and <code>town</code>'s ground was cut into 128 m tiles, with lights and an overriding Material added to the ADR's Placement. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/cook/chunk.rs</code>, <code>src/cook/mod.rs</code>, <code>src/cook/mesh.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/scenes/town.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018 and 0023, and release-build measurements on the M4 Pro, all as the Chunk cook's change leaves <code>main</code> at 075919da.</footer>
+  <footer class="sources">Written from <code>src/cook/chunk.rs</code>, <code>src/cook/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/scenes/town.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018 and 0023, and release-build measurements on the M4 Pro, all as the Chunk cook's change leaves <code>main</code> at 075919da.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="box-filtering.html">Previous: Box filtering</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>

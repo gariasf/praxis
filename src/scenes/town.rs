@@ -371,8 +371,8 @@ fn placements() -> (Vec<TownRenderable>, Vec<glam::DVec3>) {
     (placed, lights)
 }
 
-/// The town's static content as its Chunks cook it: every Instance
-/// `placements` places, and its lamps' lights.
+/// The town's static content as its Chunks cook it: a Placement for each
+/// Renderable `placements` places, and its lamps' lights.
 #[cfg(feature = "cook")]
 pub(crate) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
     let scene = ReferenceScene::Town;

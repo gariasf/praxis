@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use glam::{BVec3, DVec3, Vec3};
 use sha2::{Digest, Sha256};
 
+use super::mesh::SourcePrimitive;
 use crate::cooked::{
     AssetId, CHUNK_EDGE_METRES, CHUNK_FORMAT_VERSION, CHUNK_MAGIC, CookedChunk, CookedLight,
     CookedPlacement, hex,
@@ -24,10 +25,10 @@ pub(super) fn chunks(
     for mut placement in placements {
         let (origin, chunk) = chunk_holding(&mut chunks, placement.translation);
         placement.translation -= origin;
-        let [lowest, highest] = mesh_bounds
-            .get(&placement.mesh)
-            .copied()
-            .unwrap_or([Vec3::ZERO; 2]);
+        let [lowest, highest] = mesh_bounds.get(&placement.mesh).copied().unwrap_or_else(|| {
+            tracing::warn!(mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; its Chunk's bounds hold only its pivot");
+            [Vec3::ZERO; 2]
+        });
         for corner in 0..8 {
             let is_highest = BVec3::new(corner & 1 != 0, corner & 2 != 0, corner & 4 != 0);
             let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
@@ -58,6 +59,24 @@ fn chunk_holding(
         bounds: [DVec3::INFINITY, DVec3::NEG_INFINITY],
     });
     (origin, chunk)
+}
+
+/// The box that holds every source vertex of `primitives` and every box
+/// their geometry adds, which holds the cooked Mesh's bounds.
+pub(super) fn source_bounds(primitives: &[SourcePrimitive]) -> [Vec3; 2] {
+    let positions = primitives
+        .iter()
+        .flat_map(|(geometry, _)| &geometry.positions)
+        .map(|position| Vec3::from(*position));
+    let added = primitives
+        .iter()
+        .filter_map(|(geometry, _)| geometry.bounds)
+        .flat_map(|[lowest, highest]| [Vec3::from(lowest), Vec3::from(highest)]);
+    let corners = positions.chain(added);
+    [
+        corners.clone().fold(Vec3::INFINITY, Vec3::min),
+        corners.fold(Vec3::NEG_INFINITY, Vec3::max),
+    ]
 }
 
 /// A Chunk's Cook key: SHA-256 over its format, its compression and its
