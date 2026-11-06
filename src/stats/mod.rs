@@ -25,7 +25,9 @@ pub struct FrameStats {
     /// Bytes the frame's uploads wrote to GPU buffers: the camera and light
     /// uniforms, the light buffer, the bends, the Instances it wrote, the
     /// Instance slot count when it changed, and the dynamic TLAS's instances
-    /// its build uploads. Pools upload only while a Scene loads.
+    /// its build uploads; and the bytes that the moves of Textures between
+    /// Texture classes staged since the frame before copy. The pools' own
+    /// loads are not counted.
     pub uploaded_bytes: u64,
     /// Instances the frame wrote: those of new Renderables and of those whose
     /// World transform or Material changed (ADR 0003).
