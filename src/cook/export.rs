@@ -127,7 +127,7 @@ pub fn export_scene(
         Option<&MaterialRef>,
     )>();
     for (current, previous, mesh_ref, material_ref) in renderable_query.iter(world) {
-        let mesh = exported.mesh(recorder.meshes[mesh_ref.0.0 as usize])?;
+        let mesh = exported.mesh(recorder.meshes[mesh_ref.0.index as usize])?;
         let material = match material_ref {
             Some(material_ref) => {
                 let id = recorder.materials[material_ref.0.index() as usize];
@@ -305,7 +305,10 @@ impl AssetRecorder {
 impl AssetLoader for AssetRecorder {
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.materials.push(id);
-        Ok(MaterialHandle(self.materials.len() as u32 - 1))
+        Ok(MaterialHandle {
+            index: self.materials.len() as u32 - 1,
+            generation: 0,
+        })
     }
 
     /// Every Texture is Layer 0, which no export reads.
@@ -316,7 +319,10 @@ impl AssetLoader for AssetRecorder {
 
     fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.meshes.push(id);
-        Ok(MeshHandle(self.meshes.len() as u32 - 1))
+        Ok(MeshHandle {
+            index: self.meshes.len() as u32 - 1,
+            generation: 0,
+        })
     }
 
     fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {

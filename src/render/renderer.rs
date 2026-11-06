@@ -1765,7 +1765,7 @@ pub(crate) mod tests {
         // The red pixels of each half of the frame `prepare` makes.
         let mut red_pixels = |world: &mut World, renderer: &mut Renderer| -> [usize; 2] {
             world.run_system_once(propagate_world_transforms).unwrap();
-            let frame = preparer.prepare(world, &renderer.mesh_pool, 1.0);
+            let frame = preparer.prepare(world, &renderer.mesh_pool, &renderer.material_pool, 1.0);
             let (image, ..) = render_frame(&context, renderer, frame, SIZE, SIZE);
             [0..SIZE / 2, SIZE / 2..SIZE].map(|columns| {
                 image
@@ -2314,7 +2314,7 @@ pub(crate) mod tests {
                         rotation_scale: padded_columns(rotation_scale),
                         anchor,
                         offset,
-                        mesh: if freed(slot) { NO_MESH } else { mesh.0 },
+                        mesh: if freed(slot) { NO_MESH } else { mesh.index },
                         ..instance(mesh, NO_MATERIAL, [0.0, 0.0])
                     }
                 })
@@ -2448,7 +2448,7 @@ pub(crate) mod tests {
                             let shown =
                                 in_view(slot) && !(frame + 1 < frame_count && entering(slot));
                             InstanceData {
-                                mesh: if freed(slot) { NO_MESH } else { mesh.0 },
+                                mesh: if freed(slot) { NO_MESH } else { mesh.index },
                                 ..instance(
                                     mesh,
                                     material_of(slot),
@@ -2643,7 +2643,7 @@ pub(crate) mod tests {
             anchor: [0; 3],
             material_id,
             offset: [x, y, 0.0],
-            mesh: mesh.0,
+            mesh: mesh.index,
         }
     }
 

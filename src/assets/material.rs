@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 
+use crate::assets::pools::Slots;
 use crate::cooked::{AssetId, CookedCache, CookedTexture};
 use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
 use crate::render::LoadStaging;
@@ -15,9 +16,9 @@ use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 pub(crate) const TEXTURES_PER_CHANNEL: u32 =
     FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE / MaterialChannel::ALL.len() as u32;
 
-/// Materials the SSBO holds. Materials are few and never deleted yet,
-/// so a fixed cap avoids growth + bind-group rebuilds for now.
-const MATERIAL_CAPACITY: u64 = 256;
+/// Materials the SSBO holds: a fixed cap avoids growth and bind-group
+/// rebuilds.
+const MATERIAL_CAPACITY: u32 = 256;
 
 /// The colour Channels' anisotropy (albedo, emissive) and the data
 /// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
@@ -28,14 +29,20 @@ const MATERIAL_CAPACITY: u64 = 256;
 const COLOUR_ANISOTROPY: u16 = 16;
 const DATA_ANISOTROPY: u16 = 4;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct MaterialHandle(pub u32);
+/// A Material's index in the Material SSBO, which the GPU sees, and the
+/// generation of that index it was loaded in, which no later Material there
+/// shares.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct MaterialHandle {
+    pub index: u32,
+    pub generation: u32,
+}
 
 impl MaterialHandle {
     /// Index into the material SSBO. Reads better than `.0` at call sites that
     /// unwrap a wrapping newtype (e.g. `material_ref.0.index()`).
     pub fn index(self) -> u32 {
-        self.0
+        self.index
     }
 }
 
@@ -145,6 +152,9 @@ impl ChannelTextures {
 /// carries, the Instance's override or else the Meshlet's own, and samples
 /// each Channel's array at the Layer stored in `layers`.
 pub struct MaterialPool {
+    slots: Slots,
+    /// Each Material's data, at its Handle's index; a freed one's stays
+    /// until a later Material takes its index.
     materials: Vec<MaterialData>,
     materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
@@ -205,7 +215,7 @@ impl MaterialPool {
             GpuMemoryKind::SceneAndPassBuffers,
             &wgpu::BufferDescriptor {
                 label: Some("materials_buffer"),
-                size: MATERIAL_CAPACITY * std::mem::size_of::<MaterialData>() as u64,
+                size: u64::from(MATERIAL_CAPACITY) * std::mem::size_of::<MaterialData>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             },
@@ -239,6 +249,7 @@ impl MaterialPool {
         );
 
         Self {
+            slots: Slots::default(),
             materials: Vec::new(),
             materials_buffer,
             channels,
@@ -259,19 +270,50 @@ impl MaterialPool {
         staging: &mut LoadStaging,
         data: MaterialData,
     ) -> Option<MaterialHandle> {
-        if self.materials.len() as u64 >= MATERIAL_CAPACITY {
+        if self.slots.full(MATERIAL_CAPACITY) {
             tracing::warn!(
                 capacity = MATERIAL_CAPACITY,
                 "Material refused: the Material SSBO is full"
             );
             return None;
         }
-        let handle = MaterialHandle(self.materials.len() as u32);
-        let offset = handle.0 as u64 * std::mem::size_of::<MaterialData>() as u64;
+        let (index, generation) = self.slots.take();
+        let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
-        self.materials.push(data);
-        tracing::debug!(handle = handle.0, "material registered");
-        Some(handle)
+        if index as usize == self.materials.len() {
+            self.materials.push(data);
+        } else {
+            self.materials[index as usize] = data;
+        }
+        tracing::debug!(handle = index, "material registered");
+        Some(MaterialHandle { index, generation })
+    }
+
+    /// The data of `handle`'s Material, or None when it was freed.
+    pub fn get(&self, handle: MaterialHandle) -> Option<&MaterialData> {
+        self.slots
+            .live(handle.index, handle.generation)
+            .then(|| &self.materials[handle.index as usize])
+    }
+
+    /// Releases `handle`'s slot, which the next Material inserted takes, so
+    /// `handle` finds nothing again; its Textures stay loaded. A Mesh whose
+    /// Primitive names it must be freed first. A Handle that finds no
+    /// Material is warned about.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn free(&mut self, handle: MaterialHandle) {
+        if !self.slots.free(handle.index, handle.generation) {
+            tracing::warn!(?handle, "Material not freed: its Handle finds no Material");
+            return;
+        }
+        self.material_handles.retain(|_, loaded| *loaded != handle);
+        tracing::debug!(?handle, "Material freed");
+    }
+
+    /// Materials freed since the pool was made: once it moves, an Instance
+    /// may name an index whose Material is gone.
+    pub fn frees(&self) -> u64 {
+        self.slots.frees()
     }
 
     /// Loads the Material `id` from `cache`, and each Texture it samples, once
@@ -493,6 +535,58 @@ mod tests {
         std::fs::remove_dir_all(&directory).ok();
     }
 
+    /// A freed Material's index takes the next Material inserted, in a new
+    /// generation, which the freed Handle does not find; its Asset ID loads
+    /// it again.
+    #[test]
+    fn a_freed_materials_index_takes_the_next_material_and_refuses_the_old_handle() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-material-free-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        cache.write(AssetId(1), "key", &material.to_blob()).unwrap();
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(&context.device, &gpu_memory(&context), &mut staging);
+        let kept = pool
+            .insert(&mut staging, bytemuck::Zeroable::zeroed())
+            .unwrap();
+        let freed = pool
+            .load(&context.device, &mut staging, &cache, AssetId(1))
+            .unwrap();
+
+        pool.free(freed);
+        assert!(pool.get(freed).is_none());
+        assert!(pool.get(kept).is_some());
+        assert_eq!(pool.frees(), 1);
+        let (_, log) = logged(|| pool.free(freed));
+        assert!(log.contains("Material not freed"), "not logged: {log:?}");
+
+        let mut replacement: MaterialData = bytemuck::Zeroable::zeroed();
+        replacement.base_color = [0.5; 4];
+        let inserted = pool.insert(&mut staging, replacement).unwrap();
+        assert_eq!(inserted.index, freed.index);
+        assert!(pool.get(freed).is_none());
+        assert_eq!(
+            pool.get(inserted).map(|data| data.base_color),
+            Some([0.5; 4])
+        );
+        let reloaded = pool
+            .load(&context.device, &mut staging, &cache, AssetId(1))
+            .unwrap();
+        assert!(reloaded != freed && reloaded != inserted);
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
     /// The SSBO holds `MATERIAL_CAPACITY` Materials; the next gets no
     /// Handle, so nothing draws with another Material in its place, and the
     /// refusal is logged.
@@ -510,7 +604,7 @@ mod tests {
             layers: [MaterialPool::DEFAULT_LAYER; 4],
             extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
         };
-        for index in 0..MATERIAL_CAPACITY as u32 {
+        for index in 0..MATERIAL_CAPACITY {
             let handle = pool.insert(&mut staging, material);
             assert!(handle.is_some_and(|handle| handle.index() == index));
         }
@@ -518,6 +612,6 @@ mod tests {
         assert!(handle.is_none(), "a Material past capacity got a Handle");
         assert!(log.contains("WARN"), "not a warning: {log:?}");
         assert!(log.contains("Material refused"), "not logged: {log:?}");
-        assert_eq!(pool.materials.len() as u64, MATERIAL_CAPACITY);
+        assert_eq!(pool.materials.len() as u32, MATERIAL_CAPACITY);
     }
 }

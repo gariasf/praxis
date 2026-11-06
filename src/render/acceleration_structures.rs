@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::assets::{MeshHandle, MeshPool};
+use crate::assets::MeshPool;
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::{FrameData, InstanceData, shaders};
@@ -151,7 +151,11 @@ impl StaticTlas {
             for (slot, instance) in (write.first_slot..).zip(instances) {
                 // A freed slot's Instance has no Mesh, so no BLAS.
                 let blas = (!write.moving)
-                    .then(|| mesh_pool.blas(MeshHandle(instance.mesh)))
+                    .then(|| {
+                        mesh_pool
+                            .handle_at(instance.mesh)
+                            .and_then(|handle| mesh_pool.blas(handle))
+                    })
                     .flatten();
                 let Some(entry) = self.tlas.get_mut_single(slot as usize) else {
                     if blas.is_some() {
@@ -328,8 +332,9 @@ impl DynamicTlas {
         let mut bounds: Option<[glam::Vec3; 2]> = None;
         for (index, moving) in listed.enumerate() {
             let instance = &frame.instances[moving.instance];
-            let handle = MeshHandle(instance.mesh);
-            let mesh = mesh_pool.blas(handle).zip(mesh_pool.get(handle));
+            let mesh = mesh_pool
+                .handle_at(instance.mesh)
+                .and_then(|handle| mesh_pool.blas(handle).zip(mesh_pool.get(handle)));
             self.tlas[index] = mesh.map(|(blas, mesh)| {
                 let transform = anchored_transform(instance, anchor);
                 let [lowest, highest] = placed_bounds(&transform, mesh.bounds);
@@ -478,8 +483,8 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::ARENA_CAPACITY_BYTES;
     use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
+    use crate::assets::{ARENA_CAPACITY_BYTES, MeshHandle};
     use crate::gpu::GpuContext;
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{InstanceWrite, MovingInstance};
@@ -578,7 +583,7 @@ mod tests {
                 anchor,
                 material_id: NO_MATERIAL,
                 offset,
-                mesh: self.mesh.0,
+                mesh: self.mesh.index,
             }
         }
 
