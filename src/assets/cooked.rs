@@ -52,6 +52,12 @@ pub(crate) const CHUNK_FORMAT_VERSION: u32 = 1;
 /// A Chunk's edge (ADR 0018): 4 × 4 of ADR 0014's 64 m cells.
 pub(crate) const CHUNK_EDGE_METRES: f64 = 256.0;
 
+/// The World position of the origin of the Chunk at `coordinates`, x then z,
+/// which its Placements' and lights' translations are taken from.
+pub(crate) fn chunk_origin([x, z]: [i32; 2]) -> glam::DVec3 {
+    glam::DVec3::new(f64::from(x), 0.0, f64::from(z)) * CHUNK_EDGE_METRES
+}
+
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

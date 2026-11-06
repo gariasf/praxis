@@ -12,13 +12,16 @@ use anyhow::Context;
 use serde::Serialize;
 use serde_json::json;
 
+use super::chunk;
 use super::mesh::SourcePrimitive;
 use super::{LoadedImage, asset_names, gltf_material, material_textures, read_manifest};
 use crate::ReferenceScene;
 use crate::assets::{AssetLoader, MaterialChannel, MaterialHandle, MeshHandle};
 use crate::camera::{Camera, FIELD_OF_VIEW};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
-use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedMaterial, CookedMesh};
+use crate::cooked::{
+    AssetId, AssetKind, AssetName, AssetSource, CookedChunk, CookedMaterial, CookedMesh,
+};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
 use crate::state::Simulation;
@@ -49,7 +52,7 @@ pub fn export_scene(
     );
     let frame = frame.unwrap_or(crate::capture::FRAME_COUNT - 1);
     let catalog = Catalog::new(scene, assets)?;
-    let mut recorder = AssetRecorder::default();
+    let mut recorder = AssetRecorder::new(scene);
     let mut simulation = Simulation::new(
         scene,
         glam::DVec3::ZERO,
@@ -282,15 +285,30 @@ struct RenderableEntry {
     material: Option<String>,
 }
 
-/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing.
+/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing;
+/// reads a scene's Chunks as its cook splits them from source.
 #[derive(Default)]
 pub(super) struct AssetRecorder {
     pub(super) meshes: Vec<AssetId>,
     pub(super) materials: Vec<AssetId>,
     textures: Vec<AssetId>,
+    chunks: HashMap<AssetId, CookedChunk>,
 }
 
 impl AssetRecorder {
+    /// A recorder for `scene`'s spawn.
+    pub(super) fn new(scene: ReferenceScene) -> Self {
+        let (placements, lights) = scene.static_content();
+        let chunks = chunk::split(placements, lights)
+            .into_iter()
+            .map(|(coordinates, chunk)| (scene.chunk_id(coordinates), chunk))
+            .collect();
+        Self {
+            chunks,
+            ..Self::default()
+        }
+    }
+
     /// Every Asset ID a spawn loaded, once per load.
     pub(super) fn ids(&self) -> impl Iterator<Item = AssetId> + '_ {
         let ids = self
@@ -335,6 +353,11 @@ impl AssetLoader for AssetRecorder {
 
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh(id)
+    }
+
+    fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
+        let chunk = self.chunks.get(&id).cloned();
+        chunk.with_context(|| format!("Chunk {id} holds none of the scene's static content"))
     }
 }
 

@@ -5,11 +5,15 @@
 //! bollards, benches and bins, utility poles carry wires that go sub-pixel
 //! at distance, 1,024 street lamps each hold a point light, and 10,000
 //! pigeons circle over the roofs in flocks, its Moving Instances. Its Meshes
-//! cook from the generators here, and its spawn places each Instance from a
-//! hash of where it stands, so every launch places the same town.
+//! and Chunks cook from the generators here, which place each Instance from
+//! a hash of where it stands, so every launch places the same town.
 
+#![cfg_attr(not(feature = "cook"), allow(dead_code))]
+
+use std::collections::HashMap;
 use std::f64::consts::FRAC_PI_2;
 
+use anyhow::Context;
 use bevy_ecs::prelude::*;
 use glam::FloatExt;
 
@@ -17,6 +21,7 @@ use super::{ReferenceScene, Spin};
 use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+use crate::cooked::{AssetId, chunk_origin};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
 use crate::render::DYNAMIC_TLAS_CAPACITY;
@@ -296,7 +301,7 @@ enum Choice {
     Bird,
 }
 
-/// A Renderable the spawn places: its Mesh, its Material where it
+/// A Renderable the town places: its Mesh, its Material where it
 /// overrides the Mesh's, and its Transform.
 struct TownRenderable {
     mesh: TownMesh,
@@ -347,6 +352,7 @@ fn facing(direction: glam::DVec3) -> glam::Quat {
 
 /// Every Instance the town places, block by block, then its lamps, poles
 /// and wires, and its lamps' lights.
+#[cfg(feature = "cook")]
 fn placements() -> (Vec<TownRenderable>, Vec<glam::DVec3>) {
     let mut placed: Vec<_> = super::ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE)
         .map(|centre| TownRenderable::new(TownMesh::Ground, centre, glam::Quat::IDENTITY))
@@ -784,44 +790,72 @@ fn flocks() -> Vec<Flock> {
         .collect()
 }
 
+/// The coordinates of the Chunks the town's static content lies in, x then
+/// z, in coordinate order: 4 × 4 about the World's origin.
+pub(crate) fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
+    (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z]))
+}
+
 /// Loads the town's Meshes and the Materials its boxes draw with, then
-/// places its Instances, its lamps' point lights, and its flocks: each a
-/// spinning centre with its birds as its children, all moved in the fixed
-/// schedule, so each carries its previous World transform (ADR 0022).
+/// places what does not move from its Chunks, in coordinate order, each
+/// Instance and point light in the order its Chunk holds them at the
+/// Chunk's origin plus its translation; then its flocks: each a spinning
+/// centre with its birds as its children, all moved in the fixed schedule,
+/// so each carries its previous World transform (ADR 0022).
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Town;
-    let meshes: Vec<MeshHandle> = TownMesh::ALL
+    let meshes: Vec<(AssetId, MeshHandle)> = TownMesh::ALL
         .iter()
-        .map(|mesh| loader.mesh(scene.mesh_id(mesh.name())))
+        .map(|mesh| {
+            let id = scene.mesh_id(mesh.name());
+            Ok((id, loader.mesh(id)?))
+        })
         .collect::<anyhow::Result<_>>()?;
-    let materials: Vec<MaterialHandle> = BoxMaterial::ALL
+    let materials: HashMap<AssetId, MaterialHandle> = BoxMaterial::ALL
         .iter()
-        .map(|material| loader.material(scene.material_id(material.name())))
+        .map(|material| {
+            let id = scene.material_id(material.name());
+            Ok((id, loader.material(id)?))
+        })
         .collect::<anyhow::Result<_>>()?;
-    let (placed, lights) = placements();
-    let (boxes, others): (Vec<_>, Vec<_>) = placed
-        .into_iter()
-        .partition(|renderable| renderable.material.is_some());
-    world.spawn_batch(others.into_iter().map(|renderable| {
-        (
-            renderable.transform,
-            MeshRef(meshes[renderable.mesh as usize]),
-        )
-    }));
-    world.spawn_batch(boxes.into_iter().filter_map(|renderable| {
-        let material = materials[renderable.material? as usize];
-        Some((
-            renderable.transform,
-            MeshRef(meshes[renderable.mesh as usize]),
-            MaterialRef(material),
-        ))
-    }));
-    world.spawn_batch(
-        lights
-            .into_iter()
-            .map(|position| (Transform::from_translation(position), LAMP_LIGHT)),
-    );
-    let bird = meshes[TownMesh::Bird as usize];
+    let bird = meshes[TownMesh::Bird as usize].1;
+    let meshes: HashMap<AssetId, MeshHandle> = meshes.into_iter().collect();
+    let (mut others, mut boxes, mut lights) = (Vec::new(), Vec::new(), Vec::new());
+    for coordinates in chunk_coordinates() {
+        let chunk = loader.chunk(scene.chunk_id(coordinates))?;
+        let origin = chunk_origin(coordinates);
+        for placement in chunk.placements {
+            let transform = Transform {
+                translation: origin + placement.translation,
+                rotation: placement.rotation,
+                scale: placement.scale,
+            };
+            let mesh = MeshRef(*meshes.get(&placement.mesh).with_context(|| {
+                format!("a Placement names Mesh {}, not the town's", placement.mesh)
+            })?);
+            match placement.material {
+                None => others.push((transform, mesh)),
+                Some(id) => {
+                    let material = materials.get(&id).with_context(|| {
+                        format!("a Placement names Material {id}, not the town's")
+                    })?;
+                    boxes.push((transform, mesh, MaterialRef(*material)));
+                }
+            }
+        }
+        lights.extend(chunk.lights.into_iter().map(|light| {
+            let light_component = PointLight {
+                color: light.color,
+                intensity: light.intensity,
+                range: light.range,
+            };
+            let translation = origin + light.translation;
+            (Transform::from_translation(translation), light_component)
+        }));
+    }
+    world.spawn_batch(others);
+    world.spawn_batch(boxes);
+    world.spawn_batch(lights);
     for flock in flocks() {
         let centre = world
             .spawn((

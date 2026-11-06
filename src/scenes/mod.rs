@@ -316,7 +316,6 @@ impl ReferenceScene {
     }
 
     /// The Asset ID of the scene's Chunk at integer `coordinates`, x then z.
-    #[cfg(feature = "cook")]
     pub(crate) fn chunk_id(self, [x, z]: [i32; 2]) -> AssetId {
         let source = AssetSource::Scene(self.name());
         let name = format!("{x} {z}");

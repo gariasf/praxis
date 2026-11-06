@@ -181,7 +181,7 @@ pub fn cook_scene(
 fn scene_references(scenes: &[ReferenceScene]) -> anyhow::Result<Vec<(Referrer, AssetId)>> {
     let mut references = Vec::new();
     for &scene in scenes {
-        let mut recorder = AssetRecorder::default();
+        let mut recorder = AssetRecorder::new(scene);
         // The default crowd form loads the shadow proxies besides every
         // Asset the traced forms load.
         Simulation::new(

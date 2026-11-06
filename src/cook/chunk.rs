@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use super::mesh::SourcePrimitive;
 use crate::cooked::{
     AssetId, CHUNK_EDGE_METRES, CHUNK_FORMAT_VERSION, CHUNK_MAGIC, CookedChunk, CookedLight,
-    CookedPlacement, hex,
+    CookedPlacement, chunk_origin, hex,
 };
 
 /// Each Chunk that holds the pivot of one of `placements` or `lights`,
@@ -21,20 +21,40 @@ pub(super) fn chunks(
     lights: Vec<CookedLight>,
     mesh_bounds: &HashMap<AssetId, [Vec3; 2]>,
 ) -> BTreeMap<[i32; 2], CookedChunk> {
+    let mut chunks = split(placements, lights);
+    for chunk in chunks.values_mut() {
+        let CookedChunk {
+            placements, bounds, ..
+        } = chunk;
+        for placement in placements.iter() {
+            let [lowest, highest] = mesh_bounds.get(&placement.mesh).copied().unwrap_or_else(|| {
+                tracing::warn!(mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; its Chunk's bounds hold only its pivot");
+                [Vec3::ZERO; 2]
+            });
+            for corner in 0..8 {
+                let is_highest = BVec3::new(corner & 1 != 0, corner & 2 != 0, corner & 4 != 0);
+                let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
+                let placed =
+                    placement.translation + placement.rotation.as_dquat() * local.as_dvec3();
+                *bounds = [bounds[0].min(placed), bounds[1].max(placed)];
+            }
+        }
+    }
+    chunks
+}
+
+/// Each Chunk that holds the pivot of one of `placements` or `lights`,
+/// translated from the World's origin, by its coordinates, each Placement
+/// and light in the order given and translated from its Chunk's origin; its
+/// bounds hold nothing.
+pub(super) fn split(
+    placements: Vec<CookedPlacement>,
+    lights: Vec<CookedLight>,
+) -> BTreeMap<[i32; 2], CookedChunk> {
     let mut chunks = BTreeMap::new();
     for mut placement in placements {
         let (origin, chunk) = chunk_holding(&mut chunks, placement.translation);
         placement.translation -= origin;
-        let [lowest, highest] = mesh_bounds.get(&placement.mesh).copied().unwrap_or_else(|| {
-            tracing::warn!(mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; its Chunk's bounds hold only its pivot");
-            [Vec3::ZERO; 2]
-        });
-        for corner in 0..8 {
-            let is_highest = BVec3::new(corner & 1 != 0, corner & 2 != 0, corner & 4 != 0);
-            let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
-            let placed = placement.translation + placement.rotation.as_dquat() * local.as_dvec3();
-            chunk.bounds = [chunk.bounds[0].min(placed), chunk.bounds[1].max(placed)];
-        }
         chunk.placements.push(placement);
     }
     for mut light in lights {
@@ -50,15 +70,13 @@ fn chunk_holding(
     chunks: &mut BTreeMap<[i32; 2], CookedChunk>,
     pivot: DVec3,
 ) -> (DVec3, &mut CookedChunk) {
-    let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor());
-    let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES;
-    let coordinates = coordinates.map(|coordinate| coordinate as i32);
+    let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);
     let chunk = chunks.entry(coordinates).or_insert_with(|| CookedChunk {
         placements: Vec::new(),
         lights: Vec::new(),
         bounds: [DVec3::INFINITY, DVec3::NEG_INFINITY],
     });
-    (origin, chunk)
+    (chunk_origin(coordinates), chunk)
 }
 
 /// The box that holds every source vertex of `primitives` and every box
@@ -158,7 +176,7 @@ mod tests {
         let report = cook_scene(scene, &assets, &cache, &settings).unwrap();
         assert_eq!(report.dangling_references, []);
 
-        let mut recorder = AssetRecorder::default();
+        let mut recorder = AssetRecorder::new(scene);
         let mut simulation = Simulation::new(
             scene,
             DVec3::ZERO,
