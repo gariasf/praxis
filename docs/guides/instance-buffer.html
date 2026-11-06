@@ -117,16 +117,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/instance.rs</code></div>
   <h1>The Instance buffer</h1>
   <p class="definition">The GPU storage buffer that holds every <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instance</span>, 128 bytes in a slot per <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh's Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>, created once at a fixed 524,288 slots and never grown, which the culling pass and the main pass's vertex stage read through one bind group built once.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to the Instance buffer, its slot's layout or its capacity rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="prepare.html">Prepare</a> for how a Renderable keeps its slot and which slots a frame writes, <a href="culling-pass.html">The culling pass</a> for the pass that reads every slot.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at dac8cf9a (2026-11-06). A change to the Instance buffer, its slot's layout or its capacity rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="prepare.html">Prepare</a> for how a Renderable keeps its slot and which slots a frame writes, <a href="culling-pass.html">The culling pass</a> for the pass that reads every slot.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Created</dt><dd>Once, in <code>Renderer::new</code>, at <code>INSTANCE_CAPACITY</code> slots of <code>InstanceData</code>: 67,108,864 bytes, with the <code>STORAGE</code> and <code>COPY_DST</code> usages. It never grows and is never replaced.</dd>
+      <dt>Created</dt><dd>Once, in <code>Renderer::new</code>, at <code>RenderCapacities::instances</code> slots of <code>InstanceData</code>, which the GPU memory Budgets give at device creation: 67,108,864 bytes at the checked-in ones, with the <code>STORAGE</code> and <code>COPY_DST</code> usages. It never grows and is never replaced.</dd>
       <dt>Written</dt><dd>Each frame, only the slots that <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s Instance writes name, a run of consecutive slots per copy, at the slot's index times 128 bytes; every other slot keeps what an earlier frame wrote (ADR 0003). The copies go through the frame's staging (<a href="staging.html">Staging</a>).</dd>
       <dt>Read by</dt><dd>The culling pass's compute stage, in <code>offset_slots</code>, <code>append_records</code> and <code>append_triangles</code>; the main pass's vertex stage, in <code>vertex_output</code>, which the depth pre-pass, phase two's depth pass and the lit pass all run. No fragment stage reads it. The static and dynamic TLAS take the same <code>InstanceData</code> values from Frame data on the CPU, not from the buffer.</dd>
       <dt>Bind group</dt><dd>Group 2, the scene geometry (<code>SCENE_GEOMETRY</code>): binding <code>instances</code>, read-only storage, <code>array&lt;InstanceData&gt;</code>, visible to the vertex and compute stages; built once in <code>Renderer::new</code>.</dd>
       <dt>Counted</dt><dd>Whole, in <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019&#39;s gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span>' <code>gpu_memory_bytes</code>; its writes in <code>uploaded_bytes</code> and <code>instances_written</code>; Renderables the full buffer turned away in <code>renderables_refused</code>.</dd>
-      <dt>Where in the code</dt><dd><code>src/render/instance.rs</code> (the slot, the capacity, the anchor split); <code>src/render/renderer.rs</code> (creation, upload, memory); <code>src/render/bind_groups.rs</code> (group 2); <code>src/render/shaders/common.wgsl</code> (the WGSL twin); <code>src/render/shaders/culling.wgsl</code> and <code>main.wgsl</code> (the readers).</dd>
+      <dt>Where in the code</dt><dd><code>src/render/instance.rs</code> (the slot, the anchor split); <code>src/render/renderer.rs</code> (the capacity, creation, upload, memory); <code>src/render/bind_groups.rs</code> (group 2); <code>src/render/shaders/common.wgsl</code> (the WGSL twin); <code>src/render/shaders/culling.wgsl</code> and <code>main.wgsl</code> (the readers).</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -189,9 +189,9 @@ pub struct InstanceData {
   <p>WGSL gives each <code>vec3</code> column of a <code>mat3x3</code> 16 bytes, so each matrix is 48 bytes, not 36, and Rust holds it as three 4-float columns; <code>padded_columns</code> writes a glam matrix that way, with each column's fourth float 0. A <code>vec3</code> is 16-byte aligned but 12 bytes long, so a 4-byte scalar fits after each: <code>material_id</code> after the anchor, <code>mesh</code> after the offset. The slot has no padding of its own; every one of its 128 bytes is data but the matrices' six column pads, 24 bytes.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>Constant</th><th class="n">Value</th><th>What it fixes</th></tr></thead>
+    <thead><tr><th>Name</th><th class="n">Value</th><th>What it fixes</th></tr></thead>
     <tbody>
-      <tr><td><code>INSTANCE_CAPACITY</code></td><td class="n">524,288 (2<sup>19</sup>)</td><td>slots the buffer holds, and so the most Renderables drawn at once</td></tr>
+      <tr><td><code>RenderCapacities::instances</code></td><td class="n">524,288 (2<sup>19</sup>)</td><td>slots the buffer holds at the checked-in Budgets, and so the most Renderables drawn at once</td></tr>
       <tr><td><code>size_of::&lt;InstanceData&gt;()</code></td><td class="n">128</td><td>bytes per slot, and the stride from one slot to the next</td></tr>
       <tr><td>the buffer</td><td class="n">67,108,864</td><td>bytes, 524,288 &times; 128: 64 MiB</td></tr>
       <tr><td><code>ANCHOR_CELL_SIZE</code></td><td class="n">64.0</td><td>metres along each edge of the grid cell an anchor names</td></tr>
@@ -200,7 +200,7 @@ pub struct InstanceData {
     </tbody>
   </table>
   </div>
-  <p class="note">From <code>src/render/instance.rs</code> at the commit above. Rust declares <code>ANCHOR_CELL_SIZE</code>, <code>NO_MESH</code>, <code>NO_MATERIAL</code> and <code>INSTANCE_CAPACITY</code> into every WGSL module as it assembles it (<code>src/render/shaders/mod.rs</code>), so no shader part holds them as literals.</p>
+  <p class="note">The capacity from <code>RenderCapacities::checked_in</code> in <code>src/render/renderer.rs</code>, the rest from <code>src/render/instance.rs</code>, at the commit above. Rust declares <code>ANCHOR_CELL_SIZE</code>, <code>NO_MESH</code>, <code>NO_MATERIAL</code> and, from the Renderer's capacities, <code>INSTANCE_CAPACITY</code> into every WGSL module as it assembles it (<code>src/render/shaders/mod.rs</code>), so no shader part holds them as literals.</p>
 </section>
 
 <section class="part prose" id="twin">
@@ -235,16 +235,20 @@ struct InstanceData {
 <section class="part prose" id="buffer">
   <div class="part-mark">3 &middot; <code>Renderer::new</code>, <code>src/render/renderer.rs</code></div>
   <h2>One buffer at a fixed size, one bind group built once</h2>
-  <p class="key-idea">The Renderer creates the buffer once, at its whole capacity, before any Scene loads, and builds the bind group that holds it in the same function. Since the buffer is never replaced, the bind group never goes stale and nothing rebuilds it.</p>
+  <p class="key-idea">The Renderer creates the buffer once, at the whole capacity its Budget gives, before any Scene loads, and builds the bind group that holds it in the same function. Since the buffer is never replaced, the bind group never goes stale and nothing rebuilds it.</p>
 <pre class="code"><code><span class="comment">// Created at its fixed capacity; it never grows.</span>
-let instance_buffer = device.create_buffer(&amp;wgpu::BufferDescriptor {
-    label: Some("Instance Buffer"),
-    size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::&lt;InstanceData&gt;() as u64,
-    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-    mapped_at_creation: false,
-});</code></pre>
+let instance_buffer = memory.create_buffer(
+    &amp;device,
+    GpuMemoryKind::SceneAndPassBuffers,
+    &amp;wgpu::BufferDescriptor {
+        label: Some("Instance Buffer"),
+        size: u64::from(capacities.instances) * std::mem::size_of::&lt;InstanceData&gt;() as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    },
+);</code></pre>
   <p class="code-source"><code>Renderer::new</code>, <code>src/render/renderer.rs</code>.</p>
-  <p>The size is the product of two constants, so it is the same 67,108,864 bytes on every adapter and backend, at every render size and in every scene: nothing in its creation asks the adapter anything. It needs only <code>STORAGE</code>, since shaders read it, and <code>COPY_DST</code>, since the frame's uploads copy into it; nothing copies out of it.</p>
+  <p>The size is the slot's size times the capacity <code>RenderCapacities::checked_in</code> derives from the Budgets this build was compiled with, a slot per 256 bytes of the scene and pass buffers' Budget in a power of two of 256-slot scan blocks, so it is the same 67,108,864 bytes on every adapter and backend, at every render size and in every scene: nothing in its creation asks the adapter anything. <code>GpuMemory::create_buffer</code> counts it in the ledger under the scene and pass buffers, the kind that Budget caps. It needs only <code>STORAGE</code>, since shaders read it, and <code>COPY_DST</code>, since the frame's uploads copy into it; nothing copies out of it.</p>
   <p>A bind group is a snapshot of the resources it was built with. The scene geometry group holds the Instance buffer beside the vertex Arena and the Mesh pool's tables of Meshes and Meshlets, each created at a fixed capacity, so the group is built once, right after them, and the culling and main passes bind that one group at index 2 every frame.</p>
 <pre class="code"><code><span class="comment">/// Group 2, the scene geometry, built once since its buffers never grow: the
 /// Instances, the vertex Arena the vertex shader pulls from (ADR 0019), and
@@ -268,7 +272,7 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 <pre class="code"><code>let instance_size = std::mem::size_of::&lt;InstanceData&gt;() as wgpu::BufferAddress;
 let instance_uploads = frame.instance_writes.iter().map(|write| {
     (
-        &amp;self.instance_buffer,
+        &amp;*self.instance_buffer,
         u64::from(write.first_slot) * instance_size,
         bytemuck::cast_slice(&amp;frame.instances[write.instances.clone()]),
     )
@@ -380,13 +384,13 @@ fn no_mesh_instance() -&gt; InstanceData {
   <p class="code-source"><code>src/render/prepare.rs</code>.</p>
   <p>The rest of the empty Instance is zeroes, which no reader looks at: the culling pass tests the Mesh before anything else, and only drawn slots reach a Meshlet record. A freed slot stays below <code>instance_slot_count</code>, so the culling pass still reads its Mesh each frame until a Renderable takes it again.</p>
   <h3>Past capacity</h3>
-  <p>The capacity is enforced where slots are handed out, in prepare's slot table, not at the buffer. A Renderable without a slot takes a freed one first, then a fresh one, the next past the highest yet taken, while that is under <code>INSTANCE_CAPACITY</code>; with neither, it is refused.</p>
-<pre class="code"><code>let fresh = (self.end &lt; INSTANCE_CAPACITY).then_some(self.end);
+  <p>The capacity is enforced where slots are handed out, in prepare's slot table, not at the buffer. A Renderable without a slot takes a freed one first, then a fresh one, the next past the highest yet taken, while that is under the table's <code>capacity</code>, the Renderer's Instance slots, which <code>FramePreparer::new</code> takes from <code>Renderer::capacities</code>; with neither, it is refused.</p>
+<pre class="code"><code>let fresh = (self.end &lt; self.capacity).then_some(self.end);
 let Some(slot) = self.free.pop().or(fresh) else {
     if self.refused.insert(entity) {
         tracing::warn!(
             ?entity,
-            capacity = INSTANCE_CAPACITY,
+            capacity = self.capacity,
             "Renderable refused: the Instance buffer is full"
         );
     }
@@ -399,7 +403,7 @@ let Some(slot) = self.free.pop().or(fresh) else {
 <section class="part prose" id="tests">
   <div class="part-mark">7 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The twin test holds the slot's layout on both sides; prepare's tests hold the slots it writes, the empty Instance and the refusal at the real capacity; a Renderer test shows on the GPU that a freed slot draws nothing; and an oracle holds the anchor composition to its precision bar.</p>
+  <p class="key-idea">The twin test holds the slot's layout on both sides; prepare's tests hold the slots it writes, the empty Instance and the refusal at the capacity small Budgets give; the checked-in Budgets are held to the capacity they gave before; a Renderer test shows on the GPU that a freed slot draws nothing; and an oracle holds the anchor composition to its precision bar.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
@@ -407,7 +411,8 @@ let Some(slot) = self.free.pop().or(fresh) else {
       <tr><td><code>structs_shared_with_the_cpu_match_their_rust_twins</code></td><td><code>shader_tests.rs</code></td><td><code>InstanceData</code>'s fields, offsets, sizes, scalars and column strides, and its 128-byte size, agree between Rust and every module's WGSL</td></tr>
       <tr><td><code>every_binding_is_visible_to_exactly_the_stages_that_use_it</code></td><td><code>shader_tests.rs</code></td><td><code>instances</code> is visible to exactly the stages that use it, the vertex and compute stages</td></tr>
       <tr><td><code>renderables_keep_their_slots_and_freed_slots_are_taken_again</code></td><td><code>prepare.rs</code></td><td>consecutive slots go as one write; a freed slot is written an Instance with <code>NO_MESH</code>, and is taken again from the next frame while the others keep theirs</td></tr>
-      <tr><td><code>a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees</code></td><td><code>prepare.rs</code></td><td>with all <code>INSTANCE_CAPACITY</code> slots taken, the next Renderable is written nowhere, warned about once, counted every frame, and takes the slot another frees</td></tr>
+      <tr><td><code>a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees</code></td><td><code>prepare.rs</code></td><td>with all 256 slots of Budgets for one scan block taken, the next Renderable is written nowhere, warned about once, counted every frame, and takes the slot another frees</td></tr>
+      <tr><td><code>the_checked_in_budgets_keep_the_render_capacities_before_them</code></td><td><code>renderer.rs</code></td><td>the checked-in Budgets give 524,288 Instance slots, as before they sized it</td></tr>
       <tr><td><code>a_changed_transform_or_material_writes_exactly_its_slot</code></td><td><code>prepare.rs</code></td><td>a change writes its own slot and no other</td></tr>
       <tr><td><code>a_renderable_whose_mesh_is_not_in_the_pool_keeps_its_slot_and_draws_there_once_it_loads</code></td><td><code>prepare.rs</code></td><td>a skipped Renderable keeps its slot, which draws nothing until its Mesh loads</td></tr>
       <tr><td><code>rewriting_all_instances_writes_every_slot_once</code></td><td><code>prepare.rs</code></td><td>the rewrite that follows lost writes covers every slot, once</td></tr>
@@ -431,21 +436,21 @@ let Some(slot) = self.free.pop().or(fresh) else {
     <thead><tr><th>Scene</th><th class="n">Instance buffer, bytes</th><th class="n"><code>gpu_memory_bytes</code></th><th class="n">Buffer's share</th><th class="n"><code>instances_drawn</code></th></tr></thead>
     <tbody>
       <tr><td><code>shadows</code></td><td class="n">67,108,864</td><td class="n">663,385,447</td><td class="n">10.1%</td><td class="n">1</td></tr>
-      <tr><td><code>helmet</code></td><td class="n">67,108,864</td><td class="n">683,925,801</td><td class="n">9.8%</td><td class="n">11</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">67,108,864</td><td class="n">684,231,729</td><td class="n">9.8%</td><td class="n">11</td></tr>
       <tr><td><code>pbr-sweep</code></td><td class="n">67,108,864</td><td class="n">663,389,964</td><td class="n">10.1%</td><td class="n">10</td></tr>
-      <tr><td><code>normal-tangent</code></td><td class="n">67,108,864</td><td class="n">683,213,657</td><td class="n">9.8%</td><td class="n">1</td></tr>
-      <tr><td><code>uv-grid</code></td><td class="n">67,108,864</td><td class="n">668,878,951</td><td class="n">10.0%</td><td class="n">1</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">67,108,864</td><td class="n">683,519,585</td><td class="n">9.8%</td><td class="n">1</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">67,108,864</td><td class="n">668,966,359</td><td class="n">10.0%</td><td class="n">1</td></tr>
       <tr><td><code>minification</code></td><td class="n">67,108,864</td><td class="n">663,547,207</td><td class="n">10.1%</td><td class="n">1</td></tr>
-      <tr><td><code>far-coplanar</code></td><td class="n">67,108,864</td><td class="n">663,286,519</td><td class="n">10.1%</td><td class="n">2</td></tr>
-      <tr><td><code>orrery</code></td><td class="n">67,108,864</td><td class="n">668,982,396</td><td class="n">10.0%</td><td class="n">5</td></tr>
-      <tr><td><code>texture-wall</code></td><td class="n">67,108,864</td><td class="n">663,812,599</td><td class="n">10.1%</td><td class="n">100</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">67,108,864</td><td class="n">664,856,311</td><td class="n">10.1%</td><td class="n">1,416</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">67,108,864</td><td class="n">669,069,804</td><td class="n">10.0%</td><td class="n">5</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">67,108,864</td><td class="n">663,824,071</td><td class="n">10.1%</td><td class="n">100</td></tr>
       <tr><td><code>crowd</code></td><td class="n">67,108,864</td><td class="n">664,077,523</td><td class="n">10.1%</td><td class="n">101</td></tr>
-      <tr class="focus"><td><code>town</code></td><td class="n">67,108,864</td><td class="n">764,009,624</td><td class="n">8.8%</td><td class="n">137,730</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">67,108,864</td><td class="n">764,009,624</td><td class="n">8.8%</td><td class="n">137,776</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro/&lt;scene&gt;.json</code> at the commit above, each file's top-level <code>gpu_memory_bytes</code> and <code>instances_drawn</code>, medians over the measured frames; each share is the buffer's bytes over <code>gpu_memory_bytes</code>, rounded to a tenth of a percent. <code>instances_drawn</code> counts the Instances the frame's draw held after culling, not the slots in use. The buffer is 0.84% of the 8,000,000,000-byte GPU memory <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget is to split into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, at sizes M4 sets (ADRs 0013, 0017); today it is one number, and each kind's capacity is provisional. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span> in <code>bench/budgets.json</code>.</p>
-  <p>The fixed size is the same on every adapter: <code>Renderer::new</code> creates the buffer from two constants and nothing else, so the RTX 2070 SUPER's and CI's lavapipe Baselines count the same 67,108,864 bytes for it within their <code>gpu_memory_bytes</code>. The capacity also sizes two of the culling pass's buffers, which that pass counts as its own: its offsets, 8 bytes for each slot, for each block of <code>SCAN_BLOCK_SIZE</code> slots and for one more entry, 4,210,696 bytes; and its visibility, a bit per slot, 65,536 bytes.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro/&lt;scene&gt;.json</code> at the commit above, each file's top-level <code>gpu_memory_bytes</code> and <code>instances_drawn</code>, medians over the measured frames; each share is the buffer's bytes over <code>gpu_memory_bytes</code>, rounded to a tenth of a percent. <code>instances_drawn</code> counts the Instances the frame's draw held after culling, not the slots in use. The buffer is 0.84% of the 8,000,000,000-byte GPU memory <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019&#x27;s gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS&#x27;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools&#x27; capacities, the Instance slots, the light buffer&#x27;s and the static TLAS&#x27;s derive from them at device creation (ADRs 0013, 0017); their sizes are provisional until M4 sets them. Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.">Budget</span> in <code>bench/budgets.json</code>.</p>
+  <p>The fixed size is the same on every adapter: <code>Renderer::new</code> creates the buffer from the slot's size and the checked-in Budgets and nothing else, so the RTX 2070 SUPER's and CI's lavapipe Baselines count the same 67,108,864 bytes for it within their <code>gpu_memory_bytes</code>. The capacity also sizes two of the culling pass's buffers, which that pass counts as its own: its offsets, 8 bytes for each slot, for each block of <code>SCAN_BLOCK_SIZE</code> slots and for one more entry, 4,210,696 bytes; and its visibility, a bit per slot, 65,536 bytes.</p>
   <p><code>uploaded_bytes</code> is left out of the table: it sums the camera and light uniforms, the light buffer, the bends, the Instance writes, the slot count when it changes and the dynamic TLAS's entries, and the Baselines do not record the Instance writes' share of it.</p>
 </section>
 
@@ -454,7 +459,7 @@ let Some(slot) = self.free.pop().or(fresh) else {
   <h2>Why this way</h2>
   <p><b>One persistent buffer, a slot per Renderable.</b> ADR 0003 keeps every Instance in one GPU buffer, in a slot the Renderable keeps while it is one, written only when what it holds changes, and every frame for a Moving Instance, with no uniform buffer per entity: GPU-driven culling, TLAS builds and instancing all consume that one shape, and a frame in which nothing changed and nothing moves writes no Instance. A published GPU-driven renderer draws a test scene of 250,000 separate moving objects with two indirect draw calls from data of this kind.</p>
   <p><b>A structured buffer, looked up by slot.</b> ADR 0005 puts per-Instance data in a structured buffer that each draw indexes into, with no bind group per Mesh or per Instance. Since one draw spans every Instance (ADR 0019), the key is the slot a Meshlet record names, not the draw's instance index.</p>
-  <p><b>A fixed capacity, not growth.</b> A GPU buffer cannot grow in place: growing one means creating a larger buffer, copying the old into it on the GPU and rebuilding every bind group that held the old one, mid-frame, with both alive during the copy. Created once at its capacity, the buffer's memory is known at startup, no frame pays for a resize, the scene geometry bind group is built once, and a full buffer shows itself as a refusal, warned about and counted, rather than as more memory. The price is 64 MiB in every scene, a one-Instance scene included. The capacity is provisional, its doc comment says, until the split of the 8 GB GPU memory Budget by kind of memory sizes it.</p>
+  <p><b>A fixed capacity, not growth.</b> A GPU buffer cannot grow in place: growing one means creating a larger buffer, copying the old into it on the GPU and rebuilding every bind group that held the old one, mid-frame, with both alive during the copy. Created once at its capacity, the buffer's memory is known at startup, no frame pays for a resize, the scene geometry bind group is built once, and a full buffer shows itself as a refusal, warned about and counted, rather than as more memory. The price is 64 MiB in every scene, a one-Instance scene included. The capacity derives at device creation from the scene and pass buffers' share of the 8 GB GPU memory Budget, so a change to that Budget resizes the buffer, the culling pass's buffers it sizes and every shader module's <code>INSTANCE_CAPACITY</code> together; the share is provisional until the Budget split sets it.</p>
   <p><b>Within one storage binding at the floor.</b> The vertex and compute stages read the whole buffer through one binding, so it must fit the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span>'s <code>max_storage_buffer_binding_size</code>. ADR 0021 keeps that limit at wgpu's default of 128 MiB, Vulkan's minimum, and 64 MiB fits within it, so the capacity raised no limit.</p>
   <p><b>Anchor plus offset in the slot.</b> ADR 0014 forbids any World position in f32 on the GPU: f32 positions fail the precision bar beyond 512 m from their origin, and Metal has no f64 in shaders. An integer anchor and an f32 offset per slot, composed relative to the camera in the shader, keep every slot valid as the camera moves, so camera motion dirties no Instance; a floating origin would instead rewrite every position the engine holds, GPU buffers among them, at each shift.</p>
   <p><b>Counted whole, as the engine counts it.</b> ADR 0013 counts GPU memory as the bytes of the buffers and textures the engine created, summed by the engine on every backend, so the Instance buffer counts at its capacity, not at the slots in use: the figure is what the device holds for it.</p>
@@ -463,11 +468,11 @@ let Some(slot) = self.free.pop().or(fresh) else {
 <section class="part prose" id="limits">
   <div class="part-mark">10</div>
   <h2>Limits</h2>
-  <p><b>524,288 Renderables at once.</b> Past that a Renderable is refused and not drawn until a slot frees; nothing streams or evicts Instances.</p>
-  <p><b>Shadows cover fewer slots.</b> The static TLAS covers the lowest <code>STATIC_TLAS_CAPACITY</code> slots, 262,144, half the buffer: a static Instance in a higher slot draws but casts no shadow, and is counted in <code>static_instances_left_out</code>. The dynamic TLAS holds at most <code>DYNAMIC_TLAS_CAPACITY</code>, 10,000, Moving Instances.</p>
+  <p><b>524,288 Renderables at once</b>, at the checked-in Budgets. Past that a Renderable is refused and not drawn until a slot frees; nothing streams or evicts Instances.</p>
+  <p><b>Shadows cover fewer slots.</b> The static TLAS covers the lowest slots its capacity holds, 262,144, half the buffer: a static Instance in a higher slot draws but casts no shadow, and is counted in <code>static_instances_left_out</code>. The dynamic TLAS holds at most <code>DYNAMIC_TLAS_CAPACITY</code>, 10,000, Moving Instances.</p>
   <p><b>One doubling of headroom in its binding.</b> At 128 bytes a slot, twice the capacity would fill the floor's 128 MiB storage binding exactly; any more would need the binding split or the floor raised.</p>
   <p><b>The slots in use never shrink.</b> The culling pass walks every slot below one past the highest ever taken, so a scene that frees its high slots still dispatches over them, each read for its <code>NO_MESH</code> and skipped.</p>
-  <p><b>64 MiB whatever the scene.</b> A scene of one Instance holds the same buffer as <code>town</code>; until the Budget split sizes it, the capacity is one number for the app, tests, bench and CI.</p>
+  <p><b>64 MiB whatever the scene.</b> A scene of one Instance holds the same buffer as <code>town</code>; until the Budget split sets its share, the capacity comes from the one Budgets file the app, tests, bench and CI are built with.</p>
 </section>
 
 <section class="part prose" id="sources">
@@ -479,8 +484,8 @@ let Some(slot) = self.free.pop().or(fresh) else {
     <dt><a href="https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf">Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering</a></dt><dd>p. 53: a test scene of 250,000 separate moving objects drawn with only two indirect draw calls, the GPU-driven shape a persistent buffer of every Instance serves</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The buffer began as per-Instance data in a structured buffer that each draw looked up by its instance index, then became persistent, a slot per Renderable written only when it changes, and took an anchor plus an offset in place of a World translation. It grew by doubling, copied into a larger buffer mid-frame with its bind group rebuilt, until it was created once at its fixed capacity, with the refusal past it. The Mesh then moved into the slot's spare bytes, a freed slot came to hold an Instance with no Mesh, and the lookup moved from the instance index to the slot a Meshlet record names, as the GPU began to build the frame's draw; the buffer moved to group 2, whose bind group came to be built once. The narrative, with the measurements of its day, is in <a href="instance-buffer.html">The Instance buffer</a>, whose chapters on GPU memory and on measuring stay there for now. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/render/instance.rs</code>, <code>renderer.rs</code>, <code>bind_groups.rs</code>, <code>prepare.rs</code>, <code>acceleration_structures.rs</code>, <code>culling_pass.rs</code>, <code>shaders/common.wgsl</code>, <code>culling.wgsl</code>, <code>main.wgsl</code> and <code>shaders/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0005, 0013, 0014 and 0021, the committed Baselines and <code>bench/budgets.json</code>, all at <code>main</code> b3d764b4.</footer>
+  <p class="note">The buffer began as per-Instance data in a structured buffer that each draw looked up by its instance index, then became persistent, a slot per Renderable written only when it changes, and took an anchor plus an offset in place of a World translation. It grew by doubling, copied into a larger buffer mid-frame with its bind group rebuilt, until it was created once at its fixed capacity, with the refusal past it; that capacity later came to derive from the GPU memory Budgets at device creation. The Mesh then moved into the slot's spare bytes, a freed slot came to hold an Instance with no Mesh, and the lookup moved from the instance index to the slot a Meshlet record names, as the GPU began to build the frame's draw; the buffer moved to group 2, whose bind group came to be built once. The narrative, with the measurements of its day, is in <a href="instance-buffer.html">The Instance buffer</a>, whose chapters on GPU memory and on measuring stay there for now. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/render/instance.rs</code>, <code>renderer.rs</code>, <code>bind_groups.rs</code>, <code>prepare.rs</code>, <code>acceleration_structures.rs</code>, <code>culling_pass.rs</code>, <code>shaders/common.wgsl</code>, <code>culling.wgsl</code>, <code>main.wgsl</code> and <code>shaders/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0005, 0013, 0014 and 0021, the committed Baselines and <code>bench/budgets.json</code>, all at <code>main</code> dac8cf9a.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="staging.html">Previous: Staging</a><a href="index.html">All field guides</a><a href="camera-relative-placement.html">Next: Camera-relative placement</a></nav>

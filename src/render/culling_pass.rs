@@ -13,12 +13,11 @@
 //! indirectly, all in one compute pass.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
-use crate::render::INSTANCE_CAPACITY;
 use crate::render::bind_groups::{
     BindGroupDefinition, FRAME_DRAW, compute_pipeline, pipeline_layout,
 };
 use crate::render::prepare::FrameData;
-use crate::render::renderer::RenderSwitches;
+use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
@@ -43,9 +42,8 @@ impl CullingPhase {
     }
 }
 
-/// Slots each workgroup of the pass's scans sums: the scans of
-/// `INSTANCE_CAPACITY` slots take one workgroup of blocks, 8 to an
-/// invocation.
+/// Slots each workgroup of the pass's scans sums: the scans of the Instance
+/// slots take one workgroup of blocks, a run of them to an invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
 /// The workgroups in each dimension of a dispatch the Capability floor
@@ -157,19 +155,21 @@ struct FrameDrawBuffers {
 
 impl CullingPass {
     /// The pass, given the layouts of the shared bind groups its shader
-    /// module declares, with its draw of `capacity`, as `switches` set,
-    /// testing Instances against the depth pyramid of `render_targets`.
+    /// module declares, with its draw of `draw_capacity` over the Instance slots
+    /// of `capacities`, as `switches` set, testing Instances against the
+    /// depth pyramid of `render_targets`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
-        capacity: DrawCapacity,
+        draw_capacity: DrawCapacity,
+        capacities: &RenderCapacities,
         switches: RenderSwitches,
         render_targets: &RenderTargets,
     ) -> CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
-        assert!(capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
+        assert!(draw_capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
         assert!(
             device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
         );
@@ -192,19 +192,19 @@ impl CullingPass {
         );
         let instance_offsets = buffer(
             "Instance Offset Buffer",
-            u64::from(INSTANCE_CAPACITY + INSTANCE_CAPACITY / SCAN_BLOCK_SIZE + 1)
+            u64::from(capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 1)
                 * size_of::<[u32; 2]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         // A record is three u32s: Instance slot, Meshlet and Material ID.
         let meshlet_records = buffer(
             "Meshlet Record Buffer",
-            u64::from(capacity.meshlet_records) * size_of::<[u32; 3]>() as u64,
+            u64::from(draw_capacity.meshlet_records) * size_of::<[u32; 3]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         let packed_indices = buffer(
             "Packed Index Buffer",
-            u64::from(capacity.packed_indices) * size_of::<u32>() as u64,
+            u64::from(draw_capacity.packed_indices) * size_of::<u32>() as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDEX,
         );
         // Cleared before phase one, so COPY_DST, and copied to the GPU stats
@@ -225,7 +225,7 @@ impl CullingPass {
         // Zeroed at creation: no Instance was visible before the first frame.
         let instance_visibility = buffer(
             "Instance Visibility Buffer",
-            u64::from(INSTANCE_CAPACITY / u32::BITS) * size_of::<u32>() as u64,
+            u64::from(capacities.instances / u32::BITS) * size_of::<u32>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         let buffers = FrameDrawBuffers {
@@ -241,7 +241,7 @@ impl CullingPass {
         let [bind_group, append_bind_group] =
             frame_draw_bind_groups(device, &frame_draw_layout, &buffers, render_targets);
 
-        let shader = device.create_shader_module(shaders::CULLING.descriptor());
+        let shader = device.create_shader_module(shaders::CULLING.descriptor(capacities));
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);

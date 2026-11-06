@@ -18,7 +18,7 @@ use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
 use crate::render::shaders::{MODULES, Part, ShaderModule};
-use crate::render::{CameraUniform, InstanceData, LightData, LightUniform};
+use crate::render::{CameraUniform, InstanceData, LightData, LightUniform, RenderCapacities};
 
 #[test]
 fn every_module_parses_and_validates() {
@@ -451,10 +451,11 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
 /// naga's analysis of it. An error names the module, and the part and line
 /// it is in.
 fn validate(module: &ShaderModule) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
-    let source = module.source();
+    let capacities = RenderCapacities::checked_in();
+    let source = module.source(&capacities);
     let label = format!("{} module", module.name);
     let error = |location: Option<naga::SourceLocation>, message: &str| match location
-        .and_then(|location| module.locate(location.offset as usize))
+        .and_then(|location| module.locate(&capacities, location.offset as usize))
     {
         Some((path, line, column)) => format!("{label}: {path}:{line}:{column}: {message}"),
         None => format!("{label}: {message}"),

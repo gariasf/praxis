@@ -1,9 +1,10 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
-//! after the constants Rust shares with WGSL, the Render switches' overrides
-//! and its bindings' declarations, all generated from Rust (`assemble`,
-//! `render::bind_groups`). A function under an oracle lives in a shared
-//! part, which the oracle harness assembles with its kernel alone.
+//! after the constants Rust shares with WGSL, the Render capacities among
+//! them, the Render switches' overrides and its bindings' declarations, all
+//! generated from Rust (`assemble`, `render::bind_groups`). A function under
+//! an oracle lives in a shared part, which the oracle harness assembles with
+//! its kernel alone.
 
 use crate::assets::material::SLICES_PER_CLASS;
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
@@ -21,9 +22,9 @@ use crate::render::froxel_pass::{
     FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS, FROXEL_SLICES,
     FROXEL_SLICES_PER_OCTAVE,
 };
-use crate::render::instance::{ANCHOR_CELL_SIZE, INSTANCE_CAPACITY, NO_MATERIAL, NO_MESH};
+use crate::render::instance::{ANCHOR_CELL_SIZE, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
-use crate::render::renderer::RenderSwitches;
+use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shadow_mask_pass::{
     SAMPLE_OFFSETS, SHADOW_EDGE_LIGHTS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE,
 };
@@ -195,25 +196,33 @@ pub const MODULES: [ShaderModule; 11] = [
 ];
 
 impl ShaderModule {
-    /// The descriptor that compiles the module, labelled with its name.
-    pub fn descriptor(&self) -> wgpu::ShaderModuleDescriptor<'static> {
+    /// The descriptor that compiles the module with `capacities`, labelled
+    /// with its name.
+    pub fn descriptor(
+        &self,
+        capacities: &RenderCapacities,
+    ) -> wgpu::ShaderModuleDescriptor<'static> {
         wgpu::ShaderModuleDescriptor {
             label: Some(self.name),
-            source: wgpu::ShaderSource::Wgsl(self.source().into()),
+            source: wgpu::ShaderSource::Wgsl(self.source(capacities).into()),
         }
     }
 
-    /// The module's WGSL.
-    pub fn source(&self) -> String {
-        self.assemble().0
+    /// The module's WGSL with `capacities`.
+    pub fn source(&self, capacities: &RenderCapacities) -> String {
+        self.assemble(capacities).0
     }
 
-    /// The part that byte `offset` of the module's WGSL falls in, and the
-    /// 1-based line and column of `offset` within that part; `None` before
-    /// the first part, in what `assemble` generates.
+    /// The part that byte `offset` of the module's WGSL with `capacities`
+    /// falls in, and the 1-based line and column of `offset` within that
+    /// part; `None` before the first part, in what `assemble` generates.
     #[cfg(test)]
-    pub fn locate(&self, offset: usize) -> Option<(&'static str, usize, usize)> {
-        let (_, starts) = self.assemble();
+    pub fn locate(
+        &self,
+        capacities: &RenderCapacities,
+        offset: usize,
+    ) -> Option<(&'static str, usize, usize)> {
+        let (_, starts) = self.assemble(capacities);
         let index = starts.iter().rposition(|&start| start <= offset)?;
         let part = self.parts[index];
         let before = &part.source[..(offset - starts[index]).min(part.source.len())];
@@ -227,11 +236,11 @@ impl ShaderModule {
 
     /// The module's WGSL, an `enable` directive per extension first, since
     /// directives precede every declaration, then the constants Rust shares,
-    /// an `override` per Render switch, which has no default so a pipeline
-    /// that uses it must set it, and the declarations of its bind groups'
-    /// bindings, then each part on lines of its own; and the byte offset
-    /// where each part starts.
-    fn assemble(&self) -> (String, Vec<usize>) {
+    /// `capacities` among them, an `override` per Render switch, which has no
+    /// default so a pipeline that uses it must set it, and the declarations
+    /// of its bind groups' bindings, then each part on lines of its own; and
+    /// the byte offset where each part starts.
+    fn assemble(&self, capacities: &RenderCapacities) -> (String, Vec<usize>) {
         let mut source: String = self
             .enables
             .iter()
@@ -245,7 +254,7 @@ impl ShaderModule {
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const MAX_WORKGROUPS_PER_DIMENSION: u32 = {MAX_WORKGROUPS_PER_DIMENSION}u;\n\
-             const INSTANCE_CAPACITY: u32 = {INSTANCE_CAPACITY}u;\n\
+             const INSTANCE_CAPACITY: u32 = {}u;\n\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
@@ -266,6 +275,7 @@ impl ShaderModule {
              const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
+            capacities.instances,
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
             LUMINANCE_COEFFICIENTS[2]

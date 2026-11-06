@@ -6,6 +6,7 @@
 //! main pass keeps then, rather than counting in the lit pass, whose side
 //! effects would make the GPU run it for fragments its depth test rejects.
 
+use crate::render::RenderCapacities;
 use crate::render::bind_groups::{LIGHT_COUNT_INPUT, compute_pipeline, pipeline_layout};
 use crate::render::froxel_pass::FroxelPass;
 use crate::render::shaders;
@@ -40,16 +41,18 @@ struct LightCountBuffers {
 impl LightCountPass {
     /// The pass, counting the lights of `lights`, seen by `camera`, the
     /// Renderer's buffers, through `froxel_pass`'s lists into its light
-    /// counts, at the depth of `render_targets`.
+    /// counts, at the depth of `render_targets`, its shader module assembled
+    /// with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         camera: &wgpu::Buffer,
         lights: &wgpu::Buffer,
         froxel_pass: &FroxelPass,
         render_targets: &RenderTargets,
+        capacities: &RenderCapacities,
     ) -> LightCountPass {
         let layout = LIGHT_COUNT_INPUT.layout(device);
-        let shader = device.create_shader_module(shaders::LIGHT_COUNT.descriptor());
+        let shader = device.create_shader_module(shaders::LIGHT_COUNT.descriptor(capacities));
         let groups = [(&LIGHT_COUNT_INPUT, &layout)];
         let pipeline_layout = pipeline_layout(device, "Light Count Pass Pipeline Layout", &groups);
         let pipeline =

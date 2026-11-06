@@ -16,7 +16,7 @@ use crate::render::bind_groups::{
     SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, compute_pipeline, pipeline_layout,
 };
 use crate::render::froxel_pass::FROXEL_SLICES;
-use crate::render::renderer::RenderSwitches;
+use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
@@ -114,7 +114,9 @@ pub struct ShadowMaskPass {
 impl ShadowMaskPass {
     /// The pass, tracing against `static_tlas` and `dynamic_tlas`, reading the Renderer's `camera`, `light` and `lights`
     /// buffers and the Froxel pass's `froxel_lists`, and writing the shadow
-    /// mask of `render_targets`, with its Froxel lookups as `switches` set.
+    /// mask of `render_targets`, with its Froxel lookups as `switches` set,
+    /// its shader module assembled with `capacities`.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
@@ -123,6 +125,7 @@ impl ShadowMaskPass {
         buffers: [(&'static str, &wgpu::Buffer); 4],
         render_targets: &RenderTargets,
         switches: RenderSwitches,
+        capacities: &RenderCapacities,
     ) -> ShadowMaskPass {
         let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
         let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
@@ -134,7 +137,7 @@ impl ShadowMaskPass {
             ],
         );
         let layout = SHADOW_MASK_BUILD.layout(device);
-        let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor());
+        let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor(capacities));
         let pipeline_layout = pipeline_layout(
             device,
             "Shadow Mask Pipeline Layout",

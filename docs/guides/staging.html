@@ -282,8 +282,8 @@ let frame_staging = FrameStaging::new(
     <tbody>
       <tr><td>camera buffer</td><td><code>CameraUniform</code></td><td class="n">144</td></tr>
       <tr><td>light uniform buffer</td><td><code>LightUniform</code></td><td class="n">32</td></tr>
-      <tr><td>light buffer</td><td><code>LIGHT_CAPACITY</code> &times; <code>LightData</code>, 4,096 &times; 48</td><td class="n">196,608</td></tr>
-      <tr><td>Instance buffer</td><td><code>INSTANCE_CAPACITY</code> &times; <code>InstanceData</code>, 2<sup>19</sup> &times; 128</td><td class="n">67,108,864</td></tr>
+      <tr><td>light buffer</td><td>its capacity &times; <code>LightData</code>, 4,096 &times; 48</td><td class="n">196,608</td></tr>
+      <tr><td>Instance buffer</td><td>its capacity &times; <code>InstanceData</code>, 2<sup>19</sup> &times; 128</td><td class="n">67,108,864</td></tr>
       <tr><td>Instance slot count buffer</td><td>a <code>u32</code></td><td class="n">4</td></tr>
       <tr><td>bend buffer</td><td><code>BEND_CAPACITY</code> &times; <code>BendData</code>, 4,096 &times; 20</td><td class="n">81,920</td></tr>
       <tr class="focus"><td>the bound</td><td>their sum</td><td class="n">67,387,572</td></tr>

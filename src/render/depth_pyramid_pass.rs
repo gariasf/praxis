@@ -3,6 +3,7 @@
 //! time, each texel the minimum depth, the farthest, of the texels below
 //! whose share of the screen overlaps its own (ADRs 0015, 0019).
 
+use crate::render::RenderCapacities;
 use crate::render::bind_groups::{DEPTH_PYRAMID_LEVEL, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
@@ -29,9 +30,14 @@ pub struct DepthPyramidPass {
 }
 
 impl DepthPyramidPass {
-    /// The pass, building the pyramid of `render_targets`.
-    pub fn new(device: &wgpu::Device, render_targets: &RenderTargets) -> DepthPyramidPass {
-        let shader = device.create_shader_module(shaders::DEPTH_PYRAMID.descriptor());
+    /// The pass, building the pyramid of `render_targets`, its shader module
+    /// assembled with `capacities`.
+    pub fn new(
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+        capacities: &RenderCapacities,
+    ) -> DepthPyramidPass {
+        let shader = device.create_shader_module(shaders::DEPTH_PYRAMID.descriptor(capacities));
         // Level 0 reduces the depth target, each later level the one below.
         let reduce_depth_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "depth"]);
         let reduce_level_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "level_below"]);
@@ -139,7 +145,8 @@ pub(crate) mod tests {
         };
         let device = &context.device;
         let render_targets = RenderTargets::new(device, &gpu_memory(&context), 16, 16);
-        let mut pass = DepthPyramidPass::new(device, &render_targets);
+        let mut pass =
+            DepthPyramidPass::new(device, &render_targets, &RenderCapacities::checked_in());
         for (width, height) in [(37, 23), (64, 48)] {
             assert_pyramid_holds_minimum_depths(&context, &mut pass, width, height);
         }

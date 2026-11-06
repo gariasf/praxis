@@ -3,6 +3,7 @@
 //! for the lit pass to shade a pixel with its Froxel's lights alone
 //! (ADR 0019).
 
+use crate::render::RenderCapacities;
 use crate::render::bind_groups::{FROXEL_LISTS, compute_pipeline, pipeline_layout};
 use crate::render::shaders;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
@@ -58,13 +59,15 @@ pub struct FroxelPass {
 
 impl FroxelPass {
     /// The pass, listing the point lights of `lights`, as `light` counts
-    /// them, seen by `camera`: the Renderer's buffers.
+    /// them, seen by `camera`: the Renderer's buffers. Its shader module is
+    /// assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         camera: &wgpu::Buffer,
         light: &wgpu::Buffer,
         lights: &wgpu::Buffer,
+        capacities: &RenderCapacities,
     ) -> FroxelPass {
         // Created at their fixed capacities; they never grow.
         let froxel_lists = memory.create_buffer(
@@ -102,7 +105,7 @@ impl FroxelPass {
                 ("light_counts", light_counts.as_entire_binding()),
             ],
         );
-        let shader = device.create_shader_module(shaders::FROXEL.descriptor());
+        let shader = device.create_shader_module(shaders::FROXEL.descriptor(capacities));
         let groups = [(&FROXEL_LISTS, &layout)];
         let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &groups);
         let pipeline =
