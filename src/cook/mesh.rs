@@ -135,20 +135,20 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
 /// `geometry`'s UV units per metre, as `CookedPrimitive::texel_density`
 /// defines it.
 fn texel_density(geometry: &Geometry) -> f32 {
-    let (mut uv_area, mut world_area) = (0.0f64, 0.0f64);
+    let (mut uv_area, mut mesh_area) = (0.0f64, 0.0f64);
     for triangle in geometry.indices.as_chunks::<3>().0 {
         let [first, second, third] = triangle.map(|index| index as usize);
         let position = |vertex: usize| Vec3::from(geometry.positions[vertex]).as_dvec3();
         let uv = |vertex: usize| Vec2::from(geometry.uvs[vertex]).as_dvec2();
-        world_area += (position(second) - position(first))
+        mesh_area += (position(second) - position(first))
             .cross(position(third) - position(first))
             .length();
         uv_area += (uv(second) - uv(first))
             .perp_dot(uv(third) - uv(first))
             .abs();
     }
-    if world_area > 0.0 {
-        (uv_area / world_area).sqrt() as f32
+    if mesh_area > 0.0 {
+        (uv_area / mesh_area).sqrt() as f32
     } else {
         0.0
     }
