@@ -803,7 +803,7 @@ fn gloss_texture() -> LoadedImage {
 }
 
 /// texture-wall's Textures, all in the albedo Channel.
-const TEXTURE_WALL_TEXTURES: u32 = 10_000;
+pub(crate) const TEXTURE_WALL_TEXTURES: u32 = 10_000;
 /// The quads: 10 rows of 10, 1 m apart.
 const TEXTURE_WALL_QUADS: u32 = 100;
 const TEXTURE_WALL_COLUMNS: u32 = 10;
@@ -830,8 +830,8 @@ fn wall_material_name(quad: u32) -> String {
     format!("quad-{quad}")
 }
 
-/// Loads every Texture in index order, so Texture i is Layer i + 1 of the
-/// albedo Channel, then the quads, row 0 farthest from the camera and
+/// Loads every Texture in index order, into the albedo Channel's Texture
+/// classes after its neutral default, then the quads, row 0 farthest from the camera and
 /// column 0 on its left, each with its own Material.
 pub(crate) fn spawn_texture_wall(
     world: &mut World,

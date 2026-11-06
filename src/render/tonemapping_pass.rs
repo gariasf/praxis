@@ -101,7 +101,7 @@ impl TonemappingPass {
                 view_formats: &[],
             },
         );
-        staging.write_texture(&dither_mask, 0, DITHER_MASK);
+        staging.write_texture(&dither_mask, 0, 0, DITHER_MASK);
         let dither_mask =
             dither_mask.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let input = Self::input_bind_group(device, &layout, render_targets, &dither_mask);

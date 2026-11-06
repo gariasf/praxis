@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/main_pass.rs</code></div>
   <h1>The lit pass</h1>
   <p class="definition">The render pass that shades the frame's draw, both culling phases' <span class="concept" data-term="Instance" data-tip="One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span>, at depth equal into the 4x <a href="msaa.html">MSAA</a> colour, once per pixel for each triangle that covers a sample: it sums glTF 2.0's metallic-roughness BRDF over the pixel's directional lights and its <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span>'s point lights, each unless the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where the bit of one of the first seven directional lights at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span> hides it, adds the ambient term and the emissive, and resolves the exposed colour into the HDR target.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples, fragments and the resolve, <a href="depth-prepass.html">The depth pre-pass</a> for the depth this pass tests against and the vertices it pulls, <a href="shadow-mask.html">The shadow mask pass</a> for the bits it reads.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 98564b94 (2026-11-06). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples, fragments and the resolve, <a href="depth-prepass.html">The depth pre-pass</a> for the depth this pass tests against and the vertices it pulls, <a href="shadow-mask.html">The shadow mask pass</a> for the bits it reads.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -213,14 +213,35 @@ lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);</code></pre>
   <h2>Sampling the Material</h2>
   <p class="key-idea">Every Texture is sampled before anything else, so no sample runs under non-uniform control flow. The colour <span class="concept" data-term="Channel" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Albedo and emissive are the colour Channels, encoded sRGB; normal, metallic-roughness and occlusion are the data Channels, encoded linear. Each kind has its own sampler.">Channels</span> are sampled at 16x anisotropy, the data Channels at 4x.</p>
 <pre class="code"><code>let material = materials[in.material_id];
-let albedo = textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv);
-let metallic_roughness =
-    textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg;
-let occlusion = textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r;
-let emissive = textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb;
-let normal_sample = textureSample(normal_textures[material.layers.y], data_sampler, in.uv).rg;</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
-  <p>The Material ID indexes the Material table; the Material's <code>layers</code> name, for each Channel, the <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> to sample in that Channel's binding array, and Layer 0 of every Channel is a neutral default, so a Material without a Channel samples a Texture that changes nothing. <code>textureSample</code> picks its mip from the screen-space derivatives of the UV, which exist only while every invocation of the 2&times;2 quad runs the same code; sampling first keeps that true by construction, which naga does not check.</p>
+let albedo_class_and_slice = layer_class_and_slice(material.layers.x);
+let normal_class_and_slice = layer_class_and_slice(material.layers.y);
+let metallic_roughness_class_and_slice = layer_class_and_slice(material.layers.z);
+let occlusion_class_and_slice = layer_class_and_slice(material.layers.w);
+let emissive_class_and_slice = layer_class_and_slice(material.extra.x);
+let albedo =
+    textureSample(albedo_textures[albedo_class_and_slice.x], colour_sampler, in.uv, albedo_class_and_slice.y);
+let metallic_roughness = textureSample(
+    metallic_roughness_textures[metallic_roughness_class_and_slice.x],
+    data_sampler,
+    in.uv,
+    metallic_roughness_class_and_slice.y,
+).rg;
+let occlusion = textureSample(
+    occlusion_textures[occlusion_class_and_slice.x],
+    data_sampler,
+    in.uv,
+    occlusion_class_and_slice.y,
+).r;
+let emissive = textureSample(
+    emissive_textures[emissive_class_and_slice.x],
+    colour_sampler,
+    in.uv,
+    emissive_class_and_slice.y,
+).rgb;
+let normal_sample =
+    textureSample(normal_textures[normal_class_and_slice.x], data_sampler, in.uv, normal_class_and_slice.y).rg;</code></pre>
+  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>; <code>layer_class_and_slice</code> is in <code>common.wgsl</code>.</p>
+  <p>The Material ID indexes the Material table; the Material's <code>layers</code> name, for each Channel, the <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> to sample. <code>layer_class_and_slice</code> splits it into its <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span>, which indexes that Channel's binding array of texture arrays, and its slice of that class's array, so the bind group holds an array per class rather than a texture per Texture. Layer 0 of every Channel is a neutral default, so a Material without a Channel samples a Texture that changes nothing. <code>textureSample</code> picks its mip from the screen-space derivatives of the UV, which exist only while every invocation of the 2&times;2 quad runs the same code; sampling first keeps that true by construction, which naga does not check.</p>
   <p>The Material bind group holds one sampler per kind of Channel, both trilinear and repeating:</p>
 <pre class="code"><code>const COLOUR_ANISOTROPY: u16 = 16;
 const DATA_ANISOTROPY: u16 = 4;</code></pre>
@@ -477,34 +498,34 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>lit_pass</code></th><th class="n">Gate, rays off</th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">496.8</td><td class="n">849.5</td><td class="n">4,094.7</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">514.0</td><td class="n">849.5</td><td class="n">4,120.1</td></tr>
       <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">395.3</td><td class="n">672.9</td><td class="n">2,338.8</td></tr>
       <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">428.0</td><td class="n">750.5</td><td class="n">2,341.4</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">808.5</td><td class="n">1,210.1</td><td class="n">6,689.1</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">807.6</td><td class="n">1,215.0</td><td class="n">6,687.7</td></tr>
       <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">481.3</td><td class="n">865.1</td><td class="n">2,736.3</td></tr>
       <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">501.8</td><td class="n">908.4</td><td class="n">2,717.7</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">470.2</td><td class="n">773.8</td><td class="n">3,851.5</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">475.4</td><td class="n">776.9</td><td class="n">3,871.0</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">289.5</td><td class="n">548.0</td><td class="n">1,692.5</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">288.3</td><td class="n">571.4</td><td class="n">1,611.1</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">475.8</td><td class="n">818.2</td><td class="n">3,664.5</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">487.3</td><td class="n">820.8</td><td class="n">3,683.6</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">305.7</td><td class="n">565.2</td><td class="n">1,680.2</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">309.2</td><td class="n">595.9</td><td class="n">1,639.2</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">447.8</td><td class="n">763.0</td><td class="n">2,917.0</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">455.2</td><td class="n">764.9</td><td class="n">2,933.0</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">288.2</td><td class="n">537.6</td><td class="n">1,747.0</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">288.6</td><td class="n">563.1</td><td class="n">1,685.5</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">528.5</td><td class="n">835.2</td><td class="n">3,003.5</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">531.7</td><td class="n">847.0</td><td class="n">3,006.1</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">387.1</td><td class="n">634.8</td><td class="n">1,846.3</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">405.4</td><td class="n">720.9</td><td class="n">1,819.8</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">344.5</td><td class="n">677.2</td><td class="n">2,598.5</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">372.0</td><td class="n">715.6</td><td class="n">2,609.6</td></tr>
       <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">306.9</td><td class="n">715.6</td><td class="n">1,594.7</td></tr>
       <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">417.5</td><td class="n">870.4</td><td class="n">1,622.2</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">335.0</td><td class="n">642.6</td><td class="n">2,917.3</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">340.4</td><td class="n">647.5</td><td class="n">2,928.0</td></tr>
       <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">183.2</td><td class="n">422.4</td><td class="n">1,424.8</td></tr>
       <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">168.8</td><td class="n">448.5</td><td class="n">1,110.5</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">607.2</td><td class="n">14,109.0</td><td class="n">15,975.0</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.4</td><td class="n">618.3</td><td class="n">2,301.2</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">199.4</td><td class="n">513.6</td><td class="n">1,207.2</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">196.7</td><td class="n">558.9</td><td class="n">1,095.3</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">712.5</td><td class="n">1,297.0</td><td class="n">3,747.5</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">716.1</td><td class="n">1,252.2</td><td class="n">3,754.9</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">423.9</td><td class="n">840.5</td><td class="n">2,169.8</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">464.9</td><td class="n">924.8</td><td class="n">1,970.2</td></tr>
       <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,762.6</td><td class="n">8,612.1</td><td class="n">19,935.0</td></tr>
@@ -513,7 +534,7 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. Two gates on the reference machine, the Apple M4 Pro, are over their <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: <code>texture-wall</code>'s, set by its ten thousand bound Textures rather than its shading, and <code>town</code>'s, set by the triangles it draws.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. One gate on the reference machine, the Apple M4 Pro, is over its <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: <code>town</code>'s, set by the triangles it draws.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th></tr></thead>

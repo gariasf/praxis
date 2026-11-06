@@ -9,7 +9,7 @@
 
 use std::num::NonZeroU32;
 
-use crate::assets::material::TEXTURES_PER_CHANNEL;
+use crate::assets::material::CLASSES_PER_CHANNEL;
 use crate::render::targets::{
     DEPTH_PYRAMID_FORMAT, SHADOW_MASK_FORMAT, SHADOW_MASK_SAMPLES_FORMAT,
 };
@@ -41,10 +41,11 @@ pub const FRAME: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 1, which the Material pool rebuilds when loads add Textures: the
-/// Materials (ADR 0001), each Channel's Textures as a binding array indexed
-/// by Layer, in `MaterialChannel` order (ADR 0017), and their samplers: the
-/// colour Channels' and the data Channels', at their own anisotropy.
+/// Group 1, which the Material pool rebuilds when loads open Texture
+/// classes: the Materials (ADR 0001), each Channel's Textures as a binding
+/// array of texture arrays, one per Texture class, in `MaterialChannel`
+/// order (ADR 0017), and their samplers: the colour Channels' and the data
+/// Channels', at their own anisotropy.
 pub const MATERIALS: BindGroupDefinition = BindGroupDefinition {
     index: 1,
     label: "Material Bind Group",
@@ -656,18 +657,18 @@ const fn acceleration_structure(name: &'static str, stages: wgpu::ShaderStages) 
     }
 }
 
-/// One Channel's Textures, which the fragment shader samples.
+/// One Channel's Texture classes, which the fragment shader samples.
 const fn channel(name: &'static str) -> Binding {
     Binding {
         name,
-        wgsl_type: "texture_2d<f32>",
+        wgsl_type: "texture_2d_array<f32>",
         binding_type: wgpu::BindingType::Texture {
             sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
+            view_dimension: wgpu::TextureViewDimension::D2Array,
             multisampled: false,
         },
         stages: wgpu::ShaderStages::FRAGMENT,
-        count: NonZeroU32::new(TEXTURES_PER_CHANNEL),
+        count: NonZeroU32::new(CLASSES_PER_CHANNEL),
         writer: Writer::Cpu,
     }
 }

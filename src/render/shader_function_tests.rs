@@ -4,11 +4,13 @@
 
 use std::io::Write;
 
+use crate::assets::material::{ClassAndSlice, ClassTable, TextureShape};
 use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
 use crate::render::shaders;
+use crate::scenes::TEXTURE_WALL_TEXTURES;
 
 /// Largest difference allowed between a result and its expectation. Results
 /// land within 2e-7 of theirs on the M4 Pro. WGSL floors, worst first: D's
@@ -2297,6 +2299,48 @@ fn sums_in_every_order(terms: &[f32]) -> Vec<f32> {
         }
     }
     sums
+}
+
+/// Every Layer of texture-wall's albedo Channel, its neutral default then its
+/// 10,000 Textures of one 4 × 4 shape with three mips, decodes in WGSL to the
+/// Texture class and slice the CPU placed it in.
+#[test]
+fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let neutral = TextureShape::of(&MaterialPool::neutral_texture(MaterialChannel::Albedo));
+    let wall = TextureShape {
+        width: 4,
+        height: 4,
+        mip_level_count: 3,
+        ..neutral
+    };
+    let mut table = ClassTable::default();
+    let placements: Vec<ClassAndSlice> = std::iter::once(neutral)
+        .chain(std::iter::repeat_n(wall, TEXTURE_WALL_TEXTURES as usize))
+        .map(|shape| table.place(shape).expect("a free Texture class"))
+        .collect();
+    // Layers stay below 2^24, so f32 carries them exactly.
+    let inputs: Vec<[f32; 4]> = placements
+        .iter()
+        .map(|placement| [placement.layer() as f32, 0.0, 0.0, 0.0])
+        .collect();
+    let results = evaluate(
+        &context,
+        "vec4<f32>(vec2<f32>(layer_class_and_slice(u32(input.x))), 0.0, 0.0)",
+        &inputs,
+    );
+
+    assert_eq!(placements[0].layer(), MaterialPool::DEFAULT_LAYER);
+    for (placement, result) in placements.iter().zip(results) {
+        assert_eq!(
+            [result[0], result[1]],
+            [placement.class as f32, placement.slice as f32],
+            "Layer {}",
+            placement.layer()
+        );
+    }
 }
 
 /// A headless context, or `None` after saying so on a machine without a GPU

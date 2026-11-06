@@ -27,12 +27,16 @@ One texture role of a Material: albedo, normal, metallic-roughness, occlusion or
 _Avoid_: Map, slot
 
 **Layer**:
-One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.
-_Avoid_: Slice, texture index
+One numbered texture within a Channel: its Texture class and its slice of that class's texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.
+_Avoid_: texture index; a slice is half of a Layer, not a Layer
 
 **Texture**:
 One Channel's image with its mips. A Layer refers to one Texture.
 _Avoid_: Map, image
+
+**Texture class**:
+The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class's shape opens another class.
+_Avoid_: Size class, bucket
 
 **Resident tail**:
 The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.
