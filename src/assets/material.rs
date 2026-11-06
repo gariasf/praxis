@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 
-use crate::assets::pools::Slots;
+use crate::assets::pools::Generations;
 use crate::cooked::{AssetId, CookedCache, CookedTexture};
 use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
 use crate::render::LoadStaging;
@@ -39,8 +39,7 @@ pub struct MaterialHandle {
 }
 
 impl MaterialHandle {
-    /// Index into the material SSBO. Reads better than `.0` at call sites that
-    /// unwrap a wrapping newtype (e.g. `material_ref.0.index()`).
+    /// Index into the material SSBO.
     pub fn index(self) -> u32 {
         self.index
     }
@@ -152,7 +151,7 @@ impl ChannelTextures {
 /// carries, the Instance's override or else the Meshlet's own, and samples
 /// each Channel's array at the Layer stored in `layers`.
 pub struct MaterialPool {
-    slots: Slots,
+    generations: Generations,
     /// Each Material's data, at its Handle's index; a freed one's stays
     /// until a later Material takes its index.
     materials: Vec<MaterialData>,
@@ -249,7 +248,7 @@ impl MaterialPool {
         );
 
         Self {
-            slots: Slots::default(),
+            generations: Generations::default(),
             materials: Vec::new(),
             materials_buffer,
             channels,
@@ -270,14 +269,14 @@ impl MaterialPool {
         staging: &mut LoadStaging,
         data: MaterialData,
     ) -> Option<MaterialHandle> {
-        if self.slots.full(MATERIAL_CAPACITY) {
+        if self.generations.full(MATERIAL_CAPACITY) {
             tracing::warn!(
                 capacity = MATERIAL_CAPACITY,
                 "Material refused: the Material SSBO is full"
             );
             return None;
         }
-        let (index, generation) = self.slots.take();
+        let (index, generation) = self.generations.take();
         let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         if index as usize == self.materials.len() {
@@ -291,29 +290,30 @@ impl MaterialPool {
 
     /// The data of `handle`'s Material, or None when it was freed.
     pub fn get(&self, handle: MaterialHandle) -> Option<&MaterialData> {
-        self.slots
+        self.generations
             .live(handle.index, handle.generation)
             .then(|| &self.materials[handle.index as usize])
     }
 
-    /// Releases `handle`'s slot, which the next Material inserted takes, so
+    /// Releases `handle`'s index, which the next Material inserted takes, so
     /// `handle` finds nothing again; its Textures stay loaded. A Mesh whose
     /// Primitive names it must be freed first. A Handle that finds no
     /// Material is warned about.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn free(&mut self, handle: MaterialHandle) {
-        if !self.slots.free(handle.index, handle.generation) {
+        if !self.generations.free(handle.index, handle.generation) {
             tracing::warn!(?handle, "Material not freed: its Handle finds no Material");
             return;
         }
-        self.material_handles.retain(|_, loaded| *loaded != handle);
+        self.material_handles
+            .retain(|_, material_handle| *material_handle != handle);
         tracing::debug!(?handle, "Material freed");
     }
 
     /// Materials freed since the pool was made: once it moves, an Instance
     /// may name an index whose Material is gone.
     pub fn frees(&self) -> u64 {
-        self.slots.frees()
+        self.generations.frees()
     }
 
     /// Loads the Material `id` from `cache`, and each Texture it samples, once

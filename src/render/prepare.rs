@@ -351,8 +351,6 @@ impl FramePreparer {
         }
         *warned_of_overflowed_lights = *lights_overflowed > 0;
 
-        // ponytail: every Instance, not the freed entries' Renderables, until
-        // streaming frees often enough to show in prepare's time.
         let frees = mesh_pool.frees() + material_pool.frees();
         if std::mem::replace(pool_frees, frees) != frees {
             *rewrite_every_instance = true;
@@ -1165,17 +1163,17 @@ mod tests {
         assert!(written(&mut frames).0.is_empty());
 
         // Unchanged since, each Renderable is visited again once a pool
-        // frees an entry, and the one whose Mesh was freed is skipped.
+        // frees an entry, and the one whose Mesh was freed is skipped, though
+        // another Mesh took its index.
         frames.mesh_pool.free(freed_mesh);
+        let replacement = load(&mut frames, 3);
+        assert_eq!(replacement.index, freed_mesh.index);
         let (slots, log) = written(&mut frames);
         assert_eq!(slots, [(0, false), (1, true)]);
         assert!(
             log.contains("MeshHandle not in pool"),
             "not logged: {log:?}"
         );
-        // A Mesh loaded into the freed index is not drawn in its place.
-        let replacement = load(&mut frames, 3);
-        assert_eq!(replacement.index, freed_mesh.index);
         assert!(written(&mut frames).0.is_empty());
 
         frames.material_pool.free(other_material);
