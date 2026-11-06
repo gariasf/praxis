@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use crate::assets::material::{ClassAndSlice, ClassTable, TextureShape};
+use crate::assets::material::{CLASSES_PER_CHANNEL, ClassAndSlice, ClassTable, TextureShape};
 use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
@@ -2316,7 +2316,7 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
         mip_level_count: 3,
         ..neutral
     };
-    let mut table = ClassTable::default();
+    let mut table = ClassTable::new(CLASSES_PER_CHANNEL);
     let placements: Vec<ClassAndSlice> = std::iter::once(neutral)
         .chain(std::iter::repeat_n(wall, TEXTURE_WALL_TEXTURES as usize))
         .map(|shape| table.place(shape).expect("a free Texture class"))

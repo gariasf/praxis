@@ -50,6 +50,48 @@ impl GpuMemoryKind {
     }
 }
 
+/// The GPU memory Budget of each kind, in bytes (ADRs 0013, 0017), named
+/// as `GpuMemoryKind::name` spells the kind.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GpuMemoryBudgets {
+    pub geometry_arenas: u64,
+    pub texture_pool: u64,
+    pub resident_tails: u64,
+    pub render_targets: u64,
+    pub acceleration_structures: u64,
+    pub staging: u64,
+    pub scene_and_pass_buffers: u64,
+}
+
+impl GpuMemoryBudgets {
+    /// `bytes` for every kind.
+    #[cfg(test)]
+    pub const fn each(bytes: u64) -> Self {
+        Self {
+            geometry_arenas: bytes,
+            texture_pool: bytes,
+            resident_tails: bytes,
+            render_targets: bytes,
+            acceleration_structures: bytes,
+            staging: bytes,
+            scene_and_pass_buffers: bytes,
+        }
+    }
+
+    pub fn of(&self, kind: GpuMemoryKind) -> u64 {
+        match kind {
+            GpuMemoryKind::GeometryArenas => self.geometry_arenas,
+            GpuMemoryKind::TexturePool => self.texture_pool,
+            GpuMemoryKind::ResidentTails => self.resident_tails,
+            GpuMemoryKind::RenderTargets => self.render_targets,
+            GpuMemoryKind::AccelerationStructures => self.acceleration_structures,
+            GpuMemoryKind::Staging => self.staging,
+            GpuMemoryKind::SceneAndPassBuffers => self.scene_and_pass_buffers,
+        }
+    }
+}
+
 // A kind's total sits at its discriminant, and `ALL` lists the kinds in that order.
 const _: () = {
     let mut index = 0;

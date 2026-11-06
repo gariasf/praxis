@@ -112,7 +112,7 @@ impl PoolLoader<'_> {
 #[cfg(all(test, feature = "cook"))]
 mod tests {
     use super::*;
-    use crate::assets::ARENA_CAPACITY_BYTES;
+    use crate::assets::PoolCapacities;
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::{CookedMaterial, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex};
     use crate::stats::gpu_memory::tests::gpu_memory;
@@ -164,8 +164,10 @@ mod tests {
 
         let mut staging = LoadStaging::new(context.device.clone());
         let memory = gpu_memory(&context);
-        let mut mesh_pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
-        let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging, false);
+        let capacities = PoolCapacities::checked_in();
+        let mut mesh_pool = MeshPool::new(&context.device, &memory, &capacities);
+        let mut material_pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
         let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,

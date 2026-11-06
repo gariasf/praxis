@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 
-use crate::assets::pools::Generations;
+use crate::assets::pools::{Generations, PoolCapacities};
 use crate::cooked::{AssetId, CookedCache, CookedTexture, level_bytes};
 use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
@@ -20,10 +20,6 @@ pub(crate) const CLASSES_PER_CHANNEL: u32 =
 /// The most slices a Texture class holds, the floor's array layers, and the
 /// Layers each class spans: a Layer is its class times this plus its slice.
 pub(crate) const SLICES_PER_CLASS: u32 = FLOOR_TEXTURE_ARRAY_LAYERS;
-
-/// Materials the SSBO holds: a fixed cap avoids growth and bind-group
-/// rebuilds.
-const MATERIAL_CAPACITY: u32 = 256;
 
 /// The colour Channels' anisotropy (albedo, emissive) and the data
 /// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
@@ -147,10 +143,11 @@ impl ClassAndSlice {
     }
 }
 
-/// One Channel's Texture classes, in the order they opened.
-#[derive(Default)]
+/// One Channel's Texture classes, in the order they opened, up to its
+/// capacity.
 pub(crate) struct ClassTable {
     classes: Vec<ClassSlices>,
+    capacity: u32,
 }
 
 /// A Texture class's shape, its slice count, fixed when it opens, and the
@@ -162,11 +159,18 @@ struct ClassSlices {
 }
 
 impl ClassTable {
+    pub(crate) fn new(capacity: u32) -> Self {
+        Self {
+            classes: Vec::new(),
+            capacity,
+        }
+    }
+
     /// The next slice of the newest class of `shape`, or slice 0 of a new
     /// class when that one is full or there is none: the first of a shape
     /// has one slice, each later one twice the one before's, up to
-    /// `SLICES_PER_CLASS`. `None` when the Channel holds
-    /// `CLASSES_PER_CHANNEL` classes and none of `shape` has room.
+    /// `SLICES_PER_CLASS`. `None` when the Channel holds its capacity of
+    /// classes and none of `shape` has room.
     pub(crate) fn place(&mut self, shape: TextureShape) -> Option<ClassAndSlice> {
         let newest = self.classes.iter().rposition(|class| class.shape == shape);
         if let Some(class) = newest
@@ -179,7 +183,7 @@ impl ClassTable {
                 slice: newest_class.taken - 1,
             });
         }
-        if self.classes.len() as u32 >= CLASSES_PER_CHANNEL {
+        if self.classes.len() as u32 >= self.capacity {
             return None;
         }
         let slices = newest.map_or(1, |class| {
@@ -215,11 +219,11 @@ struct ChannelTextures {
 }
 
 impl ChannelTextures {
-    fn new(label: &'static str, memory: &GpuMemory) -> Self {
+    fn new(label: &'static str, memory: &GpuMemory, classes: u32) -> Self {
         Self {
             label,
             memory: memory.clone(),
-            table: ClassTable::default(),
+            table: ClassTable::new(classes),
             textures: Vec::new(),
             views: Vec::new(),
         }
@@ -267,7 +271,7 @@ impl ChannelTextures {
         let Some(placement) = self.table.place(shape) else {
             tracing::error!(
                 channel = self.label,
-                capacity = CLASSES_PER_CHANNEL,
+                capacity = self.table.capacity,
                 "channel has no room for another Texture class; the Texture keeps its Resident tail, or Layer 0 without one"
             );
             return None;
@@ -329,6 +333,7 @@ pub struct MaterialPool {
     bind_group_is_stale: bool,
     /// The residency switch: every Texture loads its Resident tail alone.
     holds_back_finer_mips: bool,
+    material_capacity: u32,
 }
 
 impl MaterialPool {
@@ -376,6 +381,7 @@ impl MaterialPool {
         device: &wgpu::Device,
         memory: &GpuMemory,
         staging: &mut LoadStaging,
+        capacities: &PoolCapacities,
         holds_back_finer_mips: bool,
     ) -> Self {
         let materials_buffer = memory.create_buffer(
@@ -383,7 +389,7 @@ impl MaterialPool {
             GpuMemoryKind::SceneAndPassBuffers,
             &wgpu::BufferDescriptor {
                 label: Some("materials_buffer"),
-                size: u64::from(MATERIAL_CAPACITY) * std::mem::size_of::<MaterialData>() as u64,
+                size: u64::from(capacities.materials) * std::mem::size_of::<MaterialData>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             },
@@ -397,7 +403,7 @@ impl MaterialPool {
             "occlusion_textures",
             "emissive_textures",
         ]
-        .map(|label| ChannelTextures::new(label, memory));
+        .map(|label| ChannelTextures::new(label, memory, capacities.texture_classes_per_channel));
 
         for channel in MaterialChannel::ALL {
             let neutral = Self::neutral_texture(channel);
@@ -430,6 +436,7 @@ impl MaterialPool {
             bind_group,
             bind_group_is_stale: false,
             holds_back_finer_mips,
+            material_capacity: capacities.materials,
         }
     }
 
@@ -440,9 +447,9 @@ impl MaterialPool {
         staging: &mut LoadStaging,
         data: MaterialData,
     ) -> Option<MaterialHandle> {
-        if self.generations.full(MATERIAL_CAPACITY) {
+        if self.generations.full(self.material_capacity) {
             tracing::warn!(
-                capacity = MATERIAL_CAPACITY,
+                capacity = self.material_capacity,
                 "Material refused: the Material SSBO is full"
             );
             return None;
@@ -642,6 +649,7 @@ mod tests {
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::cooked::CookedMaterial;
     use crate::gpu::GpuContext;
+    use crate::stats::GpuMemoryBudgets;
     use crate::stats::gpu_memory::tests::gpu_memory;
 
     /// A shape's first class has one slice and each later one twice the one
@@ -657,7 +665,7 @@ mod tests {
             format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
         };
         let (wall, other) = (shape(4), shape(8));
-        let mut table = ClassTable::default();
+        let mut table = ClassTable::new(CLASSES_PER_CHANNEL);
         let shapes = std::iter::repeat_n(wall, 7).chain([other, wall]);
         let placed: Vec<(u32, u32)> = shapes
             .map(|shape| table.place(shape).unwrap())
@@ -749,7 +757,13 @@ mod tests {
             bytes[GpuMemoryKind::TexturePool as usize]
                 + bytes[GpuMemoryKind::ResidentTails as usize]
         };
-        let mut pool = MaterialPool::new(&context.device, &memory, &mut staging, false);
+        let mut pool = MaterialPool::new(
+            &context.device,
+            &memory,
+            &mut staging,
+            &PoolCapacities::checked_in(),
+            false,
+        );
         let neutral_bytes = texture_bytes();
         let occlusion_layers: Vec<u32> = (1..=3)
             .map(|id| {
@@ -797,8 +811,13 @@ mod tests {
         };
         cache.write(AssetId(1), "key", &material.to_blob()).unwrap();
         let mut staging = LoadStaging::new(context.device.clone());
-        let mut pool =
-            MaterialPool::new(&context.device, &gpu_memory(&context), &mut staging, false);
+        let mut pool = MaterialPool::new(
+            &context.device,
+            &gpu_memory(&context),
+            &mut staging,
+            &PoolCapacities::checked_in(),
+            false,
+        );
         let kept = pool
             .insert(&mut staging, bytemuck::Zeroable::zeroed())
             .unwrap();
@@ -829,7 +848,7 @@ mod tests {
         std::fs::remove_dir_all(&directory).ok();
     }
 
-    /// The SSBO holds `MATERIAL_CAPACITY` Materials; the next gets no
+    /// Budgets for four Materials make an SSBO of four; the next gets no
     /// Handle, so nothing draws with another Material in its place, and the
     /// refusal is logged.
     #[test]
@@ -838,8 +857,17 @@ mod tests {
             return;
         };
         let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities::from_budgets(&GpuMemoryBudgets {
+            texture_pool: 64 << 20,
+            ..GpuMemoryBudgets::each(0)
+        });
+        let memory = gpu_memory(&context);
         let mut pool =
-            MaterialPool::new(&context.device, &gpu_memory(&context), &mut staging, false);
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        assert_eq!(
+            memory.bytes_by_kind()[GpuMemoryKind::SceneAndPassBuffers as usize],
+            4 * std::mem::size_of::<MaterialData>() as u64
+        );
         let material = MaterialData {
             base_color: [1.0; 4],
             metallic_roughness: [0.0, 1.0, 1.0, 0.0],
@@ -847,7 +875,7 @@ mod tests {
             layers: [MaterialPool::DEFAULT_LAYER; 4],
             extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
         };
-        for index in 0..MATERIAL_CAPACITY {
+        for index in 0..4 {
             let handle = pool.insert(&mut staging, material);
             assert!(handle.is_some_and(|handle| handle.index() == index));
         }
@@ -855,6 +883,6 @@ mod tests {
         assert!(handle.is_none(), "a Material past capacity got a Handle");
         assert!(log.contains("WARN"), "not a warning: {log:?}");
         assert!(log.contains("Material refused"), "not logged: {log:?}");
-        assert_eq!(pool.materials.len() as u32, MATERIAL_CAPACITY);
+        assert_eq!(pool.materials.len(), 4);
     }
 }
