@@ -531,7 +531,7 @@ impl MeshPool {
         let index = handle.index as usize;
         let allocation = self.allocations[index]
             .take()
-            .expect("a live index holds a Mesh");
+            .expect("a live index holds a Mesh's allocation");
         for (arena, range) in self.arenas_mut().into_iter().zip(allocation.ranges) {
             arena.free(range);
         }

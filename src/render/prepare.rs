@@ -260,11 +260,12 @@ impl FramePreparer {
     /// (ADR 0022). A Renderable draws each Primitive of its Mesh with its
     /// Material Handle, else with the Material the Primitive names; one whose
     /// Mesh is not in `meshes`, whose Material Handle `material_generations`
-    /// finds no Material for, or that has no Material Handle where a Primitive names
-    /// no Material, is skipped with a warning: it keeps its slot, which holds
-    /// an Instance with no Mesh until the Renderable is drawn. One that
-    /// finds the Instance buffer full is refused, warned about once and
-    /// counted every frame, and neither written nor drawn until a slot frees.
+    /// finds no Material for, or that has no Material Handle where a
+    /// Primitive names no Material, is skipped with a warning: it keeps its
+    /// slot, which holds an Instance with no Mesh until the Renderable is
+    /// drawn. One that finds the Instance buffer full is refused, warned
+    /// about once and counted every frame, and neither written nor drawn
+    /// until a slot frees.
     /// An Instance is a Moving Instance while its entity carries its previous
     /// World transform; past the dynamic TLAS's capacity, those in the
     /// highest slots are left out of it, counted, and warned about when they
