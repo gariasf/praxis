@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Chunk Cooking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/cook/chunk.rs</code></div>
+  <h1>Chunk cooking</h1>
+  <p class="definition">The cook of a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s static content into <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>s: every Renderable that does not move becomes a <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#39;s, if any.">Placement</span>, and every point light a light, each in the 256 m Chunk that holds its pivot and translated in f64 from that Chunk's origin; each Chunk's bounds grow to hold its Placements' Meshes, and each Chunk is stored as one <span class="concept" data-term="Blob" data-tip="One cooked Asset&#39;s bytes, named by their content hash.">Blob</span>, a field at a time, under an <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file&#39;s GUID, or a procedural Reference scene&#39;s name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span> made from its scene's name and its coordinates.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 075919da (2026-11-05), with the Chunk cook as its change leaves it. A change to the Chunk cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#town">The Reference scenes</a> for what <code>town</code> places, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchors and a vertex&#39;s 128 m from its pivot, <a href="cook-texture.html">Texture cooking</a> for the Cook key and the Cooked cache.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Before the frame, never during it: in <code>praxis cook</code> for every Reference scene and in each dev launch for its own, writing only a Chunk whose <span class="concept" data-term="Cook key" data-tip="The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.">Cook key</span> changed. The runtime does not load Chunks yet; scenes still spawn as before.</dd>
+      <dt>Reads</dt><dd><code>ReferenceScene::static_content</code>: Placements and lights in World coordinates; only <code>town</code> has any so far. The source bounds of every Mesh the same cook reads, through <code>source_bounds</code>.</dd>
+      <dt>Writes</dt><dd>One Blob per Chunk into the <span class="concept" data-term="Cooked cache" data-tip="The store of Blobs plus the index from Asset ID to Blob. Disposable: it can always be rebuilt from sources.">Cooked cache</span>, under <code>ReferenceScene::chunk_id</code>; its Cook key; and to the cook's report, each Mesh or Material a Placement names that the cook does not make.</dd>
+      <dt>Counted</dt><dd>Not in Frame stats: the cook runs outside the frame. The cook's <code>cook complete</code> log counts Chunks among the Assets cooked and unchanged.</dd>
+      <dt>Where in the code</dt><dd><code>chunks</code> and <code>cook_key</code> in <code>src/cook/chunk.rs</code>; <code>read_sources</code> and <code>cook_sources</code> in <code>src/cook/mod.rs</code>; the Blob in <code>CookedChunk</code>, <code>CookedPlacement</code> and <code>CookedLight</code>, <code>src/assets/cooked.rs</code>; <code>town</code>'s content in <code>static_content</code>, <code>src/scenes/town.rs</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#content">1 &middot; Static content</a>
+    <a href="#pivot">2 &middot; The Chunk over a pivot</a>
+    <a href="#bounds">3 &middot; Bounds</a>
+    <a href="#blob">4 &middot; The Blob</a>
+    <a href="#references">5 &middot; Names that dangle</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="content">
+  <div class="part-mark">1 &middot; <code>static_content</code></div>
+  <h2>Static content</h2>
+  <p class="key-idea">A scene's Chunks cook from the same generator its spawn places from: <code>town</code>'s <code>placements</code>, with each Mesh and Material named by Asset ID instead of a loaded Handle. Its flocks, the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, stay out: scene systems spawn them at runtime.</p>
+  <p><code>town</code>'s <code>placements</code> returns every Renderable it places, block by block, then its lamps, poles and wires, and the position of each lamp's light. <code>static_content</code> maps each to a <code>CookedPlacement</code> in World coordinates: the Mesh's Asset ID from <code>mesh_id</code>, the overriding Material's from <code>material_id</code> where the Renderable has one, as the boxes do, and its <code>Transform</code>'s translation, rotation and scale. Each light takes <code>LAMP_LIGHT</code>'s colour, intensity in candela and range. Every other scene returns nothing yet.</p>
+<pre class="code"><code>let placements = placed
+    .into_iter()
+    .map(|renderable| CookedPlacement {
+        mesh: scene.mesh_id(renderable.mesh.name()),
+        material: renderable
+            .material
+            .map(|material| scene.material_id(material.name())),
+        translation: renderable.transform.translation,
+        rotation: renderable.transform.rotation,
+        scale: renderable.transform.scale,
+    })
+    .collect();</code></pre>
+  <p class="code-source"><code>static_content</code>, <code>src/scenes/town.rs</code>.</p>
+</section>
+
+<section class="part prose" id="pivot">
+  <div class="part-mark">2 &middot; <code>chunks</code> &middot; <code>chunk_holding</code></div>
+  <h2>The Chunk over a pivot</h2>
+  <p class="key-idea">A Placement or light belongs to the Chunk whose column holds its translation: x and z divided by 256 m and floored. Its translation is stored from that Chunk's origin, in f64, so a Mesh may reach past the Chunk's edge and still have one owner.</p>
+  <p>A Chunk at integer coordinates (x, z) has its origin at (256x, 0, 256z) and holds the column from there to 256 m further along x and z, at every height. <code>chunk_holding</code> floors, so a pivot at x = &minus;0.5 m is in Chunk &minus;1 and one at x = 256 m in Chunk 1. <code>chunks</code> keeps the Chunks in a <code>BTreeMap</code> by coordinates, so they and their contents come out in the same order every cook.</p>
+<pre class="code"><code>let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor());
+let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES;</code></pre>
+  <p class="code-source"><code>chunk_holding</code>, <code>src/cook/chunk.rs</code>.</p>
+  <p>The subtraction is not always exact. When the translation from the origin has a larger exponent than the World translation, a pivot at x = &minus;10.1 m becoming 245.9 m in Chunk &minus;1 say, it is rounded to f64's step at that size, at most 2<sup>&minus;45</sup> m, about 3 &times; 10<sup>&minus;14</sup> m, for any translation under 256 m. Adding the origin back can then differ from the World translation in its last bits, by at most 2<sup>&minus;46</sup> m, about 1.4 &times; 10<sup>&minus;14</sup> m. <code>town</code>'s 16 Chunks hold 244,319 Placements and 1,024 lights: its 20 &times; 20 blocks span 4 &times; 4 Chunks, and its ground's 8 &times; 8 tiles of 128 m lie four to a Chunk.</p>
+</section>
+
+<section class="part prose" id="bounds">
+  <div class="part-mark">3 &middot; <code>chunks</code> &middot; <code>source_bounds</code></div>
+  <h2>Bounds</h2>
+  <p class="key-idea">A Chunk's bounds are the box, from its origin, that holds the eight corners of every Placement's Mesh box, each scaled, rotated and translated as the Placement places it. They may reach past the Chunk's edge; lights do not grow them.</p>
+  <p>Each Mesh's box is <code>source_bounds</code> of the Primitives the same cook reads: every source vertex and every box a Primitive adds, which holds the box its cooked Blob stores, as welding moves no vertex. The corners are placed in f64, the rotation's f32 quaternion widened first. A Chunk with no Placement keeps its empty box, its lowest corner at +&infin; and its highest at &minus;&infin;. <code>town</code>'s wires reach up to 18.5 m past their Chunk's edge, and the bounds of the Chunks at x = 1 start up to 1.48 m before theirs.</p>
+<pre class="code"><code>for corner in 0..8 {
+    let is_highest = BVec3::new(corner &amp; 1 != 0, corner &amp; 2 != 0, corner &amp; 4 != 0);
+    let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
+    let placed = placement.translation + placement.rotation.as_dquat() * local.as_dvec3();
+    chunk.bounds = [chunk.bounds[0].min(placed), chunk.bounds[1].max(placed)];
+}</code></pre>
+  <p class="code-source"><code>chunks</code>, <code>src/cook/chunk.rs</code>.</p>
+</section>
+
+<section class="part prose" id="blob">
+  <div class="part-mark">4 &middot; <code>CookedChunk</code> &middot; <code>cook_key</code></div>
+  <h2>The Blob</h2>
+  <p class="key-idea">A Chunk Blob is the magic <code>PXCH</code>, its format version and one zstd frame at level 9 holding the counts, the bounds, then each field for every Placement in turn and each field for every light: 84 bytes per Placement and 44 per light before compression. Its Cook key hashes that payload, so a moved Placement or a Mesh whose box changes cooks the Chunk again.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Field</th><th class="n">Bytes each</th><th>Encoding</th></tr></thead>
+    <tbody>
+      <tr><td>Placement count, light count</td><td class="n">4, 4</td><td>u32, little-endian</td></tr>
+      <tr><td>bounds, lowest then highest</td><td class="n">6 &times; 8</td><td>f64 from the Chunk's origin</td></tr>
+      <tr><td>Mesh Asset IDs</td><td class="n">16</td><td>u128, big-endian, as a Material Blob stores one</td></tr>
+      <tr><td>Material Asset IDs</td><td class="n">16</td><td>u128, big-endian; zero for none</td></tr>
+      <tr><td>translations' x, then y, then z</td><td class="n">3 &times; 8</td><td>f64 from the Chunk's origin</td></tr>
+      <tr><td>rotations' x, y, z, w; scales' x, y, z</td><td class="n">7 &times; 4</td><td>f32</td></tr>
+      <tr><td>lights' translations' x, then y, then z</td><td class="n">3 &times; 8</td><td>f64 from the Chunk's origin</td></tr>
+      <tr><td>lights' red, green, blue, intensity, range</td><td class="n">5 &times; 4</td><td>f32: colour, candela, metres</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>CookedChunk::from_blob</code> refuses another magic or version with a re-cook message, and a payload whose length after the header is not its counts' Placements and lights. <code>CookedCache::chunk</code> reads one by Asset ID. The Chunk's Asset ID is <code>ReferenceScene::chunk_id</code>: the scene's name, the Chunk kind and the coordinates written as a name, <code>-2 1</code> for Chunk (&minus;2, 1).</p>
+  <p>The Cook key is SHA-256 over the magic, the version, zstd's library version, the level and the payload. The payload holds everything the Chunk cooks from, its Meshes' boxes included through its bounds, so an unchanged scene finds every Chunk up to date and writes none.</p>
+</section>
+
+<section class="part prose" id="references">
+  <div class="part-mark">5 &middot; <code>dangling_references</code></div>
+  <h2>Names that dangle</h2>
+  <p class="key-idea">Every Mesh and Material a Placement names is checked against the Assets the same cook makes. One it does not make is warned of, naming the Chunk and the Asset ID, even when the Cooked cache still holds a stale Blob for it.</p>
+  <p>The Cooked cache never drops an index entry, so a renamed Mesh's old ID still loads its old Blob. <code>cook_sources</code> adds each Placement's Mesh and Material, with <code>Referrer::Chunk</code> and the scene and coordinates, to the references it already checks: each Material's Textures, each Mesh's Materials and each scene's loads. A Chunk of a scene with an absent source is let through as that scene's own references are, since an absent source keeps its Blobs.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The cook is tested against what the spawn places: <code>town</code> spawned into a World and its Chunks read back by Asset ID must hold the same Placements and lights, bit for bit, each in the Chunk the test computes for it.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>towns_chunks_hold_what_its_spawn_places_that_does_not_move</code></td><td><code>src/cook/chunk.rs</code></td><td>exactly the 4 &times; 4 Chunks from (&minus;2, &minus;2) to (1, 1) are cooked; every entity the spawn gives a Mesh and no previous World transform, and every point light, is in the Chunk over its pivot at its translation from that Chunk's origin, with its Mesh, overriding Material, rotation, scale and photometric values; every pivot lies within its Chunk; each cooked Mesh's box, placed, lies within its Chunk's bounds; a second cook cooks nothing</td></tr>
+      <tr><td><code>chunk_blob_round_trips_and_refuses_another_version_or_a_wrong_count</code></td><td><code>src/assets/cooked.rs</code></td><td>a Chunk with and without a Material reads back as written; another version and a count its bytes do not hold are refused</td></tr>
+      <tr><td><code>a_placement_or_material_naming_a_removed_asset_dangles</code></td><td><code>src/cook/mod.rs</code></td><td>a Placement's Mesh and Material, and a Material's Texture, that only a stale cache holds are reported with their referrer, the Chunk named by scene and coordinates</td></tr>
+      <tr><td>the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span></td><td><code>tests/goldens.rs</code></td><td>unchanged: no scene loads a Chunk yet</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>praxis cook</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The Chunk cook costs cook time and bytes, never frame time. <code>town</code>'s 16 Chunks compress from 20.6 MB to 0.69 MB, and a launch whose Chunks are up to date still generates, cuts and hashes them.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th><code>town</code>'s 16 Chunks</th><th class="n">Bytes</th><th class="n">Bytes per Placement</th><th class="n">Time, ms</th></tr></thead>
+    <tbody>
+      <tr class="focus"><td>compressed a field at a time, level 9</td><td class="n">689,069</td><td class="n">2.82</td><td class="n">31&ndash;35</td></tr>
+      <tr><td>compressed a Placement at a time, level 19</td><td class="n">1,010,577</td><td class="n">4.14</td><td class="n">3,610</td></tr>
+      <tr><td>compressed a Placement at a time, level 3</td><td class="n">1,417,239</td><td class="n">5.80</td><td class="n">13</td></tr>
+      <tr><td>uncompressed</td><td class="n">20,568,748</td><td class="n">84.19</td><td class="n">&mdash;</td></tr>
+      <tr><td>generated, cut and hashed, as an up-to-date launch does</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">37&ndash;64</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Release builds on the Apple M4 Pro, all 16 Chunks on one thread, with the one-minute load average between 5 and 14, so the ranges are a few runs each; bytes per Placement divide by 244,319 and include the lights' share and each Blob's 8-byte magic and version. The rows a Placement at a time were measured on a layout this cook no longer writes. One Chunk holds 13,265 to 17,577 Placements and 56 to 72 lights, 39,774 to 47,254 bytes compressed.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADRs 0014, 0018, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>f64 from the Chunk's origin.</b> ADR 0018 stores a Placement's translation in f64 because f32 heights fail the simulation bar above 1,024 m; ADR 0014 addresses a Chunk by integer (x, z) with its origin at the edge's multiple, so a Placement's translation stays small however far its Chunk lies.</p>
+  <p><b>The pivot decides.</b> A Placement belongs to one Chunk, the one over its pivot, rather than to every Chunk its Mesh touches, so it loads once; the Chunk's bounds grow instead, and ADR 0014's 128 m pivot bound, which the Mesh cook enforces, keeps a Mesh at unit scale within 128 m of its pivot, though the corners of its rotated box, which the bounds hold, can reach about 222 m along an axis.</p>
+  <p><b>A Material per Placement.</b> An Instance's Material overrides its Mesh's, and <code>town</code>'s boxes rely on it: one unit cube drawn as slabs, walls, windows and rails in eight Materials. A Placement carries the same optional override, so the Chunks hold what the spawn places with no Mesh per Material.</p>
+  <p><b>A field at a time.</b> Stored a Placement at a time, an Asset ID repeats every 84 bytes among unrelated floats; stored a field at a time, the Asset IDs, the translations along each axis and the unit scales each sit together, and zstd at level 9 compresses them to two thirds of what level 19 reaches the other way, about a hundred times faster.</p>
+  <p><b>Photometric lights.</b> A light keeps the <code>PointLight</code> it is spawned from: a colour, an intensity in candela as ADR 0023 has it, and a range in metres as <code>KHR_lights_punctual</code> defines it.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>Not loaded yet.</b> The runtime reads no Chunk; <code>town</code> spawns from its generator as before, and the other scenes cook no Chunks.</p>
+  <p><b>The last bit of a translation.</b> A World translation rebuilt from a Chunk's origin and a Placement's translation can differ from the generator's in f64's last bits, by at most 2<sup>&minus;46</sup> m.</p>
+  <p><b>A Mesh the cook does not read.</b> A Placement whose Mesh no source of the same cook defines grows its Chunk's bounds by its pivot alone; that Mesh is warned of as dangling.</p>
+  <p><b>Lights outside the bounds.</b> A light's range does not grow its Chunk's bounds.</p>
+  <p><b>No index of Chunks.</b> Nothing lists which Chunks a scene has: a reader finds one by its coordinates.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">The Chunk cook relies on no outside source beyond the zstd library the Cooked cache already uses; its rules are the ADRs named above.</p>
+  <h3>History</h3>
+  <p class="note">Chunks were a line of ADR 0018, a list of Placements with no code behind it. They were first cooked for the streamed world, after the cooker began refusing a Mesh past 128 m from its pivot and <code>town</code>'s ground was cut into 128 m tiles, with lights and an overriding Material added to the ADR's Placement. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/cook/chunk.rs</code>, <code>src/cook/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/scenes/town.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018 and 0023, and release-build measurements on the M4 Pro, all as the Chunk cook's change leaves <code>main</code> at 075919da.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="box-filtering.html">Previous: Box filtering</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

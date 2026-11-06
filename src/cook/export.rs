@@ -285,8 +285,8 @@ struct RenderableEntry {
 /// Notes the Asset ID behind each Handle a spawn takes, and loads nothing.
 #[derive(Default)]
 pub(super) struct AssetRecorder {
-    meshes: Vec<AssetId>,
-    materials: Vec<AssetId>,
+    pub(super) meshes: Vec<AssetId>,
+    pub(super) materials: Vec<AssetId>,
     textures: Vec<AssetId>,
 }
 
