@@ -1,0 +1,168 @@
+{
+  "adapter": "Apple M4 Pro",
+  "aliasing_p99": 13721,
+  "aliasing_rmse": 3222,
+  "arena_bytes_in_use": 176,
+  "backend": "metal",
+  "committed_unix_seconds": 1793967074,
+  "counter_frames": {
+    "arena_bytes_in_use": 176,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "gpu_memory_bytes": 663824071,
+    "heap_allocations": 350,
+    "instances_drawn": 100,
+    "instances_overflowed": 0,
+    "triangles_drawn": 200,
+    "uploaded_bytes": 224
+  },
+  "cpu_frame_microseconds": {
+    "median": 240.833,
+    "p95": 298.625
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "median": 0.083,
+    "p95": 0.20900000000000002
+  },
+  "experiment": {
+    "merge_base": "03da4fd2190f9ff29c489700068d653a2c6afbe8",
+    "merge_base_source_hash": "77832c0539df765b339685351cfa7895c7cd9236",
+    "name": "texture-classes"
+  },
+  "gate_microseconds": {
+    "median": 617.5409999999999,
+    "p95": 637.875
+  },
+  "gate_pass_microseconds": {
+    "culling_phase_one": {
+      "median": 26.291999999999998,
+      "p95": 27.333000000000002
+    },
+    "culling_phase_two": {
+      "median": 19.541,
+      "p95": 20.375
+    },
+    "depth_prepass": {
+      "median": 90.541,
+      "p95": 93.54100000000001
+    },
+    "depth_pyramid_pass": {
+      "median": 203.33300000000003,
+      "p95": 206.209
+    },
+    "froxel_pass": {
+      "median": 5.541,
+      "p95": 5.917000000000001
+    },
+    "lit_pass": {
+      "median": 267.208,
+      "p95": 281.33299999999997
+    }
+  },
+  "gpu_frame_microseconds": {
+    "median": 2305.542,
+    "p95": 2566.9170000000004
+  },
+  "gpu_memory_bytes": 663824071,
+  "gpu_memory_bytes_by_kind": {
+    "acceleration_structures": 78513635,
+    "geometry_arenas": 83886080,
+    "render_targets": 270335860,
+    "resident_tails": 491496,
+    "scene_and_pass_buffers": 230547848,
+    "staging": 49152,
+    "texture_pool": 0
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "blas_refit": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "culling_phase_one": {
+      "median": 27.041999999999998,
+      "p95": 28.375
+    },
+    "culling_phase_two": {
+      "median": 20.25,
+      "p95": 20.875
+    },
+    "depth_prepass": {
+      "median": 158.958,
+      "p95": 159.792
+    },
+    "depth_pyramid_pass": {
+      "median": 203.708,
+      "p95": 207.125
+    },
+    "dynamic_tlas_build": {
+      "median": 0.0,
+      "p95": 0.0
+    },
+    "froxel_pass": {
+      "median": 5.625,
+      "p95": 5.959
+    },
+    "lit_pass": {
+      "median": 322.0,
+      "p95": 335.917
+    },
+    "phase_two_depth_pass": {
+      "median": 12.167,
+      "p95": 12.583
+    },
+    "shadow_mask_pass": {
+      "median": 1213.625,
+      "p95": 1269.292
+    },
+    "tonemapping_pass": {
+      "median": 319.959,
+      "p95": 322.58299999999997
+    }
+  },
+  "heap_allocations": 350,
+  "height": 1440,
+  "instances_drawn": 100,
+  "instances_overflowed": 0,
+  "lit_pass_wait_microseconds": {
+    "median": 4.3340000000000005,
+    "p95": 4.875
+  },
+  "measured_frames": 1800,
+  "profile": "release",
+  "provenance": {
+    "branch": "feature/622-texture-classes",
+    "commit": "a8c7def47b6cc4513fd863b93314421910a95f2b",
+    "dirty": false,
+    "driver": "",
+    "driver_info": "",
+    "gpu_frame_p95_over_median": 1.1133681364295251,
+    "gpu_load_percent": 82,
+    "harness_version": 10,
+    "one_minute_load_average": 2.7,
+    "other_processes": [],
+    "quiet": false,
+    "scene_content_hash": "9a67b104118a36654fd54c571e90b250ddaaaa8b32d38a553a3dad6adb78c53d",
+    "source_hash": "7190d3744a36a51c53c7d91bd33a2658b1b4e11a",
+    "started_unix_seconds": 1793970690
+  },
+  "scene": "texture-wall",
+  "shadow_ray_microseconds": {
+    "median": 1364.917,
+    "p95": 1613.5
+  },
+  "tags": [
+    "source not main's",
+    "machine not quiet"
+  ],
+  "triangles_drawn": 200,
+  "uploaded_bytes": 224,
+  "width": 2560
+}
