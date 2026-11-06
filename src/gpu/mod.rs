@@ -290,6 +290,11 @@ pub(crate) fn floor_downlevel_flags() -> wgpu::DownlevelFlags {
 /// guarantees (ADR 0021), which the Material Channels share.
 pub(crate) const FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE: u32 = 65_536;
 
+/// The array layers a texture may have under the Capability floor (ADR
+/// 0021): wgpu's default, which a Texture class's slices stay within.
+pub(crate) const FLOOR_TEXTURE_ARRAY_LAYERS: u32 =
+    wgpu::Limits::defaults().max_texture_array_layers;
+
 /// The Capability floor's limits (ADR 0021): the defaults, raised only where
 /// an ADR needs it.
 pub(crate) fn floor_limits() -> wgpu::Limits {
@@ -297,6 +302,7 @@ pub(crate) fn floor_limits() -> wgpu::Limits {
         // ADR 0017's arenas.
         max_buffer_size: (1 << 31) - 1,
         max_binding_array_elements_per_shader_stage: FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE,
+        max_texture_array_layers: FLOOR_TEXTURE_ARRAY_LAYERS,
         // ADR 0020's static and dynamic TLAS.
         max_acceleration_structures_per_shader_stage: 2,
         // The culling pass's compute stage reads and writes nine, the

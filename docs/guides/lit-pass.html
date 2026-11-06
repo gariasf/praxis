@@ -213,14 +213,35 @@ lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);</code></pre>
   <h2>Sampling the Material</h2>
   <p class="key-idea">Every Texture is sampled before anything else, so no sample runs under non-uniform control flow. The colour <span class="concept" data-term="Channel" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Albedo and emissive are the colour Channels, encoded sRGB; normal, metallic-roughness and occlusion are the data Channels, encoded linear. Each kind has its own sampler.">Channels</span> are sampled at 16x anisotropy, the data Channels at 4x.</p>
 <pre class="code"><code>let material = materials[in.material_id];
-let albedo = textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv);
-let metallic_roughness =
-    textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg;
-let occlusion = textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r;
-let emissive = textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb;
-let normal_sample = textureSample(normal_textures[material.layers.y], data_sampler, in.uv).rg;</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
-  <p>The Material ID indexes the Material table; the Material's <code>layers</code> name, for each Channel, the <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> to sample in that Channel's binding array, and Layer 0 of every Channel is a neutral default, so a Material without a Channel samples a Texture that changes nothing. <code>textureSample</code> picks its mip from the screen-space derivatives of the UV, which exist only while every invocation of the 2&times;2 quad runs the same code; sampling first keeps that true by construction, which naga does not check.</p>
+let albedo_layer = layer_class_and_slice(material.layers.x);
+let normal_layer = layer_class_and_slice(material.layers.y);
+let metallic_roughness_layer = layer_class_and_slice(material.layers.z);
+let occlusion_layer = layer_class_and_slice(material.layers.w);
+let emissive_layer = layer_class_and_slice(material.extra.x);
+let albedo =
+    textureSample(albedo_textures[albedo_layer.x], colour_sampler, in.uv, albedo_layer.y);
+let metallic_roughness = textureSample(
+    metallic_roughness_textures[metallic_roughness_layer.x],
+    data_sampler,
+    in.uv,
+    metallic_roughness_layer.y,
+).rg;
+let occlusion = textureSample(
+    occlusion_textures[occlusion_layer.x],
+    data_sampler,
+    in.uv,
+    occlusion_layer.y,
+).r;
+let emissive = textureSample(
+    emissive_textures[emissive_layer.x],
+    colour_sampler,
+    in.uv,
+    emissive_layer.y,
+).rgb;
+let normal_sample =
+    textureSample(normal_textures[normal_layer.x], data_sampler, in.uv, normal_layer.y).rg;</code></pre>
+  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>; <code>layer_class_and_slice</code> is in <code>common.wgsl</code>.</p>
+  <p>The Material ID indexes the Material table; the Material's <code>layers</code> name, for each Channel, the <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> to sample. <code>layer_class_and_slice</code> splits it into its <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span>, which indexes that Channel's binding array of texture arrays, and its slice of that class's array, so the bind group holds an array per class rather than a texture per Texture. Layer 0 of every Channel is a neutral default, so a Material without a Channel samples a Texture that changes nothing. <code>textureSample</code> picks its mip from the screen-space derivatives of the UV, which exist only while every invocation of the 2&times;2 quad runs the same code; sampling first keeps that true by construction, which naga does not check.</p>
   <p>The Material bind group holds one sampler per kind of Channel, both trilinear and repeating:</p>
 <pre class="code"><code>const COLOUR_ANISOTROPY: u16 = 16;
 const DATA_ANISOTROPY: u16 = 4;</code></pre>

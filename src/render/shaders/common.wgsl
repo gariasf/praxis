@@ -2,7 +2,7 @@
 // (src/render/shaders/mod.rs): the structs more than one pass reads, the
 // Anchor composition, the position a depth target's depth places at a pixel,
 // the ray and box test, the point light's position, the packed index, the
-// vertex decode and the octahedral codec.
+// vertex decode, the octahedral codec and the Layer decode.
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
@@ -300,4 +300,10 @@ fn octahedral_decode(coordinates: vec2<f32>) -> vec3<f32> {
     let sign = select(vec2<f32>(-1.0), vec2<f32>(1.0), coordinates >= vec2<f32>(0.0));
     let unfolded = select((1.0 - abs(coordinates.yx)) * sign, coordinates, z >= 0.0);
     return normalize(vec3<f32>(unfolded, z));
+}
+
+// A Layer's Texture class, its index in its Channel's binding array, and its
+// slice of that class's texture array; Layer 0 is class 0's slice 0.
+fn layer_class_and_slice(layer: u32) -> vec2<u32> {
+    return vec2<u32>(layer / SLICES_PER_CLASS, layer % SLICES_PER_CLASS);
 }

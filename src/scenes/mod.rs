@@ -803,7 +803,7 @@ fn gloss_texture() -> LoadedImage {
 }
 
 /// texture-wall's Textures, all in the albedo Channel.
-const TEXTURE_WALL_TEXTURES: u32 = 10_000;
+pub(crate) const TEXTURE_WALL_TEXTURES: u32 = 10_000;
 /// The quads: 10 rows of 10, 1 m apart.
 const TEXTURE_WALL_QUADS: u32 = 100;
 const TEXTURE_WALL_COLUMNS: u32 = 10;

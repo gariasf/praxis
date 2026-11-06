@@ -195,22 +195,24 @@ impl LoadStaging {
             .copy_from_slice(bytes);
     }
 
-    /// Records a copy of `bytes`, mip `level` of `texture` as rows of blocks
-    /// without padding, re-pitching each row to
+    /// Records a copy of `bytes`, mip `level` of array layer `slice` of
+    /// `texture` as rows of blocks without padding, re-pitching each row to
     /// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT` as it is written into the belt.
-    pub fn write_texture(&mut self, texture: &wgpu::Texture, level: u32, bytes: &[u8]) {
+    pub fn write_texture(&mut self, texture: &wgpu::Texture, level: u32, slice: u32, bytes: &[u8]) {
         let format = texture.format();
         let (block_width, block_height) = format.block_dimensions();
         let block_bytes = format.block_copy_size(None).expect("a colour format");
         // A mip smaller than a block still copies a whole one.
-        let size = texture
-            .size()
-            .mip_level_size(level, texture.dimension())
-            .physical_size(format);
+        let size = wgpu::Extent3d {
+            depth_or_array_layers: 1,
+            ..texture
+                .size()
+                .mip_level_size(level, texture.dimension())
+                .physical_size(format)
+        };
         let row_bytes = (size.width / block_width * block_bytes) as usize;
         let rows = size.height / block_height;
         let pitch = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
-        assert_eq!(size.depth_or_array_layers, 1, "one layer per Texture");
         assert_eq!(
             bytes.len(),
             row_bytes * rows as usize,
@@ -246,7 +248,11 @@ impl LoadStaging {
             wgpu::TexelCopyTextureInfo {
                 texture,
                 mip_level: level,
-                origin: wgpu::Origin3d::ZERO,
+                origin: wgpu::Origin3d {
+                    x: 0,
+                    y: 0,
+                    z: slice,
+                },
                 aspect: wgpu::TextureAspect::All,
             },
             size,
@@ -304,10 +310,11 @@ mod tests {
     use crate::capture::submit_and_map;
     use crate::gpu::GpuContext;
 
-    /// Every mip of an 8 × 8 BC5 Texture written through the belt after a
-    /// 4-byte buffer write reads back as written: each mip starts at a
-    /// multiple of its 16-byte blocks, mip 0's two block rows of 32 bytes
-    /// sit 256 bytes apart, and mips smaller than a block copy one block.
+    /// Every mip of slice 1 of an 8 × 8 BC5 texture array written through
+    /// the belt after a 4-byte buffer write reads back as written: each mip
+    /// starts at a multiple of its 16-byte blocks, mip 0's two block rows of
+    /// 32 bytes sit 256 bytes apart, and mips smaller than a block copy one
+    /// block.
     #[test]
     fn every_mip_reads_back_as_written() {
         let context = match pollster::block_on(GpuContext::headless()) {
@@ -324,7 +331,7 @@ mod tests {
             size: wgpu::Extent3d {
                 width: 8,
                 height: 8,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: 2,
             },
             mip_level_count: 4,
             sample_count: 1,
@@ -354,7 +361,7 @@ mod tests {
         });
         staging.write(&word, 0, &[1, 2, 3, 4]);
         for (level, bytes) in levels.iter().enumerate() {
-            staging.write_texture(&texture, level as u32, bytes);
+            staging.write_texture(&texture, level as u32, 1, bytes);
         }
         staging.submit(&context.queue);
 
@@ -373,7 +380,7 @@ mod tests {
                 wgpu::TexelCopyTextureInfo {
                     texture: &texture,
                     mip_level: level as u32,
-                    origin: wgpu::Origin3d::ZERO,
+                    origin: wgpu::Origin3d { x: 0, y: 0, z: 1 },
                     aspect: wgpu::TextureAspect::All,
                 },
                 wgpu::TexelCopyBufferInfo {

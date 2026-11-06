@@ -5,16 +5,20 @@ use anyhow::Context;
 
 use crate::assets::pools::Generations;
 use crate::cooked::{AssetId, CookedCache, CookedTexture};
-use crate::gpu::FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE;
+use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
 use crate::render::bind_groups::MATERIALS;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
-/// Textures each Channel's binding array can hold: the Channels split the
-/// Capability floor's binding-array elements per stage (ADR 0021), 13,107
-/// each, room for texture-wall's 10,000 and Layer 0.
-pub(crate) const TEXTURES_PER_CHANNEL: u32 =
+/// Texture classes each Channel's binding array can hold: the Channels split
+/// the Capability floor's binding-array elements per stage (ADR 0021),
+/// 13,107 each.
+pub(crate) const CLASSES_PER_CHANNEL: u32 =
     FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE / MaterialChannel::ALL.len() as u32;
+
+/// The most slices a Texture class holds, the floor's array layers, and the
+/// Layers each class spans: a Layer is its class times this plus its slice.
+pub(crate) const SLICES_PER_CLASS: u32 = FLOOR_TEXTURE_ARRAY_LAYERS;
 
 /// Materials the SSBO holds: a fixed cap avoids growth and bind-group
 /// rebuilds.
@@ -46,7 +50,7 @@ impl MaterialHandle {
 }
 
 /// One texture channel of a material. Each channel has its own binding array;
-/// a material stores one Layer index per channel. The discriminant is the
+/// a material stores one Layer per channel. The discriminant is the
 /// Channel's position in `MaterialPool::channels` and part of every
 /// Texture's Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -80,12 +84,104 @@ pub struct MaterialData {
     pub extra: [u32; 4],              // x=emissive Layer, yzw=pad
 }
 
-/// One Channel's Textures, each sized to its source, bound as one partially
-/// bound binding array (ADR 0017). A Layer is an index into `views`.
+/// What every Texture of one Texture class shares.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TextureShape {
+    pub width: u32,
+    pub height: u32,
+    pub mip_level_count: u32,
+    pub format: wgpu::TextureFormat,
+}
+
+impl TextureShape {
+    pub(crate) fn of(texture: &CookedTexture) -> Self {
+        Self {
+            width: texture.width,
+            height: texture.height,
+            mip_level_count: texture.levels.len() as u32,
+            format: texture.format,
+        }
+    }
+}
+
+/// A Texture's place in its Channel: its Texture class, which indexes the
+/// Channel's binding array, and its slice of that class's texture array.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Placement {
+    pub class: u32,
+    pub slice: u32,
+}
+
+impl Placement {
+    /// The Layer that names it, which WGSL's `layer_class_and_slice` decodes.
+    pub(crate) fn layer(self) -> u32 {
+        self.class * SLICES_PER_CLASS + self.slice
+    }
+}
+
+/// One Channel's Texture classes, in the order they opened.
+#[derive(Default)]
+pub(crate) struct ClassTable {
+    classes: Vec<ClassSlices>,
+}
+
+/// A Texture class's shape, its slice count, fixed when it opens, and the
+/// slices taken.
+struct ClassSlices {
+    shape: TextureShape,
+    slices: u32,
+    taken: u32,
+}
+
+impl ClassTable {
+    /// The next slice of the newest class of `shape`, or slice 0 of a new
+    /// class when that one is full or there is none: the first of a shape
+    /// has one slice, each later one twice the one before's, up to
+    /// `SLICES_PER_CLASS`. `None` when the Channel holds
+    /// `CLASSES_PER_CHANNEL` classes and none of `shape` has room.
+    pub(crate) fn place(&mut self, shape: TextureShape) -> Option<Placement> {
+        let newest = self.classes.iter().rposition(|class| class.shape == shape);
+        if let Some(class) = newest
+            && let newest_class = &mut self.classes[class]
+            && newest_class.taken < newest_class.slices
+        {
+            newest_class.taken += 1;
+            return Some(Placement {
+                class: class as u32,
+                slice: newest_class.taken - 1,
+            });
+        }
+        if self.classes.len() as u32 >= CLASSES_PER_CHANNEL {
+            return None;
+        }
+        let slices = newest.map_or(1, |class| {
+            (self.classes[class].slices * 2).min(SLICES_PER_CLASS)
+        });
+        self.classes.push(ClassSlices {
+            shape,
+            slices,
+            taken: 1,
+        });
+        Some(Placement {
+            class: self.classes.len() as u32 - 1,
+            slice: 0,
+        })
+    }
+
+    /// The slices `class` was opened with.
+    fn slices(&self, class: u32) -> u32 {
+        self.classes[class as usize].slices
+    }
+}
+
+/// One Channel's Textures, a texture array per Texture class, bound as one
+/// partially bound binding array (ADR 0017).
 struct ChannelTextures {
-    /// Its binding's name in `MATERIALS`, which labels its Textures too.
+    /// Its binding's name in `MATERIALS`, which labels its arrays too.
     label: &'static str,
     memory: GpuMemory,
+    table: ClassTable,
+    /// Each Texture class's array and its view, at the class's index.
     textures: Vec<Counted<wgpu::Texture>>,
     views: Vec<wgpu::TextureView>,
 }
@@ -95,61 +191,69 @@ impl ChannelTextures {
         Self {
             label,
             memory: memory.clone(),
+            table: ClassTable::default(),
             textures: Vec::new(),
             views: Vec::new(),
         }
     }
 
-    /// Creates `texture` with its full mip chain, written through `staging`,
-    /// and returns its Layer, or `None` when the Channel is full.
+    /// Writes `texture` with its full mip chain through `staging` into the
+    /// slice its class has free, creating the class's array when the class
+    /// is new, and returns its Layer, or `None` when the Channel is full.
     fn push(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
         texture: &CookedTexture,
     ) -> Option<u32> {
-        if self.views.len() as u32 >= TEXTURES_PER_CHANNEL {
+        let Some(placement) = self.table.place(TextureShape::of(texture)) else {
             tracing::error!(
                 channel = self.label,
-                capacity = TEXTURES_PER_CHANNEL,
-                "channel full; using the neutral default layer"
+                capacity = CLASSES_PER_CHANNEL,
+                "channel holds its every Texture class; using the neutral default layer"
             );
             return None;
-        }
-        let layer = self.views.len() as u32;
-        let size = wgpu::Extent3d {
-            width: texture.width,
-            height: texture.height,
-            depth_or_array_layers: 1,
         };
-        let gpu_texture = self.memory.create_material_texture(
-            device,
-            &wgpu::TextureDescriptor {
-                label: Some(self.label),
-                size,
-                mip_level_count: texture.levels.len() as u32,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: texture.format,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-        );
-        for (level, bytes) in texture.levels.iter().enumerate() {
-            staging.write_texture(&gpu_texture, level as u32, bytes);
+        if placement.slice == 0 {
+            let array = self.memory.create_material_texture(
+                device,
+                &wgpu::TextureDescriptor {
+                    label: Some(self.label),
+                    size: wgpu::Extent3d {
+                        width: texture.width,
+                        height: texture.height,
+                        depth_or_array_layers: self.table.slices(placement.class),
+                    },
+                    mip_level_count: texture.levels.len() as u32,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: texture.format,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                },
+            );
+            // An array of one slice would otherwise get a 2D view.
+            self.views
+                .push(array.create_view(&wgpu::TextureViewDescriptor {
+                    dimension: Some(wgpu::TextureViewDimension::D2Array),
+                    ..Default::default()
+                }));
+            self.textures.push(array);
         }
-        self.views
-            .push(gpu_texture.create_view(&Default::default()));
-        self.textures.push(gpu_texture);
-        Some(layer)
+        let array = &self.textures[placement.class as usize];
+        for (level, bytes) in texture.levels.iter().enumerate() {
+            staging.write_texture(array, level as u32, placement.slice, bytes);
+        }
+        Some(placement.layer())
     }
 }
 
 /// Material-as-ID: one SSBO of `MaterialData` indexed by `MaterialHandle`, plus
-/// one texture binding array per Channel. A single bind group serves every
-/// material; the fragment shader looks up the Material ID its Meshlet record
-/// carries, the Instance's override or else the Meshlet's own, and samples
-/// each Channel's array at the Layer stored in `layers`.
+/// one binding array of Texture classes per Channel. A single bind group
+/// serves every material; the fragment shader looks up the Material ID its
+/// Meshlet record carries, the Instance's override or else the Meshlet's own,
+/// and samples each Channel at the class and slice of the Layer stored in
+/// `layers`.
 pub struct MaterialPool {
     generations: Generations,
     /// Each Material's data, at its Handle's index; a freed one's stays
@@ -165,7 +269,7 @@ pub struct MaterialPool {
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
-    /// Set when a load adds a Texture the bind group lacks.
+    /// Set when a load opens a Texture class the bind group lacks.
     bind_group_is_stale: bool,
 }
 
@@ -362,8 +466,8 @@ impl MaterialPool {
     }
 
     /// Loads the Texture `id` from `cache` into `channel` once per Asset ID,
-    /// written through `staging`, and returns its Layer: the next free one,
-    /// or Layer 0 when the Channel is full.
+    /// written through `staging`, and returns its Layer: the next free slice
+    /// of its shape's Texture class, or Layer 0 when the Channel is full.
     pub fn load_texture(
         &mut self,
         device: &wgpu::Device,
@@ -376,17 +480,18 @@ impl MaterialPool {
             return Ok(layer);
         }
         let texture = cache.texture(id)?;
-        let Some(layer) = self.channels[channel as usize].push(device, staging, &texture) else {
+        let channel_textures = &mut self.channels[channel as usize];
+        let classes = channel_textures.views.len();
+        let Some(layer) = channel_textures.push(device, staging, &texture) else {
             return Ok(Self::DEFAULT_LAYER);
         };
+        self.bind_group_is_stale |= channel_textures.views.len() != classes;
         self.texture_layers.insert(id, layer);
-        self.bind_group_is_stale = true;
         Ok(layer)
     }
 
-    /// Rebuilds the bind group when loads since the last call added
-    /// Textures, so a scene's loads build it once: bind groups are
-    /// snapshots.
+    /// Rebuilds the bind group when loads since the last call opened Texture
+    /// classes, so a scene's loads build it once: bind groups are snapshots.
     pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
         if std::mem::take(&mut self.bind_group_is_stale) {
             let started = Instant::now();
@@ -398,9 +503,9 @@ impl MaterialPool {
                 &self.colour_sampler,
                 &self.data_sampler,
             );
-            // ADR 0017's gate: the build's cost at the bound Textures' count.
+            // ADR 0017's gate: the build's cost at the bound arrays' count.
             tracing::info!(
-                textures = self
+                texture_classes = self
                     .channels
                     .iter()
                     .map(|channel| channel.views.len())
@@ -429,8 +534,8 @@ fn trilinear_sampler(device: &wgpu::Device, label: &str, anisotropy: u16) -> wgp
 }
 
 /// The material bind group (`MATERIALS`): the SSBO, each Channel's
-/// Textures, and the colour and data Channels' samplers. Bind groups are
-/// snapshots, so a new Texture needs a new one.
+/// Texture classes, and the colour and data Channels' samplers. Bind groups
+/// are snapshots, so a new Texture class needs a new one.
 fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
@@ -467,6 +572,63 @@ mod tests {
     use crate::cooked::CookedMaterial;
     use crate::gpu::GpuContext;
     use crate::stats::gpu_memory::tests::gpu_memory;
+
+    /// A shape's first class has one slice and each later one twice the one
+    /// before's, up to `SLICES_PER_CLASS`; another shape opens classes of its
+    /// own between them; and a Channel holding `CLASSES_PER_CHANNEL` classes
+    /// refuses a Texture only when its shape's newest class is full.
+    #[test]
+    fn a_shapes_classes_double_to_the_floors_slices_and_a_full_channel_refuses() {
+        let shape = |width| TextureShape {
+            width,
+            height: 4,
+            mip_level_count: 3,
+            format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+        };
+        let (wall, other) = (shape(4), shape(8));
+        let mut table = ClassTable::default();
+        let shapes = std::iter::repeat_n(wall, 7).chain([other, wall]);
+        let placed: Vec<(u32, u32)> = shapes
+            .map(|shape| table.place(shape).unwrap())
+            .map(|placement| (placement.class, placement.slice))
+            .collect();
+        assert_eq!(
+            placed,
+            [
+                (0, 0),
+                (1, 0),
+                (1, 1),
+                (2, 0),
+                (2, 1),
+                (2, 2),
+                (2, 3),
+                (3, 0),
+                (4, 0)
+            ]
+        );
+        assert_eq!(table.slices(4), 8);
+        for _ in 0..2000 {
+            table.place(wall).unwrap();
+        }
+        let wall_slices: Vec<u32> = table
+            .classes
+            .iter()
+            .filter(|class| class.shape == wall)
+            .map(|class| class.slices)
+            .collect();
+        assert_eq!(wall_slices[..10], [1, 2, 4, 8, 16, 32, 64, 128, 256, 256]);
+        assert!(wall_slices.iter().all(|&slices| slices <= SLICES_PER_CLASS));
+
+        let mut width = 16;
+        while table.classes.len() < CLASSES_PER_CHANNEL as usize {
+            table.place(shape(width)).unwrap();
+            width += 4;
+        }
+        assert_eq!(table.place(shape(width)), None);
+        assert_eq!(table.place(other), None);
+        assert!(table.place(wall).is_some());
+        assert!(table.place(shape(16)).is_none());
+    }
 
     /// Two Materials sampling one Texture load it once, and a Material
     /// without that Channel samples Layer 0; each carries its normal scale.
@@ -527,7 +689,14 @@ mod tests {
             })
             .collect();
         assert_eq!(texture_bytes() - neutral_bytes, 3 * 8);
-        assert_eq!(occlusion_layers, [1, 1, MaterialPool::DEFAULT_LAYER]);
+        assert_eq!(
+            occlusion_layers,
+            [
+                SLICES_PER_CLASS,
+                SLICES_PER_CLASS,
+                MaterialPool::DEFAULT_LAYER
+            ]
+        );
         assert!(
             pool.materials
                 .iter()

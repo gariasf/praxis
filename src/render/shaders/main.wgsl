@@ -170,12 +170,33 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
 @fragment
 fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
-    let albedo = textureSample(albedo_textures[material.layers.x], colour_sampler, in.uv);
-    let metallic_roughness =
-        textureSample(metallic_roughness_textures[material.layers.z], data_sampler, in.uv).rg;
-    let occlusion = textureSample(occlusion_textures[material.layers.w], data_sampler, in.uv).r;
-    let emissive = textureSample(emissive_textures[material.extra.x], colour_sampler, in.uv).rgb;
-    let normal_sample = textureSample(normal_textures[material.layers.y], data_sampler, in.uv).rg;
+    let albedo_layer = layer_class_and_slice(material.layers.x);
+    let normal_layer = layer_class_and_slice(material.layers.y);
+    let metallic_roughness_layer = layer_class_and_slice(material.layers.z);
+    let occlusion_layer = layer_class_and_slice(material.layers.w);
+    let emissive_layer = layer_class_and_slice(material.extra.x);
+    let albedo =
+        textureSample(albedo_textures[albedo_layer.x], colour_sampler, in.uv, albedo_layer.y);
+    let metallic_roughness = textureSample(
+        metallic_roughness_textures[metallic_roughness_layer.x],
+        data_sampler,
+        in.uv,
+        metallic_roughness_layer.y,
+    ).rg;
+    let occlusion = textureSample(
+        occlusion_textures[occlusion_layer.x],
+        data_sampler,
+        in.uv,
+        occlusion_layer.y,
+    ).r;
+    let emissive = textureSample(
+        emissive_textures[emissive_layer.x],
+        colour_sampler,
+        in.uv,
+        emissive_layer.y,
+    ).rgb;
+    let normal_sample =
+        textureSample(normal_textures[normal_layer.x], data_sampler, in.uv, normal_layer.y).rg;
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
     // re-orthogonalise it (Gram-Schmidt) before rebuilding the bitangent with

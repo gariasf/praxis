@@ -123,16 +123,18 @@ impl GpuMemory {
         }
     }
 
-    /// A Material Texture, its Resident tail's mips counted apart from the
-    /// others.
+    /// A Texture class's array of Material Textures, every slice counted
+    /// whether it holds one or not, each slice's Resident tail mips counted
+    /// apart from the others.
     pub fn create_material_texture(
         &self,
         device: &wgpu::Device,
         descriptor: &wgpu::TextureDescriptor<'_>,
     ) -> Counted<wgpu::Texture> {
         let texture = device.create_texture(descriptor);
+        let slices = u64::from(texture.depth_or_array_layers());
         let tail_bytes: u64 = level_bytes(&texture)
-            .filter(|&bytes| bytes <= RESIDENT_TAIL_LEVEL_BYTES)
+            .filter(|&bytes| bytes / slices <= RESIDENT_TAIL_LEVEL_BYTES)
             .sum();
         let pool_bytes = level_bytes(&texture).sum::<u64>() - tail_bytes;
         let mut charge = self.charge(GpuMemoryKind::TexturePool, pool_bytes);
@@ -287,7 +289,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_material_textures_mips_of_64_kib_and_smaller_count_as_its_resident_tail() {
+    fn each_slices_mips_of_64_kib_and_smaller_count_as_its_resident_tail() {
         let Some(context) = gpu_context() else {
             return;
         };
@@ -299,7 +301,7 @@ pub(crate) mod tests {
                 size: wgpu::Extent3d {
                     width: 512,
                     height: 512,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: 3,
                 },
                 mip_level_count: 10,
                 sample_count: 1,
@@ -309,12 +311,12 @@ pub(crate) mod tests {
                 view_formats: &[],
             },
         );
-        // RGBA8 mips from 512 × 512: 1 MiB and 256 KiB, then 128 × 128 at
-        // 64 KiB down to 1 × 1.
+        // Three slices of RGBA8 mips from 512 × 512: 1 MiB and 256 KiB, then
+        // 128 × 128 at 64 KiB down to 1 × 1.
         let mut expected = [0; GpuMemoryKind::COUNT];
-        expected[GpuMemoryKind::TexturePool as usize] = 1_048_576 + 262_144;
+        expected[GpuMemoryKind::TexturePool as usize] = 3 * (1_048_576 + 262_144);
         expected[GpuMemoryKind::ResidentTails as usize] =
-            65_536 + 16_384 + 4_096 + 1_024 + 256 + 64 + 16 + 4;
+            3 * (65_536 + 16_384 + 4_096 + 1_024 + 256 + 64 + 16 + 4);
         assert_eq!(memory.bytes_by_kind(), expected);
         drop(texture);
         assert_eq!(memory.bytes_by_kind(), [0; GpuMemoryKind::COUNT]);

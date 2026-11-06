@@ -5,6 +5,7 @@
 //! `render::bind_groups`). A function under an oracle lives in a shared
 //! part, which the oracle harness assembles with its kernel alone.
 
+use crate::assets::material::SLICES_PER_CLASS;
 use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 #[cfg(any(test, target_vendor = "apple"))]
@@ -56,8 +57,8 @@ macro_rules! part {
 
 /// The structs more than one pass reads, the Anchor composition, the
 /// position a depth places at a pixel, the ray and box test, the point
-/// light's position, the packed index, the vertex decode and the octahedral
-/// codec.
+/// light's position, the packed index, the vertex decode, the octahedral
+/// codec and the Layer decode.
 const COMMON: Part = part!("common.wgsl");
 
 /// The shading terms.
@@ -88,7 +89,7 @@ pub struct ShaderModule {
 /// The main pass.
 pub const MAIN: ShaderModule = ShaderModule {
     name: "main",
-    // Each Channel is a binding array indexed by Layer (ADR 0017).
+    // Each Channel is a binding array of Texture classes (ADR 0017).
     enables: &["wgpu_binding_array"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
@@ -261,7 +262,8 @@ impl ShaderModule {
              const SHADOW_MASK_LIGHTS: u32 = {SHADOW_MASK_LIGHTS}u;\n\
              const SHADOW_EDGE_LIGHTS: u32 = {SHADOW_EDGE_LIGHTS}u;\n\
              const SAMPLE_COUNT: u32 = {SAMPLE_COUNT}u;\n\
-             const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n",
+             const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n\
+             const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],
