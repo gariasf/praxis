@@ -17,6 +17,8 @@ use super::{ReferenceScene, Spin};
 use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
 use crate::camera::Camera;
 use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+#[cfg(feature = "cook")]
+use crate::cooked::{CookedLight, CookedPlacement};
 use crate::render::DYNAMIC_TLAS_CAPACITY;
 use crate::transform::PreviousWorldTransform;
 
@@ -367,6 +369,36 @@ fn placements() -> (Vec<TownRenderable>, Vec<glam::DVec3>) {
     }
     place_poles_and_wires(&mut placed);
     (placed, lights)
+}
+
+/// The town's static content as its Chunks cook it: every Instance
+/// `placements` places, and its lamps' lights.
+#[cfg(feature = "cook")]
+pub(crate) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+    let scene = ReferenceScene::Town;
+    let (placed, lights) = placements();
+    let placements = placed
+        .into_iter()
+        .map(|renderable| CookedPlacement {
+            mesh: scene.mesh_id(renderable.mesh.name()),
+            material: renderable
+                .material
+                .map(|material| scene.material_id(material.name())),
+            translation: renderable.transform.translation,
+            rotation: renderable.transform.rotation,
+            scale: renderable.transform.scale,
+        })
+        .collect();
+    let lights = lights
+        .into_iter()
+        .map(|translation| CookedLight {
+            translation,
+            color: LAMP_LIGHT.color,
+            intensity: LAMP_LIGHT.intensity,
+            range: LAMP_LIGHT.range,
+        })
+        .collect();
+    (placements, lights)
 }
 
 /// One block of the grid, `column` along X and `row` along Z.

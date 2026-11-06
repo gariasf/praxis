@@ -2,12 +2,13 @@
 //! Reference scene into Blobs in the Cooked cache, cooking only the Assets
 //! whose Cook key changed.
 
+mod chunk;
 mod export;
 mod fetch;
 pub(crate) mod mesh;
 mod texture;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Context;
@@ -21,7 +22,7 @@ pub use texture::{LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
 use crate::cooked::{
-    AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedMaterial,
+    AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedChunk, CookedMaterial,
     MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MaterialChannel, TEXTURE_FORMAT_VERSION, hex,
 };
 use crate::render::CrowdForm;
@@ -65,6 +66,9 @@ pub enum Referrer {
     Mesh(AssetId),
     /// A Reference scene, of the Assets its spawn loads.
     Scene(ReferenceScene),
+    /// A Reference scene's Chunk at its coordinates, x then z, of the Meshes
+    /// and Materials its Placements name.
+    Chunk(ReferenceScene, [i32; 2]),
 }
 
 impl std::fmt::Display for Referrer {
@@ -73,6 +77,13 @@ impl std::fmt::Display for Referrer {
             Self::Material(id) => write!(formatter, "Material {id}"),
             Self::Mesh(id) => write!(formatter, "Mesh {id}"),
             Self::Scene(scene) => write!(formatter, "Reference scene {}", scene.name()),
+            Self::Chunk(scene, [x, z]) => {
+                write!(
+                    formatter,
+                    "Chunk ({x}, {z}) of Reference scene {}",
+                    scene.name()
+                )
+            }
         }
     }
 }
@@ -114,7 +125,7 @@ fn read_manifest(assets: &Path, may_be_absent: bool) -> anyhow::Result<Vec<Manif
     }
 }
 
-/// Every Material, Texture and Mesh the sources define.
+/// Every Material, Texture, Mesh and Chunk the sources define.
 #[derive(Default)]
 struct Sources {
     /// Each Material with its Cook key.
@@ -122,6 +133,8 @@ struct Sources {
     textures: Vec<TextureSource>,
     /// Each Mesh with its name, its Cook key and its Primitives.
     meshes: Vec<(AssetId, String, String, Vec<mesh::SourcePrimitive>)>,
+    /// Each Chunk with what names it in a warning and its Cook key.
+    chunks: Vec<(AssetId, Referrer, String, CookedChunk)>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
     /// as the source, or an image it names, is absent.
@@ -212,6 +225,14 @@ fn cook_sources(
             report.cooked.push(*id);
         }
     }
+    for (id, _, cook_key, chunk) in &sources.chunks {
+        if is_fresh(cache, *id, cook_key) {
+            report.unchanged.push(*id);
+        } else {
+            cache.write(*id, cook_key, &chunk.to_blob()?)?;
+            report.cooked.push(*id);
+        }
+    }
     let mut stale = Vec::new();
     for texture in &sources.textures {
         let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);
@@ -250,8 +271,14 @@ fn cook_sources(
         let materials = primitives.iter().filter_map(|(_, material)| *material);
         materials.map(|material| (Referrer::Mesh(*id), material))
     });
+    let placement_references = sources.chunks.iter().flat_map(|(_, referrer, _, chunk)| {
+        let placements = chunk.placements.iter();
+        let named = placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
+        named.flatten().map(|id| (*referrer, id))
+    });
     let references: Vec<_> = texture_references
         .chain(material_references)
+        .chain(placement_references)
         .chain(scene_references.iter().copied())
         .collect();
     let made: HashSet<_> = report
@@ -265,7 +292,7 @@ fn cook_sources(
     // cook did not read may be kept; a scene's references, only while one of
     // its own sources is.
     let may_be_kept = |(referrer, id): &(Referrer, AssetId)| match referrer {
-        Referrer::Scene(scene) => scene
+        Referrer::Scene(scene) | Referrer::Chunk(scene, _) => scene
             .source_files()
             .iter()
             .any(|guid| sources.kept_sources.contains(guid)),
@@ -386,6 +413,20 @@ fn read_sources(
             let name = format!("{} {name}", scene.name());
             let cook_key = mesh::cook_key(&primitives);
             sources.meshes.push((id, name, cook_key, primitives));
+        }
+    }
+    let mesh_bounds: HashMap<_, _> = sources
+        .meshes
+        .iter()
+        .map(|(id, _, _, primitives)| (*id, mesh::source_bounds(primitives)))
+        .collect();
+    for &scene in scenes {
+        let (placements, lights) = scene.static_content();
+        for (coordinates, chunk) in chunk::chunks(placements, lights, &mesh_bounds) {
+            let id = scene.chunk_id(coordinates);
+            let cook_key = chunk::cook_key(&chunk);
+            let referrer = Referrer::Chunk(scene, coordinates);
+            sources.chunks.push((id, referrer, cook_key, chunk));
         }
     }
     Ok(sources)
@@ -614,6 +655,61 @@ mod tests {
         assert_eq!(
             dangling_references(&cache, &made_ids, &references, only_the_mesh_kept),
             [references[0], references[3]]
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// A Placement and a Material naming Asset IDs that only the stale
+    /// Cooked cache still holds warn, each naming its referrer and the ID.
+    #[test]
+    fn a_placement_or_material_naming_a_removed_asset_dangles() {
+        let directory =
+            std::env::temp_dir().join(format!("praxis-removed-assets-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let (removed_mesh, removed_material, removed_texture) =
+            (AssetId(1), AssetId(2), AssetId(3));
+        for removed in [removed_mesh, removed_material, removed_texture] {
+            cache.write(removed, "cook key", b"stale Blob").unwrap();
+        }
+        let material_id = AssetId(10);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [Some(removed_texture), None, None, None, None],
+        };
+        let placement = crate::cooked::CookedPlacement {
+            mesh: removed_mesh,
+            material: Some(removed_material),
+            translation: glam::DVec3::ZERO,
+            rotation: glam::Quat::IDENTITY,
+            scale: glam::Vec3::ONE,
+        };
+        let chunk = CookedChunk {
+            placements: vec![placement],
+            lights: Vec::new(),
+            bounds: [glam::DVec3::ZERO; 2],
+        };
+        let chunk_referrer = Referrer::Chunk(ReferenceScene::Town, [-2, 1]);
+        let sources = Sources {
+            materials: vec![(material_id, "material cook key".into(), material)],
+            chunks: vec![(AssetId(20), chunk_referrer, "chunk cook key".into(), chunk)],
+            ..Sources::default()
+        };
+        let report = cook_sources(&sources, &[], &cache, &CookSettings::default()).unwrap();
+        assert_eq!(
+            report.dangling_references,
+            [
+                (Referrer::Material(material_id), removed_texture),
+                (chunk_referrer, removed_mesh),
+                (chunk_referrer, removed_material),
+            ]
+        );
+        assert_eq!(
+            chunk_referrer.to_string(),
+            "Chunk (-2, 1) of Reference scene town"
         );
         std::fs::remove_dir_all(directory).unwrap();
     }

@@ -131,6 +131,24 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
     Ok(mesh)
 }
 
+/// The box that holds every source vertex of `primitives` and every box
+/// their geometry adds, which holds the cooked Mesh's bounds.
+pub(super) fn source_bounds(primitives: &[SourcePrimitive]) -> [Vec3; 2] {
+    let positions = primitives
+        .iter()
+        .flat_map(|(geometry, _)| &geometry.positions)
+        .map(|position| Vec3::from(*position));
+    let added = primitives
+        .iter()
+        .filter_map(|(geometry, _)| geometry.bounds)
+        .flat_map(|[lowest, highest]| [Vec3::from(lowest), Vec3::from(highest)]);
+    let corners = positions.chain(added);
+    [
+        corners.clone().fold(Vec3::INFINITY, Vec3::min),
+        corners.fold(Vec3::NEG_INFINITY, Vec3::max),
+    ]
+}
+
 /// One Primitive's vertices and indices, welded, re-split and ordered for
 /// vertex cache and overdraw.
 fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {

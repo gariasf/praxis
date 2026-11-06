@@ -45,6 +45,12 @@ pub(crate) const MESHLET_MAX_TRIANGLES: usize = 124;
 /// The smallest QTangent w, one Snorm16 step, so the w that carries the
 /// bitangent sign never rounds to zero.
 pub(crate) const QTANGENT_SMALLEST_W: f32 = 1.0 / i16::MAX as f32;
+/// Starts every Chunk Blob, followed by `CHUNK_FORMAT_VERSION`.
+pub(crate) const CHUNK_MAGIC: [u8; 4] = *b"PXCH";
+/// As `MATERIAL_FORMAT_VERSION`, for Chunk Blobs.
+pub(crate) const CHUNK_FORMAT_VERSION: u32 = 1;
+/// A Chunk's edge (ADR 0018): 4 × 4 of ADR 0014's 64 m cells.
+pub const CHUNK_EDGE_METRES: f64 = 256.0;
 
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
@@ -53,6 +59,7 @@ pub enum AssetKind {
     Mesh,
     Material,
     Texture(MaterialChannel),
+    Chunk,
 }
 
 /// Where an Asset comes from.
@@ -96,6 +103,7 @@ impl AssetId {
             AssetKind::Mesh => hasher.update([0]),
             AssetKind::Material => hasher.update([1]),
             AssetKind::Texture(_) => hasher.update([2]),
+            AssetKind::Chunk => hasher.update([3]),
         }
         match name {
             AssetName::Name(name) => {
@@ -635,6 +643,197 @@ impl CookedMesh {
     }
 }
 
+/// One Mesh Asset placed in a Chunk: an f64 translation from the Chunk's
+/// origin, and f32 rotation and scale (ADR 0018).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CookedPlacement {
+    pub mesh: AssetId,
+    /// The Material that overrides every Primitive's, if any.
+    pub material: Option<AssetId>,
+    pub translation: glam::DVec3,
+    pub rotation: glam::Quat,
+    pub scale: glam::Vec3,
+}
+
+/// A point light in a Chunk: an f64 translation from the Chunk's origin,
+/// and its colour, intensity in candela and range in metres (ADR 0023).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CookedLight {
+    pub translation: glam::DVec3,
+    pub color: glam::Vec3,
+    pub intensity: f32,
+    pub range: f32,
+}
+
+/// A Chunk Asset: the Placements and point lights whose pivots it holds,
+/// and the box that holds its Placements' Meshes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedChunk {
+    pub placements: Vec<CookedPlacement>,
+    pub lights: Vec<CookedLight>,
+    /// From the Chunk's origin, its lowest corner, then its highest; lowest
+    /// above highest when it holds no Placement.
+    pub bounds: [glam::DVec3; 2],
+}
+
+impl CookedChunk {
+    const HEADER_BYTES: usize = 2 * 4 + 6 * 8;
+    const PLACEMENT_BYTES: usize = 2 * 16 + 3 * 8 + 7 * 4;
+    const LIGHT_BYTES: usize = 3 * 8 + 5 * 4;
+
+    /// The zstd level the cooker compresses at; part of the Cook key.
+    #[cfg(feature = "cook")]
+    pub(crate) const ZSTD_LEVEL: i32 = 9;
+
+    /// The Placement and light counts as u32s and the bounds as six f64s,
+    /// then the Placements a field at a time: Mesh Asset IDs, Material Asset
+    /// IDs (zero for none), translations' x, y and z as f64s, rotations' x,
+    /// y, z and w and scales' x, y and z as f32s; then the lights a field at
+    /// a time: translations' x, y and z as f64s, colours' red, green and
+    /// blue, intensities and ranges as f32s. Numbers are little-endian and
+    /// Asset IDs big-endian, as in a Material Blob.
+    #[cfg(feature = "cook")]
+    pub(crate) fn payload(&self) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(
+            Self::HEADER_BYTES
+                + self.placements.len() * Self::PLACEMENT_BYTES
+                + self.lights.len() * Self::LIGHT_BYTES,
+        );
+        for count in [self.placements.len(), self.lights.len()] {
+            payload.extend((count as u32).to_le_bytes());
+        }
+        for coordinate in self.bounds.iter().flat_map(|corner| corner.to_array()) {
+            payload.extend(coordinate.to_le_bytes());
+        }
+        let placements = &self.placements;
+        for placement in placements {
+            payload.extend(placement.mesh.0.to_be_bytes());
+        }
+        for placement in placements {
+            payload.extend(placement.material.map_or(0, |id| id.0).to_be_bytes());
+        }
+        for axis in 0..3 {
+            for placement in placements {
+                payload.extend(placement.translation[axis].to_le_bytes());
+            }
+        }
+        for component in 0..4 {
+            for placement in placements {
+                payload.extend(placement.rotation.to_array()[component].to_le_bytes());
+            }
+        }
+        for axis in 0..3 {
+            for placement in placements {
+                payload.extend(placement.scale[axis].to_le_bytes());
+            }
+        }
+        for axis in 0..3 {
+            for light in &self.lights {
+                payload.extend(light.translation[axis].to_le_bytes());
+            }
+        }
+        for value in 0..5 {
+            for light in &self.lights {
+                let [red, green, blue] = light.color.to_array();
+                let values = [red, green, blue, light.intensity, light.range];
+                payload.extend(values[value].to_le_bytes());
+            }
+        }
+        payload
+    }
+
+    /// The magic, the format version, then `payload` as one zstd frame.
+    #[cfg(feature = "cook")]
+    pub(crate) fn to_blob(&self) -> anyhow::Result<Vec<u8>> {
+        let mut blob = Vec::from(CHUNK_MAGIC);
+        blob.extend(CHUNK_FORMAT_VERSION.to_le_bytes());
+        blob.extend(zstd::bulk::compress(&self.payload(), Self::ZSTD_LEVEL)?);
+        Ok(blob)
+    }
+
+    pub fn from_blob(blob: &[u8]) -> anyhow::Result<Self> {
+        let payload = zstd::decode_all(payload(blob, CHUNK_MAGIC, CHUNK_FORMAT_VERSION)?)?;
+        let (header, mut rest) = payload
+            .split_at_checked(Self::HEADER_BYTES)
+            .context("Chunk Blob is truncated")?;
+        let (counts, bounds) = header.split_at(2 * 4);
+        let [placement_count, light_count] = little_endian_u32s(counts).map(|count| count as usize);
+        anyhow::ensure!(
+            rest.len() == placement_count * Self::PLACEMENT_BYTES + light_count * Self::LIGHT_BYTES,
+            "Chunk Blob's {} bytes after its header do not hold its {placement_count} Placements and {light_count} lights",
+            rest.len()
+        );
+        let bounds = little_endian_f64s(bounds);
+        let mut column = |value_bytes: usize, count: usize| {
+            let (column, after) = rest.split_at(value_bytes * count);
+            rest = after;
+            column
+        };
+        let asset_ids = |column: &[u8]| -> Vec<u128> {
+            let (ids, _) = column.as_chunks::<16>();
+            ids.iter().map(|id| u128::from_be_bytes(*id)).collect()
+        };
+        let meshes = asset_ids(column(16, placement_count));
+        let materials = asset_ids(column(16, placement_count));
+        let translations: [_; 3] =
+            std::array::from_fn(|_| little_endian_f64s(column(8, placement_count)));
+        let rotations: [_; 4] =
+            std::array::from_fn(|_| little_endian_f32s(column(4, placement_count)));
+        let scales: [_; 3] =
+            std::array::from_fn(|_| little_endian_f32s(column(4, placement_count)));
+        let placements = (0..placement_count)
+            .map(|index| CookedPlacement {
+                mesh: AssetId(meshes[index]),
+                material: (materials[index] != 0).then_some(AssetId(materials[index])),
+                translation: glam::DVec3::from_array(
+                    translations.each_ref().map(|axis| axis[index]),
+                ),
+                rotation: glam::Quat::from_array(
+                    rotations.each_ref().map(|component| component[index]),
+                ),
+                scale: glam::Vec3::from_array(scales.each_ref().map(|axis| axis[index])),
+            })
+            .collect();
+        let light_translations: [_; 3] =
+            std::array::from_fn(|_| little_endian_f64s(column(8, light_count)));
+        let [red, green, blue, intensities, ranges]: [_; 5] =
+            std::array::from_fn(|_| little_endian_f32s(column(4, light_count)));
+        let lights = (0..light_count)
+            .map(|index| CookedLight {
+                translation: glam::DVec3::from_array(
+                    light_translations.each_ref().map(|axis| axis[index]),
+                ),
+                color: glam::Vec3::new(red[index], green[index], blue[index]),
+                intensity: intensities[index],
+                range: ranges[index],
+            })
+            .collect();
+        Ok(Self {
+            placements,
+            lights,
+            bounds: [
+                glam::DVec3::from_slice(&bounds[..3]),
+                glam::DVec3::from_slice(&bounds[3..]),
+            ],
+        })
+    }
+}
+
+fn little_endian_u32s<const COUNT: usize>(bytes: &[u8]) -> [u32; COUNT] {
+    let (words, _) = bytes.as_chunks::<4>();
+    std::array::from_fn(|index| u32::from_le_bytes(words[index]))
+}
+
+fn little_endian_f32s(bytes: &[u8]) -> Vec<f32> {
+    let (words, _) = bytes.as_chunks::<4>();
+    words.iter().map(|word| f32::from_le_bytes(*word)).collect()
+}
+
+fn little_endian_f64s(bytes: &[u8]) -> Vec<f64> {
+    let (words, _) = bytes.as_chunks::<8>();
+    words.iter().map(|word| f64::from_le_bytes(*word)).collect()
+}
+
 /// The first `length` bytes of `rest`, which then starts after them.
 fn take<'a>(rest: &mut &'a [u8], length: usize) -> anyhow::Result<&'a [u8]> {
     let (taken, after) = rest
@@ -752,6 +951,10 @@ impl CookedCache {
 
     pub fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh> {
         CookedMesh::from_blob(&self.read(id)?).with_context(|| format!("reading Mesh {id}"))
+    }
+
+    pub fn chunk(&self, id: AssetId) -> anyhow::Result<CookedChunk> {
+        CookedChunk::from_blob(&self.read(id)?).with_context(|| format!("reading Chunk {id}"))
     }
 
     /// Stores `blob` under its hash and points `id` at it with `cook_key`.
@@ -942,6 +1145,56 @@ mod tests {
         blob[4..8].copy_from_slice(&1u32.to_le_bytes());
         let error = CookedMesh::from_blob(&blob).unwrap_err().to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+    }
+
+    /// A Chunk round-trips field by field, a Placement without a Material
+    /// and with one; another version, and a count its bytes do not hold,
+    /// are refused.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn chunk_blob_round_trips_and_refuses_another_version_or_a_wrong_count() {
+        let placement = CookedPlacement {
+            mesh: AssetId(1 << 100 | 2),
+            material: None,
+            translation: glam::dvec3(0.5, 1024.25, 255.875),
+            rotation: glam::Quat::from_rotation_y(0.3),
+            scale: glam::vec3(1.0, 2.0, 3.0),
+        };
+        let chunk = CookedChunk {
+            placements: vec![
+                placement,
+                CookedPlacement {
+                    material: Some(AssetId(u128::MAX)),
+                    translation: glam::dvec3(7.0, -1.5, 0.0),
+                    ..placement
+                },
+            ],
+            lights: vec![CookedLight {
+                translation: glam::dvec3(3.0, 4.7, 9.5),
+                color: glam::vec3(1.0, 0.85, 0.65),
+                intensity: 2.5e5,
+                range: 18.0,
+            }],
+            bounds: [glam::dvec3(-1.0, -2.0, -3.0), glam::dvec3(4.0, 5.0, 6.0)],
+        };
+        let blob = chunk.to_blob().unwrap();
+        assert_eq!(CookedChunk::from_blob(&blob).unwrap(), chunk);
+
+        let mut another_version = blob.clone();
+        another_version[4..8].copy_from_slice(&(CHUNK_FORMAT_VERSION + 1).to_le_bytes());
+        let error = CookedChunk::from_blob(&another_version)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("re-cook with `praxis cook`"), "{error}");
+
+        let mut payload = chunk.payload();
+        payload[..4].copy_from_slice(&3u32.to_le_bytes());
+        let mut wrong_count = blob[..8].to_vec();
+        wrong_count.extend(zstd::bulk::compress(&payload, 1).unwrap());
+        let error = CookedChunk::from_blob(&wrong_count)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("3 Placements and 1 lights"), "{error}");
     }
 
     #[cfg(feature = "cook")]

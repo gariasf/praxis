@@ -9,9 +9,9 @@ use crate::camera::{Camera, ev100_for_exposure};
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
-#[cfg(feature = "cook")]
-use crate::cooked::CookedMaterial;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
+#[cfg(feature = "cook")]
+use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
@@ -312,6 +312,33 @@ impl ReferenceScene {
                 ]
             }
             Self::Town => town::meshes(),
+        }
+    }
+
+    /// The Asset ID of the scene's Chunk at integer `coordinates`, x then z.
+    #[cfg(feature = "cook")]
+    pub(crate) fn chunk_id(self, [x, z]: [i32; 2]) -> AssetId {
+        let source = AssetSource::Scene(self.name());
+        let name = format!("{x} {z}");
+        AssetId::new(source, AssetKind::Chunk, AssetName::Name(&name))
+    }
+
+    /// What the scene's Chunks cook from: the Renderables that do not move
+    /// and the point lights, each translated from the World's origin.
+    #[cfg(feature = "cook")]
+    pub(crate) fn static_content(self) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+        match self {
+            Self::Town => town::static_content(),
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall
+            | Self::Shadows
+            | Self::Crowd => (Vec::new(), Vec::new()),
         }
     }
 

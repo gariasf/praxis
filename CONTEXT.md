@@ -83,7 +83,7 @@ The store of Blobs plus the index from Asset ID to Blob. Disposable: it can alwa
 _Avoid_: Build output, derived data
 
 **Placement**:
-One Mesh Asset positioned inside a Chunk.
+One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh's, if any.
 _Avoid_: Spawn, instance (an Instance is a Renderable's data on the GPU)
 
 ### Frame
