@@ -68,9 +68,9 @@ pub struct MeshBlas {
 /// and a BLAS per Mesh that rays trace (ADR 0020).
 pub struct MeshPool {
     device: wgpu::Device,
-    generations: Generations,
-    /// Each loaded Mesh, at its Handle's index.
-    meshes: Vec<Option<LoadedMesh>>,
+    meshes: LoadedMeshes,
+    /// What freeing each loaded Mesh gives back, at its Handle's index.
+    allocations: Vec<Option<MeshAllocation>>,
     /// The Handle of each Mesh loaded by Asset ID for a shared use.
     asset_handles: HashMap<(AssetId, MeshUse), MeshHandle>,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
@@ -106,8 +106,8 @@ impl MeshPool {
         let u32_bytes = size_of::<u32>() as u64;
         Self {
             device: device.clone(),
-            generations: Generations::default(),
-            meshes: Vec::new(),
+            meshes: LoadedMeshes::default(),
+            allocations: Vec::new(),
             asset_handles: HashMap::new(),
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
@@ -238,7 +238,7 @@ impl MeshPool {
             meshlet_vertex_count,
             triangle_count,
         ];
-        if self.generations.full(MESH_CAPACITY) {
+        if self.meshes.full(MESH_CAPACITY) {
             tracing::error!(
                 capacity = MESH_CAPACITY,
                 "Mesh refused: the Mesh table is full"
@@ -271,8 +271,11 @@ impl MeshPool {
             );
             return None;
         };
-        let (index, generation) = self.generations.take();
-        let handle = MeshHandle { index, generation };
+        let handle = self.meshes.insert(Mesh {
+            needs_material_handle: mesh_use.drawn() && materials.contains(&None),
+            vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
+            bounds: mesh.bounds,
+        });
 
         // A Meshlet's vertices index the vertex Arena, and its triangles
         // follow the Mesh's earlier Meshlets' in the triangle Arena.
@@ -346,12 +349,7 @@ impl MeshPool {
         } else {
             0
         };
-        let loaded = LoadedMesh {
-            mesh: Mesh {
-                needs_material_handle: mesh_use.drawn() && materials.contains(&None),
-                vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
-                bounds: mesh.bounds,
-            },
+        let allocation = MeshAllocation {
             ranges: [
                 vertices,
                 indices,
@@ -362,12 +360,12 @@ impl MeshPool {
             blas_triangles,
             blas_compacted: false,
         };
-        let index = index as usize;
-        if index == self.meshes.len() {
-            self.meshes.push(Some(loaded));
+        let index = handle.index as usize;
+        if index == self.allocations.len() {
+            self.allocations.push(Some(allocation));
             self.blases.push(None);
         } else {
-            self.meshes[index] = Some(loaded);
+            self.allocations[index] = Some(allocation);
         }
         if !mesh_use.traced() {
             return Some(handle);
@@ -482,8 +480,8 @@ impl MeshPool {
                 continue;
             }
             *blas = queue.compact_blas(blas);
-            if let Some(loaded) = &mut self.meshes[handle.index as usize] {
-                loaded.blas_compacted = true;
+            if let Some(allocation) = &mut self.allocations[handle.index as usize] {
+                allocation.blas_compacted = true;
             }
             self.uncompacted_blas_triangles -= triangles;
             self.compacted_blas_triangles += triangles;
@@ -506,8 +504,7 @@ impl MeshPool {
     /// The Handle of the Mesh loaded at `index` of the Mesh table, which an
     /// Instance names, or None when none is.
     pub fn handle_at(&self, index: u32) -> Option<MeshHandle> {
-        let generation = self.generations.live_generation(index)?;
-        Some(MeshHandle { index, generation })
+        self.meshes.handle_at(index)
     }
 
     /// Frees `handle`'s Mesh: its ranges go back to their Arenas and its
@@ -527,24 +524,24 @@ impl MeshPool {
             tracing::warn!(?handle, "Mesh not freed: its BLAS is refitted");
             return;
         }
-        if !self.generations.free(handle.index, handle.generation) {
+        if !self.meshes.remove(handle) {
             tracing::warn!(?handle, "Mesh not freed: its Handle finds no Mesh");
             return;
         }
         let index = handle.index as usize;
-        let loaded = self.meshes[index]
+        let allocation = self.allocations[index]
             .take()
-            .expect("a live index holds a Mesh");
-        for (arena, range) in self.arenas_mut().into_iter().zip(loaded.ranges) {
+            .expect("a live index holds a Mesh's allocation");
+        for (arena, range) in self.arenas_mut().into_iter().zip(allocation.ranges) {
             arena.free(range);
         }
         if self.blases[index].take().is_some() {
             self.awaiting_compaction
                 .retain(|&(awaiting, _)| awaiting != handle);
-            if loaded.blas_compacted {
-                self.compacted_blas_triangles -= loaded.blas_triangles;
+            if allocation.blas_compacted {
+                self.compacted_blas_triangles -= allocation.blas_triangles;
             } else {
-                self.uncompacted_blas_triangles -= loaded.blas_triangles;
+                self.uncompacted_blas_triangles -= allocation.blas_triangles;
             }
             self.charge_blases();
         }
@@ -553,10 +550,9 @@ impl MeshPool {
         tracing::debug!(?handle, "Mesh freed");
     }
 
-    /// Meshes freed since the pool was made: once it moves, an Instance may
-    /// name an index whose Mesh is gone.
-    pub fn frees(&self) -> u64 {
-        self.generations.frees()
+    /// The loaded Meshes, as prepare reads them.
+    pub fn meshes(&self) -> &LoadedMeshes {
+        &self.meshes
     }
 
     pub fn vertex_arena(&self) -> &wgpu::Buffer {
@@ -621,18 +617,66 @@ impl MeshPool {
     }
 
     pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
-        if !self.generations.live(handle.index, handle.generation) {
-            return None;
-        }
-        let loaded = self.meshes[handle.index as usize].as_ref()?;
-        Some(&loaded.mesh)
+        self.meshes.get(handle)
     }
 }
 
-/// A loaded Mesh, and what freeing it gives back: its range of each Arena,
-/// in `MeshPool::arenas` order, and its BLAS's triangles, compacted or not.
-struct LoadedMesh {
-    mesh: Mesh,
+/// The Meshes a Mesh pool holds, each at its Handle's index, with what
+/// prepare reads of them; a Handle whose Mesh was freed finds none.
+#[derive(Default)]
+pub struct LoadedMeshes {
+    generations: Generations,
+    /// Each Mesh, at its Handle's index; a freed one's stays until a later
+    /// Mesh takes its index.
+    meshes: Vec<Mesh>,
+}
+
+impl LoadedMeshes {
+    pub fn get(&self, handle: MeshHandle) -> Option<&Mesh> {
+        self.generations
+            .live(handle.index, handle.generation)
+            .then(|| &self.meshes[handle.index as usize])
+    }
+
+    /// Meshes freed since the first insert: once it moves, an Instance may
+    /// name an index whose Mesh is gone.
+    pub fn frees(&self) -> u64 {
+        self.generations.frees()
+    }
+
+    /// Whether `capacity` Meshes are loaded, so `insert` must not be called.
+    pub(crate) fn full(&self, capacity: u32) -> bool {
+        self.generations.full(capacity)
+    }
+
+    /// Puts `mesh` at a free index, the last freed or else a fresh one, and
+    /// returns its Handle.
+    pub(crate) fn insert(&mut self, mesh: Mesh) -> MeshHandle {
+        let (index, generation) = self.generations.take();
+        if index as usize == self.meshes.len() {
+            self.meshes.push(mesh);
+        } else {
+            self.meshes[index as usize] = mesh;
+        }
+        MeshHandle { index, generation }
+    }
+
+    /// The Handle of the Mesh at `index`, or None when none is.
+    pub(crate) fn handle_at(&self, index: u32) -> Option<MeshHandle> {
+        let generation = self.generations.live_generation(index)?;
+        Some(MeshHandle { index, generation })
+    }
+
+    /// Frees `handle`'s index, so `handle` finds nothing again; false,
+    /// changing nothing, when it finds no Mesh.
+    pub(crate) fn remove(&mut self, handle: MeshHandle) -> bool {
+        self.generations.free(handle.index, handle.generation)
+    }
+}
+
+/// What freeing a loaded Mesh gives back: its range of each Arena, in
+/// `MeshPool::arenas` order, and its BLAS's triangles, compacted or not.
+struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
     blas_triangles: u64,
     blas_compacted: bool,
@@ -856,7 +900,7 @@ pub(crate) mod tests {
 
         assert_eq!(handles, [0, 0, 1, 1, 2, 3, 4, 5]);
         assert_eq!(other, 6);
-        assert_eq!(pool.meshes.len(), 7);
+        assert_eq!(pool.allocations.len(), 7);
     }
 
     /// A Mesh of two Primitives, loaded after another Mesh, reaches the
@@ -955,7 +999,7 @@ pub(crate) mod tests {
         let (_, log) = logged(|| pool.free(refitted));
         assert!(log.contains("its BLAS is refitted"), "not logged: {log:?}");
         assert!(pool.get(refitted).is_some());
-        assert_eq!(pool.frees(), 0);
+        assert_eq!(pool.meshes().frees(), 0);
         let arena_bytes_in_use = pool.arena_bytes_in_use();
         let blas_bytes = acceleration_structure_bytes();
         let freed = pool
@@ -976,10 +1020,10 @@ pub(crate) mod tests {
         assert!(pool.get(freed).is_none() && pool.blas(freed).is_none());
         assert_eq!(pool.handle_at(freed.index), None);
         assert_eq!(pool.handle(AssetId(1), MeshUse::DrawnAndTraced), None);
-        assert_eq!(pool.frees(), 1);
+        assert_eq!(pool.meshes().frees(), 1);
         let (_, log) = logged(|| pool.free(freed));
         assert!(log.contains("Mesh not freed"), "not logged: {log:?}");
-        assert_eq!(pool.frees(), 1);
+        assert_eq!(pool.meshes().frees(), 1);
 
         let mut bounds = [[0.0; 3], [1.0; 3]];
         let mut replacement = mesh(4, vec![0, 1, 2, 2, 1, 3]);

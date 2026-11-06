@@ -262,8 +262,8 @@ impl State {
         }
         let frame = self.preparer.prepare(
             &mut self.simulation.world,
-            &self.renderer.mesh_pool,
-            &self.renderer.material_pool,
+            self.renderer.mesh_pool.meshes(),
+            self.renderer.material_pool.generations(),
             self.renderer.aspect_ratio(),
         );
         self.recorder.stage("prepare_frame", started);
