@@ -180,7 +180,7 @@ impl ChunkStreamer {
         }
         frame.holding = (frame.holding || arrived) && !every_chunk_within_load_radius_loaded;
         self.requests
-            .sort_by(|left, right| left.0.total_cmp(&right.0).then(left.1.cmp(&right.1)));
+            .sort_unstable_by(|left, right| left.0.total_cmp(&right.0).then(left.1.cmp(&right.1)));
         for (_, coordinates) in self.requests.drain(..) {
             io.request(coordinates);
             self.in_flight.insert(coordinates, self.frame_number);

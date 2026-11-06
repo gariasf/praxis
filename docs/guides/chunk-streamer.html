@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>The Chunk Streamer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; Chunks &middot; <code>src/streaming/mod.rs</code></div>
+  <h1>The Chunk streamer</h1>
+  <p class="definition">The module that decides, each frame, which <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk's edge.">Chunks</span> of a <span class="concept" data-term="Game world" data-tip="The playable space, divided into Chunks.">Game world</span> to request, keep and unload around the camera, from the camera's <span class="concept" data-term="World position" data-tip="A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.">World position</span> and the loads its IO finished, and reports its <span class="concept" data-term="Late Chunk" data-tip="A Chunk the camera came within the Load radius of before it was loaded.">Late Chunks</span>, its hold after a teleport and whether the frame is Settled.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 3654003f (2026-11-06), with the Chunk streamer as its change leaves it. A change to the Chunk streamer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-chunk.html">Chunk cooking</a> for the Chunks it streams and the Asset IDs their Placements name.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Once a frame, when <code>ChunkStreamer::update</code> is called; no Reference scene calls it yet. It reads no GPU state, records no GPU work and reads no clock.</dd>
+      <dt>Reads</dt><dd>The camera's World position, whether it teleported, and each finished load from its <code>ChunkIo</code>: the Chunk's coordinates and the Mesh and Material Asset IDs its Placements name. Which Chunks exist and the <span class="concept" data-term="Load radius" data-tip="The horizontal distance from the camera within which Chunks are loaded.">Load radius</span> are given at creation.</dd>
+      <dt>Writes</dt><dd>Its requests, nearest first, to its <code>ChunkIo</code>, and a <code>ChunkFrame</code>: the Chunks requested, loaded, held and unloaded this frame, the Assets whose last user unloaded, the Late Chunks, whether it holds and whether the frame is Settled.</dd>
+      <dt>Counted</dt><dd>Not in Frame stats yet: its <code>ChunkFrame</code> carries the frame's Late Chunks.</dd>
+      <dt>Where in the code</dt><dd><code>ChunkStreamer</code>, <code>ChunkIo</code>, <code>FinishedLoad</code> and <code>ChunkFrame</code> in <code>src/streaming/mod.rs</code>; the Chunk's edge, <code>CHUNK_EDGE_METRES</code>, in <code>src/assets/cooked.rs</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#distance">1 &middot; Distance to a Chunk</a>
+    <a href="#requests">2 &middot; Requests and the lead</a>
+    <a href="#hold-radius">3 &middot; Held and unloaded</a>
+    <a href="#arrivals">4 &middot; Late Chunks, the hold and Settled</a>
+    <a href="#last-users">5 &middot; Last users</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="distance">
+  <div class="part-mark">1 &middot; <code>distance</code> &middot; <code>chunks_within</code></div>
+  <h2>Distance to a Chunk</h2>
+  <p class="key-idea">Every radius is measured from the camera to the nearest point of a Chunk's 256 m square, across x and z only: a Chunk is within a radius when any of its column is. At a Load radius of 256 m that is 7 to 9 Chunks.</p>
+  <p>Along each axis the camera is either over the Chunk, at no distance, or past its lowest or highest edge by the difference; the two axes combine as a hypotenuse. Height plays no part, as a Chunk is a column at every height.</p>
+<pre class="code"><code>let along = |position: f64, coordinate: i32| {
+    let lowest = coordinate as f64 * CHUNK_EDGE_METRES;
+    (lowest - position)
+        .max(position - lowest - CHUNK_EDGE_METRES)
+        .max(0.0)
+};
+along(camera.x, x).hypot(along(camera.z, z))</code></pre>
+  <p class="code-source"><code>distance</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p>Over the middle of a Chunk, the camera has its own Chunk, the four beside it at 128 m and the four at its corners at 181 m within 256 m: nine. Near the middle of an edge it has the two Chunks the edge divides, the four beside those and one of the two beyond: seven. Near a corner it has the four that share the corner and four of those around them: eight. <code>chunks_within</code> lists the Chunks that overlap the square around the camera of the radius's half-size, and each is kept only if it is in the Game world, which the streamer was given at creation, and within the radius.</p>
+</section>
+
+<section class="part prose" id="requests">
+  <div class="part-mark">2 &middot; <code>update</code></div>
+  <h2>Requests and the lead</h2>
+  <p class="key-idea">A Chunk is requested once it is within the Load radius plus the lead: the distance the camera covered in its last frame, times one frame more than the latest load took. Requests go out nearest first, and a Chunk already requested is not requested again.</p>
+<pre class="code"><code>let lead = metres_per_frame * (self.load_frames + 1) as f64;
+let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
+  <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p>Speed and load time are both counted in frames: the camera's horizontal move since the frame before, and the frames from the request of the latest load that finished to the frame the streamer saw it finish. Their product is how far the camera goes while a load like the last one is under way. A load is seen on the frame after IO completes it, so a load as long as the last one can be seen a frame later; the extra frame covers that. The camera then cannot come within the Load radius of a requested Chunk before it loads, unless it speeds up or a load takes longer. On a teleport, and on the first frame, the speed is zero and the request radius is the Load radius.</p>
+  <p>The request radius never passes the hold radius, so nothing is requested that would be unloaded on arrival. Requests are sorted by distance, ties by coordinates, so a run of the same camera path and the same IO requests the same Chunks in the same order.</p>
+</section>
+
+<section class="part prose" id="hold-radius">
+  <div class="part-mark">3 &middot; <code>update</code> &middot; <code>ChunkFrame</code></div>
+  <h2>Held and unloaded</h2>
+  <p class="key-idea">A loaded Chunk stays loaded to the hold radius, one Chunk (256 m) beyond the Load radius, and unloads past it. Between the two it is held: kept with its Assets but neither drawn nor traced, so the camera can cross the Load radius back and forth without a reload.</p>
+  <p>At a Load radius of 256 m the hold radius is 512 m, which holds 20 to 23 Chunks. <code>ChunkFrame::held</code> lists every held Chunk each frame, by coordinates; a held Chunk the camera comes back to leaves the list and is drawn again without IO. A load that finishes for a Chunk the camera has since left past the hold radius is dropped, never loaded, and a load in flight is never requested twice.</p>
+</section>
+
+<section class="part prose" id="arrivals">
+  <div class="part-mark">4 &middot; <code>update</code></div>
+  <h2>Late Chunks, the hold and Settled</h2>
+  <p class="key-idea">A Late Chunk is counted on the frame the camera comes within the Load radius of a Chunk not yet loaded. A teleport is an arrival, not travel: its Chunks are not Late, and the streamer holds until every Chunk within the Load radius has loaded. A frame is Settled when every Chunk within its request radius has loaded.</p>
+<pre class="code"><code>if !arrived &amp;&amp; !loaded &amp;&amp; !self.within_load_radius_before.contains(&amp;coordinates) {
+    frame.late_chunks += 1;
+}</code></pre>
+  <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p>The streamer keeps the set of Chunks within the Load radius on the frame before, so a Chunk counts once on entering, not on every frame it is late. The first frame arrives as a teleport does, since the camera did not travel to it. The hold starts on an arrival and ends on the frame the last Chunk within the Load radius loads:</p>
+<pre class="code"><code>frame.holding = (frame.holding || arrived) &amp;&amp; !every_chunk_within_load_radius_loaded;</code></pre>
+  <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p>Settled reaches further than the hold: it waits for the lead's Chunks too, so a frame of travel whose lead has a request in flight is not Settled though it does not hold. A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them once Chunks stream.">Settled frame</span> is one a capture may render; the hold is what a fast travel waits on.</p>
+</section>
+
+<section class="part prose" id="last-users">
+  <div class="part-mark">5 &middot; <code>update</code> &middot; <code>FinishedLoad</code></div>
+  <h2>Last users</h2>
+  <p class="key-idea">The streamer counts how many times the loaded Chunks name each <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file's GUID, or a procedural Reference scene's name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span>. An unload that brings a count to zero reports that Asset as having lost its last user, in a fixed order.</p>
+  <p>A finished load carries the Mesh and Material Asset IDs its Placements name, in Placement order; an Asset named twice is counted twice, and so reaches zero once, at its last name. Held Chunks keep their counts. Chunks unload in coordinate order, and within each, its Assets in its own order:</p>
+<pre class="code"><code>for asset in assets.iter() {
+    let Some(count) = users.get_mut(asset) else {
+        continue;
+    };
+    *count -= 1;
+    if *count == 0 {
+        users.remove(asset);
+        frame.last_users.push(*asset);
+    }
+}</code></pre>
+  <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p>What becomes of an Asset with no user is the pools' decision, not the streamer's: it reports the Asset and frees nothing.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">Every test drives the streamer frame by frame along a scripted camera path, against a scripted IO whose loads finish a set number of frames after their request, and compares what it reports with values worked out by hand from the Chunk grid. None needs a GPU.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>chunks_load_within_the_load_radius_stay_held_to_the_hold_radius_and_unload_past_it</code></td><td>the 9 Chunks around the camera requested nearest first and loaded a frame later; after a jump of two Chunks, the 6 new ones requested, the column 384 m away held and the column 640 m away unloaded; back in the middle, the held column drawn again with no request</td></tr>
+      <tr><td><code>chunks_ahead_are_requested_a_load_time_early_at_50_metres_a_second</code></td><td>flying at 50 m/s with loads of 6 frames, the Chunk ahead requested on the frame it comes within 256 m and 7 frames' travel, loaded the frame before the camera comes within 256 m of it, and 0 Late Chunks over 60 s</td></tr>
+      <tr><td><code>a_chunk_whose_load_is_delayed_past_its_arrival_counts_as_late_once</code></td><td>two Chunks on the path whose loads take 10 s: exactly 2 Late Chunks over 60 s</td></tr>
+      <tr><td><code>a_teleport_holds_until_the_last_chunk_in_the_load_radius_loads</code></td><td>the hold on the first frame and after a teleport, released on the frame its last Chunk, delayed 5 frames, loads; no Late Chunk</td></tr>
+      <tr><td><code>a_frame_is_settled_when_every_chunk_it_requested_has_loaded</code></td><td>the frames that are not Settled flying east: the first 6, and 6 from each of the two requests ahead</td></tr>
+      <tr><td><code>an_unload_reports_the_assets_it_was_the_last_loaded_user_of_in_order</code></td><td>a column unloading while held Chunks still name its rows' Materials reports only its Mesh; twelve Chunks unloading at once report their Meshes and Materials in the order their counts reach zero</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>update</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">No Reference scene runs the streamer yet, so no Baseline measures it. Measured alone, a frame's update at the world's 256 m Load radius is a few hundred nanoseconds; with a radius that holds a thousand Chunks it grows with the Chunks it examines.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Flying diagonally at 50 m/s, 3,600 frames</th><th class="n">Median, &micro;s</th><th class="n">p99, &micro;s</th></tr></thead>
+    <tbody>
+      <tr class="focus"><td>Load radius 256 m over 40 &times; 40 Chunks</td><td class="n">0.29&ndash;0.33</td><td class="n">0.58&ndash;0.71</td></tr>
+      <tr><td>Load radius 6 km over 32 &times; 32 Chunks, all loaded</td><td class="n">45&ndash;47</td><td class="n">55&ndash;67</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Release build on the Apple M4 Pro: the update alone, in a test against the scripted IO with loads of 6 frames, five rounds while other sessions held the one-minute load average near 26, so the ranges may run high.</p>
+  <p>The work is the Chunks overlapping the request radius's square, each looked up in the Game world's set, plus every loaded Chunk for the hold radius and the held list. At 256 m that is 9 to 25 Chunks examined, and the loaded ones, at most the 20 to 23 within the hold radius. Its lists and sets are cleared each frame, not dropped, so they keep their capacity.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8</div>
+  <h2>Why this way</h2>
+  <p><b>The nearest point.</b> The Load radius was chosen from a table that counts the Chunks whose nearest point lies within each radius, 7 to 9 at 256 m against 20 to 23 at 512 m, so the streamer measures the same way. Measured to a Chunk's middle instead, a Load radius of 256 m would leave unloaded a Chunk whose corner is 75 m from the camera.</p>
+  <p><b>A hold radius one Chunk out.</b> OGRE's terrain paging holds pages to a larger radius than it loads them to, to stop thrashing when the camera moves back and forth across the loading border. The streamed world takes that form with the hold one Chunk, 256 m, beyond the Load radius; held Chunks are not drawn or traced, as at <code>town</code>'s density the static TLAS could not hold them.</p>
+  <p><b>A lead the same in every direction.</b> Funkhouser bounds where an observer can be in N frames by a sphere of radius N times its speed, and suggests weighting it toward the direction of travel. The streamer takes the bound alone: one request radius around the camera. The extra Chunks it requests beside and behind the camera lie well within the hold radius at any lead a few frames long, so they cost a request each and no churn.</p>
+  <p><b>Frames, not seconds.</b> Speed and load time are both counted in frames, so their product is a distance whatever the frame rate, and the streamer reads no clock: the same camera path and the same IO give the same requests, which the tests and Settled captures both need.</p>
+  <p><b>Arrivals hold.</b> A teleport has no lead to cover it: Sunset Overdrive's streaming had to load all seven zones around a teleport's destination at once. The streamer holds instead, and does not count the arrival's Chunks as Late, so Late Chunks measure travel alone.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>Not driven yet.</b> No Reference scene loads its Chunks through the streamer; the engine's IO and the drawing of loaded Chunks are still to come.</p>
+  <p><b>The latest load only.</b> The lead takes the latest load's time, so a fast load after a slow one shortens it at once; a camera that speeds up during a load can make a Chunk late.</p>
+  <p><b>No cancelled reads.</b> A request whose Chunk the camera leaves stays in flight until it finishes and is dropped.</p>
+  <p><b>Wide radii examine many Chunks.</b> The square around a radius that holds a whole scene is examined every frame, every Chunk of it looked up, whether or not anything moves.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://github.com/OGRECave/ogre/blob/bb8b7565cd4c6fd010ed2c04d6e762afab75a369/Components/Terrain/include/OgreTerrainPaging.h#L90-L93">OGRE 14.3, TerrainPaging::createWorldSection</a></dt>
+    <dd>The load and hold radii: a hold radius larger than the load radius, "used to minimise thrashing if the camera goes backwards and forwards at the loading border". Registry key ogre-14.3-hold-radius.</dd>
+    <dt><a href="https://graphicsinterface.org/wp-content/uploads/gi1996-1.pdf#page=4">Funkhouser, Database Management for Interactive Display of Large Architectural Models, Graphics Interface 1996, &sect;4</a></dt>
+    <dd>The observer's range in the next N frames as a sphere of radius N times its speed, weighted toward its travel. Registry key funkhouser-1996-observer-range.</dd>
+    <dt><a href="https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=151">Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, p. 151</a></dt>
+    <dd>A teleport loading every zone around its destination at once. Registry key ruskin-2015-sunset-overdrive-teleport.</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/research/open-world-streaming-and-io.md">State of the art: open-world streaming and IO</a></dt>
+    <dd>The survey behind the hold radius, the lead and the Load radius, with the table of Chunks per radius.</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The streamer was written for the streamed world after its survey set the Load radius at 256 m and the hold radius one Chunk beyond it, before any scene loaded its Chunks through it. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/streaming/mod.rs</code>, <code>src/assets/cooked.rs</code>, the tests named above, <code>CONTEXT.md</code> and the survey above, all as the Chunk streamer's change leaves <code>main</code> at 3654003f.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="cook-chunk.html">Previous: Chunk cooking</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
