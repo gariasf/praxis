@@ -1302,7 +1302,10 @@ mod tests {
     /// A figure bent by `curvature` towards azimuth 2.2.
     fn bend(curvature: f32) -> Bend {
         Bend {
-            rest: MeshHandle(0),
+            rest: MeshHandle {
+                index: 0,
+                generation: 0,
+            },
             azimuth: 2.2,
             curvature,
             previous_curvature: curvature,

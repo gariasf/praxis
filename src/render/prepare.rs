@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bevy_ecs::prelude::*;
 
-use crate::assets::MeshPool;
+use crate::assets::{MaterialPool, MeshPool};
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight};
 use crate::environment::Environment;
@@ -212,6 +212,8 @@ pub struct FramePreparer {
     skipped: bevy_ecs::entity::EntityHashSet,
     /// Set by `rewrite_all_instances` until the next `prepare`.
     rewrite_every_instance: bool,
+    /// The Mesh and Material pools' frees the last `prepare` saw.
+    pool_frees: u64,
     renderables_refused: u32,
     moving_instances_left_out: u32,
     /// Set while Moving Instances are left out of the dynamic TLAS, which
@@ -238,6 +240,7 @@ impl FramePreparer {
             unwritten: bevy_ecs::entity::EntityHashSet::default(),
             skipped: bevy_ecs::entity::EntityHashSet::default(),
             rewrite_every_instance: false,
+            pool_frees: 0,
             renderables_refused: 0,
             moving_instances_left_out: 0,
             warned_of_moving_instances_left_out: false,
@@ -255,8 +258,9 @@ impl FramePreparer {
     /// fixed schedule moves is drawn blended between its two newest Ticks
     /// (ADR 0022). A Renderable draws each Primitive of its Mesh with its
     /// Material Handle, else with the Material the Primitive names; one whose
-    /// Mesh is not in `mesh_pool`, or that has no Material Handle where a
-    /// Primitive names no Material, is skipped: it keeps its slot, which holds
+    /// Mesh is not in `mesh_pool`, whose Material Handle finds no Material in
+    /// `material_pool`, or that has no Material Handle where a Primitive names
+    /// no Material, is skipped with a warning: it keeps its slot, which holds
     /// an Instance with no Mesh until the Renderable is drawn. One that
     /// finds the Instance buffer full is refused, warned about once and
     /// counted every frame, and neither written nor drawn until a slot frees.
@@ -272,13 +276,15 @@ impl FramePreparer {
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
-    /// Instance, and a slot freed since writes an Instance with no Mesh. It
+    /// Instance, every one when either pool freed an entry since, and a slot
+    /// freed since writes an Instance with no Mesh. It
     /// ends the World's change window (`World::clear_trackers`), so it is the
     /// frame's last World read, once per frame.
     pub fn prepare(
         &mut self,
         world: &mut World,
         mesh_pool: &MeshPool,
+        material_pool: &MaterialPool,
         aspect_ratio: f32,
     ) -> &FrameData {
         let Self {
@@ -292,6 +298,7 @@ impl FramePreparer {
             unwritten,
             skipped,
             rewrite_every_instance,
+            pool_frees,
             renderables_refused,
             moving_instances_left_out,
             warned_of_moving_instances_left_out,
@@ -344,6 +351,10 @@ impl FramePreparer {
         }
         *warned_of_overflowed_lights = *lights_overflowed > 0;
 
+        let frees = mesh_pool.frees() + material_pool.frees();
+        if std::mem::replace(pool_frees, frees) != frees {
+            *rewrite_every_instance = true;
+        }
         frame.instances.clear();
         frame.instance_writes.clear();
         frame.moving_instances.clear();
@@ -374,8 +385,19 @@ impl FramePreparer {
             let drawn = match mesh_pool.get(mesh_ref.0) {
                 None => {
                     tracing::warn!(
-                        handle = mesh_ref.0.0,
+                        handle = ?mesh_ref.0,
                         "MeshHandle not in pool, skipping entity"
+                    );
+                    false
+                }
+                Some(_)
+                    if material_ref.is_some_and(|material_ref| {
+                        material_pool.get(material_ref.0).is_none()
+                    }) =>
+                {
+                    tracing::warn!(
+                        ?entity,
+                        "Renderable's Material Handle is not in the pool, skipping it"
                     );
                     false
                 }
@@ -417,7 +439,7 @@ impl FramePreparer {
                     material_id: material_ref
                         .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
                     offset,
-                    mesh: mesh_ref.0.0,
+                    mesh: mesh_ref.0.index,
                 },
                 previous.is_some(),
             );
@@ -600,16 +622,16 @@ fn prepare_bends(
     for (mesh_ref, bend) in bend_query.iter(world) {
         let (Some(bent), Some(rest)) = (mesh_pool.get(mesh_ref.0), mesh_pool.get(bend.rest)) else {
             tracing::warn!(
-                mesh = mesh_ref.0.0,
-                rest = bend.rest.0,
+                mesh = ?mesh_ref.0,
+                rest = ?bend.rest,
                 "A bent Mesh or its rest Mesh is not in the pool, so it is not bent"
             );
             continue;
         };
         if bent.vertices.len() != rest.vertices.len() {
             tracing::warn!(
-                mesh = mesh_ref.0.0,
-                rest = bend.rest.0,
+                mesh = ?mesh_ref.0,
+                rest = ?bend.rest,
                 "A bent Mesh and its rest Mesh hold different vertex counts, so it is not bent"
             );
             continue;
@@ -663,7 +685,10 @@ mod tests {
     use crate::transform::propagate_world_transforms;
 
     /// The Material `Frames::mesh` draws with.
-    const MESH_MATERIAL: MaterialHandle = MaterialHandle(5);
+    const MESH_MATERIAL: MaterialHandle = MaterialHandle {
+        index: 5,
+        generation: 0,
+    };
 
     /// A World of Renderables prepared frame by frame, as `State` does.
     struct Frames {
@@ -671,6 +696,8 @@ mod tests {
         propagation: Schedule,
         staging: LoadStaging,
         mesh_pool: MeshPool,
+        /// Materials 0 to 7.
+        material_pool: MaterialPool,
         /// A triangle drawn with `MESH_MATERIAL`.
         mesh: MeshHandle,
         preparer: FramePreparer,
@@ -689,8 +716,14 @@ mod tests {
                 Err(error) => panic!("headless GPU context failed: {error:#}"),
             };
             let mut staging = LoadStaging::new(context.device.clone());
-            let mut mesh_pool =
-                MeshPool::new(&context.device, &gpu_memory(&context), ARENA_CAPACITY_BYTES);
+            let memory = gpu_memory(&context);
+            let mut mesh_pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
+            let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging);
+            for _ in 0..8 {
+                material_pool
+                    .insert(&mut staging, bytemuck::Zeroable::zeroed())
+                    .expect("eight Materials fit");
+            }
             let mesh = mesh_pool
                 .load(
                     &mut staging,
@@ -710,6 +743,7 @@ mod tests {
                 propagation,
                 staging,
                 mesh_pool,
+                material_pool,
                 mesh,
                 preparer,
             })
@@ -719,7 +753,10 @@ mod tests {
             let renderable = (
                 Transform::from_translation(glam::dvec3(x, 0.0, 0.0)),
                 MeshRef(self.mesh),
-                MaterialRef(MaterialHandle(0)),
+                MaterialRef(MaterialHandle {
+                    index: 0,
+                    generation: 0,
+                }),
             );
             self.world.spawn(renderable).id()
         }
@@ -728,7 +765,7 @@ mod tests {
         fn prepare(&mut self) -> Vec<u32> {
             self.propagation.run(&mut self.world);
             self.preparer
-                .prepare(&mut self.world, &self.mesh_pool, 1.0)
+                .prepare(&mut self.world, &self.mesh_pool, &self.material_pool, 1.0)
                 .instance_writes
                 .iter()
                 .flat_map(|write| write.first_slot..write.first_slot + write.instances.len() as u32)
@@ -847,7 +884,10 @@ mod tests {
             .collect();
         assert!(offsets.contains(&[1.0, 5.0, 0.0]) && offsets.contains(&[2.0, 5.0, 0.0]));
 
-        frames.world.get_mut::<MaterialRef>(third).unwrap().0 = MaterialHandle(7);
+        frames.world.get_mut::<MaterialRef>(third).unwrap().0 = MaterialHandle {
+            index: 7,
+            generation: 0,
+        };
         assert_eq!(frames.prepare(), [2]);
         assert_eq!(frames.preparer.frame().instances[0].material_id, 7);
 
@@ -977,7 +1017,14 @@ mod tests {
         let Some(mut frames) = Frames::new() else {
             return;
         };
-        let [other_mesh, bare_mesh] = [Some(MaterialHandle(6)), None].map(|material| {
+        let [other_mesh, bare_mesh] = [
+            Some(MaterialHandle {
+                index: 6,
+                generation: 0,
+            }),
+            None,
+        ]
+        .map(|material| {
             let mesh =
                 frames
                     .mesh_pool
@@ -998,21 +1045,24 @@ mod tests {
                 .map(|instance| (instance.mesh, instance.material_id))
                 .collect()
         };
-        assert_eq!(written(&mut frames), [(first_mesh.0, NO_MATERIAL)]);
+        assert_eq!(written(&mut frames), [(first_mesh.index, NO_MATERIAL)]);
 
         frames
             .world
             .entity_mut(entity)
-            .insert(MaterialRef(MaterialHandle(7)));
-        assert_eq!(written(&mut frames), [(first_mesh.0, 7)]);
+            .insert(MaterialRef(MaterialHandle {
+                index: 7,
+                generation: 0,
+            }));
+        assert_eq!(written(&mut frames), [(first_mesh.index, 7)]);
         frames.world.entity_mut(entity).insert(MeshRef(other_mesh));
-        assert_eq!(written(&mut frames), [(other_mesh.0, 7)]);
+        assert_eq!(written(&mut frames), [(other_mesh.index, 7)]);
         // Without its Handle, it draws with its Mesh's Materials, and so
         // after a change of Mesh.
         frames.world.entity_mut(entity).remove::<MaterialRef>();
-        assert_eq!(written(&mut frames), [(other_mesh.0, NO_MATERIAL)]);
+        assert_eq!(written(&mut frames), [(other_mesh.index, NO_MATERIAL)]);
         frames.world.entity_mut(entity).insert(MeshRef(first_mesh));
-        assert_eq!(written(&mut frames), [(first_mesh.0, NO_MATERIAL)]);
+        assert_eq!(written(&mut frames), [(first_mesh.index, NO_MATERIAL)]);
         // With a Primitive that names no Material, it is not drawn, and its
         // slot draws nothing.
         frames.world.entity_mut(entity).insert(MeshRef(bare_mesh));
@@ -1041,7 +1091,10 @@ mod tests {
         assert_eq!(written(&mut frames), [(0, true), (1, true)]);
 
         // The handle the pool's next load returns.
-        let unloaded = MeshHandle(frames.mesh.0 + 1);
+        let unloaded = MeshHandle {
+            index: frames.mesh.index + 1,
+            generation: 0,
+        };
         // A Renderable whose Mesh is not in the pool keeps its slot, which is
         // written once an Instance with no Mesh; so is a new one's slot.
         frames.world.entity_mut(switched).insert(MeshRef(unloaded));
@@ -1068,9 +1121,74 @@ mod tests {
         assert!(loaded == unloaded, "the pool loaded a different handle");
         assert_eq!(written(&mut frames), [(1, true), (2, true)]);
         let instances = &frames.preparer.frame().instances;
-        assert!(instances.iter().all(|instance| instance.mesh == unloaded.0));
+        assert!(
+            instances
+                .iter()
+                .all(|instance| instance.mesh == unloaded.index)
+        );
         assert!(written(&mut frames).is_empty());
         assert_eq!(frames.preparer.frame().instance_slot_count, 4);
+    }
+
+    #[test]
+    fn a_renderable_whose_handle_was_freed_is_skipped_with_a_warning_and_keeps_its_slot() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        // The slots the next frame writes, in slot order, whether each
+        // Instance names a Mesh, and what the frame logged.
+        let written = |frames: &mut Frames| -> (Vec<(u32, bool)>, String) {
+            let (slots, log) = logged(|| frames.prepare());
+            let instances = &frames.preparer.frame().instances;
+            let mut slots_and_meshes: Vec<(u32, bool)> = slots
+                .into_iter()
+                .zip(instances.iter().map(|instance| instance.mesh != NO_MESH))
+                .collect();
+            slots_and_meshes.sort_unstable();
+            (slots_and_meshes, log)
+        };
+        let freed_mesh = frames.mesh;
+        frames.spawn(0.0);
+        let other_mesh = load(&mut frames, 3);
+        let other_material = MaterialHandle {
+            index: 1,
+            generation: 0,
+        };
+        frames.world.spawn((
+            Transform::IDENTITY,
+            MeshRef(other_mesh),
+            MaterialRef(other_material),
+        ));
+        assert_eq!(written(&mut frames).0, [(0, true), (1, true)]);
+        assert!(written(&mut frames).0.is_empty());
+
+        // Unchanged since, each Renderable is visited again once a pool
+        // frees an entry, and the one whose Mesh was freed is skipped, though
+        // another Mesh took its index.
+        frames.mesh_pool.free(freed_mesh);
+        let replacement = load(&mut frames, 3);
+        assert_eq!(replacement.index, freed_mesh.index);
+        let (slots, log) = written(&mut frames);
+        assert_eq!(slots, [(0, false), (1, true)]);
+        assert!(
+            log.contains("MeshHandle not in pool"),
+            "not logged: {log:?}"
+        );
+        assert!(written(&mut frames).0.is_empty());
+
+        frames.material_pool.free(other_material);
+        let (slots, log) = written(&mut frames);
+        assert_eq!(slots, [(0, false), (1, false)]);
+        assert!(
+            log.contains("Material Handle is not in the pool"),
+            "not logged: {log:?}"
+        );
+        // Both keep their slots.
+        frames
+            .world
+            .spawn((Transform::IDENTITY, MeshRef(replacement)));
+        assert_eq!(written(&mut frames).0, [(2, true)]);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 3);
     }
 
     /// Loads a Mesh of a triangle over the first three of `vertex_count`
@@ -1115,7 +1233,13 @@ mod tests {
             (first, bend(rest, 0.6)),
             (first, bend(rest, 0.6)),
             (longer, bend(rest, 0.4)),
-            (MeshHandle(99), bend(rest, 0.4)),
+            (
+                MeshHandle {
+                    index: 99,
+                    generation: 0,
+                },
+                bend(rest, 0.4),
+            ),
             (own, bend(own, 0.4)),
             (third, bend(second, 0.4)),
         ] {

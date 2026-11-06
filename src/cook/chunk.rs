@@ -174,8 +174,8 @@ mod tests {
             .map(|(transform, mesh, material)| {
                 let (coordinates, translation) = in_chunk(transform.translation);
                 placement_bits(coordinates, &CookedPlacement {
-                    mesh: recorder.meshes[mesh.0.0 as usize],
-                    material: material.map(|material| recorder.materials[material.0.0 as usize]),
+                    mesh: recorder.meshes[mesh.0.index as usize],
+                    material: material.map(|material| recorder.materials[material.0.index as usize]),
                     translation,
                     rotation: transform.rotation,
                     scale: transform.scale,

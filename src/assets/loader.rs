@@ -191,7 +191,7 @@ mod tests {
                 .into_iter()
                 .chain(bent)
                 .chain([next])
-                .map(|handle| handle.0)
+                .map(|handle| handle.index)
                 .collect::<Vec<_>>()
         });
         let Err(missing) = loader.mesh(AssetId(5)) else {

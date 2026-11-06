@@ -45,7 +45,7 @@ The central store of one kind of resource (Mesh pool, Material pool). It hands o
 _Avoid_: Manager, cache, registry
 
 **Handle**:
-A typed index into a Pool, held by components in place of the resource.
+A typed index into a Pool and the generation of that index it was handed out in, held by components in place of the resource; once its entry is freed, it finds nothing, even after a later entry takes the index. The GPU sees only the index.
 _Avoid_: Pointer, resource ID
 
 **Arena**:

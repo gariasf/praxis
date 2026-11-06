@@ -263,6 +263,7 @@ impl State {
         let frame = self.preparer.prepare(
             &mut self.simulation.world,
             &self.renderer.mesh_pool,
+            &self.renderer.material_pool,
             self.renderer.aspect_ratio(),
         );
         self.recorder.stage("prepare_frame", started);
@@ -490,7 +491,10 @@ mod tests {
         world.insert_resource(Input::default());
         world.insert_resource(FixedTime::default());
         let bend = Bend {
-            rest: MeshHandle(0),
+            rest: MeshHandle {
+                index: 0,
+                generation: 0,
+            },
             azimuth: 0.0,
             curvature: 0.0,
             previous_curvature: 0.0,

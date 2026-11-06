@@ -11,8 +11,13 @@ pub struct Mesh {
     pub bounds: [[f32; 3]; 2],
 }
 
+/// A Mesh's index in the Mesh table, which the GPU sees, and the generation
+/// of that index it was loaded in, which no later Mesh there shares.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct MeshHandle(pub u32);
+pub struct MeshHandle {
+    pub index: u32,
+    pub generation: u32,
+}
 
 /// A Mesh as the Mesh table holds it, at its Handle's index: its Meshlets,
 /// whose triangles follow one another in the Meshlet triangle Arena, and the
