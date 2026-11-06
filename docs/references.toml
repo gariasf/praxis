@@ -4696,6 +4696,12 @@ section = "wgpu-core 30.0.1, resource.rs, struct Tlas (struct Blas likewise at L
 quote = '''pub struct Tlas { pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>, pub(crate) device: Arc<Device>, pub(crate) size_info: hal::AccelerationStructureBuildSizes, pub(crate) max_instance_count: u32, [...] pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,'''
 checked = 2026-11-05
 
+["wgpu-30-blas-size-at-create"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L100-L118"
+section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_blas: each triangle geometry given to wgpu-hal's size query, its index buffer likewise the zero buffer (L60-L69); the BLAS is created at the size returned (L159-L164)"
+quote = '''entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> { vertex_buffer: Some(self.zero_buffer.as_ref()), vertex_format: desc.vertex_format, first_vertex: 0, vertex_count: desc.vertex_count, vertex_stride: 0, indices, transform, flags: desc.flags, }); } unsafe { self.raw().get_acceleration_structure_build_sizes( &hal::GetAccelerationStructureBuildSizesDescriptor { entries: &hal::AccelerationStructureEntries::Triangles(entries), flags: blas_desc.flags, }, ) }'''
+checked = 2026-11-06
+
 ["wgpu-30-blas-compacted-size-private"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518"
 section = "wgpu-core 30.0.1, resource.rs, enum BlasCompactState (crate-private); the compacted size reaches only a log line, device/queue.rs L2036-L2042"
@@ -4826,6 +4832,18 @@ url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs
 section = "wgpu-hal 30.0.1, metal/command.rs, place_acceleration_structure_barrier, whose body is empty (DX12 issues a null-resource UAV barrier, dx12/command.rs L1793-L1815; Vulkan a global memory barrier, vulkan/command.rs L747-L772)"
 quote = '''unsafe fn place_acceleration_structure_barrier( &mut self, _barriers: crate::AccelerationStructureBarrier, ) { }'''
 checked = 2026-11-05
+
+["wgpu-hal-30-instance-bytes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1825"
+section = "wgpu-hal 30.0.1, vulkan/adapter.rs, the alignments the adapter exposes: a 64-byte instance record on Vulkan; dx12/adapter.rs L1037-L1040 sizes it as D3D12_RAYTRACING_INSTANCE_DESC, also 64 bytes"
+quote = '''raw_tlas_instance_size: 64,'''
+checked = 2026-11-06
+
+["wgpu-hal-30-metal-instance-bytes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124"
+section = "wgpu-hal 30.0.1, metal/device.rs, tlas_instance_to_bytes, which returns the descriptor's bytes (L2158); metal/adapter.rs L1503-L1506 sizes wgpu-core's instance record by the same type"
+quote = '''fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> { let temp = MTLIndirectAccelerationStructureInstanceDescriptor {'''
+checked = 2026-11-06
 
 ["wgpu-hal-30-metal-build-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2076-L2091"

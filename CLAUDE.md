@@ -187,8 +187,9 @@ src/
                                  GPU stats through a ring of mapped
                                  buffers),
                                  acceleration_structures (the static
-                                 and dynamic TLAS, their memory
-                                 estimates), instance,
+                                 and dynamic TLAS, the sizes of
+                                 acceleration structures through
+                                 wgpu-hal), instance,
                                  uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)
@@ -379,7 +380,8 @@ When reviewing changes, check for:
 - [ ] Frame stats still see new work: GPU buffers, textures and
       acceleration structures are created through the GPU memory
       ledger (`GpuMemory`) under their kind, acceleration structures at
-      the measured per-adapter estimate (`AccelerationStructureBytes`);
+      the size wgpu-hal's query gives (`blas_bytes`, `tlas_bytes`), a
+      compacted BLAS at its adapter's estimated fraction of it;
       the GPU stats readback's buffers stay out, as they measure the frame (ADR 0013); per-frame GPU
       writes add to `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`

@@ -209,14 +209,14 @@ let mesh_blas = MeshBlas {
 };
 staging.build_blas(&amp;self.blas_build_entry(&amp;mesh_blas));
 
-let blas_triangles = mesh.indices.len() as u64 / 3;
+…
 self.blases.push(Some(mesh_blas.blas.clone()));
 if refitted {
     self.refitted_blases.push(mesh_blas);
 } else {
-    self.awaiting_compaction.push((handle, blas_triangles));
+    …
 }
-self.uncompacted_blas_triangles += blas_triangles;
+…
 Some(handle)</code></pre>
   <p class="code-source">Building a Mesh's BLAS at load, <code>MeshPool::load_for</code>. A refitted BLAS goes to <code>refitted_blases</code>, with the <code>MeshBlas</code> that records its build, instead of the compaction queue.</p>
 </section>
@@ -733,13 +733,13 @@ pub(super) fn record(
     <tbody>
       <tr><td>the refits' scratch, GPU memory</td><td>each BLAS's update scratch rounded up to 256, at least 256 in all</td><td class="n">&ge; 256</td></tr>
       <tr><td>the marker's result, GPU memory</td><td>one <code>u32</code></td><td class="n">4</td></tr>
-      <tr><td>the figures' BLASes, uncompacted, estimated</td><td>512,000 triangles &times; <code>per_blas_triangle</code>, 94</td><td class="n">48,128,000</td></tr>
-      <tr><td>the same, were they compacted</td><td>512,000 triangles &times; <code>per_compacted_blas_triangle</code>, 45.5</td><td class="n">23,296,000</td></tr>
+      <tr><td>the figures' BLASes, uncompacted, estimated</td><td>512,000 triangles &times; 94 bytes</td><td class="n">48,128,000</td></tr>
+      <tr><td>the same, were they compacted</td><td>512,000 triangles &times; 45.5 bytes</td><td class="n">23,296,000</td></tr>
       <tr><td>the figures' index streams, index Arena in use</td><td>100 &times; 15,360 indices &times; 4</td><td class="n">6,144,000</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>BlasRefit::gpu_memory_bytes</code>; <code>AccelerationStructureBytes</code>'s M4 Pro estimate in <code>src/render/acceleration_structures.rs</code>; <code>MeshPool::load_for</code>. The index streams join <code>arena_bytes_in_use</code>, not GPU memory, which counts each Arena's whole buffer in every form.</p>
+  <p class="note"><code>BlasRefit::gpu_memory_bytes</code>; the M4 Pro's estimate in <code>src/render/acceleration_structures.rs</code> at the commit above; <code>MeshPool::load_for</code>. The index streams join <code>arena_bytes_in_use</code>, not GPU memory, which counts each Arena's whole buffer in every form.</p>
 </section>
 
 <section class="part prose" id="why">

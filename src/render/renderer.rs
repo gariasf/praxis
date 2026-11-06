@@ -874,7 +874,7 @@ impl Renderer {
     }
 
     /// Bytes of the buffers and textures this Renderer created, its Pools
-    /// included, and of its acceleration structures, estimated, by kind in
+    /// included, and of its acceleration structures, by kind in
     /// `GpuMemoryKind::ALL`'s order; the render target is the caller's. The
     /// GPU stats readback's buffers are left out, since they measure the
     /// frame rather than hold it.

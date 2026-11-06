@@ -5,7 +5,7 @@ use crate::{
     assets::{MaterialChannel, MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     bench::Budgets,
     cooked::{AssetId, CookedMesh, CookedVertex},
-    render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
+    render::{LoadStaging, NO_MATERIAL, blas_bytes},
     stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
 };
 
@@ -124,17 +124,17 @@ pub struct MeshPool {
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
     /// The Meshes whose BLAS is built but not yet compacted, with its
-    /// triangles.
+    /// bytes.
     awaiting_compaction: Vec<(MeshHandle, u64)>,
     /// The BLASes of the Meshes loaded as `MeshUse::Refitted`.
     refitted_blases: Vec<MeshBlas>,
-    /// Triangles of the BLASes compacted, and of the others.
-    compacted_blas_triangles: u64,
-    uncompacted_blas_triangles: u64,
-    /// The BLASes' bytes, as `acceleration_structure_bytes` estimates them
-    /// for those triangles.
+    /// Bytes of the BLASes compacted, as built, and of the others.
+    compacted_blas_bytes: u64,
+    uncompacted_blas_bytes: u64,
+    /// The BLASes' bytes, the compacted ones' at `compacted_blas_fraction`
+    /// of theirs.
     blas_charge: Charge,
-    acceleration_structure_bytes: AccelerationStructureBytes,
+    compacted_blas_fraction: f64,
     vertex_arena: Arena,
     index_arena: Arena,
     meshlet_arena: Arena,
@@ -159,10 +159,10 @@ impl MeshPool {
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
             refitted_blases: Vec::new(),
-            compacted_blas_triangles: 0,
-            uncompacted_blas_triangles: 0,
+            compacted_blas_bytes: 0,
+            uncompacted_blas_bytes: 0,
             blas_charge: memory.charge(GpuMemoryKind::AccelerationStructures, 0),
-            acceleration_structure_bytes: memory.acceleration_structure_bytes(),
+            compacted_blas_fraction: memory.compacted_blas_fraction(),
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
             vertex_arena: arena(
                 "Vertex Arena",
@@ -406,8 +406,22 @@ impl MeshPool {
             meshlets = meshlet_count,
             "Mesh loaded"
         );
-        let blas_triangles = if mesh_use.traced() {
-            mesh.indices.len() as u64 / 3
+        let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
+            vertex_count: mesh.vertices.len() as u32,
+            index_format: Some(wgpu::IndexFormat::Uint32),
+            index_count: Some(mesh.indices.len() as u32),
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+        };
+        let refitted = mesh_use == MeshUse::Refitted;
+        let flags = if refitted {
+            REFITTED_BLAS_FLAGS
+        } else {
+            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+        };
+        let built_bytes = if mesh_use.traced() {
+            blas_bytes(&self.device, &self.vertex_arena.buffer, flags, &geometry)
         } else {
             0
         };
@@ -419,7 +433,7 @@ impl MeshPool {
                 meshlet_vertices,
                 meshlet_triangles,
             ],
-            blas_triangles,
+            blas_bytes: built_bytes,
             blas_compacted: false,
         };
         let index = handle.index as usize;
@@ -432,23 +446,10 @@ impl MeshPool {
         if !mesh_use.traced() {
             return Some(handle);
         }
-        let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x3,
-            vertex_count: mesh.vertices.len() as u32,
-            index_format: Some(wgpu::IndexFormat::Uint32),
-            index_count: Some(mesh.indices.len() as u32),
-            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
-        };
-        let refitted = mesh_use == MeshUse::Refitted;
         let blas = self.device.create_blas(
             &wgpu::CreateBlasDescriptor {
                 label: Some("Mesh BLAS"),
-                flags: if refitted {
-                    REFITTED_BLAS_FLAGS
-                } else {
-                    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
-                        | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
-                },
+                flags,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -467,9 +468,9 @@ impl MeshPool {
         if refitted {
             self.refitted_blases.push(mesh_blas);
         } else {
-            self.awaiting_compaction.push((handle, blas_triangles));
+            self.awaiting_compaction.push((handle, built_bytes));
         }
-        self.uncompacted_blas_triangles += blas_triangles;
+        self.uncompacted_blas_bytes += built_bytes;
         self.charge_blases();
         Some(handle)
     }
@@ -530,7 +531,7 @@ impl MeshPool {
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
             tracing::error!(%error, "waiting for BLAS builds failed");
         }
-        for (handle, triangles) in self.awaiting_compaction.drain(..) {
+        for (handle, bytes) in self.awaiting_compaction.drain(..) {
             let Some(blas) = &mut self.blases[handle.index as usize] else {
                 continue;
             };
@@ -545,8 +546,8 @@ impl MeshPool {
             if let Some(allocation) = &mut self.allocations[handle.index as usize] {
                 allocation.blas_compacted = true;
             }
-            self.uncompacted_blas_triangles -= triangles;
-            self.compacted_blas_triangles += triangles;
+            self.uncompacted_blas_bytes -= bytes;
+            self.compacted_blas_bytes += bytes;
         }
         self.charge_blases();
         // The copies wait in the queue's pending writes until a submit.
@@ -601,9 +602,9 @@ impl MeshPool {
             self.awaiting_compaction
                 .retain(|&(awaiting, _)| awaiting != handle);
             if allocation.blas_compacted {
-                self.compacted_blas_triangles -= allocation.blas_triangles;
+                self.compacted_blas_bytes -= allocation.blas_bytes;
             } else {
-                self.uncompacted_blas_triangles -= allocation.blas_triangles;
+                self.uncompacted_blas_bytes -= allocation.blas_bytes;
             }
             self.charge_blases();
         }
@@ -665,10 +666,9 @@ impl MeshPool {
     }
 
     fn charge_blases(&mut self) {
-        let bytes = self.acceleration_structure_bytes.blases(
-            self.compacted_blas_triangles,
-            self.uncompacted_blas_triangles,
-        );
+        let compacted_bytes =
+            (self.compacted_blas_bytes as f64 * self.compacted_blas_fraction).round() as u64;
+        let bytes = compacted_bytes + self.uncompacted_blas_bytes;
         self.blas_charge
             .set(GpuMemoryKind::AccelerationStructures, bytes);
     }
@@ -737,10 +737,10 @@ impl LoadedMeshes {
 }
 
 /// What freeing a loaded Mesh gives back: its range of each Arena, in
-/// `MeshPool::arenas` order, and its BLAS's triangles, compacted or not.
+/// `MeshPool::arenas` order, and its BLAS's bytes as built, compacted or not.
 struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
-    blas_triangles: u64,
+    blas_bytes: u64,
     blas_compacted: bool,
 }
 
@@ -1187,19 +1187,14 @@ pub(crate) mod tests {
     /// A Mesh loaded after one whose triangle is degenerate, so that its
     /// ranges of the vertex and index Arenas start past their first elements,
     /// is traced where its triangle is once its BLAS is built and compacted;
-    /// its BLAS counts by the estimate's bytes per triangle, then per
-    /// compacted triangle.
+    /// each BLAS counts the bytes its driver gives for a triangle's, then
+    /// the ledger's fraction of them.
     #[test]
     fn a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted() {
         let Some(context) = gpu_context() else {
             return;
         };
-        let bytes = AccelerationStructureBytes {
-            per_blas_triangle: 100.0,
-            per_compacted_blas_triangle: 50.0,
-            per_tlas_instance: 0.0,
-        };
-        let memory = GpuMemory::new(false, bytes);
+        let memory = GpuMemory::new(false, 0.25);
         let acceleration_structure_bytes =
             || memory.bytes_by_kind()[GpuMemoryKind::AccelerationStructures as usize];
         let mut staging = LoadStaging::new(context.device.clone());
@@ -1209,10 +1204,27 @@ pub(crate) mod tests {
         let handle = pool
             .load(&mut staging, &triangle_about_x(), &[None])
             .expect("a triangle fits");
-        assert_eq!(acceleration_structure_bytes(), 2 * 100);
+        let triangle_bytes = blas_bytes(
+            &context.device,
+            pool.vertex_arena(),
+            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+            &wgpu::BlasTriangleGeometrySizeDescriptor {
+                vertex_format: wgpu::VertexFormat::Float32x3,
+                vertex_count: 3,
+                index_format: Some(wgpu::IndexFormat::Uint32),
+                index_count: Some(3),
+                flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+            },
+        );
+        assert!(triangle_bytes > 0);
+        assert_eq!(acceleration_structure_bytes(), 2 * triangle_bytes);
         staging.submit(&context.queue);
         pool.compact_blases(&context.queue);
-        assert_eq!(acceleration_structure_bytes(), 2 * 50);
+        assert_eq!(
+            acceleration_structure_bytes(),
+            (2.0 * triangle_bytes as f64 * 0.25).round() as u64
+        );
 
         let blas = pool.blas(handle).expect("the triangle's BLAS");
         assert_eq!(
