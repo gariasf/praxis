@@ -2,10 +2,11 @@
 //! Suspect beside the record before it and bisected the commits between.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::Context;
 
+use super::night;
 use super::{
     BRANCH, JUDGED_TIMINGS, Publication, README, RELEASE_BUILD, adapter_key, fetch_main, git, push,
     remote_tip, source_hash,
@@ -14,9 +15,6 @@ use crate::bench::baseline_directory;
 
 /// The branch's directory of Verdicts: `verdicts/<adapter>-<backend>/<scene>/<Suspect's source hash>.json`.
 pub(super) const VERDICTS: &str = "verdicts";
-
-/// The file in a night's directory holding the Verdict as the night started.
-const NIGHT_VERDICT: &str = "verdict.json";
 
 /// The smallest shift a night's re-bench must still show, as a share of
 /// the good end's median, whatever the Suspect's marked shift.
@@ -356,9 +354,8 @@ pub fn suspects(repository: &Path, adapter: &str, backend: &str) -> anyhow::Resu
     Ok(suspects)
 }
 
-/// Takes a night's next step of re-benching and bisecting, `adapter`'s on
-/// `backend`, its runs `<scene>.json` in the directories of `night` in
-/// name order: the night resumes the bisect of a held Verdict, or else
+/// Takes a Night's next step of re-benching and bisecting, `adapter`'s on
+/// `backend`, its runs those in `night`'s directory: the night resumes the bisect of a held Verdict, or else
 /// starts on the oldest Suspect with none, and keeps to it. Records the
 /// Verdict on the remote's `bench-history` once the night's ends are
 /// judged, and returns the scene and commit to bench next, none once the
@@ -370,11 +367,9 @@ pub fn bisect(
     night: &Path,
 ) -> anyhow::Result<Option<(String, String)>> {
     let key = adapter_key(adapter, Some(backend));
-    let night_file = night.join(NIGHT_VERDICT);
     fetch_main(repository)?;
-    let start: Verdict = if night_file.exists() {
-        serde_json::from_slice(&std::fs::read(&night_file)?)
-            .with_context(|| format!("parsing {}", night_file.display()))?
+    let start: Verdict = if let Some(start) = night::started(night)? {
+        start
     } else {
         let resumed = match remote_tip(repository)? {
             Some(tip) => stored(repository, &tip, &format!("{VERDICTS}/{key}"))?
@@ -389,14 +384,13 @@ pub fn bisect(
                 None => return Ok(None),
             },
         };
-        std::fs::create_dir_all(night)?;
-        std::fs::write(&night_file, serde_json::to_string_pretty(&start)? + "\n")?;
+        night::start(night, &start)?;
         start
     };
     let first_parent = first_parent(repository, &start.good, &start.bad)?;
     let (verdict, next) = step(
         &start,
-        &night_runs(night, &start.scene, &start.metric)?,
+        &night::runs(night, &start.scene, &start.metric)?,
         &first_parent,
     );
     if let Some(mut verdict) = verdict {
@@ -409,7 +403,7 @@ pub fn bisect(
                 .collect();
             let commit = &pinned.commit.commit;
             for (metric, _) in JUDGED_TIMINGS {
-                let runs = night_runs(night, &verdict.scene, metric)?;
+                let runs = night::runs(night, &verdict.scene, metric)?;
                 let (good, bad) = (medians(&runs, &start.good), medians(&runs, &start.bad));
                 if !good.is_empty() && !bad.is_empty() {
                     pinned.measured.medians.insert(
@@ -633,41 +627,6 @@ fn first_parent(repository: &Path, good: &str, bad: &str) -> anyhow::Result<Vec<
         .collect()
 }
 
-/// The file in a night's run directory naming the commit it benched, for
-/// a binary too old to stamp its results with provenance.
-const RUN_COMMIT_FILE: &str = "commit";
-
-/// The runs in `night`'s directories, in name order, of `scene`: the
-/// commit each benched, as its provenance or else its `RUN_COMMIT_FILE`
-/// names it, and its median of `metric`.
-fn night_runs(night: &Path, scene: &str, metric: &str) -> anyhow::Result<Vec<Run>> {
-    let mut directories: Vec<PathBuf> = std::fs::read_dir(night)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<std::io::Result<_>>()?;
-    directories.sort();
-    let mut runs = Vec::new();
-    for directory in directories {
-        let path = directory.join(format!("{scene}.json"));
-        if !path.exists() {
-            continue;
-        }
-        // Read loosely: an earlier commit's binary wrote it.
-        let result: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)
-            .with_context(|| format!("parsing {}", path.display()))?;
-        let commit = match result["provenance"]["commit"].as_str() {
-            Some(commit) => Some(commit.to_owned()),
-            None => std::fs::read_to_string(directory.join(RUN_COMMIT_FILE))
-                .ok()
-                .map(|commit| commit.trim().to_owned()),
-        };
-        let median = result[metric]["median"].as_f64();
-        if let (Some(commit), Some(median)) = (commit, median) {
-            runs.push(Run { commit, median });
-        }
-    }
-    Ok(runs)
-}
-
 /// Pushes `verdict` to the branch under `adapter_key`, and rebuilds every
 /// Series, as a pinned commit starts a line.
 fn record(repository: &Path, adapter_key: &str, verdict: &Verdict) -> anyhow::Result<()> {
@@ -820,8 +779,10 @@ fn holds(shift: f64, good_median: f64, bad_median: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::super::ON_SERIES;
+    use super::super::night::NIGHT_VERDICT;
     use super::super::tests::{Fixture, commit};
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn a_shift_holds_at_half_its_marked_size_and_three_percent() {
@@ -910,63 +871,6 @@ mod tests {
         assert_eq!(verdict.unwrap().state, Some(State::Held));
         // Sources 2 and 3 lie between: the middle is 3's commit, c.
         assert_eq!(next.as_deref(), Some("c"));
-    }
-
-    #[test]
-    fn a_nights_runs_are_read_from_the_results_the_bench_writes() {
-        let night_directory =
-            std::env::temp_dir().join(format!("praxis-night-{}", std::process::id()));
-        std::fs::remove_dir_all(&night_directory).ok();
-        let mut result = crate::bench::tests::baseline();
-        let checkout = crate::bench::Checkout {
-            source_hash: "1".to_owned(),
-            commit: "a".to_owned(),
-            dirty: false,
-            branch: "HEAD".to_owned(),
-        };
-        result.provenance = Some(crate::bench::tests::provenance(checkout, 1.01));
-        for (run, median) in [("002", 200.0), ("001", 100.0)] {
-            result.cpu_frame_microseconds.median = median;
-            let directory = night_directory.join(run);
-            std::fs::create_dir_all(&directory).unwrap();
-            std::fs::write(
-                directory.join(format!("{}.json", result.scene)),
-                serde_json::to_string(&result).unwrap(),
-            )
-            .unwrap();
-        }
-        let verdict = Verdict {
-            scene: result.scene.clone(),
-            ..night()
-        };
-        let read = night_runs(&night_directory, &verdict.scene, &verdict.metric).unwrap();
-        std::fs::remove_dir_all(&night_directory).ok();
-        assert_eq!(read, runs(&[("a", 100.0), ("a", 200.0)]));
-    }
-
-    /// A binary older than the bench's provenance stamps no commit, so the
-    /// sweep names it beside the result.
-    #[test]
-    fn a_run_without_provenance_is_of_the_commit_the_sweep_named() {
-        let night_directory =
-            std::env::temp_dir().join(format!("praxis-unstamped-night-{}", std::process::id()));
-        std::fs::remove_dir_all(&night_directory).ok();
-        let result = crate::bench::tests::baseline();
-        for (run, commit) in [("001", Some("a")), ("002", None)] {
-            let directory = night_directory.join(run);
-            std::fs::create_dir_all(&directory).unwrap();
-            std::fs::write(
-                directory.join(format!("{}.json", result.scene)),
-                serde_json::to_string(&result).unwrap(),
-            )
-            .unwrap();
-            if let Some(commit) = commit {
-                std::fs::write(directory.join(RUN_COMMIT_FILE), format!("{commit}\n")).unwrap();
-            }
-        }
-        let read = night_runs(&night_directory, &result.scene, "cpu_frame_microseconds").unwrap();
-        std::fs::remove_dir_all(&night_directory).ok();
-        assert_eq!(read, runs(&[("a", 1000.0)]));
     }
 
     #[test]

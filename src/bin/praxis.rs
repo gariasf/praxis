@@ -82,6 +82,9 @@ enum Command {
     Bisect {
         night: String,
     },
+    PublishNight {
+        night: String,
+    },
     Regressions,
     Compare {
         results: String,
@@ -145,6 +148,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::UnrecordedScenes => unrecorded_scenes(),
         Command::Suspects => suspects(),
         Command::Bisect { night } => bisect(&night),
+        Command::PublishNight { night } => publish_night(&night),
         Command::Regressions => regressions(),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
@@ -296,6 +300,11 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 night: night.clone(),
             }
         }
+        [command, subcommand, night] if command == "history" && subcommand == "publish-night" => {
+            Command::PublishNight {
+                night: night.clone(),
+            }
+        }
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -325,7 +334,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_clause} \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )
@@ -566,18 +575,32 @@ fn suspects() -> anyhow::Result<()> {
 }
 
 /// Takes the sweep's next step of re-benching and bisecting a Suspect on
-/// this machine, whose runs so far are in `night`'s directories, and
-/// prints the scene and commit to bench next into a new one, nothing once
-/// the night is done.
+/// this machine, whose runs so far are in the Night `night`, creates the
+/// next run's directory and prints three lines: the commit to bench, the
+/// run's directory, then the rest of `bench`'s arguments. Nothing once the
+/// Night is done.
 fn bisect(night: &str) -> anyhow::Result<()> {
     let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
-    if let Some((scene, commit)) = praxis::bench::bisect(
-        Path::new("."),
-        &adapter.name,
-        adapter.backend.to_str(),
-        Path::new(night),
-    )? {
-        writeln!(std::io::stdout(), "{scene} {commit}")?;
+    let (repository, night) = (Path::new("."), Path::new(night));
+    if let Some((scene, commit)) =
+        praxis::bench::bisect(repository, &adapter.name, adapter.backend.to_str(), night)?
+    {
+        let run = praxis::bench::next_run(repository, night, &scene, &commit)?;
+        writeln!(
+            std::io::stdout(),
+            "{commit}\n{}\n{}",
+            run.directory.display(),
+            run.arguments.join(" ")
+        )?;
+    }
+    Ok(())
+}
+
+/// Publishes the results of the Night `night`'s runs in one commit, and
+/// prints what it did.
+fn publish_night(night: &str) -> anyhow::Result<()> {
+    if let Some(publication) = praxis::bench::publish_night(Path::new("."), Path::new(night))? {
+        writeln!(std::io::stdout(), "{publication}")?;
     }
     Ok(())
 }
@@ -1020,6 +1043,12 @@ mod tests {
         ));
         let Command::Bisect { night } = parse(&["history", "bisect", "night"]).unwrap() else {
             panic!("history bisect parsed as another command");
+        };
+        assert_eq!(night, "night");
+        let Command::PublishNight { night } =
+            parse(&["history", "publish-night", "night"]).unwrap()
+        else {
+            panic!("history publish-night parsed as another command");
         };
         assert_eq!(night, "night");
         assert!(matches!(
