@@ -4,7 +4,7 @@
 //! them for vertex cache, overdraw and vertex fetch, and cuts each
 //! Primitive's triangles, in that order, into Meshlets.
 
-use glam::{Mat3, Quat, Vec3};
+use glam::{Mat3, Quat, Vec2, Vec3};
 use sha2::{Digest, Sha256};
 
 use crate::cooked::{
@@ -101,6 +101,7 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
             first_index: mesh.indices.len() as u32,
             index_count: indices.len() as u32,
             material: *material,
+            texel_density: texel_density(geometry),
             meshlets: Vec::new(),
         });
         mesh.indices
@@ -129,6 +130,28 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         corners.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
     ];
     Ok(mesh)
+}
+
+/// `geometry`'s UV units per metre, as `CookedPrimitive::texel_density`
+/// defines it.
+fn texel_density(geometry: &Geometry) -> f32 {
+    let (mut uv_area, mut world_area) = (0.0f64, 0.0f64);
+    for triangle in geometry.indices.as_chunks::<3>().0 {
+        let [first, second, third] = triangle.map(|index| index as usize);
+        let position = |vertex: usize| Vec3::from(geometry.positions[vertex]).as_dvec3();
+        let uv = |vertex: usize| Vec2::from(geometry.uvs[vertex]).as_dvec2();
+        world_area += (position(second) - position(first))
+            .cross(position(third) - position(first))
+            .length();
+        uv_area += (uv(second) - uv(first))
+            .perp_dot(uv(third) - uv(first))
+            .abs();
+    }
+    if world_area > 0.0 {
+        (uv_area / world_area).sqrt() as f32
+    } else {
+        0.0
+    }
 }
 
 /// One Primitive's vertices and indices, welded, re-split and ordered for
@@ -511,6 +534,14 @@ pub(crate) mod tests {
         };
         assert_eq!(weld(&soup).positions.len(), 4);
         assert_eq!(cook(&[(soup, None)]).unwrap().vertices.len(), 4);
+    }
+
+    #[test]
+    fn a_square_metre_quad_has_the_uv_units_per_metre_its_uvs_span() {
+        for uv_repeat in [1.0, 2.0] {
+            let mesh = cook(&[(crate::scenes::ground_plane(0.5, uv_repeat), None)]).unwrap();
+            assert_eq!(mesh.primitives[0].texel_density, uv_repeat);
+        }
     }
 
     /// The plane's `u` grows along +X and its `v` along +Z, down the image,

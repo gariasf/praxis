@@ -332,6 +332,11 @@ impl MeshPool {
             needs_material_handle: mesh_use.drawn() && materials.contains(&None),
             vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
             bounds: mesh.bounds,
+            texel_densities: mesh
+                .primitives
+                .iter()
+                .map(|primitive| primitive.texel_density)
+                .collect(),
         });
 
         // A Meshlet's vertices index the vertex Arena, and its triangles
@@ -985,6 +990,7 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: indices.len() as u32,
                 material: None,
+                texel_density: 0.0,
                 meshlets,
             }],
             indices,
@@ -1054,6 +1060,7 @@ pub(crate) mod tests {
             first_index: first_index as u32,
             index_count: 3,
             material: None,
+            texel_density: first_index as f32,
             meshlets: CookedMeshlet::split(&[[0, 1, 2], [2, 1, 3]][first_index / 3..][..1], [1])
                 .expect("one Meshlet"),
         };
@@ -1071,6 +1078,7 @@ pub(crate) mod tests {
             .load(&mut staging, &two_primitives, &[Some(material), None])
             .expect("the Mesh fits");
         staging.submit(&context.queue);
+        assert_eq!(pool.get(handle).unwrap().texel_densities, [0.0, 3.0]);
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];
