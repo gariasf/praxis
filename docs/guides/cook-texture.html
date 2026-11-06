@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/cook/texture.rs</code></div>
   <h1>Texture cooking</h1>
   <p class="definition">The cook of one <span class="concept" data-term="Texture" data-tip="One Channel's image with its mips. A Layer refers to one Texture.">Texture</span>: it takes a source image into linear light, reduces it by means of 2&times;2 boxes down to a single texel, widens a metallic-roughness Texture's roughness at each mip by how far its normal Texture's normals spread there, after Toksvig, encodes every mip in its <span class="concept" data-term="Channel" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Albedo and emissive are the colour Channels, encoded sRGB; normal, metallic-roughness and occlusion are the data Channels, encoded linear. Each kind has its own sampler.">Channel</span>'s BC format, and stores the chain as a KTX2 <span class="concept" data-term="Blob" data-tip="One cooked Asset's bytes, named by their content hash.">Blob</span>, each level zstd-compressed on its own, smallest first.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 98564b94 (2026-11-06). A change to the Texture cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="staging.html">Staging</a> for the belt the loader writes each mip through.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 7d8f0a57 (2026-11-06). A change to the Texture cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="staging.html">Staging</a> for the belt the loader writes each mip through.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -346,9 +346,9 @@ let bc7_settings = if components == 4
 </section>
 
 <section class="part prose" id="blob">
-  <div class="part-mark">6 &middot; <code>CookedTexture::to_blob</code> &middot; <code>ChannelTextures::push</code></div>
+  <div class="part-mark">6 &middot; <code>CookedTexture::to_blob</code> &middot; <code>ChannelTextures::push</code> &middot; <code>resident_tail_level</code></div>
   <h2>The Blob and its load</h2>
-  <p class="key-idea">A Texture Blob is KTX2: a header, a level index, a data format descriptor, one key-value entry with the format version, then each level's blocks zstd-compressed on its own, the smallest mip first. The runtime refuses a Blob of another version, format, size or mip count, and writes the whole chain into a slice of the texture array its shape shares.</p>
+  <p class="key-idea">A Texture Blob is KTX2: a header, a level index, a data format descriptor, one key-value entry with the format version, then each level's blocks zstd-compressed on its own, the smallest mip first. The runtime refuses a Blob of another version, format, size or mip count, and writes the Resident tail into a slice of the tail's own Texture class, then the finer mips into a slice of the whole chain's, with the tail copied over.</p>
   <p>The key-value entry is <code>PXTXVERSION</code>, its NUL and <code>TEXTURE_FORMAT_VERSION</code>, 2, as a little-endian u32. The key and its NUL are 12 bytes, a multiple of the value's 4, as KTX 2.0 requires of a key whose value starts with a multi-byte number. The levels follow in reverse, so the smallest mips are one contiguous byte range: the <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span> that streaming will keep loaded, read in one span.</p>
 <pre class="code"><code>let data_offset = key_value_offset + key_value_entry.len();
 for (level, texels) in self.levels.iter().enumerate().rev() {
@@ -363,25 +363,29 @@ for (level, texels) in self.levels.iter().enumerate().rev() {
 }</code></pre>
   <p class="code-source"><code>CookedTexture::to_blob</code>, <code>src/assets/cooked.rs</code>. A supercompressed level needs no alignment, so the levels pack end to end.</p>
   <p>Each level's uncompressed size is <code>level_bytes</code>: the level's side, halved per mip and no less than 1, in whole blocks of 4&times;4, times the format's <code>block_copy_size</code>. A level smaller than a block still takes a whole one. <code>CookedTexture::from_blob</code> checks every level against that size as it decompresses it, and the mip count against the one the cook makes.</p>
-  <p>At load, <code>MaterialPool::load_texture</code> reads the Blob by Asset ID once, and <code>ChannelTextures::push</code> writes it, with every mip, into the next free slice of its shape's <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span>: one texture array per size, mip count and format. A class opens, its array created, when its shape has none or its newest is full; the first of a shape has one slice and each later one twice the one before's, up to the Capability floor's 256 array layers, and every slice counts in GPU memory from the start. The class and slice make the Texture's <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span>, class times 256 plus slice. Each mip goes through the load's staging, which pitches the unpadded rows to a multiple of 256 bytes as it copies them into the belt. Streaming is not in yet: every mip is loaded with its Texture.</p>
+  <p>At load, <code>MaterialPool::load_texture</code> reads the Blob by Asset ID once, and <code>ChannelTextures::push</code> writes it in two steps, each into a free slice of a <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span>: one texture array per size, mip count and format. A class opens, its array created, when its shape has none or its newest is full; the first of a shape has one slice and each later one twice the one before's, up to the Capability floor's 256 array layers, and every slice counts in GPU memory from the start. The class and slice make the Texture's <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span>, class times 256 plus slice. Each mip goes through the load's staging, which pitches the unpadded rows to a multiple of 256 bytes as it copies them into the belt.</p>
+  <p>The first step writes the Resident tail, the mips from the first of 64 KiB or less, <code>RESIDENT_TAIL_LEVEL_BYTES</code>, into the class of the tail's own shape. The second writes the finer mips into the class of the whole chain's shape and copies the tail over from its slice on the load's encoder, and the Texture's Layer is that slice's. Both steps run at load; with the residency Render switch the second never runs, and the Texture samples its tail alone, blurred, never Layer 0. A Texture whose mip 0 is 64 KiB or less is all tail and loads in one step, as does one whose tail's first mip is not whole blocks, which a BC Texture of its own cannot start with; a Channel with no room for the chain's class leaves the Texture at its tail. The tail's slice stays taken after the move.</p>
 <pre class="code"><code>let shape = TextureShape::of(texture);
-let Some(placement) = self.table.place(shape) else {
-...
-if placement.slice == 0 {
-    let array = self.memory.create_material_texture(
-        device,
-        &amp;wgpu::TextureDescriptor {
-            label: Some(self.label),
-            size: wgpu::Extent3d {
-                width: shape.width,
-                height: shape.height,
-                depth_or_array_layers: self.table.slices(placement.class),
-...
-let array = &amp;self.textures[placement.class as usize];
-for (level, bytes) in texture.levels.iter().enumerate() {
-    staging.write_texture(array, level as u32, placement.slice, bytes);
+let tail_level = shape.resident_tail_level();
+let (finer_levels, tail_levels) = texture.levels.split_at(tail_level as usize);
+let tail = self.place(device, shape.mips_from(tail_level))?;
+for (level, bytes) in tail_levels.iter().enumerate() {
+    let array = &amp;self.textures[tail.class as usize];
+    staging.write_texture(array, level as u32, tail.slice, bytes);
 }
-Some(placement.layer())</code></pre>
+if finer_levels.is_empty() || holds_back_finer_mips {
+    return Some(tail.layer());
+}
+let Some(chain) = self.place(device, shape) else {
+    return Some(tail.layer());
+};
+let chain_array = &amp;self.textures[chain.class as usize];
+for (level, bytes) in finer_levels.iter().enumerate() {
+    staging.write_texture(chain_array, level as u32, chain.slice, bytes);
+}
+let tail_array = &amp;self.textures[tail.class as usize];
+staging.copy_texture(tail_array, tail.slice, chain_array, chain.slice, tail_level);
+Some(chain.layer())</code></pre>
   <p class="code-source"><code>ChannelTextures::push</code>, <code>src/assets/material.rs</code>.</p>
 </section>
 
@@ -402,6 +406,7 @@ Some(placement.layer())</code></pre>
       <tr><td><code>a_dev_launch_cooks_exactly_what_its_scene_references_and_changed</code></td><td><code>tests/cook.rs</code></td><td>a touched embedded normal Texture re-cooks itself and the metallic-roughness Texture it widens, nothing else</td></tr>
       <tr><td><code>the_cook_key_covers_the_format_version</code></td><td><code>src/cook/texture.rs</code></td><td>a Texture's Cook key changes with <code>TEXTURE_FORMAT_VERSION</code></td></tr>
       <tr><td><code>texture_blob_round_trips_smallest_mip_first_and_refuses_another_version</code></td><td><code>src/assets/cooked.rs</code></td><td>a Blob reads back as written, its level offsets fall from mip 0 to the last, its version lands 4-byte aligned, and another version, the first format's entry and a side not a multiple of 4 are refused</td></tr>
+      <tr><td><code>a_texture_held_to_its_resident_tail_samples_the_tail_and_a_moved_one_every_mip</code></td><td><code>src/render/renderer.rs</code></td><td>a 512&times;512 BC5 Texture whose mip 0 is red and its tail, mip 1 on, green: with the residency switch, squares sampled at mips 0 and 2 both show green; without it, red then green, the tail copied after mip 0</td></tr>
       <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every Reference scene renders from cooked Textures, <code>minification</code>'s widened floor and <code>texture-wall</code>'s 10,000 Textures among them, and matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
     </tbody>
   </table>
@@ -488,7 +493,7 @@ Some(placement.layer())</code></pre>
   </dl>
   <h3>History</h3>
   <p class="note">The Texture cook took its present form over two weeks of the third milestone: BC encoding with mips in linear light first, then the Toksvig widening of metallic-roughness mips and, the same day, the runtime reading cooked Textures and Materials; then the procedural scenes' Textures paired with their normal Textures, for the minification floor; a sources audit that tied each step of the widening to its paper and said where it departs from them; and the KTX2 key-value entry aligned as KTX 2.0 requires, which moved the format to version 2. Before the cook, Textures were uncompressed RGBA8 without mips. The scenes that pin it, the floor and the wall, are on <a href="reference-scenes.html#minification">The Reference scenes</a>; <a href="box-filtering.html">Box filtering</a> explains what a mean of texels lets through and why a supersampled reference rewards blur; <a href="lit-pass.html#specular">The lit pass</a> describes what the widening leaves to the lit pass. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/cook/texture.rs</code>, <code>src/cook/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/assets/material.rs</code>, <code>src/render/staging.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0010, 0011, 0017 and 0018, two timed cold cooks, and the sources above, all at <code>main</code> b3d764b4.</footer>
+  <footer class="sources">Written from <code>src/cook/texture.rs</code>, <code>src/cook/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/assets/material.rs</code>, <code>src/render/staging.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0010, 0011, 0017 and 0018, and the sources above, all at <code>main</code> 7d8f0a57, and two cold cooks timed at b3d764b4.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="reference-scenes.html">Previous: The Reference scenes</a><a href="index.html">All field guides</a><a href="box-filtering.html">Next: Box filtering</a></nav>

@@ -165,7 +165,7 @@ mod tests {
         let mut staging = LoadStaging::new(context.device.clone());
         let memory = gpu_memory(&context);
         let mut mesh_pool = MeshPool::new(&context.device, &memory, ARENA_CAPACITY_BYTES);
-        let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging);
+        let mut material_pool = MaterialPool::new(&context.device, &memory, &mut staging, false);
         let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,

@@ -415,11 +415,18 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
     for (frame, stats) in frames.iter().enumerate() {
         // The 144-byte camera and 32-byte light uniforms, the sun and four
         // point lights, 48 bytes each, the five 128-byte Instances and their
-        // entries, and on the first frame the 4-byte Instance slot count.
-        let slot_count = if frame == 0 { 4 } else { 0 };
+        // entries, and on the first frame the 4-byte Instance slot count and
+        // the grid Texture's move to its whole chain's class: its Resident tail, mips
+        // 3 on of 2,048², in 16-byte blocks, 64², 32², … 2² of them, then 1
+        // at each of the last three mips.
+        let first_frame = if frame == 0 {
+            4 + 16 * (4096 + 1024 + 256 + 64 + 16 + 4 + 3)
+        } else {
+            0
+        };
         assert_eq!(
             stats.uploaded_bytes,
-            144 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + slot_count,
+            144 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + first_frame,
             "frame {frame}"
         );
         let timed: Vec<&str> = stats

@@ -84,6 +84,10 @@ pub struct RenderSwitches {
     /// The form the `crowd` scene's figures, which the GPU bends each frame,
     /// take in the TLAS.
     pub crowd_form: CrowdForm,
+    /// Whether every Texture holds back the mips finer than its Resident
+    /// tail, so it samples its tail alone, as one whose finer mips have not
+    /// arrived. Off, as it ships, every mip loads.
+    pub residency: bool,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -135,6 +139,7 @@ impl Default for RenderSwitches {
             shadow_rays: true,
             count_point_lights: false,
             crowd_form: CrowdForm::Proxies,
+            residency: false,
         }
     }
 }
@@ -248,7 +253,8 @@ impl Renderer {
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let mut load_staging = LoadStaging::new(device.clone());
-        let material_pool = MaterialPool::new(&device, &memory, &mut load_staging);
+        let material_pool =
+            MaterialPool::new(&device, &memory, &mut load_staging, switches.residency);
 
         let render_targets = RenderTargets::new(&device, &memory, width, height);
         let culling_pass = CullingPass::new(
@@ -493,7 +499,7 @@ impl Renderer {
         // Loads staged since the last frame land before its copies and
         // draws, and their BLASes are compacted before the static TLAS
         // takes them.
-        self.load_staging.submit(&self.queue);
+        recorder.counters.uploaded_bytes += self.load_staging.submit(&self.queue);
         self.mesh_pool.compact_blases(&self.queue);
         // Before the frame's encoder, as `prepare_encoder` says; it counts
         // as the dynamic TLAS's recording.
@@ -814,6 +820,8 @@ pub(crate) mod tests {
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
+    #[cfg(feature = "cook")]
+    use crate::cooked::{AssetId, CookedCache, CookedMaterial, CookedTexture, level_bytes};
     use crate::cooked::{
         CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex, MESHLET_MAX_VERTICES,
     };
@@ -908,6 +916,69 @@ pub(crate) mod tests {
             resized_image == created_image,
             "the resized Renderer drew another image than one created at its size"
         );
+    }
+
+    /// Two squares of a Texture whose mip 0 and Resident tail are distinct
+    /// colours, each 32 pixels wide over 16 and 128 of its mip 0's 512
+    /// texels, so sampled magnified at mip 0 and at mip 2, clear of the
+    /// mips around them. With the residency switch the Texture holds back
+    /// its finer mips and both show its tail, never mip 0 nor Layer 0's
+    /// white. Without it the Texture moves to its whole chain's class, mip 0
+    /// written beside the tail copied from the tail's class, and the frame
+    /// counts the copy in `uploaded_bytes`.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn a_texture_held_to_its_resident_tail_samples_the_tail_and_a_moved_one_every_mip() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-resident-tail-{}", std::process::id()));
+        let cache = mip_coloured_cache(&directory);
+        let size = 64;
+        let render = |residency| {
+            let switches = RenderSwitches {
+                residency,
+                ..RenderSwitches::default()
+            };
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, size, size, switches);
+            let material = renderer
+                .material_pool
+                .load(
+                    &renderer.device,
+                    &mut renderer.load_staging,
+                    &cache,
+                    MIP_COLOURED_MATERIAL,
+                )
+                .expect("the Material loads");
+            let magnified = load_uv_square(&mut renderer, 16.0 / 512.0);
+            let minified = load_uv_square(&mut renderer, 128.0 / 512.0);
+            let frame = frame_of(vec![
+                instance(magnified, material.index(), [-0.5, 0.0]),
+                instance(minified, material.index(), [0.5, 0.0]),
+            ]);
+            let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, size, size);
+            let pixels = [16, 48].map(|x| image.get_pixel(x, size / 2).0);
+            (pixels, recorder.counters.uploaded_bytes)
+        };
+        let (held, held_bytes) = render(true);
+        let (moved, moved_bytes) = render(false);
+        std::fs::remove_dir_all(&directory).ok();
+
+        assert!(
+            held.iter().all(|&pixel| shows(pixel, GREEN)),
+            "held to its tail: {held:?}"
+        );
+        assert!(shows(moved[0], RED), "moved, mip 0: {:?}", moved[0]);
+        assert!(shows(moved[1], GREEN), "moved, mip 2: {:?}", moved[1]);
+        // The 144-byte camera and 32-byte light uniforms, two 128-byte
+        // Instances and the 4-byte Instance slot count; moved, also the
+        // tail's 16-byte blocks: 64², 32², … 2² of them, then 1 at each of
+        // the last three mips.
+        let frame_bytes = 144 + 32 + 2 * 128 + 4;
+        let tail_bytes = 16 * (4096 + 1024 + 256 + 64 + 16 + 4 + 3);
+        assert_eq!(held_bytes, frame_bytes);
+        assert_eq!(moved_bytes, frame_bytes + tail_bytes);
     }
 
     /// Two Instances of a Mesh whose Primitives name a red and a green
@@ -2634,6 +2705,82 @@ pub(crate) mod tests {
             .mesh_pool
             .load(&mut renderer.load_staging, &mesh, &[None])
             .expect("the quad fits")
+    }
+
+    /// Loads a Mesh of a 1-wide square about the origin, facing -Z at the
+    /// depth of `load_triangles`' triangles, whose UVs span `uv_side` from
+    /// one corner to the other.
+    #[cfg(feature = "cook")]
+    fn load_uv_square(renderer: &mut Renderer, uv_side: f32) -> MeshHandle {
+        let vertices = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+            .map(|[u, v]| CookedVertex {
+                position: [u - 0.5, v - 0.5, 0.5],
+                uv: [u * uv_side, v * uv_side],
+                qtangent: [0, 0, 0, i16::MAX],
+            })
+            .to_vec();
+        let mesh = CookedMesh {
+            vertices,
+            indices: vec![0, 1, 2, 0, 2, 3],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 6,
+                material: None,
+                meshlets: vec![CookedMeshlet {
+                    vertices: vec![0, 1, 2, 3],
+                    triangles: vec![[0, 1, 2], [0, 2, 3]],
+                }],
+            }],
+            bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
+        };
+        renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &mesh, &[None])
+            .expect("the square fits")
+    }
+
+    /// The Material `mip_coloured_cache` holds.
+    #[cfg(feature = "cook")]
+    const MIP_COLOURED_MATERIAL: AssetId = AssetId(2);
+
+    /// A cache in `directory` holding a black, unlit Material whose emissive
+    /// Channel samples a 512 × 512 BC5 Texture with mip 0 red and every
+    /// coarser mip green. Its Resident tail, the mips of 64 KiB and smaller,
+    /// is mip 1 on.
+    #[cfg(feature = "cook")]
+    fn mip_coloured_cache(directory: &std::path::Path) -> CookedCache {
+        let format = wgpu::TextureFormat::Bc5RgUnorm;
+        // Two BC4 blocks whose every texel takes the first endpoint.
+        let block =
+            |[red, green]: [u8; 2]| [red, red, 0, 0, 0, 0, 0, 0, green, green, 0, 0, 0, 0, 0, 0];
+        let levels = (0..10)
+            .map(|level| {
+                let colour = if level == 0 { [255, 0] } else { [0, 255] };
+                block(colour).repeat(level_bytes(format, 512, 512, level) / 16)
+            })
+            .collect();
+        let texture = CookedTexture {
+            format,
+            width: 512,
+            height: 512,
+            levels,
+        };
+        let material = CookedMaterial {
+            base_color: [0.0, 0.0, 0.0, 1.0],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [1.0; 3],
+            normal_scale: 1.0,
+            textures: [None, None, None, None, Some(AssetId(1))],
+        };
+        let cache = CookedCache::new(directory);
+        cache
+            .write(AssetId(1), "key", &texture.to_blob(1).expect("a BC5 Blob"))
+            .expect("Texture written");
+        cache
+            .write(MIP_COLOURED_MATERIAL, "key", &material.to_blob())
+            .expect("Material written");
+        cache
     }
 
     /// An Instance of `mesh` moved by `offset` in x and y.

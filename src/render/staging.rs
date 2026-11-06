@@ -168,12 +168,15 @@ const LOAD_CHUNK_BYTES: u64 = 1 << 20;
 
 /// Staging for load-time uploads (ADR 0017): each write goes through a
 /// `StagingBelt` into a copy on one encoder, with the BLAS builds that read
-/// them, which `submit` sends ahead of the next frame's. The belt goes with
-/// it, so its staging buffers live only until the GPU has run the copies and
-/// never count in `gpu_memory_bytes`.
+/// them and the copies that move Textures between Texture classes, which
+/// `submit` sends ahead of the next frame's. The belt goes with it, so its
+/// staging buffers live only until the GPU has run the copies and never
+/// count in `gpu_memory_bytes`.
 pub struct LoadStaging {
     device: wgpu::Device,
     pending: Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
+    /// Bytes the pending Texture moves copy.
+    moved_bytes: u64,
 }
 
 impl LoadStaging {
@@ -181,6 +184,7 @@ impl LoadStaging {
         Self {
             device,
             pending: None,
+            moved_bytes: 0,
         }
     }
 
@@ -259,6 +263,60 @@ impl LoadStaging {
         );
     }
 
+    /// Records a copy of every mip of array layer `source_slice` of `source`
+    /// into layer `target_slice` of `target`, from its mip
+    /// `first_target_level` on: a Texture's move between Texture classes.
+    pub fn copy_texture(
+        &mut self,
+        source: &wgpu::Texture,
+        source_slice: u32,
+        target: &wgpu::Texture,
+        target_slice: u32,
+        first_target_level: u32,
+    ) {
+        let format = source.format();
+        let (block_width, block_height) = format.block_dimensions();
+        let block_bytes = format.block_copy_size(None).expect("a colour format");
+        let mut moved_bytes = 0;
+        let (_, encoder) = self.pending();
+        for level in 0..source.mip_level_count() {
+            // A mip smaller than a block still copies a whole one.
+            let size = wgpu::Extent3d {
+                depth_or_array_layers: 1,
+                ..source
+                    .size()
+                    .mip_level_size(level, source.dimension())
+                    .physical_size(format)
+            };
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: source,
+                    mip_level: level,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: source_slice,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: target,
+                    mip_level: first_target_level + level,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: target_slice,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                size,
+            );
+            let blocks = (size.width / block_width) * (size.height / block_height);
+            moved_bytes += u64::from(blocks * block_bytes);
+        }
+        self.moved_bytes += moved_bytes;
+    }
+
     /// Records `entry`'s BLAS build after the copies recorded so far, so it
     /// reads what they write.
     pub fn build_blas(&mut self, entry: &wgpu::BlasBuildEntry<'_>) {
@@ -279,12 +337,14 @@ impl LoadStaging {
         })
     }
 
-    /// Submits the copies recorded since the last call, if any.
-    pub fn submit(&mut self, queue: &wgpu::Queue) {
+    /// Submits the copies recorded since the last call, if any, and returns
+    /// the bytes their Texture moves copy.
+    pub fn submit(&mut self, queue: &wgpu::Queue) -> u64 {
         if let Some((mut belt, encoder)) = self.pending.take() {
             belt.finish();
             queue.submit(std::iter::once(encoder.finish()));
         }
+        std::mem::take(&mut self.moved_bytes)
     }
 }
 
