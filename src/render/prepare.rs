@@ -1431,9 +1431,7 @@ mod tests {
     /// query order.
     #[test]
     fn past_the_light_buffers_capacity_the_farthest_point_lights_are_cut() {
-        let Some(mut frames) = Frames::new() else {
-            return;
-        };
+        let mut frames = Frames::new();
         let camera_position = glam::dvec3(1.0e6, 0.0, 0.0);
         frames.world.resource_mut::<Camera>().position = camera_position;
         for distance in (1..=LIGHT_CAPACITY + 3).rev() {
