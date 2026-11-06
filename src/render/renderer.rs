@@ -918,13 +918,14 @@ pub(crate) mod tests {
         );
     }
 
-    /// Two squares of a Texture whose mips are distinct colours, each 32
-    /// pixels wide over 32 and 64 of its mip 0's 512 texels, so sampled at
-    /// mips 0 and 1. With the residency switch the Texture holds back its
-    /// finer mips and both show its Resident tail's finest mip, mip 1,
-    /// never mip 0 nor Layer 0's white. Without it the Texture moves to its
-    /// full class, mip 0 written beside the tail copied from the tail's
-    /// class, and the frame counts the copy in `uploaded_bytes`.
+    /// Two squares of a Texture whose mip 0 and Resident tail are distinct
+    /// colours, each 32 pixels wide over 16 and 128 of its mip 0's 512
+    /// texels, so sampled magnified at mip 0 and at mip 2, clear of the
+    /// mips around them. With the residency switch the Texture holds back
+    /// its finer mips and both show its tail, never mip 0 nor Layer 0's
+    /// white. Without it the Texture moves to its whole chain's class, mip 0
+    /// written beside the tail copied from the tail's class, and the frame
+    /// counts the copy in `uploaded_bytes`.
     #[cfg(feature = "cook")]
     #[test]
     fn a_texture_held_to_its_resident_tail_samples_the_tail_and_a_moved_one_every_mip() {
@@ -950,11 +951,11 @@ pub(crate) mod tests {
                     MIP_COLOURED_MATERIAL,
                 )
                 .expect("the Material loads");
-            let finest = load_uv_square(&mut renderer, 32.0 / 512.0);
-            let second = load_uv_square(&mut renderer, 64.0 / 512.0);
+            let magnified = load_uv_square(&mut renderer, 16.0 / 512.0);
+            let minified = load_uv_square(&mut renderer, 128.0 / 512.0);
             let frame = frame_of(vec![
-                instance(finest, material.index(), [-0.5, 0.0]),
-                instance(second, material.index(), [0.5, 0.0]),
+                instance(magnified, material.index(), [-0.5, 0.0]),
+                instance(minified, material.index(), [0.5, 0.0]),
             ]);
             let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, size, size);
             let pixels = [16, 48].map(|x| image.get_pixel(x, size / 2).0);
@@ -969,7 +970,7 @@ pub(crate) mod tests {
             "held to its tail: {held:?}"
         );
         assert!(shows(moved[0], RED), "moved, mip 0: {:?}", moved[0]);
-        assert!(shows(moved[1], GREEN), "moved, mip 1: {:?}", moved[1]);
+        assert!(shows(moved[1], GREEN), "moved, mip 2: {:?}", moved[1]);
         // The 144-byte camera and 32-byte light uniforms, two 128-byte
         // Instances and the 4-byte Instance slot count; moved, also the
         // tail's 16-byte blocks: 64², 32², … 2² of them, then 1 at each of
@@ -2743,9 +2744,9 @@ pub(crate) mod tests {
     const MIP_COLOURED_MATERIAL: AssetId = AssetId(2);
 
     /// A cache in `directory` holding a black, unlit Material whose emissive
-    /// Channel samples a 512 × 512 BC5 Texture with mip 0 red, mip 1 green
-    /// and every coarser mip black. Its Resident tail, the mips of 64 KiB
-    /// and smaller, is mip 1 on.
+    /// Channel samples a 512 × 512 BC5 Texture with mip 0 red and every
+    /// coarser mip green. Its Resident tail, the mips of 64 KiB and smaller,
+    /// is mip 1 on.
     #[cfg(feature = "cook")]
     fn mip_coloured_cache(directory: &std::path::Path) -> CookedCache {
         let format = wgpu::TextureFormat::Bc5RgUnorm;
@@ -2754,11 +2755,7 @@ pub(crate) mod tests {
             |[red, green]: [u8; 2]| [red, red, 0, 0, 0, 0, 0, 0, green, green, 0, 0, 0, 0, 0, 0];
         let levels = (0..10)
             .map(|level| {
-                let colour = match level {
-                    0 => [255, 0],
-                    1 => [0, 255],
-                    _ => [0, 0],
-                };
+                let colour = if level == 0 { [255, 0] } else { [0, 255] };
                 block(colour).repeat(level_bytes(format, 512, 512, level) / 16)
             })
             .collect();

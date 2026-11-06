@@ -416,7 +416,7 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
         // The 144-byte camera and 32-byte light uniforms, the sun and four
         // point lights, 48 bytes each, the five 128-byte Instances and their
         // entries, and on the first frame the 4-byte Instance slot count and
-        // the grid Texture's move to its full class: its Resident tail, mips
+        // the grid Texture's move to its whole chain's class: its Resident tail, mips
         // 3 on of 2,048², in 16-byte blocks, 64², 32², … 2² of them, then 1
         // at each of the last three mips.
         let first_frame = if frame == 0 {

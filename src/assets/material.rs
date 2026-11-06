@@ -227,10 +227,10 @@ impl ChannelTextures {
 
     /// Writes `texture` through `staging`: its Resident tail into a free
     /// slice of the tail's own Texture class, then, unless
-    /// `holds_back_finer_mips`, its finer mips into a free slice of its full
-    /// class, beside the tail copied over from the tail's slice. Returns the
-    /// Layer it ends in, its tail's when its full class has no room, or
-    /// `None` when the Channel has no room for its tail.
+    /// `holds_back_finer_mips`, its finer mips into a free slice of its whole
+    /// chain's class, beside the tail copied over from the tail's slice.
+    /// Returns the Layer it ends in, its tail's when the Channel has no room
+    /// for its chain, or `None` when it has none for its tail.
     fn push(
         &mut self,
         device: &wgpu::Device,
@@ -249,16 +249,16 @@ impl ChannelTextures {
         if finer_levels.is_empty() || holds_back_finer_mips {
             return Some(tail.layer());
         }
-        let Some(full) = self.place(device, shape) else {
+        let Some(chain) = self.place(device, shape) else {
             return Some(tail.layer());
         };
-        let full_array = &self.textures[full.class as usize];
+        let chain_array = &self.textures[chain.class as usize];
         for (level, bytes) in finer_levels.iter().enumerate() {
-            staging.write_texture(full_array, level as u32, full.slice, bytes);
+            staging.write_texture(chain_array, level as u32, chain.slice, bytes);
         }
         let tail_array = &self.textures[tail.class as usize];
-        staging.copy_texture(tail_array, tail.slice, full_array, full.slice, tail_level);
-        Some(full.layer())
+        staging.copy_texture(tail_array, tail.slice, chain_array, chain.slice, tail_level);
+        Some(chain.layer())
     }
 
     /// A free slice of `shape`'s Texture class, its array created when the
@@ -268,7 +268,7 @@ impl ChannelTextures {
             tracing::error!(
                 channel = self.label,
                 capacity = CLASSES_PER_CHANNEL,
-                "channel has no room for another Texture class; using the neutral default layer"
+                "channel has no room for another Texture class; the Texture keeps its Resident tail, or Layer 0 without one"
             );
             return None;
         };
@@ -535,8 +535,8 @@ impl MaterialPool {
     /// Loads the Texture `id` from `cache` into `channel` once per Asset ID,
     /// written through `staging`, and returns its Layer: a free slice of its
     /// shape's Texture class, or of its Resident tail's when the pool holds
-    /// back finer mips or its own class has no room, or Layer 0 when the
-    /// Channel is full.
+    /// back finer mips or the Channel has no room for its chain, or Layer 0
+    /// when it has none for its tail either.
     pub fn load_texture(
         &mut self,
         device: &wgpu::Device,
