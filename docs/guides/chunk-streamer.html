@@ -143,7 +143,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 </header>
 
 <section class="part prose" id="distance">
-  <div class="part-mark">1 &middot; <code>distance</code> &middot; <code>chunks_within</code></div>
+  <div class="part-mark">1 &middot; <code>distance_metres</code> &middot; <code>chunks_within</code></div>
   <h2>Distance to a Chunk</h2>
   <p class="key-idea">Every radius is measured from the camera to the nearest point of a Chunk's 256 m square, across x and z only: a Chunk is within a radius when any of its column is. At a Load radius of 256 m that is 7 to 9 Chunks.</p>
   <p>Along each axis the camera is either over the Chunk, at no distance, or past its lowest or highest edge by the difference; the two axes combine as a hypotenuse. Height plays no part, as a Chunk is a column at every height.</p>
@@ -154,7 +154,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
         .max(0.0)
 };
 along(camera.x, x).hypot(along(camera.z, z))</code></pre>
-  <p class="code-source"><code>distance</code>, <code>src/streaming/mod.rs</code>.</p>
+  <p class="code-source"><code>distance_metres</code>, <code>src/streaming/mod.rs</code>.</p>
   <p>Over the middle of a Chunk, the camera has its own Chunk, the four beside it at 128 m and the four at its corners at 181 m within 256 m: nine. Near the middle of an edge it has the two Chunks the edge divides, the four beside those and one of the two beyond: seven. Near a corner it has the four that share the corner and four of those around them: eight. <code>chunks_within</code> lists the Chunks that overlap the square around the camera of the radius's half-size, and each is kept only if it is in the Game world, which the streamer was given at creation, and within the radius.</p>
 </section>
 
@@ -162,10 +162,10 @@ along(camera.x, x).hypot(along(camera.z, z))</code></pre>
   <div class="part-mark">2 &middot; <code>update</code></div>
   <h2>Requests and the lead</h2>
   <p class="key-idea">A Chunk is requested once it is within the Load radius plus the lead: the distance the camera covered in its last frame, times one frame more than the latest load took. Requests go out nearest first, and a Chunk already requested is not requested again.</p>
-<pre class="code"><code>let lead = metres_per_frame * (self.load_frames + 1) as f64;
-let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
+<pre class="code"><code>let lead_metres = metres_per_frame * (self.load_frames + 1) as f64;
+let request_radius_metres = (load_radius_metres + lead_metres).min(hold_radius_metres);</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
-  <p>Speed and load time are both counted in frames: the camera's horizontal move since the frame before, and the frames from the request of the latest load that finished to the frame the streamer saw it finish. Their product is how far the camera goes while a load like the last one is under way. A load is seen on the frame after IO completes it, so a load as long as the last one can be seen a frame later; the extra frame covers that. The camera then cannot come within the Load radius of a requested Chunk before it loads, unless it speeds up or a load takes longer. On a teleport, and on the first frame, the speed is zero and the request radius is the Load radius.</p>
+  <p>Speed and load time are both counted in frames: the camera's horizontal move since the frame before, and the frames from the request of the latest load that finished to the frame the streamer saw it finish. By <code>ChunkIo</code>'s contract a load finishes once its Chunk's content is applied and the Assets it names are Resident, so the lead covers all of that. Their product is how far the camera goes while a load like the last one is under way. A load is seen on the frame after IO completes it, so a load as long as the last one can be seen a frame later; the extra frame covers that. The camera then cannot come within the Load radius of a requested Chunk before it loads, unless it speeds up or a load takes longer. On a teleport, and on the first frame, the speed is zero and the request radius is the Load radius.</p>
   <p>The request radius never passes the hold radius, so nothing is requested that would be unloaded on arrival. Requests are sorted by distance, ties by coordinates, so a run of the same camera path and the same IO requests the same Chunks in the same order.</p>
 </section>
 
@@ -179,12 +179,13 @@ let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
 <section class="part prose" id="arrivals">
   <div class="part-mark">4 &middot; <code>update</code></div>
   <h2>Late Chunks, the hold and Settled</h2>
-  <p class="key-idea">A Late Chunk is counted on the frame the camera comes within the Load radius of a Chunk not yet loaded. A teleport is an arrival, not travel: its Chunks are not Late, and the streamer holds until every Chunk within the Load radius has loaded. A frame is Settled when every Chunk within its request radius has loaded.</p>
-<pre class="code"><code>if !arrived &amp;&amp; !loaded &amp;&amp; !self.within_load_radius_before.contains(&amp;coordinates) {
+  <p class="key-idea">A Late Chunk is counted on the frame the camera comes within the Load radius of a Chunk not yet loaded, once per load. A teleport is an arrival, not travel: its Chunks are not Late, and the streamer holds until every Chunk within the Load radius has loaded. A frame is Settled when every Chunk within its request radius has loaded.</p>
+<pre class="code"><code>let entered = !self.within_load_radius_before.contains(&amp;coordinates);
+if !arrived &amp;&amp; !loaded &amp;&amp; entered &amp;&amp; self.counted_late.insert(coordinates) {
     frame.late_chunks += 1;
 }</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
-  <p>The streamer keeps the set of Chunks within the Load radius on the frame before, so a Chunk counts once on entering, not on every frame it is late. The first frame arrives as a teleport does, since the camera did not travel to it. The hold starts on an arrival and ends on the frame the last Chunk within the Load radius loads:</p>
+  <p>The streamer keeps the set of Chunks within the Load radius on the frame before, so a Chunk counts on entering, not on every frame it is late, and the Chunks it has counted until their loads finish, so a camera crossing a late Chunk's border back and forth counts it once. The first frame arrives as a teleport does, since the camera did not travel to it. The hold starts on an arrival and ends on the frame the last Chunk within the Load radius loads:</p>
 <pre class="code"><code>frame.holding = (frame.holding || arrived) &amp;&amp; !every_chunk_within_load_radius_loaded;</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
   <p>Settled reaches further than the hold: it waits for the lead's Chunks too, so a frame of travel whose lead has a request in flight is not Settled though it does not hold. A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them once Chunks stream.">Settled frame</span> is one a capture may render; the hold is what a fast travel waits on.</p>
@@ -220,6 +221,8 @@ let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
       <tr><td><code>chunks_load_within_the_load_radius_stay_held_to_the_hold_radius_and_unload_past_it</code></td><td>the 9 Chunks around the camera requested nearest first and loaded a frame later; after a jump of two Chunks, the 6 new ones requested, the column 384 m away held and the column 640 m away unloaded; back in the middle, the held column drawn again with no request</td></tr>
       <tr><td><code>chunks_ahead_are_requested_a_load_time_early_at_50_metres_a_second</code></td><td>flying at 50 m/s with loads of 6 frames, the Chunk ahead requested on the frame it comes within 256 m and 7 frames' travel, loaded the frame before the camera comes within 256 m of it, and 0 Late Chunks over 60 s</td></tr>
       <tr><td><code>a_chunk_whose_load_is_delayed_past_its_arrival_counts_as_late_once</code></td><td>two Chunks on the path whose loads take 10 s: exactly 2 Late Chunks over 60 s</td></tr>
+      <tr><td><code>a_chunk_the_camera_reaches_twice_before_it_loads_is_one_late_chunk</code></td><td>a camera that crosses into the Load radius of a slow Chunk, out and in again before it loads, counts 1 Late Chunk</td></tr>
+      <tr><td><code>a_load_finishing_past_the_hold_radius_is_dropped_and_one_in_flight_is_not_requested_again</code></td><td>loads that finish after a teleport took the camera away are dropped, neither loaded, held nor unloaded; back at the start, the Chunk still in flight is not requested again and loads when its first request finishes</td></tr>
       <tr><td><code>a_teleport_holds_until_the_last_chunk_in_the_load_radius_loads</code></td><td>the hold on the first frame and after a teleport, released on the frame its last Chunk, delayed 5 frames, loads; no Late Chunk</td></tr>
       <tr><td><code>a_frame_is_settled_when_every_chunk_it_requested_has_loaded</code></td><td>the frames that are not Settled flying east: the first 6, and 6 from each of the two requests ahead</td></tr>
       <tr><td><code>an_unload_reports_the_assets_it_was_the_last_loaded_user_of_in_order</code></td><td>a column unloading while held Chunks still name its rows' Materials reports only its Mesh; twelve Chunks unloading at once report their Meshes and Materials in the order their counts reach zero</td></tr>
@@ -231,7 +234,7 @@ let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
 <section class="part prose" id="cost">
   <div class="part-mark">7 &middot; <code>update</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">No Reference scene runs the streamer yet, so no Baseline measures it. Measured alone, a frame's update at the world's 256 m Load radius is a few hundred nanoseconds; with a radius that holds a thousand Chunks it grows with the Chunks it examines.</p>
+  <p class="key-idea">No Reference scene runs the streamer yet, so no Baseline measures it. Measured alone, its cost grows with the Chunks it examines: the square around its request radius and the Chunks it has loaded.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Flying diagonally at 50 m/s, 3,600 frames</th><th class="n">Median, &micro;s</th><th class="n">p99, &micro;s</th></tr></thead>
@@ -250,7 +253,7 @@ let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
   <h2>Why this way</h2>
   <p><b>The nearest point.</b> The Load radius was chosen from a table that counts the Chunks whose nearest point lies within each radius, 7 to 9 at 256 m against 20 to 23 at 512 m, so the streamer measures the same way. Measured to a Chunk's middle instead, a Load radius of 256 m would leave unloaded a Chunk whose corner is 75 m from the camera.</p>
   <p><b>A hold radius one Chunk out.</b> OGRE's terrain paging holds pages to a larger radius than it loads them to, to stop thrashing when the camera moves back and forth across the loading border. The streamed world takes that form with the hold one Chunk, 256 m, beyond the Load radius; held Chunks are not drawn or traced, as at <code>town</code>'s density the static TLAS could not hold them.</p>
-  <p><b>A lead the same in every direction.</b> Funkhouser bounds where an observer can be in N frames by a sphere of radius N times its speed, and suggests weighting it toward the direction of travel. The streamer takes the bound alone: one request radius around the camera. The extra Chunks it requests beside and behind the camera lie well within the hold radius at any lead a few frames long, so they cost a request each and no churn.</p>
+  <p><b>A lead the same in every direction.</b> Funkhouser bounds where an observer can be in N frames by a sphere of radius N times its top speed, and suggests weighting it toward the direction of travel. The streamer takes the bound alone: one request radius around the camera. The extra Chunks it requests beside and behind the camera lie well within the hold radius at any lead a few frames long, so they cost a request each and no churn.</p>
   <p><b>Frames, not seconds.</b> Speed and load time are both counted in frames, so their product is a distance whatever the frame rate, and the streamer reads no clock: the same camera path and the same IO give the same requests, which the tests and Settled captures both need.</p>
   <p><b>Arrivals hold.</b> A teleport has no lead to cover it: Sunset Overdrive's streaming had to load all seven zones around a teleport's destination at once. The streamer holds instead, and does not count the arrival's Chunks as Late, so Late Chunks measure travel alone.</p>
 </section>
@@ -269,11 +272,11 @@ let request_radius = (load_radius + lead).min(hold_radius);</code></pre>
   <h2>Sources</h2>
   <dl class="reading">
     <dt><a href="https://github.com/OGRECave/ogre/blob/bb8b7565cd4c6fd010ed2c04d6e762afab75a369/Components/Terrain/include/OgreTerrainPaging.h#L90-L93">OGRE 14.3, TerrainPaging::createWorldSection</a></dt>
-    <dd>The load and hold radii: a hold radius larger than the load radius, "used to minimise thrashing if the camera goes backwards and forwards at the loading border". Registry key ogre-14.3-hold-radius.</dd>
+    <dd>The load and hold radii: a hold radius larger than the load radius, "used to minimise thrashing if the camera goes backwards and forwards at the loading border". Registry key ogre-14.3-hold-radius, as the survey cites it.</dd>
     <dt><a href="https://graphicsinterface.org/wp-content/uploads/gi1996-1.pdf#page=4">Funkhouser, Database Management for Interactive Display of Large Architectural Models, Graphics Interface 1996, &sect;4</a></dt>
-    <dd>The observer's range in the next N frames as a sphere of radius N times its speed, weighted toward its travel. Registry key funkhouser-1996-observer-range.</dd>
+    <dd>The observer's range in the next N frames as a sphere of radius N times its top speed, weighted toward its travel. Registry key funkhouser-1996-observer-range, as the survey cites it.</dd>
     <dt><a href="https://archive.org/download/GDC2015Ruskin/GDC2015-Ruskin.pdf#page=151">Ruskin, Streaming in Sunset Overdrive's Open World, GDC 2015, p. 151</a></dt>
-    <dd>A teleport loading every zone around its destination at once. Registry key ruskin-2015-sunset-overdrive-teleport.</dd>
+    <dd>A teleport loading every zone around its destination at once. Registry key ruskin-2015-sunset-overdrive-teleport, as the survey cites it.</dd>
     <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/research/open-world-streaming-and-io.md">State of the art: open-world streaming and IO</a></dt>
     <dd>The survey behind the hold radius, the lead and the Load radius, with the table of Chunks per radius.</dd>
   </dl>

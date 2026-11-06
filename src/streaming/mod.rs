@@ -13,7 +13,9 @@ pub(crate) trait ChunkIo {
     /// Starts loading the Chunk at `coordinates`, x then z.
     fn request(&mut self, coordinates: [i32; 2]);
 
-    /// A load that finished since the last call, if any.
+    /// A load that finished since the last call, if any. A load finishes
+    /// once its Chunk's content is applied and the Assets it names are
+    /// Resident: the lead and the Settled report count to that point.
     fn take_finished(&mut self) -> Option<FinishedLoad>;
 }
 
@@ -59,6 +61,8 @@ pub(crate) struct ChunkStreamer {
     /// Each requested Chunk not yet loaded, and the frame it was requested
     /// on.
     in_flight: HashMap<[i32; 2], u64>,
+    /// Chunks counted as Late Chunks whose loads have not finished.
+    counted_late: HashSet<[i32; 2]>,
     within_load_radius: HashSet<[i32; 2]>,
     within_load_radius_before: HashSet<[i32; 2]>,
     camera_before: Option<DVec3>,
@@ -80,6 +84,7 @@ impl ChunkStreamer {
             loaded: BTreeMap::new(),
             users: HashMap::new(),
             in_flight: HashMap::new(),
+            counted_late: HashSet::new(),
             within_load_radius: HashSet::new(),
             within_load_radius_before: HashSet::new(),
             camera_before: None,
@@ -106,8 +111,8 @@ impl ChunkStreamer {
         frame.unloaded.clear();
         frame.last_users.clear();
         frame.late_chunks = 0;
-        let load_radius = self.load_radius_metres;
-        let hold_radius = load_radius + CHUNK_EDGE_METRES;
+        let load_radius_metres = self.load_radius_metres;
+        let hold_radius_metres = load_radius_metres + CHUNK_EDGE_METRES;
         let metres_per_frame = match self.camera_before {
             Some(before) if !teleported => (camera.x - before.x).hypot(camera.z - before.z),
             _ => 0.0,
@@ -118,8 +123,9 @@ impl ChunkStreamer {
             let Some(requested_on) = self.in_flight.remove(&load.coordinates) else {
                 continue;
             };
+            self.counted_late.remove(&load.coordinates);
             self.load_frames = self.frame_number - requested_on;
-            if distance(camera, load.coordinates) > hold_radius {
+            if distance_metres(camera, load.coordinates) > hold_radius_metres {
                 continue;
             }
             for &asset in &load.assets {
@@ -131,7 +137,7 @@ impl ChunkStreamer {
 
         let users = &mut self.users;
         self.loaded.retain(|&coordinates, assets| {
-            if distance(camera, coordinates) <= hold_radius {
+            if distance_metres(camera, coordinates) <= hold_radius_metres {
                 return true;
             }
             frame.unloaded.push(coordinates);
@@ -148,8 +154,8 @@ impl ChunkStreamer {
             false
         });
 
-        let lead = metres_per_frame * (self.load_frames + 1) as f64;
-        let request_radius = (load_radius + lead).min(hold_radius);
+        let lead_metres = metres_per_frame * (self.load_frames + 1) as f64;
+        let request_radius_metres = (load_radius_metres + lead_metres).min(hold_radius_metres);
         std::mem::swap(
             &mut self.within_load_radius,
             &mut self.within_load_radius_before,
@@ -157,30 +163,33 @@ impl ChunkStreamer {
         self.within_load_radius.clear();
         let mut every_chunk_within_load_radius_loaded = true;
         frame.settled = true;
-        for coordinates in chunks_within(camera, request_radius) {
+        for coordinates in chunks_within(camera, request_radius_metres) {
             if !self.chunks.contains(&coordinates) {
                 continue;
             }
-            let distance = distance(camera, coordinates);
-            if distance > request_radius {
+            let metres = distance_metres(camera, coordinates);
+            if metres > request_radius_metres {
                 continue;
             }
             let loaded = self.loaded.contains_key(&coordinates);
             frame.settled &= loaded;
-            if distance <= load_radius {
+            if metres <= load_radius_metres {
                 self.within_load_radius.insert(coordinates);
                 every_chunk_within_load_radius_loaded &= loaded;
-                if !arrived && !loaded && !self.within_load_radius_before.contains(&coordinates) {
+                let entered = !self.within_load_radius_before.contains(&coordinates);
+                if !arrived && !loaded && entered && self.counted_late.insert(coordinates) {
                     frame.late_chunks += 1;
                 }
             }
             if !loaded && !self.in_flight.contains_key(&coordinates) {
-                self.requests.push((distance, coordinates));
+                self.requests.push((metres, coordinates));
             }
         }
         frame.holding = (frame.holding || arrived) && !every_chunk_within_load_radius_loaded;
         self.requests
-            .sort_unstable_by(|left, right| left.0.total_cmp(&right.0).then(left.1.cmp(&right.1)));
+            .sort_unstable_by(|(left_metres, left), (right_metres, right)| {
+                left_metres.total_cmp(right_metres).then(left.cmp(right))
+            });
         for (_, coordinates) in self.requests.drain(..) {
             io.request(coordinates);
             self.in_flight.insert(coordinates, self.frame_number);
@@ -190,7 +199,7 @@ impl ChunkStreamer {
         frame.held.extend(
             self.loaded
                 .keys()
-                .filter(|&&coordinates| distance(camera, coordinates) > load_radius),
+                .filter(|&&coordinates| distance_metres(camera, coordinates) > load_radius_metres),
         );
         self.camera_before = Some(camera);
         self.frame_number += 1;
@@ -200,7 +209,7 @@ impl ChunkStreamer {
 
 /// The horizontal distance from `camera` to the nearest point of the Chunk
 /// at `coordinates`.
-fn distance(camera: DVec3, [x, z]: [i32; 2]) -> f64 {
+fn distance_metres(camera: DVec3, [x, z]: [i32; 2]) -> f64 {
     let along = |position: f64, coordinate: i32| {
         let lowest = coordinate as f64 * CHUNK_EDGE_METRES;
         (lowest - position)
@@ -211,11 +220,11 @@ fn distance(camera: DVec3, [x, z]: [i32; 2]) -> f64 {
 }
 
 /// The coordinates of every Chunk that overlaps the square of half-size
-/// `radius` around `camera`.
-fn chunks_within(camera: DVec3, radius: f64) -> impl Iterator<Item = [i32; 2]> {
+/// `radius_metres` around `camera`.
+fn chunks_within(camera: DVec3, radius_metres: f64) -> impl Iterator<Item = [i32; 2]> {
     let range = |position: f64| {
         let chunk = |metres: f64| (metres / CHUNK_EDGE_METRES).floor() as i32;
-        chunk(position - radius)..=chunk(position + radius)
+        chunk(position - radius_metres)..=chunk(position + radius_metres)
     };
     let columns = range(camera.x);
     let rows = range(camera.z);
@@ -289,7 +298,11 @@ mod tests {
 
     /// The camera over the middle of Chunk `[x, z]`.
     fn middle_of([x, z]: [i32; 2]) -> DVec3 {
-        DVec3::new((x as f64 + 0.5) * 256.0, 10.0, (z as f64 + 0.5) * 256.0)
+        DVec3::new(
+            (x as f64 + 0.5) * CHUNK_EDGE_METRES,
+            10.0,
+            (z as f64 + 0.5) * CHUNK_EDGE_METRES,
+        )
     }
 
     /// Runs one frame and steps the IO's clock past it.
@@ -470,5 +483,56 @@ mod tests {
                 material(1)
             ]
         );
+    }
+
+    #[test]
+    fn a_chunk_the_camera_reaches_twice_before_it_loads_is_one_late_chunk() {
+        let (mut streamer, mut io) = (streamer(), ScriptedIo::new(1));
+        io.delays.insert([2, 0], 100);
+        // Column 2 starts at x = 512 m: 255 m from x = 257 m, 262 m from 250.
+        let late: Vec<u32> = [128.0, 128.0, 257.0, 250.0, 257.0]
+            .into_iter()
+            .map(|x| {
+                let camera = DVec3::new(x, 10.0, 128.0);
+                step(&mut streamer, &mut io, camera, false).late_chunks
+            })
+            .collect();
+        assert_eq!(late, [0, 0, 1, 0, 0]);
+    }
+
+    #[test]
+    fn a_load_finishing_past_the_hold_radius_is_dropped_and_one_in_flight_is_not_requested_again() {
+        let (mut streamer, mut io) = (streamer(), ScriptedIo::new(1));
+        io.delays.insert([1, 1], 3);
+        let cameras = [
+            ([0, 0], false),
+            ([20, 0], true),
+            ([0, 0], true),
+            ([0, 0], false),
+        ];
+        let frames: Vec<ChunkFrame> = cameras
+            .into_iter()
+            .map(|(chunk, teleported)| step(&mut streamer, &mut io, middle_of(chunk), teleported))
+            .collect();
+
+        for frame in &frames[1..3] {
+            assert!(frame.loaded.is_empty());
+            assert!(frame.held.is_empty());
+            assert!(frame.unloaded.is_empty());
+        }
+        let around_origin_but_in_flight = [
+            [0, 0],
+            [-1, 0],
+            [0, -1],
+            [0, 1],
+            [1, 0],
+            [-1, -1],
+            [-1, 1],
+            [1, -1],
+        ];
+        assert_eq!(frames[2].requested, around_origin_but_in_flight);
+        assert_eq!(frames[3].loaded[0], [1, 1]);
+        assert_eq!(frames[3].loaded[1..], around_origin_but_in_flight);
+        assert!(!frames[3].holding);
     }
 }
