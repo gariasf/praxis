@@ -737,7 +737,7 @@ impl LoadedMeshes {
 }
 
 /// What freeing a loaded Mesh gives back: its range of each Arena, in
-/// `MeshPool::arenas` order, and its BLAS's triangles, compacted or not.
+/// `MeshPool::arenas` order, and its BLAS's bytes as built, compacted or not.
 struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
     blas_bytes: u64,

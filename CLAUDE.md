@@ -187,8 +187,9 @@ src/
                                  GPU stats through a ring of mapped
                                  buffers),
                                  acceleration_structures (the static
-                                 and dynamic TLAS, their memory
-                                 estimates), instance,
+                                 and dynamic TLAS, the sizes of
+                                 acceleration structures through
+                                 wgpu-hal), instance,
                                  uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)

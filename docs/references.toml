@@ -4833,6 +4833,12 @@ section = "wgpu-hal 30.0.1, metal/command.rs, place_acceleration_structure_barri
 quote = '''unsafe fn place_acceleration_structure_barrier( &mut self, _barriers: crate::AccelerationStructureBarrier, ) { }'''
 checked = 2026-11-05
 
+["wgpu-hal-30-instance-bytes"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1825"
+section = "wgpu-hal 30.0.1, vulkan/adapter.rs, the alignments the adapter exposes: a 64-byte instance record on Vulkan; dx12/adapter.rs L1037-L1040 sizes it as D3D12_RAYTRACING_INSTANCE_DESC, also 64 bytes"
+quote = '''raw_tlas_instance_size: 64,'''
+checked = 2026-11-06
+
 ["wgpu-hal-30-metal-instance-bytes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124"
 section = "wgpu-hal 30.0.1, metal/device.rs, tlas_instance_to_bytes, which returns the descriptor's bytes (L2158); metal/adapter.rs L1503-L1506 sizes wgpu-core's instance record by the same type"

@@ -24,12 +24,12 @@ pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 const NVIDIA_VENDOR: u32 = 0x10DE;
 
 /// The fraction of its built bytes a compacted BLAS keeps on `adapter`, as
-/// measured there: an estimate, since wgpu-core keeps a compacted size
-/// crate-private [ref:wgpu-30-blas-compacted-size-private] and wgpu-hal gives
-/// no structure's raw handle [ref:wgpu-hal-30-as-raw-private]. NVIDIA's on an NVIDIA
-/// GPU, on any backend; lavapipe's on any other Vulkan adapter, software or
-/// not; and the M4 Pro's on any other, as the Budgets' reference machine
-/// (ADR 0013).
+/// measured there: an estimate, since wgpu-core keeps the compacted size it
+/// reads crate-private [ref:wgpu-30-blas-compacted-size-private], and reading
+/// it again takes a query recorded through wgpu-hal outside wgpu's tracking
+/// and another wait. NVIDIA's on an NVIDIA GPU, on any backend; lavapipe's on
+/// any other Vulkan adapter, software or not; and the M4 Pro's on any other,
+/// as the Budgets' reference machine (ADR 0013).
 pub fn compacted_blas_fraction(adapter: &wgpu::AdapterInfo) -> f64 {
     if adapter.vendor == NVIDIA_VENDOR {
         // The RTX 2070 SUPER on Vulkan (NVIDIA 621.01), bytes a triangle by
@@ -37,7 +37,8 @@ pub fn compacted_blas_fraction(adapter: &wgpu::AdapterInfo) -> f64 {
         // behind the code).
         29.2 / 70.7
     } else if adapter.backend == wgpu::Backend::Vulkan {
-        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built.
+        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built
+        // (`docs/research/source-audit.md`, lavapipe's figures).
         1.0
     } else {
         // The M4 Pro on Metal, bytes a triangle by `currentAllocatedSize`
@@ -49,7 +50,8 @@ pub fn compacted_blas_fraction(adapter: &wgpu::AdapterInfo) -> f64 {
 /// Bytes of a BLAS of `geometry` built with `flags` on `device`: the size its
 /// driver gives through wgpu-hal, asked as wgpu-core asks it to create the
 /// BLAS. `input` is any buffer of `device`'s with a BLAS or TLAS input usage,
-/// which the query names and does not read.
+/// which the query names in place of wgpu-core's zero buffer: Metal's
+/// requires one [ref:wgpu-hal-30-metal-instances-buffer-unwrap].
 pub fn blas_bytes(
     device: &wgpu::Device,
     input: &wgpu::Buffer,
@@ -87,26 +89,20 @@ fn built_bytes(
     geometry: Geometry<'_>,
 ) -> u64 {
     let bytes: Option<u64> = None;
-    // SAFETY: the query reads no buffer, and `input` outlives it.
     #[cfg(target_vendor = "apple")]
-    let bytes = bytes.or_else(|| unsafe {
-        hal_built_bytes::<wgpu::hal::api::Metal>(device, input, flags, &geometry)
-    });
-    // SAFETY: as above.
+    let bytes =
+        bytes.or_else(|| hal_built_bytes::<wgpu::hal::api::Metal>(device, input, flags, &geometry));
     #[cfg(any(
         windows,
         target_os = "linux",
         target_os = "android",
         target_os = "freebsd"
     ))]
-    let bytes = bytes.or_else(|| unsafe {
-        hal_built_bytes::<wgpu::hal::api::Vulkan>(device, input, flags, &geometry)
-    });
-    // SAFETY: as above.
+    let bytes = bytes
+        .or_else(|| hal_built_bytes::<wgpu::hal::api::Vulkan>(device, input, flags, &geometry));
     #[cfg(windows)]
-    let bytes = bytes.or_else(|| unsafe {
-        hal_built_bytes::<wgpu::hal::api::Dx12>(device, input, flags, &geometry)
-    });
+    let bytes =
+        bytes.or_else(|| hal_built_bytes::<wgpu::hal::api::Dx12>(device, input, flags, &geometry));
     bytes.unwrap_or_else(|| {
         tracing::error!("Acceleration structure counted as 0 bytes: its backend has no size query");
         0
@@ -119,12 +115,8 @@ fn built_bytes(
 /// [ref:wgpu-30-blas-size-at-create] [ref:wgpu-30-tlas-size-at-create], and
 /// the Instance buffer a slot of wgpu-hal's Instance encoding each, for at
 /// least one slot [ref:wgpu-30-tlas-instance-buffer]
-/// [ref:wgpu-hal-30-metal-instance-bytes].
-///
-/// # Safety
-///
-/// `input` lives past the call.
-unsafe fn hal_built_bytes<A: wgpu::hal::Api>(
+/// [ref:wgpu-hal-30-metal-instance-bytes] [ref:wgpu-hal-30-instance-bytes].
+fn hal_built_bytes<A: wgpu::hal::Api>(
     device: &wgpu::Device,
     input: &wgpu::Buffer,
     flags: wgpu::AccelerationStructureFlags,
@@ -132,8 +124,8 @@ unsafe fn hal_built_bytes<A: wgpu::hal::Api>(
 ) -> Option<u64> {
     use wgpu::hal::{self, Device as _};
     // SAFETY: neither object is destroyed through its handle.
-    let (hal_device, buffer) = unsafe { (device.as_hal::<A>()?, input.as_hal::<A>()?) };
-    let buffer = Some(&*buffer);
+    let (hal_device, hal_buffer) = unsafe { (device.as_hal::<A>()?, input.as_hal::<A>()?) };
+    let buffer = Some(&*hal_buffer);
     let entries = match *geometry {
         Geometry::Triangles(triangles) => hal::AccelerationStructureEntries::Triangles(vec![
             hal::AccelerationStructureTriangles {
@@ -150,7 +142,12 @@ unsafe fn hal_built_bytes<A: wgpu::hal::Api>(
                         count,
                     },
                 ),
-                transform: None,
+                transform: flags
+                    .contains(wgpu::AccelerationStructureFlags::USE_TRANSFORM)
+                    .then(|| hal::AccelerationStructureTriangleTransform {
+                        buffer: &*hal_buffer,
+                        offset: 0,
+                    }),
                 flags: triangles.flags,
             },
         ]),
@@ -162,7 +159,7 @@ unsafe fn hal_built_bytes<A: wgpu::hal::Api>(
             })
         }
     };
-    // SAFETY: the query only reads the descriptor.
+    // SAFETY: the descriptor names live buffers only, as wgpu-core's does.
     let sizes = unsafe {
         hal_device.get_acceleration_structure_build_sizes(
             &hal::GetAccelerationStructureBuildSizesDescriptor {

@@ -339,7 +339,8 @@ pub(crate) mod tests {
 
     /// A TLAS counts the size its driver gives and wgpu-core's Instance
     /// buffer, 72 bytes a slot on Metal and 64 elsewhere, until dropped; its
-    /// size query's input is gone with the call.
+    /// size query's input is gone with the call. The driver's size is asked
+    /// here directly, for an Instances entry of the TLAS's capacity.
     #[test]
     fn a_tlas_created_through_the_ledger_counts_its_build_size_and_instances() {
         let Some(context) = gpu_context() else {
@@ -359,17 +360,70 @@ pub(crate) mod tests {
             usage: wgpu::BufferUsages::TLAS_INPUT,
             mapped_at_creation: false,
         });
-        let bytes = tlas_bytes(&context.device, &input, &descriptor);
+        let driver_bytes = driver_tlas_bytes(&context.device, &input, &descriptor);
         let instance_bytes = match context.backend() {
             wgpu::Backend::Metal => 72,
             _ => 64,
         };
-        assert!(bytes > 1000 * instance_bytes, "{bytes} bytes");
+        assert!(driver_bytes > 0);
         let mut expected = [0; GpuMemoryKind::COUNT];
-        expected[GpuMemoryKind::AccelerationStructures as usize] = bytes;
+        expected[GpuMemoryKind::AccelerationStructures as usize] =
+            driver_bytes + 1000 * instance_bytes;
         assert_eq!(memory.bytes_by_kind(), expected);
         drop(tlas);
         assert_eq!(memory.bytes_by_kind(), [0; GpuMemoryKind::COUNT]);
+    }
+
+    /// The size `device`'s driver gives a TLAS of `descriptor`, asked through
+    /// wgpu-hal on the backend the test runs on.
+    fn driver_tlas_bytes(
+        device: &wgpu::Device,
+        input: &wgpu::Buffer,
+        descriptor: &wgpu::CreateTlasDescriptor<'_>,
+    ) -> u64 {
+        fn on<A: wgpu::hal::Api>(
+            device: &wgpu::Device,
+            input: &wgpu::Buffer,
+            descriptor: &wgpu::CreateTlasDescriptor<'_>,
+        ) -> Option<u64> {
+            use wgpu::hal::{self, Device as _};
+            // SAFETY: neither object is destroyed through its handle, and the
+            // descriptor names a live buffer.
+            unsafe {
+                let hal_device = device.as_hal::<A>()?;
+                let hal_buffer = input.as_hal::<A>()?;
+                let entries = hal::AccelerationStructureEntries::Instances(
+                    hal::AccelerationStructureInstances {
+                        buffer: Some(&*hal_buffer),
+                        offset: 0,
+                        count: descriptor.max_instances,
+                    },
+                );
+                Some(
+                    hal_device
+                        .get_acceleration_structure_build_sizes(
+                            &hal::GetAccelerationStructureBuildSizesDescriptor {
+                                entries: &entries,
+                                flags: descriptor.flags,
+                            },
+                        )
+                        .acceleration_structure_size,
+                )
+            }
+        }
+        let bytes: Option<u64> = None;
+        #[cfg(target_vendor = "apple")]
+        let bytes = bytes.or_else(|| on::<wgpu::hal::api::Metal>(device, input, descriptor));
+        #[cfg(any(
+            windows,
+            target_os = "linux",
+            target_os = "android",
+            target_os = "freebsd"
+        ))]
+        let bytes = bytes.or_else(|| on::<wgpu::hal::api::Vulkan>(device, input, descriptor));
+        #[cfg(windows)]
+        let bytes = bytes.or_else(|| on::<wgpu::hal::api::Dx12>(device, input, descriptor));
+        bytes.expect("the test's backend has a size query")
     }
 
     #[test]

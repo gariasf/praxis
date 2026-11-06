@@ -92,10 +92,12 @@ impl GpuContext {
         })
     }
 
+    /// The device every pool, pass and target is created on.
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
 
+    /// What the adapter reports of itself: its backend, vendor and kind.
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
         self.adapter.get_info()
     }

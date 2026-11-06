@@ -383,8 +383,8 @@ self.mesh_pool.compact_blases(&amp;self.queue);</code></pre>
   <p class="key-idea">wgpu keeps an acceleration structure's size to itself, so the engine asks the driver the same question wgpu-core asks when it creates one, through wgpu-hal, and counts that answer; only a compacted BLAS's size, which neither wgpu-core nor wgpu-hal gives back, stays an estimate: a fraction of its built size measured once on each kind of adapter.</p>
   <p><code>blas_bytes</code> and <code>tlas_bytes</code> both end in <code>hal_built_bytes</code>, tried on each backend the build has: Metal on Apple targets, Vulkan on Windows, Linux, Android and FreeBSD, DX12 on Windows. Each returns None on a device of another backend, so the one the device runs on answers.</p>
 <pre class="code"><code>// SAFETY: neither object is destroyed through its handle.
-let (hal_device, buffer) = unsafe { (device.as_hal::&lt;A&gt;()?, input.as_hal::&lt;A&gt;()?) };
-let buffer = Some(&amp;*buffer);
+let (hal_device, hal_buffer) = unsafe { (device.as_hal::&lt;A&gt;()?, input.as_hal::&lt;A&gt;()?) };
+let buffer = Some(&amp;*hal_buffer);
 let entries = match *geometry {
     Geometry::Triangles(triangles) =&gt; hal::AccelerationStructureEntries::Triangles(vec![
         hal::AccelerationStructureTriangles {
@@ -404,7 +404,7 @@ let entries = match *geometry {
         })
     }
 };
-// SAFETY: the query only reads the descriptor.
+// SAFETY: the descriptor names live buffers only, as wgpu-core's does.
 let sizes = unsafe {
     hal_device.get_acceleration_structure_build_sizes(
         &amp;hal::GetAccelerationStructureBuildSizesDescriptor {
@@ -423,15 +423,15 @@ let instance_buffer_bytes = match *geometry {
     }
 };
 Some(sizes.acceleration_structure_size + instance_buffer_bytes)</code></pre>
-  <p class="code-source">The body of <code>hal_built_bytes</code>, <code>src/render/acceleration_structures.rs</code>; the elided lines give the triangles' indices and an Instance of zeros.</p>
-  <p>The geometry it describes is wgpu-core's own: zero first vertex and zero stride, a buffer named but never read, and for a TLAS one Instances entry of its capacity. Metal's query panics without a buffer there, and Vulkan's and DX12's read its address, so a caller passes <code>input</code>: the Mesh pool its vertex Arena, the GPU memory ledger a 64-byte buffer it creates for the query and drops at once. A TLAS adds wgpu-core's buffer of its Instances, a record per slot and at least one, each as long as wgpu-hal's encoding of an Instance: 72 bytes on Metal, 64 on Vulkan and DX12.</p>
+  <p class="code-source">The body of <code>hal_built_bytes</code>, <code>src/render/acceleration_structures.rs</code>; the elided lines give the triangles' indices, a transform only under <code>USE_TRANSFORM</code>, as wgpu-core gives one, and an Instance of zeros.</p>
+  <p>The geometry it describes is wgpu-core's own: zero first vertex and zero stride, a buffer named in place of wgpu-core's zero buffer, and for a TLAS one Instances entry of its capacity. Metal's query panics without a buffer there, so a caller passes <code>input</code>: the Mesh pool its vertex Arena, the GPU memory ledger a 64-byte buffer it creates for the query and drops at once. A TLAS adds wgpu-core's buffer of its Instances, a record per slot and at least one, each as long as wgpu-hal's encoding of an Instance: 72 bytes on Metal, 64 on Vulkan and DX12.</p>
 <pre class="code"><code>/// The fraction of its built bytes a compacted BLAS keeps on `adapter`, as
-/// measured there: an estimate, since wgpu-core keeps a compacted size
-/// crate-private [ref:wgpu-30-blas-compacted-size-private] and wgpu-hal gives
-/// no structure's raw handle [ref:wgpu-hal-30-as-raw-private]. NVIDIA's on an NVIDIA
-/// GPU, on any backend; lavapipe's on any other Vulkan adapter, software or
-/// not; and the M4 Pro's on any other, as the Budgets' reference machine
-/// (ADR 0013).
+/// measured there: an estimate, since wgpu-core keeps the compacted size it
+/// reads crate-private [ref:wgpu-30-blas-compacted-size-private], and reading
+/// it again takes a query recorded through wgpu-hal outside wgpu's tracking
+/// and another wait. NVIDIA's on an NVIDIA GPU, on any backend; lavapipe's on
+/// any other Vulkan adapter, software or not; and the M4 Pro's on any other,
+/// as the Budgets' reference machine (ADR 0013).
 pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
     if adapter.vendor == NVIDIA_VENDOR {
         // The RTX 2070 SUPER on Vulkan (NVIDIA 621.01), bytes a triangle by
@@ -439,7 +439,8 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
         // behind the code).
         29.2 / 70.7
     } else if adapter.backend == wgpu::Backend::Vulkan {
-        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built.
+        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built
+        // (`docs/research/source-audit.md`, lavapipe's figures).
         1.0
     } else {
         // The M4 Pro on Metal, bytes a triangle by `currentAllocatedSize`
@@ -473,7 +474,7 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
       <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a Mesh one vertex past the vertex Arena, or one index past the index Arena, is refused and logged, and leaves the pool's memory and ranges as they were</td></tr>
       <tr><td><code>a_freed_meshs_index_takes_the_next_mesh_and_refuses_the_old_handle</code></td><td><code>src/assets/pools.rs</code></td><td>a freed Mesh gives its BLAS's bytes back to the ledger, and a refitted Mesh is not freed</td></tr>
       <tr><td><code>the_compacted_blas_fraction_follows_the_adapter</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>an NVIDIA GPU on Vulkan and on DX12 gets NVIDIA's fraction, lavapipe under Mesa's vendor ID gets lavapipe's, an Apple GPU on Metal the M4 Pro's</td></tr>
-      <tr><td><code>a_tlas_created_through_the_ledger_counts_its_build_size_and_instances</code></td><td><code>src/stats/gpu_memory.rs</code></td><td>a TLAS of 1,000 slots counts <code>tlas_bytes</code> for it, more than its Instance buffer of 72 bytes a slot on Metal and 64 elsewhere, and nothing once dropped; its query's input is gone with the call</td></tr>
+      <tr><td><code>a_tlas_created_through_the_ledger_counts_its_build_size_and_instances</code></td><td><code>src/stats/gpu_memory.rs</code></td><td>a TLAS of 1,000 slots counts the size its driver gives, asked through wgpu-hal in the test itself, plus 1,000 Instance records of 72 bytes on Metal and 64 elsewhere, and nothing once dropped; its query's input is gone with the call</td></tr>
       <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the acceleration structures' kind equals the driver's size for the sphere's BLAS of 1,223 vertices and 2,208 triangles at the adapter's compacted fraction, rounded to a whole byte, plus both TLAS at capacity</td></tr>
       <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>on Metal, the crowd's figures loaded as <code>MeshUse::Refitted</code> cast through their refitted BLASes the shadows their rebuilt ones cast; off Metal, the refit form is refused</td></tr>
       <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, in its default form, is drawn from Meshes loaded <code>Drawn</code> and shadowed by a Mesh loaded <code>Traced</code>; every other Reference scene's shadows come from compacted BLASes</td></tr>
@@ -526,7 +527,7 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
   <p><b>Compaction.</b> A BLAS built once is traced for the rest of the run, so a one-time copy at load buys back over half its memory on the M4 Pro and on NVIDIA, the adapters Budgets and comparisons are judged on.</p>
   <p><b>A CPU wait, not ordering on the GPU.</b> The compaction runs once, at load, where a stall of the main thread, the one thread that submits and polls under ADR 0016, costs one frame. Ordering the copies before the TLAS builds on the GPU would need wgpu to record a barrier after the copy, which wgpu-core 30.0.1 does not on any backend, or Metal shared events through wgpu-hal, the route the per-frame refit takes because a wait in every frame could not pay; a wgpu version that orders the copy is a dependency change and the owner's call.</p>
   <p><b>The driver's size, not a measured rate.</b> ADR 0013's GPU memory Budget and ADR 0017's split of it by kind need acceleration structures counted, and wgpu 30 keeps the sizes it creates them at to itself. wgpu-hal answers the same question wgpu-core asks, so asking it as wgpu-core does counts each structure at the size it is created at, on any adapter, where bytes per triangle and per slot measured on three adapters counted every other adapter by one of theirs.</p>
-  <p><b>A compacted size estimated.</b> wgpu-core reads a compacted BLAS's size back into its own buffer and keeps it crate-private, and wgpu-hal gives no structure's raw handle, through which Metal or Vulkan could be asked. Reading it through a new dependency was ruled out; so the built size, which is exact, is scaled by the compaction measured on each kind of adapter.</p>
+  <p><b>A compacted size estimated.</b> wgpu-core reads a compacted BLAS's size back into its own buffer and keeps it crate-private. wgpu-hal's command encoder could read it again, but only through commands recorded outside wgpu's tracking, with their own barriers on each backend and another wait on the GPU; a new dependency was ruled out. So the built size, which is exact, is scaled by the compaction measured on each kind of adapter.</p>
 </section>
 
 <section class="part prose" id="limits">
@@ -553,8 +554,9 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
     <dt><a href="https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a73099715/pci.ids#L10357">The PCI ID Repository, vendor 10de</a>, <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/devsandqueues.adoc#L155-L157">Vulkan, VkPhysicalDeviceProperties::vendorID</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/ns-dxgi1_2-dxgi_adapter_desc2">DXGI_ADAPTER_DESC2</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194">wgpu-hal 30.0.1's DX12 adapter</a></dt><dd>the vendor ID the compacted fraction is picked by, on Vulkan and on DX12; <code>pci-vendor-id-nvidia</code>, <code>vulkan-vendorid-pci</code>, <code>dxgi-adapter-desc2-vendorid</code>, <code>wgpu-30-dx12-vendor-id</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L667-L673">wgpu 30.0.1, <code>Device::as_hal</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1194-L1197">wgpu-hal 30.0.1, <code>get_acceleration_structure_build_sizes</code></a></dt><dd>the route to the driver's size query; <code>wgpu-30-device-as-hal</code>, <code>wgpu-hal-30-build-sizes</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L100-L118">wgpu-core 30.0.1, <code>Device::create_blas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L242-L266"><code>Device::create_tlas</code></a></dt><dd>the geometry wgpu-core gives the same query, and that it creates each structure at the size returned; <code>wgpu-30-blas-size-at-create</code>, <code>wgpu-30-tlas-size-at-create</code></dd>
-    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L268-L282">wgpu-core 30.0.1, a TLAS's Instance buffer</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124">wgpu-hal 30.0.1, Metal's Instance encoding</a></dt><dd>the buffer of a record per slot, at least one, beside each TLAS, and the record's length; <code>wgpu-30-tlas-instance-buffer</code>, <code>wgpu-hal-30-metal-instance-bytes</code></dd>
-    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518">wgpu-core 30.0.1, a BLAS's compaction state</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L1389-L1392">wgpu-hal 30.0.1, Metal's <code>AccelerationStructure</code></a></dt><dd>why a compacted size stays an estimate: wgpu-core keeps it crate-private, and wgpu-hal gives no raw handle to ask the driver through; <code>wgpu-30-blas-compacted-size-private</code>, <code>wgpu-hal-30-as-raw-private</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L268-L282">wgpu-core 30.0.1, a TLAS's Instance buffer</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124">wgpu-hal 30.0.1, Metal's Instance encoding</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1825">Vulkan's record size</a></dt><dd>the buffer of a record per slot, at least one, beside each TLAS, and the record's length; <code>wgpu-30-tlas-instance-buffer</code>, <code>wgpu-hal-30-metal-instance-bytes</code>, <code>wgpu-hal-30-instance-bytes</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L384-L390">wgpu-hal 30.0.1, Metal's acceleration-structure descriptor</a></dt><dd>why a caller passes a buffer to the size query; <code>wgpu-hal-30-metal-instances-buffer-unwrap</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518">wgpu-core 30.0.1, a BLAS's compaction state</a></dt><dd>why a compacted size stays an estimate: wgpu-core keeps the size it reads crate-private; <code>wgpu-30-blas-compacted-size-private</code></dd>
     <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml">Vulkan registry, <code>VK_VENDOR_ID_MESA</code></a> and <a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886">Mesa 25.2.8, lavapipe's vendor ID</a></dt><dd>the vendor ID the fraction's test gives lavapipe; <code>vulkan-vendor-id-mesa</code>, <code>lavapipe-vendor-id-mesa</code></dd>
   </dl>
   <h3>History</h3>
