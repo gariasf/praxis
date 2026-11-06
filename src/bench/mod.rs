@@ -474,8 +474,9 @@ pub struct Budgets {
 impl Budgets {
     /// `BUDGETS_PATH` as this build was compiled with it.
     pub fn checked_in() -> Budgets {
-        serde_json::from_str(include_str!("../../bench/budgets.json"))
-            .expect("bench/budgets.json parses, as its test checks")
+        serde_json::from_str(include_str!("../../bench/budgets.json")).expect(
+            "bench/budgets.json parses, as the_checked_in_gpu_memory_budgets_fit_the_whole checks",
+        )
     }
 }
 
@@ -773,8 +774,8 @@ impl std::fmt::Display for Measurements {
 /// against Baselines. Against the Budgets, the CPU frame, the GPU frame and
 /// the gate count at the median and p99, the CPU frame at the p95 too, and
 /// the CPU and GPU frames' maximums against one 60 Hz period, and GPU
-/// memory in total and by kind; other p95s
-/// are reported only, as they move with one slow frame. Runs that
+/// memory in total and by kind; other p95s are reported only, as they move
+/// with one slow frame. Runs that
 /// measured as many frames compare their measured frames' counters; runs of
 /// other lengths compare their counter frames', and only with
 /// `CompareMode::Ci`, as their times cover other frames.
@@ -1525,8 +1526,6 @@ mod tests {
         );
     }
 
-    /// The CPU frame answers to its 6 ms Budget at the p95 too, though its
-    /// Baseline compares medians alone.
     /// Each kind of GPU memory answers to its own Budget, and runs without
     /// a kind's median are judged on the others.
     #[test]
@@ -1558,6 +1557,8 @@ mod tests {
         );
     }
 
+    /// The CPU frame answers to its 6 ms Budget at the p95 too, though its
+    /// Baseline compares medians alone.
     #[test]
     fn a_cpu_frame_p95_over_budget_fails_with_its_median_within() {
         let mut slow_tail = baseline();

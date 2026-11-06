@@ -6,7 +6,6 @@ use crate::{
     bench::Budgets,
     cooked::{AssetId, CookedMesh, CookedVertex},
     render::{AccelerationStructureBytes, LoadStaging, NO_MATERIAL},
-    stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES,
     stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
 };
 
@@ -15,6 +14,9 @@ const GEOMETRY_BYTES_PER_MESH: u64 = 1280;
 
 /// Bytes of the texture pool's Budget per Material table entry.
 const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 16 << 20;
+
+/// Bytes of a Channel's share of the texture pool's Budget per Texture class.
+const TEXTURE_POOL_BYTES_PER_CLASS: u64 = 64 << 10;
 
 /// What each pool holds, derived from the GPU memory Budgets at device
 /// creation: the geometry Arenas' Budget in equal shares and the Mesh table
@@ -47,7 +49,7 @@ impl PoolCapacities {
             meshes: entries(budgets.geometry_arenas / GEOMETRY_BYTES_PER_MESH),
             materials: entries(budgets.texture_pool / TEXTURE_POOL_BYTES_PER_MATERIAL),
             texture_classes_per_channel: entries(
-                budgets.texture_pool / (channels * RESIDENT_TAIL_LEVEL_BYTES),
+                budgets.texture_pool / (channels * TEXTURE_POOL_BYTES_PER_CLASS),
             )
             .min(CLASSES_PER_CHANNEL),
         }
