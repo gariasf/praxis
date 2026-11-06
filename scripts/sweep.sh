@@ -164,11 +164,7 @@
   }
 
   start=$SECONDS
-  # One Suspect a Night: its ends interleaved, then the bisect's commits.
-  # `history bisect` keeps the Night's directory and prints each run as
-  # three lines, as bash 3.2, launchd's, has no mapfile and a Windows path
-  # may hold a space: the commit, the run's directory, then the rest of
-  # `bench`'s arguments.
+  # Not mapfile: launchd's bash 3.2 lacks it [ref:gnu-bash-news-4.0-mapfile].
   night="$PWD/target/sweep/bisect-$(date '+%Y%m%dT%H%M%S')"
   bisect_done=0
   while true; do

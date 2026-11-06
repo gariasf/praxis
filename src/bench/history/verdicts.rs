@@ -354,12 +354,12 @@ pub fn suspects(repository: &Path, adapter: &str, backend: &str) -> anyhow::Resu
     Ok(suspects)
 }
 
-/// Takes a Night's next step of re-benching and bisecting, `adapter`'s on
-/// `backend`, its runs those in `night`'s directory: the night resumes the bisect of a held Verdict, or else
-/// starts on the oldest Suspect with none, and keeps to it. Records the
-/// Verdict on the remote's `bench-history` once the night's ends are
-/// judged, and returns the scene and commit to bench next, none once the
-/// night is done.
+/// Takes the next step of the Night `night`, re-benching and bisecting
+/// `adapter`'s Suspects on `backend` from the runs in its directory: the
+/// Night resumes the bisect of a held Verdict, or else starts on the oldest
+/// Suspect with none, and keeps to it. Records the Verdict on the remote's
+/// `bench-history` once the Night's ends are judged, and returns the scene
+/// and commit to bench next, none once the Night is done.
 pub fn bisect(
     repository: &Path,
     adapter: &str,

@@ -59,11 +59,11 @@ pub fn next_run(
     scene: &str,
     commit: &str,
 ) -> anyhow::Result<NextRun> {
-    run_after(repository, night, scene, commit, NO_PUBLISH_ADDED)
+    next_run_since(repository, night, scene, commit, NO_PUBLISH_ADDED)
 }
 
 /// `next_run`, `--no-publish` added by the commit `no_publish_added`.
-fn run_after(
+fn next_run_since(
     repository: &Path,
     night: &Path,
     scene: &str,
@@ -90,7 +90,8 @@ fn run_after(
     })
 }
 
-/// Whether `ancestor` is `commit` or comes before it.
+/// Whether `ancestor` is `commit` or comes before it
+/// [ref:git-merge-base-is-ancestor].
 fn is_ancestor(repository: &Path, ancestor: &str, commit: &str) -> anyhow::Result<bool> {
     let status = Command::new("git")
         .arg("-C")
@@ -224,7 +225,7 @@ mod tests {
         start(&night, &verdict).unwrap();
         let directories: Vec<PathBuf> = (0..3)
             .map(|_| {
-                run_after(checkout, &night, "town", &commit, &commit)
+                next_run_since(checkout, &night, "town", &commit, &commit)
                     .unwrap()
                     .directory
             })
@@ -250,14 +251,14 @@ mod tests {
         commit(checkout, "src/after.rs", "fn after() {}");
         let after = head(checkout);
         let arguments = |commit: &str| {
-            run_after(checkout, &night, "town", commit, &added)
+            next_run_since(checkout, &night, "town", commit, &added)
                 .unwrap()
                 .arguments
         };
         assert_eq!(arguments(&before), ["town"]);
         assert_eq!(arguments(&added), ["--no-publish", "town"]);
         assert_eq!(arguments(&after), ["--no-publish", "town"]);
-        assert!(run_after(checkout, &night, "town", "0000000", &added).is_err());
+        assert!(next_run_since(checkout, &night, "town", "0000000", &added).is_err());
     }
 
     fn write_run(night: &Path, run: &str, result: &serde_json::Value) {
@@ -270,12 +271,17 @@ mod tests {
     fn a_nights_runs_are_read_from_the_results_the_bench_writes() {
         let fixture = Fixture::new("night-read");
         let night = night(&fixture);
+        let mut result = baseline();
+        let checkout = Checkout {
+            source_hash: "1".to_owned(),
+            commit: "a".to_owned(),
+            dirty: false,
+            branch: "HEAD".to_owned(),
+        };
+        result.provenance = Some(provenance(checkout, 1.01));
         for (run, median) in [("002", 200.0), ("001", 100.0)] {
-            let result = serde_json::json!({
-                "provenance": { "commit": "a" },
-                "cpu_frame_microseconds": { "median": median },
-            });
-            write_run(&night, run, &result);
+            result.cpu_frame_microseconds.median = median;
+            write_run(&night, run, &serde_json::to_value(&result).unwrap());
         }
         let read = runs(&night, "town", "cpu_frame_microseconds").unwrap();
         assert_eq!(
@@ -296,7 +302,7 @@ mod tests {
         let night = night(&fixture);
         let commit = head(checkout);
         let result = serde_json::json!({ "cpu_frame_microseconds": { "median": 1000.0 } });
-        let run = run_after(checkout, &night, "town", &commit, &commit).unwrap();
+        let run = next_run_since(checkout, &night, "town", &commit, &commit).unwrap();
         std::fs::write(run.directory.join("town.json"), result.to_string()).unwrap();
         write_run(&night, "002", &result);
         let read = runs(&night, "town", "cpu_frame_microseconds").unwrap();

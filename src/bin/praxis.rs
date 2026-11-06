@@ -15,6 +15,7 @@ const DEFAULT_CAPTURE_SIZE: &str = "640x360";
 fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
         .init();
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "praxis starting");
