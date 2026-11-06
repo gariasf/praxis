@@ -118,25 +118,23 @@
   # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
   # to 1 s [ref:nvidia-smi-utilization-sample-period], and on the RTX 2070
   # SUPER it still read 67% a third of a second after a scene's bench
-  # exited. A scene's bench also raises the one-minute load average. So
-  # each scene waits for preflight to see the GPU idle and the CPU load
-  # under its threshold, and either still busy after a minute ends the night.
+  # exited. A scene's bench, and a tree's build before it, also raise the
+  # one-minute load average, which falls by a factor of e a minute, so it
+  # can take minutes to fall under preflight's threshold. So each run waits
+  # for preflight to see the GPU idle and the CPU load under its threshold
+  # for as long as the time cap allows.
   machine_busy() { preflight_warns '[cg]pu load'; }
   # Whether the next run, $1, may start: within the time cap, once the
   # machine is idle; it logs why not.
   may_start() {
-    if [ $((SECONDS - start)) -ge "$cap_seconds" ]; then
-      log "time cap of ${cap_seconds}s reached; left for the next night: $1 and after"
-      return 1
-    fi
-    local wait_start=$SECONDS
-    while machine_busy; do
-      if [ $((SECONDS - wait_start)) -ge 60 ]; then
-        log "skipped, the GPU or CPU is still busy after a minute; left for the next night: $1 and after"
-        return 1
-      fi
+    local busy=""
+    while [ $((SECONDS - start)) -lt "$cap_seconds" ]; do
+      machine_busy || return 0
+      busy=" while the GPU or CPU was busy"
       sleep 1
     done
+    log "time cap of ${cap_seconds}s reached${busy}; left for the next night: $1 and after"
+    return 1
   }
   # A worktree of commit $1 under target/sweep/trees, with its release
   # binary, the fetched sources and its Cooked cache, made once and kept
