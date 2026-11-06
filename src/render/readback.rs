@@ -21,7 +21,6 @@ use crate::render::blas_refit::BLAS_REFIT_PASS;
 use crate::render::culling_pass::{CullingPhase, FrameDraw};
 use crate::render::froxel_pass::{FROXEL_PASS, LightCounts};
 use crate::render::main_pass::LIT_PASS;
-use crate::render::renderer::RENDER_PASSES;
 use crate::render::{FRAMES_IN_FLIGHT, TIMED_PASSES};
 use crate::stats::{FrameRecorder, GpuFrameStats};
 
@@ -97,8 +96,6 @@ pub struct GpuStatsReadback {
     /// Set while the frames read back had lights their shadow mask had no
     /// bit for, which was warned about when it was set.
     warned_of_shadow_mask_overflow: bool,
-    /// Which of `TIMED_PASSES` never run, so read as taking no time.
-    untimed: [bool; TIMED_PASSES.len()],
     /// The last frame read back and the tick its last pass ended at, from
     /// which the next frame's build of the dynamic TLAS counts.
     last_pass_end: Option<(u64, u64)>,
@@ -109,24 +106,47 @@ struct Slot {
     buffer: wgpu::Buffer,
     state: SlotState,
     progress: Arc<AtomicU8>,
-    shape: FrameShape,
+    /// The Timed passes its frame ran.
+    pass_log: PassLog,
 }
 
-/// Which of the timed work that runs in some frames only a frame ran.
+/// Which of `TIMED_PASSES` a frame ran, each marked as its queries were
+/// turned into its timestamp writes: a pass not marked reads as taking no
+/// time, its queries holding an earlier frame's timestamps.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct FrameShape {
-    /// Whether it built the dynamic TLAS, the first of `TIMED_PASSES`,
-    /// between the markers its timestamps bracket: in a frame that does
-    /// not, the build reads as taking no time.
-    pub dynamic_tlas_built: bool,
-    /// Whether it bent Meshes in the bend pass: in a frame that does not,
-    /// the pass reads as taking no time, and the frame's passes start at the
-    /// first after the BLAS refit.
-    pub bent: bool,
-    /// Whether it refitted the bent Meshes' BLASes after the bend pass, in a
-    /// submission of their own, up to a marker its timestamps end them at:
-    /// in a frame that does not, the refit reads as taking no time.
-    pub blas_refitted: bool,
+pub struct PassLog {
+    passes: [Option<LoggedPass>; TIMED_PASSES.len()],
+    /// The submission the passes marked now are recorded into.
+    submission: u8,
+    /// Where in `TIMED_PASSES` the last pass marked in that submission is,
+    /// except a bracket.
+    last_in_submission: Option<usize>,
+}
+
+/// A Timed pass a frame ran.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LoggedPass {
+    pub kind: PassKind,
+    /// Which of the frame's submissions it was recorded into, numbered from
+    /// 0 in the order they are submitted; a bracket, a command buffer of its
+    /// own, is submitted just ahead of that submission.
+    pub submission: u8,
+}
+
+/// How a Timed pass's queries were written: the timestamp writes its queries
+/// were turned into.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PassKind {
+    /// A compute pass, timed from its start to its end.
+    Compute,
+    /// A render pass, timed from its start to its end.
+    Render,
+    /// Work two compute passes bracket, in a command buffer of their own:
+    /// the end of the first, the start of the second.
+    Bracket,
+    /// Work a compute pass ends at its start, from the end of the pass
+    /// before it.
+    Marker,
 }
 
 #[derive(Clone, Copy)]
@@ -149,17 +169,27 @@ enum SlotState {
     },
 }
 
-/// Where a frame's passes write their timestamps.
-#[derive(Clone, Copy)]
+/// Where a frame's passes write their timestamps, and the log of those that
+/// do.
 pub struct FrameTimestamps<'a> {
     query_set: &'a wgpu::QuerySet,
     first_query: u32,
+    log: &'a mut PassLog,
+}
+
+/// The queries of one of `TIMED_PASSES`, which mark it run in its frame's
+/// log as they are turned into its timestamp writes; dropped unturned, they
+/// leave it unmarked.
+pub struct PassQueries<'a, 'log> {
+    query_set: &'a wgpu::QuerySet,
+    first_query: u32,
+    position: usize,
+    log: &'log mut PassLog,
 }
 
 impl GpuStatsReadback {
-    /// The ring, empty; timestamps tick every `nanoseconds_per_tick`, and
-    /// the passes of `TIMED_PASSES` that `untimed` names never run.
-    pub fn new(device: &wgpu::Device, nanoseconds_per_tick: f32, untimed: &[&str]) -> Self {
+    /// The ring, empty; timestamps tick every `nanoseconds_per_tick`.
+    pub fn new(device: &wgpu::Device, nanoseconds_per_tick: f32) -> Self {
         let buffer = |label, size, usage| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
@@ -189,7 +219,7 @@ impl GpuStatsReadback {
                     ),
                     state: SlotState::Free,
                     progress: Arc::new(AtomicU8::new(COPY_PENDING)),
-                    shape: FrameShape::default(),
+                    pass_log: PassLog::default(),
                 })
                 .collect(),
             frames_completed: Arc::new(AtomicU64::new(0)),
@@ -199,12 +229,6 @@ impl GpuStatsReadback {
             warned_of_overflow: false,
             warned_of_froxel_overflow: false,
             warned_of_shadow_mask_overflow: false,
-            untimed: untimed
-                .iter()
-                .fold([false; TIMED_PASSES.len()], |mut flags, pass| {
-                    flags[pass_position(pass)] = true;
-                    flags
-                }),
             last_pass_end: None,
         }
     }
@@ -213,8 +237,8 @@ impl GpuStatsReadback {
     /// the slots whose copies completed, at least `MAP_LAG` frames ago,
     /// reads back the slot it takes, resolves the timestamps of the frame
     /// `COMPLETION_LAG` before it, and returns where its passes write
-    /// theirs; `None` when its slot is still copying or mapping, a skip
-    /// counted in `recorder`.
+    /// theirs, which logs those that do; `None` when its slot is still
+    /// copying or mapping, a skip counted in `recorder`.
     pub fn begin_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -242,21 +266,14 @@ impl GpuStatsReadback {
             recorder.counters.gpu_readbacks_skipped += 1;
             return None;
         }
-        self.slots[index].state = SlotState::Recorded { frame: self.frame };
-        self.slots[index].shape = FrameShape::default();
+        let slot = &mut self.slots[index];
+        slot.state = SlotState::Recorded { frame: self.frame };
+        slot.pass_log = PassLog::default();
         Some(FrameTimestamps {
             query_set: &self.query_set,
             first_query: (index * QUERIES_PER_FRAME) as u32,
+            log: &mut slot.pass_log,
         })
-    }
-
-    /// Records which of the timed work that runs in some frames only the
-    /// frame `begin_frame` started ran.
-    pub fn shape(&mut self, shape: FrameShape) {
-        let slot = &mut self.slots[slot_index(self.frame)];
-        if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
-            slot.shape = shape;
-        }
     }
 
     /// Ends the frame `begin_frame` started: copies its draw's counts,
@@ -456,14 +473,14 @@ impl GpuStatsReadback {
                             last_pass_end,
                         } = frame_times(
                             &ticks,
-                            slot.shape,
-                            &self.untimed,
+                            &slot.pass_log,
                             previous_pass_end,
                             self.nanoseconds_per_tick,
                         );
                         self.last_pass_end = Some((frame, last_pass_end));
                         self.read_back.push(GpuFrameStats {
                             frame,
+                            pass_log: slot.pass_log,
                             pass_times,
                             frame_time,
                             gate_time,
@@ -505,62 +522,111 @@ impl Slot {
     }
 }
 
+impl PassLog {
+    /// The pass at `position` in `TIMED_PASSES`, if the frame ran it.
+    pub fn get(&self, position: usize) -> Option<LoggedPass> {
+        self.passes[position]
+    }
+
+    /// Marks the pass at `position` run, as `kind`, in the submission being
+    /// recorded.
+    fn mark(&mut self, position: usize, kind: PassKind) {
+        if kind != PassKind::Bracket {
+            debug_assert!(
+                self.last_in_submission.is_none_or(|last| last < position),
+                "{} marked out of TIMED_PASSES order",
+                TIMED_PASSES[position]
+            );
+            self.last_in_submission = Some(position);
+        }
+        self.passes[position] = Some(LoggedPass {
+            kind,
+            submission: self.submission,
+        });
+    }
+
+    fn split_submission(&mut self) {
+        self.submission += 1;
+        self.last_in_submission = None;
+    }
+
+    /// Whether the frame ran the pass at `position` and it wrote both its
+    /// timestamps, at its start and its end.
+    fn wrote_both(&self, position: usize) -> bool {
+        self.passes[position]
+            .is_some_and(|pass| matches!(pass.kind, PassKind::Compute | PassKind::Render))
+    }
+}
+
 impl<'a> FrameTimestamps<'a> {
-    /// The timestamp writes of `pass`, a compute pass of `TIMED_PASSES`.
-    pub fn compute_pass(self, pass: &str) -> wgpu::ComputePassTimestampWrites<'a> {
-        let first = self.first_query_of(pass);
+    /// The queries of `pass`, of `TIMED_PASSES`.
+    pub fn pass(&mut self, pass: &str) -> PassQueries<'a, '_> {
+        let position = pass_position(pass);
+        PassQueries {
+            query_set: self.query_set,
+            first_query: self.first_query + 2 * position as u32,
+            position,
+            log: self.log,
+        }
+    }
+
+    /// Ends the frame's submission: the passes marked after it are submitted
+    /// after those marked before it, apart.
+    pub fn split_submission(&mut self) {
+        self.log.split_submission();
+    }
+}
+
+impl<'a> PassQueries<'a, '_> {
+    /// The timestamp writes of the pass, a compute pass.
+    pub fn compute(self) -> wgpu::ComputePassTimestampWrites<'a> {
+        self.log.mark(self.position, PassKind::Compute);
         wgpu::ComputePassTimestampWrites {
             query_set: self.query_set,
-            beginning_of_pass_write_index: Some(first),
-            end_of_pass_write_index: Some(first + 1),
+            beginning_of_pass_write_index: Some(self.first_query),
+            end_of_pass_write_index: Some(self.first_query + 1),
         }
     }
 
-    /// The timestamp writes of `pass`, a render pass of `TIMED_PASSES`.
-    pub fn render_pass(self, pass: &str) -> wgpu::RenderPassTimestampWrites<'a> {
-        debug_assert!(
-            RENDER_PASSES.contains(&pass),
-            "{pass} is not in RENDER_PASSES"
-        );
-        let first = self.first_query_of(pass);
+    /// The timestamp writes of the pass, a render pass.
+    pub fn render(self) -> wgpu::RenderPassTimestampWrites<'a> {
+        self.log.mark(self.position, PassKind::Render);
         wgpu::RenderPassTimestampWrites {
             query_set: self.query_set,
-            beginning_of_pass_write_index: Some(first),
-            end_of_pass_write_index: Some(first + 1),
+            beginning_of_pass_write_index: Some(self.first_query),
+            end_of_pass_write_index: Some(self.first_query + 1),
         }
     }
 
-    /// The timestamp writes that bracket `pass`, of `TIMED_PASSES`, with
-    /// two compute passes around it: the end of the first, the start of the
-    /// second.
-    pub fn bracket(self, pass: &str) -> [wgpu::ComputePassTimestampWrites<'a>; 2] {
-        let first = self.first_query_of(pass);
+    /// The timestamp writes that bracket the pass, in a command buffer of
+    /// its own, with two compute passes around it: the end of the first,
+    /// the start of the second.
+    pub fn bracket(self) -> [wgpu::ComputePassTimestampWrites<'a>; 2] {
+        self.log.mark(self.position, PassKind::Bracket);
         [
             wgpu::ComputePassTimestampWrites {
                 query_set: self.query_set,
                 beginning_of_pass_write_index: None,
-                end_of_pass_write_index: Some(first),
+                end_of_pass_write_index: Some(self.first_query),
             },
             wgpu::ComputePassTimestampWrites {
                 query_set: self.query_set,
-                beginning_of_pass_write_index: Some(first + 1),
+                beginning_of_pass_write_index: Some(self.first_query + 1),
                 end_of_pass_write_index: None,
             },
         ]
     }
 
-    /// The timestamp write of a marker that ends `pass`, of `TIMED_PASSES`,
-    /// at its start: `pass` starts where the pass before it ends.
-    pub fn marker_after(self, pass: &str) -> wgpu::ComputePassTimestampWrites<'a> {
+    /// The timestamp write of a marker that ends the pass at its start: the
+    /// pass starts where the pass before it ends.
+    #[cfg_attr(not(target_vendor = "apple"), allow(dead_code))]
+    pub fn marker(self) -> wgpu::ComputePassTimestampWrites<'a> {
+        self.log.mark(self.position, PassKind::Marker);
         wgpu::ComputePassTimestampWrites {
             query_set: self.query_set,
-            beginning_of_pass_write_index: Some(self.first_query_of(pass) + 1),
+            beginning_of_pass_write_index: Some(self.first_query + 1),
             end_of_pass_write_index: None,
         }
-    }
-
-    fn first_query_of(self, pass: &str) -> u32 {
-        self.first_query + 2 * pass_position(pass) as u32
     }
 }
 
@@ -574,21 +640,20 @@ struct FrameTimes {
     last_pass_end: u64,
 }
 
-/// Each of `TIMED_PASSES`' time in a frame of `shape` whose timestamps read
-/// `ticks`, `nanoseconds_per_tick` apart, a render pass's past the passes
-/// before it that it waits on; the frame's GPU time: the dynamic TLAS's
-/// build, plus the span of each submission's passes, so neither the waits
-/// between submissions nor what a submission records before its first pass
-/// counts; ADR 0019's gate, from the start of culling phase one to the
-/// latest end of the passes up to the lit pass; the lit pass's wait, from
-/// the latest end of the passes from culling phase one up to it to its
-/// start; and the tick its last pass ended at. The build, in a submission
-/// before the frame's passes, starts no earlier than `build_floor`; the
-/// passes `untimed` names take no time.
+/// Each of `TIMED_PASSES`' time in a frame whose timestamps read `ticks`,
+/// `nanoseconds_per_tick` apart, and which ran the passes `log` marked, a
+/// render pass's past the passes before it that it waits on; the frame's
+/// GPU time: the dynamic TLAS's build, plus the span of each submission's
+/// passes, so neither the waits between submissions nor what a submission
+/// records before its first pass counts; ADR 0019's gate, from the start of
+/// culling phase one to the latest end of the passes up to the lit pass; the
+/// lit pass's wait, from the latest end of the passes from culling phase one
+/// up to it to its start; and the tick its last pass ended at. The build,
+/// in a submission before the frame's passes, starts no earlier than
+/// `build_floor`; a pass the frame did not run takes no time.
 fn frame_times(
     ticks: &[u64; QUERIES_PER_FRAME],
-    shape: FrameShape,
-    untimed: &[bool; TIMED_PASSES.len()],
+    log: &PassLog,
     build_floor: u64,
     nanoseconds_per_tick: f64,
 ) -> FrameTimes {
@@ -596,8 +661,16 @@ fn frame_times(
         let ticks = end.saturating_sub(begin) as f64;
         Duration::from_nanos((ticks * nanoseconds_per_tick) as u64)
     };
+    let ran = |pass: usize| log.get(pass).is_some();
     let (bend_pass, blas_refit) = (pass_position(BEND_PASS), pass_position(BLAS_REFIT_PASS));
-    let build = if shape.dynamic_tlas_built {
+    let refitted = ran(blas_refit);
+    // An untimed refit leaves the build inside the span from the bend pass.
+    let build_spanned = !refitted
+        && log
+            .get(bend_pass)
+            .zip(log.get(0))
+            .is_some_and(|(bend, build)| bend.submission < build.submission);
+    let build = if ran(0) && !build_spanned {
         time(ticks[0].max(build_floor), ticks[1])
     } else {
         Duration::ZERO
@@ -608,7 +681,7 @@ fn frame_times(
     // before culling phase one, and a pass can end after the last.
     let bounds = |passes: std::ops::Range<usize>| {
         passes
-            .filter(|&pass| pass != blas_refit && !untimed[pass])
+            .filter(|&pass| log.wrote_both(pass))
             .fold((u64::MAX, 0), |(begin, end), pass| {
                 (begin.min(ticks[2 * pass]), end.max(ticks[2 * pass + 1]))
             })
@@ -620,23 +693,12 @@ fn frame_times(
     // The refit runs from the end of the bend pass, and the frame's other
     // passes in a later submission. A frame that bends nothing records no
     // bend pass, whose timestamps are then an earlier frame's.
-    let frame_time = if shape.blas_refitted {
+    let frame_time = if refitted {
         build
             + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
             + span(blas_refit + 1..TIMED_PASSES.len())
     } else {
-        let first_pass = if shape.bent {
-            bend_pass
-        } else {
-            blas_refit + 1
-        };
-        build + span(first_pass..TIMED_PASSES.len())
-    };
-    // Whether `pass`, after the build, wrote this frame's end timestamp.
-    let wrote_end = |pass: usize| match pass {
-        _ if pass == bend_pass => shape.bent,
-        _ if pass == blas_refit => shape.blas_refitted,
-        _ => !untimed[pass],
+        build + span(bend_pass..TIMED_PASSES.len())
     };
     // Apple GPUs can run a render pass's vertex stage while its fragment
     // stage waits for the passes before it [ref:apple-metal-fence-per-stage],
@@ -652,23 +714,24 @@ fn frame_times(
     let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
     let counted_begin = |pass: usize| {
         let begin = ticks[2 * pass];
-        if !RENDER_PASSES.contains(&TIMED_PASSES[pass]) {
+        if log
+            .get(pass)
+            .is_none_or(|logged| logged.kind != PassKind::Render)
+        {
             return begin;
         }
         (bend_pass..pass)
-            .filter(|&earlier| wrote_end(earlier) && (earlier != froxel_pass || pass >= lit_pass))
+            .filter(|&earlier| ran(earlier) && (earlier != froxel_pass || pass >= lit_pass))
             .map(|earlier| ticks[2 * earlier + 1])
             .fold(begin, u64::max)
     };
     let pass_times = std::array::from_fn(|pass| {
         let taken = match pass {
             0 => build,
-            _ if pass == bend_pass && !shape.bent => Duration::ZERO,
-            _ if pass == blas_refit && shape.blas_refitted => {
+            _ if pass == blas_refit && refitted => {
                 time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1])
             }
-            _ if pass == blas_refit => Duration::ZERO,
-            _ if untimed[pass] => Duration::ZERO,
+            _ if !ran(pass) => Duration::ZERO,
             _ => time(counted_begin(pass), ticks[2 * pass + 1]),
         };
         (TIMED_PASSES[pass], taken)
@@ -698,15 +761,79 @@ fn slot_index(frame: u64) -> usize {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::capture::{FrameWait, render_frames};
     use crate::gpu::GpuContext;
     use crate::render::main_pass::{DEPTH_PREPASS, PHASE_TWO_DEPTH_PASS};
-    use crate::render::renderer::SHADOW_RAY_PASSES;
     use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
     use crate::render::tonemapping_pass::TONEMAPPING_PASS;
+    use crate::render::{CrowdForm, RenderSwitches};
+    use crate::scenes::ReferenceScene;
+
+    /// How a frame bends Meshes: not at all, in its one submission, or in a
+    /// submission ahead of its others, which the refit's marker ends if it
+    /// is timed.
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) enum Bending {
+        Unbent,
+        InFrame,
+        Submitted { refit_timed: bool },
+    }
+
+    /// A frame as `render` records it: how it bends, and whether it
+    /// brackets a build of the dynamic TLAS.
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) struct RecordedFrame {
+        pub(crate) bending: Bending,
+        pub(crate) built: bool,
+    }
+
+    impl RecordedFrame {
+        pub(crate) const STILL: Self = Self {
+            bending: Bending::Unbent,
+            built: false,
+        };
+
+        /// The log of its passes, marked as `render` marks them, phase two's
+        /// depth pass and the shadow mask pass among them if `shadow_rays`.
+        pub(crate) fn log(self, shadow_rays: bool) -> PassLog {
+            let mut log = PassLog::default();
+            if !matches!(self.bending, Bending::Unbent) {
+                log.mark(pass_position(BEND_PASS), PassKind::Compute);
+            }
+            if let Bending::Submitted { refit_timed } = self.bending {
+                if refit_timed {
+                    log.mark(pass_position(BLAS_REFIT_PASS), PassKind::Marker);
+                }
+                log.split_submission();
+            }
+            if self.built {
+                log.mark(0, PassKind::Bracket);
+            }
+            let render_passes = [
+                DEPTH_PREPASS,
+                PHASE_TWO_DEPTH_PASS,
+                LIT_PASS,
+                TONEMAPPING_PASS,
+            ];
+            let shadow_ray_passes = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
+            let first_pass = pass_position(CullingPhase::One.label());
+            for (position, pass) in TIMED_PASSES.iter().enumerate().skip(first_pass) {
+                if shadow_rays || !shadow_ray_passes.contains(pass) {
+                    let kind = if render_passes.contains(pass) {
+                        PassKind::Render
+                    } else {
+                        PassKind::Compute
+                    };
+                    log.mark(position, kind);
+                }
+            }
+            log
+        }
+    }
 
     /// Timestamps a microsecond apart, each pass starting 10 µs after the
     /// one before it and taking 4 µs, in submissions that start 100 µs
@@ -730,10 +857,10 @@ mod tests {
     }
 
     /// Asserts `frame_times`' whole output, in microseconds, for the
-    /// `spread_ticks` frame of `shape` after a frame whose last pass ended
-    /// 1 µs into this one's build.
+    /// `spread_ticks` frame recorded as `frame` after a frame whose last
+    /// pass ended 1 µs into this one's build.
     fn assert_spread_frame(
-        shape: FrameShape,
+        frame: RecordedFrame,
         shadow_rays: bool,
         pass_microseconds: [u64; TIMED_PASSES.len()],
         frame_microseconds: u64,
@@ -741,17 +868,11 @@ mod tests {
         lit_pass_wait_microseconds: u64,
     ) {
         let ticks = spread_ticks();
-        let mut untimed = [false; TIMED_PASSES.len()];
-        if !shadow_rays {
-            for pass in SHADOW_RAY_PASSES {
-                untimed[pass_position(pass)] = true;
-            }
-        }
-        let times = frame_times(&ticks, shape, &untimed, ticks[0] + 1, 1000.0);
+        let times = frame_times(&ticks, &frame.log(shadow_rays), ticks[0] + 1, 1000.0);
         let microseconds = Duration::from_micros;
         let expected_passes: [(&str, Duration); TIMED_PASSES.len()] =
             std::array::from_fn(|pass| (TIMED_PASSES[pass], microseconds(pass_microseconds[pass])));
-        let kind = format!("{shape:?}, shadow rays {shadow_rays}");
+        let kind = format!("{frame:?}, shadow rays {shadow_rays}");
         assert_eq!(times.pass_times, expected_passes, "{kind}");
         assert_eq!(times.frame_time, microseconds(frame_microseconds), "{kind}");
         assert_eq!(times.gate_time, microseconds(gate_microseconds), "{kind}");
@@ -762,95 +883,95 @@ mod tests {
 
     #[test]
     fn a_frame_that_neither_builds_nor_bends_spans_its_last_submission() {
-        let shape = FrameShape::default();
+        let frame = RecordedFrame::STILL;
         let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 84, 74, 6);
+        assert_spread_frame(frame, true, with_shadow_rays, 84, 74, 6);
         let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 84, 74, 26);
+        assert_spread_frame(frame, false, without_shadow_rays, 84, 74, 26);
     }
 
     #[test]
     fn a_frame_that_builds_but_does_not_bend_adds_its_build_from_the_floor() {
-        let shape = FrameShape {
-            dynamic_tlas_built: true,
-            ..FrameShape::default()
+        let frame = RecordedFrame {
+            built: true,
+            ..RecordedFrame::STILL
         };
         let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 87, 74, 6);
+        assert_spread_frame(frame, true, with_shadow_rays, 87, 74, 6);
         let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 87, 74, 26);
+        assert_spread_frame(frame, false, without_shadow_rays, 87, 74, 26);
     }
 
-    /// The shape of a bent frame whose refit is absent and whose build is
-    /// not bracketed, and of one whose refit went untimed, which `render`
-    /// gives no bracketed build.
+    /// A bent frame whose refit is absent and whose build is not bracketed,
+    /// one whose bend pass is submitted ahead of the rest with no refit
+    /// timed, the rebuild form's, and one whose refit went untimed beside a
+    /// bracketed build, which its span from the bend pass holds.
     #[test]
     fn a_bent_frame_without_a_bracketed_build_spans_from_the_bend_pass() {
-        let shape = FrameShape {
-            bent: true,
-            ..FrameShape::default()
-        };
-        let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 204, 74, 6);
-        let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 204, 74, 26);
+        let untimed_refit = Bending::Submitted { refit_timed: false };
+        for (bending, built) in [
+            (Bending::InFrame, false),
+            (untimed_refit, false),
+            (untimed_refit, true),
+        ] {
+            let frame = RecordedFrame { bending, built };
+            let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+            assert_spread_frame(frame, true, with_shadow_rays, 204, 74, 6);
+            let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+            assert_spread_frame(frame, false, without_shadow_rays, 204, 74, 26);
+        }
     }
 
     #[test]
     fn a_bent_frame_with_a_bracketed_build_and_no_refit_adds_the_build() {
-        let shape = FrameShape {
-            dynamic_tlas_built: true,
-            bent: true,
-            blas_refitted: false,
+        let frame = RecordedFrame {
+            bending: Bending::InFrame,
+            built: true,
         };
         let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 207, 74, 6);
+        assert_spread_frame(frame, true, with_shadow_rays, 207, 74, 6);
         let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 207, 74, 26);
+        assert_spread_frame(frame, false, without_shadow_rays, 207, 74, 26);
     }
 
     /// No Moving Instance, so no build, beside a timed refit of a bent Mesh.
     #[test]
     fn a_refitted_frame_without_a_build_times_its_refit_from_the_bend() {
-        let shape = FrameShape {
-            dynamic_tlas_built: false,
-            bent: true,
-            blas_refitted: true,
+        let frame = RecordedFrame {
+            bending: Bending::Submitted { refit_timed: true },
+            built: false,
         };
         let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 95, 74, 6);
+        assert_spread_frame(frame, true, with_shadow_rays, 95, 74, 6);
         let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 95, 74, 26);
+        assert_spread_frame(frame, false, without_shadow_rays, 95, 74, 26);
     }
 
     #[test]
     fn a_refitted_frame_with_a_build_times_three_submissions_apart() {
-        let shape = FrameShape {
-            dynamic_tlas_built: true,
-            bent: true,
-            blas_refitted: true,
+        let frame = RecordedFrame {
+            bending: Bending::Submitted { refit_timed: true },
+            built: true,
         };
         let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(shape, true, with_shadow_rays, 98, 74, 6);
+        assert_spread_frame(frame, true, with_shadow_rays, 98, 74, 6);
         let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(shape, false, without_shadow_rays, 98, 74, 26);
+        assert_spread_frame(frame, false, without_shadow_rays, 98, 74, 26);
     }
 
     #[test]
     fn a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend() {
         let ticks = spread_ticks();
-        let untimed = [false; TIMED_PASSES.len()];
         let microseconds = Duration::from_micros;
-        let refitted = FrameShape {
-            dynamic_tlas_built: true,
-            bent: true,
-            blas_refitted: true,
+        let refitted = RecordedFrame {
+            bending: Bending::Submitted { refit_timed: true },
+            built: true,
         };
         let FrameTimes {
             pass_times: passes,
             frame_time,
             ..
-        } = frame_times(&ticks, refitted, &untimed, 0, 1000.0);
+        } = frame_times(&ticks, &refitted.log(true), 0, 1000.0);
         let taken = |name| passes.iter().find(|&&(pass, _)| pass == name).unwrap().1;
         assert_eq!(taken(BLAS_REFIT_PASS), microseconds(7));
         assert_eq!(taken(BEND_PASS), microseconds(4));
@@ -862,26 +983,26 @@ mod tests {
             microseconds(4) + microseconds(4 + 7) + microseconds(rest_span)
         );
 
-        let proxies = FrameShape {
-            blas_refitted: false,
+        let proxies = RecordedFrame {
+            bending: Bending::InFrame,
             ..refitted
         };
         let FrameTimes {
             pass_times: passes,
             frame_time,
             ..
-        } = frame_times(&ticks, proxies, &untimed, 0, 1000.0);
+        } = frame_times(&ticks, &proxies.log(true), 0, 1000.0);
         assert_eq!(passes[pass_position(BLAS_REFIT_PASS)].1, Duration::ZERO);
         let bend_start = ticks[2 * pass_position(BEND_PASS)];
         let span = ticks[QUERIES_PER_FRAME - 1] - bend_start;
         assert_eq!(frame_time, microseconds(4) + microseconds(span));
 
-        let still = FrameShape::default();
+        let still = RecordedFrame::STILL.log(true);
         let FrameTimes {
             pass_times: passes,
             frame_time,
             ..
-        } = frame_times(&ticks, still, &untimed, 0, 1000.0);
+        } = frame_times(&ticks, &still, 0, 1000.0);
         assert_eq!(passes[0].1, Duration::ZERO);
         assert_eq!(passes[pass_position(BEND_PASS)].1, Duration::ZERO);
         assert_eq!(frame_time, microseconds(rest_span));
@@ -904,24 +1025,27 @@ mod tests {
         ticks[2 * lit_pass + 1] = ticks[QUERIES_PER_FRAME - 1] + 20;
         ticks[2 * shadow_mask_pass] = 1;
         ticks[2 * shadow_mask_pass + 1] = 1 << 40;
-        let mut untimed = [false; TIMED_PASSES.len()];
-        untimed[shadow_mask_pass] = true;
+        let without_shadow_mask = |frame: RecordedFrame| {
+            let mut log = frame.log(true);
+            log.passes[shadow_mask_pass] = None;
+            log
+        };
         let rest_span = ticks[2 * lit_pass + 1] - (culling_start - 30);
 
+        let still = without_shadow_mask(RecordedFrame::STILL);
         let FrameTimes {
             pass_times: passes,
             frame_time,
             ..
-        } = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        } = frame_times(&ticks, &still, 0, 1000.0);
         assert_eq!(frame_time, microseconds(rest_span));
         assert!(passes.iter().all(|&(_, taken)| taken <= frame_time));
 
-        let refitted = FrameShape {
-            dynamic_tlas_built: true,
-            bent: true,
-            blas_refitted: true,
-        };
-        let frame_time = frame_times(&ticks, refitted, &untimed, 0, 1000.0).frame_time;
+        let refitted = without_shadow_mask(RecordedFrame {
+            bending: Bending::Submitted { refit_timed: true },
+            built: true,
+        });
+        let frame_time = frame_times(&ticks, &refitted, 0, 1000.0).frame_time;
         assert_eq!(
             frame_time,
             microseconds(4) + microseconds(4 + 7) + microseconds(rest_span)
@@ -937,21 +1061,18 @@ mod tests {
         let mut ticks = spread_ticks();
         let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
         let lit_end = ticks[2 * pass_position(LIT_PASS) + 1];
-        let mut untimed = [false; TIMED_PASSES.len()];
-        for pass in SHADOW_RAY_PASSES {
-            untimed[pass_position(pass)] = true;
+        let built = RecordedFrame {
+            built: true,
+            ..RecordedFrame::STILL
         }
-        let built = FrameShape {
-            dynamic_tlas_built: true,
-            ..FrameShape::default()
-        };
+        .log(false);
         let microseconds = Duration::from_micros;
-        let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &built, 0, 1000.0);
         assert_eq!(times.gate_time, microseconds(lit_end - culling_start));
         assert_eq!(times.last_pass_end, ticks[QUERIES_PER_FRAME - 1]);
 
         ticks[2 * pass_position(FROXEL_PASS)] = culling_start - 30;
-        let times = frame_times(&ticks, built, &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &built, 0, 1000.0);
         assert_eq!(times.gate_time, microseconds(lit_end - culling_start));
     }
 
@@ -971,22 +1092,18 @@ mod tests {
         ticks[2 * lit_pass + 1] = culling_two_end + 12_500;
         // A stale end from an earlier frame's shadow mask pass.
         ticks[2 * pass_position(SHADOW_MASK_PASS) + 1] = culling_two_end + 20_000;
-        let mut untimed = [false; TIMED_PASSES.len()];
-        for pass in SHADOW_RAY_PASSES {
-            untimed[pass_position(pass)] = true;
-        }
+        let without_shadow_rays = RecordedFrame::STILL.log(false);
 
-        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &without_shadow_rays, 0, 1000.0);
         assert_eq!(times.lit_pass_wait, microseconds(12_000));
         assert_eq!(
             times.gate_time,
             microseconds(culling_two_end - culling_start) + microseconds(12_000 + 500)
         );
 
-        let untimed = [false; TIMED_PASSES.len()];
         ticks[2 * lit_pass] = culling_two_end + 19_000;
         ticks[2 * lit_pass + 1] = culling_two_end + 21_000;
-        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &RecordedFrame::STILL.log(true), 0, 1000.0);
         assert_eq!(times.lit_pass_wait, Duration::ZERO);
     }
 
@@ -1017,9 +1134,8 @@ mod tests {
         ticks[2 * lit_pass + 1] = mask_start + 2_480;
         ticks[2 * tonemapping_pass] = mask_start + 12;
         ticks[2 * tonemapping_pass + 1] = mask_start + 2_800;
-        let untimed = [false; TIMED_PASSES.len()];
 
-        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &RecordedFrame::STILL.log(true), 0, 1000.0);
         let taken = |pass: usize| times.pass_times[pass].1;
         assert_eq!(taken(lit_pass), microseconds(480));
         assert_eq!(taken(tonemapping_pass), microseconds(320));
@@ -1048,14 +1164,102 @@ mod tests {
         let lit_pass = pass_position(LIT_PASS);
         let lit_start = ticks[2 * lit_pass];
         ticks[2 * froxel_pass + 1] = lit_start + 2;
-        let untimed = [false; TIMED_PASSES.len()];
 
-        let times = frame_times(&ticks, FrameShape::default(), &untimed, 0, 1000.0);
+        let times = frame_times(&ticks, &RecordedFrame::STILL.log(true), 0, 1000.0);
         let taken = |pass| times.pass_times[pass_position(pass)].1;
         assert_eq!(taken(DEPTH_PREPASS), microseconds(4));
         assert_eq!(taken(PHASE_TWO_DEPTH_PASS), microseconds(4));
         assert_eq!(taken(LIT_PASS), microseconds(2));
         assert_eq!(taken(TONEMAPPING_PASS), microseconds(4));
+    }
+
+    /// The Timed passes `log` marks, in `TIMED_PASSES` order, with how each
+    /// was timed and its submission.
+    fn marked(log: PassLog) -> Vec<(&'static str, PassKind, u8)> {
+        (0..TIMED_PASSES.len())
+            .filter_map(|pass| log.get(pass).map(|logged| (pass, logged)))
+            .map(|(pass, logged)| (TIMED_PASSES[pass], logged.kind, logged.submission))
+            .collect()
+    }
+
+    /// `render` marks the Timed passes each kind of frame runs as the frames
+    /// these tests time record them: in one submission, a frame that neither
+    /// bends nor builds, with shadow rays and without, one that builds the
+    /// dynamic TLAS, the orrery's, and one that bends the crowd and builds
+    /// its proxies' TLAS; in two, one that rebuilds the crowd's BLASes,
+    /// untimed, and on Metal one whose refit a marker ends, with the build
+    /// bracketed ahead of the second.
+    #[test]
+    fn render_marks_the_passes_each_kind_of_frame_runs() {
+        let context = match pollster::block_on(GpuContext::headless()) {
+            Ok(context) => context,
+            Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+                writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+                return;
+            }
+            Err(error) => panic!("headless GPU context failed: {error:#}"),
+        };
+        let defaults = RenderSwitches::default();
+        let without_shadow_rays = RenderSwitches {
+            shadow_rays: false,
+            ..defaults
+        };
+        let crowd = |crowd_form| RenderSwitches {
+            crowd_form,
+            ..defaults
+        };
+        let frame = |bending, built| RecordedFrame { bending, built };
+        let submitted = |refit_timed| Bending::Submitted { refit_timed };
+        let mut frames = vec![
+            (ReferenceScene::PbrSweep, defaults, RecordedFrame::STILL),
+            (
+                ReferenceScene::PbrSweep,
+                without_shadow_rays,
+                RecordedFrame::STILL,
+            ),
+            (
+                ReferenceScene::Orrery,
+                defaults,
+                frame(Bending::Unbent, true),
+            ),
+            (
+                ReferenceScene::Crowd,
+                crowd(CrowdForm::Proxies),
+                frame(Bending::InFrame, true),
+            ),
+            (
+                ReferenceScene::Crowd,
+                crowd(CrowdForm::Rebuild),
+                frame(submitted(false), false),
+            ),
+        ];
+        if context.backend() == wgpu::Backend::Metal {
+            let refitted = frame(submitted(true), true);
+            frames.push((ReferenceScene::Crowd, crowd(CrowdForm::Refit), refitted));
+        }
+        for (scene, switches, expected) in frames {
+            let (_, frame_stats, _) = render_frames(
+                &context,
+                scene,
+                glam::DVec3::ZERO,
+                64,
+                36,
+                0..2,
+                &[],
+                scene.frame_delta(),
+                switches,
+                FrameWait::Block,
+            )
+            .expect("the scene renders");
+            for (frame, stats) in frame_stats.iter().enumerate() {
+                let gpu = stats.gpu.expect("every frame read back its GPU stats");
+                assert_eq!(
+                    marked(gpu.pass_log),
+                    marked(expected.log(switches.shadow_rays)),
+                    "{scene:?} with {switches:?}, frame {frame}"
+                );
+            }
+        }
     }
 
     /// Frames that never complete, as their encoders are never submitted:
@@ -1075,7 +1279,7 @@ mod tests {
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
-        let new_ring = || GpuStatsReadback::new(&context.device, 1.0, &[]);
+        let new_ring = || GpuStatsReadback::new(&context.device, 1.0);
         let counts = |label, size| {
             context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),

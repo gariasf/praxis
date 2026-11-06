@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::assets::{MeshHandle, MeshPool};
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
+use crate::render::readback::PassQueries;
 use crate::render::{FrameData, InstanceData, shaders};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -351,21 +352,21 @@ impl DynamicTlas {
     }
 
     /// Records the build of its last fill into a command buffer of
-    /// `device`'s, between markers that write `timestamps`, the end of the
+    /// `device`'s, between markers `queries` times, the end of the
     /// first and the start of the second. Returns the command buffer and the
     /// bytes the build uploads; `None` when that fill left nothing to build,
     /// as it held none and held none in the fill before, or was recorded.
     pub fn record(
         &mut self,
         device: &wgpu::Device,
-        timestamps: Option<[wgpu::ComputePassTimestampWrites<'_>; 2]>,
+        queries: Option<PassQueries<'_, '_>>,
     ) -> Option<(wgpu::CommandBuffer, u64)> {
         let uploaded_bytes = self.unrecorded_upload_bytes.take()?;
         let mut encoder = self
             .encoder
             .take()
             .unwrap_or_else(|| create_encoder(device));
-        let [before, after] = timestamps.map_or([None, None], |writes| writes.map(Some));
+        let [before, after] = queries.map_or([None, None], |queries| queries.bracket().map(Some));
         self.mark(&mut encoder, before);
         encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&*self.tlas));
         self.mark(&mut encoder, after);

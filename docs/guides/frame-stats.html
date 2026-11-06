@@ -117,16 +117,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/stats/mod.rs</code> &middot; <code>src/render/readback.rs</code></div>
   <h1>Frame stats</h1>
   <p class="definition"><span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> are what one frame cost, measured by the engine itself: on the CPU, a clock around each ECS system and each renderer stage, the thread's allocation count and the counters the frame's own code keeps; on the GPU, a timestamp at each end of every timed pass and the counts the passes wrote, which come back through a ring of mapped buffers seven frames later and are turned into a time per pass, a GPU frame total that is a span rather than a sum, ADR 0019's gate and the lit pass's wait.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 9493ec8d (2026-11-05). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 075919da (2026-11-05). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Recorded</dt><dd>The CPU side from <code>FrameRecorder::begin</code>, the first line of <code>State::update</code>, to <code>FrameRecorder::end</code>, the last of <code>State::render</code>. The GPU side as the passes run: <code>GpuStatsReadback::begin_frame</code> hands the frame's encoder its timestamp queries, <code>end_frame</code> copies the counts the GPU wrote into the frame's slot, and the slot is read seven frames later by <code>begin_frame</code>, or by <code>flush</code> at the end of a run. <code>State::frame_stats</code> returns the last frame's.</dd>
+      <dt>Recorded</dt><dd>The CPU side from <code>FrameRecorder::begin</code>, the first line of <code>State::update</code>, to <code>FrameRecorder::end</code>, the last of <code>State::render</code>. The GPU side as the passes run: <code>GpuStatsReadback::begin_frame</code> hands the frame's passes their timestamp queries, which mark each pass run in the frame's log as it takes them, <code>end_frame</code> copies the counts the GPU wrote into the frame's slot, and the slot is read seven frames later by <code>begin_frame</code>, or by <code>flush</code> at the end of a run. <code>State::frame_stats</code> returns the last frame's.</dd>
       <dt>Reads</dt><dd>On the CPU, the clock around each stage, the spans bevy_ecs enters around each system, the thread's allocation count, the preparer's refusals and the GPU memory ledger's totals by kind. On the GPU, the query set's timestamps, the culling pass's <code>FrameDraw</code>, the Froxel pass's <code>LightCounts</code> and the shadow mask pass's overflow count.</dd>
       <dt>Writes</dt><dd>One <code>FrameStats</code> per frame, whose <code>gpu</code> is <code>None</code> until that frame's <code>GpuFrameStats</code> come back, and for good if their readback was skipped.</dd>
       <dt>Buffers</dt><dd>One query set of 168 timestamps, 24 per slot; a 192-byte resolve buffer, since queries resolve only into a buffer the CPU cannot map; and seven slots of 288 bytes each, <code>MAP_READ</code> and <code>COPY_DST</code>, holding a frame's draw, its light counts, its overflow count and then its timestamps. ADR 0013 leaves all of them out of <code>gpu_memory_bytes</code>, since they measure the frame rather than hold it.</dd>
       <dt>Counted</dt><dd>Of itself, only <code>gpu_readbacks_skipped</code>, the slots that were still copying or mapping when their frame came round. Every other field is another mechanism's cost; <code>praxis capture</code> writes the last frame's to standard output, and <code>praxis bench</code> reduces every measured frame's into a <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span>'s form (<a href="bench.html">The bench</a>). The window shell reads none of them.</dd>
-      <dt>Where in the code</dt><dd><code>src/stats/mod.rs</code>: <code>FrameStats</code>, <code>GpuFrameStats</code>, <code>FrameRecorder</code>, <code>SystemTimer</code>, <code>CountingAllocator</code>. <code>src/stats/gpu_memory.rs</code>: <code>GpuMemory</code>, <code>GpuMemoryKind</code>, <code>Counted</code>, <code>Charge</code>, <code>texture_bytes</code>. <code>src/render/readback.rs</code>: <code>GpuStatsReadback</code>, <code>FrameTimestamps</code>, <code>FrameShape</code>, <code>frame_times</code>. <code>TIMED_PASSES</code> and <code>RENDER_PASSES</code> in <code>src/render/renderer.rs</code>, whose <code>render</code> hands each pass its queries; the stages in <code>src/state.rs</code> and <code>renderer.rs</code>; each owner's creation through the ledger in its constructor.</dd>
+      <dt>Where in the code</dt><dd><code>src/stats/mod.rs</code>: <code>FrameStats</code>, <code>GpuFrameStats</code>, <code>FrameRecorder</code>, <code>SystemTimer</code>, <code>CountingAllocator</code>. <code>src/stats/gpu_memory.rs</code>: <code>GpuMemory</code>, <code>GpuMemoryKind</code>, <code>Counted</code>, <code>Charge</code>, <code>texture_bytes</code>. <code>src/render/readback.rs</code>: <code>GpuStatsReadback</code>, <code>FrameTimestamps</code>, <code>PassQueries</code>, <code>PassLog</code>, <code>frame_times</code>. <code>TIMED_PASSES</code> in <code>src/render/renderer.rs</code>, whose <code>render</code> hands each pass its queries; the stages in <code>src/state.rs</code> and <code>renderer.rs</code>; each owner's creation through the ledger in its constructor.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -203,13 +203,16 @@ pub struct FrameStats {
     </tbody>
   </table>
   </div>
-  <p><code>GpuFrameStats</code> is what the GPU measured of one frame, tagged with that frame's number. Its <code>pass_times</code> hold a time for each of the twelve timed passes in the order they ran; a pass that did not run in the frame, as the dynamic TLAS's build in a frame that had nothing to build, or with the crowd's rebuild form, which never brackets it, reads as taking no time. Three spans stand beside them, each defined in section 5, and the counts the GPU wrote: the Instances and triangles the frame's draw held, phase two's share of those triangles, and the overflows of the draw, the Froxel lists and the shadow mask. With the <code>count_point_lights</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, the lit pixels and the point lights their <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span> list and whose range reaches them join; they read 0 with it off.</p>
+  <p><code>GpuFrameStats</code> is what the GPU measured of one frame, tagged with that frame's number. Its <code>pass_log</code> says which of the twelve <span class="concept" data-term="Timed pass" data-tip="A span of a frame's GPU work that the GPU timestamps at its start and end for Frame stats: a compute or render pass, or a span that markers bound (the dynamic TLAS's build, the BLAS refit). The set and its order are fixed; a frame that does not run one reads it as taking no time.">Timed passes</span> the frame ran, how each was timed and the submission it was recorded into (section 3). Its <code>pass_times</code> hold a time for each of them in the order they ran; a pass that did not run in the frame, as the dynamic TLAS's build in a frame that had nothing to build, or with the crowd's rebuild form, which never brackets it, reads as taking no time. Three spans stand beside them, each defined in section 5, and the counts the GPU wrote: the Instances and triangles the frame's draw held, phase two's share of those triangles, and the overflows of the draw, the Froxel lists and the shadow mask. With the <code>count_point_lights</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, the lit pixels and the point lights their <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span> list and whose range reaches them join; they read 0 with it off.</p>
   <div class="code-source"><code>GpuFrameStats</code>, <code>src/stats/mod.rs</code>, the counts elided</div>
 <pre class="code"><code>/// What the GPU measured of one frame, read back a few frames after it.
 #[derive(Clone, Copy, Debug)]
 pub struct GpuFrameStats {
     /// The frame's number: how many frames its Renderer rendered before it.
     pub frame: u64,
+    /// Which of `TIMED_PASSES` it ran, each with how it was timed and the
+    /// submission it was recorded into.
+    pub pass_log: PassLog,
     /// GPU time of each pass, between timestamps at its start and its end,
     /// in the order the passes ran, after the dynamic TLAS's build, between
     /// the markers around it: no time in a frame that does not build it, as
@@ -460,52 +463,62 @@ fn level_bytes(texture: &amp;wgpu::Texture) -&gt; impl Iterator&lt;Item = u64&gt
     LIT_PASS,
     TONEMAPPING_PASS,
 ];</code></pre>
-  <p>The three marked passes run in some frames only: the dynamic TLAS's build where the frame has Moving Instances or the fill before held some, so an emptied TLAS is rebuilt once, the bend pass where it bends Meshes, the BLAS refit where it bent them with the crowd's refit form. Phase two's depth pass and the shadow mask pass run only with the <code>shadow_rays</code> switch on; with it off they are created untimed and read as taking no time. Timestamp queries are in the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> (ADR 0021), so every frame on every adapter is timed.</p>
-  <p><code>begin_frame</code> returns a <code>FrameTimestamps</code>, the query set and the frame's first query, and <code>Renderer::render</code> asks it for each pass's writes as it records the pass. A compute pass and a render pass get wgpu's timestamp writes at their start and end. The dynamic TLAS's build is not a pass, so it is bracketed: the end timestamp of a marker before it and the start timestamp of a marker after it, both compute passes that query the TLAS so that Metal orders them around the build (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>). With the crowd's rebuild form the build is never bracketed, since its rebuilds through wgpu would fail the first marker's query, and reads as taking no time. The BLAS refit is recorded through wgpu-hal with no pass of its own, so it gets only a marker after it, which writes the refit's end query at its start; the refit's time runs from the bend pass's end (<a href="blas-refit.html#marker">The BLAS refit</a>).</p>
-  <div class="code-source"><code>FrameTimestamps</code>, <code>src/render/readback.rs</code></div>
-<pre class="code"><code>    /// The timestamp writes of `pass`, a compute pass of `TIMED_PASSES`.
-    pub fn compute_pass(self, pass: &amp;str) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
-        let first = self.first_query_of(pass);
-        wgpu::ComputePassTimestampWrites {
+  <p>The three marked passes run in some frames only: the dynamic TLAS's build where the frame has Moving Instances or the fill before held some, so an emptied TLAS is rebuilt once, the bend pass where it bends Meshes, the BLAS refit where it bent them with the crowd's refit form. Phase two's depth pass and the shadow mask pass run only with the <code>shadow_rays</code> switch on; with it off they are never recorded, so never marked, and read as taking no time. Timestamp queries are in the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> (ADR 0021), so every frame on every adapter is timed.</p>
+  <p><code>begin_frame</code> returns a <code>FrameTimestamps</code>: the query set, the frame's first query and the frame's pass log. <code>Renderer::render</code> asks it for each pass's <code>PassQueries</code>, the pair of queries at the pass's position, and the pass turns it into the timestamp writes it takes as it is recorded. A compute pass and a render pass take wgpu's timestamp writes at their start and end. The dynamic TLAS's build is not a pass, so it is bracketed: the end timestamp of a marker before it and the start timestamp of a marker after it, both compute passes that query the TLAS so that Metal orders them around the build (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>). With the crowd's rebuild form the build is never bracketed, since its rebuilds through wgpu would fail the first marker's query, and reads as taking no time. The BLAS refit is recorded through wgpu-hal with no pass of its own, so it gets only a marker after it, which writes the refit's end query at its start; the refit's time runs from the bend pass's end (<a href="blas-refit.html#marker">The BLAS refit</a>).</p>
+  <div class="code-source"><code>FrameTimestamps</code> and <code>PassQueries</code>, <code>src/render/readback.rs</code></div>
+<pre class="code"><code>    /// The queries of `pass`, of `TIMED_PASSES`.
+    pub fn pass(&amp;mut self, pass: &amp;str) -&gt; PassQueries&lt;'a, '_&gt; {
+        let position = pass_position(pass);
+        PassQueries {
             query_set: self.query_set,
-            beginning_of_pass_write_index: Some(first),
-            end_of_pass_write_index: Some(first + 1),
+            first_query: self.first_query + 2 * position as u32,
+            position,
+            log: self.log,
         }
     }
 …
-    /// The timestamp writes that bracket `pass`, of `TIMED_PASSES`, with
-    /// two compute passes around it: the end of the first, the start of the
-    /// second.
-    pub fn bracket(self, pass: &amp;str) -&gt; [wgpu::ComputePassTimestampWrites&lt;'a&gt;; 2] {
-        let first = self.first_query_of(pass);
-        [
-            wgpu::ComputePassTimestampWrites {
-                query_set: self.query_set,
-                beginning_of_pass_write_index: None,
-                end_of_pass_write_index: Some(first),
-            },
-            wgpu::ComputePassTimestampWrites {
-                query_set: self.query_set,
-                beginning_of_pass_write_index: Some(first + 1),
-                end_of_pass_write_index: None,
-            },
-        ]
-    }
-
-    /// The timestamp write of a marker that ends `pass`, of `TIMED_PASSES`,
-    /// at its start: `pass` starts where the pass before it ends.
-    pub fn marker_after(self, pass: &amp;str) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
+    /// The timestamp writes of the pass, a compute pass.
+    pub fn compute(self) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
+        self.log.mark(self.position, PassKind::Compute);
         wgpu::ComputePassTimestampWrites {
             query_set: self.query_set,
-            beginning_of_pass_write_index: Some(self.first_query_of(pass) + 1),
-            end_of_pass_write_index: None,
+            beginning_of_pass_write_index: Some(self.first_query),
+            end_of_pass_write_index: Some(self.first_query + 1),
         }
     }
-
-    fn first_query_of(self, pass: &amp;str) -&gt; u32 {
-        self.first_query + 2 * pass_position(pass) as u32
+…
+    /// The timestamp write of a marker that ends the pass at its start: the
+    /// pass starts where the pass before it ends.
+    #[cfg_attr(not(target_vendor = "apple"), allow(dead_code))]
+    pub fn marker(self) -&gt; wgpu::ComputePassTimestampWrites&lt;'a&gt; {
+        self.log.mark(self.position, PassKind::Marker);
+        wgpu::ComputePassTimestampWrites {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: Some(self.first_query + 1),
+            end_of_pass_write_index: None,
+        }
     }</code></pre>
-  <p>Which of the optional passes ran is told to the ring after the frame is recorded, as a <code>FrameShape</code>: whether the build was bracketed, whether the bend pass ran, whether the refit was timed. A frame that bent Meshes but whose refit went untimed, the rebuild form's, counts no build apart, since its build's submission is then spanned from the bend pass. The shape decides which queries the readback trusts: a pass that did not run leaves the stale timestamps of the frame that last used its slot.</p>
+  <p>Turning a <code>PassQueries</code> into its writes marks the pass in the frame's <code>PassLog</code>, a fixed array in the frame's slot with an entry per timed pass, so marking allocates nothing. Each entry holds the kind of writes the pass took, which is the method called, compute, render, bracket or marker, and the submission it was recorded into. A pass handed queries it does not use stays unmarked: the bend pass with nothing to bend, the dynamic TLAS with nothing to build, the refit when no marker was recorded. Submissions are counted by <code>render</code>, which calls <code>split_submission</code> once the bend pass and the BLAS updates are submitted ahead of the frame's other passes; the build, a command buffer of its own, is submitted just ahead of the submission it was marked in. Debug builds assert that each submission's passes are marked in <code>TIMED_PASSES</code>' order.</p>
+  <div class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code></div>
+<pre class="code"><code>        if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
+            let started = Instant::now();
+            let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
+            let refit_queries = timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
+            blas_refit.submit(
+                &amp;self.device,
+                &amp;self.queue,
+                head,
+                &amp;self.mesh_pool,
+                refit_queries,
+            );
+            if let Some(timestamps) = &amp;mut timestamps {
+                timestamps.split_submission();
+            }
+            recorder.stage(BLAS_REFIT, started);
+        }</code></pre>
+  <p>The log decides which queries the readback trusts: a pass not marked leaves the stale timestamps of the frame that last used its slot. It travels with the frame's <code>GpuFrameStats</code>, where the bench reads which of the gate's passes its run without shadow rays ran.</p>
 </section>
 
 <section class="part prose" id="ring">
@@ -621,11 +634,13 @@ enum SlotState {
             recorder.counters.gpu_readbacks_skipped += 1;
             return None;
         }
-        self.slots[index].state = SlotState::Recorded { frame: self.frame };
-        self.slots[index].shape = FrameShape::default();
+        let slot = &amp;mut self.slots[index];
+        slot.state = SlotState::Recorded { frame: self.frame };
+        slot.pass_log = PassLog::default();
         Some(FrameTimestamps {
             query_set: &amp;self.query_set,
             first_query: (index * QUERIES_PER_FRAME) as u32,
+            log: &amp;mut slot.pass_log,
         })</code></pre>
   <p><code>end_frame</code> copies the three counters the GPU wrote during the frame into the slot's head, in front of the timestamps' place: the culling pass's <code>FrameDraw</code>, whose indirect arguments carry the draw's index count and whose two counts are the Instances drawn and overflowed; the Froxel pass's <code>LightCounts</code>; and the shadow mask pass's 4-byte count of the lights it had no bit for. Each is read on the CPU with <code>pod_read_unaligned</code> at its offset. A frame whose draw, lists or mask overflowed is warned about once, until a frame read back has room for all.</p>
   <div class="code-source"><code>GpuStatsReadback::end_frame</code>, <code>src/render/readback.rs</code></div>
@@ -647,9 +662,18 @@ enum SlotState {
   <div class="part-mark">5 &middot; <code>frame_times</code> &middot; <code>src/render/readback.rs</code></div>
   <h2>From timestamps to times</h2>
   <p class="key-idea">A frame's GPU time is a span, not a sum. Metal runs neighbouring passes side by side wherever neither writes what the other binds, so adding the passes' times would count the shared stretches twice; the frame is timed from its passes' earliest start to their latest end, submission by submission, with the dynamic TLAS's build counted only where it sticks out past the frame before.</p>
-  <p><code>frame_times</code> is a pure function of the 24 ticks, the frame's shape, which passes are untimed, a floor for the build and the tick period. Every time it returns is <code>end.saturating_sub(begin)</code> scaled by the period, so a stale or missing timestamp reads as no time rather than as a huge one. Its helper <code>bounds</code> takes a range of passes and returns the earliest start and latest end among those that wrote both timestamps, the refit always left out since its start is never written.</p>
+  <p><code>frame_times</code> is a pure function of the 24 ticks, the frame's pass log, a floor for the build and the tick period. Every time it returns is <code>end.saturating_sub(begin)</code> scaled by the period, so a stale or missing timestamp reads as no time rather than as a huge one. Its helper <code>bounds</code> takes a range of passes and returns the earliest start and latest end among those that wrote both timestamps: the compute and render passes the log marks, so never the refit, whose marker writes only its end, nor a pass the frame did not run.</p>
   <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
-<pre class="code"><code>    let build = if shape.dynamic_tlas_built {
+<pre class="code"><code>    let ran = |pass: usize| log.get(pass).is_some();
+    let (bend_pass, blas_refit) = (pass_position(BEND_PASS), pass_position(BLAS_REFIT_PASS));
+    let refitted = ran(blas_refit);
+    // An untimed refit leaves the build inside the span from the bend pass.
+    let build_spanned = !refitted
+        &amp;&amp; log
+            .get(bend_pass)
+            .zip(log.get(0))
+            .is_some_and(|(bend, build)| bend.submission &lt; build.submission);
+    let build = if ran(0) &amp;&amp; !build_spanned {
         time(ticks[0].max(build_floor), ticks[1])
     } else {
         Duration::ZERO
@@ -660,7 +684,7 @@ enum SlotState {
     // before culling phase one, and a pass can end after the last.
     let bounds = |passes: std::ops::Range&lt;usize&gt;| {
         passes
-            .filter(|&amp;pass| pass != blas_refit &amp;&amp; !untimed[pass])
+            .filter(|&amp;pass| log.wrote_both(pass))
             .fold((u64::MAX, 0), |(begin, end), pass| {
                 (begin.min(ticks[2 * pass]), end.max(ticks[2 * pass + 1]))
             })
@@ -672,20 +696,15 @@ enum SlotState {
     // The refit runs from the end of the bend pass, and the frame's other
     // passes in a later submission. A frame that bends nothing records no
     // bend pass, whose timestamps are then an earlier frame's.
-    let frame_time = if shape.blas_refitted {
+    let frame_time = if refitted {
         build
             + time(ticks[2 * bend_pass], ticks[2 * blas_refit + 1])
             + span(blas_refit + 1..TIMED_PASSES.len())
     } else {
-        let first_pass = if shape.bent {
-            bend_pass
-        } else {
-            blas_refit + 1
-        };
-        build + span(first_pass..TIMED_PASSES.len())
+        build + span(bend_pass..TIMED_PASSES.len())
     };</code></pre>
   <h3>The GPU frame total</h3>
-  <p>The frame's passes reach the GPU in up to three submissions: the bend pass with the BLAS refits and their marker, the dynamic TLAS's build between its markers, and the rest. <code>frame_time</code> is the build, plus the span of each submission of passes: with a timed refit, from the bend pass's start to the refit marker's start and then the span of the passes after the refit; without one, the span from the bend pass or, in a frame that bent nothing, from culling phase one. Neither the GPU's idle time between submissions nor what a submission records before its first pass counts.</p>
+  <p>The frame's passes reach the GPU in up to three submissions: the bend pass with the BLAS refits and their marker, the dynamic TLAS's build between its markers, and the rest. <code>frame_time</code> is the build, plus the span of each submission of passes: with a timed refit, from the bend pass's start to the refit marker's start and then the span of the passes after the refit; without one, the span from the bend pass or, in a frame that bent nothing, from culling phase one. Neither the GPU's idle time between submissions nor what a submission records before its first pass counts. A frame whose bend pass was submitted ahead of the build's submission with no marker to end it, the refit having gone untimed, spans the build's submission from the bend pass, so its build is not counted apart.</p>
   <p>The build's time starts at the later of its first marker's end and the floor, and the floor is the tick at which the frame before's last pass ended, which the readback keeps from the last frame it read and hands on only to the frame that directly follows. The build is submitted before the frame's passes and, with two frames in flight, runs beside the frame before's lit and tonemapping passes, which bind no TLAS; counted from its own marker, that overlap would sit in the frame before's span and again in this frame's build. Where the build starts on the GPU, and what its two markers are, is on <a href="dynamic-tlas.html#build">The dynamic TLAS</a>; the refit's marker on <a href="blas-refit.html#marker">The BLAS refit</a>.</p>
   <h3>The gate and the lit pass's wait</h3>
   <p>ADR 0019's gate is the span its reopen clause names: from the start of culling phase one, not from the earliest start among the gate's passes, to the latest end of the passes up to and including the lit pass. The build and the tonemapping pass are outside it. The lit pass's wait is how long after the latest end of the passes from culling phase one up to it the lit pass started, and none where it started beside them; with the span of the passes before it and the lit pass's own time it makes up the gate, which is how <code>praxis report</code> prints the gate as a table that sums.</p>
@@ -701,28 +720,29 @@ enum SlotState {
         last_pass_end: bounds(blas_refit + 1..TIMED_PASSES.len()).1,
     }</code></pre>
   <h3>A pass's own time</h3>
-  <p>Apple GPUs can run a render pass's vertex stage while its fragment stage waits for the passes before it, and the M4 Pro writes the pass's start timestamp as the vertex stage starts: the lit pass's beside the shadow mask pass in some frames, the tonemapping pass's beside the lit pass in every frame. A time read from its own two timestamps would then hold the wait. So a render pass counts from the latest end of the passes before it that it waits on, if later than its own start: its time is what it adds past them. The depth pre-pass and phase two's depth pass do not count from the Froxel pass's end, which only the lit pass and later read; Metal can run them beside the Froxel pass and end them first, and a floor at its end would read them as 0. A compute pass keeps its own time, as the Froxel pass runs beside culling phase one and outlasts it. <code>counted_begin</code> models no other dependency: a render pass's floor is the latest end of every pass that ran before it, from the bend pass on, with the Froxel pass left out for the passes before the lit pass, whether or not the pass waited on each of them; a pass that did not run in the frame bounds nothing, since its end timestamp is stale.</p>
+  <p>Apple GPUs can run a render pass's vertex stage while its fragment stage waits for the passes before it, and the M4 Pro writes the pass's start timestamp as the vertex stage starts: the lit pass's beside the shadow mask pass in some frames, the tonemapping pass's beside the lit pass in every frame. A time read from its own two timestamps would then hold the wait. So a render pass, a pass its log marks as one, counts from the latest end of the passes before it that it waits on, if later than its own start: its time is what it adds past them. The depth pre-pass and phase two's depth pass do not count from the Froxel pass's end, which only the lit pass and later read; Metal can run them beside the Froxel pass and end them first, and a floor at its end would read them as 0. A compute pass keeps its own time, as the Froxel pass runs beside culling phase one and outlasts it. <code>counted_begin</code> models no other dependency: a render pass's floor is the latest end of every pass that ran before it, from the bend pass on, with the Froxel pass left out for the passes before the lit pass, whether or not the pass waited on each of them; a pass that did not run in the frame bounds nothing, since its end timestamp is stale.</p>
   <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
 <pre class="code"><code>    let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
     let counted_begin = |pass: usize| {
         let begin = ticks[2 * pass];
-        if !RENDER_PASSES.contains(&amp;TIMED_PASSES[pass]) {
+        if log
+            .get(pass)
+            .is_none_or(|logged| logged.kind != PassKind::Render)
+        {
             return begin;
         }
         (bend_pass..pass)
-            .filter(|&amp;earlier| wrote_end(earlier) &amp;&amp; (earlier != froxel_pass || pass &gt;= lit_pass))
+            .filter(|&amp;earlier| ran(earlier) &amp;&amp; (earlier != froxel_pass || pass &gt;= lit_pass))
             .map(|earlier| ticks[2 * earlier + 1])
             .fold(begin, u64::max)
     };
     let pass_times = std::array::from_fn(|pass| {
         let taken = match pass {
             0 =&gt; build,
-            _ if pass == bend_pass &amp;&amp; !shape.bent =&gt; Duration::ZERO,
-            _ if pass == blas_refit &amp;&amp; shape.blas_refitted =&gt; {
+            _ if pass == blas_refit &amp;&amp; refitted =&gt; {
                 time(ticks[2 * bend_pass + 1], ticks[2 * blas_refit + 1])
             }
-            _ if pass == blas_refit =&gt; Duration::ZERO,
-            _ if untimed[pass] =&gt; Duration::ZERO,
+            _ if !ran(pass) =&gt; Duration::ZERO,
             _ =&gt; time(counted_begin(pass), ticks[2 * pass + 1]),
         };
         (TIMED_PASSES[pass], taken)
@@ -746,17 +766,24 @@ enum SlotState {
 <section class="part prose" id="tests">
   <div class="part-mark">6 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">Unit tests feed <code>frame_times</code> made-up ticks and pin each rule of the accounting; a GPU test drives the ring with frames that never complete; integration tests capture a Reference scene and check every CPU stage, every pass and the memory sum to the byte.</p>
+  <p class="key-idea">Unit tests feed <code>frame_times</code> made-up ticks and pass logs and pin each rule of the accounting; GPU tests check that <code>render</code> marks the logs those tests take, and drive the ring with frames that never complete; integration tests capture a Reference scene and check every CPU stage, every pass and the memory sum to the byte.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
+      <tr><td><code>a_frame_that_neither_builds_nor_bends_spans_its_last_submission</code></td><td><code>readback.rs</code></td><td>every time <code>frame_times</code> returns, with shadow rays and without, for a frame whose passes are spread over three submissions: the frame spans the last</td></tr>
+      <tr><td><code>a_frame_that_builds_but_does_not_bend_adds_its_build_from_the_floor</code></td><td><code>readback.rs</code></td><td>the same, with the build counted from the frame before's last pass</td></tr>
+      <tr><td><code>a_bent_frame_without_a_bracketed_build_spans_from_the_bend_pass</code></td><td><code>readback.rs</code></td><td>the same for a bent frame without a build, the rebuild form's, and one whose untimed refit leaves its build inside the span from the bend pass</td></tr>
+      <tr><td><code>a_bent_frame_with_a_bracketed_build_and_no_refit_adds_the_build</code></td><td><code>readback.rs</code></td><td>the same for the proxies' frame: the build apart, the span from the bend pass</td></tr>
+      <tr><td><code>a_refitted_frame_without_a_build_times_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>the same for a timed refit beside no build</td></tr>
+      <tr><td><code>a_refitted_frame_with_a_build_times_three_submissions_apart</code></td><td><code>readback.rs</code></td><td>the same for a timed refit and a build: three submissions timed apart</td></tr>
       <tr><td><code>a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>with a timed refit the frame is the build, the bend-to-marker span and the rest's span; with proxies the refit reads 0 and the span runs from the bend pass; a still frame times neither build nor bend</td></tr>
-      <tr><td><code>a_frame_spans_its_passes_earliest_start_and_latest_end</code></td><td><code>readback.rs</code></td><td>a Froxel pass that starts before culling and a lit pass that ends after the last stretch the frame; an untimed pass's stale ticks span nothing; no pass outlasts the frame</td></tr>
+      <tr><td><code>a_frame_spans_its_passes_earliest_start_and_latest_end</code></td><td><code>readback.rs</code></td><td>a Froxel pass that starts before culling and a lit pass that ends after the last stretch the frame; an unmarked pass's stale ticks span nothing; no pass outlasts the frame</td></tr>
       <tr><td><code>the_gate_spans_culling_phase_one_to_the_lit_pass</code></td><td><code>readback.rs</code></td><td>the gate runs from culling's start to the lit pass's end, without the build or the passes after, even where the Froxel pass starts first; the last pass's end</td></tr>
-      <tr><td><code>the_lit_pass_waits_from_the_latest_end_before_it</code></td><td><code>readback.rs</code></td><td>the wait from the latest end before it, with a stale end from an untimed pass ignored; it and the passes make up the gate; a lit pass beside them waits for none</td></tr>
+      <tr><td><code>the_lit_pass_waits_from_the_latest_end_before_it</code></td><td><code>readback.rs</code></td><td>the wait from the latest end before it, with a stale end from an unmarked pass ignored; it and the passes make up the gate; a lit pass beside them waits for none</td></tr>
       <tr><td><code>a_render_pass_counts_from_the_end_of_the_passes_before_it</code></td><td><code>readback.rs</code></td><td>the lit and tonemapping passes count past the passes before them; the Froxel pass keeps its own time; a pass that did not run bounds nothing; neither the frame nor the gate moves</td></tr>
       <tr><td><code>a_depth_pass_counts_past_the_froxel_pass_it_does_not_read</code></td><td><code>readback.rs</code></td><td>both depth passes keep their own time past a Froxel pass that ends after them; the lit pass counts from its end</td></tr>
+      <tr><td><code>render_marks_the_passes_each_kind_of_frame_runs</code></td><td><code>readback.rs</code></td><td>on a GPU: <code>render</code> marks each pass, its kind and its submission as the tests above take them, for <code>pbr-sweep</code> with shadow rays and without, the orrery, and the crowd as proxies, rebuilt and, on Metal, refitted</td></tr>
       <tr><td><code>readbacks_not_ready_are_skipped_and_counted</code></td><td><code>readback.rs</code></td><td>on a GPU: frames never submitted skip their timestamps from <code>COMPLETION_LAG</code> on, counted, and none is read; a slot whose copy was dropped is skipped once the ring comes round and the next slot is read</td></tr>
       <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>on <code>pbr-sweep</code> at 160&times;90: the draw calls, the first and a later frame's uploaded bytes, no dropped time, each kind of GPU memory, <code>gpu_memory_bytes</code> and <code>arena_bytes_in_use</code> to the byte, every system and stage named, their sum within the frame, no readback skipped, the twelve pass names, each pass's time within the frame, allocations counted, the printout within five lines</td></tr>
       <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s <code>instances_drawn</code> and <code>triangles_drawn</code> equal its closed-form counts, none overflowed; after the first frame only what moves is written; <code>town</code>'s uploaded bytes</td></tr>
@@ -871,8 +898,8 @@ enum SlotState {
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413">wgpu-core 30.0.1, LifetimeTracker::handle_mapping</a></dt><dd>each maintenance that finds buffers ready to map allocates their callbacks' list, the allocation the map lag pins to one frame; <code>wgpu-30-handle-mapping</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The stats began as the CPU recorder, the counting allocator and the engine's own memory ledger, written when the Instance buffer stopped growing and every Baseline's memory had to add up to the byte. GPU time came as two timestamps per pass summed into a frame, then the dynamic TLAS's build bracketed by two markers that query the TLAS, since a build is no pass, and the BLAS refit ended by a marker that reads its scratch (<a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="blas-refit.html">The BLAS refit</a>). The frame became a span per submission once the Froxel pass was seen starting before culling, and the build was counted from the frame before's last pass after it was found running beside that frame and counted twice; the main pass prototypes were judged by spans for the same reason (<a href="metal-quirks.html#overlap">Metal quirks</a>). A render pass came to count from the passes before it when the M4 Pro was seen writing its start timestamp as the vertex stage started, the depth passes were then freed from the Froxel pass's end, and the lit pass's wait was added when a scene spent most of its gate before the lit pass began. The ring took its map lag when a frame's allocations were found to depend on when the GPU finished, and the readback's, the presented target's and capture's buffers left the memory sum. The volumes that narrated those steps are absorbed into this page; it describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/stats/mod.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, <code>src/capture/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017, 0019, 0021 and 0022, the committed Baselines, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+  <p class="note">The stats began as the CPU recorder, the counting allocator and the engine's own memory ledger, written when the Instance buffer stopped growing and every Baseline's memory had to add up to the byte. GPU time came as two timestamps per pass summed into a frame, then the dynamic TLAS's build bracketed by two markers that query the TLAS, since a build is no pass, and the BLAS refit ended by a marker that reads its scratch (<a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="blas-refit.html">The BLAS refit</a>). The frame became a span per submission once the Froxel pass was seen starting before culling, and the build was counted from the frame before's last pass after it was found running beside that frame and counted twice; the main pass prototypes were judged by spans for the same reason (<a href="metal-quirks.html#overlap">Metal quirks</a>). A render pass came to count from the passes before it when the M4 Pro was seen writing its start timestamp as the vertex stage started, the depth passes were then freed from the Froxel pass's end, and the lit pass's wait was added when a scene spent most of its gate before the lit pass began. The ring took its map lag when a frame's allocations were found to depend on when the GPU finished, and the readback's, the presented target's and capture's buffers left the memory sum. Which passes a frame ran was first told to the ring after the frame was recorded, as three flags beside lists of passes never run and of render passes; it became the log the passes mark as they take their queries, so the list of timed passes is written once. The volumes that narrated those steps are absorbed into this page; it describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/stats/mod.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, <code>src/capture/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017, 0019, 0021 and 0022, the committed Baselines, and the sources above, all at <code>main</code> 075919da.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="tonemapping-pass.html">Previous: The tonemapping pass</a><a href="index.html">All field guides</a><a href="bench.html">Next: The bench</a></nav>

@@ -154,26 +154,37 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
     <li>dynamic TLAS build</li><li class="focus">bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
   </ol>
   <p><code>Renderer::render</code> records the pass into the frame's encoder, which already holds what <code>upload</code> recorded, the bends' copy among it, and the start of the frame's GPU stats; every other pass of the frame follows it in that encoder. The dynamic TLAS's build is not in it: it goes in a command buffer of its own, recorded after the pass on the CPU and submitted before the frame's.</p>
-<pre class="code"><code>let timestamps = self.gpu_stats.begin_frame(&amp;mut encoder, recorder);
+<pre class="code"><code>let mut timestamps = self.gpu_stats.begin_frame(&amp;mut encoder, recorder);
 // Bent Meshes take their shapes before any pass reads their vertices.
-let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+let bend_queries = timestamps
+    .as_mut()
+    .map(|timestamps| timestamps.pass(BEND_PASS));
 let bent = self
     .bend_pass
-    .record(&amp;mut encoder, &amp;frame.bends, bend_timestamps);
+    .record(&amp;mut encoder, &amp;frame.bends, bend_queries);
 let encoding = started.elapsed();
 // Their BLASes take them too, in a submission of their own, which
 // the dynamic TLAS's build, recorded after it, follows.
-let mut blas_refitted = false;
 if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
     let started = Instant::now();
     let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
-    let refit_end = timestamps.map(|timestamps| timestamps.marker_after(BLAS_REFIT_PASS));
-    blas_refitted =
-        blas_refit.submit(&amp;self.device, &amp;self.queue, head, &amp;self.mesh_pool, refit_end);
+    let refit_queries = timestamps
+        .as_mut()
+        .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
+    blas_refit.submit(
+        &amp;self.device,
+        &amp;self.queue,
+        head,
+        &amp;self.mesh_pool,
+        refit_queries,
+    );
+    if let Some(timestamps) = &amp;mut timestamps {
+        timestamps.split_submission();
+    }
     recorder.stage(BLAS_REFIT, started);
 }</code></pre>
   <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>.</p>
-  <p>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at its default, <code>CrowdForm::Proxies</code>, the Renderer has no <code>BlasRefit</code>, nothing is cut, and the bent Meshes have no BLAS: shadow proxies cast their shadows. In the refit and rebuild forms each figure traces its own BLAS, which must take the bent shape before the dynamic TLAS is built over it. So in a frame that bent anything the encoder is swapped for a fresh one right after the pass, and the head, the uploads and the bend pass, goes to the GPU in a submission of its own with the BLAS updates, ahead of the build (<a href="blas-refit.html">BLAS Refit</a>). <code>record</code>'s answer, whether it recorded anything, decides both that cut and whether the frame's GPU stats time the pass.</p>
+  <p>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at its default, <code>CrowdForm::Proxies</code>, the Renderer has no <code>BlasRefit</code>, nothing is cut, and the bent Meshes have no BLAS: shadow proxies cast their shadows. In the refit and rebuild forms each figure traces its own BLAS, which must take the bent shape before the dynamic TLAS is built over it. So in a frame that bent anything the encoder is swapped for a fresh one right after the pass, and the head, the uploads and the bend pass, goes to the GPU in a submission of its own with the BLAS updates, ahead of the build (<a href="blas-refit.html">BLAS Refit</a>). <code>record</code>'s answer, whether it recorded anything, decides that cut; the pass is timed only when it records, since only then does it turn its queries into timestamp writes, which marks it run for the frame's GPU stats (<a href="frame-stats.html#queries">Frame stats</a>).</p>
 </section>
 
 <section class="part prose" id="ticks">
@@ -335,14 +346,14 @@ pub struct BendData {
     &amp;self,
     encoder: &amp;mut wgpu::CommandEncoder,
     bends: &amp;[BendData],
-    timestamp_writes: Option&lt;wgpu::ComputePassTimestampWrites&lt;'_&gt;&gt;,
+    queries: Option&lt;PassQueries&lt;'_, '_&gt;&gt;,
 ) -&gt; bool {
     let Some(longest) = bends.iter().map(|bend| bend.vertex_count).max() else {
         return false;
     };
     let mut pass = encoder.begin_compute_pass(&amp;wgpu::ComputePassDescriptor {
         label: Some(BEND_PASS),
-        timestamp_writes,
+        timestamp_writes: queries.map(PassQueries::compute),
     });
     pass.set_pipeline(&amp;self.pipeline);
     pass.set_bind_group(BENDS.index, &amp;self.bind_group, &amp;[]);

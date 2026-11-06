@@ -287,20 +287,31 @@ impl CrowdForm {
   <div class="part-mark">3 &middot; <code>Renderer::render</code> &middot; <code>BlasRefit::submit</code></div>
   <h2>The frame, cut after the bend pass</h2>
   <p class="key-idea">The refit must sit between the bend pass, which writes the vertices it reads, and the dynamic TLAS's build, which reads the BLASes it writes. So in a frame that bent anything the frame's encoder is cut after the bend pass, and its head goes to the GPU with the updates, in a submission of its own, ahead of the build.</p>
-<pre class="code"><code>let bend_timestamps = timestamps.map(|timestamps| timestamps.compute_pass(BEND_PASS));
+<pre class="code"><code>let bend_queries = timestamps
+    .as_mut()
+    .map(|timestamps| timestamps.pass(BEND_PASS));
 let bent = self
     .bend_pass
-    .record(&amp;mut encoder, &amp;frame.bends, bend_timestamps);
+    .record(&amp;mut encoder, &amp;frame.bends, bend_queries);
 let encoding = started.elapsed();
 // Their BLASes take them too, in a submission of their own, which
 // the dynamic TLAS's build, recorded after it, follows.
-let mut blas_refitted = false;
 if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
     let started = Instant::now();
     let head = std::mem::replace(&amp;mut encoder, create_frame_encoder(&amp;self.device));
-    let refit_end = timestamps.map(|timestamps| timestamps.marker_after(BLAS_REFIT_PASS));
-    blas_refitted =
-        blas_refit.submit(&amp;self.device, &amp;self.queue, head, &amp;self.mesh_pool, refit_end);
+    let refit_queries = timestamps
+        .as_mut()
+        .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
+    blas_refit.submit(
+        &amp;self.device,
+        &amp;self.queue,
+        head,
+        &amp;self.mesh_pool,
+        refit_queries,
+    );
+    if let Some(timestamps) = &amp;mut timestamps {
+        timestamps.split_submission();
+    }
     recorder.stage(BLAS_REFIT, started);
 }</code></pre>
   <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>. A fresh encoder takes the rest of the frame; at the default form <code>blas_refit</code> is None and nothing is cut.</p>
@@ -310,16 +321,16 @@ if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
 /// orders what `queue` submits next after them. The rebuild form records
 /// the update into `head` and submits that one command buffer; the refit
 /// form, on Apple, records it after `head`, in a command buffer of its own
-/// submitted beside it and followed, when given `refit_end`, by a marker
-/// that writes it. Returns whether that marker was recorded.
+/// submitted beside it and followed, when given `queries`, by a marker that
+/// ends it.
 pub fn submit(
     &amp;mut self,
     device: &amp;wgpu::Device,
     queue: &amp;wgpu::Queue,
     mut head: wgpu::CommandEncoder,
     mesh_pool: &amp;MeshPool,
-    refit_end: Option&lt;wgpu::ComputePassTimestampWrites&lt;'_&gt;&gt;,
-) -&gt; bool {
+    queries: Option&lt;PassQueries&lt;'_, '_&gt;&gt;,
+) {
     if self.form == CrowdForm::Rebuild {
         mesh_pool.rebuild_refitted_blases(&amp;mut head);
     }
@@ -329,24 +340,22 @@ pub fn submit(
         order.signal_from_next_submit(queue);
     }
     #[cfg(target_vendor = "apple")]
-    let (submission, refit_timed) = if self.form == CrowdForm::Refit {
+    let submission = if self.form == CrowdForm::Refit {
         let refits = self.record_refits(device, mesh_pool);
-        let marker = refit_end
+        let marker = queries
             .zip(self.marker.as_mut())
             .zip(self.scratch.as_ref())
-            .map(|((writes, marker), (scratch, _))| marker.record(device, scratch, writes));
-        let refit_timed = marker.is_some();
-        (
-            queue.submit([head, refits].into_iter().chain(marker)),
-            refit_timed,
-        )
+            .map(|((queries, marker), (scratch, _))| {
+                marker.record(device, scratch, queries.marker())
+            });
+        queue.submit([head, refits].into_iter().chain(marker))
     } else {
-        (queue.submit(std::iter::once(head)), false)
+        queue.submit(std::iter::once(head))
     };
     #[cfg(not(target_vendor = "apple"))]
-    let (submission, refit_timed) = {
-        let _ = refit_end;
-        (queue.submit(std::iter::once(head)), false)
+    let submission = {
+        let _ = queries;
+        queue.submit(std::iter::once(head))
     };
     #[cfg(target_vendor = "apple")]
     if let Some(order) = &amp;self.order {
@@ -361,7 +370,6 @@ pub fn submit(
             tracing::error!(%error, "waiting for BLAS updates failed");
         }
     }
-    refit_timed
 }</code></pre>
   <p class="code-source"><code>BlasRefit::submit</code>, <code>src/render/blas_refit.rs</code>.</p>
   <p>The rebuild form records its rebuilds into the head itself, through wgpu, and submits that one command buffer:</p>
@@ -679,7 +687,7 @@ pub(super) fn record(
 }</code></pre>
   <p class="code-source"><code>RefitMarker::record</code>, <code>src/render/blas_refit.rs</code>; its bind group is made once, for the scratch the first refit makes, which no later refit replaces.</p>
   <p>On Metal, wgpu-hal takes a pass's timestamps as counter samples where its encoder starts and ends, so a marker must do real work, since a pass that does nothing writes no timestamp, and must name a resource the timed work writes, or Metal may run it beside that work rather than after it. Every refit names the scratch buffer, and the marker reads its first word, so it starts once the refits are done.</p>
-  <p>The marker writes only its start: <code>marker_after</code> gives it the refit's second query slot, the one a pass's end would take, and no end. No timestamp marks where the refits begin, so the GPU stats time <code>blas_refit</code> from the end of the bend pass, the last timed pass in the head, to the marker's start, a span that includes what Metal spends between command buffers. <code>submit</code> returns whether it recorded the marker, and the frame's shape says whether the refit was timed; a frame whose refit went untimed does not count the dynamic TLAS's build apart, since its span from the bend pass already holds the build's submission. The rebuild form times neither its rebuilds nor its build: a BLAS rebuilt through wgpu would fail the first marker's query of the dynamic TLAS, which wgpu-core checks against the BLASes of the last build.</p>
+  <p>The marker writes only its start: <code>PassQueries::marker</code> gives it the refit's second query slot, the one a pass's end would take, and no end. No timestamp marks where the refits begin, so the GPU stats time <code>blas_refit</code> from the end of the bend pass, the last timed pass in the head, to the marker's start, a span that includes what Metal spends between command buffers. <code>submit</code> turns its queries into the marker's timestamp write only when it records the marker, which marks the refit run in the frame's pass log (<a href="frame-stats.html#queries">Frame stats</a>); a frame whose refit went untimed does not count the dynamic TLAS's build apart, since its span from the bend pass already holds the build's submission. The rebuild form times neither its rebuilds nor its build: a BLAS rebuilt through wgpu would fail the first marker's query of the dynamic TLAS, which wgpu-core checks against the BLASes of the last build.</p>
   <p>On the CPU, the stage <code>BLAS_REFIT</code> times recording the refits and submitting them with the head; <code>dynamic_tlas_cpu_microseconds</code> sums it with the build's recording and submit. The head's submit is in it too, which the proxies form makes with the rest of the frame.</p>
 </section>
 
