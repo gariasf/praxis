@@ -198,6 +198,9 @@ impl InstanceSlots {
 pub struct FramePreparer {
     directional_light_query: LightQuery<DirectionalLight>,
     point_light_query: LightQuery<PointLight>,
+    /// Each point light's squared distance from the camera and its index in
+    /// query order, kept for its memory.
+    point_light_distances: Vec<(f64, usize)>,
     lights_overflowed: u32,
     /// Set while lights overflow the light buffer, which was warned about
     /// when it was set.
@@ -233,6 +236,7 @@ impl FramePreparer {
         Self {
             directional_light_query: world.query(),
             point_light_query: world.query(),
+            point_light_distances: Vec::new(),
             lights_overflowed: 0,
             warned_of_overflowed_lights: false,
             renderable_query: world.query(),
@@ -292,6 +296,7 @@ impl FramePreparer {
         let Self {
             directional_light_query,
             point_light_query,
+            point_light_distances,
             lights_overflowed,
             warned_of_overflowed_lights,
             renderable_query,
@@ -334,8 +339,10 @@ impl FramePreparer {
             world,
             directional_light_query,
             point_light_query,
+            camera_position,
             blend_weight,
             &mut frame.lights,
+            point_light_distances,
             lights_overflowed,
         );
         frame.light = LightUniform {
@@ -558,14 +565,19 @@ impl FramePreparer {
 /// Fills `lights` with every directional light, shining along its entity's
 /// forward axis, then every point light, at its World position as an Anchor
 /// plus an offset (ADR 0014), each blended between its two newest Ticks, up
-/// to `LIGHT_CAPACITY`. Returns how many are directional, and sets
-/// `overflowed` to how many the light buffer had no room for.
+/// to `LIGHT_CAPACITY`. Point lights past it are cut farthest from
+/// `camera_position` first, the rest keeping their query order. Returns how
+/// many are directional, and sets `overflowed` to how many the light buffer
+/// had no room for.
+#[allow(clippy::too_many_arguments)]
 fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
     point_light_query: &mut LightQuery<PointLight>,
+    camera_position: glam::DVec3,
     blend_weight: f32,
     lights: &mut Vec<LightData>,
+    point_light_distances: &mut Vec<(f64, usize)>,
     overflowed: &mut u32,
 ) -> u32 {
     let mut directional_lights =
@@ -582,26 +594,46 @@ fn prepare_lights(
                     ..LightData::default()
                 })
             });
-    let mut point_lights = point_light_query
+    let point_lights = point_light_query
         .iter(world)
         .map(|(current, previous, light)| {
             let transform = current.drawn(previous, blend_weight);
-            let (anchor, offset) = anchor_and_offset(transform.translation());
-            LightData {
+            let position = transform.translation();
+            let (anchor, offset) = anchor_and_offset(position);
+            let light = LightData {
                 anchor,
                 range: light.range,
                 offset,
                 intensity: (light.color * light.intensity).to_array(),
                 ..LightData::default()
-            }
+            };
+            (position.distance_squared(camera_position), light)
         });
     let capacity = LIGHT_CAPACITY as usize;
     lights.clear();
     lights.extend(directional_lights.by_ref().take(capacity));
-    let directional_light_count = lights.len() as u32;
-    lights.extend(point_lights.by_ref().take(capacity - lights.len()));
-    *overflowed = (directional_lights.count() + point_lights.count()) as u32;
-    directional_light_count
+    let directional_light_count = lights.len();
+    let directional_lights_overflowed = directional_lights.count();
+    point_light_distances.clear();
+    for (index, (distance_squared, light)) in point_lights.enumerate() {
+        point_light_distances.push((distance_squared, index));
+        lights.push(light);
+    }
+    let point_light_count = point_light_distances.len();
+    let room = capacity - directional_light_count;
+    if point_light_count > room {
+        point_light_distances.select_nth_unstable_by(room, |left, right| {
+            left.0.total_cmp(&right.0).then(left.1.cmp(&right.1))
+        });
+        point_light_distances.truncate(room);
+        point_light_distances.sort_unstable_by_key(|&(_, index)| index);
+        for (kept, &(_, index)) in point_light_distances.iter().enumerate() {
+            lights[directional_light_count + kept] = lights[directional_light_count + index];
+        }
+        lights.truncate(capacity);
+    }
+    *overflowed = (directional_lights_overflowed + point_light_count.saturating_sub(room)) as u32;
+    directional_light_count as u32
 }
 
 /// Fills `bends` with a bend per Renderable with a `Bend` whose Mesh and
@@ -1391,6 +1423,43 @@ mod tests {
             LIGHT_CAPACITY as usize
         );
         assert_eq!(frames.preparer.lights_overflowed(), 0);
+    }
+
+    /// Three point lights more than the light buffer holds, spawned
+    /// farthest first, each with its distance from the camera as its
+    /// intensity: the three farthest are cut, and the rest keep the World's
+    /// query order.
+    #[test]
+    fn past_the_light_buffers_capacity_the_farthest_point_lights_are_cut() {
+        let Some(mut frames) = Frames::new() else {
+            return;
+        };
+        let camera_position = glam::dvec3(1.0e6, 0.0, 0.0);
+        frames.world.resource_mut::<Camera>().position = camera_position;
+        for distance in (1..=LIGHT_CAPACITY + 3).rev() {
+            let position = camera_position + glam::dvec3(0.0, f64::from(distance), 0.0);
+            let light = PointLight {
+                color: glam::Vec3::ONE,
+                intensity: distance as f32,
+                range: 1.0,
+            };
+            frames
+                .world
+                .spawn((Transform::from_translation(position), light));
+        }
+
+        frames.prepare();
+        let lights = &frames.preparer.frame().lights;
+        let distances: Vec<f32> = lights.iter().map(|light| light.intensity[0]).collect();
+        let nearest_in_query_order: Vec<f32> = frames
+            .world
+            .query::<&PointLight>()
+            .iter(&frames.world)
+            .map(|light| light.intensity)
+            .filter(|&distance| distance <= LIGHT_CAPACITY as f32)
+            .collect();
+        assert_eq!(distances, nearest_in_query_order);
+        assert_eq!(frames.preparer.lights_overflowed(), 3);
     }
 
     #[test]

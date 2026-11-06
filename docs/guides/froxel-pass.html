@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/froxel_pass.rs</code></div>
   <h1>The Froxel pass</h1>
   <p class="definition">A compute pass that cuts the view into 18,432 <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span>, 32 screen rectangles across, 18 down and 32 slices of depth each, and lists for every Froxel, in light order, the point lights of the light buffer whose range reaches into its bounds, so that the lit pass shades a pixel with its Froxel's point lights alone and a light left out would have added exactly zero.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at a79fe156 (2026-11-05). A change to the pass or the light buffer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="light-units.html">Light units</a> for what a light's intensity holds, <a href="shadow-mask.html">The shadow mask pass</a> for the bits that follow each list, <a href="lit-pass.html">The lit pass</a> for the shading that reads them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at f097fd15 (2026-11-06). A change to the pass or the light buffer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="light-units.html">Light units</a> for what a light's intensity holds, <a href="shadow-mask.html">The shadow mask pass</a> for the bits that follow each list, <a href="lit-pass.html">The lit pass</a> for the shading that reads them.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -149,14 +149,21 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="part-mark">1 &middot; <code>src/render/uniforms.rs</code> &middot; <code>prepare_lights</code></div>
   <h2>The light buffer</h2>
   <p class="key-idea">Every light the frame draws is a 48-byte entry of one storage buffer of fixed capacity, the directional lights first and the point lights after them, a point light placed by an Anchor and an offset; a separate 32-byte uniform says how many of each it holds.</p>
-  <p>Prepare fills Frame data with every directional light, then every point light, each blended between its two newest <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, up to <code>LIGHT_CAPACITY</code>, 4,096, and the frame's upload writes them through its staging into the light buffer. The buffer is created at that capacity, 196,608 bytes, and never grows. Directional lights take their places first, so a full buffer leaves out point lights before the sun; whatever it leaves out, prepare counts as <code>lights_overflowed</code> and warns of once, "Lights past the light buffer's capacity are not drawn", until a frame in which all fit.</p>
-<pre class="code"><code>let capacity = LIGHT_CAPACITY as usize;
-lights.clear();
-lights.extend(directional_lights.by_ref().take(capacity));
-let directional_light_count = lights.len() as u32;
-lights.extend(point_lights.by_ref().take(capacity - lights.len()));
-*overflowed = (directional_lights.count() + point_lights.count()) as u32;
-directional_light_count</code></pre>
+  <p>Prepare fills Frame data with every directional light, then every point light, each blended between its two newest <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, up to <code>LIGHT_CAPACITY</code>, 4,096, and the frame's upload writes them through its staging into the light buffer. The buffer is created at that capacity, 196,608 bytes, and never grows. Directional lights take their places first, so a full buffer leaves out point lights before the sun, those farthest from the camera, and keeps the rest in the order it lists them under capacity; whatever it leaves out, prepare counts as <code>lights_overflowed</code> and warns of once, "Lights past the light buffer's capacity are not drawn", until a frame in which all fit.</p>
+<pre class="code"><code>let room = capacity - directional_light_count;
+if point_light_count &gt; room {
+    point_light_distances.select_nth_unstable_by(room, |left, right| {
+        left.0.total_cmp(&amp;right.0).then(left.1.cmp(&amp;right.1))
+    });
+    point_light_distances.truncate(room);
+    point_light_distances.sort_unstable_by_key(|&amp;(_, index)| index);
+    for (kept, &amp;(_, index)) in point_light_distances.iter().enumerate() {
+        lights[directional_light_count + kept] = lights[directional_light_count + index];
+    }
+    lights.truncate(capacity);
+}
+*overflowed = (directional_lights_overflowed + point_light_count.saturating_sub(room)) as u32;
+directional_light_count as u32</code></pre>
   <p class="code-source"><code>prepare_lights</code>, <code>src/render/prepare.rs</code>.</p>
   <p>A light is a <code>LightData</code>, with a WGSL twin in the common part that a test holds field for field to the Rust. A directional light has no position, so its offset carries the direction it shines along, its transform's forward axis; one scaled to nothing has no direction and is not drawn. Intensity is the light's colour times its intensity, in the units of <a href="light-units.html">Light units</a>: candela for a point light, lux for a directional light.</p>
   <div class="table-wrap">
