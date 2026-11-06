@@ -3,8 +3,9 @@ mod provenance;
 mod report;
 
 pub use history::{
-    GitHubIssues, IssueTracker, Publication, ReleaseBuild, Suspect, bisect, check_experiment_name,
-    file_regressions, import_baselines, publish, publish_experiment, suspects, unrecorded_scenes,
+    GitHubIssues, IssueTracker, NextRun, Publication, ReleaseBuild, Suspect, bisect,
+    check_experiment_name, file_regressions, import_baselines, next_run, publish,
+    publish_experiment, publish_night, suspects, unrecorded_scenes,
 };
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;

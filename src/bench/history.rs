@@ -3,6 +3,7 @@
 //! reads, rebuilt in the same commit.
 
 mod import;
+mod night;
 mod suspects;
 mod verdicts;
 
@@ -16,6 +17,7 @@ use super::provenance::{Checkout, git, source_hash};
 use super::{Configuration, Counters, Measurements, Spread, adapter_key};
 
 pub use import::import_baselines;
+pub use night::{NextRun, next_run, publish_night};
 pub use verdicts::{GitHubIssues, IssueTracker, Suspect, bisect, file_regressions, suspects};
 
 const REMOTE: &str = "origin";
@@ -1269,7 +1271,7 @@ mod tests {
             .collect()
         }
 
-        fn commits(&self) -> usize {
+        pub(super) fn commits(&self) -> usize {
             git(&self.remote, &["rev-list", "--count", BRANCH], None)
                 .unwrap()
                 .parse()

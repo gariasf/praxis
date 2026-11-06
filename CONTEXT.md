@@ -240,6 +240,10 @@ _Avoid_: Alert, outlier, anomaly
 What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
 _Avoid_: Confirmation, bisect result; the code's other `Verdict`s are compare's (warn or fail of one metric) and preflight's (ok, note, warn or fail of one check); the shadow mask's verdict (`directional_verdicts`, `sample_verdicts`) is a light's hidden bit at a sample, the Shadow mask entry's word, not this one
 
+**Night**:
+One run of the nightly sweep on one machine: the re-bench and bisect of at most one Suspect, each run in a directory of its own under the Night's, then `main`'s scenes that lack a record on a Series there.
+_Avoid_: sweep run, job
+
 **Regression**:
 A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one `needs-triage` issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.
 _Avoid_: Slowdown, perf bug

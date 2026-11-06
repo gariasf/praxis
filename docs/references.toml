@@ -5396,3 +5396,15 @@ url = "https://learn.microsoft.com/en-us/windows/win32/direct3d12/residency"
 section = "Microsoft Learn, Direct3D 12, Residency: Residency budget; Programming residency management"
 quote = '''The budget can fluctuate noticeably as background processes wake-up and sleep; and fluctuate dramatically when the user switches away to another application. [...] Simple applications may be able to get by merely creating committed resources until experiencing out-of-memory failures. Upon failure, the application can destroy other committed resources or API objects to enable further resource creations to succeed. But, even simple applications are strongly recommended to watch for negative budget changes and destroy unused API objects roughly once a frame.'''
 checked = 2026-11-05
+
+["git-merge-base-is-ancestor"]
+url = "https://git-scm.com/docs/git-merge-base"
+section = "git-merge-base(1), Options, --is-ancestor"
+quote = '''Check if the first <commit> is an ancestor of the second <commit>, and exit with status 0 if true, or with status 1 if not. Errors are signaled by a non-zero status that is not 1.'''
+checked = 2026-11-06
+
+["gnu-bash-news-4.0-mapfile"]
+url = "https://tiswww.case.edu/php/chet/bash/NEWS"
+section = "bash NEWS, new features added to bash-4.0 since the release of bash-3.2, item u"
+quote = '''u.  There is a new `mapfile' builtin to populate an array with lines from a given file.  The name `readarray' is a synonym.'''
+checked = 2026-11-06
