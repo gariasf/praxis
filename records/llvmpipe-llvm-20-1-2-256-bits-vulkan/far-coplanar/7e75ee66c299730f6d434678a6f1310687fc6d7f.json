@@ -146,6 +146,7 @@
     "source_hash": "7e75ee66c299730f6d434678a6f1310687fc6d7f",
     "started_unix_seconds": 1793913446
   },
+  "rerecorded_baseline": true,
   "scene": "far-coplanar",
   "shadow_ray_microseconds": {
     "median": 15847.684999999998,

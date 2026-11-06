@@ -137,6 +137,7 @@
     "source_hash": "4da82f0c6f87e7f568ca91d18d747f41292912c0",
     "started_unix_seconds": 1793899875
   },
+  "rerecorded_baseline": true,
   "scene": "crowd",
   "shadow_ray_microseconds": {
     "median": 56410.19999999998,
