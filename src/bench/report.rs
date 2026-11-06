@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 
-use super::{Budgets, Measurements, Spread, compared_counters, ensure_comparable};
+use super::{Budgets, COUNTER_COUNT, Measurements, Spread, compared_counters, ensure_comparable};
 
 /// `current`'s times and counters, its aliasing among them when it was
 /// measured, as markdown tables, each against its `baseline`, when there is
@@ -52,8 +52,8 @@ pub fn report(
     }
 
     report.push_str(
-        "\n\n| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |\n\
-         |---|---:|---:|---:|---:|---:|---:|---:|\n",
+        "\n\n| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |\n\
+         |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
     );
     let frame_times = [
         (
@@ -100,7 +100,7 @@ pub fn report(
         .chain(pass_times);
     for (name, time, baseline_time, budget) in times {
         let compared = match baseline_time {
-            Some(Spread { median, p95 }) => [
+            Some(Spread { median, p95, .. }) => [
                 grouped(median, 1),
                 grouped(p95, 1),
                 signed(time.median - median, 1),
@@ -109,14 +109,22 @@ pub fn report(
             None => std::array::from_fn(|_| "—".to_owned()),
         };
         let [baseline_median, baseline_p95, delta, ratio_text] = compared;
+        let [p99, maximum] = [time.p99, time.maximum]
+            .map(|value| value.map_or("—".to_owned(), |value| grouped(value, 1)));
         writeln!(
             report,
-            "| {name} | {} | {} | {baseline_median} | {baseline_p95} | {delta} | {ratio_text} | {} |",
+            "| {name} | {} | {} | {p99} | {maximum} | {baseline_median} | {baseline_p95} | {delta} | {ratio_text} | {} |",
             grouped(time.median, 1),
             grouped(time.p95, 1),
             budget.map_or("—".to_owned(), |budget| grouped(budget, 1))
         )?;
     }
+
+    writeln!(
+        report,
+        "\nThe Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to {} µs.",
+        grouped(budgets.maximum_frame_microseconds, 1)
+    )?;
 
     if let Some(wait) = current.lit_pass_wait_microseconds {
         report.push_str(
@@ -159,7 +167,7 @@ pub fn report(
         }
         None => (current.counters, None),
     };
-    let baseline_values = baseline_counters.map_or([None; 8], |baseline_counters| {
+    let baseline_values = baseline_counters.map_or([None; COUNTER_COUNT], |baseline_counters| {
         baseline_counters.named().map(|(_, value)| Some(value))
     });
     let baseline_aliasing = baseline.and_then(|baseline| baseline.aliasing);
@@ -250,6 +258,13 @@ mod tests {
         gpu_memory_bytes: 536_471_449,
         arena_bytes_in_use: 844_804,
         heap_allocations: 326,
+        renderables_refused: 0,
+        lights_overflowed: 0,
+        static_instances_left_out: 0,
+        moving_instances_left_out: 0,
+        bends_left_out: 0,
+        froxel_lights_overflowed: 0,
+        shadow_mask_lights_overflowed: 3,
     };
 
     const BUDGETS: Budgets = Budgets {
@@ -258,11 +273,25 @@ mod tests {
         gate_microseconds: 6000.0,
         dynamic_tlas_cpu_microseconds: 1100.0,
         dynamic_tlas_gpu_microseconds: 1000.0,
+        maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
     };
 
     fn spread(median: f64, p95: f64) -> Spread {
-        Spread { median, p95 }
+        Spread {
+            median,
+            p95,
+            p99: None,
+            maximum: None,
+        }
+    }
+
+    fn tailed(median: f64, p95: f64, p99: f64, maximum: f64) -> Spread {
+        Spread {
+            p99: Some(p99),
+            maximum: Some(maximum),
+            ..spread(median, p95)
+        }
     }
 
     fn measurements(
@@ -315,9 +344,9 @@ mod tests {
             .map(|(pass, time)| (pass.to_owned(), time))
             .collect(),
             ..measurements(
-                spread(190.0, 262.3),
-                spread(4208.6, 5204.5),
-                spread(2950.0, 3010.4),
+                tailed(190.0, 262.3, 301.9, 1250.0),
+                tailed(4208.6, 5204.5, 5390.2, 17_001.5),
+                tailed(2950.0, 3010.4, 3044.0, 3521.7),
                 [
                     ("culling_phase_one", spread(166.3, 169.8)),
                     ("dynamic_tlas_build", spread(48.7, 462.9)),
@@ -354,16 +383,18 @@ mod tests {
             "\
 **helmet** on Apple M4 Pro, release, 2560x1440, 1800 measured frames
 
-| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| CPU frame | 190.0 | 262.3 | 200.0 | 250.0 | -10.0 | 0.950 | 6,000.0 |
-| Dynamic TLAS, CPU | 0.0 | 0.1 | 0.0 | 0.1 | +0.0 | — | 1,100.0 |
-| GPU frame | 4,208.6 | 5,204.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
-| Gate, rays off | 2,950.0 | 3,010.4 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
-| Shadow-ray time | -3.2 | 40.5 | -3.2 | 40.5 | +0.0 | — | — |
-| `culling_phase_one` | 166.3 | 169.8 | 160.0 | 170.0 | +6.3 | 1.039 | — |
-| `dynamic_tlas_build` | 48.7 | 462.9 | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
-| `lit_pass` | 755.8 | 768.1 | 800.0 | 810.0 | -44.2 | 0.945 | — |
+| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 190.0 | 262.3 | 301.9 | 1,250.0 | 200.0 | 250.0 | -10.0 | 0.950 | 6,000.0 |
+| Dynamic TLAS, CPU | 0.0 | 0.1 | — | — | 0.0 | 0.1 | +0.0 | — | 1,100.0 |
+| GPU frame | 4,208.6 | 5,204.5 | 5,390.2 | 17,001.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
+| Gate, rays off | 2,950.0 | 3,010.4 | 3,044.0 | 3,521.7 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
+| Shadow-ray time | -3.2 | 40.5 | — | — | -3.2 | 40.5 | +0.0 | — | — |
+| `culling_phase_one` | 166.3 | 169.8 | — | — | 160.0 | 170.0 | +6.3 | 1.039 | — |
+| `dynamic_tlas_build` | 48.7 | 462.9 | — | — | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
+| `lit_pass` | 755.8 | 768.1 | — | — | 800.0 | 810.0 | -44.2 | 0.945 | — |
+
+The Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to 16,667.0 µs.
 
 | Gate, rays off, µs | Median | p95 |
 |---|---:|---:|
@@ -383,6 +414,13 @@ mod tests {
 | `gpu_memory_bytes` | 536,471,449 | 536,000,000 | +471,449 | 1.001 | 8,000,000,000 |
 | `arena_bytes_in_use` | 844,804 | 844,804 | +0 | 1.000 | — |
 | `heap_allocations` | 326 | 300 | +26 | 1.087 | — |
+| `renderables_refused` | 0 | 0 | +0 | — | — |
+| `lights_overflowed` | 0 | 0 | +0 | — | — |
+| `static_instances_left_out` | 0 | 0 | +0 | — | — |
+| `moving_instances_left_out` | 0 | 0 | +0 | — | — |
+| `bends_left_out` | 0 | 0 | +0 | — | — |
+| `froxel_lights_overflowed` | 0 | 0 | +0 | — | — |
+| `shadow_mask_lights_overflowed` | 3 | 3 | +0 | 1.000 | — |
 "
         );
     }
@@ -410,8 +448,8 @@ mod tests {
                 "**helmet** on Apple M4 Pro, release, 2560x1440, 64 measured frames; its Baseline \
                  measured 1800 frames on Apple M4 Pro, so times compare with none; counters of \
                  frames 8..72",
-                "| CPU frame | 190.0 | 262.3 | — | — | — | — | 6,000.0 |",
-                "| `lit_pass` | 755.8 | 768.1 | — | — | — | — | — |",
+                "| CPU frame | 190.0 | 262.3 | 301.9 | 1,250.0 | — | — | — | — | 6,000.0 |",
+                "| `lit_pass` | 755.8 | 768.1 | — | — | — | — | — | — | — |",
                 "| `lit_pass` | 1,575.4 | 1,600.2 |",
                 "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
             ]
@@ -425,7 +463,7 @@ mod tests {
             lines(&report, &["GPU frame", "`gpu_memory_bytes`"]),
             [
                 "**helmet** on Apple M4 Pro, release, 2560x1440, 1800 measured frames",
-                "| GPU frame | 4,208.6 | 5,204.5 | — | — | — | — | 12,000.0 |",
+                "| GPU frame | 4,208.6 | 5,204.5 | 5,390.2 | 17,001.5 | — | — | — | — | 12,000.0 |",
                 "| `gpu_memory_bytes` | 536,471,449 | — | — | — | 8,000,000,000 |",
             ]
         );

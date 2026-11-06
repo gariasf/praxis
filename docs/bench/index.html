@@ -259,7 +259,7 @@ const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seco
 // How many of a Series' latest counter changes show before the rest fold.
 const SHOWN_COUNTER_CHANGES = 6;
 // Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
-const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations"];
+const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed"];
 // `Configuration::REFERENCE`'s measured frames: only rows of that length show their measured counters, so no two counted different frames.
 const REFERENCE_MEASURED_FRAMES = 1800;
 const METRIC_LABELS = {
@@ -270,11 +270,18 @@ const METRIC_LABELS = {
   dynamic_tlas_cpu_microseconds: "Dynamic TLAS, CPU",
   dynamic_tlas_gpu_microseconds: "Dynamic TLAS, GPU",
   arena_bytes_in_use: "Arena in use",
+  bends_left_out: "Bends left out",
   draw_calls: "Draw calls",
+  froxel_lights_overflowed: "Froxel lights overflowed",
   gpu_memory_bytes: "GPU memory",
   heap_allocations: "Heap allocations",
   instances_drawn: "Instances drawn",
   instances_overflowed: "Instances overflowed",
+  lights_overflowed: "Lights overflowed",
+  moving_instances_left_out: "Moving Instances left out of the dynamic TLAS",
+  renderables_refused: "Renderables refused",
+  shadow_mask_lights_overflowed: "Shadow mask lights overflowed",
+  static_instances_left_out: "Static Instances left out of the static TLAS",
   triangles_drawn: "Triangles drawn",
   uploaded_bytes: "Uploaded",
   binary_bytes: "Release binary",
