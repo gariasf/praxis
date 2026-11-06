@@ -2735,6 +2735,7 @@ pub(crate) mod tests {
                 first_index: 0,
                 index_count: 6,
                 material: None,
+                texel_density: 0.0,
                 meshlets: vec![CookedMeshlet {
                     vertices: vec![0, 1, 2, 3],
                     triangles: vec![[0, 1, 2], [0, 2, 3]],
