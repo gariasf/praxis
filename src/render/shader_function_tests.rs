@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use crate::assets::material::{ClassTable, Placement, TextureShape};
+use crate::assets::material::{ClassAndSlice, ClassTable, TextureShape};
 use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
@@ -2302,8 +2302,8 @@ fn sums_in_every_order(terms: &[f32]) -> Vec<f32> {
 }
 
 /// Every Layer of texture-wall's albedo Channel, its neutral default then its
-/// 10,000 4 × 4 Textures, decodes in WGSL to the Texture class and slice the
-/// CPU placed it in.
+/// 10,000 Textures of one 4 × 4 shape with three mips, decodes in WGSL to the
+/// Texture class and slice the CPU placed it in.
 #[test]
 fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in() {
     let Some(context) = gpu_context() else {
@@ -2314,10 +2314,10 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
         width: 4,
         height: 4,
         mip_level_count: 3,
-        format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+        ..neutral
     };
     let mut table = ClassTable::default();
-    let placements: Vec<Placement> = std::iter::once(neutral)
+    let placements: Vec<ClassAndSlice> = std::iter::once(neutral)
         .chain(std::iter::repeat_n(wall, TEXTURE_WALL_TEXTURES as usize))
         .map(|shape| table.place(shape).expect("a free Texture class"))
         .collect();

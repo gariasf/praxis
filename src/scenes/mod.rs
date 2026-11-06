@@ -830,8 +830,8 @@ fn wall_material_name(quad: u32) -> String {
     format!("quad-{quad}")
 }
 
-/// Loads every Texture in index order, so Texture i is Layer i + 1 of the
-/// albedo Channel, then the quads, row 0 farthest from the camera and
+/// Loads every Texture in index order, into the albedo Channel's Texture
+/// classes after its neutral default, then the quads, row 0 farthest from the camera and
 /// column 0 on its left, each with its own Material.
 pub(crate) fn spawn_texture_wall(
     world: &mut World,

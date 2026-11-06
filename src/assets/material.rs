@@ -107,12 +107,12 @@ impl TextureShape {
 /// A Texture's place in its Channel: its Texture class, which indexes the
 /// Channel's binding array, and its slice of that class's texture array.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Placement {
+pub(crate) struct ClassAndSlice {
     pub class: u32,
     pub slice: u32,
 }
 
-impl Placement {
+impl ClassAndSlice {
     /// The Layer that names it, which WGSL's `layer_class_and_slice` decodes.
     pub(crate) fn layer(self) -> u32 {
         self.class * SLICES_PER_CLASS + self.slice
@@ -139,14 +139,14 @@ impl ClassTable {
     /// has one slice, each later one twice the one before's, up to
     /// `SLICES_PER_CLASS`. `None` when the Channel holds
     /// `CLASSES_PER_CHANNEL` classes and none of `shape` has room.
-    pub(crate) fn place(&mut self, shape: TextureShape) -> Option<Placement> {
+    pub(crate) fn place(&mut self, shape: TextureShape) -> Option<ClassAndSlice> {
         let newest = self.classes.iter().rposition(|class| class.shape == shape);
         if let Some(class) = newest
             && let newest_class = &mut self.classes[class]
             && newest_class.taken < newest_class.slices
         {
             newest_class.taken += 1;
-            return Some(Placement {
+            return Some(ClassAndSlice {
                 class: class as u32,
                 slice: newest_class.taken - 1,
             });
@@ -162,7 +162,7 @@ impl ClassTable {
             slices,
             taken: 1,
         });
-        Some(Placement {
+        Some(ClassAndSlice {
             class: self.classes.len() as u32 - 1,
             slice: 0,
         })
@@ -206,11 +206,12 @@ impl ChannelTextures {
         staging: &mut LoadStaging,
         texture: &CookedTexture,
     ) -> Option<u32> {
-        let Some(placement) = self.table.place(TextureShape::of(texture)) else {
+        let shape = TextureShape::of(texture);
+        let Some(placement) = self.table.place(shape) else {
             tracing::error!(
                 channel = self.label,
                 capacity = CLASSES_PER_CHANNEL,
-                "channel holds its every Texture class; using the neutral default layer"
+                "channel has no room for another Texture class; using the neutral default layer"
             );
             return None;
         };
@@ -220,14 +221,14 @@ impl ChannelTextures {
                 &wgpu::TextureDescriptor {
                     label: Some(self.label),
                     size: wgpu::Extent3d {
-                        width: texture.width,
-                        height: texture.height,
+                        width: shape.width,
+                        height: shape.height,
                         depth_or_array_layers: self.table.slices(placement.class),
                     },
-                    mip_level_count: texture.levels.len() as u32,
+                    mip_level_count: shape.mip_level_count,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: texture.format,
+                    format: shape.format,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
                 },
@@ -481,11 +482,11 @@ impl MaterialPool {
         }
         let texture = cache.texture(id)?;
         let channel_textures = &mut self.channels[channel as usize];
-        let classes = channel_textures.views.len();
+        let classes_before = channel_textures.views.len();
         let Some(layer) = channel_textures.push(device, staging, &texture) else {
             return Ok(Self::DEFAULT_LAYER);
         };
-        self.bind_group_is_stale |= channel_textures.views.len() != classes;
+        self.bind_group_is_stale |= channel_textures.views.len() != classes_before;
         self.texture_layers.insert(id, layer);
         Ok(layer)
     }

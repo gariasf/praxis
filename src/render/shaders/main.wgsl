@@ -170,33 +170,33 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
 @fragment
 fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
     let material = materials[in.material_id];
-    let albedo_layer = layer_class_and_slice(material.layers.x);
-    let normal_layer = layer_class_and_slice(material.layers.y);
-    let metallic_roughness_layer = layer_class_and_slice(material.layers.z);
-    let occlusion_layer = layer_class_and_slice(material.layers.w);
-    let emissive_layer = layer_class_and_slice(material.extra.x);
+    let albedo_class_and_slice = layer_class_and_slice(material.layers.x);
+    let normal_class_and_slice = layer_class_and_slice(material.layers.y);
+    let metallic_roughness_class_and_slice = layer_class_and_slice(material.layers.z);
+    let occlusion_class_and_slice = layer_class_and_slice(material.layers.w);
+    let emissive_class_and_slice = layer_class_and_slice(material.extra.x);
     let albedo =
-        textureSample(albedo_textures[albedo_layer.x], colour_sampler, in.uv, albedo_layer.y);
+        textureSample(albedo_textures[albedo_class_and_slice.x], colour_sampler, in.uv, albedo_class_and_slice.y);
     let metallic_roughness = textureSample(
-        metallic_roughness_textures[metallic_roughness_layer.x],
+        metallic_roughness_textures[metallic_roughness_class_and_slice.x],
         data_sampler,
         in.uv,
-        metallic_roughness_layer.y,
+        metallic_roughness_class_and_slice.y,
     ).rg;
     let occlusion = textureSample(
-        occlusion_textures[occlusion_layer.x],
+        occlusion_textures[occlusion_class_and_slice.x],
         data_sampler,
         in.uv,
-        occlusion_layer.y,
+        occlusion_class_and_slice.y,
     ).r;
     let emissive = textureSample(
-        emissive_textures[emissive_layer.x],
+        emissive_textures[emissive_class_and_slice.x],
         colour_sampler,
         in.uv,
-        emissive_layer.y,
+        emissive_class_and_slice.y,
     ).rgb;
     let normal_sample =
-        textureSample(normal_textures[normal_layer.x], data_sampler, in.uv, normal_layer.y).rg;
+        textureSample(normal_textures[normal_class_and_slice.x], data_sampler, in.uv, normal_class_and_slice.y).rg;
 
     // Tangent frame. Interpolation bends the tangent off the normal, so
     // re-orthogonalise it (Gram-Schmidt) before rebuilding the bitangent with
