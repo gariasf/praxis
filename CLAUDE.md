@@ -117,6 +117,11 @@ src/
   stats/                       # frame stats: CPU and GPU times, counts,
                                  the GPU memory ledger by kind,
                                  counting allocator
+  streaming/                   # the Chunk streamer: which Chunks of a
+                                 Game world to request, hold and unload
+                                 around the camera, its Late Chunks, hold
+                                 after a teleport and Settled report,
+                                 reaching IO through a narrow trait
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's
