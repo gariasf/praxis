@@ -9,7 +9,7 @@ use crate::assets::{MaterialChannel, MaterialPool};
 use crate::cooked::CookedVertex;
 use crate::gpu::GpuContext;
 use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset};
-use crate::render::shaders;
+use crate::render::{RenderCapacities, shaders};
 use crate::scenes::TEXTURE_WALL_TEXTURES;
 
 /// Largest difference allowed between a result and its expectation. Results
@@ -2402,7 +2402,10 @@ fn evaluate_cases<const VECTORS: usize>(
         .replace("WORKGROUP_SIZE", &WORKGROUP_SIZE.to_string())
         .replace("VECTORS_PER_CASE", &VECTORS.to_string())
         .replace("EXPRESSION", expression);
-    let source = format!("{}\n{kernel}", shaders::SHARED.source());
+    let source = format!(
+        "{}\n{kernel}",
+        shaders::SHARED.source(&RenderCapacities::checked_in())
+    );
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader Function Harness"),
         source: wgpu::ShaderSource::Wgsl(source.into()),

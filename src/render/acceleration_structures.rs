@@ -4,15 +4,8 @@ use crate::assets::MeshPool;
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::readback::PassQueries;
-use crate::render::{FrameData, InstanceData, shaders};
+use crate::render::{FrameData, InstanceData, RenderCapacities, shaders};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
-
-/// Slots the static TLAS covers: a static Instance in a higher slot is left
-/// out, so it casts no shadow, and is counted and warned about. Sized for
-/// the 250k Instances M3 plans `town` with, no larger: in wgpu a TLAS
-/// rebuild's CPU time grows with its capacity, filled or not.
-/// Provisional until ADR 0013's split of the 8 GB Budget sizes it.
-pub const STATIC_TLAS_CAPACITY: u32 = 1 << 18;
 
 /// Moving Instances the dynamic TLAS holds: those in the lowest slots, so
 /// which ones changes only as they spawn and despawn; any past it are left
@@ -242,12 +235,13 @@ pub struct DynamicTlas {
 impl DynamicTlas {
     /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries on
     /// `backend`, built through `queue` at once, so a marker never queries it
-    /// unbuilt.
+    /// unbuilt, its markers' shader module assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         queue: &wgpu::Queue,
         backend: wgpu::Backend,
+        capacities: &RenderCapacities,
     ) -> Self {
         let tlas = memory.create_tlas(
             device,
@@ -282,7 +276,8 @@ impl DynamicTlas {
                 ("marker_result", marker_result.as_entire_binding()),
             ],
         );
-        let shader = device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor());
+        let shader =
+            device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor(capacities));
         let groups = [(&DYNAMIC_TLAS_MARKERS, &layout)];
         let label = "Dynamic TLAS Marker Pipeline Layout";
         let pipeline_layout = pipeline_layout(device, label, &groups);
@@ -644,6 +639,15 @@ mod tests {
         }
     }
 
+    /// An entry's custom data is its slot, of which wgpu keeps the lower 24
+    /// bits [ref:wgpu-30-tlas-instance-fields].
+    #[test]
+    fn every_slot_the_checked_in_budgets_give_fits_an_entrys_custom_data() {
+        let capacities = RenderCapacities::checked_in();
+        assert!(capacities.instances <= 1 << 24);
+        assert!(capacities.static_tlas_instances <= 1 << 24);
+    }
+
     #[test]
     fn the_static_tlas_holds_each_static_instance_in_its_slot_from_the_load_anchor() {
         let Some(triangle) = Triangle::new() else {
@@ -738,6 +742,7 @@ mod tests {
             &gpu_memory(context),
             &context.queue,
             context.backend(),
+            &RenderCapacities::checked_in(),
         );
         // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
         let turned_and_doubled = glam::Mat3::from_cols(

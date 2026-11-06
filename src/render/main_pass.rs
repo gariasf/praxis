@@ -11,7 +11,7 @@
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
 use crate::render::culling_pass::{CullingPhase, PHASE_TWO_DRAW_OFFSET};
-use crate::render::renderer::RenderSwitches;
+use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
 
@@ -53,7 +53,9 @@ impl MainPass {
     /// module declares, which draws the culling pass's frame's draw, its
     /// Meshlet records `meshlet_records`, packed indices `packed_indices`
     /// and indirect arguments `frame_draw`, lit through the shadow mask of
-    /// `render_targets`, its lit pipeline as `switches` set.
+    /// `render_targets`, its lit pipeline as `switches` set, its shader
+    /// module assembled with `capacities`.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
@@ -62,6 +64,7 @@ impl MainPass {
         frame_draw: &wgpu::Buffer,
         render_targets: &RenderTargets,
         switches: RenderSwitches,
+        capacities: &RenderCapacities,
     ) -> MainPass {
         let inputs_layout = MAIN_PASS_INPUTS.layout(device);
         let meshlet_records_buffer = meshlet_records.clone();
@@ -71,7 +74,7 @@ impl MainPass {
             &meshlet_records_buffer,
             render_targets,
         );
-        let shader = device.create_shader_module(shaders::MAIN.descriptor());
+        let shader = device.create_shader_module(shaders::MAIN.descriptor(capacities));
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);

@@ -1,12 +1,13 @@
 use std::time::Instant;
 
 use crate::assets::{MaterialPool, MeshPool, PoolCapacities};
+use crate::bench::Budgets;
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_PASS, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::blas_refit::{BLAS_REFIT_PASS, BlasRefit};
-use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity};
+use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity, SCAN_BLOCK_SIZE};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
@@ -16,10 +17,12 @@ use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
-    CameraUniform, DynamicTlas, FrameData, FrameStaging, INSTANCE_CAPACITY, InstanceData,
-    LIGHT_CAPACITY, LightData, LightUniform, LoadStaging, STATIC_TLAS_CAPACITY, StaticTlas,
+    CameraUniform, DynamicTlas, FrameData, FrameStaging, InstanceData, LightData, LightUniform,
+    LoadStaging, StaticTlas,
 };
-use crate::stats::{Counted, FrameRecorder, GpuFrameStats, GpuMemory, GpuMemoryKind};
+use crate::stats::{
+    Counted, FrameRecorder, GpuFrameStats, GpuMemory, GpuMemoryBudgets, GpuMemoryKind,
+};
 
 /// The passes `render` records, in order, each timed from its start, or a
 /// render pass from the latest end of the passes before it that it waits on
@@ -156,6 +159,63 @@ impl RenderSwitches {
     }
 }
 
+/// Bytes of the scene and pass buffers' Budget per Instance slot.
+const SCENE_AND_PASS_BYTES_PER_INSTANCE: u64 = 256;
+
+/// Bytes of the scene and pass buffers' Budget per light.
+const SCENE_AND_PASS_BYTES_PER_LIGHT: u64 = 32 << 10;
+
+/// Bytes of the acceleration structures' Budget per static TLAS entry.
+const ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE: u64 = 1 << 10;
+
+/// What the Instance buffer, the light buffer and the static TLAS hold,
+/// derived from the GPU memory Budgets at device creation, which assembles
+/// the shader modules with them: each the largest power of two of entries
+/// its kind's Budget gives at a fixed number of bytes per entry, the Instance
+/// slots in whole scan blocks. The bytes per entry keep the capacities the
+/// checked-in Budgets gave before; the Budget split sets them (ADR 0013).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RenderCapacities {
+    /// Slots the Instance buffer holds.
+    pub instances: u32,
+    /// Lights the light buffer holds, directional and point lights together.
+    pub lights: u32,
+    /// Slots the static TLAS covers: a static Instance in a higher slot is
+    /// left out, so it casts no shadow, and is counted and warned about. In
+    /// wgpu a TLAS rebuild's CPU time grows with its capacity, filled or not.
+    pub static_tlas_instances: u32,
+}
+
+impl RenderCapacities {
+    /// The capacities `budgets` give.
+    pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
+        let power_of_two = |bytes: u64, bytes_per_entry: u64| {
+            u32::try_from(bytes / bytes_per_entry)
+                .unwrap_or(u32::MAX)
+                .checked_ilog2()
+                .map_or(0, |exponent| 1 << exponent)
+        };
+        let scan_block_bytes = SCENE_AND_PASS_BYTES_PER_INSTANCE * u64::from(SCAN_BLOCK_SIZE);
+        Self {
+            instances: power_of_two(budgets.scene_and_pass_buffers, scan_block_bytes)
+                * SCAN_BLOCK_SIZE,
+            lights: power_of_two(
+                budgets.scene_and_pass_buffers,
+                SCENE_AND_PASS_BYTES_PER_LIGHT,
+            ),
+            static_tlas_instances: power_of_two(
+                budgets.acceleration_structures,
+                ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE,
+            ),
+        }
+    }
+
+    /// The capacities of `Budgets::checked_in`.
+    pub fn checked_in() -> Self {
+        Self::from_budgets(&Budgets::checked_in().gpu_memory_bytes_by_kind)
+    }
+}
+
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
 /// holds the bind groups passes share, the render targets and both TLAS, and
@@ -196,6 +256,7 @@ pub struct Renderer {
     /// The Instances, the vertex Arena and the Mesh pool's tables
     /// (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
+    capacities: RenderCapacities,
     static_tlas: StaticTlas,
     dynamic_tlas: DynamicTlas,
     memory: GpuMemory,
@@ -253,6 +314,7 @@ impl Renderer {
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let pool_capacities = PoolCapacities::checked_in();
+        let capacities = RenderCapacities::checked_in();
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(
             &device,
@@ -271,6 +333,7 @@ impl Renderer {
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
             draw_capacity,
+            &capacities,
             switches,
             &render_targets,
         );
@@ -286,6 +349,7 @@ impl Renderer {
             culling_pass.frame_draw(),
             &render_targets,
             switches,
+            &capacities,
         );
 
         let camera_buffer = memory.create_buffer(
@@ -313,7 +377,7 @@ impl Renderer {
             GpuMemoryKind::SceneAndPassBuffers,
             &wgpu::BufferDescriptor {
                 label: Some("Light Buffer"),
-                size: u64::from(LIGHT_CAPACITY) * std::mem::size_of::<LightData>() as u64,
+                size: u64::from(capacities.lights) * std::mem::size_of::<LightData>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             },
@@ -324,6 +388,7 @@ impl Renderer {
             &camera_buffer,
             &light_uniform_buffer,
             &light_buffer,
+            &capacities,
         );
         let light_count_pass = switches.count_point_lights.then(|| {
             LightCountPass::new(
@@ -332,6 +397,7 @@ impl Renderer {
                 &light_buffer,
                 &froxel_pass,
                 &render_targets,
+                &capacities,
             )
         });
         let frame_bind_group = FRAME.bind_group(
@@ -354,13 +420,13 @@ impl Renderer {
             GpuMemoryKind::SceneAndPassBuffers,
             &wgpu::BufferDescriptor {
                 label: Some("Instance Buffer"),
-                size: u64::from(INSTANCE_CAPACITY) * std::mem::size_of::<InstanceData>() as u64,
+                size: u64::from(capacities.instances) * std::mem::size_of::<InstanceData>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             },
         );
         let mesh_pool = MeshPool::new(&device, &memory, &pool_capacities);
-        let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
+        let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena(), &capacities);
         // The most a frame uploads: every buffer `upload` writes, in full.
         let uploaded_buffers: [&wgpu::Buffer; 6] = [
             &camera_buffer,
@@ -375,14 +441,16 @@ impl Renderer {
             uploaded_buffers.iter().map(|buffer| buffer.size()).sum(),
         );
 
-        let static_tlas = StaticTlas::new(&device, &memory, STATIC_TLAS_CAPACITY);
-        let dynamic_tlas = DynamicTlas::new(&device, &memory, &queue, context.backend());
+        let static_tlas = StaticTlas::new(&device, &memory, capacities.static_tlas_instances);
+        let dynamic_tlas =
+            DynamicTlas::new(&device, &memory, &queue, context.backend(), &capacities);
         let blas_refit = BlasRefit::new(
             &device,
             &memory,
             &queue,
             context.backend(),
             switches.crowd_form,
+            &capacities,
         );
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
@@ -416,14 +484,16 @@ impl Renderer {
             ],
             &render_targets,
             switches,
+            &capacities,
         );
-        let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets);
+        let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets, &capacities);
         let tonemapping_pass = TonemappingPass::new(
             &device,
             &memory,
             target_format,
             &render_targets,
             &mut load_staging,
+            &capacities,
         );
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
 
@@ -454,6 +524,7 @@ impl Renderer {
             scene_geometry_bind_group,
             static_tlas,
             dynamic_tlas,
+            capacities,
             memory,
             lost_instance_writes: false,
             uploaded_instance_slot_count: 0,
@@ -487,6 +558,12 @@ impl Renderer {
     /// The width of the target over its height.
     pub fn aspect_ratio(&self) -> f32 {
         self.aspect_ratio
+    }
+
+    /// What its Instance buffer, light buffer and static TLAS hold, which
+    /// the Frame data it draws must fit.
+    pub fn capacities(&self) -> RenderCapacities {
+        self.capacities
     }
 
     /// Records the static TLAS's rebuild, if `frame` changes it, and the
@@ -861,6 +938,18 @@ pub(crate) mod tests {
             .iter()
             .zip(colour)
             .all(|(&channel, expected)| channel.abs_diff(expected) <= 1)
+    }
+
+    #[test]
+    fn the_checked_in_budgets_keep_the_render_capacities_before_them() {
+        assert_eq!(
+            RenderCapacities::checked_in(),
+            RenderCapacities {
+                instances: 524_288,
+                lights: 4096,
+                static_tlas_instances: 262_144,
+            }
+        );
     }
 
     #[test]
@@ -1832,7 +1921,7 @@ pub(crate) mod tests {
         });
         world.insert_resource(FixedTime::default());
         world.insert_resource(Environment::default());
-        let mut preparer = FramePreparer::new(&mut world);
+        let mut preparer = FramePreparer::new(&mut world, renderer.capacities());
         let [_, right] = [-0.5, 0.5].map(|x| {
             let transform = Transform::from_translation(glam::dvec3(x, 0.0, 0.0));
             world.spawn((transform, MeshRef(mesh))).id()

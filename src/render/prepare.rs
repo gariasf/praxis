@@ -10,8 +10,8 @@ use crate::environment::Environment;
 use crate::render::bend_pass::{BEND_CAPACITY, BendData};
 use crate::render::instance::{anchor_and_offset, padded_columns};
 use crate::render::{
-    CameraUniform, DYNAMIC_TLAS_CAPACITY, INSTANCE_CAPACITY, InstanceData, LIGHT_CAPACITY,
-    LightData, LightUniform, NO_MATERIAL, NO_MESH,
+    CameraUniform, DYNAMIC_TLAS_CAPACITY, InstanceData, LightData, LightUniform, NO_MATERIAL,
+    NO_MESH, RenderCapacities,
 };
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
@@ -23,8 +23,8 @@ use crate::transform::{PreviousWorldTransform, WorldTransform};
 pub struct FrameData {
     pub camera: CameraUniform,
     pub light: LightUniform,
-    /// The light buffer's lights, directional lights first, at most
-    /// `LIGHT_CAPACITY`.
+    /// The light buffer's lights, directional lights first, at most its
+    /// capacity.
     pub lights: Vec<LightData>,
     /// The colour the lit pass clears to: the scene's background luminance,
     /// pre-exposed as the lit pass exposes what it draws.
@@ -144,10 +144,11 @@ fn no_mesh_instance() -> InstanceData {
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
 /// Renderable (ADR 0003); a slot freed in an earlier frame is taken
-/// again before a fresh one, and once all `INSTANCE_CAPACITY` are taken a
-/// Renderable is refused one.
+/// again before a fresh one, and once all `capacity` are taken a Renderable
+/// is refused one.
 #[derive(Default)]
 struct InstanceSlots {
+    capacity: u32,
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
     free: Vec<u32>,
     /// Slots freed this frame, which take an Instance with no Mesh before
@@ -167,12 +168,12 @@ impl InstanceSlots {
         if let Some(&slot) = self.by_entity.get(&entity) {
             return Some(slot);
         }
-        let fresh = (self.end < INSTANCE_CAPACITY).then_some(self.end);
+        let fresh = (self.end < self.capacity).then_some(self.end);
         let Some(slot) = self.free.pop().or(fresh) else {
             if self.refused.insert(entity) {
                 tracing::warn!(
                     ?entity,
-                    capacity = INSTANCE_CAPACITY,
+                    capacity = self.capacity,
                     "Renderable refused: the Instance buffer is full"
                 );
             }
@@ -201,6 +202,7 @@ pub struct FramePreparer {
     /// Each point light's squared distance from the camera and its index in
     /// query order, kept for its memory.
     point_light_distances: Vec<(f64, usize)>,
+    light_capacity: u32,
     lights_overflowed: u32,
     /// Set while lights overflow the light buffer, which was warned about
     /// when it was set.
@@ -232,16 +234,21 @@ pub struct FramePreparer {
 }
 
 impl FramePreparer {
-    pub fn new(world: &mut World) -> Self {
+    /// A preparer for the Instance slots and lights of `capacities`.
+    pub fn new(world: &mut World, capacities: RenderCapacities) -> Self {
         Self {
             directional_light_query: world.query(),
             point_light_query: world.query(),
             point_light_distances: Vec::new(),
+            light_capacity: capacities.lights,
             lights_overflowed: 0,
             warned_of_overflowed_lights: false,
             renderable_query: world.query(),
             changed_renderable_query: world.query_filtered(),
-            instance_slots: InstanceSlots::default(),
+            instance_slots: InstanceSlots {
+                capacity: capacities.instances,
+                ..InstanceSlots::default()
+            },
             unwritten: bevy_ecs::entity::EntityHashSet::default(),
             skipped: bevy_ecs::entity::EntityHashSet::default(),
             rewrite_every_instance: false,
@@ -297,6 +304,7 @@ impl FramePreparer {
             directional_light_query,
             point_light_query,
             point_light_distances,
+            light_capacity,
             lights_overflowed,
             warned_of_overflowed_lights,
             renderable_query,
@@ -341,6 +349,7 @@ impl FramePreparer {
             point_light_query,
             camera_position,
             blend_weight,
+            *light_capacity,
             &mut frame.lights,
             point_light_distances,
             lights_overflowed,
@@ -354,7 +363,7 @@ impl FramePreparer {
         if *lights_overflowed > 0 && !*warned_of_overflowed_lights {
             tracing::warn!(
                 lights_overflowed = *lights_overflowed,
-                capacity = LIGHT_CAPACITY,
+                capacity = *light_capacity,
                 "Lights past the light buffer's capacity are not drawn"
             );
         }
@@ -565,7 +574,7 @@ impl FramePreparer {
 /// Fills `lights` with every directional light, shining along its entity's
 /// forward axis, then every point light, at its World position as an Anchor
 /// plus an offset (ADR 0014), each blended between its two newest Ticks, up
-/// to `LIGHT_CAPACITY`. Point lights past it are cut farthest from
+/// to `capacity`. Point lights past it are cut farthest from
 /// `camera_position` first, the rest keeping their query order. Returns how
 /// many are directional, and sets `overflowed` to how many the light buffer
 /// had no room for.
@@ -576,6 +585,7 @@ fn prepare_lights(
     point_light_query: &mut LightQuery<PointLight>,
     camera_position: glam::DVec3,
     blend_weight: f32,
+    capacity: u32,
     lights: &mut Vec<LightData>,
     point_light_distances: &mut Vec<(f64, usize)>,
     overflowed: &mut u32,
@@ -609,7 +619,7 @@ fn prepare_lights(
             };
             (position.distance_squared(camera_position), light)
         });
-    let capacity = LIGHT_CAPACITY as usize;
+    let capacity = capacity as usize;
     lights.clear();
     lights.extend(directional_lights.by_ref().take(capacity));
     let directional_light_count = lights.len();
@@ -711,7 +721,8 @@ mod tests {
     use crate::assets::pools::tests::logged;
     use crate::assets::{MaterialHandle, Mesh, MeshHandle};
     use crate::components::Transform;
-    use crate::render::DYNAMIC_TLAS_CAPACITY;
+    use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
+    use crate::stats::GpuMemoryBudgets;
     use crate::transform::propagate_world_transforms;
 
     /// A World of Renderables prepared frame by frame, as `State` does.
@@ -730,6 +741,10 @@ mod tests {
 
     impl Frames {
         fn new() -> Self {
+            Self::with_capacities(RenderCapacities::checked_in())
+        }
+
+        fn with_capacities(capacities: RenderCapacities) -> Self {
             let mut material_generations = Generations::default();
             for _ in 0..8 {
                 material_generations.take();
@@ -745,7 +760,7 @@ mod tests {
             world.insert_resource(Camera::new());
             world.insert_resource(FixedTime::default());
             world.insert_resource(Environment::default());
-            let preparer = FramePreparer::new(&mut world);
+            let preparer = FramePreparer::new(&mut world, capacities);
             let mut propagation = Schedule::default();
             propagation.add_systems(propagate_world_transforms);
             Self {
@@ -830,11 +845,16 @@ mod tests {
         assert_eq!(frames.prepare(), [0]);
     }
 
+    /// Budgets for one scan block of 256 slots, at 256 bytes each.
     #[test]
     fn a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees() {
-        let mut frames = Frames::new();
-        let filled: Vec<Entity> = (0..INSTANCE_CAPACITY).map(|_| frames.spawn(0.0)).collect();
-        let slots: Vec<u32> = (0..INSTANCE_CAPACITY).collect();
+        let mut frames =
+            Frames::with_capacities(RenderCapacities::from_budgets(&GpuMemoryBudgets {
+                scene_and_pass_buffers: 1 << 16,
+                ..GpuMemoryBudgets::each(0)
+            }));
+        let filled: Vec<Entity> = (0..256).map(|_| frames.spawn(0.0)).collect();
+        let slots: Vec<u32> = (0..256).collect();
         assert_eq!(frames.prepare(), slots);
 
         // Refused frame after frame: warned about once, counted every frame,
@@ -1389,6 +1409,7 @@ mod tests {
     #[test]
     fn lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once() {
         let mut frames = Frames::new();
+        let light_capacity = RenderCapacities::checked_in().lights;
         let sun = DirectionalLight {
             color: glam::Vec3::ONE,
             intensity: 1.0,
@@ -1399,7 +1420,7 @@ mod tests {
             intensity: 1.0,
             range: 1.0,
         };
-        let point_lights: Vec<Entity> = (0..LIGHT_CAPACITY + 1)
+        let point_lights: Vec<Entity> = (0..light_capacity + 1)
             .map(|index| {
                 let position = glam::dvec3(f64::from(index), 0.0, 0.0);
                 let light = (Transform::from_translation(position), point_light);
@@ -1411,7 +1432,7 @@ mod tests {
                 frames.prepare();
                 let light = frames.preparer.frame().light;
                 let counts = (light.directional_light_count, light.point_light_count);
-                assert_eq!(counts, (1, LIGHT_CAPACITY - 1));
+                assert_eq!(counts, (1, light_capacity - 1));
                 assert_eq!(frames.preparer.lights_overflowed(), 2);
             }
         });
@@ -1423,7 +1444,7 @@ mod tests {
         frames.prepare();
         assert_eq!(
             frames.preparer.frame().lights.len(),
-            LIGHT_CAPACITY as usize
+            light_capacity as usize
         );
         assert_eq!(frames.preparer.lights_overflowed(), 0);
     }
@@ -1435,9 +1456,10 @@ mod tests {
     #[test]
     fn past_the_light_buffers_capacity_the_farthest_point_lights_are_cut() {
         let mut frames = Frames::new();
+        let light_capacity = RenderCapacities::checked_in().lights;
         let camera_position = glam::dvec3(1.0e6, 0.0, 0.0);
         frames.world.resource_mut::<Camera>().position = camera_position;
-        for distance in (1..=LIGHT_CAPACITY + 3).rev() {
+        for distance in (1..=light_capacity + 3).rev() {
             let position = camera_position + glam::dvec3(0.0, f64::from(distance), 0.0);
             let light = PointLight {
                 color: glam::Vec3::ONE,
@@ -1457,7 +1479,7 @@ mod tests {
             .query::<&PointLight>()
             .iter(&frames.world)
             .map(|light| light.intensity)
-            .filter(|&distance| distance <= LIGHT_CAPACITY as f32)
+            .filter(|&distance| distance <= light_capacity as f32)
             .collect();
         assert_eq!(distances, nearest_in_query_order);
         assert_eq!(frames.preparer.lights_overflowed(), 3);

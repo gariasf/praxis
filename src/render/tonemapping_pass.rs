@@ -2,10 +2,10 @@
 //! of the HDR target and writes the pixel's display colour, sRGB-encoded and
 //! dithered.
 
-use crate::render::LoadStaging;
 use crate::render::bind_groups::{TONEMAPPING_INPUT, pipeline_layout};
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
+use crate::render::{LoadStaging, RenderCapacities};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// The tonemapping pass's label, and its name in frame stats.
@@ -40,19 +40,20 @@ impl TonemappingPass {
     /// The pass for views of `target_format`, which is not sRGB: the pass
     /// encodes sRGB itself, so its dither lands on 8-bit steps. It reads the
     /// HDR target of `render_targets` and loads its dither mask through
-    /// `staging`.
+    /// `staging`. Its shader module is assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         target_format: wgpu::TextureFormat,
         render_targets: &RenderTargets,
         staging: &mut LoadStaging,
+        capacities: &RenderCapacities,
     ) -> TonemappingPass {
         debug_assert!(
             !target_format.is_srgb(),
             "the tonemapping pass encodes sRGB itself, so writes no sRGB view"
         );
-        let shader = device.create_shader_module(shaders::TONEMAPPING.descriptor());
+        let shader = device.create_shader_module(shaders::TONEMAPPING.descriptor(capacities));
         let layout = TONEMAPPING_INPUT.layout(device);
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Tonemapping Pipeline"),
@@ -227,7 +228,14 @@ mod tests {
         let memory = gpu_memory(&context);
         let render_targets = RenderTargets::new(device, &memory, size.width, size.height);
         let mut staging = LoadStaging::new(device.clone());
-        let pass = TonemappingPass::new(device, &memory, format, &render_targets, &mut staging);
+        let pass = TonemappingPass::new(
+            device,
+            &memory,
+            format,
+            &render_targets,
+            &mut staging,
+            &RenderCapacities::checked_in(),
+        );
         staging.submit(&context.queue);
         let target = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Tonemapping Test Target"),
@@ -310,6 +318,7 @@ mod tests {
             TARGET_FORMAT,
             &render_targets,
             &mut staging,
+            &RenderCapacities::checked_in(),
         );
         staging.submit(&context.queue);
         let target = device.create_texture(&wgpu::TextureDescriptor {

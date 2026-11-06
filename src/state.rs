@@ -185,7 +185,7 @@ impl State {
                     absent => error.context(format!("absent sources: {}", absent.join(", "))),
                 },
             )?;
-        let preparer = FramePreparer::new(&mut simulation.world);
+        let preparer = FramePreparer::new(&mut simulation.world, renderer.capacities());
 
         Ok(Self {
             simulation,
