@@ -19,7 +19,7 @@ use crate::preflight::{
 /// metric is measured, so that two Bench records compare only when they
 /// share it. The lower versions name the eras before the Bench history,
 /// numbered by its import of the Baselines from 1.
-pub const HARNESS_VERSION: u32 = 10;
+pub const HARNESS_VERSION: u32 = 11;
 
 /// The top-level paths whose changes can change a measurement, which the
 /// source hash covers. Every other tracked top-level path is in the tests'

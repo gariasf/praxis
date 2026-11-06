@@ -4,5 +4,6 @@
   "gate_microseconds": 6000,
   "dynamic_tlas_cpu_microseconds": 1100,
   "dynamic_tlas_gpu_microseconds": 1000,
+  "maximum_frame_microseconds": 16667,
   "gpu_memory_bytes": 8000000000
 }

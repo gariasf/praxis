@@ -149,7 +149,8 @@ const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
 
 /// The steady-state cost of one Reference scene: medians over the measured
-/// frames, plus p95 for times, and the counter frames' counters. Bench
+/// frames, plus p95, p99 and maximum for times, and the counter frames'
+/// counters. Bench
 /// output and Baselines share this form.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Measurements {
@@ -215,8 +216,13 @@ impl Measurements {
     }
 }
 
+const COUNTER_COUNT: usize = 15;
+
 /// Medians of counters, which repeat exactly on every run, but for the
-/// Instances overflowed: the most of any frame, so one overflow counts.
+/// Instances overflowed and the refusals, from the Renderables refused to
+/// the shadow mask's light overflows: the most of any frame, so one overflow
+/// counts. The refusals are absent from Baselines recorded before results
+/// carried them, which read as none refused.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
@@ -227,6 +233,20 @@ pub struct Counters {
     pub gpu_memory_bytes: u64,
     pub arena_bytes_in_use: u64,
     pub heap_allocations: u64,
+    #[serde(default)]
+    pub renderables_refused: u64,
+    #[serde(default)]
+    pub lights_overflowed: u64,
+    #[serde(default)]
+    pub static_instances_left_out: u64,
+    #[serde(default)]
+    pub moving_instances_left_out: u64,
+    #[serde(default)]
+    pub bends_left_out: u64,
+    #[serde(default)]
+    pub froxel_lights_overflowed: u64,
+    #[serde(default)]
+    pub shadow_mask_lights_overflowed: u64,
 }
 
 impl Counters {
@@ -250,11 +270,26 @@ impl Counters {
             gpu_memory_bytes: median(|stats| stats.gpu_memory_bytes),
             arena_bytes_in_use: median(|stats| stats.arena_bytes_in_use),
             heap_allocations: median(|stats| stats.heap_allocations),
+            renderables_refused: most(|stats| stats.renderables_refused.into()),
+            lights_overflowed: most(|stats| stats.lights_overflowed.into()),
+            static_instances_left_out: most(|stats| stats.static_instances_left_out.into()),
+            moving_instances_left_out: most(|stats| stats.moving_instances_left_out.into()),
+            bends_left_out: most(|stats| stats.bends_left_out.into()),
+            froxel_lights_overflowed: most(|stats| {
+                stats
+                    .gpu
+                    .map_or(0, |gpu| gpu.froxel_lights_overflowed.into())
+            }),
+            shadow_mask_lights_overflowed: most(|stats| {
+                stats
+                    .gpu
+                    .map_or(0, |gpu| gpu.shadow_mask_lights_overflowed.into())
+            }),
         }
     }
 
     /// Each counter's name, as results and Bench records spell it.
-    pub(super) const NAMES: [&'static str; 8] = [
+    pub(super) const NAMES: [&'static str; COUNTER_COUNT] = [
         "draw_calls",
         "instances_drawn",
         "triangles_drawn",
@@ -263,9 +298,16 @@ impl Counters {
         "gpu_memory_bytes",
         "arena_bytes_in_use",
         "heap_allocations",
+        "renderables_refused",
+        "lights_overflowed",
+        "static_instances_left_out",
+        "moving_instances_left_out",
+        "bends_left_out",
+        "froxel_lights_overflowed",
+        "shadow_mask_lights_overflowed",
     ];
 
-    fn named(&self) -> [(&'static str, u64); 8] {
+    fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
         let values = [
             self.draw_calls,
             self.instances_drawn,
@@ -275,6 +317,13 @@ impl Counters {
             self.gpu_memory_bytes,
             self.arena_bytes_in_use,
             self.heap_allocations,
+            self.renderables_refused,
+            self.lights_overflowed,
+            self.static_instances_left_out,
+            self.moving_instances_left_out,
+            self.bends_left_out,
+            self.froxel_lights_overflowed,
+            self.shadow_mask_lights_overflowed,
         ];
         std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
@@ -386,10 +435,17 @@ pub struct CounterFrames {
     pub counters: Counters,
 }
 
+/// A time's median, p95, p99 and maximum over frames, by nearest rank; the
+/// p99 and maximum are absent from Baselines and Bench records from before
+/// results carried them.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Spread {
     pub median: f64,
     pub p95: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub p99: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maximum: Option<f64>,
 }
 
 /// ADR 0013's per-frame limits on the reference machine, ADR 0019's gate
@@ -400,7 +456,7 @@ pub struct Budgets {
     /// The frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: f64,
-    /// The median gate, past which ADR 0019's visibility pre-pass and
+    /// The gate's median and p99, past which ADR 0019's visibility pre-pass and
     /// visibility buffer are prototyped.
     pub gate_microseconds: f64,
     /// Ceilings on the dynamic TLAS at its 10,000 Moving Instances (ADR
@@ -408,6 +464,8 @@ pub struct Budgets {
     /// the GPU, from the end of the frame before.
     pub dynamic_tlas_cpu_microseconds: f64,
     pub dynamic_tlas_gpu_microseconds: f64,
+    /// The longest CPU frame and GPU frame allowed: one 60 Hz period.
+    pub maximum_frame_microseconds: f64,
     pub gpu_memory_bytes: u64,
 }
 
@@ -648,31 +706,40 @@ fn measure(
     })
 }
 
-/// One line, `key=value` pairs after the scene name: the CPU frame's median
-/// and p95, the dynamic TLAS's CPU median, then medians and p95s of the GPU
-/// frame, the gate, shadow-ray time and, when measured, the lit pass's wait,
-/// each pass's median, the counters, then the aliasing figures when
-/// measured.
+/// One line, `key=value` pairs after the scene name: the CPU frame's
+/// median, p95, p99 and maximum, the dynamic TLAS's CPU median, the same
+/// four of the GPU frame and the gate, the median and p95 of shadow-ray time
+/// and, when measured, of the lit pass's wait, each pass's median, the
+/// counters, then the aliasing figures when measured.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
+        let write_spread = |formatter: &mut std::fmt::Formatter<'_>, spread: Spread| {
+            write!(
+                formatter,
+                " median={:.1} p95={:.1}",
+                spread.median, spread.p95
+            )?;
+            for (statistic, value) in [("p99", spread.p99), ("maximum", spread.maximum)] {
+                if let Some(value) = value {
+                    write!(formatter, " {statistic}={value:.1}")?;
+                }
+            }
+            Ok(())
+        };
+        write!(formatter, "{} cpu_us", self.scene)?;
+        write_spread(formatter, self.cpu_frame_microseconds)?;
         write!(
             formatter,
-            "{} cpu_us median={:.1} p95={:.1} dynamic_tlas_cpu_us={:.1} gpu_us median={:.1} p95={:.1}",
-            self.scene,
-            cpu.median,
-            cpu.p95,
-            self.dynamic_tlas_cpu_microseconds.median,
-            gpu.median,
-            gpu.p95
+            " dynamic_tlas_cpu_us={:.1} gpu_us",
+            self.dynamic_tlas_cpu_microseconds.median
         )?;
+        write_spread(formatter, self.gpu_frame_microseconds)?;
+        write!(formatter, " gate_us")?;
+        write_spread(formatter, self.gate_microseconds)?;
         write!(
             formatter,
-            " gate_us median={:.1} p95={:.1} shadow_ray_us median={:.1} p95={:.1}",
-            self.gate_microseconds.median,
-            self.gate_microseconds.p95,
-            self.shadow_ray_microseconds.median,
-            self.shadow_ray_microseconds.p95
+            " shadow_ray_us median={:.1} p95={:.1}",
+            self.shadow_ray_microseconds.median, self.shadow_ray_microseconds.p95
         )?;
         if let Some(wait) = self.lit_pass_wait_microseconds {
             write!(
@@ -692,9 +759,11 @@ impl std::fmt::Display for Measurements {
     }
 }
 
-/// Compares `current` with its `baseline` and the Budgets. Medians count;
-/// p95s are reported only, as they move with one slow frame, but for the
-/// CPU frame's, which its Budget bounds too. Runs that
+/// Compares `current` with its `baseline` and the Budgets. Medians count
+/// against Baselines. Against the Budgets, the CPU frame, the GPU frame and
+/// the gate count at the median and p99, the CPU frame at the p95 too, and
+/// the CPU and GPU frames' maximums against one 60 Hz period; other p95s
+/// are reported only, as they move with one slow frame. Runs that
 /// measured as many frames compare their measured frames' counters; runs of
 /// other lengths compare their counter frames', and only with
 /// `CompareMode::Ci`, as their times cover other frames.
@@ -747,31 +816,26 @@ pub fn compare(
         baseline.adapter,
         baseline.backend
     );
-    let cpu = current.cpu_frame_microseconds.median;
+    let cpu = current.cpu_frame_microseconds;
     check_regression(
         &mut findings,
         "cpu_frame_microseconds",
-        cpu,
+        cpu.median,
         baseline.cpu_frame_microseconds.median,
         CPU_NOISE_FLOOR_MICROSECONDS,
     );
-    check_budget(
+    let (metric, budget) = ("cpu_frame_microseconds", budgets.cpu_frame_microseconds);
+    check_budget(&mut findings, metric, cpu.median, budget);
+    check_tail_budget(&mut findings, metric, "p95", Some(cpu.p95), budget);
+    check_tail_budget(&mut findings, metric, "p99", cpu.p99, budget);
+    let maximum_budget = budgets.maximum_frame_microseconds;
+    check_tail_budget(
         &mut findings,
-        "cpu_frame_microseconds",
-        cpu,
-        budgets.cpu_frame_microseconds,
+        metric,
+        "maximum",
+        cpu.maximum,
+        maximum_budget,
     );
-    // The CPU frame's Budget bounds its p95 as well as its median.
-    let earlier = findings.len();
-    check_budget(
-        &mut findings,
-        "cpu_frame_microseconds",
-        current.cpu_frame_microseconds.p95,
-        budgets.cpu_frame_microseconds,
-    );
-    for finding in &mut findings[earlier..] {
-        finding.detail = format!("p95 {}", finding.detail);
-    }
     let passes = &current.gpu_pass_microseconds;
     let baseline_passes = &baseline.gpu_pass_microseconds;
     anyhow::ensure!(
@@ -791,11 +855,16 @@ pub fn compare(
             finding.detail = format!("{pass} {}", finding.detail);
         }
     }
-    check_budget(
+    let (metric, budget) = ("gpu_frame_microseconds", budgets.gpu_frame_microseconds);
+    let gpu = current.gpu_frame_microseconds;
+    check_budget(&mut findings, metric, gpu.median, budget);
+    check_tail_budget(&mut findings, metric, "p99", gpu.p99, budget);
+    check_tail_budget(
         &mut findings,
-        "gpu_frame_microseconds",
-        current.gpu_frame_microseconds.median,
-        budgets.gpu_frame_microseconds,
+        metric,
+        "maximum",
+        gpu.maximum,
+        maximum_budget,
     );
     let gate = current.gate_microseconds.median;
     let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
@@ -809,12 +878,10 @@ pub fn compare(
     ] {
         check_regression(&mut findings, metric, current, baseline, noise_floor);
     }
-    check_budget(
-        &mut findings,
-        "gate_microseconds",
-        gate,
-        budgets.gate_microseconds,
-    );
+    let (metric, budget) = ("gate_microseconds", budgets.gate_microseconds);
+    check_budget(&mut findings, metric, gate, budget);
+    let gate_p99 = current.gate_microseconds.p99;
+    check_tail_budget(&mut findings, metric, "p99", gate_p99, budget);
     check_budget(
         &mut findings,
         "dynamic_tlas_cpu_microseconds",
@@ -967,6 +1034,25 @@ fn check_regression(
     });
 }
 
+/// Fails when `current`, `metric`'s `statistic`, exceeds `budget`, naming
+/// the statistic; passes when it was not measured.
+fn check_tail_budget(
+    findings: &mut Vec<Finding>,
+    metric: &'static str,
+    statistic: &str,
+    current: Option<f64>,
+    budget: f64,
+) {
+    let Some(current) = current else {
+        return;
+    };
+    let earlier = findings.len();
+    check_budget(findings, metric, current, budget);
+    for finding in &mut findings[earlier..] {
+        finding.detail = format!("{statistic} {}", finding.detail);
+    }
+}
+
 /// Fails when `current` exceeds `budget`.
 fn check_budget(findings: &mut Vec<Finding>, metric: &'static str, current: f64, budget: f64) {
     if current > budget {
@@ -979,10 +1065,11 @@ fn check_budget(findings: &mut Vec<Finding>, metric: &'static str, current: f64,
 }
 
 fn spread(values: Vec<f64>) -> Spread {
-    let median = percentile(values.clone(), 0.5);
     Spread {
-        median,
-        p95: percentile(values, 0.95),
+        median: percentile(values.clone(), 0.5),
+        p95: percentile(values.clone(), 0.95),
+        p99: Some(percentile(values.clone(), 0.99)),
+        maximum: Some(percentile(values, 1.0)),
     }
 }
 
@@ -1009,6 +1096,13 @@ mod tests {
         gpu_memory_bytes: 1 << 30,
         arena_bytes_in_use: 85_296,
         heap_allocations: 100,
+        renderables_refused: 0,
+        lights_overflowed: 0,
+        static_instances_left_out: 0,
+        moving_instances_left_out: 0,
+        bends_left_out: 0,
+        froxel_lights_overflowed: 0,
+        shadow_mask_lights_overflowed: 0,
     };
 
     #[test]
@@ -1022,6 +1116,13 @@ mod tests {
             gpu_memory_bytes: 6,
             arena_bytes_in_use: 7,
             heap_allocations: 8,
+            renderables_refused: 9,
+            lights_overflowed: 10,
+            static_instances_left_out: 11,
+            moving_instances_left_out: 12,
+            bends_left_out: 13,
+            froxel_lights_overflowed: 14,
+            shadow_mask_lights_overflowed: 15,
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
@@ -1043,22 +1144,32 @@ mod tests {
             cpu_frame_microseconds: Spread {
                 median: 1000.0,
                 p95: 1200.0,
+                p99: Some(1300.0),
+                maximum: Some(2000.0),
             },
             dynamic_tlas_cpu_microseconds: Spread {
                 median: 100.0,
                 p95: 120.0,
+                p99: None,
+                maximum: None,
             },
             gpu_frame_microseconds: Spread {
                 median: 2500.0,
                 p95: 2600.0,
+                p99: Some(2700.0),
+                maximum: Some(3500.0),
             },
             gate_microseconds: Spread {
                 median: 1500.0,
                 p95: 1600.0,
+                p99: Some(1700.0),
+                maximum: Some(2500.0),
             },
             shadow_ray_microseconds: Spread {
                 median: 500.0,
                 p95: 600.0,
+                p99: None,
+                maximum: None,
             },
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
@@ -1067,7 +1178,15 @@ mod tests {
                 .into_iter()
                 .map(|(pass, median)| {
                     let p95 = median + 100.0;
-                    (pass.to_owned(), Spread { median, p95 })
+                    (
+                        pass.to_owned(),
+                        Spread {
+                            median,
+                            p95,
+                            p99: None,
+                            maximum: None,
+                        },
+                    )
                 })
                 .collect(),
             counters: COUNTERS,
@@ -1105,6 +1224,7 @@ mod tests {
         gate_microseconds: 6000.0,
         dynamic_tlas_cpu_microseconds: 1100.0,
         dynamic_tlas_gpu_microseconds: 1000.0,
+        maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
     };
 
@@ -1202,6 +1322,8 @@ mod tests {
             Spread {
                 median: 2300.0,
                 p95: 2400.0,
+                p99: None,
+                maximum: None,
             },
         );
         assert_eq!(
@@ -1222,6 +1344,8 @@ mod tests {
             Spread {
                 median: 1000.0,
                 p95: 9000.0,
+                p99: None,
+                maximum: None,
             },
         );
         current.counters.heap_allocations = 90;
@@ -1236,6 +1360,112 @@ mod tests {
             verdicts(&current, &baseline(), CompareMode::Local),
             [("heap_allocations", Verdict::Fail)]
         );
+    }
+
+    #[test]
+    fn a_refusal_fails_on_any_increase_in_ci_too() {
+        let mut current = baseline();
+        current.counters.lights_overflowed = 1;
+        current.counters.shadow_mask_lights_overflowed = 1;
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Ci),
+            [
+                ("lights_overflowed", Verdict::Fail),
+                ("shadow_mask_lights_overflowed", Verdict::Fail)
+            ]
+        );
+    }
+
+    /// The CPU frame, the GPU frame and the gate answer to their Budgets at
+    /// the p99 too, though their Baselines compare medians alone.
+    #[test]
+    fn a_p99_over_its_budget_fails_with_its_median_within() {
+        let mut slow_tail = baseline();
+        slow_tail.cpu_frame_microseconds.p99 = Some(6100.0);
+        slow_tail.gpu_frame_microseconds.p99 = Some(12_100.0);
+        slow_tail.gate_microseconds.p99 = Some(6200.0);
+        let findings = compare(&slow_tail, &slow_tail, &BUDGETS, CompareMode::Local).unwrap();
+        let details: Vec<_> = findings
+            .iter()
+            .map(|finding| (finding.metric, finding.verdict, finding.detail.as_str()))
+            .collect();
+        assert_eq!(
+            details,
+            [
+                (
+                    "cpu_frame_microseconds",
+                    Verdict::Fail,
+                    "p99 6100.0 over Budget 6000.0; \
+                     one-minute load average unknown, its Baseline's unknown"
+                ),
+                (
+                    "gpu_frame_microseconds",
+                    Verdict::Fail,
+                    "p99 12100.0 over Budget 12000.0"
+                ),
+                (
+                    "gate_microseconds",
+                    Verdict::Fail,
+                    "p99 6200.0 over Budget 6000.0"
+                ),
+            ]
+        );
+    }
+
+    /// No CPU or GPU frame may last longer than one 60 Hz period; the gate's
+    /// maximum is reported, not judged.
+    #[test]
+    fn a_maximum_over_16_667_microseconds_fails() {
+        let mut one_slow_frame = baseline();
+        one_slow_frame.cpu_frame_microseconds.maximum = Some(16_700.0);
+        one_slow_frame.gpu_frame_microseconds.maximum = Some(20_000.0);
+        one_slow_frame.gate_microseconds.maximum = Some(20_000.0);
+        let findings = compare(
+            &one_slow_frame,
+            &one_slow_frame,
+            &BUDGETS,
+            CompareMode::Local,
+        )
+        .unwrap();
+        let details: Vec<_> = findings
+            .iter()
+            .map(|finding| (finding.metric, finding.detail.as_str()))
+            .collect();
+        assert_eq!(
+            details,
+            [
+                (
+                    "cpu_frame_microseconds",
+                    "maximum 16700.0 over Budget 16667.0; \
+                     one-minute load average unknown, its Baseline's unknown"
+                ),
+                (
+                    "gpu_frame_microseconds",
+                    "maximum 20000.0 over Budget 16667.0"
+                ),
+            ]
+        );
+        let mut at_the_budget = baseline();
+        at_the_budget.gpu_frame_microseconds.maximum = Some(16_667.0);
+        assert_eq!(
+            verdicts(&at_the_budget, &baseline(), CompareMode::Local),
+            []
+        );
+    }
+
+    /// Tails measured before results carried them pass unjudged.
+    #[test]
+    fn a_spread_without_tails_passes_its_budgets() {
+        let mut untailed = baseline();
+        for spread in [
+            &mut untailed.cpu_frame_microseconds,
+            &mut untailed.gpu_frame_microseconds,
+            &mut untailed.gate_microseconds,
+        ] {
+            spread.p99 = None;
+            spread.maximum = None;
+        }
+        assert_eq!(verdicts(&untailed, &untailed, CompareMode::Local), []);
     }
 
     #[test]
@@ -1345,6 +1575,8 @@ mod tests {
             Spread {
                 median: 1100.0,
                 p95: 1200.0,
+                p99: None,
+                maximum: None,
             },
         );
         assert_eq!(
@@ -1380,6 +1612,8 @@ mod tests {
         let depth_prepass = Spread {
             median: 300.0,
             p95: 350.0,
+            p99: None,
+            maximum: None,
         };
         more_passes
             .gpu_pass_microseconds
@@ -1500,6 +1734,8 @@ mod tests {
         let culling = |median| Spread {
             median,
             p95: median,
+            p99: None,
+            maximum: None,
         };
         let mut current = baseline();
         current
@@ -1544,6 +1780,7 @@ mod tests {
             .map(|frame| {
                 let counted = COUNTER_FRAMES.contains(&frame);
                 let warming_up = frame < configuration.warm_up_frames;
+                let refused = |count| if frame == 300 { count } else { 0 };
                 FrameStats {
                     cpu_frame_time: Duration::from_micros(if warming_up { 900 } else { 100 }),
                     cpu_times: [
@@ -1565,14 +1802,19 @@ mod tests {
                         triangles_drawn: if counted { 15 } else { 231 },
                         phase_two_triangles_drawn: 0,
                         instances_overflowed: if frame == 300 { 3 } else { 0 },
-                        froxel_lights_overflowed: 0,
-                        shadow_mask_lights_overflowed: 0,
+                        froxel_lights_overflowed: refused(6),
+                        shadow_mask_lights_overflowed: refused(7),
                         lit_pixels: 0,
                         listed_point_lights: 0,
                         reaching_point_lights: 0,
                     }),
                     draw_calls: if counted { 10 } else { 99 },
                     heap_allocations: if counted { 50 } else { 999 },
+                    renderables_refused: refused(1),
+                    lights_overflowed: refused(2),
+                    static_instances_left_out: refused(3),
+                    moving_instances_left_out: refused(4),
+                    bends_left_out: refused(5),
                     gpu_memory_bytes_by_kind: if warming_up {
                         [9; GpuMemoryKind::COUNT]
                     } else {
@@ -1628,6 +1870,19 @@ mod tests {
             counted(reference.counter_frames.counters),
             (10, 5, 15, 0, 50)
         );
+        let refusals = |counters: Counters| {
+            [
+                counters.renderables_refused,
+                counters.lights_overflowed,
+                counters.static_instances_left_out,
+                counters.moving_instances_left_out,
+                counters.bends_left_out,
+                counters.froxel_lights_overflowed,
+                counters.shadow_mask_lights_overflowed,
+            ]
+        };
+        assert_eq!(refusals(reference.counters), [1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(refusals(reference.counter_frames.counters), [0; 7]);
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);
@@ -1638,7 +1893,9 @@ mod tests {
             reference.lit_pass_wait_microseconds,
             Some(Spread {
                 median: 90.0,
-                p95: 90.0
+                p95: 90.0,
+                p99: Some(90.0),
+                maximum: Some(90.0),
             })
         );
         assert_eq!(reference.shadow_ray_microseconds.median, 50.0);
@@ -1874,6 +2131,21 @@ mod tests {
         assert_eq!(parsed, measured);
         let parsed = Measurements::from_baseline_json(skipped.as_bytes()).expect("skipped");
         assert_eq!(parsed.aliasing, None);
+    }
+
+    #[test]
+    fn a_spread_holds_the_nearest_rank_median_p95_p99_and_maximum() {
+        let values: Vec<f64> = (1..=200).rev().map(f64::from).collect();
+        assert_eq!(
+            spread(values),
+            Spread {
+                median: 100.0,
+                p95: 190.0,
+                p99: Some(198.0),
+                maximum: Some(200.0),
+            }
+        );
+        assert_eq!(spread(vec![7.0]).maximum, Some(7.0));
     }
 
     #[test]
