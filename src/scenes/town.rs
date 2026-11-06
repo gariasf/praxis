@@ -301,7 +301,7 @@ enum Choice {
     Bird,
 }
 
-/// A Renderable the town places: its Mesh, its Material where it
+/// What the town places that does not move, as its Chunks hold it: its Mesh, its Material where it
 /// overrides the Mesh's, and its Transform.
 struct TownRenderable {
     mesh: TownMesh,
@@ -792,7 +792,7 @@ fn flocks() -> Vec<Flock> {
 
 /// The coordinates of the Chunks the town's static content lies in, x then
 /// z, in coordinate order: 4 × 4 about the World's origin.
-pub(crate) fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
+fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
     (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z]))
 }
 
@@ -804,7 +804,7 @@ pub(crate) fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
 /// so each carries its previous World transform (ADR 0022).
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Town;
-    let meshes: Vec<(AssetId, MeshHandle)> = TownMesh::ALL
+    let meshes: HashMap<AssetId, MeshHandle> = TownMesh::ALL
         .iter()
         .map(|mesh| {
             let id = scene.mesh_id(mesh.name());
@@ -818,8 +818,6 @@ pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> any
             Ok((id, loader.material(id)?))
         })
         .collect::<anyhow::Result<_>>()?;
-    let bird = meshes[TownMesh::Bird as usize].1;
-    let meshes: HashMap<AssetId, MeshHandle> = meshes.into_iter().collect();
     let (mut others, mut boxes, mut lights) = (Vec::new(), Vec::new(), Vec::new());
     for coordinates in chunk_coordinates() {
         let chunk = loader.chunk(scene.chunk_id(coordinates))?;
@@ -844,18 +842,19 @@ pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> any
             }
         }
         lights.extend(chunk.lights.into_iter().map(|light| {
-            let light_component = PointLight {
+            let point_light = PointLight {
                 color: light.color,
                 intensity: light.intensity,
                 range: light.range,
             };
             let translation = origin + light.translation;
-            (Transform::from_translation(translation), light_component)
+            (Transform::from_translation(translation), point_light)
         }));
     }
     world.spawn_batch(others);
     world.spawn_batch(boxes);
     world.spawn_batch(lights);
+    let bird = meshes[&scene.mesh_id(TownMesh::Bird.name())];
     for flock in flocks() {
         let centre = world
             .spawn((

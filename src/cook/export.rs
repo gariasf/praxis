@@ -52,7 +52,12 @@ pub fn export_scene(
     );
     let frame = frame.unwrap_or(crate::capture::FRAME_COUNT - 1);
     let catalog = Catalog::new(scene, assets)?;
-    let mut recorder = AssetRecorder::new(scene);
+    let (placements, lights) = scene.static_content();
+    let chunks: Vec<_> = chunk::split(placements, lights)
+        .into_iter()
+        .map(|(coordinates, chunk)| (scene.chunk_id(coordinates), chunk))
+        .collect();
+    let mut recorder = AssetRecorder::new(chunks.iter().map(|(id, chunk)| (*id, chunk)));
     let mut simulation = Simulation::new(
         scene,
         glam::DVec3::ZERO,
@@ -285,26 +290,21 @@ struct RenderableEntry {
     material: Option<String>,
 }
 
-/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing;
-/// reads a scene's Chunks as its cook splits them from source.
+/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing
+/// but the Chunks it is given.
 #[derive(Default)]
-pub(super) struct AssetRecorder {
+pub(super) struct AssetRecorder<'chunks> {
     pub(super) meshes: Vec<AssetId>,
     pub(super) materials: Vec<AssetId>,
     textures: Vec<AssetId>,
-    chunks: HashMap<AssetId, CookedChunk>,
+    chunks: HashMap<AssetId, &'chunks CookedChunk>,
 }
 
-impl AssetRecorder {
-    /// A recorder for `scene`'s spawn.
-    pub(super) fn new(scene: ReferenceScene) -> Self {
-        let (placements, lights) = scene.static_content();
-        let chunks = chunk::split(placements, lights)
-            .into_iter()
-            .map(|(coordinates, chunk)| (scene.chunk_id(coordinates), chunk))
-            .collect();
+impl<'chunks> AssetRecorder<'chunks> {
+    /// A recorder whose spawn reads `chunks`, by Asset ID.
+    pub(super) fn new(chunks: impl IntoIterator<Item = (AssetId, &'chunks CookedChunk)>) -> Self {
         Self {
-            chunks,
+            chunks: chunks.into_iter().collect(),
             ..Self::default()
         }
     }
@@ -320,7 +320,7 @@ impl AssetRecorder {
     }
 }
 
-impl AssetLoader for AssetRecorder {
+impl AssetLoader for AssetRecorder<'_> {
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.materials.push(id);
         Ok(MaterialHandle {
@@ -356,7 +356,7 @@ impl AssetLoader for AssetRecorder {
     }
 
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
-        let chunk = self.chunks.get(&id).cloned();
+        let chunk = self.chunks.get(&id).map(|chunk| (*chunk).clone());
         chunk.with_context(|| format!("Chunk {id} holds none of the scene's static content"))
     }
 }
