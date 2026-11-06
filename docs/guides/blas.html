@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/assets/pools.rs</code></div>
   <h1>A BLAS per Mesh</h1>
   <p class="definition">Each <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span> that rays trace gets a <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, which a TLAS's entries place in the world. A ray that enters an entry walks its BLAS down to the triangles it meets.">BLAS</span> when it loads, built on the GPU from where the Mesh already lies in the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>, then compacted into a tighter copy, which the CPU waits for before any <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> is built from it; a Mesh loaded to be refitted keeps its BLAS uncompacted, and one only drawn gets none.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the Mesh pool's BLASes rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> for why a GPU read of what other GPU work writes needs something to order the two. <a href="static-tlas.html">The static TLAS</a> and <a href="dynamic-tlas.html">the dynamic TLAS</a> place these BLASes; <a href="blas-refit.html">the BLAS refit</a> updates the refitted ones.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 3654003f (2026-11-06). A change to the Mesh pool's BLASes rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> for why a GPU read of what other GPU work writes needs something to order the two. <a href="static-tlas.html">The static TLAS</a> and <a href="dynamic-tlas.html">the dynamic TLAS</a> place these BLASes; <a href="blas-refit.html">the BLAS refit</a> updates the refitted ones.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -127,7 +127,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Builds</dt><dd>One <code>build_acceleration_structures</code> call per traced Mesh, recorded into the load encoder after the copies that fill its Arena ranges; one compaction copy per compacted BLAS, which wgpu queues in its pending writes.</dd>
       <dt>Bind groups</dt><dd>None: no pass binds a BLAS. A TLAS entry names one, and a ray reaches it through the TLAS.</dd>
       <dt>Shader</dt><dd>None.</dd>
-      <dt>Counted</dt><dd>In the acceleration structures' estimate, and so in <code>gpu_memory_bytes</code>: each BLAS's triangles at the adapter's bytes per triangle, compacted or as built. The compaction's two CPU waits count in the <code>upload</code> stage of the frame that runs them. No GPU pass time is taken of the builds or the copies.</dd>
+      <dt>Counted</dt><dd>In the acceleration structures' kind of <code>gpu_memory_bytes</code>: each BLAS at the size its driver gives for it, and once compacted at the adapter's estimated fraction of that size. The compaction's two CPU waits count in the <code>upload</code> stage of the frame that runs them. No GPU pass time is taken of the builds or the copies.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -150,7 +150,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <p class="key-idea">A Mesh is loaded for a use: drawn, traced, both, or drawn and traced through a BLAS the GPU updates each frame. Only a traced Mesh gets a BLAS and the index stream it is built from; only a drawn one gets Meshlets.</p>
 <pre class="code"><code>/// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
 /// trace it through its BLAS, or both.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
@@ -166,7 +166,7 @@ pub enum MeshUse {
 
 impl MeshUse {
     /// Whether the main pass draws it, so it needs Meshlets.
-    fn drawn(self) -&gt; bool {
+    pub(crate) fn drawn(self) -&gt; bool {
         self != MeshUse::Traced
     }
 
@@ -202,12 +202,8 @@ pub const REFITTED_BLAS_FLAGS: wgpu::AccelerationStructureFlags =
   <div class="part-mark">2 &middot; <code>MeshPool::load_for</code> &middot; <code>LoadStaging::build_blas</code></div>
   <h2>The build, from the Arenas</h2>
   <p class="key-idea">The BLAS is built from the Mesh where it already lies: its positions in the vertex Arena, its indices in the index Arena, read in place by the GPU after the copies that put them there, with no transform and no second copy of the geometry.</p>
-  <p>Once the Mesh has its Arena ranges and its writes are staged, <code>load_for</code> creates the BLAS, describes its one geometry, and records its build. A Mesh no ray traces returns before any of it.</p>
-<pre class="code"><code>if !mesh_use.traced() {
-    self.blases.push(None);
-    return Some(handle);
-}
-let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
+  <p>Once the Mesh has its Arena ranges and its writes are staged, <code>load_for</code> describes the BLAS's one geometry and its flags, asks the driver how large such a BLAS is, and keeps that size with the Mesh's ranges at its Handle's index; then it creates the BLAS and records its build. A Mesh no ray traces counts no bytes and returns before the BLAS.</p>
+<pre class="code"><code>let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
     vertex_format: wgpu::VertexFormat::Float32x3,
     vertex_count: mesh.vertices.len() as u32,
     index_format: Some(wgpu::IndexFormat::Uint32),
@@ -215,15 +211,42 @@ let geometry = wgpu::BlasTriangleGeometrySizeDescriptor {
     flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
 };
 let refitted = mesh_use == MeshUse::Refitted;
+let flags = if refitted {
+    REFITTED_BLAS_FLAGS
+} else {
+    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+        | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+};
+let built_bytes = if mesh_use.traced() {
+    blas_bytes(&amp;self.device, &amp;self.vertex_arena.buffer, flags, &amp;geometry)
+} else {
+    0
+};
+let allocation = MeshAllocation {
+    ranges: [
+        vertices,
+        indices,
+        meshlet_range,
+        meshlet_vertices,
+        meshlet_triangles,
+    ],
+    blas_bytes: built_bytes,
+    blas_compacted: false,
+};
+let index = handle.index as usize;
+if index == self.allocations.len() {
+    self.allocations.push(Some(allocation));
+    self.blases.push(None);
+} else {
+    self.allocations[index] = Some(allocation);
+}
+if !mesh_use.traced() {
+    return Some(handle);
+}
 let blas = self.device.create_blas(
     &amp;wgpu::CreateBlasDescriptor {
         label: Some("Mesh BLAS"),
-        flags: if refitted {
-            REFITTED_BLAS_FLAGS
-        } else {
-            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
-                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
-        },
+        flags,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
     },
     wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -238,14 +261,14 @@ let mesh_blas = MeshBlas {
 };
 staging.build_blas(&amp;self.blas_build_entry(&amp;mesh_blas));
 
-let blas_triangles = mesh.indices.len() as u64 / 3;
-self.blases.push(Some(mesh_blas.blas.clone()));
+self.blases[index] = Some(mesh_blas.blas.clone());
 if refitted {
     self.refitted_blases.push(mesh_blas);
 } else {
-    self.awaiting_compaction.push((handle, blas_triangles));
+    self.awaiting_compaction.push((handle, built_bytes));
 }
-self.uncompacted_blas_triangles += blas_triangles;
+self.uncompacted_blas_bytes += built_bytes;
+self.charge_blases();
 Some(handle)</code></pre>
   <p class="code-source">The end of <code>MeshPool::load_for</code>, <code>src/assets/pools.rs</code>.</p>
 <pre class="code"><code>/// The build of `blas` from its ranges of the vertex and index Arenas:
@@ -276,7 +299,7 @@ pub fn build_blas(&amp;mut self, entry: &amp;wgpu::BlasBuildEntry&lt;'_&gt;) {
 }</code></pre>
   <p class="code-source"><code>LoadStaging::build_blas</code>, <code>src/render/staging.rs</code>.</p>
   <p><code>LoadStaging</code> holds one encoder for everything a load writes: each Arena write goes through its <code>StagingBelt</code> into a copy on that encoder, and each BLAS build is recorded on the same encoder after them. <code>LoadStaging::submit</code> sends the encoder ahead of the next frame's. The builds need two buffer usages: the vertex Arena is created <code>STORAGE | BLAS_INPUT</code>, since the vertex shader pulls from it and builds read it, and the index Arena <code>BLAS_INPUT</code> alone, since no pass draws from it; <code>Arena::new</code> adds <code>COPY_DST</code> to both, for the copies that fill them.</p>
-  <p>For the memory estimate the BLAS counts its triangles from the Mesh's index stream, a third of its length; Meshlets play no part in it. They count as uncompacted until compaction moves them.</p>
+  <p>The size is asked with the same geometry and flags the BLAS is created with, so it is the size wgpu-core creates it at; Meshlets play no part in it. The Mesh's bytes count as uncompacted until compaction moves them, and a Mesh freed from the pool takes them back from whichever sum holds them (<a href="#bytes">Counting bytes</a>).</p>
 </section>
 
 <section class="part prose" id="flags">
@@ -304,28 +327,32 @@ pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
         return;
     }
     for &amp;(handle, _) in &amp;self.awaiting_compaction {
-        if let Some(blas) = &amp;self.blases[handle.0 as usize] {
+        if let Some(blas) = &amp;self.blases[handle.index as usize] {
             blas.prepare_compaction_async(|_| {});
         }
     }
     if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
         tracing::error!(%error, "waiting for BLAS builds failed");
     }
-    for (handle, triangles) in self.awaiting_compaction.drain(..) {
-        let Some(blas) = &amp;mut self.blases[handle.0 as usize] else {
+    for (handle, bytes) in self.awaiting_compaction.drain(..) {
+        let Some(blas) = &amp;mut self.blases[handle.index as usize] else {
             continue;
         };
         if !blas.ready_for_compaction() {
             tracing::warn!(
-                mesh = handle.0,
+                mesh = handle.index,
                 "BLAS not compacted: not ready after its build"
             );
             continue;
         }
         *blas = queue.compact_blas(blas);
-        self.uncompacted_blas_triangles -= triangles;
-        self.compacted_blas_triangles += triangles;
+        if let Some(allocation) = &amp;mut self.allocations[handle.index as usize] {
+            allocation.blas_compacted = true;
+        }
+        self.uncompacted_blas_bytes -= bytes;
+        self.compacted_blas_bytes += bytes;
     }
+    self.charge_blases();
     // The copies wait in the queue's pending writes until a submit.
     queue.submit(std::iter::empty());
     if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
@@ -336,7 +363,7 @@ pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
   <ol class="keypoints">
     <li><b>Ask for each compacted size.</b> <code>prepare_compaction_async</code> on each BLAS loaded since the last call; wgpu answers once the GPU has built it.</li>
     <li><b>Wait for the builds.</b> <code>device.poll(PollType::wait_indefinitely())</code> blocks the calling thread, the main thread, until the GPU has finished every submission, the load encoder with its builds among them, and so has answered.</li>
-    <li><b>Replace each ready BLAS with its copy.</b> <code>queue.compact_blas</code> returns the compacted BLAS at once and records the copy into the queue's pending writes; the Mesh's triangles move from the uncompacted count to the compacted one. A BLAS that is not ready keeps its built form, counted as built, and a warning names its Mesh.</li>
+    <li><b>Replace each ready BLAS with its copy.</b> <code>queue.compact_blas</code> returns the compacted BLAS at once and records the copy into the queue's pending writes; the Mesh's allocation is marked compacted, and its built bytes move from the uncompacted sum to the compacted one, which the charge then counts at the adapter's fraction. A BLAS that is not ready keeps its built form, counted as built, and a warning names its Mesh.</li>
     <li><b>Send the copies.</b> Pending writes reach the GPU only with a submission, and a poll waits only for what was submitted, so an empty <code>queue.submit</code> sends them as a submission of their own.</li>
     <li><b>Wait for the copies.</b> A second poll blocks until the GPU has written every compacted BLAS.</li>
   </ol>
@@ -344,65 +371,110 @@ pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
 <pre class="code"><code>// Loads staged since the last frame land before its copies and
 // draws, and their BLASes are compacted before the static TLAS
 // takes them.
-self.load_staging.submit(&amp;self.queue);
+recorder.counters.uploaded_bytes += self.load_staging.submit(&amp;self.queue);
 self.mesh_pool.compact_blases(&amp;self.queue);</code></pre>
   <p class="code-source">The start of <code>Renderer::upload</code>, <code>src/render/renderer.rs</code>.</p>
   <p>The waits run where the BLASes are first needed: at the head of the upload of the first frame after the loads, which submits the load encoder and compacts before the static TLAS's update records its build into the frame's encoder. Since every Mesh loads in <code>State::new</code>, that is the first frame, and every later frame finds nothing awaiting compaction and returns at once. Both waits block the main thread, which records and submits the frame, for the whole of the load's GPU work, the Textures' copies included, since a poll waits for every submission. Refitted BLASes take no part: they are never compacted, and how a frame orders their updates before the dynamic TLAS's build is <a href="blas-refit.html">the BLAS refit</a>'s. <a href="static-tlas.html#limits">The static TLAS's Limits</a> count the wait among its own.</p>
 </section>
 
 <section class="part prose" id="bytes">
-  <div class="part-mark">5 &middot; <code>AccelerationStructureBytes</code></div>
+  <div class="part-mark">5 &middot; <code>blas_bytes</code> &middot; <code>compacted_blas_fraction</code></div>
   <h2>Counting bytes</h2>
-  <p class="key-idea">wgpu 30 reports no acceleration structure's size, so the engine counts BLASes by an estimate: triangles times bytes per triangle measured once on each kind of adapter, compacted or as built, labelled as an estimate in Frame stats and added into GPU memory.</p>
-<pre class="code"><code>/// What acceleration structures take in GPU memory, as measured on one
-/// adapter: estimates, since wgpu exposes no acceleration-structure size,
-/// until M4 sets exact ones.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct AccelerationStructureBytes {
-    pub per_blas_triangle: f64,
-    pub per_compacted_blas_triangle: f64,
-    /// Per Instance a TLAS can hold, wgpu-core's buffer of them included.
-    pub per_tlas_instance: f64,
-}</code></pre>
-<pre class="code"><code>/// The estimate for `adapter`: NVIDIA's on an NVIDIA GPU, on any
-/// backend; lavapipe's on any other Vulkan adapter, software or not;
-/// and the M4 Pro's on any other, as the Budgets' reference machine
-/// (ADR 0013).
-pub fn estimate(adapter: &amp;wgpu::AdapterInfo) -&gt; Self {
-    if adapter.vendor == NVIDIA_VENDOR {
-        Self::NVIDIA
-    } else if adapter.backend == wgpu::Backend::Vulkan {
-        Self::LAVAPIPE
-    } else {
-        Self::M4_PRO
+  <p class="key-idea">wgpu keeps an acceleration structure's size to itself, so the engine asks the driver the same question wgpu-core asks when it creates one, through wgpu-hal, and counts that answer; only a compacted BLAS's size, which neither wgpu-core nor wgpu-hal gives back, stays an estimate: a fraction of its built size measured once on each kind of adapter.</p>
+  <p><code>blas_bytes</code> and <code>tlas_bytes</code> both end in <code>hal_built_bytes</code>, tried on each backend the build has: Metal on Apple targets, Vulkan on Windows, Linux, Android and FreeBSD, DX12 on Windows. Each returns None on a device of another backend, so the one the device runs on answers.</p>
+<pre class="code"><code>// SAFETY: neither object is destroyed through its handle.
+let (hal_device, buffer) = unsafe { (device.as_hal::&lt;A&gt;()?, input.as_hal::&lt;A&gt;()?) };
+let buffer = Some(&amp;*buffer);
+let entries = match *geometry {
+    Geometry::Triangles(triangles) =&gt; hal::AccelerationStructureEntries::Triangles(vec![
+        hal::AccelerationStructureTriangles {
+            vertex_buffer: buffer,
+            vertex_format: triangles.vertex_format,
+            first_vertex: 0,
+            vertex_count: triangles.vertex_count,
+            vertex_stride: 0,
+            // …
+        },
+    ]),
+    Geometry::Instances(count) =&gt; {
+        hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
+            buffer,
+            offset: 0,
+            count,
+        })
     }
-}
-
-/// Bytes of BLASes of `compacted_triangles` compacted and
-/// `uncompacted_triangles` not.
-pub fn blases(&amp;self, compacted_triangles: u64, uncompacted_triangles: u64) -&gt; u64 {
-    (compacted_triangles as f64 * self.per_compacted_blas_triangle
-        + uncompacted_triangles as f64 * self.per_blas_triangle)
-        .round() as u64
+};
+// SAFETY: the query only reads the descriptor.
+let sizes = unsafe {
+    hal_device.get_acceleration_structure_build_sizes(
+        &amp;hal::GetAccelerationStructureBuildSizesDescriptor {
+            entries: &amp;entries,
+            flags,
+        },
+    )
+};
+let instance_buffer_bytes = match *geometry {
+    Geometry::Triangles(_) =&gt; 0,
+    Geometry::Instances(count) =&gt; {
+        let instance = hal_device.tlas_instance_to_bytes(hal::TlasInstance {
+            // …
+        });
+        instance.len() as u64 * u64::from(count.max(1))
+    }
+};
+Some(sizes.acceleration_structure_size + instance_buffer_bytes)</code></pre>
+  <p class="code-source">The body of <code>hal_built_bytes</code>, <code>src/render/acceleration_structures.rs</code>; the elided lines give the triangles' indices and an Instance of zeros.</p>
+  <p>The geometry it describes is wgpu-core's own: zero first vertex and zero stride, a buffer named but never read, and for a TLAS one Instances entry of its capacity. Metal's query panics without a buffer there, and Vulkan's and DX12's read its address, so a caller passes <code>input</code>: the Mesh pool its vertex Arena, the GPU memory ledger a 64-byte buffer it creates for the query and drops at once. A TLAS adds wgpu-core's buffer of its Instances, a record per slot and at least one, each as long as wgpu-hal's encoding of an Instance: 72 bytes on Metal, 64 on Vulkan and DX12.</p>
+<pre class="code"><code>/// The fraction of its built bytes a compacted BLAS keeps on `adapter`, as
+/// measured there: an estimate, since wgpu-core keeps a compacted size
+/// crate-private [ref:wgpu-30-blas-compacted-size-private] and wgpu-hal gives
+/// no structure's raw handle [ref:wgpu-hal-30-as-raw-private]. NVIDIA's on an NVIDIA
+/// GPU, on any backend; lavapipe's on any other Vulkan adapter, software or
+/// not; and the M4 Pro's on any other, as the Budgets' reference machine
+/// (ADR 0013).
+pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
+    if adapter.vendor == NVIDIA_VENDOR {
+        // The RTX 2070 SUPER on Vulkan (NVIDIA 621.01), bytes a triangle by
+        // wgpu's allocator report (`docs/performance.md`, Measurements
+        // behind the code).
+        29.2 / 70.7
+    } else if adapter.backend == wgpu::Backend::Vulkan {
+        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built.
+        1.0
+    } else {
+        // The M4 Pro on Metal, bytes a triangle by `currentAllocatedSize`
+        // (`docs/research/global-illumination-and-lighting.md`).
+        45.5 / 94.0
+    }
 }</code></pre>
-  <p class="code-source"><code>AccelerationStructureBytes</code>, its <code>estimate</code> and its <code>blases</code>, <code>src/render/acceleration_structures.rs</code>.</p>
-  <p>The Renderer picks its estimate once, from the adapter, when it is created. An NVIDIA GPU, on Vulkan or DX12, gets figures measured on an RTX 2070 SUPER; any other Vulkan adapter gets lavapipe's; every other adapter, as on Metal, gets the Apple M4 Pro's, the reference machine of ADR 0013. The vendor test reads the PCI vendor ID, which Vulkan and DXGI both report. How each set was measured is in its doc comment: Metal's <code>currentAllocatedSize</code> around creating 2.1 million triangles of BLAS for the M4 Pro, recorded in <code>docs/research/global-illumination-and-lighting.md</code>; wgpu's allocator report around building and compacting BLASes of 2,048 to 131,072 triangles for lavapipe and the RTX 2070 SUPER, recorded for the latter in <code>docs/performance.md</code>. lavapipe's compaction leaves a BLAS as large as it was.</p>
-  <p>The Mesh pool applies the estimate to its two triangle counts, and the Renderer adds the static and dynamic TLAS at their capacities. <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the shadow mask had no bit for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> carry the sum as the acceleration structures' estimate and add it into <code>gpu_memory_bytes</code>. For scale, <code>pbr-sweep</code>'s sphere, one Mesh of 2,208 triangles shared by every sphere, counts 100,464 bytes compacted on the M4 Pro, 64,474 on an NVIDIA GPU and 229,632 on lavapipe.</p>
+  <p class="code-source"><code>compacted_blas_fraction</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+<pre class="code"><code>fn charge_blases(&amp;mut self) {
+    let compacted_bytes =
+        (self.compacted_blas_bytes as f64 * self.compacted_blas_fraction).round() as u64;
+    let bytes = compacted_bytes + self.uncompacted_blas_bytes;
+    self.blas_charge
+        .set(GpuMemoryKind::AccelerationStructures, bytes);
+}</code></pre>
+  <p class="code-source"><code>MeshPool::charge_blases</code>, <code>src/assets/pools.rs</code>.</p>
+  <p>The Mesh pool keeps two sums of built bytes, compacted and not, and its one charge on the ledger counts the compacted sum at the adapter's fraction, rounded to a whole byte, plus the other. The fraction is picked once, from the adapter, when the ledger is created: an NVIDIA GPU, on Vulkan or DX12, gets the RTX 2070 SUPER's; any other Vulkan adapter gets lavapipe's, whose compaction leaves a BLAS as large as it was; every other adapter, as on Metal, gets the Apple M4 Pro's, the reference machine of ADR 0013. The vendor test reads the PCI vendor ID, which Vulkan and DXGI both report. Each TLAS is counted where it is created, through <code>GpuMemory::create_tlas</code>, at <code>tlas_bytes</code>.</p>
+  <p><span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass and the GPU frame total, and counters such as draw calls, Instances and triangles drawn, lights the shadow mask had no bit for, bytes uploaded, heap allocations and GPU memory.">Frame stats</span> carry the acceleration structures' kind and add it into <code>gpu_memory_bytes</code>. For scale, <code>pbr-sweep</code>'s sphere, one Mesh of 2,208 triangles shared by every sphere, is built at 207,424 bytes on the M4 Pro and counted at 100,402 once compacted.</p>
 </section>
 
 <section class="part prose" id="tests">
   <div class="part-mark">6 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">A ray query through a one-entry TLAS proves each compacted BLAS holds its Mesh from its own Arena ranges; an eight-device stress test pins the compaction wait; Frame stats pin the estimate per adapter; the crowd's tests and Goldens cover the other uses.</p>
+  <p class="key-idea">A ray query through a one-entry TLAS proves each compacted BLAS holds its Mesh from its own Arena ranges; an eight-device stress test pins the compaction wait; Frame stats and the ledger pin the counted bytes to the driver's sizes; the crowd's tests and Goldens cover the other uses.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
-      <tr><td><code>a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted</code></td><td><code>src/assets/pools.rs</code></td><td>a triangle loaded after a degenerate one, so its ranges start past the Arenas' first elements, is hit by a ray down through it and missed by two beside it, through a TLAS of its compacted BLAS alone, tagged 7; its estimate moves from the built to the compacted figure</td></tr>
+      <tr><td><code>a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted</code></td><td><code>src/assets/pools.rs</code></td><td>a triangle loaded after a degenerate one, so its ranges start past the Arenas' first elements, is hit by a ray down through it and missed by two beside it, through a TLAS of its compacted BLAS alone, tagged 7; with a ledger fraction of 0.25, the two triangles' BLASes count twice the size the driver gives a triangle's, then a quarter of that once compacted</td></tr>
       <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>eight threads, each with its own device and a pool of 4 KiB Arenas, load and trace a triangle 25 times each, and every trace hits: a TLAS built once <code>compact_blases</code> returns reads the finished copy while other work loads the GPU</td></tr>
       <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a Mesh one vertex past the vertex Arena, or one index past the index Arena, is refused and logged, and leaves the pool's memory and ranges as they were</td></tr>
-      <tr><td><code>the_estimate_follows_the_adapter</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>an NVIDIA GPU on Vulkan and on DX12 gets NVIDIA's figures, lavapipe under Mesa's vendor ID gets lavapipe's, an Apple GPU on Metal the M4 Pro's</td></tr>
-      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the acceleration structures' estimate equals the sphere's 2,208 triangles compacted plus both TLAS at capacity, by the adapter's figures, each rounded to a whole byte</td></tr>
+      <tr><td><code>a_freed_meshs_index_takes_the_next_mesh_and_refuses_the_old_handle</code></td><td><code>src/assets/pools.rs</code></td><td>a freed Mesh gives its BLAS's bytes back to the ledger, and a refitted Mesh is not freed</td></tr>
+      <tr><td><code>the_compacted_blas_fraction_follows_the_adapter</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>an NVIDIA GPU on Vulkan and on DX12 gets NVIDIA's fraction, lavapipe under Mesa's vendor ID gets lavapipe's, an Apple GPU on Metal the M4 Pro's</td></tr>
+      <tr><td><code>a_tlas_created_through_the_ledger_counts_its_build_size_and_instances</code></td><td><code>src/stats/gpu_memory.rs</code></td><td>a TLAS of 1,000 slots counts <code>tlas_bytes</code> for it, more than its Instance buffer of 72 bytes a slot on Metal and 64 elsewhere, and nothing once dropped; its query's input is gone with the call</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the acceleration structures' kind equals the driver's size for the sphere's BLAS of 1,223 vertices and 2,208 triangles at the adapter's compacted fraction, rounded to a whole byte, plus both TLAS at capacity</td></tr>
       <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>on Metal, the crowd's figures loaded as <code>MeshUse::Refitted</code> cast through their refitted BLASes the shadows their rebuilt ones cast; off Metal, the refit form is refused</td></tr>
       <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, in its default form, is drawn from Meshes loaded <code>Drawn</code> and shadowed by a Mesh loaded <code>Traced</code>; every other Reference scene's shadows come from compacted BLASes</td></tr>
     </tbody>
@@ -412,22 +484,37 @@ pub fn blases(&amp;self, compacted_triangles: u64, uncompacted_triangles: u64) -
 </section>
 
 <section class="part prose" id="cost">
-  <div class="part-mark">7 &middot; <code>AccelerationStructureBytes</code></div>
+  <div class="part-mark">7 &middot; <code>blas_bytes</code> &middot; <code>tlas_bytes</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">A BLAS costs GPU memory in proportion to its triangles, and compaction takes it to under half of its built size on the M4 Pro and on NVIDIA. Its other cost, the CPU waiting for the builds and copies, falls in a load frame, which no Baseline measures.</p>
-  <p>The figures the engine counts by, per triangle, from <code>src/render/acceleration_structures.rs</code>:</p>
+  <p class="key-idea">A BLAS costs GPU memory in proportion to its triangles, about 95 bytes each as the M4 Pro's driver sizes a large one, and compaction is counted at under half of that on the M4 Pro and on NVIDIA. Its other cost, the CPU waiting for the builds and copies, falls in a load frame, which no Baseline measures.</p>
+  <p>Sizes the M4 Pro's driver gives through the query, Metal, at the commit above, with the flags the engine uses:</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>Figures</th><th>Chosen for</th><th class="n">Bytes per triangle, built</th><th class="n">Compacted</th><th class="n">Compacted share</th></tr></thead>
+    <thead><tr><th>Structure</th><th class="n">Triangles or slots</th><th class="n">Bytes counted</th><th class="n">Per triangle or slot</th></tr></thead>
     <tbody>
-      <tr><td><code>M4_PRO</code></td><td>any adapter that is neither NVIDIA nor on Vulkan; measured on the Apple M4 Pro, Metal</td><td class="n">94</td><td class="n">45.5</td><td class="n">48%</td></tr>
-      <tr><td><code>NVIDIA</code></td><td>an NVIDIA GPU on any backend; measured on the RTX 2070 SUPER, Vulkan</td><td class="n">70.7</td><td class="n">29.2</td><td class="n">41%</td></tr>
-      <tr><td><code>LAVAPIPE</code></td><td>any other Vulkan adapter; measured on lavapipe</td><td class="n">104</td><td class="n">104</td><td class="n">100%</td></tr>
+      <tr><td>BLAS, a quad (built)</td><td class="n">2</td><td class="n">640</td><td class="n">320</td></tr>
+      <tr><td>BLAS, <code>pbr-sweep</code>'s sphere (built)</td><td class="n">2,208</td><td class="n">207,424</td><td class="n">93.9</td></tr>
+      <tr><td>BLAS, 131,072 triangles (built)</td><td class="n">131,072</td><td class="n">12,483,712</td><td class="n">95.2</td></tr>
+      <tr><td>BLAS, <code>pbr-sweep</code>'s sphere, compacted at 45.5/94</td><td class="n">2,208</td><td class="n">100,402</td><td class="n">45.5</td></tr>
+      <tr><td>Dynamic TLAS, with its Instance buffer</td><td class="n">10,000</td><td class="n">2,884,224</td><td class="n">288.4</td></tr>
+      <tr><td>Static TLAS, with its Instance buffer</td><td class="n">262,144</td><td class="n">75,597,888</td><td class="n">288.4</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Generated from the three constants at the commit above; the share is compacted over built.</p>
-  <p>No Baseline field isolates the BLASes. The committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> record <code>gpu_memory_bytes</code>, which holds each scene's BLAS estimate among everything else the engine allocates, but not the acceleration structures' estimate, which the stats log line prints beside it; <a href="static-tlas.html#cost">the static TLAS's cost table</a> gives each scene's <code>gpu_memory_bytes</code> with the static TLAS's share of it. Nor does any Baseline time the compaction's waits: a bench takes its counters from frame 8 and its timings after 248 warm-up frames, and the waits run in frame 0.</p>
+  <p class="note"><code>blas_bytes</code> and <code>tlas_bytes</code> on the M4 Pro, PREFER_FAST_TRACE with ALLOW_COMPACTION for the BLASes; the TLAS rows include 72 bytes a slot of Instance buffer. lavapipe's and NVIDIA's sizes come from their own drivers: lavapipe's in CI's runs, NVIDIA's on the RTX 2070 SUPER.</p>
+  <p>The compacted fractions the engine counts by, from <code>compacted_blas_fraction</code>:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Adapter</th><th>Chosen for</th><th class="n">Bytes per triangle, built, as measured</th><th class="n">Compacted</th><th class="n">Fraction</th></tr></thead>
+    <tbody>
+      <tr><td>Apple M4 Pro, Metal</td><td>any adapter that is neither NVIDIA nor on Vulkan</td><td class="n">94</td><td class="n">45.5</td><td class="n">48%</td></tr>
+      <tr><td>RTX 2070 SUPER, Vulkan</td><td>an NVIDIA GPU on any backend</td><td class="n">70.7</td><td class="n">29.2</td><td class="n">41%</td></tr>
+      <tr><td>lavapipe</td><td>any other Vulkan adapter</td><td class="n">104</td><td class="n">104</td><td class="n">100%</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The measured figures behind each fraction, at the commit above; the fraction is compacted over built.</p>
+  <p>The committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> record the acceleration structures' kind of <code>gpu_memory_bytes</code>: on the M4 Pro, 78,482,422 bytes for <code>minification</code>, both TLAS and one quad's compacted BLAS of 310 bytes, and 78,582,514 for <code>pbr-sweep</code>, the same with the sphere's 100,402. <a href="static-tlas.html#cost">The static TLAS's cost table</a> gives each scene's <code>gpu_memory_bytes</code> with the static TLAS's share of it. No Baseline times the compaction's waits: a bench takes its counters from frame 8 and its timings after 248 warm-up frames, and the waits run in frame 0.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -438,17 +525,19 @@ pub fn blases(&amp;self, compacted_triangles: u64, uncompacted_triangles: u64) -
   <p><b>No BLAS for a bent Mesh drawn alone.</b> Its BLAS, built from its rest shape, would cast another shape's shadow; the default crowd form casts the figures' shadows through rigid proxies instead, and the refitted form updates a BLAS each frame, which a compacted BLAS cannot be.</p>
   <p><b>Compaction.</b> A BLAS built once is traced for the rest of the run, so a one-time copy at load buys back over half its memory on the M4 Pro and on NVIDIA, the adapters Budgets and comparisons are judged on.</p>
   <p><b>A CPU wait, not ordering on the GPU.</b> The compaction runs once, at load, where a stall of the main thread, the one thread that submits and polls under ADR 0016, costs one frame. Ordering the copies before the TLAS builds on the GPU would need wgpu to record a barrier after the copy, which wgpu-core 30.0.1 does not on any backend, or Metal shared events through wgpu-hal, the route the per-frame refit takes because a wait in every frame could not pay; a wgpu version that orders the copy is a dependency change and the owner's call.</p>
-  <p><b>An estimate, not a size.</b> wgpu 30 exposes no acceleration structure's size, yet ADR 0013's GPU memory Budget and ADR 0017's split of it by kind need acceleration structures counted. Figures measured once per kind of adapter, named an estimate wherever they appear, count them until exact sizes can be read.</p>
+  <p><b>The driver's size, not a measured rate.</b> ADR 0013's GPU memory Budget and ADR 0017's split of it by kind need acceleration structures counted, and wgpu 30 keeps the sizes it creates them at to itself. wgpu-hal answers the same question wgpu-core asks, so asking it as wgpu-core does counts each structure at the size it is created at, on any adapter, where bytes per triangle and per slot measured on three adapters counted every other adapter by one of theirs.</p>
+  <p><b>A compacted size estimated.</b> wgpu-core reads a compacted BLAS's size back into its own buffer and keeps it crate-private, and wgpu-hal gives no structure's raw handle, through which Metal or Vulkan could be asked. Reading it through a new dependency was ruled out; so the built size, which is exact, is scaled by the compaction measured on each kind of adapter.</p>
 </section>
 
 <section class="part prose" id="limits">
   <div class="part-mark">9</div>
   <h2>Limits</h2>
   <p><b>A CPU wait per load.</b> The frame after a load blocks the main thread twice for the load's whole GPU work. Today that is the first frame alone; Meshes streamed during play would stall each frame that loads them, until wgpu orders the copy on every backend.</p>
-  <p><b>Estimates, by kind of adapter.</b> An AMD or Intel GPU on Vulkan is counted with lavapipe's figures, and any adapter neither NVIDIA nor on Vulkan with the M4 Pro's; none of the figures is read back from the driver.</p>
+  <p><b>Compaction estimated, by kind of adapter.</b> A compacted BLAS counts its built size at a fraction measured on the M4 Pro, the RTX 2070 SUPER or lavapipe: an AMD or Intel GPU on Vulkan is counted with lavapipe's, which counts no saving, and any adapter neither NVIDIA nor on Vulkan with the M4 Pro's.</p>
+  <p><b>Sizes, not allocations.</b> The count is the size the driver asks for; what its allocator rounds that up to, or the scratch each build takes and returns, is not counted.</p>
   <p><b>Compaction can fail.</b> One that is not ready after its build keeps its built size, counted as built, with a warning.</p>
   <p><b>Opaque only.</b> No triangle has an alpha test, so a cutout Material would cast a solid shadow.</p>
-  <p><b>Never freed.</b> The Mesh pool has no unload: a BLAS lives as long as the pool, with the Arena ranges it was built from.</p>
+  <p><b>Freed only by tests.</b> <code>MeshPool::free</code> drops a Mesh's BLAS and gives back its bytes, but nothing outside tests calls it yet, and it refuses a refitted Mesh, whose refit scratch holds a region per refitted BLAS in load order.</p>
   <p><b>One build per Mesh.</b> Each Mesh's build is its own <code>build_acceleration_structures</code> call on the load encoder; builds are not batched across Meshes.</p>
 </section>
 
@@ -461,12 +550,16 @@ pub fn blases(&amp;self, compacted_triangles: u64, uncompacted_triangles: u64) -
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs">wgpu-core 30.0.1, <code>device/queue.rs</code></a></dt><dd>the compaction copy recorded into the queue's pending writes, which go ahead of the next submission; and the refusal of a BLAS that is not ready</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs">wgpu-types 30.0.1, ray_tracing.rs</a></dt><dd>what <code>PREFER_FAST_TRACE</code>, <code>ALLOW_COMPACTION</code>, <code>ALLOW_UPDATE</code> and the geometry's <code>OPAQUE</code> flag ask for</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215, Metal BLAS to TLAS builds need synchronisation</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592">wgpu-hal 30.0.1, Metal's empty barriers</a></dt><dd>why nothing on the GPU orders a TLAS build after the copies, the upstream bug <code>compact_blases</code> names; the registry holds them as <code>wgpu-issue-9215</code> and <code>wgpu-30-metal-barriers-empty</code></dd>
-    <dt><a href="https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a73099715/pci.ids#L10357">The PCI ID Repository, vendor 10de</a>, <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/devsandqueues.adoc#L155-L157">Vulkan, VkPhysicalDeviceProperties::vendorID</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/ns-dxgi1_2-dxgi_adapter_desc2">DXGI_ADAPTER_DESC2</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194">wgpu-hal 30.0.1's DX12 adapter</a></dt><dd>the vendor ID the estimate reads, on Vulkan and on DX12; <code>pci-vendor-id-nvidia</code>, <code>vulkan-vendorid-pci</code>, <code>dxgi-adapter-desc2-vendorid</code>, <code>wgpu-30-dx12-vendor-id</code></dd>
-    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml">Vulkan registry, <code>VK_VENDOR_ID_MESA</code></a> and <a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886">Mesa 25.2.8, lavapipe's vendor ID</a></dt><dd>the vendor ID the estimate's test gives lavapipe; <code>vulkan-vendor-id-mesa</code>, <code>lavapipe-vendor-id-mesa</code></dd>
+    <dt><a href="https://github.com/pciutils/pciids/blob/3447a24b14fe0dd91d2ee10d2d3b6b0a73099715/pci.ids#L10357">The PCI ID Repository, vendor 10de</a>, <a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/devsandqueues.adoc#L155-L157">Vulkan, VkPhysicalDeviceProperties::vendorID</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/ns-dxgi1_2-dxgi_adapter_desc2">DXGI_ADAPTER_DESC2</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/adapter.rs#L76-L194">wgpu-hal 30.0.1's DX12 adapter</a></dt><dd>the vendor ID the compacted fraction is picked by, on Vulkan and on DX12; <code>pci-vendor-id-nvidia</code>, <code>vulkan-vendorid-pci</code>, <code>dxgi-adapter-desc2-vendorid</code>, <code>wgpu-30-dx12-vendor-id</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L667-L673">wgpu 30.0.1, <code>Device::as_hal</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1194-L1197">wgpu-hal 30.0.1, <code>get_acceleration_structure_build_sizes</code></a></dt><dd>the route to the driver's size query; <code>wgpu-30-device-as-hal</code>, <code>wgpu-hal-30-build-sizes</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L100-L118">wgpu-core 30.0.1, <code>Device::create_blas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L242-L266"><code>Device::create_tlas</code></a></dt><dd>the geometry wgpu-core gives the same query, and that it creates each structure at the size returned; <code>wgpu-30-blas-size-at-create</code>, <code>wgpu-30-tlas-size-at-create</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L268-L282">wgpu-core 30.0.1, a TLAS's Instance buffer</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124">wgpu-hal 30.0.1, Metal's Instance encoding</a></dt><dd>the buffer of a record per slot, at least one, beside each TLAS, and the record's length; <code>wgpu-30-tlas-instance-buffer</code>, <code>wgpu-hal-30-metal-instance-bytes</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518">wgpu-core 30.0.1, a BLAS's compaction state</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L1389-L1392">wgpu-hal 30.0.1, Metal's <code>AccelerationStructure</code></a></dt><dd>why a compacted size stays an estimate: wgpu-core keeps it crate-private, and wgpu-hal gives no raw handle to ask the driver through; <code>wgpu-30-blas-compacted-size-private</code>, <code>wgpu-hal-30-as-raw-private</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml">Vulkan registry, <code>VK_VENDOR_ID_MESA</code></a> and <a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886">Mesa 25.2.8, lavapipe's vendor ID</a></dt><dd>the vendor ID the fraction's test gives lavapipe; <code>vulkan-vendor-id-mesa</code>, <code>lavapipe-vendor-id-mesa</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The Mesh pool gained a compacted BLAS per Mesh on 2026-10-20, with the memory estimate, measured then on the M4 Pro and lavapipe and since 2026-10-26 chosen by adapter, with an RTX 2070 SUPER's figures for NVIDIA. The wait for the compaction's copies followed on 2026-10-23, once a test that traced a triangle sometimes missed it under load and the race proved to be the engine's own. The crowd brought the uses: a Mesh drawn alone with no BLAS, and a shadow proxy traced alone, then on 2026-10-26 the refitted Mesh, built to allow updates and never compacted. The race behind the wait is on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017 and 0020, and the sources above, all at <code>main</code> fbae12f4.</footer>
+  <p class="note">The Mesh pool gained a compacted BLAS per Mesh on 2026-10-20, with the memory estimate, measured then on the M4 Pro and lavapipe and since 2026-10-26 chosen by adapter, with an RTX 2070 SUPER's figures for NVIDIA. The wait for the compaction's copies followed on 2026-10-23, once a test that traced a triangle sometimes missed it under load and the race proved to be the engine's own. The crowd brought the uses: a Mesh drawn alone with no BLAS, and a shadow proxy traced alone, then on 2026-10-26 the refitted Mesh, built to allow updates and never compacted. Since 2026-11-06 each BLAS and TLAS is counted at the size its driver gives through wgpu-hal, and only compaction is estimated. The race behind the wait is on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, the Baselines in <code>bench/baselines/apple-m4-pro</code>, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017 and 0020, and the sources above, all at <code>main</code> 3654003f as this change leaves them.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="chunk-streamer.html">Previous: The Chunk streamer</a><a href="index.html">All field guides</a><a href="static-tlas.html">Next: The static TLAS</a></nav>

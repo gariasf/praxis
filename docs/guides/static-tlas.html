@@ -477,7 +477,7 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, and <code>AccelerationStructureBytes</code>, at the commit above, by a script. Both NVIDIA rows use NVIDIA's figures, which the estimate picks by vendor on any backend.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, and the ledger's estimates per entry, at the commit above, by a script. Both NVIDIA rows use NVIDIA's figures, which the estimate picks by vendor on any backend.</p>
   <p>No Baseline times a rebuild. A rebuild records in the <code>upload</code> stage of its frame, which Baselines fold into the CPU frame without a field of its own, and the first frame's build, which every scene makes, comes before the 248 warm-up frames a bench skips. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
 </section>
 

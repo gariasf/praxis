@@ -47,14 +47,14 @@ pub struct FrameStats {
     pub bends_left_out: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013), and of
-    /// its acceleration structures, estimated. The render target and
+    /// its acceleration structures. The render target and
     /// capture's own buffers are the caller's, and the GPU stats
     /// readback's are left out, since they measure the frame rather than
     /// hold it.
     pub gpu_memory_bytes: u64,
     /// Of `gpu_memory_bytes`, each kind's, in `GpuMemoryKind::ALL`'s order;
-    /// acceleration structures' are estimated from the bytes measured on the
-    /// backend, since wgpu exposes no acceleration-structure size (ADR 0017).
+    /// a compacted BLAS's is estimated, since wgpu gives no compacted size
+    /// (ADR 0017).
     pub gpu_memory_bytes_by_kind: [u64; GpuMemoryKind::COUNT],
     /// Bytes of the Arenas that hold Meshes, which `gpu_memory_bytes`
     /// counts whole whatever they hold.

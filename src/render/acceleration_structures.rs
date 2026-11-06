@@ -23,76 +23,168 @@ pub(crate) const DYNAMIC_TLAS_BUILD: &str = "dynamic_tlas_build";
 /// wgpu-hal's DX12 adapter [ref:wgpu-30-dx12-vendor-id].
 const NVIDIA_VENDOR: u32 = 0x10DE;
 
-/// What acceleration structures take in GPU memory, as measured on one
-/// adapter: estimates, since wgpu exposes no acceleration-structure size,
-/// until M4 sets exact ones.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct AccelerationStructureBytes {
-    pub per_blas_triangle: f64,
-    pub per_compacted_blas_triangle: f64,
-    /// Per Instance a TLAS can hold, wgpu-core's buffer of them included.
-    pub per_tlas_instance: f64,
+/// The fraction of its built bytes a compacted BLAS keeps on `adapter`, as
+/// measured there: an estimate, since wgpu-core keeps a compacted size
+/// crate-private [ref:wgpu-30-blas-compacted-size-private] and wgpu-hal gives
+/// no structure's raw handle [ref:wgpu-hal-30-as-raw-private]. NVIDIA's on an NVIDIA
+/// GPU, on any backend; lavapipe's on any other Vulkan adapter, software or
+/// not; and the M4 Pro's on any other, as the Budgets' reference machine
+/// (ADR 0013).
+pub fn compacted_blas_fraction(adapter: &wgpu::AdapterInfo) -> f64 {
+    if adapter.vendor == NVIDIA_VENDOR {
+        // The RTX 2070 SUPER on Vulkan (NVIDIA 621.01), bytes a triangle by
+        // wgpu's allocator report (`docs/performance.md`, Measurements
+        // behind the code).
+        29.2 / 70.7
+    } else if adapter.backend == wgpu::Backend::Vulkan {
+        // lavapipe (Mesa 25.2.8) leaves a compacted BLAS as it was built.
+        1.0
+    } else {
+        // The M4 Pro on Metal, bytes a triangle by `currentAllocatedSize`
+        // (`docs/research/global-illumination-and-lighting.md`).
+        45.5 / 94.0
+    }
 }
 
-impl AccelerationStructureBytes {
-    /// The M4 Pro's on Metal: `currentAllocatedSize` around creating 2.1M
-    /// triangles of BLAS and a 100,064-Instance TLAS
-    /// (`docs/research/global-illumination-and-lighting.md`).
-    const M4_PRO: Self = Self {
-        per_blas_triangle: 94.0,
-        per_compacted_blas_triangle: 45.5,
-        per_tlas_instance: 288.5,
-    };
+/// Bytes of a BLAS of `geometry` built with `flags` on `device`: the size its
+/// driver gives through wgpu-hal, asked as wgpu-core asks it to create the
+/// BLAS. `input` is any buffer of `device`'s with a BLAS or TLAS input usage,
+/// which the query names and does not read.
+pub fn blas_bytes(
+    device: &wgpu::Device,
+    input: &wgpu::Buffer,
+    flags: wgpu::AccelerationStructureFlags,
+    geometry: &wgpu::BlasTriangleGeometrySizeDescriptor,
+) -> u64 {
+    built_bytes(device, input, flags, Geometry::Triangles(geometry))
+}
 
-    /// lavapipe's on Vulkan (Mesa 25.2.8): wgpu's allocator report around
-    /// building and compacting BLASes of 2,048 to 131,072 triangles, which
-    /// compaction leaves as they were, and creating TLASes of 1,024 to
-    /// 262,144 Instances.
-    const LAVAPIPE: Self = Self {
-        per_blas_triangle: 104.0,
-        per_compacted_blas_triangle: 104.0,
-        per_tlas_instance: 240.0,
-    };
+/// Bytes of a TLAS of `descriptor` on `device`: the size its driver gives
+/// through wgpu-hal, asked as wgpu-core asks it to create the TLAS, and
+/// wgpu-core's buffer of its Instances. `input` is as `blas_bytes` takes it.
+pub fn tlas_bytes(
+    device: &wgpu::Device,
+    input: &wgpu::Buffer,
+    descriptor: &wgpu::CreateTlasDescriptor<'_>,
+) -> u64 {
+    built_bytes(
+        device,
+        input,
+        descriptor.flags,
+        Geometry::Instances(descriptor.max_instances),
+    )
+}
 
-    /// The RTX 2070 SUPER's on Vulkan (NVIDIA 621.01): wgpu's allocator
-    /// report around building and compacting BLASes of 2,048 to 131,072
-    /// triangles, which compaction shrinks to under half (measured:
-    /// `docs/performance.md`, Measurements behind the code), and creating
-    /// TLASes of
-    /// 1,024 to 262,144 Instances, taken at the largest of each. On DX12 the
-    /// same GPU measures within its 64 KiB placement granularity of these.
-    const NVIDIA: Self = Self {
-        per_blas_triangle: 70.7,
-        per_compacted_blas_triangle: 29.2,
-        per_tlas_instance: 238.2,
-    };
+enum Geometry<'a> {
+    Triangles(&'a wgpu::BlasTriangleGeometrySizeDescriptor),
+    Instances(u32),
+}
 
-    /// The estimate for `adapter`: NVIDIA's on an NVIDIA GPU, on any
-    /// backend; lavapipe's on any other Vulkan adapter, software or not;
-    /// and the M4 Pro's on any other, as the Budgets' reference machine
-    /// (ADR 0013).
-    pub fn estimate(adapter: &wgpu::AdapterInfo) -> Self {
-        if adapter.vendor == NVIDIA_VENDOR {
-            Self::NVIDIA
-        } else if adapter.backend == wgpu::Backend::Vulkan {
-            Self::LAVAPIPE
-        } else {
-            Self::M4_PRO
+fn built_bytes(
+    device: &wgpu::Device,
+    input: &wgpu::Buffer,
+    flags: wgpu::AccelerationStructureFlags,
+    geometry: Geometry<'_>,
+) -> u64 {
+    let bytes: Option<u64> = None;
+    // SAFETY: the query reads no buffer, and `input` outlives it.
+    #[cfg(target_vendor = "apple")]
+    let bytes = bytes.or_else(|| unsafe {
+        hal_built_bytes::<wgpu::hal::api::Metal>(device, input, flags, &geometry)
+    });
+    // SAFETY: as above.
+    #[cfg(any(
+        windows,
+        target_os = "linux",
+        target_os = "android",
+        target_os = "freebsd"
+    ))]
+    let bytes = bytes.or_else(|| unsafe {
+        hal_built_bytes::<wgpu::hal::api::Vulkan>(device, input, flags, &geometry)
+    });
+    // SAFETY: as above.
+    #[cfg(windows)]
+    let bytes = bytes.or_else(|| unsafe {
+        hal_built_bytes::<wgpu::hal::api::Dx12>(device, input, flags, &geometry)
+    });
+    bytes.unwrap_or_else(|| {
+        tracing::error!("Acceleration structure counted as 0 bytes: its backend has no size query");
+        0
+    })
+}
+
+/// `built_bytes` on backend `A`, or None when `device` is not `A`'s, through
+/// wgpu-hal's size query [ref:wgpu-30-device-as-hal] [ref:wgpu-hal-30-build-sizes].
+/// Each geometry is as wgpu-core gives it to the same query
+/// [ref:wgpu-30-blas-size-at-create] [ref:wgpu-30-tlas-size-at-create], and
+/// the Instance buffer a slot of wgpu-hal's Instance encoding each, for at
+/// least one slot [ref:wgpu-30-tlas-instance-buffer]
+/// [ref:wgpu-hal-30-metal-instance-bytes].
+///
+/// # Safety
+///
+/// `input` lives past the call.
+unsafe fn hal_built_bytes<A: wgpu::hal::Api>(
+    device: &wgpu::Device,
+    input: &wgpu::Buffer,
+    flags: wgpu::AccelerationStructureFlags,
+    geometry: &Geometry<'_>,
+) -> Option<u64> {
+    use wgpu::hal::{self, Device as _};
+    // SAFETY: neither object is destroyed through its handle.
+    let (hal_device, buffer) = unsafe { (device.as_hal::<A>()?, input.as_hal::<A>()?) };
+    let buffer = Some(&*buffer);
+    let entries = match *geometry {
+        Geometry::Triangles(triangles) => hal::AccelerationStructureEntries::Triangles(vec![
+            hal::AccelerationStructureTriangles {
+                vertex_buffer: buffer,
+                vertex_format: triangles.vertex_format,
+                first_vertex: 0,
+                vertex_count: triangles.vertex_count,
+                vertex_stride: 0,
+                indices: triangles.index_format.zip(triangles.index_count).map(
+                    |(format, count)| hal::AccelerationStructureTriangleIndices {
+                        format,
+                        buffer,
+                        offset: 0,
+                        count,
+                    },
+                ),
+                transform: None,
+                flags: triangles.flags,
+            },
+        ]),
+        Geometry::Instances(count) => {
+            hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
+                buffer,
+                offset: 0,
+                count,
+            })
         }
-    }
-
-    /// Bytes of BLASes of `compacted_triangles` compacted and
-    /// `uncompacted_triangles` not.
-    pub fn blases(&self, compacted_triangles: u64, uncompacted_triangles: u64) -> u64 {
-        (compacted_triangles as f64 * self.per_compacted_blas_triangle
-            + uncompacted_triangles as f64 * self.per_blas_triangle)
-            .round() as u64
-    }
-
-    /// Bytes of a TLAS that can hold `instances`.
-    pub fn tlas(&self, instances: usize) -> u64 {
-        (instances as f64 * self.per_tlas_instance).round() as u64
-    }
+    };
+    // SAFETY: the query only reads the descriptor.
+    let sizes = unsafe {
+        hal_device.get_acceleration_structure_build_sizes(
+            &hal::GetAccelerationStructureBuildSizesDescriptor {
+                entries: &entries,
+                flags,
+            },
+        )
+    };
+    let instance_buffer_bytes = match *geometry {
+        Geometry::Triangles(_) => 0,
+        Geometry::Instances(count) => {
+            let instance = hal_device.tlas_instance_to_bytes(hal::TlasInstance {
+                transform: [0.0; 12],
+                custom_data: 0,
+                mask: 0,
+                blas_address: 0,
+                pipeline_intersection_data_offset: 0,
+            });
+            instance.len() as u64 * u64::from(count.max(1))
+        }
+    };
+    Some(sizes.acceleration_structure_size + instance_buffer_bytes)
 }
 
 /// The static TLAS (ADR 0020): each static Instance in its slot's entry,
@@ -492,13 +584,14 @@ mod tests {
     /// anchor does not.
     const LOAD_ANCHOR: [i32; 3] = [1562, 0, -3];
 
-    /// An NVIDIA GPU is counted with NVIDIA's figures on Vulkan and on DX12,
-    /// lavapipe, a CPU Vulkan adapter under Mesa's vendor ID (the Vulkan
-    /// registry's `VK_VENDOR_ID_MESA` [ref:vulkan-vendor-id-mesa], which
-    /// lavapipe reports [ref:lavapipe-vendor-id-mesa]), with
-    /// lavapipe's, and an Apple GPU on Metal with the M4 Pro's.
+    /// An NVIDIA GPU's compacted BLASes are counted at NVIDIA's fraction on
+    /// Vulkan and on DX12, lavapipe's, a CPU Vulkan adapter under Mesa's
+    /// vendor ID (the Vulkan registry's `VK_VENDOR_ID_MESA`
+    /// [ref:vulkan-vendor-id-mesa], which lavapipe reports
+    /// [ref:lavapipe-vendor-id-mesa]), at lavapipe's, and an Apple GPU's on
+    /// Metal at the M4 Pro's.
     #[test]
-    fn the_estimate_follows_the_adapter() {
+    fn the_compacted_blas_fraction_follows_the_adapter() {
         let adapter = |device_type, backend, vendor| wgpu::AdapterInfo {
             vendor,
             ..wgpu::AdapterInfo::new(device_type, backend)
@@ -507,26 +600,19 @@ mod tests {
         for (adapter, expected) in [
             (
                 adapter(discrete, wgpu::Backend::Vulkan, 0x10DE),
-                AccelerationStructureBytes::NVIDIA,
+                29.2 / 70.7,
             ),
-            (
-                adapter(discrete, wgpu::Backend::Dx12, 0x10DE),
-                AccelerationStructureBytes::NVIDIA,
-            ),
+            (adapter(discrete, wgpu::Backend::Dx12, 0x10DE), 29.2 / 70.7),
             (
                 adapter(wgpu::DeviceType::Cpu, wgpu::Backend::Vulkan, 0x10005),
-                AccelerationStructureBytes::LAVAPIPE,
+                1.0,
             ),
             (
                 adapter(wgpu::DeviceType::IntegratedGpu, wgpu::Backend::Metal, 0),
-                AccelerationStructureBytes::M4_PRO,
+                45.5 / 94.0,
             ),
         ] {
-            assert_eq!(
-                AccelerationStructureBytes::estimate(&adapter),
-                expected,
-                "{adapter:?}"
-            );
+            assert_eq!(compacted_blas_fraction(&adapter), expected, "{adapter:?}");
         }
     }
 

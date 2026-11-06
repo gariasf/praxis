@@ -92,6 +92,14 @@ impl GpuContext {
         })
     }
 
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    pub fn adapter_info(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
+    }
+
     /// The graphics API the adapter runs on.
     pub fn backend(&self) -> wgpu::Backend {
         self.adapter.get_info().backend

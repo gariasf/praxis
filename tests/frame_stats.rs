@@ -56,23 +56,46 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
     // pole.
     let triangles = 48 * 24 * 2 - 2 * 48;
-    // Its compacted BLAS, the static TLAS's 2^18 Instances and the dynamic
-    // TLAS's 10,000, by the bytes measured on this adapter: estimates, each
-    // structure's rounded to a whole byte.
-    let (compacted_blas_bytes_per_triangle, tlas_bytes_per_instance) =
-        match (context.vendor(), context.backend()) {
-            (0x10DE, _) => (29.2, 238.2),
-            (_, wgpu::Backend::Vulkan) => (104.0, 240.0),
-            _ => (45.5, 288.5),
-        };
-    let acceleration_structure_bytes = [
-        triangles as f64 * compacted_blas_bytes_per_triangle,
-        (1 << 18) as f64 * tlas_bytes_per_instance,
-        10_000.0 * tlas_bytes_per_instance,
-    ]
-    .map(|bytes| bytes.round() as u64)
-    .iter()
-    .sum::<u64>();
+    // Its BLAS, of the 25 rings of 49 vertices less the two the cook's weld
+    // drops (below), at the adapter's compacted fraction of the bytes its
+    // driver gives, rounded to a whole byte; the static TLAS's 2^18
+    // Instances and the dynamic TLAS's 10,000 at theirs.
+    let input = context.device().create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Frame Stats Size Query Input"),
+        size: 64,
+        usage: wgpu::BufferUsages::TLAS_INPUT,
+        mapped_at_creation: false,
+    });
+    let sphere_blas_bytes = praxis::blas_bytes(
+        context.device(),
+        &input,
+        wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+            | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+        &wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
+            vertex_count: 25 * 49 - 2,
+            index_format: Some(wgpu::IndexFormat::Uint32),
+            index_count: Some(triangles as u32 * 3),
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+        },
+    );
+    let tlas_bytes = |max_instances| {
+        praxis::tlas_bytes(
+            context.device(),
+            &input,
+            &wgpu::CreateTlasDescriptor {
+                label: None,
+                max_instances,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            },
+        )
+    };
+    let compacted_blas_fraction = praxis::compacted_blas_fraction(&context.adapter_info());
+    let acceleration_structure_bytes = (sphere_blas_bytes as f64 * compacted_blas_fraction).round()
+        as u64
+        + tlas_bytes(1 << 18)
+        + tlas_bytes(10_000);
     // GPU memory by kind. The geometry Arenas: the Mesh pool's five of
     // 16 MiB. The Resident tails: five 1×1 neutral Textures, one per
     // Channel (the spheres sample no other), RGBA8 but the normal Channel's

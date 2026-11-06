@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::render::AccelerationStructureBytes;
+use crate::render::{compacted_blas_fraction, tlas_bytes};
 
 /// A kind of GPU memory, as ADR 0017 splits the GPU memory Budget.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,8 +14,9 @@ pub enum GpuMemoryKind {
     /// smaller, its Resident tail (ADR 0017).
     ResidentTails,
     RenderTargets,
-    /// BLASes and TLASes, estimated (`AccelerationStructureBytes`), and the
-    /// BLAS refit's scratch.
+    /// BLASes and TLASes, by the sizes their drivers give (`blas_bytes`,
+    /// `tlas_bytes`) but a compacted BLAS's estimated, and the BLAS refit's
+    /// scratch.
     AccelerationStructures,
     Staging,
     /// The Instance and light buffers, the Mesh and Material tables, and the
@@ -113,30 +114,28 @@ pub const RESIDENT_TAIL_LEVEL_BYTES: u64 = 64 << 10;
 pub struct GpuMemory {
     totals: Totals,
     transient_saves_memory: bool,
-    acceleration_structure_bytes: AccelerationStructureBytes,
+    compacted_blas_fraction: f64,
 }
 
 impl GpuMemory {
-    pub fn new(
-        transient_saves_memory: bool,
-        acceleration_structure_bytes: AccelerationStructureBytes,
-    ) -> Self {
+    pub fn new(transient_saves_memory: bool, compacted_blas_fraction: f64) -> Self {
         Self {
             totals: Totals::default(),
             transient_saves_memory,
-            acceleration_structure_bytes,
+            compacted_blas_fraction,
         }
     }
 
     pub fn for_adapter(adapter: &wgpu::AdapterInfo) -> Self {
         Self::new(
             adapter.transient_saves_memory == Some(true),
-            AccelerationStructureBytes::estimate(adapter),
+            compacted_blas_fraction(adapter),
         )
     }
 
-    pub fn acceleration_structure_bytes(&self) -> AccelerationStructureBytes {
-        self.acceleration_structure_bytes
+    /// The fraction of its built bytes a compacted BLAS is counted at.
+    pub fn compacted_blas_fraction(&self) -> f64 {
+        self.compacted_blas_fraction
     }
 
     pub fn create_buffer(
@@ -187,15 +186,23 @@ impl GpuMemory {
         }
     }
 
-    /// A TLAS, counted by its estimated bytes.
+    /// A TLAS, counted by `tlas_bytes`.
     pub fn create_tlas(
         &self,
         device: &wgpu::Device,
         descriptor: &wgpu::CreateTlasDescriptor<'_>,
     ) -> Counted<wgpu::Tlas> {
-        let bytes = self
-            .acceleration_structure_bytes
-            .tlas(descriptor.max_instances as usize);
+        let input = self.create_buffer(
+            device,
+            GpuMemoryKind::AccelerationStructures,
+            &wgpu::BufferDescriptor {
+                label: Some("TLAS Size Query Input"),
+                size: 64,
+                usage: wgpu::BufferUsages::TLAS_INPUT,
+                mapped_at_creation: false,
+            },
+        );
+        let bytes = tlas_bytes(device, &input, descriptor);
         Counted {
             charge: self.charge(GpuMemoryKind::AccelerationStructures, bytes),
             resource: device.create_tlas(descriptor),
@@ -327,6 +334,41 @@ pub(crate) mod tests {
         expected[staging] = 1024;
         assert_eq!(memory.bytes_by_kind(), expected);
         drop(buffer);
+        assert_eq!(memory.bytes_by_kind(), [0; GpuMemoryKind::COUNT]);
+    }
+
+    /// A TLAS counts the size its driver gives and wgpu-core's Instance
+    /// buffer, 72 bytes a slot on Metal and 64 elsewhere, until dropped; its
+    /// size query's input is gone with the call.
+    #[test]
+    fn a_tlas_created_through_the_ledger_counts_its_build_size_and_instances() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let memory = gpu_memory(&context);
+        let descriptor = wgpu::CreateTlasDescriptor {
+            label: Some("Ledger Test TLAS"),
+            max_instances: 1000,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        };
+        let tlas = memory.create_tlas(&context.device, &descriptor);
+        let input = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Ledger Test TLAS Input"),
+            size: 64,
+            usage: wgpu::BufferUsages::TLAS_INPUT,
+            mapped_at_creation: false,
+        });
+        let bytes = tlas_bytes(&context.device, &input, &descriptor);
+        let instance_bytes = match context.backend() {
+            wgpu::Backend::Metal => 72,
+            _ => 64,
+        };
+        assert!(bytes > 1000 * instance_bytes, "{bytes} bytes");
+        let mut expected = [0; GpuMemoryKind::COUNT];
+        expected[GpuMemoryKind::AccelerationStructures as usize] = bytes;
+        assert_eq!(memory.bytes_by_kind(), expected);
+        drop(tlas);
         assert_eq!(memory.bytes_by_kind(), [0; GpuMemoryKind::COUNT]);
     }
 

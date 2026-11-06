@@ -42,7 +42,7 @@ pub use capture::{
     GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, capture, capture_frames, compare_images,
     difference_image, golden_key,
 };
-pub use render::{CrowdForm, RenderSwitches};
+pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes};
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};

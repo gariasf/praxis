@@ -424,7 +424,7 @@ fn mark_dynamic_tlas() {
     </tbody>
   </table>
   </div>
-  <p class="note">Bytes. The estimates are <code>AccelerationStructureBytes</code>'s <code>per_tlas_instance</code> times <code>DYNAMIC_TLAS_CAPACITY</code>, the records <code>DynamicTlas::new</code>'s per backend; the last column is the whole frame's upload from the Baselines, of which the entries are the share shown. CI's lavapipe takes 240 bytes an entry, 2,400,000 in all.</p>
+  <p class="note">Bytes. The estimates are the ledger's bytes per entry at the commit above times <code>DYNAMIC_TLAS_CAPACITY</code>, the records <code>DynamicTlas::new</code>'s per backend; the last column is the whole frame's upload from the Baselines, of which the entries are the share shown. CI's lavapipe takes 240 bytes an entry, 2,400,000 in all.</p>
 </section>
 
 <section class="part prose" id="why">

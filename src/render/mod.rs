@@ -26,7 +26,7 @@ mod shader_function_tests;
 mod shader_tests;
 
 pub use acceleration_structures::{
-    AccelerationStructureBytes, DYNAMIC_TLAS_CAPACITY, DynamicTlas, StaticTlas,
+    DYNAMIC_TLAS_CAPACITY, DynamicTlas, StaticTlas, blas_bytes, compacted_blas_fraction, tlas_bytes,
 };
 pub use instance::{InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
