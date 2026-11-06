@@ -619,6 +619,7 @@ impl<'a> PassQueries<'a, '_> {
 
     /// The timestamp write of a marker that ends the pass at its start: the
     /// pass starts where the pass before it ends.
+    #[cfg_attr(not(target_vendor = "apple"), allow(dead_code))]
     pub fn marker(self) -> wgpu::ComputePassTimestampWrites<'a> {
         self.log.mark(self.position, PassKind::Marker);
         wgpu::ComputePassTimestampWrites {
