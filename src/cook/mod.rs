@@ -724,7 +724,15 @@ mod tests {
     #[test]
     fn a_scene_references_the_textures_it_loads() {
         let scene = ReferenceScene::TextureWall;
-        let references = scene_references(&[scene], &[]).unwrap();
+        let (placements, lights) = scene.static_content();
+        let chunks: Vec<_> = chunk::split(placements, lights)
+            .into_iter()
+            .map(|(coordinates, chunk)| {
+                let referrer = Referrer::Chunk(scene, coordinates);
+                (scene.chunk_id(coordinates), referrer, String::new(), chunk)
+            })
+            .collect();
+        let references = scene_references(&[scene], &chunks).unwrap();
         let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }

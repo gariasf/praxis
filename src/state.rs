@@ -6,19 +6,15 @@ use bevy_ecs::system::RunSystemOnce;
 
 use crate::assets::{AssetLoader, PoolLoader};
 use crate::camera::fly_camera;
-use crate::components::{MaterialRef, MeshRef, Transform};
-use crate::cooked::{
-    AssetId, AssetKind, AssetName, AssetSource, COOKED_CACHE_DIRECTORY, CookedCache,
-};
+use crate::components::Transform;
+use crate::cooked::{COOKED_CACHE_DIRECTORY, CookedCache};
 use crate::gpu::GpuContext;
 use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{CrowdForm, FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
-    ReferenceScene, SCI_FI_HELMET, SWEEP_METALLIC, SWEEP_ROUGHNESS, spawn_crowd,
-    spawn_far_coplanar, spawn_minification, spawn_normal_tangent, spawn_orrery, spawn_pbr_sweep,
-    spawn_shadows, spawn_texture_wall, spawn_town, spawn_traced_crowd, spawn_uv_grid, spin, sway,
-    sweep_material_name,
+    ReferenceScene, sci_fi_helmet_mesh_id, spawn_crowd, spawn_orrery, spawn_texture_wall,
+    spawn_town, spawn_traced_crowd, spin, sway,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::streaming::LoadedChunks;
@@ -77,39 +73,37 @@ impl Simulation {
 
         let spawn: fn(&mut World, &mut dyn AssetLoader) -> anyhow::Result<()> = match scene {
             ReferenceScene::Helmet => State::spawn_helmet_scene,
-            ReferenceScene::PbrSweep => spawn_pbr_sweep,
-            ReferenceScene::UvGrid => spawn_uv_grid,
-            ReferenceScene::NormalTangent => spawn_normal_tangent,
-            ReferenceScene::FarCoplanar => spawn_far_coplanar,
+            ReferenceScene::PbrSweep
+            | ReferenceScene::UvGrid
+            | ReferenceScene::NormalTangent
+            | ReferenceScene::FarCoplanar
+            | ReferenceScene::Minification
+            | ReferenceScene::Shadows => |_, _| Ok(()),
             ReferenceScene::Orrery => spawn_orrery,
-            ReferenceScene::Minification => spawn_minification,
             ReferenceScene::TextureWall => spawn_texture_wall,
-            ReferenceScene::Shadows => spawn_shadows,
             ReferenceScene::Crowd => match crowd_form {
                 CrowdForm::Proxies => spawn_crowd,
                 CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
             },
             ReferenceScene::Town => spawn_town,
         };
-        spawn(&mut world, loader).with_context(|| format!("loading {}", scene.name()))?;
+        let chunks = spawn(&mut world, loader)
+            .and_then(|()| scene.load_chunks(loader))
+            .with_context(|| format!("loading {}", scene.name()))?;
+        world.insert_resource(chunks);
         world.insert_resource(scene.environment());
         world.spawn(scene.sun());
-        for &(position, light) in scene.point_lights() {
-            world.spawn((Transform::from_translation(position), light));
-        }
         // A child's translation is relative to its parent, so only roots move.
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
         for mut transform in root_query.iter_mut(&mut world) {
             transform.translation += shift;
         }
-        if let Some(mut chunks) = world.get_resource_mut::<LoadedChunks>() {
-            for chunk in &mut chunks.0 {
-                for placement in &mut chunk.placements {
-                    placement.transform.translation += shift;
-                }
-                for (position, _) in &mut chunk.lights {
-                    *position += shift;
-                }
+        for chunk in &mut world.resource_mut::<LoadedChunks>().0 {
+            for placement in &mut chunk.placements {
+                placement.transform.translation += shift;
+            }
+            for (position, _) in &mut chunk.lights {
+                *position += shift;
             }
         }
         // Ticks propagate World transforms as they end; frames drawn before
@@ -207,50 +201,13 @@ impl State {
         })
     }
 
-    /// Spawns `DEFAULT_MODEL`'s helmet and a factor sweep of helmets around
-    /// it, and records the helmet's Mesh for the spawn systems.
+    /// Records `DEFAULT_MODEL`'s helmet Mesh for the spawn systems; the
+    /// scene's Chunks hold its helmets.
     fn spawn_helmet_scene(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
-        let source = AssetSource::File(SCI_FI_HELMET);
-        let id = AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"));
-        let mesh_handle = loader.mesh(id).with_context(|| {
+        let mesh = loader.mesh(sci_fi_helmet_mesh_id()).with_context(|| {
             format!("loading {DEFAULT_MODEL}; run `praxis fetch` if it is missing")
         })?;
-
-        // Debug material sweep: a pure factor sweep over the neutral default
-        // layers with a white base color. Top row dielectric, bottom row metal;
-        // roughness grows left to right. The textured glTF helmet sits between
-        // the rows. Placed 8 units ahead of the default camera. SciFiHelmet is
-        // 2.9 units tall, so the sweep copies are scaled to 3/4 to clear the
-        // middle helmet and stay in frame.
-        for (row_index, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
-            for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-                let id =
-                    ReferenceScene::Helmet.material_id(&sweep_material_name(metallic, roughness));
-                let variant_handle = loader.material(id)?;
-                let column_offset = (column_index as f32 - 2.0) * 2.0;
-                let row_offset = 2.6 - row_index as f32 * 5.2;
-                world.spawn((
-                    Transform {
-                        scale: glam::Vec3::splat(0.75),
-                        ..Transform::from_translation(glam::dvec3(
-                            column_offset.into(),
-                            row_offset.into(),
-                            -8.0,
-                        ))
-                    },
-                    MeshRef(mesh_handle),
-                    MaterialRef(variant_handle),
-                ));
-            }
-        }
-        // Drawn with the Material its Primitive names, which the sweep's
-        // helmets override.
-        world.spawn((
-            Transform::from_translation(glam::dvec3(0.0, 0.0, -8.0)),
-            MeshRef(mesh_handle),
-        ));
-
-        world.insert_resource(HelmetAssets { mesh: mesh_handle });
+        world.insert_resource(HelmetAssets { mesh });
         Ok(())
     }
 

@@ -112,9 +112,11 @@ pub(super) fn cook_key(chunk: &CookedChunk) -> String {
 
 #[cfg(test)]
 mod tests {
+    use bevy_ecs::prelude::*;
+
     use super::*;
     use crate::ReferenceScene;
-    use crate::components::{MeshRef, PointLight};
+    use crate::components::{Bend, MeshRef, PointLight};
     use crate::cook::export::AssetRecorder;
     use crate::cook::{CookSettings, cook_scene};
     use crate::cooked::CookedCache;
@@ -122,6 +124,7 @@ mod tests {
     use crate::state::Simulation;
     use crate::stats::FrameRecorder;
     use crate::streaming::LoadedChunks;
+    use crate::transform::PreviousWorldTransform;
 
     /// The 256 m Chunk over `translation`, x then z, and `translation` from
     /// its origin.
@@ -273,8 +276,7 @@ mod tests {
                 }
             }
         }
-        let town_chunks: Vec<_> = (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z])).collect();
-        assert_eq!(coordinates_cooked, town_chunks);
+        assert_eq!(coordinates_cooked, scene.chunk_coordinates());
 
         assert!(
             loaded == cooked,
@@ -325,5 +327,52 @@ mod tests {
         let again = cook_scene(scene, &assets, &cache, &settings).unwrap();
         assert_eq!(again.cooked, []);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// Each scene's Chunks lie at the coordinates its spawn loads, and its
+    /// spawn loads all they hold, spawning an entity only for what moves: no
+    /// point light, and no Renderable that neither moves in the fixed
+    /// schedule nor bends.
+    #[test]
+    fn every_scene_loads_its_static_content_from_its_chunks() {
+        for scene in ReferenceScene::ALL {
+            let name = scene.name();
+            let (placements, lights) = scene.static_content();
+            let counts = (placements.len(), lights.len());
+            let chunks = split(placements, lights);
+            let coordinates: Vec<_> = chunks.keys().copied().collect();
+            assert_eq!(coordinates, scene.chunk_coordinates(), "{name}");
+            let mut recorder = AssetRecorder::new(
+                chunks
+                    .iter()
+                    .map(|(&coordinates, chunk)| (scene.chunk_id(coordinates), chunk)),
+            );
+            let mut simulation = Simulation::new(
+                scene,
+                DVec3::ZERO,
+                CrowdForm::default(),
+                &mut recorder,
+                &FrameRecorder::new(),
+            )
+            .unwrap();
+            let world = &mut simulation.world;
+            let loaded = &world.resource::<LoadedChunks>().0;
+            let loaded_counts = (
+                loaded.iter().map(|chunk| chunk.placements.len()).sum(),
+                loaded.iter().map(|chunk| chunk.lights.len()).sum(),
+            );
+            assert_eq!(loaded_counts, counts, "{name}");
+            let point_lights = world.query::<&PointLight>().iter(world).count();
+            assert_eq!(point_lights, 0, "{name} spawns a point light");
+            let still = world
+                .query_filtered::<(), (
+                    With<MeshRef>,
+                    Without<PreviousWorldTransform>,
+                    Without<Bend>,
+                )>()
+                .iter(world)
+                .count();
+            assert_eq!(still, 0, "{name} spawns a Renderable that does not move");
+        }
     }
 }
