@@ -1,11 +1,13 @@
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use bevy_ecs::prelude::*;
 
-use crate::assets::LoadedMeshes;
 use crate::assets::pools::Generations;
+use crate::assets::{LoadedMeshes, MaterialHandle, MeshHandle};
 use crate::camera::{Camera, projection_matrix};
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight};
+use crate::cooked::AssetId;
 use crate::environment::Environment;
 use crate::render::bend_pass::{BEND_CAPACITY, BendData};
 use crate::render::instance::{anchor_and_offset, padded_columns};
@@ -13,6 +15,7 @@ use crate::render::{
     CameraUniform, DYNAMIC_TLAS_CAPACITY, InstanceData, LightData, LightUniform, NO_MATERIAL,
     NO_MESH, RenderCapacities,
 };
+use crate::streaming::{LoadedChunk, LoadedChunks};
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -29,8 +32,8 @@ pub struct FrameData {
     /// The colour the lit pass clears to: the scene's background luminance,
     /// pre-exposed as the lit pass exposes what it draws.
     pub background: wgpu::Color,
-    /// Slots the Instance buffer holds: one past the highest any Renderable
-    /// has taken. The GPU draws each, but a freed one.
+    /// Slots the Instance buffer holds: one past the highest a Renderable or
+    /// a Chunk's range has taken. The GPU draws each, but a freed one.
     pub instance_slot_count: u32,
     /// The Instances this frame writes, in `instance_writes` order; every
     /// other slot keeps what an earlier frame wrote (ADR 0003).
@@ -134,7 +137,7 @@ pub struct MovingInstance {
 }
 
 /// The Instance of a slot that draws nothing: a freed slot's, or a skipped
-/// Renderable's.
+/// Renderable's or Placement's.
 fn no_mesh_instance() -> InstanceData {
     InstanceData {
         mesh: NO_MESH,
@@ -142,14 +145,34 @@ fn no_mesh_instance() -> InstanceData {
     }
 }
 
+/// The Instance that draws `mesh` at `transform`, with `material` over its
+/// Primitives' Materials if given, anchored (ADR 0014).
+fn instance(
+    transform: &glam::DAffine3,
+    mesh: MeshHandle,
+    material: Option<MaterialHandle>,
+) -> InstanceData {
+    let rotation_scale = transform.matrix3.as_mat3();
+    let (anchor, offset) = anchor_and_offset(transform.translation);
+    InstanceData {
+        rotation_scale: padded_columns(rotation_scale),
+        normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
+        anchor,
+        material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
+        offset,
+        mesh: mesh.index,
+    }
+}
+
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable (ADR 0003); a slot freed in an earlier frame is taken
-/// again before a fresh one, and once all `capacity` are taken a Renderable
-/// is refused one.
+/// Renderable, and each loaded Chunk's range of slots (ADR 0003); a slot
+/// freed in an earlier frame is taken again before a fresh one, and once all
+/// `capacity` are taken a Renderable is refused one.
 #[derive(Default)]
 struct InstanceSlots {
     capacity: u32,
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
+    by_chunk: HashMap<AssetId, Range<u32>>,
     free: Vec<u32>,
     /// Slots freed this frame, which take an Instance with no Mesh before
     /// they join `free`.
@@ -159,6 +182,8 @@ struct InstanceSlots {
     /// Renderables refused a slot and not yet given one, each warned about
     /// once.
     refused: bevy_ecs::entity::EntityHashSet,
+    /// Chunks refused a range and not yet given one, each warned about once.
+    refused_chunks: HashSet<AssetId>,
 }
 
 impl InstanceSlots {
@@ -183,6 +208,33 @@ impl InstanceSlots {
         self.by_entity.insert(entity, slot);
         self.refused.remove(&entity);
         Some(slot)
+    }
+
+    /// A range of `count` fresh slots for the Chunk `chunk`, past the highest
+    /// slot taken, kept for as long as the preparer lives; None when the
+    /// Instance buffer has no room for it, warned the first time `chunk` is
+    /// refused.
+    fn take_range(&mut self, chunk: AssetId, count: u32) -> Option<Range<u32>> {
+        let end = self
+            .end
+            .checked_add(count)
+            .filter(|&end| end <= self.capacity);
+        let Some(end) = end else {
+            if self.refused_chunks.insert(chunk) {
+                tracing::warn!(
+                    %chunk,
+                    placements = count,
+                    capacity = self.capacity,
+                    "Chunk refused: the Instance buffer has no room for its Placements"
+                );
+            }
+            return None;
+        };
+        let range = self.end..end;
+        self.end = end;
+        self.refused_chunks.remove(&chunk);
+        self.by_chunk.insert(chunk, range.clone());
+        Some(range)
     }
 
     fn free(&mut self, entity: Entity) {
@@ -287,10 +339,22 @@ impl FramePreparer {
     /// vertex Arena are left out, counted, and warned about when they
     /// appear.
     ///
+    /// Each Chunk in the World's `LoadedChunks` takes a range of slots, one
+    /// per Placement, past the highest slot taken, on the first `prepare`
+    /// that sees it and before new Renderables take slots, and its
+    /// Placements' Instances are written there in its order; its point lights
+    /// follow the entities'. A Placement that a Renderable's checks would
+    /// skip writes an Instance with no Mesh, warned about, and is not
+    /// retried. A Chunk the Instance buffer has no room for is refused, warned
+    /// about once and its Placements counted among the refused Renderables
+    /// every frame; as ranges come only past the highest slot taken, it stays
+    /// refused.
+    ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
-    /// Instance, every one when either pool freed an entry since, and a slot
-    /// freed since writes an Instance with no Mesh. It
+    /// Instance, every one when either pool freed an entry since, as do the
+    /// Placements of every Chunk then, and a slot freed since writes an
+    /// Instance with no Mesh. It
     /// ends the World's change window (`World::clear_trackers`), so it is the
     /// frame's last World read, once per frame.
     pub fn prepare(
@@ -343,10 +407,14 @@ impl FramePreparer {
             a: 1.0,
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
+        let chunks = world
+            .get_resource::<LoadedChunks>()
+            .map_or(&[][..], |chunks| &chunks.0);
         let directional_light_count = prepare_lights(
             world,
             directional_light_query,
             point_light_query,
+            chunks,
             camera_position,
             blend_weight,
             *light_capacity,
@@ -377,6 +445,21 @@ impl FramePreparer {
         frame.instance_writes.clear();
         frame.moving_instances.clear();
         *renderables_refused = 0;
+        for chunk in chunks {
+            let slots = match instance_slots.by_chunk.get(&chunk.id) {
+                Some(_) if !*rewrite_every_instance => continue,
+                Some(slots) => slots.clone(),
+                None => {
+                    let count = chunk.placements.len() as u32;
+                    let Some(slots) = instance_slots.take_range(chunk.id, count) else {
+                        *renderables_refused += count;
+                        continue;
+                    };
+                    slots
+                }
+            };
+            write_chunk(frame, chunk, slots, meshes, material_generations);
+        }
         let renderables = renderable_query.query(world);
         // Slots of entities that stopped being Renderables are freed before new
         // Renderables take slots.
@@ -446,19 +529,10 @@ impl FramePreparer {
             // Each Renderable visited is new, changed, blended, retried or lost
             // a component, or every Instance is written again.
             let transform = current.drawn(previous, blend_weight);
-            let rotation_scale = transform.0.matrix3.as_mat3();
-            let (anchor, offset) = anchor_and_offset(transform.translation());
+            let material = material_ref.map(|material_ref| material_ref.0);
             frame.write_instance(
                 slot,
-                InstanceData {
-                    rotation_scale: padded_columns(rotation_scale),
-                    normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
-                    anchor,
-                    material_id: material_ref
-                        .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
-                    offset,
-                    mesh: mesh_ref.0.index,
-                },
+                instance(&transform.0, mesh_ref.0, material),
                 previous.is_some(),
             );
         };
@@ -539,9 +613,9 @@ impl FramePreparer {
         &self.frame
     }
 
-    /// Renderables the last `prepare` refused a slot because the Instance
-    /// buffer is full, so neither written nor drawn; each is retried every
-    /// frame.
+    /// Renderables, and Placements of Chunks, the last `prepare` refused a
+    /// slot because the Instance buffer is full, so neither written nor
+    /// drawn; each is retried every frame.
     pub fn renderables_refused(&self) -> u32 {
         self.renderables_refused
     }
@@ -571,10 +645,51 @@ impl FramePreparer {
     }
 }
 
+/// Writes the Instances of `chunk`'s Placements into `slots`, in its order.
+/// A Placement whose Mesh is not in `meshes`, whose Material Handle
+/// `material_generations` finds no Material for, or that has none where a
+/// Primitive of its Mesh names no Material writes an Instance with no Mesh,
+/// warned about.
+fn write_chunk(
+    frame: &mut FrameData,
+    chunk: &LoadedChunk,
+    slots: Range<u32>,
+    meshes: &LoadedMeshes,
+    material_generations: &Generations,
+) {
+    let mut skipped = 0;
+    for (slot, placement) in slots.zip(&chunk.placements) {
+        let drawn = meshes
+            .get(placement.mesh)
+            .is_some_and(|mesh| match placement.material {
+                Some(material) => material_generations.live(material.index, material.generation),
+                None => !mesh.needs_material_handle,
+            });
+        let written = if drawn {
+            instance(
+                &placement.transform.to_affine(),
+                placement.mesh,
+                placement.material,
+            )
+        } else {
+            skipped += 1;
+            no_mesh_instance()
+        };
+        frame.write_instance(slot, written, false);
+    }
+    if skipped > 0 {
+        tracing::warn!(
+            chunk = %chunk.id,
+            skipped,
+            "Placements whose Mesh or Material is not in its pool, or that need a Material Handle, draw nothing"
+        );
+    }
+}
+
 /// Fills `lights` with every directional light, shining along its entity's
-/// forward axis, then every point light, at its World position as an Anchor
-/// plus an offset (ADR 0014), each blended between its two newest Ticks, up
-/// to `capacity`. Point lights past it are cut farthest from
+/// forward axis, then every point light, the entities' then `chunks'`, at its
+/// World position as an Anchor plus an offset (ADR 0014), each blended
+/// between its two newest Ticks, up to `capacity`. Point lights past it are cut farthest from
 /// `camera_position` first, the rest keeping their query order. Returns how
 /// many are directional, and sets `overflowed` to how many the light buffer
 /// had no room for.
@@ -583,6 +698,7 @@ fn prepare_lights(
     world: &World,
     directional_light_query: &mut LightQuery<DirectionalLight>,
     point_light_query: &mut LightQuery<PointLight>,
+    chunks: &[LoadedChunk],
     camera_position: glam::DVec3,
     blend_weight: f32,
     capacity: u32,
@@ -604,11 +720,16 @@ fn prepare_lights(
                     ..LightData::default()
                 })
             });
-    let point_lights = point_light_query
+    let entity_point_lights = point_light_query
         .iter(world)
         .map(|(current, previous, light)| {
-            let transform = current.drawn(previous, blend_weight);
-            let position = transform.translation();
+            let position = current.drawn(previous, blend_weight).translation();
+            (position, *light)
+        });
+    let chunk_point_lights = chunks.iter().flat_map(|chunk| &chunk.lights).copied();
+    let point_lights = entity_point_lights
+        .chain(chunk_point_lights)
+        .map(|(position, light)| {
             let (anchor, offset) = anchor_and_offset(position);
             let light = LightData {
                 anchor,
@@ -723,6 +844,7 @@ mod tests {
     use crate::components::Transform;
     use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
     use crate::stats::GpuMemoryBudgets;
+    use crate::streaming::chunks::ChunkPlacement;
     use crate::transform::propagate_world_transforms;
 
     /// A World of Renderables prepared frame by frame, as `State` does.
@@ -882,6 +1004,53 @@ mod tests {
         assert_eq!(frames.prepare(), [7]);
         assert_eq!(frames.preparer.frame().instances[0].offset, [3.0, 0.0, 0.0]);
         assert_eq!(frames.preparer.renderables_refused(), 0);
+    }
+
+    /// A Chunk takes its whole range or none: one the buffer has no room for
+    /// is refused, warned about once and counted every frame, while a later
+    /// one that fits takes its range, all before Renderables take slots;
+    /// rewriting every Instance writes each Chunk's into the range it took.
+    #[test]
+    fn a_chunk_past_capacity_is_refused_whole_and_warned_about_once() {
+        let mut frames =
+            Frames::with_capacities(RenderCapacities::from_budgets(&GpuMemoryBudgets {
+                scene_and_pass_buffers: 1 << 16,
+                ..GpuMemoryBudgets::each(0)
+            }));
+        let mesh = frames.mesh;
+        let chunk = |id: u128, placements: u32| LoadedChunk {
+            id: AssetId(id),
+            placements: (0..placements)
+                .map(|x| ChunkPlacement {
+                    transform: Transform::from_translation(glam::dvec3(x.into(), 0.0, 0.0)),
+                    mesh,
+                    material: Some(MaterialHandle {
+                        index: 0,
+                        generation: 0,
+                    }),
+                })
+                .collect(),
+            lights: Vec::new(),
+        };
+        let chunks = LoadedChunks(vec![chunk(1, 200), chunk(2, 100), chunk(3, 55)]);
+        frames.world.insert_resource(chunks);
+        frames.spawn(0.0);
+        let slots: Vec<u32> = (0..256).collect();
+        let ((), log) = logged(|| {
+            assert_eq!(frames.prepare(), slots);
+            assert_eq!(frames.preparer.frame().instances[255].offset, [0.0; 3]);
+            assert_eq!(frames.preparer.renderables_refused(), 100);
+            assert!(frames.prepare().is_empty());
+            assert_eq!(frames.preparer.renderables_refused(), 100);
+            frames.preparer.rewrite_all_instances();
+            assert_eq!(frames.prepare(), slots);
+            assert_eq!(
+                frames.preparer.frame().instances[254].offset,
+                [54.0, 0.0, 0.0]
+            );
+        });
+        assert_eq!(log.matches("Chunk refused").count(), 1, "{log:?}");
+        assert!(!log.contains("Renderable refused"), "{log:?}");
     }
 
     #[test]

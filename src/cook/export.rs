@@ -26,6 +26,7 @@ use crate::environment::Environment;
 use crate::render::CrowdForm;
 use crate::state::Simulation;
 use crate::stats::FrameRecorder;
+use crate::streaming::LoadedChunks;
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -110,35 +111,61 @@ pub fn export_scene(
             })
         })
         .collect();
-    let point_lights = world
-        .query::<(
-            &WorldTransform,
-            Option<&PreviousWorldTransform>,
-            &PointLight,
-        )>()
-        .iter(world)
-        .map(|(current, previous, light)| PointLightEntry {
-            position: current
-                .drawn(previous, blend_weight)
-                .translation()
-                .to_array(),
-            color: light.color.to_array(),
-            intensity: light.intensity,
-            range: light.range,
-        })
-        .collect();
-    let mut renderables = Vec::new();
+    let mut point_light_query = world.query::<(
+        &WorldTransform,
+        Option<&PreviousWorldTransform>,
+        &PointLight,
+    )>();
     let mut renderable_query = world.query::<(
         &WorldTransform,
         Option<&PreviousWorldTransform>,
         &MeshRef,
         Option<&MaterialRef>,
     )>();
-    for (current, previous, mesh_ref, material_ref) in renderable_query.iter(world) {
-        let mesh = exported.mesh(recorder.meshes[mesh_ref.0.index as usize])?;
-        let material = match material_ref {
-            Some(material_ref) => {
-                let id = recorder.materials[material_ref.0.index() as usize];
+    let world = &*world;
+    let chunks = world
+        .get_resource::<LoadedChunks>()
+        .map_or(&[][..], |chunks| &chunks.0);
+    let entity_point_lights = point_light_query
+        .iter(world)
+        .map(|(current, previous, light)| {
+            let position = current.drawn(previous, blend_weight).translation();
+            (position, *light)
+        });
+    let chunk_point_lights = chunks.iter().flat_map(|chunk| &chunk.lights).copied();
+    let point_lights = entity_point_lights
+        .chain(chunk_point_lights)
+        .map(|(position, light)| PointLightEntry {
+            position: position.to_array(),
+            color: light.color.to_array(),
+            intensity: light.intensity,
+            range: light.range,
+        })
+        .collect();
+    let entity_renderables =
+        renderable_query
+            .iter(world)
+            .map(|(current, previous, mesh_ref, material_ref)| {
+                let transform = current.drawn(previous, blend_weight).0;
+                (
+                    transform,
+                    mesh_ref.0,
+                    material_ref.map(|material_ref| material_ref.0),
+                )
+            });
+    let placements = chunks
+        .iter()
+        .flat_map(|chunk| &chunk.placements)
+        .map(|placement| {
+            let transform = placement.transform.to_affine();
+            (transform, placement.mesh, placement.material)
+        });
+    let mut renderables = Vec::new();
+    for (transform, mesh_handle, material_handle) in entity_renderables.chain(placements) {
+        let mesh = exported.mesh(recorder.meshes[mesh_handle.index as usize])?;
+        let material = match material_handle {
+            Some(material_handle) => {
+                let id = recorder.materials[material_handle.index() as usize];
                 Some(exported.material(id)?)
             }
             // As prepare, which skips it.
@@ -151,10 +178,7 @@ pub fn export_scene(
             }
             None => None,
         };
-        let (scale, rotation, translation) = current
-            .drawn(previous, blend_weight)
-            .0
-            .to_scale_rotation_translation();
+        let (scale, rotation, translation) = transform.to_scale_rotation_translation();
         renderables.push(RenderableEntry {
             translation: translation.to_array(),
             rotation: rotation.as_quat().to_array(),

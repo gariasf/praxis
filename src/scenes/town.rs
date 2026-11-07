@@ -10,21 +10,19 @@
 
 #![cfg_attr(not(feature = "cook"), allow(dead_code))]
 
-use std::collections::HashMap;
 use std::f64::consts::FRAC_PI_2;
 
-use anyhow::Context;
 use bevy_ecs::prelude::*;
 use glam::FloatExt;
 
 use super::{ReferenceScene, Spin};
-use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
+use crate::assets::AssetLoader;
 use crate::camera::Camera;
-use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
-use crate::cooked::{AssetId, chunk_origin};
+use crate::components::{MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
 use crate::render::DYNAMIC_TLAS_CAPACITY;
+use crate::streaming::{LoadedChunks, load_chunk};
 use crate::transform::PreviousWorldTransform;
 
 /// The town's Meshes.
@@ -796,65 +794,17 @@ fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
     (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z]))
 }
 
-/// Loads the town's Meshes and the Materials its boxes draw with, then
-/// places what does not move from its Chunks, in coordinate order, each
-/// Instance and point light in the order its Chunk holds them at the
-/// Chunk's origin plus its translation; then its flocks: each a spinning
-/// centre with its birds as its children, all moved in the fixed schedule,
-/// so each carries its previous World transform (ADR 0022).
+/// Loads what does not move from the town's Chunks, in coordinate order, as
+/// `LoadedChunks`; then its flocks: each a spinning centre with its birds as
+/// its children, all moved in the fixed schedule, so each carries its
+/// previous World transform (ADR 0022).
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let scene = ReferenceScene::Town;
-    let meshes: HashMap<AssetId, MeshHandle> = TownMesh::ALL
-        .iter()
-        .map(|mesh| {
-            let id = scene.mesh_id(mesh.name());
-            Ok((id, loader.mesh(id)?))
-        })
+    let chunks = chunk_coordinates()
+        .map(|coordinates| load_chunk(loader, scene.chunk_id(coordinates), coordinates))
         .collect::<anyhow::Result<_>>()?;
-    let materials: HashMap<AssetId, MaterialHandle> = BoxMaterial::ALL
-        .iter()
-        .map(|material| {
-            let id = scene.material_id(material.name());
-            Ok((id, loader.material(id)?))
-        })
-        .collect::<anyhow::Result<_>>()?;
-    let (mut others, mut boxes, mut lights) = (Vec::new(), Vec::new(), Vec::new());
-    for coordinates in chunk_coordinates() {
-        let chunk = loader.chunk(scene.chunk_id(coordinates))?;
-        let origin = chunk_origin(coordinates);
-        for placement in chunk.placements {
-            let transform = Transform {
-                translation: origin + placement.translation,
-                rotation: placement.rotation,
-                scale: placement.scale,
-            };
-            let mesh = MeshRef(*meshes.get(&placement.mesh).with_context(|| {
-                format!("a Placement names Mesh {}, not the town's", placement.mesh)
-            })?);
-            match placement.material {
-                None => others.push((transform, mesh)),
-                Some(id) => {
-                    let material = materials.get(&id).with_context(|| {
-                        format!("a Placement names Material {id}, not the town's")
-                    })?;
-                    boxes.push((transform, mesh, MaterialRef(*material)));
-                }
-            }
-        }
-        lights.extend(chunk.lights.into_iter().map(|light| {
-            let point_light = PointLight {
-                color: light.color,
-                intensity: light.intensity,
-                range: light.range,
-            };
-            let translation = origin + light.translation;
-            (Transform::from_translation(translation), point_light)
-        }));
-    }
-    world.spawn_batch(others);
-    world.spawn_batch(boxes);
-    world.spawn_batch(lights);
-    let bird = meshes[&scene.mesh_id(TownMesh::Bird.name())];
+    world.insert_resource(LoadedChunks(chunks));
+    let bird = loader.mesh(scene.mesh_id(TownMesh::Bird.name()))?;
     for flock in flocks() {
         let centre = world
             .spawn((

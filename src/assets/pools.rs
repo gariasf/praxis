@@ -118,8 +118,9 @@ pub struct MeshPool {
     meshes: LoadedMeshes,
     /// What freeing each loaded Mesh gives back, at its Handle's index.
     allocations: Vec<Option<MeshAllocation>>,
-    /// The Handle of each Mesh loaded by Asset ID for a shared use.
-    asset_handles: HashMap<(AssetId, MeshUse), MeshHandle>,
+    /// The Handle of each Mesh loaded by Asset ID for a shared use, and how
+    /// many loads returned it.
+    asset_handles: HashMap<(AssetId, MeshUse), (MeshHandle, u32)>,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
@@ -222,14 +223,26 @@ impl MeshPool {
     }
 
     /// The Handle of the Mesh `id` that `load_asset` loaded for `mesh_use`,
-    /// unless a bent Mesh's use, which no two Renderables share.
-    pub fn handle(&self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
-        self.asset_handles.get(&(id, mesh_use)).copied()
+    /// counting one more user of it, unless a bent Mesh's use, which no two
+    /// Renderables share.
+    pub fn add_user(&mut self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
+        let (handle, users) = self.asset_handles.get_mut(&(id, mesh_use))?;
+        *users += 1;
+        Some(*handle)
     }
 
-    /// The Handle of `mesh`, the Mesh `id`, for `mesh_use`: the one `handle`
-    /// returns, or else a load as `load_for` does, kept for `handle` unless
-    /// the Mesh is bent.
+    /// How many loads returned the Mesh `id` for `mesh_use`: a user per
+    /// loaded Chunk that names it and per spawn that loaded it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn users(&self, id: AssetId, mesh_use: MeshUse) -> u32 {
+        self.asset_handles
+            .get(&(id, mesh_use))
+            .map_or(0, |&(_, users)| users)
+    }
+
+    /// The Handle of `mesh`, the Mesh `id`, for `mesh_use`: the one `add_user`
+    /// returns, or else a load as `load_for` does, kept for `add_user` with
+    /// one user unless the Mesh is bent.
     pub fn load_asset(
         &mut self,
         staging: &mut LoadStaging,
@@ -238,12 +251,12 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
         mesh_use: MeshUse,
     ) -> Option<MeshHandle> {
-        if let Some(handle) = self.handle(id, mesh_use) {
+        if let Some(handle) = self.add_user(id, mesh_use) {
             return Some(handle);
         }
         let handle = self.load_for(staging, mesh, materials, mesh_use)?;
         if mesh_use.shared() {
-            self.asset_handles.insert((id, mesh_use), handle);
+            self.asset_handles.insert((id, mesh_use), (handle, 1));
         }
         Some(handle)
     }
@@ -609,7 +622,7 @@ impl MeshPool {
             self.charge_blases();
         }
         self.asset_handles
-            .retain(|_, asset_handle| *asset_handle != handle);
+            .retain(|_, (asset_handle, _)| *asset_handle != handle);
         tracing::debug!(?handle, "Mesh freed");
     }
 
@@ -1155,7 +1168,7 @@ pub(crate) mod tests {
         assert_eq!(acceleration_structure_bytes(), blas_bytes);
         assert!(pool.get(freed).is_none() && pool.blas(freed).is_none());
         assert_eq!(pool.handle_at(freed.index), None);
-        assert_eq!(pool.handle(AssetId(1), MeshUse::DrawnAndTraced), None);
+        assert_eq!(pool.users(AssetId(1), MeshUse::DrawnAndTraced), 0);
         assert_eq!(pool.meshes().frees(), 1);
         let (_, log) = logged(|| pool.free(freed));
         assert!(log.contains("Mesh not freed"), "not logged: {log:?}");

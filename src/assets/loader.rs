@@ -7,7 +7,8 @@ use crate::render::LoadStaging;
 /// What a scene's spawn loads its Assets through, by Asset ID (ADR 0018),
 /// and the Handles its Renderables hold.
 pub trait AssetLoader {
-    /// Loads the Material `id` with the Textures it samples.
+    /// Loads the Material `id` with the Textures it samples, or counts one
+    /// more user of it if it is loaded.
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle>;
 
     /// Loads the Texture `id` into `channel`, as a Material sampling it
@@ -15,7 +16,8 @@ pub trait AssetLoader {
     fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32>;
 
     /// Loads the Mesh `id` with the Materials its Primitives name, each
-    /// loaded once, which each Primitive draws with.
+    /// loaded once, which each Primitive draws with; or counts one more user
+    /// of it if it is loaded.
     fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
 
     /// Loads the Mesh `id` as `mesh` does, for the GPU to bend each frame
@@ -81,7 +83,7 @@ impl PoolLoader<'_> {
     /// Loads the Mesh `id` for `mesh_use`, once per Asset ID unless it is
     /// bent, with the Materials its Primitives name unless no pass draws it.
     fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
-        if let Some(handle) = self.mesh_pool.handle(id, mesh_use) {
+        if let Some(handle) = self.mesh_pool.add_user(id, mesh_use) {
             return Ok(handle);
         }
         let mesh = self.cache.mesh(id)?;

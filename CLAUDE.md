@@ -121,7 +121,11 @@ src/
                                  Game world to request, hold and unload
                                  around the camera, its Late Chunks, hold
                                  after a teleport and Settled report,
-                                 reaching IO through a narrow trait
+                                 reaching IO through a narrow trait;
+                                 chunks.rs, a Chunk loaded through the
+                                 AssetLoader into the World's
+                                 LoadedChunks, which prepare writes into
+                                 the Chunk's range of Instance slots
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's

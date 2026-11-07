@@ -30,9 +30,11 @@ pub struct FrameStats {
     /// loads are not counted.
     pub uploaded_bytes: u64,
     /// Instances the frame wrote: those of new Renderables and of those whose
-    /// World transform or Material changed (ADR 0003).
+    /// World transform or Material changed, and those of Chunks' Placements
+    /// newly loaded or rewritten (ADR 0003).
     pub instances_written: u32,
-    /// Renderables the full Instance buffer refused a slot, so not drawn.
+    /// Renderables, and Placements of Chunks, the full Instance buffer
+    /// refused a slot, so not drawn.
     pub renderables_refused: u32,
     /// Lights the light buffer had no room for, so not drawn.
     pub lights_overflowed: u32,
