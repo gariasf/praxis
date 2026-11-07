@@ -559,9 +559,11 @@ async fn first_success<T>(
 /// An instance of `backend` alone, with wgpu's flags and backend options for
 /// this build, validation in debug builds, as wgpu's variables override
 /// them: `WGPU_VALIDATION`, `WGPU_DEBUG`, `WGPU_DX12_COMPILER` and the rest.
-/// On D3D12 and Vulkan, wgpu refuses a buffer, texture, query set or
-/// acceleration structure that would take the process past the memory the
-/// driver reports it may use [ref:wgpu-types-30-memory-budget-thresholds].
+/// On D3D12, and on Vulkan where the driver has `VK_EXT_memory_budget` (wgpu
+/// drops it on RADV [ref:wgpu-hal-30-vulkan-radv-no-memory-budget]), wgpu
+/// refuses a buffer, texture, query set or acceleration structure that would
+/// take the process past the memory the driver reports it may use
+/// [ref:wgpu-types-30-memory-budget-thresholds].
 fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
     let memory_budget_thresholds = match backend {
         wgpu::Backend::Dx12 | wgpu::Backend::Vulkan => wgpu::MemoryBudgetThresholds {
