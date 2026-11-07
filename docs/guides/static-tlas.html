@@ -192,7 +192,7 @@ pub struct StaticTlas {
     /// One past the highest entry filled.
     end: u32,
     /// Static Instances it had no free entry for, by slot, which take the
-    /// entries it frees, lowest slot first.
+    /// entries still free after a later frame's writes, lowest slot first.
     left_out: BTreeMap&lt;u32, wgpu::TlasInstance&gt;,
 }
 
@@ -243,7 +243,7 @@ pub fn update(
                 })
                 .flatten();
             let Some(blas) = blas else {
-                changed |= self.empty(slot);
+                changed |= self.release(slot);
                 continue;
             };
             let transform = anchored_transform(instance, anchor);
@@ -294,7 +294,7 @@ fn entry_of(&amp;mut self, slot: u32) -&gt; Option&lt;u32&gt; {
 
 /// Empties `slot`'s entry, if it has one, and frees it; drops its
 /// Instance if left out. Returns whether an entry changed.
-fn empty(&amp;mut self, slot: u32) -&gt; bool {
+fn release(&amp;mut self, slot: u32) -&gt; bool {
     self.left_out.remove(&amp;slot);
     let Some(entry) = self
         .entry_by_slot
@@ -330,9 +330,9 @@ fn entry_mut(&amp;mut self, entry: u32) -&gt; &amp;mut Option&lt;wgpu::TlasInsta
         .get_mut_single(entry as usize)
         .expect("entries are taken under its capacity")
 }</code></pre>
-  <p class="code-source"><code>StaticTlas::entry_of</code>, <code>StaticTlas::empty</code>, <code>StaticTlas::hold</code>, <code>StaticTlas::take_entry</code> and <code>StaticTlas::entry_mut</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p class="code-source"><code>StaticTlas::entry_of</code>, <code>StaticTlas::release</code>, <code>StaticTlas::hold</code>, <code>StaticTlas::take_entry</code> and <code>StaticTlas::entry_mut</code>, <code>src/render/acceleration_structures.rs</code>.</p>
   <p>Prepare writes Instances in runs of consecutive slots, each run an <code>InstanceWrite</code> flagged <code>moving</code> where its Instances are <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, and splits a run where the flag changes. The update walks every written slot. A static Instance gets its Mesh's BLAS, found through the Handle of the Mesh at the index the Instance names (<code>MeshPool::handle_at</code>); a Moving Instance gets none, so a static Instance that starts to move empties its entry the frame it does. A freed slot is written an Instance whose Mesh is <code>NO_MESH</code>, which no Mesh is loaded at, and a Mesh loaded <code>MeshUse::Drawn</code> has no BLAS, so both empty the entry.</p>
-  <p>A written static Instance asks <code>entry_of</code> for its slot's entry: the one the slot already holds, else the last entry freed, else the next fresh one below the capacity, and when neither is left its Instance waits in <code>left_out</code>, keyed by slot. The entry is filled in place, where the Instance is built, so a frame that writes every static Instance copies none. A write with no BLAS calls <code>empty</code>, which frees the slot's entry into <code>free_entries</code> and drops it from <code>entry_by_slot</code>, a table indexed by slot. After the writes, the waiting Instances take whatever entries the frame freed, lowest slot first, each a change that rebuilds. So prepare's slots never limit what it holds: a <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>'s range, which comes past the highest slot taken, traces whether it lies under the capacity or not. Entries are taken in write order, and wgpu-core builds from the filled entries in entry order, skipping empty ones, so a scene whose first frame writes its static Instances in slot order builds from the list it built from when entries were slots.</p>
+  <p>A written static Instance asks <code>entry_of</code> for its slot's entry: the one the slot already holds, else the last entry freed, else the next fresh one below the capacity, and when neither is left its Instance waits in <code>left_out</code>, keyed by slot. The entry is filled in place, where the Instance is built, so a frame that writes every static Instance copies none. A write with no BLAS calls <code>release</code>, which frees the slot's entry into <code>free_entries</code> and drops it from <code>entry_by_slot</code>, a table indexed by slot. After the writes, the waiting Instances take whatever entries are still free, lowest slot first, each a change that rebuilds. So prepare's slots never limit what it holds: a <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>'s range, which comes past the highest slot taken, traces whether it lies under the capacity or not. Entries are taken in write order, and wgpu-core builds from the filled entries in entry order, skipping empty ones, so a scene whose first frame writes its static Instances in slot order builds from the list it built from when entries were slots.</p>
 <pre class="code"><code>/// An Instance's entry in a TLAS: `blas`, placed by `transform`
 /// (`anchored_transform`) and tagged with its `slot`.
 fn tlas_instance(blas: &amp;wgpu::Blas, transform: [f32; 12], slot: u32) -&gt; wgpu::TlasInstance {
@@ -567,7 +567,7 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
   <div class="part-mark">10</div>
   <h2>Limits</h2>
   <p><b>A CPU wait in each frame that loads Meshes.</b> Before its update, the upload waits on the main thread for the GPU to build and then to compact the frame's new BLASes, since wgpu-core 30.0.1 records no barrier after a compaction copy on any backend and wgpu-hal 30.0.1 records none on Metal. A Mesh whose BLAS lost that race would cast no shadow until the next rebuild, which, where nothing static changes, never comes. Today every Mesh loads before the first frame, so the first frame alone waits; Meshes streamed during play would make every load frame wait, until a wgpu release orders the copy on every backend, a version change that is the owner's call.</p>
-  <p><b>A rebuild walks every entry.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> slots, on the CPU in the frame that does it.</p>
+  <p><b>A rebuild walks every entry.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> entries, on the CPU in the frame that does it.</p>
   <p><b>Left out by write order.</b> Past the capacity, which static Instances cast shadows is settled by when they were written, the left-out ones admitted lowest slot first, not by their distance from the camera.</p>
   <p><b>Memory at full capacity.</b> The estimate, and wgpu-core's allocation, are for every slot, so the smallest scene pays what <code>town</code> does.</p>
   <p><b>One frame, fixed at load.</b> The origin never moves, so an entry far from where the camera stood at load rounds to f32 more coarsely: from 2,048 m out its step is 0.244 mm.</p>

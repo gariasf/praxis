@@ -201,7 +201,7 @@ pub struct StaticTlas {
     /// One past the highest entry filled.
     end: u32,
     /// Static Instances it had no free entry for, by slot, which take the
-    /// entries it frees, lowest slot first.
+    /// entries still free after a later frame's writes, lowest slot first.
     left_out: BTreeMap<u32, wgpu::TlasInstance>,
 }
 
@@ -252,7 +252,7 @@ impl StaticTlas {
                     })
                     .flatten();
                 let Some(blas) = blas else {
-                    changed |= self.empty(slot);
+                    changed |= self.release(slot);
                     continue;
                 };
                 let transform = anchored_transform(instance, anchor);
@@ -303,7 +303,7 @@ impl StaticTlas {
 
     /// Empties `slot`'s entry, if it has one, and frees it; drops its
     /// Instance if left out. Returns whether an entry changed.
-    fn empty(&mut self, slot: u32) -> bool {
+    fn release(&mut self, slot: u32) -> bool {
         self.left_out.remove(&slot);
         let Some(entry) = self
             .entry_by_slot
@@ -634,11 +634,11 @@ fn anchored_transform(instance: &InstanceData, anchor: [i32; 3]) -> [f32; 12] {
 mod tests {
     use std::io::Write;
 
-    use super::*;
-    use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
     use bevy_ecs::prelude::*;
 
+    use super::*;
     use crate::assets::pools::Generations;
+    use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
     use crate::assets::{MaterialHandle, MeshHandle, PoolCapacities};
     use crate::camera::Camera;
     use crate::components::{MaterialRef, MeshRef, Transform};
@@ -1037,7 +1037,13 @@ mod tests {
         assert_eq!(static_slots.len(), 4);
         assert_eq!(slots_held(&tlas), static_slots);
         world.despawn(despawned);
-        let (freed, _) = update(&mut world, &mut tlas);
+        let (written, moving) = update(&mut world, &mut tlas);
+        let freed: Vec<u32> = written
+            .into_iter()
+            .filter(|slot| !moving.contains(slot))
+            .collect();
+        assert_eq!(freed.len(), 1);
+        assert!(static_slots.contains(&freed[0]));
         static_slots.retain(|slot| !freed.contains(slot));
         assert_eq!(slots_held(&tlas), static_slots);
     }
