@@ -38,8 +38,8 @@ pub struct FrameStats {
     pub renderables_refused: u32,
     /// Lights the light buffer had no room for, so not drawn.
     pub lights_overflowed: u32,
-    /// Static Instances the static TLAS leaves out, their slots past its
-    /// capacity, so they cast no shadow.
+    /// Static Instances the static TLAS leaves out, as it is full, so they
+    /// cast no shadow.
     pub static_instances_left_out: u32,
     /// Moving Instances the dynamic TLAS had no room for, so they cast no
     /// shadow.

@@ -180,9 +180,10 @@ pub struct RenderCapacities {
     pub instances: u32,
     /// Lights the light buffer holds, directional and point lights together.
     pub lights: u32,
-    /// Slots the static TLAS covers: a static Instance in a higher slot is
-    /// left out, so it casts no shadow, and is counted and warned about. In
-    /// wgpu a TLAS rebuild's CPU time grows with its capacity, filled or not.
+    /// Static Instances the static TLAS holds, whatever their slots: one
+    /// past them is left out, so it casts no shadow, and is counted and
+    /// warned about. In wgpu a TLAS rebuild's CPU time grows with its
+    /// capacity, filled or not.
     pub static_tlas_instances: u32,
 }
 

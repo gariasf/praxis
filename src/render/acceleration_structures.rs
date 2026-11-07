@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 
 use crate::assets::MeshPool;
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
@@ -184,7 +184,7 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
     Some(sizes.acceleration_structure_size + instance_buffer_bytes)
 }
 
-/// The static TLAS (ADR 0020): each static Instance in its slot's entry,
+/// The static TLAS (ADR 0020): each static Instance in an entry of its own,
 /// tagged with its slot, in a frame whose origin is the corner of the
 /// camera's Anchor in the first Frame data it takes, never re-anchored in M3.
 /// It is built from that Frame data, empty or
@@ -193,12 +193,20 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
 pub struct StaticTlas {
     tlas: Counted<wgpu::Tlas>,
     anchor: Option<[i32; 3]>,
-    /// Slots past its capacity that hold a static Instance.
-    left_out: HashSet<u32>,
+    /// The entry each slot's static Instance holds, by slot, up to the
+    /// highest slot that held one.
+    entry_by_slot: Vec<Option<u32>>,
+    /// Entries emptied since they were filled, taken before fresh ones.
+    free_entries: Vec<u32>,
+    /// One past the highest entry filled.
+    end: u32,
+    /// Static Instances it had no free entry for, by slot, which take the
+    /// entries it frees, lowest slot first.
+    left_out: BTreeMap<u32, wgpu::TlasInstance>,
 }
 
 impl StaticTlas {
-    /// An empty static TLAS of `capacity` slots, counted in `memory`.
+    /// An empty static TLAS of `capacity` entries, counted in `memory`.
     pub fn new(device: &wgpu::Device, memory: &GpuMemory, capacity: u32) -> Self {
         Self {
             tlas: memory.create_tlas(
@@ -212,7 +220,10 @@ impl StaticTlas {
                 },
             ),
             anchor: None,
-            left_out: HashSet::new(),
+            entry_by_slot: Vec::new(),
+            free_entries: Vec::new(),
+            end: 0,
+            left_out: BTreeMap::new(),
         }
     }
 
@@ -240,37 +251,93 @@ impl StaticTlas {
                             .and_then(|handle| mesh_pool.blas(handle))
                     })
                     .flatten();
-                let Some(entry) = self.tlas.get_mut_single(slot as usize) else {
-                    if blas.is_some() {
-                        self.left_out.insert(slot);
-                    } else {
-                        self.left_out.remove(&slot);
-                    }
+                let Some(blas) = blas else {
+                    changed |= self.empty(slot);
                     continue;
                 };
-                *entry = match blas {
-                    Some(blas) => Some(tlas_instance(
-                        blas,
-                        anchored_transform(instance, anchor),
-                        slot,
-                    )),
-                    None if entry.is_none() => continue,
-                    None => None,
-                };
-                changed = true;
+                let transform = anchored_transform(instance, anchor);
+                match self.entry_of(slot) {
+                    Some(entry) => {
+                        *self.entry_mut(entry) = Some(tlas_instance(blas, transform, slot));
+                        changed = true;
+                    }
+                    None => {
+                        self.left_out
+                            .insert(slot, tlas_instance(blas, transform, slot));
+                    }
+                }
             }
+        }
+        while !self.left_out.is_empty()
+            && let Some(entry) = self.take_entry()
+        {
+            let (slot, instance) = self.left_out.pop_first().expect("not empty");
+            self.hold(slot, entry);
+            *self.entry_mut(entry) = Some(instance);
+            changed = true;
         }
         if !was_leaving_out && !self.left_out.is_empty() {
             tracing::warn!(
                 left_out = self.left_out.len(),
                 capacity = self.tlas.get().len(),
-                "Static Instances left out of the static TLAS: their slots are past its capacity, so they cast no shadow"
+                "Static Instances left out of the static TLAS: it is full, so they cast no shadow"
             );
         }
         if changed {
             encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&*self.tlas));
         }
         changed
+    }
+
+    /// The entry of `slot`'s static Instance, taking one if it has none;
+    /// None when it is full.
+    fn entry_of(&mut self, slot: u32) -> Option<u32> {
+        self.left_out.remove(&slot);
+        if let Some(entry) = self.entry_by_slot.get(slot as usize).copied().flatten() {
+            return Some(entry);
+        }
+        let entry = self.take_entry()?;
+        self.hold(slot, entry);
+        Some(entry)
+    }
+
+    /// Empties `slot`'s entry, if it has one, and frees it; drops its
+    /// Instance if left out. Returns whether an entry changed.
+    fn empty(&mut self, slot: u32) -> bool {
+        self.left_out.remove(&slot);
+        let Some(entry) = self
+            .entry_by_slot
+            .get_mut(slot as usize)
+            .and_then(Option::take)
+        else {
+            return false;
+        };
+        self.free_entries.push(entry);
+        *self.entry_mut(entry) = None;
+        true
+    }
+
+    fn hold(&mut self, slot: u32, entry: u32) {
+        let slot = slot as usize;
+        if slot >= self.entry_by_slot.len() {
+            self.entry_by_slot.resize(slot + 1, None);
+        }
+        self.entry_by_slot[slot] = Some(entry);
+    }
+
+    /// A freed entry, else a fresh one, else None when it is full.
+    fn take_entry(&mut self) -> Option<u32> {
+        self.free_entries.pop().or_else(|| {
+            let fresh = (self.end < self.tlas.get().len() as u32).then_some(self.end)?;
+            self.end += 1;
+            Some(fresh)
+        })
+    }
+
+    fn entry_mut(&mut self, entry: u32) -> &mut Option<wgpu::TlasInstance> {
+        self.tlas
+            .get_mut_single(entry as usize)
+            .expect("entries are taken under its capacity")
     }
 
     /// Its binding, which stays valid as it is rebuilt in place.
@@ -284,7 +351,7 @@ impl StaticTlas {
         self.anchor.unwrap_or_default()
     }
 
-    /// Static Instances in slots past its capacity, which it leaves out.
+    /// Static Instances it leaves out, as it is full.
     pub fn instances_left_out(&self) -> u32 {
         self.left_out.len() as u32
     }
@@ -569,12 +636,23 @@ mod tests {
 
     use super::*;
     use crate::assets::pools::tests::{logged, mesh, trace_down, triangle_about_x};
-    use crate::assets::{MeshHandle, PoolCapacities};
+    use bevy_ecs::prelude::*;
+
+    use crate::assets::pools::Generations;
+    use crate::assets::{MaterialHandle, MeshHandle, PoolCapacities};
+    use crate::camera::Camera;
+    use crate::components::{MaterialRef, MeshRef, Transform};
+    use crate::cooked::AssetId;
+    use crate::environment::Environment;
     use crate::gpu::GpuContext;
     use crate::render::instance::padded_columns;
-    use crate::render::prepare::{InstanceWrite, MovingInstance};
+    use crate::render::prepare::{FramePreparer, InstanceWrite, MovingInstance};
     use crate::render::{CameraUniform, LoadStaging, NO_MATERIAL, NO_MESH};
     use crate::stats::gpu_memory::tests::gpu_memory;
+    use crate::streaming::chunks::ChunkPlacement;
+    use crate::streaming::{LoadedChunk, LoadedChunks};
+    use crate::time::FixedTime;
+    use crate::transform::{PreviousWorldTransform, propagate_world_transforms};
 
     /// The camera's Anchor in the first frame: 100 km out, where an
     /// Instance's World position would round in f32 and its offset from the
@@ -694,24 +772,36 @@ mod tests {
                     moving,
                 });
             }
+            self.update_from(tlas, &frame)
+        }
+
+        /// Updates `tlas` with `frame`; returns whether it rebuilt.
+        fn update_from(&self, tlas: &mut StaticTlas, frame: &FrameData) -> bool {
             let device = &self.context.device;
             let mut encoder = device.create_command_encoder(&Default::default());
-            let rebuilt = tlas.update(&frame, &self.mesh_pool, &mut encoder);
+            let rebuilt = tlas.update(frame, &self.mesh_pool, &mut encoder);
             self.context.queue.submit(std::iter::once(encoder.finish()));
             rebuilt
         }
     }
 
-    /// Each entry the static TLAS holds: its slot, the slot it is tagged
-    /// with, and its transform.
-    fn entries(tlas: &StaticTlas) -> Vec<(usize, u32, [f32; 12])> {
-        let entries = tlas.tlas.get().iter().enumerate();
+    /// Each Instance the static TLAS holds, by the slot its entry is tagged
+    /// with: that slot and its transform.
+    fn entries(tlas: &StaticTlas) -> Vec<(u32, [f32; 12])> {
+        let mut entries: Vec<(u32, [f32; 12])> = tlas
+            .tlas
+            .get()
+            .iter()
+            .flatten()
+            .map(|instance| (instance.custom_data, instance.transform))
+            .collect();
+        entries.sort_unstable_by_key(|&(slot, _)| slot);
         entries
-            .filter_map(|(slot, entry)| {
-                let instance = entry.as_ref()?;
-                Some((slot, instance.custom_data, instance.transform))
-            })
-            .collect()
+    }
+
+    /// The slots of the Instances the static TLAS holds, in order.
+    fn slots_held(tlas: &StaticTlas) -> Vec<u32> {
+        entries(tlas).iter().map(|&(slot, _)| slot).collect()
     }
 
     /// The Instance a freed slot is written.
@@ -732,7 +822,7 @@ mod tests {
     }
 
     #[test]
-    fn the_static_tlas_holds_each_static_instance_in_its_slot_from_the_load_anchor() {
+    fn the_static_tlas_holds_each_static_instance_tagged_with_its_slot_from_the_load_anchor() {
         let Some(triangle) = Triangle::new() else {
             return;
         };
@@ -767,13 +857,11 @@ mod tests {
         let expected = vec![
             (
                 0,
-                0,
                 [
                     0.0, -2.0, 0.0, 64.25, 2.0, 0.0, 0.0, -0.5, 0.0, 0.0, 2.0, 10.0,
                 ],
             ),
             (
-                2,
                 2,
                 [1.0, 0.0, 0.0, 5.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             ),
@@ -804,8 +892,7 @@ mod tests {
             &[[-3.2, 0.0, 0.0], points[3]],
         );
         assert_eq!(traced, [Some(3), None]);
-        let slots: Vec<usize> = entries(&tlas).iter().map(|&(slot, ..)| slot).collect();
-        assert_eq!(slots, [0, 3]);
+        assert_eq!(slots_held(&tlas), [0, 3]);
         // Freeing a Moving Instance's slot leaves it as it was.
         assert!(!triangle.update(&mut tlas, away, vec![(1, freed(), false)]));
     }
@@ -879,6 +966,84 @@ mod tests {
         assert_eq!(built(&mut tlas), None);
     }
 
+    /// Its entries are not its Instances' slots: a static Instance in a slot
+    /// past its capacity takes an entry while one is free, and is traced.
+    #[test]
+    fn a_static_instance_in_a_slot_past_its_capacity_is_traced() {
+        let Some(triangle) = Triangle::new() else {
+            return;
+        };
+        let mut tlas = StaticTlas::new(&triangle.context.device, &gpu_memory(&triangle.context), 2);
+        let at = |x| triangle.instance(LOAD_ANCHOR, [x, 0.0, 0.0], glam::Mat3::IDENTITY);
+        let writes = vec![(0, at(0.0), true), (5, at(5.0), false)];
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, writes));
+        let points = [[0.8, 0.0, 0.0], [5.8, 0.0, 0.0]];
+        let traced = trace_down(&triangle.context, &tlas.tlas, &points);
+        assert_eq!(traced, [None, Some(5)]);
+        assert_eq!(tlas.instances_left_out(), 0);
+    }
+
+    /// Prepare's Frame data gives it exactly the static Instances of the
+    /// loaded Chunks and of the static spawned Renderables: neither a Moving
+    /// Instance nor a despawned Renderable's.
+    #[test]
+    fn it_holds_the_loaded_chunks_and_the_static_renderables_static_instances() {
+        let Some(triangle) = Triangle::new() else {
+            return;
+        };
+        let mut material_generations = Generations::default();
+        let (index, generation) = material_generations.take();
+        let material = MaterialHandle { index, generation };
+        let mut world = World::new();
+        world.insert_resource(Camera::new());
+        world.insert_resource(FixedTime::default());
+        world.insert_resource(Environment::default());
+        let at = |x| Transform::from_translation(glam::dvec3(x, 0.0, 0.0));
+        let placement = |x| ChunkPlacement {
+            transform: at(x),
+            mesh: triangle.mesh,
+            material: Some(material),
+        };
+        world.insert_resource(LoadedChunks(vec![LoadedChunk {
+            id: AssetId(1),
+            placements: vec![placement(0.0), placement(4.0)],
+            lights: Vec::new(),
+        }]));
+        let renderable = |x| (at(x), MeshRef(triangle.mesh), MaterialRef(material));
+        world.spawn(renderable(8.0));
+        world.spawn((renderable(12.0), PreviousWorldTransform::default()));
+        let despawned = world.spawn(renderable(16.0)).id();
+        let mut propagation = Schedule::default();
+        propagation.add_systems(propagate_world_transforms);
+        let mut preparer = FramePreparer::new(&mut world, RenderCapacities::checked_in());
+        let mut tlas = StaticTlas::new(&triangle.context.device, &gpu_memory(&triangle.context), 8);
+        let mut update = |world: &mut World, tlas: &mut StaticTlas| {
+            propagation.run(world);
+            let meshes = triangle.mesh_pool.meshes();
+            let frame = preparer.prepare(world, meshes, &material_generations, 1.0);
+            triangle.update_from(tlas, frame);
+            let written = frame.instance_writes.iter().flat_map(|write| {
+                write.first_slot..write.first_slot + write.instances.len() as u32
+            });
+            let moving = frame.moving_instances.iter().map(|moving| moving.slot);
+            (written.collect::<Vec<u32>>(), moving.collect::<Vec<u32>>())
+        };
+        let (written, moving) = update(&mut world, &mut tlas);
+        assert_eq!(written, [0, 1, 2, 3, 4]);
+        let mut static_slots: Vec<u32> = written
+            .into_iter()
+            .filter(|slot| !moving.contains(slot))
+            .collect();
+        assert_eq!(static_slots.len(), 4);
+        assert_eq!(slots_held(&tlas), static_slots);
+        world.despawn(despawned);
+        let (freed, _) = update(&mut world, &mut tlas);
+        static_slots.retain(|slot| !freed.contains(slot));
+        assert_eq!(slots_held(&tlas), static_slots);
+    }
+
+    /// Only a full static TLAS leaves a static Instance out: one left out
+    /// takes the first entry another frees.
     #[test]
     fn static_instances_past_its_capacity_are_left_out_counted_and_warned_about_once() {
         let Some(triangle) = Triangle::new() else {
@@ -894,8 +1059,10 @@ mod tests {
             assert_eq!(tlas.instances_left_out(), 1);
             triangle.update(&mut tlas, LOAD_ANCHOR, vec![(2, instance, false)]);
             assert_eq!(tlas.instances_left_out(), 1);
+            assert!(triangle.update(&mut tlas, LOAD_ANCHOR, vec![(0, freed(), false)]));
+            assert_eq!(tlas.instances_left_out(), 0);
         });
-        assert_eq!(entries(&tlas).len(), 2);
+        assert_eq!(slots_held(&tlas), [1, 2]);
         let warnings = log.matches("left out of the static TLAS").count();
         assert_eq!(warnings, 1, "{log}");
     }
