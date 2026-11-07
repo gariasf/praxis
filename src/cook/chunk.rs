@@ -112,18 +112,16 @@ pub(super) fn cook_key(chunk: &CookedChunk) -> String {
 
 #[cfg(test)]
 mod tests {
-    use bevy_ecs::prelude::*;
-
     use super::*;
     use crate::ReferenceScene;
-    use crate::components::{MaterialRef, MeshRef, PointLight, Transform};
+    use crate::components::{MeshRef, PointLight};
     use crate::cook::export::AssetRecorder;
     use crate::cook::{CookSettings, cook_scene};
     use crate::cooked::CookedCache;
     use crate::render::CrowdForm;
     use crate::state::Simulation;
     use crate::stats::FrameRecorder;
-    use crate::transform::PreviousWorldTransform;
+    use crate::streaming::LoadedChunks;
 
     /// The 256 m Chunk over `translation`, x then z, and `translation` from
     /// its origin.
@@ -164,10 +162,10 @@ mod tests {
     /// town's Chunks, read back by Asset ID, hold exactly what its generator
     /// places that does not move, and its lights: each in the 256 m Chunk
     /// over its pivot, translated from that Chunk's origin, its Mesh's cooked
-    /// box inside the Chunk's bounds. Its spawn places those with a Material
-    /// and those without each in Chunk order. A second cook rewrites nothing.
+    /// box inside the Chunk's bounds. Its spawn loads them in Chunk order,
+    /// with no entity but its birds'. A second cook rewrites nothing.
     #[test]
-    fn towns_chunks_hold_what_its_generator_places_and_spawn_in_chunk_order() {
+    fn towns_chunks_hold_what_its_generator_places_and_load_in_chunk_order() {
         let scene = ReferenceScene::Town;
         let directory =
             std::env::temp_dir().join(format!("praxis-town-chunks-{}", std::process::id()));
@@ -192,25 +190,35 @@ mod tests {
         )
         .unwrap();
         let world = &mut simulation.world;
-        let spawned: Vec<_> = world
-            .query_filtered::<(&Transform, &MeshRef, Option<&MaterialRef>), Without<PreviousWorldTransform>>()
-            .iter(world)
-            .map(|(transform, mesh, material)| {
+        let renderables = world.query::<&MeshRef>().iter(world).count();
+        assert_eq!(renderables, 10_000, "town spawns static content");
+        assert_eq!(world.query::<&PointLight>().iter(world).count(), 0);
+        let chunks = &world.resource::<LoadedChunks>().0;
+        let loaded: Vec<_> = chunks
+            .iter()
+            .flat_map(|chunk| &chunk.placements)
+            .map(|placement| {
+                let transform = placement.transform;
                 let (coordinates, translation) = in_chunk(transform.translation);
-                placement_bits(coordinates, &CookedPlacement {
-                    mesh: recorder.meshes[mesh.0.index as usize],
-                    material: material.map(|material| recorder.materials[material.0.index as usize]),
-                    translation,
-                    rotation: transform.rotation,
-                    scale: transform.scale,
-                })
+                placement_bits(
+                    coordinates,
+                    &CookedPlacement {
+                        mesh: recorder.meshes[placement.mesh.index as usize],
+                        material: placement
+                            .material
+                            .map(|material| recorder.materials[material.index as usize]),
+                        translation,
+                        rotation: transform.rotation,
+                        scale: transform.scale,
+                    },
+                )
             })
             .collect();
-        let spawned_lights: Vec<_> = world
-            .query::<(&Transform, &PointLight)>()
-            .iter(world)
-            .map(|(transform, light)| {
-                let (coordinates, translation) = in_chunk(transform.translation);
+        let loaded_lights: Vec<_> = chunks
+            .iter()
+            .flat_map(|chunk| &chunk.lights)
+            .map(|(position, light)| {
+                let (coordinates, translation) = in_chunk(*position);
                 light_bits(
                     coordinates,
                     &CookedLight {
@@ -268,17 +276,11 @@ mod tests {
         let town_chunks: Vec<_> = (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z])).collect();
         assert_eq!(coordinates_cooked, town_chunks);
 
-        let without_material = |bits: &PlacementBits| bits.2 == 0;
-        for kind_has_material in [false, true] {
-            let of_kind = |bits: &&PlacementBits| without_material(bits) != kind_has_material;
-            let spawned_of_kind: Vec<_> = spawned.iter().filter(of_kind).collect();
-            let cooked_of_kind: Vec<_> = cooked.iter().filter(of_kind).collect();
-            assert!(
-                spawned_of_kind == cooked_of_kind,
-                "town does not spawn its Chunks' Placements in Chunk order"
-            );
-        }
-        assert_eq!(spawned_lights, cooked_lights);
+        assert!(
+            loaded == cooked,
+            "town does not load its Chunks' Placements in Chunk order"
+        );
+        assert_eq!(loaded_lights, cooked_lights);
 
         let (placements, lights) = scene.static_content();
         let mut generated: Vec<_> = placements

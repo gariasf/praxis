@@ -21,6 +21,7 @@ use crate::scenes::{
     sweep_material_name,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
+use crate::streaming::LoadedChunks;
 use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
@@ -100,6 +101,16 @@ impl Simulation {
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
         for mut transform in root_query.iter_mut(&mut world) {
             transform.translation += shift;
+        }
+        if let Some(mut chunks) = world.get_resource_mut::<LoadedChunks>() {
+            for chunk in &mut chunks.0 {
+                for placement in &mut chunk.placements {
+                    placement.transform.translation += shift;
+                }
+                for (position, _) in &mut chunk.lights {
+                    *position += shift;
+                }
+            }
         }
         // Ticks propagate World transforms as they end; frames drawn before
         // the first Tick draw these.

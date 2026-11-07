@@ -117,17 +117,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/prepare.rs</code></div>
   <h1>Prepare</h1>
   <p class="definition">Once a frame, after the Ticks, prepare reads the <span class="concept" data-term="ECS World" data-tip="The container of entities, components and resources. A code concept, never the playable space.">ECS World</span> into <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>: an owned value holding the camera, the Environment, the lights, the <span class="concept" data-term="Instance" data-tip="One Renderable&#x27;s data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh&#x27;s Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.">Instances</span> whose slots this frame writes, the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span> for the dynamic TLAS and the bends for the bend pass, which the Renderer uploads and draws without reading the World.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at dac8cf9a (2026-11-06). A change to prepare or to what Frame data holds rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="index.html">the frame overview</a> for where prepare sits among the passes, <a href="instance-buffer.html">The Instance buffer</a> for what a slot holds.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 13f63694 (2026-11-07), with the Chunks' slot ranges as their change leaves them. A change to prepare or to what Frame data holds rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="index.html">the frame overview</a> for where prepare sits among the passes, <a href="instance-buffer.html">The Instance buffer</a> for what a slot holds.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
       <dt>Called</dt><dd>By <code>State::update</code>, once a frame, after the Ticks and the frame's own schedule and before <code>Renderer::upload</code>, as <code>FramePreparer::prepare</code>. It ends the World's change window, so it is the frame's last read of the World.</dd>
-      <dt>Reads</dt><dd>The <code>Camera</code>, <code>Environment</code> and <code>FixedTime</code> resources; each directional and point light's <span class="concept" data-term="World transform" data-tip="Where an entity sits in a Game world: its Transform composed with every ancestor&#x27;s, in f64. Derived from the hierarchy, never authored.">World transform</span>; each light's previous World transform; each <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s World transform, Mesh Handle, Material Handle and previous World transform; each <code>Bend</code>; from the Mesh pool's <code>LoadedMeshes</code>, whether a Mesh Handle finds a Mesh, whether that Mesh needs a Material Handle and where its vertices lie in the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>; from the Material pool's <code>Generations</code>, whether a Material Handle finds a Material; how many entries either pool has freed; the target's aspect ratio.</dd>
-      <dt>Writes</dt><dd><code>FrameData</code>, which it keeps and refills: the camera and light uniforms, the background colour, the lights, the Instances this frame writes in runs of consecutive slots, <code>instance_slot_count</code>, the Moving Instances and the bends. Across frames it keeps the slot table, its queries and the Frame data's memory.</dd>
+      <dt>Reads</dt><dd>The <code>Camera</code>, <code>Environment</code> and <code>FixedTime</code> resources; each directional and point light's <span class="concept" data-term="World transform" data-tip="Where an entity sits in a Game world: its Transform composed with every ancestor&#x27;s, in f64. Derived from the hierarchy, never authored.">World transform</span>; each light's previous World transform; each <span class="concept" data-term="Renderable" data-tip="An entity that has a Transform and a Mesh Handle, and optionally a Material Handle that overrides the Materials of its Mesh&#x27;s Primitives. The renderer pulls Renderables; entities never render themselves.">Renderable</span>'s World transform, Mesh Handle, Material Handle and previous World transform; each loaded Chunk in the <code>LoadedChunks</code> resource, its Placements' World transforms and Handles and its point lights; each <code>Bend</code>; from the Mesh pool's <code>LoadedMeshes</code>, whether a Mesh Handle finds a Mesh, whether that Mesh needs a Material Handle and where its vertices lie in the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool&#x27;s hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>; from the Material pool's <code>Generations</code>, whether a Material Handle finds a Material; how many entries either pool has freed; the target's aspect ratio.</dd>
+      <dt>Writes</dt><dd><code>FrameData</code>, which it keeps and refills: the camera and light uniforms, the background colour, the lights, the Instances this frame writes in runs of consecutive slots, <code>instance_slot_count</code>, the Moving Instances and the bends. Across frames it keeps the slot table, each Renderable's slot and each Chunk's range, its queries and the Frame data's memory.</dd>
       <dt>Sized</dt><dd>By the Renderer's <code>RenderCapacities</code>, which <code>FramePreparer::new</code> takes from <code>Renderer::capacities</code>: the Instance slots it hands out and the lights it lists, both derived from the GPU memory Budgets at device creation.</dd>
       <dt>Buffers</dt><dd>None of its own. <code>Renderer::upload</code> copies Frame data into the camera and light uniforms, the light buffer, the bend pass's bends, the Instance buffer and the culling pass's <code>instance_slot_count</code>, and reads it for the static TLAS's entries and the dynamic TLAS's fill.</dd>
       <dt>Counted</dt><dd><code>prepare_frame</code> in CPU time, which also holds the check for lost writes before it; <code>renderables_refused</code>, <code>lights_overflowed</code>, <code>moving_instances_left_out</code> and <code>bends_left_out</code> in every frame. Upload counts <code>instances_written</code> and <code>uploaded_bytes</code>.</dd>
-      <dt>Where in the code</dt><dd><code>src/render/prepare.rs</code>: <code>FrameData</code>, <code>FramePreparer</code>, the slot table <code>InstanceSlots</code>, <code>prepare_lights</code> and <code>prepare_bends</code>. Its caller is in <code>src/state.rs</code>, its consumer in <code>src/render/renderer.rs</code>.</dd>
+      <dt>Where in the code</dt><dd><code>src/render/prepare.rs</code>: <code>FrameData</code>, <code>FramePreparer</code>, the slot table <code>InstanceSlots</code>, <code>write_chunk</code>, <code>prepare_lights</code> and <code>prepare_bends</code>; <code>LoadedChunks</code> is in <code>src/streaming/chunks.rs</code>. Its caller is in <code>src/state.rs</code>, its consumer in <code>src/render/renderer.rs</code>.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -281,7 +281,7 @@ frame.background = wgpu::Color {
 <section class="part prose" id="lights">
   <div class="part-mark">3 &middot; <code>prepare_lights</code></div>
   <h2>The lights</h2>
-  <p class="key-idea">In every frame prepare lists every directional light, then every point light, each blended between its two newest Ticks, up to the light buffer's capacity; past it the point lights farthest from the camera are counted and not drawn, and the rest keep their order.</p>
+  <p class="key-idea">In every frame prepare lists every directional light, then every point light, the entities' and then the loaded Chunks', each blended between its two newest Ticks, up to the light buffer's capacity; past it the point lights farthest from the camera are counted and not drawn, and the rest keep their order.</p>
 <pre class="code"><code>let room = capacity - directional_light_count;
 if point_light_count &gt; room {
     point_light_distances.select_nth_unstable_by(room, |left, right| {
@@ -318,15 +318,16 @@ if *lights_overflowed &gt; 0 &amp;&amp; !*warned_of_overflowed_lights {
 <section class="part prose" id="slots">
   <div class="part-mark">4 &middot; <code>InstanceSlots</code></div>
   <h2>Slots, and the free list</h2>
-  <p class="key-idea">Each Renderable keeps one slot of the Instance buffer for as long as it is a Renderable (ADR 0003). A slot it leaves is written an Instance with no Mesh, which the GPU skips, and is handed out again from the next frame, the most recently freed first.</p>
+  <p class="key-idea">Each Renderable keeps one slot of the Instance buffer for as long as it is a Renderable, and each loaded Chunk a range of slots, one per Placement, with no entity behind them (ADR 0003). A slot a Renderable leaves is written an Instance with no Mesh, which the GPU skips, and is handed out again from the next frame, the most recently freed first.</p>
 <pre class="code"><code>/// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable (ADR 0003); a slot freed in an earlier frame is taken
-/// again before a fresh one, and once all `capacity` are taken a Renderable
-/// is refused one.
+/// Renderable, and each loaded Chunk's range of slots (ADR 0003); a slot
+/// freed in an earlier frame is taken again before a fresh one, and once all
+/// `capacity` are taken a Renderable is refused one.
 #[derive(Default)]
 struct InstanceSlots {
     capacity: u32,
     by_entity: bevy_ecs::entity::EntityHashMap&lt;u32&gt;,
+    by_chunk: HashMap&lt;AssetId, Range&lt;u32&gt;&gt;,
     free: Vec&lt;u32&gt;,
     /// Slots freed this frame, which take an Instance with no Mesh before
     /// they join `free`.
@@ -336,6 +337,8 @@ struct InstanceSlots {
     /// Renderables refused a slot and not yet given one, each warned about
     /// once.
     refused: bevy_ecs::entity::EntityHashSet,
+    /// Chunks refused a range and not yet given one, each warned about once.
+    refused_chunks: HashSet&lt;AssetId&gt;,
 }
 
 impl InstanceSlots {
@@ -362,6 +365,33 @@ impl InstanceSlots {
         Some(slot)
     }
 
+    /// A range of `count` fresh slots for the Chunk `chunk`, past the highest
+    /// slot taken, kept for as long as the preparer lives; None when the
+    /// Instance buffer has no room for it, warned the first time `chunk` is
+    /// refused.
+    fn take_range(&amp;mut self, chunk: AssetId, count: u32) -&gt; Option&lt;Range&lt;u32&gt;&gt; {
+        let end = self
+            .end
+            .checked_add(count)
+            .filter(|&amp;end| end &lt;= self.capacity);
+        let Some(end) = end else {
+            if self.refused_chunks.insert(chunk) {
+                tracing::warn!(
+                    %chunk,
+                    placements = count,
+                    capacity = self.capacity,
+                    "Chunk refused: the Instance buffer has no room for its Placements"
+                );
+            }
+            return None;
+        };
+        let range = self.end..end;
+        self.end = end;
+        self.refused_chunks.remove(&amp;chunk);
+        self.by_chunk.insert(chunk, range.clone());
+        Some(range)
+    }
+
     fn free(&amp;mut self, entity: Entity) {
         self.refused.remove(&amp;entity);
         if let Some(slot) = self.by_entity.remove(&amp;entity) {
@@ -384,6 +414,25 @@ for entity in world
         instance_slots.free(entity);
     }
 }</code></pre>
+  <h3>Chunk ranges</h3>
+  <p>A <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#x27;s, if any.">Placement</span> is a Chunk's static content, and it never becomes an entity: the Chunk's load resolves each Placement's Mesh and Material to Handles and composes its World transform, and the World holds the loaded Chunks as one resource, <code>LoadedChunks</code>. In the first frame prepare sees a Chunk, before any new Renderable takes a slot, <code>take_range</code> gives it fresh slots past the highest taken, one per Placement, all or none, and <code>write_chunk</code> writes its Placements' Instances there in the order the Chunk holds them, so the Chunk goes to the GPU as one run. A Chunk keeps its range: no Chunk unloads yet, so ranges are never handed back, and freed Renderable slots, scattered, are never part of one.</p>
+<pre class="code"><code>for chunk in chunks {
+    let slots = match instance_slots.by_chunk.get(&amp;chunk.id) {
+        Some(_) if !*rewrite_every_instance =&gt; continue,
+        Some(slots) =&gt; slots.clone(),
+        None =&gt; {
+            let count = chunk.placements.len() as u32;
+            let Some(slots) = instance_slots.take_range(chunk.id, count) else {
+                *renderables_refused += count;
+                continue;
+            };
+            slots
+        }
+    };
+    write_chunk(frame, chunk, slots, meshes, material_generations);
+}</code></pre>
+  <p class="code-source"><code>FramePreparer::prepare</code>. A Chunk with a range is written again only when every Instance is.</p>
+  <p>A Placement is checked as a Renderable is, but once: one whose Mesh Handle finds no Mesh, whose Material Handle finds no Material, or that has no Material Handle where a Primitive of its Mesh names no Material writes an Instance with no Mesh, and the Chunk's count of them is warned about. It is not retried, since its Handles came from loads that succeeded and the Chunk counts as a user of each entry it names. A Placement's Instance is built as a static Renderable's is, from its <code>Transform</code>'s affine, with no blend.</p>
   <h3>The free list</h3>
   <p><code>get_or_take</code> pops <code>free</code>, so a new Renderable takes the most recently freed slot, and takes a fresh one, one past the highest ever taken, only when the list is empty. A slot freed in this frame goes to <code>freed</code> instead, so no Renderable can take it in the frame it frees. At the end of the visits it is written an Instance with no Mesh, so the GPU stops drawing whatever it held, and only then joins <code>free</code>:</p>
 <pre class="code"><code>// A slot freed this frame, or every free slot when every Instance is
@@ -463,6 +512,7 @@ frame</code></pre>
     <li><b>Retried in every frame</b>: a refused Renderable joins <code>unwritten</code>, which the next prepare visits whether it changed or not. It takes the first slot that frees, from the frame after the slot frees.</li>
   </ol>
   <p>When a frame's staging slot fails to map, the GPU never receives that frame's writes. Upload then reports the lost writes, if the frame had any Instances, and the State calls <code>rewrite_all_instances</code> before the next prepare, which visits every Renderable and writes each into the slot it already keeps, with every free slot written an Instance with no Mesh. The slot table stays as it is, so no slot moves, a refused Renderable stays refused and is not warned about again, and every Renderable that held a slot still holds it.</p>
+  <p>A Chunk is refused whole, never split: when the slots past the highest taken cannot hold all its Placements, it takes none, is warned about once with <code>Chunk refused: the Instance buffer has no room for its Placements</code>, its Asset ID, its Placements and the capacity, adds its Placements to <code>renderables_refused</code> in every frame, and is retried in every frame. A later Chunk that fits still takes its range. A rewrite of every Instance writes each Chunk's Placements into the range it already took.</p>
 </section>
 
 <section class="part prose" id="runs">
@@ -601,13 +651,15 @@ bends.truncate(capacity);</code></pre>
 <section class="part prose" id="tests">
   <div class="part-mark">10 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The seam is <code>FramePreparer::prepare</code>: a World goes in, and slots, Instance writes, Moving Instances, bends, lights and counts come out. The tests in <code>prepare.rs</code> drive a real World frame by frame as the State does, at the capacities of the checked-in Budgets but in the refusal test, whose small Budgets give 256 slots, through the <code>LoadedMeshes</code> and Material <code>Generations</code> they fill themselves.</p>
+  <p class="key-idea">The seam is <code>FramePreparer::prepare</code>: a World goes in, and slots, Instance writes, Moving Instances, bends, lights and counts come out. The tests in <code>prepare.rs</code> drive a real World frame by frame as the State does, at the capacities of the checked-in Budgets but in the refusal test, and the Chunk refusal test, whose small Budgets give 256 slots, through the <code>LoadedMeshes</code> and Material <code>Generations</code> they fill themselves.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
       <tr><td><code>renderables_keep_their_slots_and_freed_slots_are_taken_again</code></td><td><code>prepare.rs</code></td><td>three spawns write slots 0 to 2 in one copy; a despawned slot is written with <code>NO_MESH</code> and taken again by the next spawn; a slot freed in a frame goes to no Renderable until the next</td></tr>
       <tr><td><code>a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees</code></td><td><code>prepare.rs</code></td><td>Budgets for 256 slots, 256 Renderables and one more: the last is refused over three frames, warned about once, counted each frame; writing every Instance again keeps every slot; it takes slot 7 the frame after slot 7 frees</td></tr>
+      <tr><td><code>a_chunk_past_capacity_is_refused_whole_and_warned_about_once</code></td><td><code>prepare.rs</code></td><td>Budgets for 256 slots, Chunks of 200, 100 and 55 Placements and one Renderable: the first and third Chunks take slots 0 to 254 and the Renderable 255; the second is refused, counted as 100 each frame and warned about once; writing every Instance again rewrites each Chunk into its range</td></tr>
+      <tr><td><code>two_chunks_share_one_pool_entry_and_each_owns_a_slot_range</code></td><td><code>streaming/chunks.rs</code></td><td>on a headless adapter, two Chunks name one Mesh and one Material: one pool entry each, two users each; the first Chunk takes slots 0 and 1 and its lamp joins the lights, a Renderable spawned next takes slot 2, the second Chunk loaded after it slot 3 at 259 m, and a frame with no change writes nothing</td></tr>
       <tr><td><code>a_changed_transform_or_material_writes_exactly_its_slot</code></td><td><code>prepare.rs</code></td><td>a moved parent writes its child's slot too; a changed Material writes one slot; a blended Renderable is written every frame, in a write of its own beside a static neighbour</td></tr>
       <tr><td><code>an_instance_is_moving_while_its_entity_carries_its_previous_world_transform</code></td><td><code>prepare.rs</code></td><td>gaining the component lists the Instance; losing it writes the slot once more, unflagged, and lists it no longer</td></tr>
       <tr><td><code>the_moving_instance_in_the_highest_slot_past_the_dynamic_tlas_capacity_is_left_out</code></td><td><code>prepare.rs</code></td><td>10,001 Moving Instances: the highest slot is left out, counted, warned about once, and still left out after a newcomer takes slot 3 and sits last in the World's order</td></tr>
@@ -691,7 +743,7 @@ bends.truncate(capacity);</code></pre>
     <dt><a href="https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/storage/table/mod.rs">bevy_ecs 0.18.1, storage/table/mod.rs</a></dt><dd>rows appended at a table's end and a removed row filled by the table's last entity: why the World's order moves, and why the Moving Instances' cap keeps slots and the bends sort by Arena offset</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">Prepare began as the frame's one pull from the World, with the slot table and change detection that made camera motion free. The Instance buffer then stopped growing and gained refusal; freed slots took an Instance with no Mesh and waited a frame, and the draws left Frame data once the GPU built its own. The lights moved into a light buffer with anchored point lights, the Environment replaced constants in the shaders, the blend between Ticks arrived with the fixed schedule, then the Moving Instance list and its cap with the dynamic TLAS, and the bends with the crowd; change detection moved from per-item tests into query filters. Once Handles carried generations and the pools could free entries, prepare came to read the Meshes and the Materials' generations as plain data rather than the pools. <a href="instance-buffer.html">The Instance buffer</a> describes the slots prepare writes; <a href="culling-pass.html">The culling pass</a> and <a href="dynamic-tlas.html">The dynamic TLAS</a> describe what reads the slots and the list. This page describes the mechanism as it is.</p>
+  <p class="note">Prepare began as the frame's one pull from the World, with the slot table and change detection that made camera motion free. The Instance buffer then stopped growing and gained refusal; freed slots took an Instance with no Mesh and waited a frame, and the draws left Frame data once the GPU built its own. The lights moved into a light buffer with anchored point lights, the Environment replaced constants in the shaders, the blend between Ticks arrived with the fixed schedule, then the Moving Instance list and its cap with the dynamic TLAS, and the bends with the crowd; change detection moved from per-item tests into query filters. Once Handles carried generations and the pools could free entries, prepare came to read the Meshes and the Materials' generations as plain data rather than the pools. Then the Chunks' static content stopped being entities: each loaded Chunk took a range of slots and its point lights joined the frame's. <a href="instance-buffer.html">The Instance buffer</a> describes the slots prepare writes; <a href="culling-pass.html">The culling pass</a> and <a href="dynamic-tlas.html">The dynamic TLAS</a> describe what reads the slots and the list. This page describes the mechanism as it is.</p>
   <footer class="sources">Written from <code>src/render/prepare.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/instance.rs</code>, <code>src/render/bend_pass.rs</code>, <code>src/components.rs</code>, <code>src/transform/mod.rs</code>, <code>src/environment/mod.rs</code>, <code>src/scenes/</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0004, 0014, 0016 and 0022, the committed Baselines and <code>bench/budgets.json</code>, and the sources above, all at <code>main</code> dac8cf9a.</footer>
 </section>
 

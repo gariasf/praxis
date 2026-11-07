@@ -88,12 +88,12 @@ _Avoid_: Build output, derived data
 
 **Placement**:
 One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh's, if any.
-_Avoid_: Spawn, instance (an Instance is a Renderable's data on the GPU)
+_Avoid_: Spawn, instance (an Instance is a Placement's data on the GPU)
 
 ### Frame
 
 **Instance**:
-One Renderable's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one.
+One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.
 _Avoid_: Object
 
 **Moving Instance**:
@@ -205,7 +205,7 @@ The variants a Renderer is created with and keeps: whether Instances are culled,
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables and Placements refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Timed pass**:

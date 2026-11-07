@@ -2,9 +2,13 @@
 //! unload around the camera, decided each frame from the camera's World
 //! position and the loads its IO finished. It reads no GPU state.
 
+pub(crate) mod chunks;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use glam::DVec3;
+
+pub(crate) use chunks::{LoadedChunk, LoadedChunks, load_chunk};
 
 use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
 
