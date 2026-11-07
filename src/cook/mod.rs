@@ -285,7 +285,10 @@ fn cook_sources(
     let placement_references = sources.chunks.iter().flat_map(|(_, referrer, _, chunk)| {
         let placements = chunk.placements.iter();
         let named = placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
-        named.flatten().map(|id| (*referrer, id))
+        let mut named: Vec<_> = named.flatten().collect();
+        named.sort_unstable();
+        named.dedup();
+        named.into_iter().map(|id| (*referrer, id))
     });
     let references: Vec<_> = texture_references
         .chain(material_references)
