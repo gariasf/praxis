@@ -559,11 +559,24 @@ async fn first_success<T>(
 /// An instance of `backend` alone, with wgpu's flags and backend options for
 /// this build, validation in debug builds, as wgpu's variables override
 /// them: `WGPU_VALIDATION`, `WGPU_DEBUG`, `WGPU_DX12_COMPILER` and the rest.
+/// On D3D12, and on Vulkan where the driver has `VK_EXT_memory_budget` (wgpu
+/// drops it on RADV [ref:wgpu-hal-30-vulkan-radv-no-memory-budget]), wgpu
+/// refuses a buffer, texture, query set or acceleration structure that would
+/// take the process past the memory the driver reports it may use
+/// [ref:wgpu-types-30-memory-budget-thresholds].
 fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
+    let memory_budget_thresholds = match backend {
+        wgpu::Backend::Dx12 | wgpu::Backend::Vulkan => wgpu::MemoryBudgetThresholds {
+            for_resource_creation: Some(100),
+            // Unset: past it wgpu loses the device after a poll or submit [ref:wgpu-core-30-lose-if-oom].
+            for_device_loss: None,
+        },
+        _ => wgpu::MemoryBudgetThresholds::default(),
+    };
     wgpu::InstanceDescriptor {
         backends: backend.into(),
         flags: wgpu::InstanceFlags::from_env_or_default(),
-        memory_budget_thresholds: Default::default(),
+        memory_budget_thresholds,
         backend_options: wgpu::BackendOptions::from_env_or_default(),
         display: None,
     }
@@ -857,6 +870,18 @@ mod tests {
                 instance_descriptor(backend).backends,
                 wgpu::Backends::from(backend)
             );
+        }
+    }
+
+    #[test]
+    fn dx12_and_vulkan_refuse_creation_past_the_reported_memory_and_never_lose_the_device() {
+        use wgpu::Backend::{Dx12, Metal, Vulkan};
+        let thresholds = |backend| instance_descriptor(backend).memory_budget_thresholds;
+        assert_eq!(thresholds(Dx12).for_resource_creation, Some(100));
+        assert_eq!(thresholds(Vulkan).for_resource_creation, Some(100));
+        assert_eq!(thresholds(Metal).for_resource_creation, None);
+        for backend in BACKEND_ORDER {
+            assert_eq!(thresholds(backend).for_device_loss, None, "{backend:?}");
         }
     }
 
