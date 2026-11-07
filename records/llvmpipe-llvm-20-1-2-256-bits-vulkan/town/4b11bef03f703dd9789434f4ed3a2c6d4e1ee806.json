@@ -204,6 +204,7 @@
     "started_unix_seconds": 1793995937
   },
   "renderables_refused": 0,
+  "rerecorded_baseline": true,
   "scene": "town",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {

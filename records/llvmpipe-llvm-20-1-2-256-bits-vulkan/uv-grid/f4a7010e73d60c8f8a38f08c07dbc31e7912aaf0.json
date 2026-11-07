@@ -204,6 +204,7 @@
     "started_unix_seconds": 1793974390
   },
   "renderables_refused": 0,
+  "rerecorded_baseline": true,
   "scene": "uv-grid",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
