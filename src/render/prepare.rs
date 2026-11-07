@@ -32,8 +32,8 @@ pub struct FrameData {
     /// The colour the lit pass clears to: the scene's background luminance,
     /// pre-exposed as the lit pass exposes what it draws.
     pub background: wgpu::Color,
-    /// Slots the Instance buffer holds: one past the highest any Renderable
-    /// has taken. The GPU draws each, but a freed one.
+    /// Slots the Instance buffer holds: one past the highest a Renderable or
+    /// a Chunk's range has taken. The GPU draws each, but a freed one.
     pub instance_slot_count: u32,
     /// The Instances this frame writes, in `instance_writes` order; every
     /// other slot keeps what an earlier frame wrote (ADR 0003).
@@ -345,9 +345,10 @@ impl FramePreparer {
     /// Placements' Instances are written there in its order; its point lights
     /// follow the entities'. A Placement that a Renderable's checks would
     /// skip writes an Instance with no Mesh, warned about, and is not
-    /// retried. A Chunk the Instance buffer has no room for is refused, warned about
-    /// once, its Placements counted among the refused Renderables, and
-    /// retried every frame.
+    /// retried. A Chunk the Instance buffer has no room for is refused, warned
+    /// about once and its Placements counted among the refused Renderables
+    /// every frame; as ranges come only past the highest slot taken, it stays
+    /// refused.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
