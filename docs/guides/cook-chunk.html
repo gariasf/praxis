@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/cook/chunk.rs</code></div>
   <h1>Chunk cooking</h1>
   <p class="definition">The cook of a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s static content into <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>s: every Renderable that does not move becomes a <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#39;s, if any.">Placement</span>, and every point light a light, each in the 256 m Chunk that holds its pivot and translated in f64 from that Chunk's origin; each Chunk's bounds grow to hold its Placements' Meshes, and each Chunk is stored as one <span class="concept" data-term="Blob" data-tip="One cooked Asset&#39;s bytes, named by their content hash.">Blob</span>, a field at a time, under an <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file&#39;s GUID, or a procedural Reference scene&#39;s name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span> made from its scene's name and its coordinates.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 075919da (2026-11-05), with the Chunk cook as its change leaves it. A change to the Chunk cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#town">The Reference scenes</a> for what <code>town</code> places, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchors and a vertex&#39;s 128 m from its pivot, <a href="cook-texture.html">Texture cooking</a> for the Cook key and the Cooked cache.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 3654003f (2026-11-06), with <code>town</code> spawned from its Chunks as its change leaves it; the costs were measured at 075919da. A change to the Chunk cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#town">The Reference scenes</a> for what <code>town</code> places, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchors and a vertex&#39;s 128 m from its pivot, <a href="cook-texture.html">Texture cooking</a> for the Cook key and the Cooked cache.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -145,7 +145,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <section class="part prose" id="content">
   <div class="part-mark">1 &middot; <code>static_content</code></div>
   <h2>Static content</h2>
-  <p class="key-idea">A scene's Chunks cook from the same generator its spawn places from: <code>town</code>'s <code>placements</code>, with each Mesh and Material named by Asset ID instead of a loaded Handle. Its flocks, the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, stay out: scene systems spawn them at runtime.</p>
+  <p class="key-idea">A scene's Chunks cook from its generator, and its spawn places what does not move from them: <code>town</code>'s <code>placements</code>, with each Mesh and Material named by Asset ID instead of a loaded Handle. Its flocks, the <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, stay out: scene systems spawn them at runtime.</p>
   <p><code>town</code>'s <code>placements</code> returns every Renderable it places, block by block, then its lamps, poles and wires, and the position of each lamp's light. <code>static_content</code> maps each to a <code>CookedPlacement</code> in World coordinates: the Mesh's Asset ID from <code>mesh_id</code>, the overriding Material's from <code>material_id</code> where the Renderable has one, as the boxes do, and its <code>Transform</code>'s translation, rotation and scale. Each light takes <code>LAMP_LIGHT</code>'s colour, intensity in candela and range. Every other scene returns nothing yet.</p>
 <pre class="code"><code>let placements = placed
     .into_iter()
@@ -167,9 +167,12 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <h2>The Chunk over a pivot</h2>
   <p class="key-idea">A Placement or light belongs to the Chunk whose column holds its translation: x and z divided by 256 m and floored. Its translation is stored from that Chunk's origin, in f64, so a Mesh may reach past the Chunk's edge and still have one owner.</p>
   <p>A Chunk at integer coordinates (x, z) has its origin at (256x, 0, 256z) and holds the column from there to 256 m further along x and z, at every height. <code>chunk_holding</code> floors, so a pivot at x = &minus;0.5 m is in Chunk &minus;1 and one at x = 256 m in Chunk 1. <code>chunks</code> keeps the Chunks in a <code>BTreeMap</code> by coordinates, so they and their contents come out in the same order every cook.</p>
-<pre class="code"><code>let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor());
-let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES;</code></pre>
+<pre class="code"><code>let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);</code></pre>
   <p class="code-source"><code>chunk_holding</code>, <code>src/cook/chunk.rs</code>.</p>
+<pre class="code"><code>pub(crate) fn chunk_origin([x, z]: [i32; 2]) -&gt; glam::DVec3 {
+    glam::DVec3::new(f64::from(x), 0.0, f64::from(z)) * CHUNK_EDGE_METRES
+}</code></pre>
+  <p class="code-source"><code>chunk_origin</code>, <code>src/assets/cooked.rs</code>, which <code>town</code>'s spawn adds each translation back to.</p>
   <p>The subtraction is not always exact. When the translation from the origin has a larger exponent than the World translation, a pivot at x = &minus;10.1 m becoming 245.9 m in Chunk &minus;1 say, it is rounded to f64's step at that size, at most 2<sup>&minus;45</sup> m, about 3 &times; 10<sup>&minus;14</sup> m, for any translation under 256 m. Adding the origin back can then differ from the World translation in its last bits, by at most 2<sup>&minus;46</sup> m, about 1.4 &times; 10<sup>&minus;14</sup> m. <code>town</code>'s 16 Chunks hold 244,319 Placements and 1,024 lights: its 20 &times; 20 blocks span 4 &times; 4 Chunks, and its ground's 8 &times; 8 tiles of 128 m lie four to a Chunk.</p>
 </section>
 
@@ -181,8 +184,9 @@ let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES
 <pre class="code"><code>for corner in 0..8 {
     let is_highest = BVec3::new(corner &amp; 1 != 0, corner &amp; 2 != 0, corner &amp; 4 != 0);
     let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
-    let placed = placement.translation + placement.rotation.as_dquat() * local.as_dvec3();
-    chunk.bounds = [chunk.bounds[0].min(placed), chunk.bounds[1].max(placed)];
+    let placed =
+        placement.translation + placement.rotation.as_dquat() * local.as_dvec3();
+    *bounds = [bounds[0].min(placed), bounds[1].max(placed)];
 }</code></pre>
   <p class="code-source"><code>chunks</code>, <code>src/cook/chunk.rs</code>.</p>
 </section>
@@ -220,15 +224,15 @@ let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES
 <section class="part prose" id="tests">
   <div class="part-mark">6 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The cook is tested against what the spawn places: <code>town</code> spawned into a World and its Chunks read back by Asset ID must hold the same Placements and lights, bit for bit, each in the Chunk the test computes for it.</p>
+  <p class="key-idea">The cook is tested against what the generator places: <code>town</code>'s static content and its Chunks read back by Asset ID must hold the same Placements and lights, bit for bit, each in the Chunk the test computes for it.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
-      <tr><td><code>towns_chunks_hold_what_its_spawn_places_that_does_not_move</code></td><td><code>src/cook/chunk.rs</code></td><td>exactly the 4 &times; 4 Chunks from (&minus;2, &minus;2) to (1, 1) are cooked; every entity the spawn gives a Mesh and no previous World transform, and every point light, is in the Chunk over its pivot at its translation from that Chunk's origin, with its Mesh, overriding Material, rotation, scale and photometric values; every pivot lies within its Chunk; each cooked Mesh's box, placed, lies within its Chunk's bounds; a second cook cooks nothing</td></tr>
+      <tr><td><code>towns_chunks_hold_what_its_generator_places_and_spawn_in_chunk_order</code></td><td><code>src/cook/chunk.rs</code></td><td>exactly the 4 &times; 4 Chunks from (&minus;2, &minus;2) to (1, 1) are cooked; every Placement and light the generator places is in the Chunk over its pivot at its translation from that Chunk's origin, with its Mesh, overriding Material, rotation, scale and photometric values; the spawn gives the Placements with a Material and those without each their entities in Chunk order, and each light one in Chunk order; every pivot lies within its Chunk; each cooked Mesh's box, placed, lies within its Chunk's bounds; a second cook cooks nothing</td></tr>
       <tr><td><code>chunk_blob_round_trips_and_refuses_another_version_or_a_wrong_count</code></td><td><code>src/assets/cooked.rs</code></td><td>a Chunk with and without a Material reads back as written; another version and a count its bytes do not hold are refused</td></tr>
       <tr><td><code>a_placement_or_material_naming_a_removed_asset_dangles</code></td><td><code>src/cook/mod.rs</code></td><td>a Placement's Mesh and Material, and a Material's Texture, that only a stale cache holds are reported with their referrer, the Chunk named by scene and coordinates</td></tr>
-      <tr><td>the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span></td><td><code>tests/goldens.rs</code></td><td>unchanged: no scene loads a Chunk yet</td></tr>
+      <tr><td>the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span></td><td><code>tests/goldens.rs</code></td><td><code>town</code>, which spawns from its Chunks, within their tolerance</td></tr>
     </tbody>
   </table>
   </div>
@@ -260,13 +264,13 @@ let origin = DVec3::new(coordinates[0], 0.0, coordinates[1]) * CHUNK_EDGE_METRES
   <p><b>The pivot decides.</b> A Placement belongs to one Chunk, the one over its pivot, rather than to every Chunk its Mesh touches, so it loads once; the Chunk's bounds grow instead, and ADR 0014's 128 m pivot bound, which the Mesh cook enforces, keeps a Mesh at unit scale within 128 m of its pivot, though the corners of its rotated box, which the bounds hold, can reach about 222 m along an axis.</p>
   <p><b>A Material per Placement.</b> An Instance's Material overrides its Mesh's, and <code>town</code>'s boxes rely on it: one unit cube drawn as slabs, walls, windows and rails in eight Materials. A Placement carries the same optional override, so the Chunks hold what the spawn places with no Mesh per Material.</p>
   <p><b>A field at a time.</b> Stored a Placement at a time, an Asset ID repeats every 84 bytes among unrelated floats; stored a field at a time, the Asset IDs, the translations along each axis and the unit scales each sit together, and zstd at level 9 compresses them to two thirds of what level 19 reaches the other way, about a hundred times faster.</p>
-  <p><b>Photometric lights.</b> A light keeps the <code>PointLight</code> it is spawned from: a colour, an intensity in candela as ADR 0023 has it, and a range in metres as <code>KHR_lights_punctual</code> defines it.</p>
+  <p><b>Photometric lights.</b> A light holds what its <code>PointLight</code> holds: a colour, an intensity in candela as ADR 0023 has it, and a range in metres as <code>KHR_lights_punctual</code> defines it.</p>
 </section>
 
 <section class="part prose" id="limits">
   <div class="part-mark">9</div>
   <h2>Limits</h2>
-  <p><b>Not loaded yet.</b> The runtime reads no Chunk; <code>town</code> spawns from its generator as before, and the other scenes cook no Chunks.</p>
+  <p><b>Spawned, not streamed.</b> <code>town</code> reads all 16 of its Chunks as it spawns, an entity per Placement and light, and the other scenes cook no Chunks.</p>
   <p><b>The last bit of a translation.</b> A World translation rebuilt from a Chunk's origin and a Placement's translation can differ from the generator's in f64's last bits, by at most 2<sup>&minus;46</sup> m.</p>
   <p><b>A Mesh the cook does not read.</b> A Placement whose Mesh no source of the same cook defines grows its Chunk's bounds by its pivot alone; that Mesh is warned of as dangling.</p>
   <p><b>Lights outside the bounds.</b> A light's range does not grow its Chunk's bounds.</p>

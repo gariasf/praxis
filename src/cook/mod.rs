@@ -158,7 +158,8 @@ pub fn cook(
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
     let sources = read_sources(assets, scenes, None)?;
-    cook_sources(&sources, &scene_references(scenes)?, cache, settings)
+    let references = scene_references(scenes, &sources.chunks)?;
+    cook_sources(&sources, &references, cache, settings)
 }
 
 /// What a dev launch of `scene` cooks before it loads: the manifest
@@ -174,14 +175,18 @@ pub fn cook_scene(
 ) -> anyhow::Result<CookReport> {
     fetch::fetch_for_launch(assets, scene.source_files());
     let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
-    cook_sources(&sources, &scene_references(&[scene])?, cache, settings)
+    let references = scene_references(&[scene], &sources.chunks)?;
+    cook_sources(&sources, &references, cache, settings)
 }
 
-/// Each Asset ID `scenes` load as they spawn, once per scene.
-fn scene_references(scenes: &[ReferenceScene]) -> anyhow::Result<Vec<(Referrer, AssetId)>> {
+/// Each Asset ID `scenes` load as they spawn from `chunks`, once per scene.
+fn scene_references(
+    scenes: &[ReferenceScene],
+    chunks: &[(AssetId, Referrer, String, CookedChunk)],
+) -> anyhow::Result<Vec<(Referrer, AssetId)>> {
     let mut references = Vec::new();
     for &scene in scenes {
-        let mut recorder = AssetRecorder::default();
+        let mut recorder = AssetRecorder::new(chunks.iter().map(|(id, _, _, chunk)| (*id, chunk)));
         // The default crowd form loads the shadow proxies besides every
         // Asset the traced forms load.
         Simulation::new(
@@ -719,7 +724,7 @@ mod tests {
     #[test]
     fn a_scene_references_the_textures_it_loads() {
         let scene = ReferenceScene::TextureWall;
-        let references = scene_references(&[scene]).unwrap();
+        let references = scene_references(&[scene], &[]).unwrap();
         let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }

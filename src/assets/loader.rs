@@ -1,7 +1,7 @@
 use anyhow::Context;
 
 use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool, MeshUse};
-use crate::cooked::{AssetId, CookedCache, CookedMesh};
+use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMesh};
 use crate::render::LoadStaging;
 
 /// What a scene's spawn loads its Assets through, by Asset ID (ADR 0018),
@@ -30,6 +30,9 @@ pub trait AssetLoader {
     /// Loads the Mesh `id` as a shadow proxy, which rays trace through its
     /// BLAS and no pass draws, so it loads no Material.
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
+
+    /// Reads the Chunk `id`, loading none of the Assets it names.
+    fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk>;
 }
 
 /// Loads Assets from a Cooked cache into the Pools, through the load's
@@ -67,6 +70,10 @@ impl AssetLoader for PoolLoader<'_> {
 
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh_for(id, MeshUse::Traced)
+    }
+
+    fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
+        self.cache.chunk(id)
     }
 }
 

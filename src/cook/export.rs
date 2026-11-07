@@ -12,13 +12,16 @@ use anyhow::Context;
 use serde::Serialize;
 use serde_json::json;
 
+use super::chunk;
 use super::mesh::SourcePrimitive;
 use super::{LoadedImage, asset_names, gltf_material, material_textures, read_manifest};
 use crate::ReferenceScene;
 use crate::assets::{AssetLoader, MaterialChannel, MaterialHandle, MeshHandle};
 use crate::camera::{Camera, FIELD_OF_VIEW};
 use crate::components::{DirectionalLight, MaterialRef, MeshRef, PointLight};
-use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource, CookedMaterial, CookedMesh};
+use crate::cooked::{
+    AssetId, AssetKind, AssetName, AssetSource, CookedChunk, CookedMaterial, CookedMesh,
+};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
 use crate::state::Simulation;
@@ -49,7 +52,12 @@ pub fn export_scene(
     );
     let frame = frame.unwrap_or(crate::capture::FRAME_COUNT - 1);
     let catalog = Catalog::new(scene, assets)?;
-    let mut recorder = AssetRecorder::default();
+    let (placements, lights) = scene.static_content();
+    let chunks: Vec<_> = chunk::split(placements, lights)
+        .into_iter()
+        .map(|(coordinates, chunk)| (scene.chunk_id(coordinates), chunk))
+        .collect();
+    let mut recorder = AssetRecorder::new(chunks.iter().map(|(id, chunk)| (*id, chunk)));
     let mut simulation = Simulation::new(
         scene,
         glam::DVec3::ZERO,
@@ -282,15 +290,25 @@ struct RenderableEntry {
     material: Option<String>,
 }
 
-/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing.
+/// Notes the Asset ID behind each Handle a spawn takes, and loads nothing
+/// but the Chunks it is given.
 #[derive(Default)]
-pub(super) struct AssetRecorder {
+pub(super) struct AssetRecorder<'chunks> {
     pub(super) meshes: Vec<AssetId>,
     pub(super) materials: Vec<AssetId>,
     textures: Vec<AssetId>,
+    chunks: HashMap<AssetId, &'chunks CookedChunk>,
 }
 
-impl AssetRecorder {
+impl<'chunks> AssetRecorder<'chunks> {
+    /// A recorder whose spawn reads `chunks`, by Asset ID.
+    pub(super) fn new(chunks: impl IntoIterator<Item = (AssetId, &'chunks CookedChunk)>) -> Self {
+        Self {
+            chunks: chunks.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
     /// Every Asset ID a spawn loaded, once per load.
     pub(super) fn ids(&self) -> impl Iterator<Item = AssetId> + '_ {
         let ids = self
@@ -302,7 +320,7 @@ impl AssetRecorder {
     }
 }
 
-impl AssetLoader for AssetRecorder {
+impl AssetLoader for AssetRecorder<'_> {
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.materials.push(id);
         Ok(MaterialHandle {
@@ -335,6 +353,11 @@ impl AssetLoader for AssetRecorder {
 
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
         self.mesh(id)
+    }
+
+    fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
+        let chunk = self.chunks.get(&id).map(|chunk| (*chunk).clone());
+        chunk.with_context(|| format!("Chunk {id} holds none of the scene's static content"))
     }
 }
 
