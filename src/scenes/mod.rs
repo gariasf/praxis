@@ -336,12 +336,13 @@ impl ReferenceScene {
             | Self::NormalTangent
             | Self::Orrery
             | Self::TextureWall => chunk_square(-1..1),
-            Self::FarCoplanar => (-8..8)
-                .flat_map(|x| {
-                    let lights = [-1, 0].contains(&x).then_some([x, 0]);
-                    (-16..0).map(move |z| [x, z]).chain(lights)
-                })
-                .collect(),
+            Self::FarCoplanar => {
+                let plane_chunks = (-8..8).flat_map(|x| (-16..0).map(move |z| [x, z]));
+                let coloured_light_chunks = [[-1, 0], [0, 0]];
+                let mut coordinates: Vec<_> = plane_chunks.chain(coloured_light_chunks).collect();
+                coordinates.sort_unstable();
+                coordinates
+            }
             Self::Town => chunk_square(-2..2),
         }
     }
@@ -356,8 +357,8 @@ impl ReferenceScene {
         Ok(LoadedChunks(chunks))
     }
 
-    /// What the scene's Chunks cook from: the Renderables that do not move
-    /// and the point lights, each translated from the World's origin.
+    /// What the scene's Chunks cook from: the Placements of what does not
+    /// move and the point lights, each translated from the World's origin.
     #[cfg(feature = "cook")]
     pub(crate) fn static_content(self) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
         let at_origin = |mesh| vec![placed(self.mesh_id(mesh), None, glam::DVec3::ZERO)];
@@ -376,14 +377,11 @@ impl ReferenceScene {
             Self::FarCoplanar => (far_coplanar_placements(), coloured_lights()),
             Self::Orrery => (Vec::new(), coloured_lights()),
             Self::Minification => (at_origin("ground"), cooked_lights(&MINIFICATION_LIGHTS)),
-            // The directional light alone, white, so each quad shows its
-            // Texture's colour.
             Self::TextureWall => (texture_wall_placements(), Vec::new()),
             Self::Shadows => (
                 at_origin("sphere-over-plane"),
                 cooked_lights(&SHADOWS_LIGHTS),
             ),
-            // The sun alone, so the figures cast its shadows alone.
             Self::Crowd => (at_origin("ground"), Vec::new()),
             Self::Town => town::static_content(),
         }
@@ -585,7 +583,7 @@ fn chunk_square(edges: std::ops::Range<i32>) -> Vec<[i32; 2]> {
 }
 
 /// SciFiHelmet's glTF file, by its manifest GUID.
-pub(crate) const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
+const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
 /// NormalTangentTest's glTF file, by its manifest GUID.
 #[cfg(feature = "cook")]
 const NORMAL_TANGENT_TEST: u128 = 0xc750a32dc879478eaca4748dbc82645a;
@@ -600,8 +598,8 @@ pub(crate) fn sci_fi_helmet_mesh_id() -> AssetId {
 /// The helmet scene's Placements: a factor sweep of helmets over the
 /// neutral default Layers, white, dielectric on the top row and metal on
 /// the bottom, roughness growing left to right; and between the rows the
-/// helmet with the Material its Primitive names. All stand 8 m ahead of the
-/// default camera, the sweep's scaled to 3/4 to clear the 2.9 m helmet.
+/// helmet with the Material its Primitive names. All stand 8 m along -Z from the
+/// origin, the sweep's scaled to 3/4 to clear the 2.9 m helmet.
 #[cfg(feature = "cook")]
 fn helmet_placements() -> Vec<CookedPlacement> {
     let mesh = sci_fi_helmet_mesh_id();

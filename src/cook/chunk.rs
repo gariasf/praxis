@@ -27,10 +27,8 @@ pub(super) fn chunks(
             placements, bounds, ..
         } = chunk;
         for placement in placements.iter() {
-            let [lowest, highest] = mesh_bounds.get(&placement.mesh).copied().unwrap_or_else(|| {
-                tracing::warn!(mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; its Chunk's bounds hold only its pivot");
-                [Vec3::ZERO; 2]
-            });
+            let [lowest, highest] =
+                (mesh_bounds.get(&placement.mesh).copied()).unwrap_or([Vec3::ZERO; 2]);
             for corner in 0..8 {
                 let is_highest = BVec3::new(corner & 1 != 0, corner & 2 != 0, corner & 4 != 0);
                 let local = Vec3::select(is_highest, highest, lowest) * placement.scale;
