@@ -567,6 +567,14 @@ section = "gfx-rs/wgpu issue 9215, Metal BLAS -> TLAS builds need synchronisatio
 quote = '''On metal, acceleration structure barriers are not inserted (due to metal not having barriers during development of this) however it appears that metal does not serialize them'''
 checked = 2026-10-26
 
+["wgpu-issue-9745"]
+url = "https://github.com/gfx-rs/wgpu/issues/9745"
+section = "gfx-rs/wgpu issue 9745, Vulkan OOM model doesn't fall back to non-device-local heaps for `CpuToGpu` memory (open)"
+quote = '''5. If the `MemoryLocation` is `CpuToGpu`, and the allocation in (4) did not succeed, tries the allocation again using the preferred memory flags for `CpuToGpu` memory.
+[...]
+That fallback is not currently modeled in the `wgpu-hal` OOM check logic, so it's possible that we reject an allocation that would actually succeed in gpu-allocator.'''
+checked = 2026-11-07
+
 ["smaa-subpixel-grid"]
 url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7"
 section = "Jimenez et al. 2012, SMAA, §4.3 Subpixel rendering, Figure 10, p. 7"
