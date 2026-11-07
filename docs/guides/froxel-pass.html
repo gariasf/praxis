@@ -417,7 +417,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above; the gate is ADR 0019's, rays off. Point lights from <code>point_lights</code> and <code>town</code>'s lamps in <code>src/scenes</code>. <code>texture-wall</code>'s gate on the Apple M4 Pro is set by its bound textures, not its lights. <code>town</code>'s 1,024 lamps make 18,874,368 sphere tests a frame.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above; the gate is ADR 0019's, rays off. Point lights from each scene's <code>static_content</code> in <code>src/scenes</code>. <code>texture-wall</code>'s gate on the Apple M4 Pro is set by its bound textures, not its lights. <code>town</code>'s 1,024 lamps make 18,874,368 sphere tests a frame.</p>
   <p>The pass's memory is fixed, whatever the resolution and the scene, and counted in GPU memory:</p>
   <div class="table-wrap">
   <table class="facts compact">

@@ -807,7 +807,13 @@ fn every_reference_scene_mesh_cooks_and_reads_back() {
     let expected = if helmet_fetched {
         vec![]
     } else {
-        vec![(Referrer::Scene(ReferenceScene::Helmet), helmet)]
+        let helmet_scene = ReferenceScene::Helmet;
+        let referrers = [
+            Referrer::Chunk(helmet_scene, [-1, -1]),
+            Referrer::Chunk(helmet_scene, [0, -1]),
+            Referrer::Scene(helmet_scene),
+        ];
+        referrers.map(|referrer| (referrer, helmet)).to_vec()
     };
     assert_eq!(report.dangling_references, expected);
 

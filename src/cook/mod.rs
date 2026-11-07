@@ -135,6 +135,9 @@ struct Sources {
     meshes: Vec<(AssetId, String, String, Vec<mesh::SourcePrimitive>)>,
     /// Each Chunk with what names it in a warning and its Cook key.
     chunks: Vec<(AssetId, Referrer, String, CookedChunk)>,
+    /// Each Chunk a Placement of which names a Mesh this cook did not read,
+    /// so its Blob, if any, stays as it is.
+    kept_chunks: Vec<AssetId>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
     /// as the source, or an image it names, is absent.
@@ -231,6 +234,9 @@ fn cook_sources(
         }
     }
     for (id, _, cook_key, chunk) in &sources.chunks {
+        if sources.kept_chunks.contains(id) {
+            continue;
+        }
         if is_fresh(cache, *id, cook_key) {
             report.unchanged.push(*id);
         } else {
@@ -279,7 +285,10 @@ fn cook_sources(
     let placement_references = sources.chunks.iter().flat_map(|(_, referrer, _, chunk)| {
         let placements = chunk.placements.iter();
         let named = placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
-        named.flatten().map(|id| (*referrer, id))
+        let mut named: Vec<_> = named.flatten().collect();
+        named.sort_unstable();
+        named.dedup();
+        named.into_iter().map(|id| (*referrer, id))
     });
     let references: Vec<_> = texture_references
         .chain(material_references)
@@ -431,6 +440,12 @@ fn read_sources(
             let id = scene.chunk_id(coordinates);
             let cook_key = chunk::cook_key(&chunk);
             let referrer = Referrer::Chunk(scene, coordinates);
+            let unread = (chunk.placements.iter())
+                .find(|placement| !mesh_bounds.contains_key(&placement.mesh));
+            if let Some(placement) = unread {
+                tracing::warn!(chunk = %referrer, mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; the Chunk's Blob, if any, stays as it is");
+                sources.kept_chunks.push(id);
+            }
             sources.chunks.push((id, referrer, cook_key, chunk));
         }
     }
@@ -724,7 +739,15 @@ mod tests {
     #[test]
     fn a_scene_references_the_textures_it_loads() {
         let scene = ReferenceScene::TextureWall;
-        let references = scene_references(&[scene], &[]).unwrap();
+        let (placements, lights) = scene.static_content();
+        let chunks: Vec<_> = chunk::split(placements, lights)
+            .into_iter()
+            .map(|(coordinates, chunk)| {
+                let referrer = Referrer::Chunk(scene, coordinates);
+                (scene.chunk_id(coordinates), referrer, String::new(), chunk)
+            })
+            .collect();
+        let references = scene_references(&[scene], &chunks).unwrap();
         let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }

@@ -22,7 +22,6 @@ use crate::components::{MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
 use crate::render::DYNAMIC_TLAS_CAPACITY;
-use crate::streaming::{LoadedChunks, load_chunk};
 use crate::transform::PreviousWorldTransform;
 
 /// The town's Meshes.
@@ -788,23 +787,11 @@ fn flocks() -> Vec<Flock> {
         .collect()
 }
 
-/// The coordinates of the Chunks the town's static content lies in, x then
-/// z, in coordinate order: 4 × 4 about the World's origin.
-fn chunk_coordinates() -> impl Iterator<Item = [i32; 2]> {
-    (-2..2).flat_map(|x| (-2..2).map(move |z| [x, z]))
-}
-
-/// Loads what does not move from the town's Chunks, in coordinate order, as
-/// `LoadedChunks`; then its flocks: each a spinning centre with its birds as
-/// its children, all moved in the fixed schedule, so each carries its
-/// previous World transform (ADR 0022).
+/// Spawns the town's flocks: each a spinning centre with its birds as its
+/// children, all moved in the fixed schedule, so each carries its previous
+/// World transform (ADR 0022).
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
-    let scene = ReferenceScene::Town;
-    let chunks = chunk_coordinates()
-        .map(|coordinates| load_chunk(loader, scene.chunk_id(coordinates), coordinates))
-        .collect::<anyhow::Result<_>>()?;
-    world.insert_resource(LoadedChunks(chunks));
-    let bird = loader.mesh(scene.mesh_id(TownMesh::Bird.name()))?;
+    let bird = loader.mesh(ReferenceScene::Town.mesh_id(TownMesh::Bird.name()))?;
     for flock in flocks() {
         let centre = world
             .spawn((

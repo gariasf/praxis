@@ -6,7 +6,9 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
 use crate::camera::{Camera, ev100_for_exposure};
-use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, PointLight, Transform};
+#[cfg(feature = "cook")]
+use crate::components::PointLight;
+use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, Transform};
 #[cfg(feature = "cook")]
 use crate::cook::LoadedImage;
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
@@ -14,6 +16,7 @@ use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
+use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
@@ -322,22 +325,65 @@ impl ReferenceScene {
         AssetId::new(source, AssetKind::Chunk, AssetName::Name(&name))
     }
 
-    /// What the scene's Chunks cook from: the Renderables that do not move
-    /// and the point lights, each translated from the World's origin.
-    #[cfg(feature = "cook")]
-    pub(crate) fn static_content(self) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+    /// The coordinates of the Chunks the scene's static content lies in, x
+    /// then z, in coordinate order: the Chunks its spawn loads.
+    pub(crate) fn chunk_coordinates(self) -> Vec<[i32; 2]> {
         match self {
-            Self::Town => town::static_content(),
+            Self::Minification | Self::Shadows | Self::Crowd => vec![[0, 0]],
             Self::Helmet
             | Self::PbrSweep
             | Self::UvGrid
             | Self::NormalTangent
-            | Self::FarCoplanar
             | Self::Orrery
-            | Self::Minification
-            | Self::TextureWall
-            | Self::Shadows
-            | Self::Crowd => (Vec::new(), Vec::new()),
+            | Self::TextureWall => chunk_square(-1..1),
+            Self::FarCoplanar => {
+                let plane_chunks = (-8..8).flat_map(|x| (-16..0).map(move |z| [x, z]));
+                let coloured_light_chunks = [[-1, 0], [0, 0]];
+                let mut coordinates: Vec<_> = plane_chunks.chain(coloured_light_chunks).collect();
+                coordinates.sort_unstable();
+                coordinates
+            }
+            Self::Town => chunk_square(-2..2),
+        }
+    }
+
+    /// Loads the scene's Chunks through `loader`, in coordinate order.
+    pub(crate) fn load_chunks(self, loader: &mut dyn AssetLoader) -> anyhow::Result<LoadedChunks> {
+        let chunks = self
+            .chunk_coordinates()
+            .into_iter()
+            .map(|coordinates| load_chunk(loader, self.chunk_id(coordinates), coordinates))
+            .collect::<anyhow::Result<_>>()?;
+        Ok(LoadedChunks(chunks))
+    }
+
+    /// What the scene's Chunks cook from: the Placements of what does not
+    /// move and the point lights, each translated from the World's origin.
+    #[cfg(feature = "cook")]
+    pub(crate) fn static_content(self) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+        let at_origin = |mesh| vec![placed(self.mesh_id(mesh), None, glam::DVec3::ZERO)];
+        let coloured_lights = || cooked_lights(&COLOURED_LIGHTS);
+        match self {
+            Self::Helmet => (helmet_placements(), coloured_lights()),
+            Self::PbrSweep => (pbr_sweep_placements(), coloured_lights()),
+            Self::UvGrid => (at_origin("plane"), coloured_lights()),
+            Self::NormalTangent => {
+                let mesh = normal_tangent_mesh_id();
+                (
+                    vec![placed(mesh, None, glam::DVec3::ZERO)],
+                    coloured_lights(),
+                )
+            }
+            Self::FarCoplanar => (far_coplanar_placements(), coloured_lights()),
+            Self::Orrery => (Vec::new(), coloured_lights()),
+            Self::Minification => (at_origin("ground"), cooked_lights(&MINIFICATION_LIGHTS)),
+            Self::TextureWall => (texture_wall_placements(), Vec::new()),
+            Self::Shadows => (
+                at_origin("sphere-over-plane"),
+                cooked_lights(&SHADOWS_LIGHTS),
+            ),
+            Self::Crowd => (at_origin("ground"), Vec::new()),
+            Self::Town => town::static_content(),
         }
     }
 
@@ -413,34 +459,6 @@ impl ReferenceScene {
         }
     }
 
-    /// The scene's point lights: position, colour, intensity and range.
-    /// town's stand in its lamps, which its spawn places.
-    pub(crate) fn point_lights(self) -> &'static [(glam::DVec3, PointLight)] {
-        match self {
-            Self::Minification => &[(
-                MINIFICATION_LIGHT,
-                PointLight {
-                    color: glam::Vec3::ONE,
-                    intensity: MINIFICATION_LIGHT_INTENSITY,
-                    range: MINIFICATION_LIGHT_RANGE,
-                },
-            )],
-            // The directional light alone, white, so each quad shows its
-            // Texture's colour; and so the crowd's figures cast the sun's
-            // shadows alone.
-            Self::TextureWall | Self::Crowd => &[],
-            // town's spawn places its lamps' lights, where it places the lamps.
-            Self::Town => &[],
-            Self::Shadows => &SHADOWS_LIGHTS,
-            Self::Helmet
-            | Self::PbrSweep
-            | Self::UvGrid
-            | Self::NormalTangent
-            | Self::FarCoplanar
-            | Self::Orrery => &COLOURED_LIGHTS,
-        }
-    }
-
     /// The scene's sun, white, of `SUN_ILLUMINANCE`: a directional light
     /// whose forward axis is turned to shine along the scene's direction.
     /// town's stands 33° up in the south-southwest, behind the camera's
@@ -500,6 +518,7 @@ const SUN_ILLUMINANCE: f32 = 100_000.0;
 
 /// Red, green, blue and yellow, 2 m up and 2 m from the origin along X and Z,
 /// each giving the sun's illuminance 3 m away and reaching 20 m.
+#[cfg(feature = "cook")]
 const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
     (
         glam::DVec3::new(2.0, 2.0, 2.0),
@@ -519,6 +538,7 @@ const COLOURED_LIGHTS: [(glam::DVec3, PointLight); 4] = [
     ),
 ];
 
+#[cfg(feature = "cook")]
 const fn coloured_light(color: glam::Vec3) -> PointLight {
     PointLight {
         color,
@@ -527,10 +547,79 @@ const fn coloured_light(color: glam::Vec3) -> PointLight {
     }
 }
 
+/// `lights` as Chunks cook them.
+#[cfg(feature = "cook")]
+fn cooked_lights(lights: &[(glam::DVec3, PointLight)]) -> Vec<CookedLight> {
+    lights
+        .iter()
+        .map(|&(translation, light)| CookedLight {
+            translation,
+            color: light.color,
+            intensity: light.intensity,
+            range: light.range,
+        })
+        .collect()
+}
+
+/// A Placement of `mesh` at `translation`, unturned and unscaled, drawn
+/// with `material` or, without one, with the Materials its Primitives name.
+#[cfg(feature = "cook")]
+fn placed(mesh: AssetId, material: Option<AssetId>, translation: glam::DVec3) -> CookedPlacement {
+    CookedPlacement {
+        mesh,
+        material,
+        translation,
+        rotation: glam::Quat::IDENTITY,
+        scale: glam::Vec3::ONE,
+    }
+}
+
+/// The Chunk coordinates `edges` × `edges`, x then z.
+fn chunk_square(edges: std::ops::Range<i32>) -> Vec<[i32; 2]> {
+    let (low, high) = (edges.start, edges.end);
+    (low..high)
+        .flat_map(|x| (low..high).map(move |z| [x, z]))
+        .collect()
+}
+
 /// SciFiHelmet's glTF file, by its manifest GUID.
-pub(crate) const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
+const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
 /// NormalTangentTest's glTF file, by its manifest GUID.
+#[cfg(feature = "cook")]
 const NORMAL_TANGENT_TEST: u128 = 0xc750a32dc879478eaca4748dbc82645a;
+
+/// SciFiHelmet's Mesh, which the helmet scene places and its spawn system
+/// spawns.
+pub(crate) fn sci_fi_helmet_mesh_id() -> AssetId {
+    let source = AssetSource::File(SCI_FI_HELMET);
+    AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"))
+}
+
+/// The helmet scene's Placements: a factor sweep of helmets over the
+/// neutral default Layers, white, dielectric on the top row and metal on
+/// the bottom, roughness growing left to right; and between the rows the
+/// helmet with the Material its Primitive names. All stand 8 m along -Z from the
+/// origin, the sweep's scaled to 3/4 to clear the 2.9 m helmet.
+#[cfg(feature = "cook")]
+fn helmet_placements() -> Vec<CookedPlacement> {
+    let mesh = sci_fi_helmet_mesh_id();
+    let mut placements = Vec::new();
+    for (row_index, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
+        for (column_index, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
+            let material =
+                ReferenceScene::Helmet.material_id(&sweep_material_name(metallic, roughness));
+            let column_offset = (column_index as f32 - 2.0) * 2.0;
+            let row_offset = 2.6 - row_index as f32 * 5.2;
+            let translation = glam::dvec3(column_offset.into(), row_offset.into(), -8.0);
+            placements.push(CookedPlacement {
+                scale: glam::Vec3::splat(0.75),
+                ..placed(mesh, Some(material), translation)
+            });
+        }
+    }
+    placements.push(placed(mesh, None, glam::dvec3(0.0, 0.0, -8.0)));
+    placements
+}
 
 /// A camera on a circle of `radius` at `height` around the origin, looking at
 /// it, starting a little left of +Z and moving a quarter degree per frame.
@@ -548,65 +637,58 @@ const SWEEP_BASE_COLOR: [f32; 4] = [1.0, 0.71, 0.29, 1.0];
 /// The helmet scene's sweep is white, so the factors alone show.
 #[cfg(feature = "cook")]
 const HELMET_SWEEP_BASE_COLOR: [f32; 4] = [1.0; 4];
+#[cfg(feature = "cook")]
 pub(crate) const SWEEP_METALLIC: [f32; 2] = [0.0, 1.0];
+#[cfg(feature = "cook")]
 pub(crate) const SWEEP_ROUGHNESS: [f32; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 #[cfg(feature = "cook")]
 const SPHERE_RADIUS: f32 = 0.5;
+#[cfg(feature = "cook")]
 const SPHERE_SPACING: f32 = 1.3;
 
 /// The name of a sweep's Material of `metallic` and `roughness`.
+#[cfg(feature = "cook")]
 pub(crate) fn sweep_material_name(metallic: f32, roughness: f32) -> String {
     format!("metallic-{metallic}-roughness-{roughness}")
 }
 
-pub(crate) fn spawn_pbr_sweep(
-    world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
-    let sphere = loader.mesh(ReferenceScene::PbrSweep.mesh_id("sphere"))?;
+/// Two rows of spheres, one per sweep Material, centred on the origin.
+#[cfg(feature = "cook")]
+fn pbr_sweep_placements() -> Vec<CookedPlacement> {
+    let scene = ReferenceScene::PbrSweep;
+    let sphere = scene.mesh_id("sphere");
+    let mut placements = Vec::new();
     for (row, metallic) in SWEEP_METALLIC.into_iter().enumerate() {
         for (column, roughness) in SWEEP_ROUGHNESS.into_iter().enumerate() {
-            let name = sweep_material_name(metallic, roughness);
-            let material = loader.material(ReferenceScene::PbrSweep.material_id(&name))?;
+            let material = scene.material_id(&sweep_material_name(metallic, roughness));
             let position = glam::vec3(
                 (column as f32 - (SWEEP_ROUGHNESS.len() - 1) as f32 / 2.0) * SPHERE_SPACING,
                 (0.5 - row as f32) * SPHERE_SPACING,
                 0.0,
             );
-            world.spawn((
-                Transform::from_translation(position.as_dvec3()),
-                MeshRef(sphere),
-                MaterialRef(material),
-            ));
+            placements.push(placed(sphere, Some(material), position.as_dvec3()));
         }
     }
-    Ok(())
+    placements
 }
 
 /// Rough so the highlight does not wash out the texture.
 #[cfg(feature = "cook")]
 const UV_GRID_ROUGHNESS: f32 = 0.8;
 
-/// The plane draws with the grid Material its Primitive names.
-pub(crate) fn spawn_uv_grid(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
-    let plane = loader.mesh(ReferenceScene::UvGrid.mesh_id("plane"))?;
-    world.spawn((Transform::IDENTITY, MeshRef(plane)));
-    Ok(())
-}
-
 /// The middle of the model's bounds, which run from -1.2 to 0.95 in Y.
 const NORMAL_TANGENT_CENTRE_HEIGHT: f64 = -0.125;
 
-/// The Mesh draws with the Material its Primitive names.
-pub(crate) fn spawn_normal_tangent(
-    world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
+/// NormalTangentTest's Mesh, which draws with the Material its Primitive
+/// names.
+#[cfg(feature = "cook")]
+fn normal_tangent_mesh_id() -> AssetId {
     let source = AssetSource::File(NORMAL_TANGENT_TEST);
-    let name = AssetName::Name("NormalTangentTest_low");
-    let mesh = loader.mesh(AssetId::new(source, AssetKind::Mesh, name))?;
-    world.spawn((Transform::IDENTITY, MeshRef(mesh)));
-    Ok(())
+    AssetId::new(
+        source,
+        AssetKind::Mesh,
+        AssetName::Name("NormalTangentTest_low"),
+    )
 }
 
 /// From the camera to the planes' centre, and from the centre to each edge.
@@ -615,11 +697,14 @@ const FAR_COPLANAR_DISTANCE: f64 = 2000.0;
 /// over about 7 cm.
 const FAR_COPLANAR_CAMERA_HEIGHT: f64 = 300.0;
 /// Between the two planes, in metres.
+#[cfg(feature = "cook")]
 const FAR_COPLANAR_GAP: f64 = 0.01;
 /// Each plane is `FAR_COPLANAR_TILES_PER_SIDE` square tiles a side, each
 /// `FAR_COPLANAR_TILE_METRES` on a side, so no vertex lies past 128 m from
 /// its tile's centre (ADR 0014).
+#[cfg(feature = "cook")]
 const FAR_COPLANAR_TILES_PER_SIDE: u32 = 32;
+#[cfg(feature = "cook")]
 const FAR_COPLANAR_TILE_METRES: f64 =
     2.0 * FAR_COPLANAR_DISTANCE / FAR_COPLANAR_TILES_PER_SIDE as f64;
 /// The upper plane's base colour, then the lower one's.
@@ -628,24 +713,23 @@ const FAR_COPLANAR_COLORS: [[f32; 4]; 2] = [[0.8, 0.1, 0.1, 1.0], [0.1, 0.8, 0.1
 #[cfg(feature = "cook")]
 const FAR_COPLANAR_ROUGHNESS: f32 = 0.8;
 
-pub(crate) fn spawn_far_coplanar(
-    world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
-    let tile = loader.mesh(ReferenceScene::FarCoplanar.mesh_id("plane"))?;
+/// The upper plane's tiles, then the lower one's.
+#[cfg(feature = "cook")]
+fn far_coplanar_placements() -> Vec<CookedPlacement> {
+    let scene = ReferenceScene::FarCoplanar;
+    let tile = scene.mesh_id("plane");
     let centre = glam::dvec3(0.0, 0.0, -FAR_COPLANAR_DISTANCE);
-    for (height, name) in [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")] {
-        let material = loader.material(ReferenceScene::FarCoplanar.material_id(name))?;
-        let tiles = ground_tile_centres(FAR_COPLANAR_TILE_METRES, FAR_COPLANAR_TILES_PER_SIDE);
-        world.spawn_batch(tiles.map(|tile_centre| {
-            (
-                Transform::from_translation(centre + tile_centre + glam::DVec3::Y * height),
-                MeshRef(tile),
-                MaterialRef(material),
-            )
-        }));
-    }
-    Ok(())
+    [(0.0, "upper"), (-FAR_COPLANAR_GAP, "lower")]
+        .into_iter()
+        .flat_map(|(height, name)| {
+            let material = scene.material_id(name);
+            let tiles = ground_tile_centres(FAR_COPLANAR_TILE_METRES, FAR_COPLANAR_TILES_PER_SIDE);
+            tiles.map(move |tile_centre| {
+                let translation = centre + tile_centre + glam::DVec3::Y * height;
+                placed(tile, Some(material), translation)
+            })
+        })
+        .collect()
 }
 
 /// Each orrery body's spin about its own +Y, the root's first, in radians per
@@ -715,11 +799,24 @@ const MINIFICATION_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 1.2, 46.0);
 const MINIFICATION_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.0, 38.0);
 /// 1 m over the floor 30 m ahead: the floor mirrors it about 16 m out, in
 /// the minified distance, so Toksvig shapes its reflection.
+#[cfg(feature = "cook")]
 const MINIFICATION_LIGHT: glam::DVec3 = glam::DVec3::new(0.0, 1.0, 16.0);
 /// The sun's illuminance about 17 m away.
+#[cfg(feature = "cook")]
 const MINIFICATION_LIGHT_INTENSITY: f32 = 300.0 * SUN_ILLUMINANCE;
 /// Past the floor's far corners, 83 m from the light.
+#[cfg(feature = "cook")]
 const MINIFICATION_LIGHT_RANGE: f32 = 200.0;
+/// minification's one raking light, white.
+#[cfg(feature = "cook")]
+const MINIFICATION_LIGHTS: [(glam::DVec3, PointLight); 1] = [(
+    MINIFICATION_LIGHT,
+    PointLight {
+        color: glam::Vec3::ONE,
+        intensity: MINIFICATION_LIGHT_INTENSITY,
+        range: MINIFICATION_LIGHT_RANGE,
+    },
+)];
 /// Side of minification's Textures, in texels.
 #[cfg(feature = "cook")]
 const MINIFICATION_TEXTURE_SIZE: u32 = 256;
@@ -734,16 +831,6 @@ const MINIFICATION_BUMP_SLOPE: f32 = 0.5;
 /// The gloss before Toksvig widens it.
 #[cfg(feature = "cook")]
 const MINIFICATION_GLOSS_ROUGHNESS: f32 = 0.2;
-
-/// The floor draws with the Material its Primitive names.
-pub(crate) fn spawn_minification(
-    world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
-    let ground = loader.mesh(ReferenceScene::Minification.mesh_id("ground"))?;
-    world.spawn((Transform::IDENTITY, MeshRef(ground)));
-    Ok(())
-}
 
 /// A `MINIFICATION_TEXTURE_SIZE`-square image of `texel(x, y)`, top row
 /// first.
@@ -804,8 +891,11 @@ fn gloss_texture() -> LoadedImage {
 /// texture-wall's Textures, all in the albedo Channel.
 pub(crate) const TEXTURE_WALL_TEXTURES: u32 = 10_000;
 /// The quads: 10 rows of 10, 1 m apart.
+#[cfg(feature = "cook")]
 const TEXTURE_WALL_QUADS: u32 = 100;
+#[cfg(feature = "cook")]
 const TEXTURE_WALL_COLUMNS: u32 = 10;
+#[cfg(feature = "cook")]
 const TEXTURE_WALL_SPACING: f64 = 1.0;
 #[cfg(feature = "cook")]
 const TEXTURE_WALL_QUAD_HALF_SIZE: f32 = 0.4;
@@ -825,15 +915,16 @@ fn wall_texture_name(index: u32) -> String {
     format!("texture-{index}")
 }
 
+#[cfg(feature = "cook")]
 fn wall_material_name(quad: u32) -> String {
     format!("quad-{quad}")
 }
 
 /// Loads every Texture in index order, into the albedo Channel's Texture
-/// classes after its neutral default, then the quads, row 0 farthest from the camera and
-/// column 0 on its left, each with its own Material.
+/// classes after its neutral default, so the quads its Chunks load sample
+/// Layers across the whole range.
 pub(crate) fn spawn_texture_wall(
-    world: &mut World,
+    _world: &mut World,
     loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     let (scene, channel) = (ReferenceScene::TextureWall, MaterialChannel::Albedo);
@@ -843,23 +934,28 @@ pub(crate) fn spawn_texture_wall(
             scene.texture_id(channel, &wall_texture_name(index)),
         )?;
     }
-    let mesh = loader.mesh(scene.mesh_id("quad"))?;
-    let centre = f64::from(TEXTURE_WALL_COLUMNS - 1) / 2.0;
-    for quad_index in 0..TEXTURE_WALL_QUADS {
-        let material = loader.material(scene.material_id(&wall_material_name(quad_index)))?;
-        let (row, column) = (
-            quad_index / TEXTURE_WALL_COLUMNS,
-            quad_index % TEXTURE_WALL_COLUMNS,
-        );
-        let position = glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre)
-            * TEXTURE_WALL_SPACING;
-        world.spawn((
-            Transform::from_translation(position),
-            MeshRef(mesh),
-            MaterialRef(material),
-        ));
-    }
     Ok(())
+}
+
+/// The quads, row 0 farthest from the camera and column 0 on its left,
+/// each with its own Material.
+#[cfg(feature = "cook")]
+fn texture_wall_placements() -> Vec<CookedPlacement> {
+    let scene = ReferenceScene::TextureWall;
+    let mesh = scene.mesh_id("quad");
+    let centre = f64::from(TEXTURE_WALL_COLUMNS - 1) / 2.0;
+    (0..TEXTURE_WALL_QUADS)
+        .map(|quad_index| {
+            let material = scene.material_id(&wall_material_name(quad_index));
+            let (row, column) = (
+                quad_index / TEXTURE_WALL_COLUMNS,
+                quad_index % TEXTURE_WALL_COLUMNS,
+            );
+            let position = glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre)
+                * TEXTURE_WALL_SPACING;
+            placed(mesh, Some(material), position)
+        })
+        .collect()
 }
 
 /// texture-wall's Texture `index`, 4×4 texels of one colour that encodes
@@ -898,17 +994,11 @@ const SHADOWS_CAMERA: glam::DVec3 = glam::DVec3::new(0.0, 2.4, 3.0);
 const SHADOWS_CAMERA_TARGET: glam::DVec3 = glam::DVec3::new(0.0, 0.45, -0.4);
 /// White, up and to the right of the sphere, in front of it, giving the
 /// sun's illuminance 3 m away and reaching 20 m, as each coloured light does.
+#[cfg(feature = "cook")]
 const SHADOWS_LIGHTS: [(glam::DVec3, PointLight); 1] = [(
     glam::DVec3::new(1.5, 2.5, 1.0),
     coloured_light(glam::Vec3::ONE),
 )];
-
-/// The Mesh draws each of its Primitives with the Material it names.
-pub(crate) fn spawn_shadows(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
-    let mesh = loader.mesh(ReferenceScene::Shadows.mesh_id("sphere-over-plane"))?;
-    world.spawn((Transform::IDENTITY, MeshRef(mesh)));
-    Ok(())
-}
 
 /// crowd's figures: rows of `CROWD_COLUMNS`, `CROWD_SPACING` metres apart,
 /// on a ground plane reaching `CROWD_GROUND_HALF_SIZE` from the origin each
@@ -990,7 +1080,7 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
     [[-reach, 0.0, -reach], [reach, CROWD_FIGURE_HEIGHT, reach]]
 }
 
-/// Spawns the ground, then the figures in rows of `CROWD_COLUMNS` centred
+/// Spawns the figures in rows of `CROWD_COLUMNS` centred
 /// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
 /// its bones' shadow proxies as children (`CrowdForm::Proxies`).
 pub(crate) fn spawn_crowd(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
@@ -1015,8 +1105,6 @@ fn spawn_crowd_as(
     form: CrowdForm,
 ) -> anyhow::Result<()> {
     let scene = ReferenceScene::Crowd;
-    let ground = loader.mesh(scene.mesh_id("ground"))?;
-    world.spawn((Transform::IDENTITY, MeshRef(ground)));
     let material = loader.material(scene.material_id("figure"))?;
     let figure = scene.mesh_id("figure");
     let rest = loader.bent_mesh(figure)?;
@@ -1227,6 +1315,7 @@ fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Ge
 /// The centres of `tiles_per_side` × `tiles_per_side` square tiles, each
 /// `tile_size_metres` on a side, that together make a square centred on the origin,
 /// row by row along +Z.
+#[cfg(feature = "cook")]
 pub(crate) fn ground_tile_centres(
     tile_size_metres: f64,
     tiles_per_side: u32,
