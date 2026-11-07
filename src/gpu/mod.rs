@@ -562,11 +562,11 @@ async fn first_success<T>(
 /// On D3D12, wgpu refuses a buffer, texture, query set or acceleration
 /// structure that would take the process past the memory the driver reports
 /// it may use [ref:wgpu-types-30-memory-budget-thresholds]. Vulkan goes
-/// without: wgpu judges a mapped buffer by the device-local, host-visible
-/// heap alone, which is a 214 MiB window on an NVIDIA card without Resizable
-/// BAR, though its allocator falls back to host memory when that heap is full
-/// (gfx-rs/wgpu#9745 [ref:wgpu-issue-9745]), so it would refuse allocations
-/// that succeed.
+/// without: wgpu judges a buffer the CPU writes by the device-local,
+/// host-visible heap alone, a window of a few hundred MiB on a card without
+/// Resizable BAR (214 MiB on the RTX 2070 SUPER), though its allocator falls
+/// back to host memory when that heap is full (gfx-rs/wgpu#9745
+/// [ref:wgpu-issue-9745]), so it would refuse allocations that succeed.
 fn instance_descriptor(backend: wgpu::Backend) -> wgpu::InstanceDescriptor {
     let memory_budget_thresholds = match backend {
         wgpu::Backend::Dx12 => wgpu::MemoryBudgetThresholds {
