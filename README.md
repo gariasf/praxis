@@ -50,7 +50,7 @@ Verdict pinned starts a line. lavapipe's records are never suspects.
   is bisected along `main`'s first-parent commits of other source hashes
   between `good` and `bad`, each commit's median judged by which end's median
   of that night it lies nearer, over as many nights as it takes, until
-  `pinned` names the commit that changed it, whether that commit changed the
+  `pinned` names the commit that changed it, whether that commit re-recorded the
   scene's Baseline for the adapter (`covered_by_baseline`), and the mean
   medians of that night's ends (`measured`). A pinned commit no Baseline
   covers is a Regression: it opens one `needs-triage` issue per scene, whose
@@ -65,8 +65,9 @@ there once. A bad publish is undone with `git revert`.
 `praxis history import` added the Baselines committed to `main` before the
 history existed, each a record of its commit's source, its `provenance.source`
 `baseline-commit`. A Baseline file a commit on `main`'s first-parent line
-added or changed is a record, unless the commit only renamed it or gave it new
-fields without changing a value it held, which measured nothing again. Two
+added or changed is a record, unless the commit only renamed it or left every
+timing it held (a field ending `_microseconds`) and its Harness version as they
+were: new fields or changed counters alone measured nothing again. Two
 Baselines of one source meet the rules above with the later first: it stays
 unless the earlier goes on a Series and it does not, or the earlier's GPU frame
 spread is lower and neither is lavapipe's. A Baseline counts as quiet unless the
