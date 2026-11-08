@@ -1,0 +1,13 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "backend": "vulkan",
+  "binary_bytes": 23194400,
+  "build_seconds": 34,
+  "checkout": {
+    "branch": "main",
+    "commit": "c2bf46a07d0e18760bf60fe26747119a735c3d62",
+    "dirty": false,
+    "source_hash": "fc81711ceef1433c6ed28ea7aae9edd9142ab8de"
+  },
+  "committed_unix_seconds": 1794139341
+}
