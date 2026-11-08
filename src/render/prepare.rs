@@ -16,6 +16,7 @@ use crate::render::{
     NO_MESH, RenderCapacities,
 };
 use crate::streaming::{LoadedChunk, LoadedChunks};
+use crate::threading::init_compute_pool;
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -74,6 +75,9 @@ type RenderableData = (
 
 /// One Renderable a `RenderableQuery` found.
 type RenderableItem<'world> = bevy_ecs::query::QueryItem<'world, 'world, RenderableData>;
+
+/// The Renderables, read in one frame.
+type Renderables<'world> = Query<'world, 'world, RenderableData>;
 
 /// The Renderables.
 type RenderableQuery<Filter = ()> = QueryState<RenderableData, Filter>;
@@ -162,6 +166,48 @@ fn instance(
         offset,
         mesh: mesh.index,
     }
+}
+
+/// The fewest Instances a compute pool task fills, so a task's work
+/// outweighs waking a thread for it.
+const INSTANCES_PER_TASK: usize = 1024;
+
+/// Fills the Instance at each index of `drawn` in `instances` from its
+/// Renderable, its World transform blended `blend_weight` of the way from the
+/// previous Tick's, split among the compute pool's threads once there are
+/// enough for two tasks (ADR 0016). `drawn` is in index order.
+fn fill_instances(
+    instances: &mut [InstanceData],
+    drawn: &[(usize, Entity)],
+    renderables: &Renderables<'_>,
+    blend_weight: f32,
+) {
+    let fill = |instances: &mut [InstanceData], first_index: usize, drawn: &[(usize, Entity)]| {
+        for &(index, entity) in drawn {
+            let Ok((_, current, previous, mesh_ref, material_ref)) = renderables.get(entity) else {
+                continue;
+            };
+            let transform = current.drawn(previous, blend_weight);
+            let material = material_ref.map(|material_ref| material_ref.0);
+            instances[index - first_index] = instance(&transform.0, mesh_ref.0, material);
+        }
+    };
+    let pool = init_compute_pool();
+    let tasks = (drawn.len() / INSTANCES_PER_TASK).min(pool.thread_num() + 1);
+    if tasks < 2 {
+        fill(instances, 0, drawn);
+        return;
+    }
+    pool.scope(|scope| {
+        let mut rest = instances;
+        let mut first_index = 0;
+        for group in drawn.chunks(drawn.len().div_ceil(tasks)) {
+            let end = group.last().map_or(first_index, |&(index, _)| index + 1);
+            let (head, tail) = std::mem::take(&mut rest).split_at_mut(end - first_index);
+            scope.spawn(async move { fill(head, first_index, group) });
+            (rest, first_index) = (tail, end);
+        }
+    });
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
@@ -268,6 +314,9 @@ pub struct FramePreparer {
     /// Renderables the last `prepare` skipped, whose slots hold an Instance
     /// with no Mesh.
     skipped: bevy_ecs::entity::EntityHashSet,
+    /// Each drawn Renderable's Instance's index in `FrameData::instances`, in
+    /// order, kept for its memory.
+    drawn: Vec<(usize, Entity)>,
     /// Set by `rewrite_all_instances` until the next `prepare`.
     rewrite_every_instance: bool,
     /// The Mesh and Material pools' frees the last `prepare` saw.
@@ -303,6 +352,7 @@ impl FramePreparer {
             },
             unwritten: bevy_ecs::entity::EntityHashSet::default(),
             skipped: bevy_ecs::entity::EntityHashSet::default(),
+            drawn: Vec::new(),
             rewrite_every_instance: false,
             pool_frees: 0,
             renderables_refused: 0,
@@ -376,6 +426,7 @@ impl FramePreparer {
             instance_slots,
             unwritten,
             skipped,
+            drawn,
             rewrite_every_instance,
             pool_frees,
             renderables_refused,
@@ -480,10 +531,9 @@ impl FramePreparer {
             .collect();
         let retried = std::mem::take(unwritten);
         let skipped_before = std::mem::take(skipped);
-        let mut visit = |(entity, current, previous, mesh_ref, material_ref): RenderableItem<
-            '_,
-        >| {
-            let drawn = match meshes.get(mesh_ref.0) {
+        drawn.clear();
+        let mut visit = |(entity, _, previous, mesh_ref, material_ref): RenderableItem<'_>| {
+            let has_mesh = match meshes.get(mesh_ref.0) {
                 None => {
                     tracing::warn!(
                         handle = ?mesh_ref.0,
@@ -516,7 +566,7 @@ impl FramePreparer {
                 unwritten.insert(entity);
                 return;
             };
-            if !drawn {
+            if !has_mesh {
                 // Its slot draws nothing until its Mesh does; an Instance with
                 // no Mesh written there before stays.
                 if *rewrite_every_instance || !skipped_before.contains(&entity) {
@@ -528,13 +578,8 @@ impl FramePreparer {
             }
             // Each Renderable visited is new, changed, blended, retried or lost
             // a component, or every Instance is written again.
-            let transform = current.drawn(previous, blend_weight);
-            let material = material_ref.map(|material_ref| material_ref.0);
-            frame.write_instance(
-                slot,
-                instance(&transform.0, mesh_ref.0, material),
-                previous.is_some(),
-            );
+            drawn.push((frame.instances.len(), entity));
+            frame.write_instance(slot, no_mesh_instance(), previous.is_some());
         };
         if *rewrite_every_instance {
             renderables.iter().for_each(&mut visit);
@@ -555,6 +600,7 @@ impl FramePreparer {
                 }
             }
         }
+        fill_instances(&mut frame.instances, drawn, &renderables, blend_weight);
         // A slot freed this frame, or every free slot when every Instance is
         // written again, takes an Instance with no Mesh, so the GPU no longer
         // draws it; Renderables may take it from the next frame.
@@ -1695,5 +1741,73 @@ mod tests {
         frames.preparer.rewrite_all_instances();
         assert_eq!(frames.prepare(), [0, 1, 2]);
         assert!(frames.prepare().is_empty());
+    }
+
+    /// Enough blended Renderables to split among the compute pool's threads,
+    /// every third skipped, so Instances with no Mesh fall between theirs:
+    /// each lands in its own slot, a quarter of the way from the previous
+    /// Tick's place and turn.
+    #[test]
+    fn every_blended_instance_lands_in_its_slot_when_split_among_threads() {
+        let mut frames = Frames::new();
+        frames.world.resource_mut::<FixedTime>().blend_weight = 0.25;
+        let unloaded = MeshHandle {
+            index: frames.mesh.index + 1,
+            generation: 0,
+        };
+        let count = 4 * INSTANCES_PER_TASK + 7;
+        let renderables: Vec<(Entity, f32)> = (0..count)
+            .map(|index| {
+                let x = index as f64;
+                let angle = index as f32 * 1e-3;
+                let previous = glam::DAffine3::from_rotation_translation(
+                    glam::DQuat::from_rotation_y(f64::from(angle)),
+                    glam::dvec3(x, 4.0, 0.0),
+                );
+                let entity = frames.spawn(x);
+                let mut renderable = frames.world.entity_mut(entity);
+                renderable.insert(PreviousWorldTransform(Some(previous)));
+                renderable.get_mut::<Transform>().unwrap().rotation =
+                    glam::Quat::from_rotation_y(angle + 0.4);
+                if index % 3 == 1 {
+                    renderable.insert(MeshRef(unloaded));
+                }
+                (entity, angle)
+            })
+            .collect();
+        frames.prepare();
+
+        let frame = frames.preparer.frame();
+        let mut instance_by_slot = HashMap::new();
+        for write in &frame.instance_writes {
+            for (slot, index) in (write.first_slot..).zip(write.instances.clone()) {
+                instance_by_slot.insert(slot, frame.instances[index]);
+            }
+        }
+        for (index, (entity, angle)) in renderables.into_iter().enumerate() {
+            let slot = frames.preparer.instance_slots.by_entity[&entity];
+            let written = instance_by_slot[&slot];
+            if index % 3 == 1 {
+                assert_eq!(written.mesh, NO_MESH, "skipped Renderable {index}");
+                continue;
+            }
+            let (anchor, offset) = anchor_and_offset(glam::dvec3(index as f64, 3.0, 0.0));
+            assert_eq!(
+                (written.mesh, written.anchor, written.offset),
+                (frames.mesh.index, anchor, offset),
+                "Renderable {index}"
+            );
+            let turned = glam::Mat3::from_rotation_y(angle + 0.1);
+            let expected = padded_columns(turned);
+            for (column, expected_column) in written.rotation_scale.iter().zip(expected) {
+                for (value, expected_value) in column.iter().zip(expected_column) {
+                    assert!(
+                        (value - expected_value).abs() <= 1e-6,
+                        "Renderable {index}: {:?}, not {expected:?}",
+                        written.rotation_scale
+                    );
+                }
+            }
+        }
     }
 }
