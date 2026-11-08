@@ -117,15 +117,15 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/cook/chunk.rs</code></div>
   <h1>Chunk cooking</h1>
   <p class="definition">The cook of a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s static content into <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>s: every Renderable that does not move becomes a <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#39;s, if any.">Placement</span>, and every point light a light, each in the 256 m Chunk that holds its pivot and translated in f64 from that Chunk's origin; each Chunk's bounds grow to hold its Placements' Meshes, and each Chunk is stored as one <span class="concept" data-term="Blob" data-tip="One cooked Asset&#39;s bytes, named by their content hash.">Blob</span>, a field at a time, under an <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file&#39;s GUID, or a procedural Reference scene&#39;s name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span> made from its scene's name and its coordinates.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 73aec1f3 (2026-11-07), with a dev launch cooking each Chunk it loads on a miss, and <code>praxis cook</code> leaving <code>world</code> out, as their changes leave them; the costs were measured at 075919da. A change to the Chunk cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#town">The Reference scenes</a> for what <code>town</code> places, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchors and a vertex&#39;s 128 m from its pivot, <a href="cook-texture.html">Texture cooking</a> for the Cook key and the Cooked cache.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at dd5ffd53 (2026-11-08), with a dev launch cooking each Chunk it loads on a miss, <code>praxis cook</code> leaving <code>world</code> out, and each Chunk generated as it cooks, as their changes leave them; <code>town</code>'s costs were measured at 075919da, <code>world</code>'s launch at this page's commit. A change to the Chunk cook rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#town">The Reference scenes</a> for what <code>town</code> places, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchors and a vertex&#39;s 128 m from its pivot, <a href="cook-texture.html">Texture cooking</a> for the Cook key and the Cooked cache.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
       <dt>Runs</dt><dd>Before the frame, never during it: in <code>praxis cook</code> for every Reference scene but <code>world</code>, in <code>praxis cook &lt;scene&gt;</code> for one, and in a dev launch for each Chunk it loads, as the load finds its Blob missing or stale, writing only a Chunk whose <span class="concept" data-term="Cook key" data-tip="The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.">Cook key</span> changed. Every scene loads its Chunks as it spawns.</dd>
-      <dt>Reads</dt><dd><code>ReferenceScene::static_content</code>: Placements and lights in World coordinates, from every Reference scene. The source bounds of every Mesh the same cook reads, through <code>source_bounds</code>.</dd>
+      <dt>Reads</dt><dd>One Chunk's Placements and lights in World coordinates: <code>ReferenceScene::chunk_content</code> for <code>world</code>, which generates that Chunk alone, and <code>ReferenceScene::static_content</code> once for every other scene, whose Chunks are cut from it. The source bounds of every Mesh the same cook reads, through <code>source_bounds</code>.</dd>
       <dt>Writes</dt><dd>One Blob per Chunk into the <span class="concept" data-term="Cooked cache" data-tip="The store of Blobs plus the index from Asset ID to Blob. Disposable: it can always be rebuilt from sources.">Cooked cache</span>, under <code>ReferenceScene::chunk_id</code>; its Cook key; and to the cook's report, each Mesh or Material a Placement names that the cook does not make.</dd>
       <dt>Counted</dt><dd>Not in Frame stats: the cook runs outside the frame. The cook's <code>cook complete</code> log counts Chunks among the Assets cooked and unchanged.</dd>
-      <dt>Where in the code</dt><dd><code>chunks</code> and <code>cook_key</code> in <code>src/cook/chunk.rs</code>; <code>read_sources</code> and <code>cook_sources</code> in <code>src/cook/mod.rs</code>; a dev launch's cook in <code>CookingLoader</code>, <code>src/cook/launch.rs</code>; the Blob in <code>CookedChunk</code>, <code>CookedPlacement</code> and <code>CookedLight</code>, <code>src/assets/cooked.rs</code>; each scene's content in <code>static_content</code>, <code>src/scenes/mod.rs</code>, <code>town</code>'s in <code>src/scenes/town.rs</code>.</dd>
+      <dt>Where in the code</dt><dd><code>chunks</code> and <code>cook_key</code> in <code>src/cook/chunk.rs</code>; <code>read_sources</code>, <code>Sources::chunk</code> and <code>cook_sources</code> in <code>src/cook/mod.rs</code>; a dev launch's cook in <code>CookingLoader</code>, <code>src/cook/launch.rs</code>; the Blob in <code>CookedChunk</code>, <code>CookedPlacement</code> and <code>CookedLight</code>, <code>src/assets/cooked.rs</code>; each scene's content in <code>static_content</code> and <code>chunk_content</code>, <code>src/scenes/mod.rs</code>, <code>town</code>'s in <code>src/scenes/town.rs</code>, <code>world</code>'s in <code>static_content_reaching</code>, <code>src/scenes/world.rs</code>.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -160,6 +160,13 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
     })
     .collect();</code></pre>
   <p class="code-source"><code>static_content</code>, <code>src/scenes/town.rs</code>.</p>
+  <p>A cook holds one Chunk at a time. <code>read_sources</code> lists each scene's Chunks by <code>chunk_coordinates</code> and generates none; <code>Sources::chunk</code> makes one as <code>cook_sources</code> reaches it, or as a dev launch's load first asks for it. <code>world</code>'s 16,214,556 Placements are generated a Chunk at a time: <code>chunk_content</code> calls <code>static_content_reaching</code>, which walks the same ground tiles, settlements, lots and farms in the same order as <code>static_content</code> but places only those whose square reaches the Chunk, each widened by how far its Placements' pivots stray from its centre, then keeps the Placements whose pivots the Chunk holds. Each Placement is placed from a hash of where it stands, so skipping a lot changes nothing else, and the Chunk holds what its cut from the whole scene holds, in the same order. Every other scene's generator places block by block, not Chunk by Chunk, so its whole content is generated once per cook and cut, and each Chunk is taken from that cut.</p>
+<pre class="code"><code>let reaches = |centre: glam::DVec3, reach_metres: f64| {
+    let near = centre - lowest + reach_metres;
+    let far = highest - centre + reach_metres;
+    near.x &gt;= 0.0 &amp;&amp; near.z &gt;= 0.0 &amp;&amp; far.x &gt;= 0.0 &amp;&amp; far.z &gt;= 0.0
+};</code></pre>
+  <p class="code-source"><code>static_content_reaching</code>, <code>src/scenes/world.rs</code>: a lot reaches 6 m, half its pitch, a farm's ground tile 64 m, a settlement its half size.</p>
 </section>
 
 <section class="part prose" id="pivot">
@@ -167,8 +174,8 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <h2>The Chunk over a pivot</h2>
   <p class="key-idea">A Placement or light belongs to the Chunk whose column holds its translation: x and z divided by 256 m and floored. Its translation is stored from that Chunk's origin, in f64, so a Mesh may reach past the Chunk's edge and still have one owner.</p>
   <p>A Chunk at integer coordinates (x, z) has its origin at (256x, 0, 256z) and holds the column from there to 256 m further along x and z, at every height. <code>chunk_holding</code> floors, so a pivot at x = &minus;0.5 m is in Chunk &minus;1 and one at x = 256 m in Chunk 1. <code>chunks</code> keeps the Chunks in a <code>BTreeMap</code> by coordinates, so they and their contents come out in the same order every cook.</p>
-<pre class="code"><code>let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);</code></pre>
-  <p class="code-source"><code>chunk_holding</code>, <code>src/cook/chunk.rs</code>.</p>
+<pre class="code"><code>[pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32)</code></pre>
+  <p class="code-source"><code>chunk_holding</code>, <code>src/assets/cooked.rs</code>, which <code>chunks</code> and <code>chunk_content</code> both use.</p>
 <pre class="code"><code>pub(crate) fn chunk_origin([x, z]: [i32; 2]) -&gt; glam::DVec3 {
     glam::DVec3::new(f64::from(x), 0.0, f64::from(z)) * CHUNK_EDGE_METRES
 }</code></pre>
@@ -218,7 +225,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="part-mark">5 &middot; <code>dangling_references</code></div>
   <h2>Names that dangle</h2>
   <p class="key-idea">Every Mesh and Material a Placement names is checked against the Assets the same cook makes. One it does not make is warned of, naming the Chunk and the Asset ID, even when the Cooked cache still holds a stale Blob for it.</p>
-  <p>The Cooked cache never drops an index entry, so a renamed Mesh's old ID still loads its old Blob. <code>cook_sources</code> adds each Placement's Mesh and Material, with <code>Referrer::Chunk</code> and the scene and coordinates, to the references it already checks: each Material's Textures, each Mesh's Materials and each scene's loads. A Chunk of a scene with an absent source is let through as that scene's own references are, since an absent source keeps its Blobs. A dev launch checks each Mesh and Material a Chunk's Placements name the same way as it loads the Chunk, and a Chunk the cook keeps passes, as its Blob stays as it is.</p>
+  <p>The Cooked cache never drops an index entry, so a renamed Mesh's old ID still loads its old Blob. <code>cook_sources</code> adds each Placement's Mesh and Material, with <code>Referrer::Chunk</code> and the scene and coordinates, to the references it already checks: each Material's Textures, each Mesh's Materials and what each scene's spawn loads before any Chunk. A Chunk of a scene with an absent source is let through as that scene's own references are, since an absent source keeps its Blobs. A dev launch checks each Mesh and Material a Chunk's Placements name the same way as it loads the Chunk, and a Chunk the cook keeps passes, as its Blob stays as it is.</p>
 </section>
 
 <section class="part prose" id="tests">
@@ -230,13 +237,14 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
       <tr><td><code>towns_chunks_hold_what_its_generator_places_and_load_in_chunk_order</code></td><td><code>src/cook/chunk.rs</code></td><td>exactly the 4 &times; 4 Chunks from (&minus;2, &minus;2) to (1, 1) are cooked; every Placement and light the generator places is in the Chunk over its pivot at its translation from that Chunk's origin, with its Mesh, overriding Material, rotation, scale and photometric values; the spawn loads every Placement and light into <code>LoadedChunks</code> in Chunk order and spawns no Renderable but the 10,000 birds and no point light; every pivot lies within its Chunk; each cooked Mesh's box, placed, lies within its Chunk's bounds; a second cook cooks nothing</td></tr>
+      <tr><td><code>every_chunk_generated_alone_has_its_cut_from_the_whole_scenes_cook_key</code></td><td><code>src/cook/chunk.rs</code></td><td>each of <code>world</code>'s 1,600 Chunks generated alone holds exactly the Chunk cut from its whole static content, Placement for Placement in the same order, by Cook key</td></tr>
       <tr><td><code>every_scene_loads_its_static_content_from_its_chunks</code></td><td><code>src/cook/chunk.rs</code></td><td>each scene's static content, split into Chunks, lies at the coordinates <code>chunk_coordinates</code> lists; its spawn loads every Placement and light from them, and spawns no point light and no Renderable that neither carries <code>PreviousWorldTransform</code> nor bends</td></tr>
       <tr><td><code>a_scene_cook_cooks_exactly_what_its_scene_references_and_changed</code></td><td><code>tests/cook.rs</code></td><td>with NormalTangentTest's file, then the manifest, gone, a cook of its scene cooks nothing, its Chunks' Blobs included</td></tr>
       <tr><td><code>loading_one_chunk_cooks_that_chunk_and_the_assets_it_names</code></td><td><code>src/cook/launch.rs</code></td><td>a dev launch cooks nothing as it starts; loading one Chunk of <code>town</code>, then of <code>uv-grid</code>, into an empty Cooked cache cooks exactly that Chunk and the Meshes, Materials and Textures it names, by index entry and by Blob</td></tr>
       <tr><td><code>a_changed_mesh_re_cooks_when_a_chunk_placing_it_loads</code></td><td><code>src/cook/launch.rs</code></td><td>a Mesh whose source grew keeps its Blob until a Chunk placing it loads, which re-cooks the Mesh and the Chunk, whose bounds grew with it</td></tr>
       <tr><td><code>a_chunk_placing_a_removed_mesh_warns_and_loads_its_stale_blob</code></td><td><code>src/cook/launch.rs</code></td><td>loading a Chunk whose Placement names a Mesh no source defines warns, naming the Chunk and the Mesh, and loads the stale Blob</td></tr>
       <tr><td><code>chunk_blob_round_trips_and_refuses_another_version_or_a_wrong_count</code></td><td><code>src/assets/cooked.rs</code></td><td>a Chunk with and without a Material reads back as written; another version and a count its bytes do not hold are refused</td></tr>
-      <tr><td><code>a_placement_or_material_naming_a_removed_asset_dangles</code></td><td><code>src/cook/mod.rs</code></td><td>a Placement's Mesh and Material, and a Material's Texture, that only a stale cache holds are reported with their referrer, the Chunk named by scene and coordinates</td></tr>
+      <tr><td><code>a_placement_or_material_naming_a_removed_asset_dangles</code></td><td><code>src/cook/mod.rs</code></td><td>a Placement's Mesh in <code>uv-grid</code>'s Chunk (0, 0), and a Material's Texture, that only a stale cache holds are reported with their referrer, the Chunk named by scene and coordinates</td></tr>
       <tr><td>the <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Goldens</span></td><td><code>tests/goldens.rs</code></td><td>every scene, each loading from its Chunks, within their tolerance</td></tr>
     </tbody>
   </table>
@@ -246,7 +254,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <section class="part prose" id="cost">
   <div class="part-mark">7 &middot; <code>praxis cook</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">The Chunk cook costs cook time and bytes, never frame time. <code>town</code>'s 16 Chunks compress from 20.6 MB to 0.69 MB, and a launch whose Chunks are up to date still generates, cuts and hashes them.</p>
+  <p class="key-idea">The Chunk cook costs cook time and bytes, never frame time. <code>town</code>'s 16 Chunks compress from 20.6 MB to 0.69 MB, and a launch whose Chunks are up to date still generates, cuts and hashes each it loads; <code>world</code>'s launch generates only those, a Chunk at a time.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th><code>town</code>'s 16 Chunks</th><th class="n">Bytes</th><th class="n">Bytes per Placement</th><th class="n">Time, ms</th></tr></thead>
@@ -260,6 +268,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   </table>
   </div>
   <p class="note">Release builds on the Apple M4 Pro, all 16 Chunks on one thread, with the one-minute load average between 5 and 14, so the ranges are a few runs each; bytes per Placement divide by 244,319 and include the lights' share and each Blob's 8-byte magic and version. The rows a Placement at a time were measured on a layout this cook no longer writes. One Chunk holds 13,265 to 17,577 Placements and 56 to 72 lights, 39,774 to 47,254 bytes compressed.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th><code>praxis capture world</code>, Blobs cooked</th><th class="n">Peak resident bytes</th><th class="n">To the first frame, s</th></tr></thead>
+    <tbody>
+      <tr class="focus"><td>each Chunk it loads generated alone</td><td class="n">367,624,192&ndash;373,587,968</td><td class="n">0.42</td></tr>
+      <tr><td>all 1,600 Chunks generated and held first</td><td class="n">4,177,756,160&ndash;4,190,961,664</td><td class="n">2.38&ndash;2.39</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Release builds on the Apple M4 Pro at 1280 &times; 720, three runs each, interleaved, peak resident bytes from <code>/usr/bin/time -l</code>; the first frame is the log line of its staging, timed from <code>praxis starting</code>.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -269,6 +287,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <p><b>The pivot decides.</b> A Placement belongs to one Chunk, the one over its pivot, rather than to every Chunk its Mesh touches, so it loads once; the Chunk's bounds grow instead, and ADR 0014's 128 m pivot bound, which the Mesh cook enforces, keeps a Mesh at unit scale within 128 m of its pivot, though the corners of its rotated box, which the bounds hold, can reach about 222 m along an axis.</p>
   <p><b>A Material per Placement.</b> An Instance's Material overrides its Mesh's, and <code>town</code>'s boxes rely on it: one unit cube drawn as slabs, walls, windows and rails in eight Materials. A Placement carries the same optional override, so the Chunks hold what the spawn places with no Mesh per Material.</p>
   <p><b>A field at a time.</b> Stored a Placement at a time, an Asset ID repeats every 84 bytes among unrelated floats; stored a field at a time, the Asset IDs, the translations along each axis and the unit scales each sit together, and zstd at level 9 compresses them to two thirds of what level 19 reaches the other way, about a hundred times faster.</p>
+  <p><b>A Chunk at a time.</b> Generating a scene whole and holding every Chunk with its Cook key, as the cook once did, made each launch of <code>world</code> place 16,214,556 Instances before its first frame, for the hundred or so Chunks it loads. Its generator places from a hash of where each thing stands, so it can place one Chunk alone; the other scenes' generators place block by block, and their content is small enough to generate once and cut. Lowering <code>world</code>'s density was ruled out: the static TLAS's capacity sets it.</p>
   <p><b>Photometric lights.</b> A light holds what its <code>PointLight</code> holds: a colour, an intensity in candela as ADR 0023 has it, and a range in metres as <code>KHR_lights_punctual</code> defines it.</p>
 </section>
 
@@ -277,6 +296,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <h2>Limits</h2>
   <p><b>Spawned, not streamed.</b> Each scene loads all its Chunks as it spawns, <code>town</code> 16 and <code>far-coplanar</code> 258, each into a range of Instance slots with no entity per Placement or light.</p>
   <p><b>The last bit of a translation.</b> A World translation rebuilt from a Chunk's origin and a Placement's translation can differ from the generator's in f64's last bits, by at most 2<sup>&minus;46</sup> m.</p>
+  <p><b>Generated alone only in <code>world</code>.</b> Every other scene's whole content is generated once per cook or launch, however few of its Chunks it loads: <code>town</code>'s 244,319 Placements each time.</p>
   <p><b>A Mesh the cook does not read.</b> A Chunk a Placement of which names a Mesh no source of the same cook defines, its source absent or the Mesh renamed, is not cooked: its bounds would know only that Placement's pivot, so it keeps the Blob it has, as an absent source's Assets do, and is warned of; its Placements' references are still checked.</p>
   <p><b>Lights outside the bounds.</b> A light's range does not grow its Chunk's bounds.</p>
   <p><b>No index of Chunks.</b> Nothing lists which Chunks a scene has: a reader finds one by its coordinates.</p>
@@ -287,8 +307,8 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <h2>Sources</h2>
   <p class="note">The Chunk cook relies on no outside source beyond the zstd library the Cooked cache already uses; its rules are the ADRs named above.</p>
   <h3>History</h3>
-  <p class="note">Chunks were a line of ADR 0018, a list of Placements with no code behind it. They were first cooked for the streamed world, after the cooker began refusing a Mesh past 128 m from its pivot and <code>town</code>'s ground was cut into 128 m tiles, with lights and an overriding Material added to the ADR's Placement. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/cook/chunk.rs</code>, <code>src/cook/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/scenes/town.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018 and 0023, and release-build measurements on the M4 Pro, all as the Chunk cook's change leaves <code>main</code> at 075919da.</footer>
+  <p class="note">Chunks were a line of ADR 0018, a list of Placements with no code behind it. They were first cooked for the streamed world, after the cooker began refusing a Mesh past 128 m from its pivot and <code>town</code>'s ground was cut into 128 m tiles, with lights and an overriding Material added to the ADR's Placement. Once <code>world</code> placed sixteen million Instances, each Chunk came to be generated as it cooks. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/cook/chunk.rs</code>, <code>src/cook/mod.rs</code>, <code>src/cook/launch.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/scenes/town.rs</code>, <code>src/scenes/world.rs</code>, <code>src/scenes/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018 and 0023, and release-build measurements on the M4 Pro, as the changes named above leave <code>main</code>.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="box-filtering.html">Previous: Box filtering</a><a href="index.html">All field guides</a><a href="chunk-streamer.html">Next: The Chunk streamer</a></nav>

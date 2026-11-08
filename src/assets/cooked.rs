@@ -61,6 +61,11 @@ pub(crate) fn chunk_origin([x, z]: [i32; 2]) -> glam::DVec3 {
     glam::DVec3::new(f64::from(x), 0.0, f64::from(z)) * CHUNK_EDGE_METRES
 }
 
+/// The coordinates, x then z, of the Chunk that holds `pivot`.
+pub(crate) fn chunk_holding(pivot: glam::DVec3) -> [i32; 2] {
+    [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32)
+}
+
 /// What an Asset is. Its number, and a Texture's Channel, are part of every
 /// Asset ID: never renumber.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

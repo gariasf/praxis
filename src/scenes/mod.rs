@@ -16,7 +16,7 @@ use std::sync::Arc;
 use crate::cook::{ImageGenerator, LoadedImage};
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 #[cfg(feature = "cook")]
-use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
+use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement, chunk_holding};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
 #[cfg(feature = "cook")]
@@ -411,6 +411,25 @@ impl ReferenceScene {
             Self::Town => town::static_content(),
             Self::World => world::static_content(),
         }
+    }
+
+    /// What the scene's Chunk at `coordinates` cooks from, where its
+    /// generator makes one Chunk alone, as `world`'s does: the Placements
+    /// and point lights whose pivots it holds, in `static_content`'s order,
+    /// each translated from the World's origin. Every other scene's Chunks
+    /// are cut from its whole `static_content`.
+    #[cfg(feature = "cook")]
+    pub(crate) fn chunk_content(
+        self,
+        coordinates: [i32; 2],
+    ) -> Option<(Vec<CookedPlacement>, Vec<CookedLight>)> {
+        let (mut placements, mut lights) = match self {
+            Self::World => world::static_content_reaching(coordinates),
+            _ => return None,
+        };
+        placements.retain(|placement| chunk_holding(placement.translation) == coordinates);
+        lights.retain(|light| chunk_holding(light.translation) == coordinates);
+        Some((placements, lights))
     }
 
     /// The camera at `frame`, moved by `shift` metres. The path is a function
