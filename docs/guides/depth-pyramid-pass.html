@@ -274,7 +274,7 @@ textureStore(level, texel.xy, vec4&lt;f32&gt;(minimum));</code></pre>
       <tr><td><code>an_instance_hidden_behind_a_nearer_one_is_culled_by_phase_two_until_it_reappears</code></td><td><code>renderer.rs</code></td><td>the pyramid through phase two, in a Renderer created at another size and resized first, so a pyramid or bind group left at the old size culls wrongly</td></tr>
       <tr><td><code>a_resized_renderer_draws_as_one_created_at_its_new_size</code></td><td><code>renderer.rs</code></td><td>a resized Renderer's frame equals one created at its new size</td></tr>
       <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the pass timed by name, and the closed-form GPU memory with the pyramid's 80&times;45 to 1&times;1 levels in it</td></tr>
-      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene's frame with culling off matches its frame with culling on, <code>town</code> at eight frames of its path: no pixel may differ on hardware, one a frame on a software driver</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene's frame with culling off matches its frame with culling on, <code>town</code> at eight frames of its path, <code>world</code> at three: no pixel may differ on hardware, one a frame on a software driver</td></tr>
     </tbody>
   </table>
   </div>
