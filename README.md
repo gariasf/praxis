@@ -2,7 +2,7 @@
 
 Open-world RPG engine in Rust and wgpu, written from scratch.
 
-<img src="tests/goldens/metal/town.png" width="640" alt="town: a procedural town at street level, lit by street lamps">
+<img src="docs/images/town-2560x1440.webp" width="100%" alt="town: a procedural town at street level, lit by street lamps">
 
 `town`: a procedural 1 km town, ~250,000 instances, 1,024 street lamps,
 ray-traced shadows.
@@ -116,8 +116,9 @@ Test scenes, each one benched. Images are the Metal goldens, 640×360.
 | <img src="tests/goldens/metal/texture-wall.png" width="320" alt="texture-wall"> | **texture-wall**: 10,000 resident textures sampled by 100 quads. |
 | <img src="tests/goldens/metal/shadows.png" width="320" alt="shadows"> | **shadows**: sphere over a plane, sun and point light; ray-traced shadow against the analytic one. |
 | <img src="tests/goldens/metal/crowd.png" width="320" alt="crowd"> | **crowd**: 100 figures bent on the GPU every frame, a stand-in for skinning, with shadows from per-bone proxies. |
+| <img src="tests/goldens/metal/town.png" width="320" alt="town"> | **town**: the scene at the top, here as its golden; the top image is the same view at 2560×1440. |
 
-Plus `town` (top), and one without a golden:
+Plus one without a golden:
 
 - **helmet**: the SciFiHelmet sample model and a material sweep. The model
   is downloaded, not committed.
