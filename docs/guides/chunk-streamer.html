@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; Chunks &middot; <code>src/streaming/</code></div>
   <h1>The Chunk streamer</h1>
   <p class="definition">The module that decides, each frame, which <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk's edge.">Chunks</span> of a <span class="concept" data-term="Game world" data-tip="The playable space, divided into Chunks.">Game world</span> to request, keep and unload around the camera, from the camera's <span class="concept" data-term="World position" data-tip="A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.">World position</span> and the loads its IO finished, and reports its <span class="concept" data-term="Late Chunk" data-tip="A Chunk the camera came within the Load radius of before it was loaded.">Late Chunks</span>, its hold after a teleport and whether the frame is Settled; with the IO pool that reads and decodes Chunks off the main thread, it keeps the World's loaded Chunks.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 1dd75c9b (2026-11-08), with the Chunk streamer driven by the IO pool as its change leaves it. A change to the Chunk streamer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-chunk.html">Chunk cooking</a> for the Chunks it streams and the Asset IDs their Placements name; <a href="prepare.html#slots">Prepare</a> for the slot ranges loaded Chunks take.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 25ab340f (2026-11-08), with the Chunk streamer driven by the IO pool as its change leaves it. A change to the Chunk streamer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-chunk.html">Chunk cooking</a> for the Chunks it streams and the Asset IDs their Placements name; <a href="prepare.html#slots">Prepare</a> for the slot ranges loaded Chunks take.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -299,12 +299,11 @@ io.receive_all()?;</code></pre>
     <thead><tr><th>Flying diagonally at 50 m/s, 3,600 frames</th><th class="n">Median, &micro;s</th><th class="n">p99, &micro;s</th></tr></thead>
     <tbody>
       <tr class="focus"><td>Load radius 256 m over 40 &times; 40 Chunks</td><td class="n">0.29&ndash;0.33</td><td class="n">0.58&ndash;0.71</td></tr>
-      <tr><td>Load radius 6 km over 32 &times; 32 Chunks, all loaded</td><td class="n">45&ndash;47</td><td class="n">55&ndash;67</td></tr>
     </tbody>
   </table>
   </div>
   <p class="note">Release build on the Apple M4 Pro: the update alone, in a test against the scripted IO with loads of 6 frames, five rounds while other sessions held the one-minute load average near 26, so the ranges may run high.</p>
-  <p>The work is the Chunks overlapping the request radius's square, each looked up in the Game world's set, plus every loaded Chunk for the hold radius and the held list. At 256 m that is 9 to 25 Chunks examined, and the loaded ones, at most the 20 to 23 within the hold radius. Its lists and sets are cleared each frame, not dropped, so they keep their capacity.</p>
+  <p>The work is the Chunks overlapping the request radius's square, clamped to the lowest and highest coordinates of the Game world's Chunks, each looked up in the Game world's set, plus every loaded Chunk for the hold radius and the held list. At 256 m that is 9 to 25 Chunks examined, and the loaded ones, at most the 20 to 23 within the hold radius. Its lists and sets are cleared each frame, not dropped, so they keep their capacity.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>First Settled frame, <code>stream_chunks</code></th><th class="n">Chunks</th><th class="n">Bytes read</th><th class="n">1 thread, &micro;s</th><th class="n">4 threads, &micro;s</th></tr></thead>
@@ -339,7 +338,7 @@ io.receive_all()?;</code></pre>
   <p><b>Main-thread reads.</b> Outside a Settled wait, an Asset claimed by a Chunk whose read is still in flight is read and decoded on the main thread by the Chunk that loads first, and <code>bytes_read</code> does not count it.</p>
   <p><b>The latest load only.</b> The lead takes the latest load's time, so a fast load after a slow one shortens it at once; a camera that speeds up during a load can make a Chunk late.</p>
   <p><b>No cancelled reads.</b> A request whose Chunk the camera leaves stays in flight until it finishes and is dropped.</p>
-  <p><b>Wide radii examine many Chunks.</b> The square around a radius that holds a whole scene is examined every frame, every Chunk of it looked up, whether or not anything moves.</p>
+  <p><b>Wide radii examine many Chunks.</b> The square around a radius that holds a whole scene, clamped to the Game world's bounds, is examined every frame, every Chunk of it looked up, whether or not anything moves.</p>
 </section>
 
 <section class="part prose" id="sources">
@@ -357,7 +356,7 @@ io.receive_all()?;</code></pre>
   </dl>
   <h3>History</h3>
   <p class="note">The streamer was written for the streamed world after its survey set the Load radius at 256 m and the hold radius one Chunk beyond it, before any scene loaded its Chunks through it. The IO pool then drove it: every scene's Chunks loaded through it, each scene with a Load radius of its own, and captures waited for Settled frames. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/streaming/</code>, <code>src/state.rs</code>, <code>src/capture/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/assets/cooked.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0016 and 0017 and the survey above, all as this change leaves <code>main</code> at 1dd75c9b.</footer>
+  <footer class="sources">Written from <code>src/streaming/</code>, <code>src/state.rs</code>, <code>src/capture/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/assets/cooked.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0016 and 0017 and the survey above, all as this change leaves <code>main</code> at 25ab340f.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="cook-chunk.html">Previous: Chunk cooking</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>
