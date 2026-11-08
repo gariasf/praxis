@@ -436,11 +436,12 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
     git(repository, &amp;["mktree"], Some(&amp;entries))
 }</code></pre>
   <h3>Quiet</h3>
-  <p>A run was quiet when preflight would have warned of nothing at its start and the scene's GPU frames held steady. Each reading that could not be taken is a preflight note, not a warning, so it passes; the spread of the GPU frames must have been read.</p>
+  <p>A run was quiet when preflight would have warned of nothing at its start, the scene's GPU frames held steady and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each reading that could not be taken is a preflight note, not a warning, so it passes; the spread of the GPU frames must have been read.</p>
   <div class="code-source"><code>is_quiet</code>, <code>src/bench/provenance.rs</code></div>
 <pre class="code"><code>    gpu_load_percent.is_none_or(|percent| percent &lt;= BUSY_GPU_PERCENT)
         &amp;&amp; one_minute_load_average.is_none_or(|load| load &lt;= BUSY_LOAD_AVERAGE)
         &amp;&amp; other_processes.is_none_or(&lt;[String]&gt;::is_empty)
+        &amp;&amp; busy_processes.is_none_or(&lt;[String]&gt;::is_empty)
         &amp;&amp; machine_warnings.is_empty()
         &amp;&amp; gpu_frame_p95_over_median.is_some_and(|ratio| ratio &lt; QUIET_P95_OVER_MEDIAN)</code></pre>
   <div class="table-wrap">
@@ -450,13 +451,14 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
       <tr><td>the busiest GPU's utilisation at the start</td><td class="n">above 10%</td><td><code>BUSY_GPU_PERCENT</code>, <code>src/preflight/mod.rs</code></td></tr>
       <tr><td>the one-minute load average at the start</td><td class="n">above 2.0</td><td><code>BUSY_LOAD_AVERAGE</code>, <code>src/preflight/mod.rs</code></td></tr>
       <tr><td>another praxis process at the start</td><td class="n">any</td><td><code>other_praxis_processes</code></td></tr>
+      <tr><td>a process outside praxis at the scene's start or end, since 2026-11-08</td><td class="n">at or over 50% of a core</td><td><code>BUSY_PROCESS_PERCENT</code>, <code>busy_processes</code></td></tr>
       <tr><td>a Mac on battery, read from <code>pmset -g batt</code></td><td class="n">warned</td><td><code>machine_warnings</code>, the power check</td></tr>
       <tr><td>a full-screen application or presentation settings on Windows</td><td class="n">warned</td><td><code>machine_warnings</code>, the display check</td></tr>
       <tr><td>the scene's GPU frame p95 over its median</td><td class="n">at or above 1.06</td><td><code>QUIET_P95_OVER_MEDIAN</code></td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">The three thresholds are the constants named, at the commit above. The last is judged per scene from the run's own figures, so a run that started quiet can still be marked otherwise.</p>
+  <p class="note">The thresholds are the constants named, at the commit above, but for the busy-process row, added after it. That row and the last are judged per scene, so a run that started quiet can still be marked otherwise. Windows gives no CPU shares, so there the busy-process listing is unknown and passes.</p>
 </section>
 
 <section class="part prose" id="compare">

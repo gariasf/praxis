@@ -20,6 +20,10 @@ pub(crate) const BUSY_GPU_PERCENT: u32 = 10;
 /// (measured: `docs/performance.md`, Measurements behind the code).
 pub(crate) const BUSY_LOAD_AVERAGE: f64 = 2.0;
 
+/// A process's CPU use, in percent of one core, at or above which a bench's
+/// CPU times would be someone else's, whatever the load average says.
+pub(crate) const BUSY_PROCESS_PERCENT: f64 = 50.0;
+
 /// Names listed per line before the rest are counted.
 const LISTED_NAMES: usize = 4;
 
@@ -505,17 +509,46 @@ pub(crate) fn other_praxis_processes() -> Option<Vec<String>> {
     )
 }
 
+/// Each process outside praxis at or over `BUSY_PROCESS_PERCENT` of a core,
+/// as `name id at percent%`, when the process listing gives CPU shares;
+/// none on Windows, whose `tasklist` gives none.
+pub(crate) fn busy_processes() -> Option<Vec<String>> {
+    if cfg!(windows) {
+        return None;
+    }
+    let listing = output("ps", &["-A", "-o", "pid=,%cpu=,comm="])?;
+    Some(busy_outside_praxis(
+        &parse_ps_with_cpu(&listing),
+        &binary_names(),
+    ))
+}
+
 fn other_processes() -> Check {
-    match other_praxis_processes() {
-        None => Check::new("processes", Verdict::Note, "unknown: no process listing"),
-        Some(names) if names.is_empty() => {
-            Check::new("processes", Verdict::Ok, "no other praxis process")
-        }
-        Some(names) => Check::new(
+    processes_check(other_praxis_processes(), busy_processes())
+}
+
+/// The processes check from the other praxis processes and the busy ones.
+fn processes_check(praxis: Option<Vec<String>>, busy: Option<Vec<String>>) -> Check {
+    let found: Vec<String> = praxis.iter().chain(&busy).flatten().cloned().collect();
+    if !found.is_empty() {
+        return Check::new(
             "processes",
             Verdict::Warn,
-            format!("{}: bench only once they end", listed(&names)),
+            format!("{}: bench only once they end", listed(&found)),
+        );
+    }
+    match (praxis, busy) {
+        (Some(_), Some(_)) => Check::new(
+            "processes",
+            Verdict::Ok,
+            format!("no other praxis process, none other at {BUSY_PROCESS_PERCENT}% of a core"),
         ),
+        (Some(_), None) => Check::new(
+            "processes",
+            Verdict::Note,
+            "no other praxis process; CPU shares unknown",
+        ),
+        (None, _) => Check::new("processes", Verdict::Note, "unknown: no process listing"),
     }
 }
 
@@ -543,6 +576,36 @@ fn parse_ps(listing: &str) -> Vec<(u32, String)> {
         .collect()
 }
 
+/// Process IDs, CPU shares in percent of a core and command names from
+/// `ps -A -o pid=,%cpu=,comm=`, whose shares take the locale's decimal
+/// separator.
+fn parse_ps_with_cpu(listing: &str) -> Vec<(u32, f64, String)> {
+    listing
+        .lines()
+        .filter_map(|line| {
+            let (id, rest) = line.trim_start().split_once(char::is_whitespace)?;
+            let (percent, command) = rest.trim_start().split_once(char::is_whitespace)?;
+            Some((
+                id.parse().ok()?,
+                percent.replace(',', ".").parse().ok()?,
+                command.trim().to_owned(),
+            ))
+        })
+        .collect()
+}
+
+/// Each of `processes` at or over `BUSY_PROCESS_PERCENT` that runs none of
+/// `binary_names`, as `name id at percent%`.
+fn busy_outside_praxis(processes: &[(u32, f64, String)], binary_names: &[String]) -> Vec<String> {
+    processes
+        .iter()
+        .filter(|(_, percent, name)| {
+            *percent >= BUSY_PROCESS_PERCENT && !is_praxis_binary(name, binary_names)
+        })
+        .map(|(id, percent, name)| format!("{name} {id} at {percent:.0}%"))
+        .collect()
+}
+
 /// The names of praxis's binaries: `praxis` itself, and each integration
 /// test's, which Cargo names after its file in `tests/`.
 fn binary_names() -> Vec<String> {
@@ -563,24 +626,27 @@ fn praxis_processes(
     own_id: u32,
     binary_names: &[String],
 ) -> Vec<(u32, String)> {
-    let is_hash =
-        |hash: &str| hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit());
     processes
         .iter()
-        .filter(|(id, name)| {
-            let file_name = name.rsplit(['/', '\\']).next().unwrap_or(name);
-            let stem = file_name.strip_suffix(".exe").unwrap_or(file_name);
-            let is_praxis = binary_names.iter().any(|binary| {
-                stem == binary
-                    || stem
-                        .strip_prefix(binary.as_str())
-                        .and_then(|rest| rest.strip_prefix('-'))
-                        .is_some_and(is_hash)
-            });
-            *id != own_id && is_praxis
-        })
+        .filter(|(id, name)| *id != own_id && is_praxis_binary(name, binary_names))
         .cloned()
         .collect()
+}
+
+/// Whether the command `name` runs one of `binary_names`, as built
+/// (`praxis`) or as Cargo's test harness (`goldens-<16 hex digits>`).
+fn is_praxis_binary(name: &str, binary_names: &[String]) -> bool {
+    let is_hash =
+        |hash: &str| hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit());
+    let file_name = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem = file_name.strip_suffix(".exe").unwrap_or(file_name);
+    binary_names.iter().any(|binary| {
+        stem == binary
+            || stem
+                .strip_prefix(binary.as_str())
+                .and_then(|rest| rest.strip_prefix('-'))
+                .is_some_and(is_hash)
+    })
 }
 
 /// The open PRs and the live milestone's assigned tickets, through `gh`.
@@ -849,6 +915,40 @@ mod tests {
             praxis_processes(&parse_ps(ps), 1, &binaries),
             [(412, "/Users/owner/praxis/target/release/praxis".to_owned())]
         );
+    }
+
+    #[test]
+    fn a_process_outside_praxis_at_half_a_core_or_more_is_busy_whatever_the_locale() {
+        let binaries = ["praxis".to_owned(), "goldens".to_owned()];
+        let listing = "  412 357.0 /Users/owner/praxis/target/release/praxis\n\
+                       77 120,4 /Library/Daemon Agent/agentd\n\
+                       78  50.0 /usr/bin/indexer\n\
+                       79  49.9 /bin/zsh\n\
+                       80 99.0 goldens-7ecf3aef1db514ba\n";
+        let busy = busy_outside_praxis(&parse_ps_with_cpu(listing), &binaries);
+        assert_eq!(
+            busy,
+            [
+                "/Library/Daemon Agent/agentd 77 at 120%",
+                "/usr/bin/indexer 78 at 50%"
+            ]
+        );
+        let check = processes_check(Some(Vec::new()), Some(busy));
+        assert_eq!(check.verdict, Verdict::Warn);
+        assert!(check.detail.contains("agentd 77"), "{}", check.detail);
+        assert_eq!(
+            processes_check(Some(vec!["praxis 9".to_owned()]), None).verdict,
+            Verdict::Warn
+        );
+        assert_eq!(
+            processes_check(Some(Vec::new()), Some(Vec::new())).verdict,
+            Verdict::Ok
+        );
+        assert_eq!(
+            processes_check(Some(Vec::new()), None).verdict,
+            Verdict::Note
+        );
+        assert_eq!(processes_check(None, None).verdict, Verdict::Note);
     }
 
     #[test]
