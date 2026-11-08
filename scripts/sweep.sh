@@ -31,7 +31,8 @@
 #     ~/Library/LaunchAgents/com.github.gariasf.praxis.sweep.plist
 # Install on the RTX 2070 SUPER (Task Scheduler, 04:00 local, waking the
 # PC if the power plan allows wake timers; it runs only while the owner is
-# logged on, as the bench needs the GPU), in Git Bash:
+# logged on, as the bench needs the GPU; a night the PC is off is skipped,
+# not caught up in the day), in Git Bash:
 #   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
 #   sweep=$(cd ~/praxis-sweep && pwd -W)
 #   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -m "$(command -v bash)")|g" \
