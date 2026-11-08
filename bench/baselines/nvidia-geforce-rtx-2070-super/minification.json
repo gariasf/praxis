@@ -155,7 +155,7 @@
     }
   },
   "gpu_memory_bytes_by_kind": {
-    "acceleration_structures": 64834443,
+    "acceleration_structures": 127283979,
     "geometry_arenas": 83886080,
     "render_targets": 388300660,
     "resident_tails": 262248,
@@ -168,7 +168,7 @@
   "triangles_drawn": 2,
   "instances_overflowed": 0,
   "uploaded_bytes": 272,
-  "gpu_memory_bytes": 767832815,
+  "gpu_memory_bytes": 830282351,
   "arena_bytes_in_use": 176,
   "heap_allocations": 347,
   "renderables_refused": 0,
@@ -188,7 +188,7 @@
     "triangles_drawn": 2,
     "instances_overflowed": 0,
     "uploaded_bytes": 272,
-    "gpu_memory_bytes": 767832815,
+    "gpu_memory_bytes": 830282351,
     "arena_bytes_in_use": 176,
     "heap_allocations": 347,
     "renderables_refused": 0,
