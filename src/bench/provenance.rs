@@ -49,10 +49,15 @@ pub struct Provenance {
     pub one_minute_load_average: Option<f64>,
     /// Other praxis processes at the bench's start, when listed.
     pub other_processes: Option<Vec<String>>,
+    /// Each process outside praxis at or over `BUSY_PROCESS_PERCENT` of a
+    /// core at the scene's start or end, as `start: name id at percent%`,
+    /// when listed; unknown in records from before results carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busy_processes: Option<Vec<String>>,
     /// The scene's GPU frame p95 over its median; none when the median is
     /// zero.
     pub gpu_frame_p95_over_median: Option<f64>,
-    /// Whether the machine was quiet, from the three fields above.
+    /// Whether the machine was quiet, from the fields above.
     pub quiet: bool,
     /// When the scene's bench started, in seconds since the Unix epoch.
     pub started_unix_seconds: u64,
@@ -96,13 +101,14 @@ impl BenchStart {
 
     /// The Provenance of a scene's run that started at `started` and
     /// loaded `scene_content_hash`, on `adapter`, whose GPU frame spread
-    /// `gpu_frame`.
+    /// `gpu_frame`, and that `busy_processes` shared the CPU with.
     pub(crate) fn provenance(
         &self,
         adapter: &wgpu::AdapterInfo,
         scene_content_hash: String,
         gpu_frame: Spread,
         started: SystemTime,
+        busy_processes: Option<Vec<String>>,
     ) -> Option<Provenance> {
         let checkout = self.checkout.clone()?;
         let gpu_frame_p95_over_median =
@@ -116,14 +122,16 @@ impl BenchStart {
             gpu_load_percent: self.gpu_load_percent,
             one_minute_load_average: self.one_minute_load_average,
             other_processes: self.other_processes.clone(),
-            gpu_frame_p95_over_median,
             quiet: is_quiet(
                 self.gpu_load_percent,
                 self.one_minute_load_average,
                 self.other_processes.as_deref(),
+                busy_processes.as_deref(),
                 &self.machine_warnings,
                 gpu_frame_p95_over_median,
             ),
+            busy_processes,
+            gpu_frame_p95_over_median,
             started_unix_seconds: started
                 .duration_since(UNIX_EPOCH)
                 .map_or(0, |since_epoch| since_epoch.as_secs()),
@@ -131,21 +139,46 @@ impl BenchStart {
     }
 }
 
+/// The busy processes of a scene from the listings at its start and end,
+/// each named with when it was found; unknown only when neither was read.
+pub(crate) fn busy_during_scene(
+    at_start: Option<Vec<String>>,
+    at_end: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    if at_start.is_none() && at_end.is_none() {
+        return None;
+    }
+    let tagged = |listing: Option<Vec<String>>, when: &'static str| {
+        listing
+            .into_iter()
+            .flatten()
+            .map(move |process| format!("{when}: {process}"))
+    };
+    Some(
+        tagged(at_start, "start")
+            .chain(tagged(at_end, "end"))
+            .collect(),
+    )
+}
+
 /// Whether a run was quiet: preflight would have warned of neither the GPU
 /// or CPU load, other praxis processes, nor the power or display at its
-/// start, and its GPU frames spread less than `QUIET_P95_OVER_MEDIAN`. A
-/// load or listing that could not be read is a preflight note, not a
-/// warning, so it passes.
+/// start, no process outside praxis held `BUSY_PROCESS_PERCENT` of a core at
+/// the scene's start or end, and its GPU frames spread less than
+/// `QUIET_P95_OVER_MEDIAN`. A load or listing that could not be read is a
+/// preflight note, not a warning, so it passes.
 fn is_quiet(
     gpu_load_percent: Option<u32>,
     one_minute_load_average: Option<f64>,
     other_processes: Option<&[String]>,
+    busy_processes: Option<&[String]>,
     machine_warnings: &[String],
     gpu_frame_p95_over_median: Option<f64>,
 ) -> bool {
     gpu_load_percent.is_none_or(|percent| percent <= BUSY_GPU_PERCENT)
         && one_minute_load_average.is_none_or(|load| load <= BUSY_LOAD_AVERAGE)
         && other_processes.is_none_or(<[String]>::is_empty)
+        && busy_processes.is_none_or(<[String]>::is_empty)
         && machine_warnings.is_empty()
         && gpu_frame_p95_over_median.is_some_and(|ratio| ratio < QUIET_P95_OVER_MEDIAN)
 }
@@ -467,32 +500,118 @@ mod tests {
         let other = &["praxis 42".to_owned()][..];
         let steady = Some(1.02);
         let battery = &["power: on battery".to_owned()][..];
+        let busy = &["end: /usr/bin/indexer 78 at 97%".to_owned()][..];
         assert!(is_quiet(
             Some(BUSY_GPU_PERCENT),
             Some(BUSY_LOAD_AVERAGE),
+            Some(none),
             Some(none),
             none,
             steady
         ));
         // Unknown load and processes are preflight notes, not warnings.
-        assert!(is_quiet(None, None, None, none, steady));
+        assert!(is_quiet(None, None, None, None, none, steady));
         assert!(!is_quiet(
             Some(BUSY_GPU_PERCENT + 1),
             None,
             Some(none),
+            Some(none),
             none,
             steady
         ));
-        assert!(!is_quiet(Some(0), None, Some(other), none, steady));
-        assert!(!is_quiet(Some(0), None, Some(none), battery, steady));
+        assert!(!is_quiet(
+            Some(0),
+            None,
+            Some(other),
+            Some(none),
+            none,
+            steady
+        ));
         assert!(!is_quiet(
             Some(0),
             None,
             Some(none),
+            Some(busy),
+            none,
+            steady
+        ));
+        assert!(!is_quiet(
+            Some(0),
+            None,
+            Some(none),
+            Some(none),
+            battery,
+            steady
+        ));
+        assert!(!is_quiet(
+            Some(0),
+            None,
+            Some(none),
+            Some(none),
             none,
             Some(QUIET_P95_OVER_MEDIAN)
         ));
-        assert!(!is_quiet(Some(0), None, Some(none), none, None));
-        assert!(!is_quiet(Some(0), Some(2.5), Some(none), none, steady));
+        assert!(!is_quiet(Some(0), None, Some(none), Some(none), none, None));
+        assert!(!is_quiet(
+            Some(0),
+            Some(2.5),
+            Some(none),
+            Some(none),
+            none,
+            steady
+        ));
+    }
+
+    #[test]
+    fn a_process_busy_at_a_scenes_end_marks_that_scene_alone_not_quiet_and_is_named() {
+        let start = BenchStart {
+            checkout: Some(Checkout {
+                source_hash: "4b825dc6".to_owned(),
+                commit: "bea8706b".to_owned(),
+                dirty: false,
+                branch: "main".to_owned(),
+            }),
+            gpu_load_percent: Some(0),
+            one_minute_load_average: Some(1.0),
+            other_processes: Some(Vec::new()),
+            machine_warnings: Vec::new(),
+        };
+        let adapter = wgpu::AdapterInfo::new(wgpu::DeviceType::IntegratedGpu, wgpu::Backend::Metal);
+        let steady = Spread {
+            median: 100.0,
+            p95: 101.0,
+            p99: None,
+            maximum: None,
+        };
+        let scene = |at_start: Option<Vec<String>>, at_end: Option<Vec<String>>| {
+            start
+                .provenance(
+                    &adapter,
+                    "e3b0c442".to_owned(),
+                    steady,
+                    UNIX_EPOCH,
+                    busy_during_scene(at_start, at_end),
+                )
+                .expect("a checkout")
+        };
+        let idle = || Some(Vec::new());
+        let indexer = Some(vec!["/usr/bin/indexer 78 at 97%".to_owned()]);
+        let scenes = [
+            scene(idle(), idle()),
+            scene(idle(), idle()),
+            scene(idle(), indexer),
+        ];
+        assert_eq!(
+            scenes.each_ref().map(|provenance| provenance.quiet),
+            [true, true, false]
+        );
+        assert_eq!(
+            scenes[2].busy_processes.as_deref(),
+            Some(&["end: /usr/bin/indexer 78 at 97%".to_owned()][..])
+        );
+        // An unreadable listing at both ends is unknown, and passes.
+        let unknown = scene(None, None);
+        assert_eq!(unknown.busy_processes, None);
+        assert!(unknown.quiet);
     }
 }

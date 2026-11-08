@@ -65,7 +65,7 @@ A declined finding class that recurs becomes a line in the `CLAUDE.md` review ch
 
 ## Session start
 
-1. Run `cargo run --release -- preflight` in the checkout. It prints the session's starting state in ten lines or fewer: the adapter and which machine it is, whether its Goldens, Baselines, fetched files and Cooked cache are present, GPU load, the one-minute load average and other praxis processes, the open PRs and the live milestone's assigned tickets. A `FAIL` line blocks `scripts/verify.sh` and names its fix; a `warn` line holds off a bench.
+1. Run `cargo run --release -- preflight` in the checkout. It prints the session's starting state in ten lines or fewer: the adapter and which machine it is, whether its Goldens, Baselines, fetched files and Cooked cache are present, GPU load, the one-minute load average, other praxis processes and any other process at half a core or more, the open PRs and the live milestone's assigned tickets. A `FAIL` line blocks `scripts/verify.sh` and names its fix; a `warn` line holds off a bench.
 2. Orient: this file, `CLAUDE.md`, the map issue body (`gh issue list --label wayfinder:map`).
 3. Take the frontier: `gh issue list --milestone <live> --label ready-for-agent --state open --limit 200 --json number,title --jq 'sort_by(.number)'`. Tickets are published blockers-first, so ascending number is a valid order. Take the lowest number whose `gh api repos/gariasf/praxis/issues/<n> --jq .issue_dependencies_summary.blocked_by` is 0. A track's frontier is the same query with `--label track:<name>` in place of `--milestone <live>`, when the owner points the session at the track.
 4. Claim it (assign) before any work.

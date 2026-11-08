@@ -546,6 +546,7 @@ pub fn run(
     start: &BenchStart,
 ) -> anyhow::Result<Measurements> {
     let started = std::time::SystemTime::now();
+    let busy_at_start = crate::preflight::busy_processes();
     let frame_count = configuration.warm_up_frames + configuration.measured_frames;
     anyhow::ensure!(
         frame_count >= COUNTER_FRAMES.end,
@@ -596,6 +597,7 @@ pub fn run(
         scene_content_hash,
         measurements.gpu_frame_microseconds,
         started,
+        provenance::busy_during_scene(busy_at_start, crate::preflight::busy_processes()),
     );
     Ok(Measurements {
         aliasing,
@@ -1262,6 +1264,7 @@ mod tests {
             gpu_load_percent: Some(3),
             one_minute_load_average: Some(0.75),
             other_processes: Some(Vec::new()),
+            busy_processes: Some(Vec::new()),
             gpu_frame_p95_over_median: Some(p95_over_median),
             quiet: p95_over_median < provenance::QUIET_P95_OVER_MEDIAN,
             started_unix_seconds: 1_793_448_000,

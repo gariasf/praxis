@@ -68,7 +68,8 @@ This branch holds data only and is never merged.
 
 A machine is quiet when preflight warned of no GPU load over 10%, one-minute
 load average over 2, other praxis process, battery power or busy display at
-the run's start, and the run's GPU frame p95 over its median stayed
+the run's start, no process outside praxis held 50% of a core or more at the
+scene's start or end, and the run's GPU frame p95 over its median stayed
 under 1.06.
 
 lavapipe's records hold CPU, GPU and pass times like any other, but lavapipe
@@ -1655,6 +1656,7 @@ mod tests {
             configuration(Configuration::CI_COUNTERS),
             format!("GPU load over {}%", crate::preflight::BUSY_GPU_PERCENT),
             format!("load average over {}", crate::preflight::BUSY_LOAD_AVERAGE),
+            format!("held {}% of a core", crate::preflight::BUSY_PROCESS_PERCENT),
             format!("under {}", crate::bench::provenance::QUIET_P95_OVER_MEDIAN),
             format!(
                 "reached {}",
