@@ -250,11 +250,11 @@ pub(crate) fn render_frames(
     let mut next_frame = 0;
     for frame in drawn {
         for undrawn in next_frame..frame {
-            state.simulation.world.insert_resource(camera_at(undrawn));
+            place_camera(&mut state.simulation.world, camera_at(undrawn));
             state.simulation.simulate(frame_delta);
         }
         next_frame = frame + 1;
-        state.simulation.world.insert_resource(camera_at(frame));
+        place_camera(&mut state.simulation.world, camera_at(frame));
         for held_frames in 0.. {
             anyhow::ensure!(
                 held_frames < MAX_HELD_FRAMES,
@@ -302,9 +302,15 @@ pub(crate) fn render_frames(
     Ok((pixels, frame_stats, state.scene_content_hash()))
 }
 
-/// A minute of frames at 60 Hz: a hold past it fails the render, as a load
-/// that never finishes would hold for ever.
+/// The frames a hold may take, a minute at 60 Hz, before the render fails.
 const MAX_HELD_FRAMES: u32 = 3600;
+
+/// Places `camera` in `world`, still teleported if the camera it replaces
+/// teleported on a frame Chunk streaming has not run since.
+fn place_camera(world: &mut bevy_ecs::world::World, mut camera: Camera) {
+    camera.teleported |= world.resource::<Camera>().teleported;
+    world.insert_resource(camera);
+}
 
 /// How `render_frames` waits for the oldest frame in flight.
 #[derive(Clone, Copy)]
@@ -574,6 +580,44 @@ mod tests {
             .map(|(frame, _)| frame)
             .collect();
         assert_eq!(holds_ended, [1, 2 + held]);
+    }
+
+    /// The camera starts 4 km from the scene's one Chunk and jumps back to
+    /// it on an undrawn frame: the next drawn frame still arrives, so it
+    /// holds and counts no Late Chunk.
+    #[test]
+    fn a_fast_travel_on_an_undrawn_frame_arrives_on_the_next_drawn_frame() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::UvGrid;
+        let camera_at = |frame: u32| {
+            let camera = scene.camera_at(frame, glam::DVec3::ZERO);
+            let away = glam::DVec3::X * if frame == 0 { 4096.0 } else { 0.0 };
+            Camera {
+                position: camera.position + away,
+                teleported: frame == 1,
+                ..camera
+            }
+        };
+        let (_, frames, _) = render_frames(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            &camera_at,
+            64,
+            36,
+            [0, 2, 3],
+            &[],
+            scene.frame_delta(),
+            RenderSwitches::default(),
+            FrameWait::Block,
+            ..1,
+        )
+        .expect("the scene renders");
+        assert!(frames[1].holding);
+        let late_chunks: u32 = frames.iter().map(|stats| stats.late_chunks).sum();
+        assert_eq!(late_chunks, 0);
     }
 
     #[test]

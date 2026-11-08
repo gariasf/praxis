@@ -500,10 +500,9 @@ impl ChunkStreaming {
         renderer: &mut Renderer,
         settle: bool,
     ) -> anyhow::Result<StreamedFrame> {
-        let started = Instant::now();
         let teleported = std::mem::take(&mut world.resource_mut::<Camera>().teleported);
         if teleported {
-            self.fast_travel_started = Some(started);
+            self.fast_travel_started = Some(Instant::now());
         }
         let streamed = self.stream(world, renderer, settle, teleported);
         let frees =

@@ -125,6 +125,8 @@ impl ChunkStreamer {
         teleported: bool,
         io: &mut impl ChunkIo,
     ) -> &ChunkFrame {
+        let load_radius_metres = self.load_radius_metres;
+        let hold_radius_metres = self.hold_radius_metres();
         let frame = &mut self.frame;
         frame.requested.clear();
         frame.loaded.clear();
@@ -132,8 +134,6 @@ impl ChunkStreamer {
         frame.unloaded.clear();
         frame.last_users.clear();
         frame.late_chunks = 0;
-        let load_radius_metres = self.load_radius_metres;
-        let hold_radius_metres = load_radius_metres + CHUNK_EDGE_METRES;
         let metres_per_frame = match self.camera_before {
             Some(before) if !teleported => (camera.x - before.x).hypot(camera.z - before.z),
             _ => 0.0,
@@ -229,10 +229,14 @@ impl ChunkStreamer {
 }
 
 impl ChunkStreamer {
+    fn hold_radius_metres(&self) -> f64 {
+        self.load_radius_metres + CHUNK_EDGE_METRES
+    }
+
     /// The Chunks within the hold radius of `camera`: the most it requests
     /// or keeps from there.
     pub(crate) fn within_hold_radius(&self, camera: DVec3) -> impl Iterator<Item = [i32; 2]> + '_ {
-        let hold_radius_metres = self.load_radius_metres + CHUNK_EDGE_METRES;
+        let hold_radius_metres = self.hold_radius_metres();
         chunks_within(camera, hold_radius_metres, &self.bounds).filter(move |coordinates| {
             self.chunks.contains(coordinates)
                 && distance_metres(camera, *coordinates) <= hold_radius_metres

@@ -640,14 +640,14 @@ mod tests {
         (0..SETTLEMENTS_PER_SIDE).any(|column| {
             (0..SETTLEMENTS_PER_SIDE).any(|row| {
                 let centre = settlement_centre([column, row]);
-                (position.x - centre.x).abs() < 377.0 && (position.z - centre.z).abs() < 377.0
+                let half = SETTLEMENT_HALF_SIZE_METRES;
+                (position.x - centre.x).abs() < half && (position.z - centre.z).abs() < half
             })
         })
     }
 
     #[test]
     fn the_bench_path_flies_into_a_settlement_over_farmland_then_fast_travels_into_another() {
-        // The bench path's 60 s at 60 Hz.
         let [(jump_frame, jump_metres)] = jumps(camera_at, 60 * 60)[..] else {
             panic!("the bench path jumps other than once");
         };
