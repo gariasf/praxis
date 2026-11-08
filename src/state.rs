@@ -844,7 +844,10 @@ mod tests {
     /// green and its Resident tail, mips 3 on, yellow: seen from 200 m, only
     /// the tail loads and draws; 40 m away, mip 1 streams in, the finest the
     /// quad needs there; 0.2 m away, the next frame still draws mip 1, with
-    /// one mip late, and once Settled draws mip 0, with none late.
+    /// one mip late, and once Settled draws mip 0, with none late. A second
+    /// Placement of the quad, 800 m behind every camera position, only rays
+    /// can reach, and its distance needs only mip 5: its own Texture keeps
+    /// its Resident tail, the floor rays sample, throughout.
     #[cfg(feature = "cook")]
     #[test]
     fn a_textures_finer_mips_stream_in_finest_needed_as_the_camera_nears() {
@@ -861,6 +864,7 @@ mod tests {
             std::env::temp_dir().join(format!("praxis-mip-streaming-{}", std::process::id()));
         let cache = CookedCache::new(&directory);
         let (texture_id, material_id, mesh_id) = (AssetId(1), AssetId(2), AssetId(3));
+        let (behind_texture_id, behind_material_id) = (AssetId(4), AssetId(5));
         let format = wgpu::TextureFormat::Bc5RgUnorm;
         // Two BC4 blocks whose every texel takes the first endpoint.
         let block =
@@ -886,6 +890,10 @@ mod tests {
             emissive: [1.0 / exposure; 3],
             normal_scale: 1.0,
             textures: [None, None, None, None, Some(texture_id)],
+        };
+        let behind_material = CookedMaterial {
+            textures: [None, None, None, None, Some(behind_texture_id)],
+            ..material
         };
         let half_size = 5.0;
         let vertices = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
@@ -915,19 +923,31 @@ mod tests {
             bounds: [[-half_size, -half_size, 0.0], [half_size, half_size, 0.0]],
         };
         let chunk = CookedChunk {
-            placements: vec![CookedPlacement {
-                mesh: mesh_id,
-                material: None,
-                translation: glam::DVec3::ZERO,
-                rotation: glam::Quat::IDENTITY,
-                scale: glam::Vec3::ONE,
-            }],
+            placements: vec![
+                CookedPlacement {
+                    mesh: mesh_id,
+                    material: None,
+                    translation: glam::DVec3::ZERO,
+                    rotation: glam::Quat::IDENTITY,
+                    scale: glam::Vec3::ONE,
+                },
+                CookedPlacement {
+                    mesh: mesh_id,
+                    material: Some(behind_material_id),
+                    translation: glam::dvec3(0.0, 0.0, 800.0),
+                    rotation: glam::Quat::IDENTITY,
+                    scale: glam::Vec3::ONE,
+                },
+            ],
             lights: Vec::new(),
-            bounds: [glam::dvec3(-5.0, -5.0, 0.0), glam::dvec3(5.0, 5.0, 0.0)],
+            bounds: [glam::dvec3(-5.0, -5.0, 0.0), glam::dvec3(5.0, 5.0, 800.0)],
         };
+        let texture_blob = texture.to_blob(1).expect("a BC5 Blob");
         let blobs = [
-            (texture_id, texture.to_blob(1).expect("a BC5 Blob")),
+            (texture_id, texture_blob.clone()),
+            (behind_texture_id, texture_blob),
             (material_id, material.to_blob()),
+            (behind_material_id, behind_material.to_blob()),
             (mesh_id, mesh.to_blob().expect("a Mesh Blob")),
             (
                 scene.chunk_id([0, 0]),
@@ -993,7 +1013,18 @@ mod tests {
             let [red, green] = [pixels[centre], pixels[centre + 1]];
             let residency = state.renderer.material_pool.texture_residency(texture_id);
             let resident_level = residency.map(|(_, level)| level);
-            (red, green, resident_level, state.frame_stats().late_mips)
+            let behind_residency = state
+                .renderer
+                .material_pool
+                .texture_residency(behind_texture_id);
+            let behind_resident_level = behind_residency.map(|(_, level)| level);
+            (
+                red,
+                green,
+                resident_level,
+                state.frame_stats().late_mips,
+                behind_resident_level,
+            )
         };
         let far = draw(200.0, true);
         let middle = draw(40.0, true);
@@ -1017,5 +1048,8 @@ mod tests {
             red(near_settled.0, near_settled.1) && near_settled.2 == Some(0) && near_settled.3 == 0,
             "0.2 m, Settled: {near_settled:?}"
         );
+        for drawn in [far, middle, near, near_settled] {
+            assert_eq!(drawn.4, Some(3), "behind the camera: {drawn:?}");
+        }
     }
 }
