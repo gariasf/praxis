@@ -279,7 +279,7 @@ fn commit_records(
 /// file in the commit before, held: whether a timing `earlier` held (a
 /// field ending `_microseconds`) or its Harness version differs or is gone.
 /// Counters alone changing, or fields added, measured nothing again.
-fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
+pub(super) fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
     let earlier: serde_json::Map<String, serde_json::Value> = serde_json::from_str(earlier)?;
     let current: serde_json::Map<String, serde_json::Value> = serde_json::from_str(current)?;
     let harness_version = |baseline: &serde_json::Map<String, serde_json::Value>| {
@@ -293,7 +293,8 @@ fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
         .filter(|(key, _)| key.ends_with("_microseconds"))
         .any(|(key, value)| current.get(key) != Some(value));
     let earlier_version = harness_version(&earlier);
-    Ok(retimed || earlier_version.is_some() && harness_version(&current) != earlier_version)
+    let version_changed = earlier_version.is_some() && harness_version(&current) != earlier_version;
+    Ok(retimed || version_changed)
 }
 
 /// What the import reads from every Baseline, whichever bench wrote it.

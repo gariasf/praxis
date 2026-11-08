@@ -94,7 +94,7 @@ Verdict pinned starts a line. lavapipe's records are never suspects.
   is bisected along `main`'s first-parent commits of other source hashes
   between `good` and `bad`, each commit's median judged by which end's median
   of that night it lies nearer, over as many nights as it takes, until
-  `pinned` names the commit that changed it, whether that commit changed the
+  `pinned` names the commit that changed it, whether that commit re-recorded the
   scene's Baseline for the adapter (`covered_by_baseline`), and the mean
   medians of that night's ends (`measured`). A pinned commit no Baseline
   covers is a Regression: it opens one `needs-triage` issue per scene, whose
