@@ -37,7 +37,8 @@ join its Series from CI's configuration whether or not the runner was quiet.
 A Series row's `suspects` names each frame median, CPU or GPU, that makes its
 record a suspect, with its shift as a share of the median of up to 8 records
 before it on its line: it lies outside that median ± the larger of 4 median
-absolute deviations and 3%, unless it only continues a suspect among those 8:
+absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless
+it only continues a suspect among those 8:
 on the same side, within that suspect's tolerance of its median. A new Harness
 version or scene content, an imported or re-recorded Baseline, or a commit a
 Verdict pinned starts a line. lavapipe's records are never suspects.
@@ -46,7 +47,8 @@ Verdict pinned starts a line. lavapipe's records are never suspects.
   found of the slower suspect of that source: the night re-benched it and the
   record before it on its line, interleaved, from release binaries of their
   commits, and the shift `held` when their mean medians still differed in its
-  direction by half its marked shift and by 3%, else `cleared`. A held shift
+  direction by half its marked shift and by its timing's 3% or 1.25%, else
+  `cleared`. A held shift
   is bisected along `main`'s first-parent commits of other source hashes
   between `good` and `bad`, each commit's median judged by which end's median
   of that night it lies nearer, over as many nights as it takes, until
