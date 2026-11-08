@@ -1242,6 +1242,7 @@ pub(crate) mod tests {
                 &context,
                 scene,
                 glam::DVec3::ZERO,
+                &|frame| scene.camera_at(frame, glam::DVec3::ZERO),
                 64,
                 36,
                 0..2,

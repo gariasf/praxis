@@ -621,6 +621,7 @@ fn render_run(
         context,
         scene,
         glam::DVec3::ZERO,
+        &|frame| scene.camera_at(frame, glam::DVec3::ZERO),
         configuration.width,
         configuration.height,
         0..configuration.warm_up_frames + configuration.measured_frames,

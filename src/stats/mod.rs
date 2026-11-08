@@ -92,6 +92,11 @@ pub struct FrameStats {
     /// Late mips: mips the frame's drawn Chunks need, by their Textures'
     /// priority, that are not Resident.
     pub late_mips: u32,
+    /// Whether the camera, since it last arrived, still waits for a Chunk
+    /// within the Load radius to load, so its path pauses.
+    pub holding: bool,
+    /// On the frame a Fast travel's hold ends, its time from the jump.
+    pub fast_travel_hold: Option<Duration>,
     /// Readbacks of GPU stats the frame skipped, its own or an earlier
     /// frame's, as their ring slot was not ready and the main thread never
     /// waits on the GPU (ADR 0016).
