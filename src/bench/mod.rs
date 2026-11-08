@@ -143,7 +143,7 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
-/// Likewise for a pass's GPU time: a short pass moves by more than the
+/// Likewise for a GPU time, a pass's or the frame's: a short pass moves by more than the
 /// ratios between runs on the M4 Pro (measured: `docs/performance.md`,
 /// Measurements behind the code).
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
@@ -797,7 +797,8 @@ impl std::fmt::Display for Measurements {
 }
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count
-/// against Baselines. Against the Budgets, the CPU frame, the GPU frame and
+/// against Baselines, the GPU frame's and each pass's included, except the
+/// dynamic TLAS's CPU median. Against the Budgets, the CPU frame, the GPU frame and
 /// the gate count at the median and p99, the CPU frame at the p95 too, and
 /// the CPU and GPU frames' maximums against one 60 Hz period, and GPU
 /// memory in total and by kind; other p95s are reported only, as they move
@@ -901,6 +902,13 @@ pub fn compare(
     }
     let (metric, budget) = ("gpu_frame_microseconds", budgets.gpu_frame_microseconds);
     let gpu = current.gpu_frame_microseconds;
+    check_regression(
+        &mut findings,
+        metric,
+        gpu.median,
+        baseline.gpu_frame_microseconds.median,
+        GPU_PASS_NOISE_FLOOR_MICROSECONDS,
+    );
     check_budget(&mut findings, metric, gpu.median, budget);
     check_tail_budget(&mut findings, metric, "p99", gpu.p99, budget);
     check_tail_budget(
@@ -1611,13 +1619,29 @@ mod tests {
         );
     }
 
-    /// The GPU frame total answers to the 12 ms Budget only, and each pass
-    /// to its Baseline.
+    /// The GPU frame answers to its Baseline even when each pass stays
+    /// under the warn ratio, and to the 12 ms Budget.
     #[test]
-    fn the_gpu_frame_total_fails_over_its_budget_alone() {
+    fn the_gpu_frame_fails_against_its_baseline_and_over_its_budget() {
         let mut slower = baseline();
-        slower.gpu_frame_microseconds.median = 3000.0;
+        slower.gpu_frame_microseconds.median = 2775.0;
+        for time in slower.gpu_pass_microseconds.values_mut() {
+            time.median *= 1.04;
+        }
+        assert_eq!(
+            verdicts(&slower, &baseline(), CompareMode::Local),
+            [("gpu_frame_microseconds", Verdict::Fail)]
+        );
+        slower.gpu_frame_microseconds.median = 2600.0;
         assert_eq!(verdicts(&slower, &baseline(), CompareMode::Local), []);
+        let mut short = baseline();
+        short.gpu_frame_microseconds.median = 150.0;
+        let mut within_noise = short.clone();
+        within_noise.gpu_frame_microseconds.median = 168.0;
+        assert_eq!(
+            verdicts(&within_noise, &short, CompareMode::Local),
+            [("gpu_frame_microseconds", Verdict::Warn)]
+        );
         let mut over_budget = baseline();
         over_budget.gpu_frame_microseconds.median = 12_500.0;
         assert_eq!(
