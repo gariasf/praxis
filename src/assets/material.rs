@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::time::Instant;
 
 use anyhow::Context;
 
 use crate::assets::loader::AssetReader;
-use crate::assets::pools::{Generations, PoolCapacities};
+use crate::assets::pools::{ENTRIES_FREED_PER_FRAME, Generations, PoolCapacities, Unused};
 use crate::cooked::{AssetId, CookedTexture, level_bytes};
 use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
@@ -151,12 +152,14 @@ pub(crate) struct ClassTable {
     capacity: u32,
 }
 
-/// A Texture class's shape, its slice count, fixed when it opens, and the
-/// slices taken.
+/// A Texture class's shape, its slice count, fixed when it opens, the
+/// slices taken from the front, and those released since, which `place`
+/// gives out again first.
 struct ClassSlices {
     shape: TextureShape,
     slices: u32,
     taken: u32,
+    released: Vec<u32>,
 }
 
 impl ClassTable {
@@ -167,12 +170,26 @@ impl ClassTable {
         }
     }
 
-    /// The next slice of the newest class of `shape`, or slice 0 of a new
-    /// class when that one is full or there is none: the first of a shape
-    /// has one slice, each later one twice the one before's, up to
-    /// `SLICES_PER_CLASS`. `None` when the Channel holds its capacity of
-    /// classes and none of `shape` has room.
+    /// A released slice of a class of `shape`, else the next slice of the
+    /// newest class of `shape`, or slice 0 of a new class when that one is
+    /// full or there is none: the first of a shape has one slice, each later
+    /// one twice the one before's, up to `SLICES_PER_CLASS`. `None` when the
+    /// Channel holds its capacity of classes and none of `shape` has room.
     pub(crate) fn place(&mut self, shape: TextureShape) -> Option<ClassAndSlice> {
+        let released = self
+            .classes
+            .iter_mut()
+            .enumerate()
+            .find_map(|(class, slices)| {
+                let slice = (slices.shape == shape).then(|| slices.released.pop())??;
+                Some(ClassAndSlice {
+                    class: class as u32,
+                    slice,
+                })
+            });
+        if released.is_some() {
+            return released;
+        }
         let newest = self.classes.iter().rposition(|class| class.shape == shape);
         if let Some(class) = newest
             && let newest_class = &mut self.classes[class]
@@ -194,6 +211,7 @@ impl ClassTable {
             shape,
             slices,
             taken: 1,
+            released: Vec::new(),
         });
         Some(ClassAndSlice {
             class: self.classes.len() as u32 - 1,
@@ -205,6 +223,64 @@ impl ClassTable {
     fn slices(&self, class: u32) -> u32 {
         self.classes[class as usize].slices
     }
+
+    /// Gives `placement`'s slice back to its class, for `place` to give out
+    /// again.
+    pub(crate) fn release(&mut self, placement: ClassAndSlice) {
+        self.classes[placement.class as usize]
+            .released
+            .push(placement.slice);
+    }
+
+    /// Whether `place` would find room for each of `shapes`, placed in turn.
+    fn has_room(&self, shapes: &[TextureShape]) -> bool {
+        let new_classes = shapes
+            .iter()
+            .filter(|&&shape| {
+                let mut classes = self.classes.iter().filter(|class| class.shape == shape);
+                classes.all(|class| class.released.is_empty())
+                    && self
+                        .classes
+                        .iter()
+                        .rfind(|class| class.shape == shape)
+                        .is_none_or(|newest| newest.taken == newest.slices)
+            })
+            .count();
+        self.classes.len() + new_classes <= self.capacity as usize
+    }
+}
+
+/// Where a loaded Texture lies in its Channel: its Resident tail's slice,
+/// and its whole chain's when it has one there, whose Layer it is sampled
+/// at.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct TexturePlacement {
+    tail: ClassAndSlice,
+    chain: Option<ClassAndSlice>,
+}
+
+impl TexturePlacement {
+    fn layer(self) -> u32 {
+        self.chain.unwrap_or(self.tail).layer()
+    }
+}
+
+/// A Texture loaded by Asset ID: its Channel, where it lies, and how many
+/// Materials and spawns loaded it, less the freed Materials among them.
+struct LoadedTexture {
+    channel: MaterialChannel,
+    placement: TexturePlacement,
+    users: u32,
+}
+
+/// A Material loaded by Asset ID: its Handle, how many loads returned it,
+/// less those `remove_user` took back, when its last user left, and the
+/// Textures it counts as a user of.
+struct LoadedMaterial {
+    handle: MaterialHandle,
+    users: u32,
+    unused_since: Option<u64>,
+    textures: Vec<AssetId>,
 }
 
 /// One Channel's Textures, a texture array per Texture class, bound as one
@@ -234,15 +310,15 @@ impl ChannelTextures {
     /// slice of the tail's own Texture class, then, unless
     /// `holds_back_finer_mips`, its finer mips into a free slice of its whole
     /// chain's class, beside the tail copied over from the tail's slice.
-    /// Returns the Layer it ends in, its tail's when the Channel has no room
-    /// for its chain, or `None` when it has none for its tail.
+    /// Returns where it lies, without a chain when the Channel has no room
+    /// for one, or `None` when it has none for its tail.
     fn push(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
         texture: &CookedTexture,
         holds_back_finer_mips: bool,
-    ) -> Option<u32> {
+    ) -> Option<TexturePlacement> {
         let shape = TextureShape::of(texture);
         let tail_level = shape.resident_tail_level();
         let (finer_levels, tail_levels) = texture.levels.split_at(tail_level as usize);
@@ -251,11 +327,12 @@ impl ChannelTextures {
             let array = &self.textures[tail.class as usize];
             staging.write_texture(array, level as u32, tail.slice, bytes);
         }
+        let tail_only = TexturePlacement { tail, chain: None };
         if finer_levels.is_empty() || holds_back_finer_mips {
-            return Some(tail.layer());
+            return Some(tail_only);
         }
         let Some(chain) = self.place(device, shape) else {
-            return Some(tail.layer());
+            return Some(tail_only);
         };
         let chain_array = &self.textures[chain.class as usize];
         for (level, bytes) in finer_levels.iter().enumerate() {
@@ -263,7 +340,31 @@ impl ChannelTextures {
         }
         let tail_array = &self.textures[tail.class as usize];
         staging.copy_texture(tail_array, tail.slice, chain_array, chain.slice, tail_level);
-        Some(chain.layer())
+        Some(TexturePlacement {
+            tail,
+            chain: Some(chain),
+        })
+    }
+
+    /// Whether `push` would find room for `texture`'s Resident tail and,
+    /// unless `holds_back_finer_mips`, its whole chain.
+    fn has_room(&self, texture: &CookedTexture, holds_back_finer_mips: bool) -> bool {
+        let shape = TextureShape::of(texture);
+        let tail_level = shape.resident_tail_level();
+        let tail = shape.mips_from(tail_level);
+        if tail_level == 0 || holds_back_finer_mips {
+            self.table.has_room(&[tail])
+        } else {
+            self.table.has_room(&[tail, shape])
+        }
+    }
+
+    /// Gives back the slices `placement` holds.
+    fn release(&mut self, placement: TexturePlacement) {
+        self.table.release(placement.tail);
+        if let Some(chain) = placement.chain {
+            self.table.release(chain);
+        }
     }
 
     /// A free slice of `shape`'s Texture class, its array created when the
@@ -322,11 +423,16 @@ pub struct MaterialPool {
     materials: Vec<MaterialData>,
     materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
-    /// Each loaded Texture's Layer in its Channel, which its Asset ID names.
-    texture_layers: HashMap<AssetId, u32>,
-    /// Each loaded Material's Handle, which its Asset ID names, and how many
-    /// loads returned it.
-    material_handles: HashMap<AssetId, (MaterialHandle, u32)>,
+    /// Each loaded Texture, which its Asset ID names.
+    loaded_textures: HashMap<AssetId, LoadedTexture>,
+    /// Each loaded Material, which its Asset ID names.
+    loaded_materials: HashMap<AssetId, LoadedMaterial>,
+    /// The Materials no load uses any more, which stay loaded until a
+    /// refused load frees them.
+    unused: Unused<AssetId>,
+    /// Materials and Textures freed to make room since `take_frame_frees`;
+    /// frees to make room stop once it reaches `ENTRIES_FREED_PER_FRAME`.
+    frame_frees: usize,
     colour_sampler: wgpu::Sampler,
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -430,8 +536,10 @@ impl MaterialPool {
             materials: Vec::new(),
             materials_buffer,
             channels,
-            texture_layers: HashMap::new(),
-            material_handles: HashMap::new(),
+            loaded_textures: HashMap::new(),
+            loaded_materials: HashMap::new(),
+            unused: Unused::default(),
+            frame_frees: 0,
             colour_sampler,
             data_sampler,
             bind_group_layout,
@@ -449,11 +557,7 @@ impl MaterialPool {
         staging: &mut LoadStaging,
         data: MaterialData,
     ) -> Option<MaterialHandle> {
-        if self.generations.full(self.material_capacity) {
-            tracing::warn!(
-                capacity = self.material_capacity,
-                "Material refused: the Material SSBO is full"
-            );
+        if self.refused_as_full() {
             return None;
         }
         let (index, generation) = self.generations.take();
@@ -468,6 +572,18 @@ impl MaterialPool {
         Some(MaterialHandle { index, generation })
     }
 
+    /// Whether the SSBO is full, logged when it is.
+    fn refused_as_full(&self) -> bool {
+        let full = self.generations.full(self.material_capacity);
+        if full {
+            tracing::warn!(
+                capacity = self.material_capacity,
+                "Material refused: the Material SSBO is full"
+            );
+        }
+        full
+    }
+
     /// The data of `handle`'s Material, or None when it was freed.
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
     pub fn get(&self, handle: MaterialHandle) -> Option<&MaterialData> {
@@ -477,7 +593,8 @@ impl MaterialPool {
     }
 
     /// Releases `handle`'s index, which the next Material inserted takes, so
-    /// `handle` finds nothing again; its Textures stay loaded. A Mesh whose
+    /// `handle` finds nothing again, and gives back the slices of its
+    /// Textures that no other loaded Material samples. A Mesh whose
     /// Primitive names it must be freed first. A Handle that finds no
     /// Material is warned about.
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
@@ -486,9 +603,78 @@ impl MaterialPool {
             tracing::warn!(?handle, "Material not freed: its Handle finds no Material");
             return;
         }
-        self.material_handles
-            .retain(|_, (material_handle, _)| *material_handle != handle);
+        let freed_id = self
+            .loaded_materials
+            .iter()
+            .find_map(|(&id, loaded)| (loaded.handle == handle).then_some(id));
+        if let Some(id) = freed_id
+            && let Some(loaded) = self.loaded_materials.remove(&id)
+        {
+            if let Some(since) = loaded.unused_since {
+                self.unused.remove(since);
+            }
+            self.release_textures(&loaded.textures);
+        }
         tracing::debug!(?handle, "Material freed");
+    }
+
+    /// Frees the least recently used unused Material as `free` does, and
+    /// tells `reader` which Assets it freed; false when none is unused or the
+    /// frame freed `ENTRIES_FREED_PER_FRAME` entries already.
+    pub fn free_least_recently_used(&mut self, reader: &dyn AssetReader) -> bool {
+        if self.frame_frees >= ENTRIES_FREED_PER_FRAME {
+            return false;
+        }
+        let Some(id) = self.unused.pop_least_recent() else {
+            return false;
+        };
+        let loaded = self
+            .loaded_materials
+            .remove(&id)
+            .expect("an unused Material is loaded");
+        let handle = loaded.handle;
+        self.generations.free(handle.index, handle.generation);
+        let mut freed = self.release_textures(&loaded.textures);
+        freed.push(id);
+        self.frame_frees += freed.len();
+        reader.forget(&freed);
+        tracing::debug!(?handle, "Material freed");
+        true
+    }
+
+    /// Frees the least recently used unused Material, or else has
+    /// `make_room` free what keeps Materials in use; false when neither
+    /// freed anything.
+    fn free_for_room(
+        &mut self,
+        reader: &dyn AssetReader,
+        make_room: &mut dyn FnMut(&mut MaterialPool) -> bool,
+    ) -> bool {
+        self.free_least_recently_used(reader) || make_room(self)
+    }
+
+    /// Counts a user fewer of each of `textures`, giving back the slices of
+    /// those left with none, whose Asset IDs it returns.
+    fn release_textures(&mut self, textures: &[AssetId]) -> Vec<AssetId> {
+        let mut freed = Vec::new();
+        for &id in textures {
+            let Entry::Occupied(mut entry) = self.loaded_textures.entry(id) else {
+                continue;
+            };
+            entry.get_mut().users -= 1;
+            if entry.get().users == 0 {
+                let texture = entry.remove();
+                self.channels[texture.channel as usize].release(texture.placement);
+                freed.push(id);
+            }
+        }
+        freed
+    }
+
+    /// Materials and Textures freed to make room since the last call, which
+    /// renews the frame's `ENTRIES_FREED_PER_FRAME`.
+    pub fn take_frame_frees(&mut self) -> usize {
+        std::mem::take(&mut self.frame_frees)
     }
 
     /// Which Material Handles find a Material, and how many Materials were
@@ -497,11 +683,18 @@ impl MaterialPool {
         &self.generations
     }
 
-    /// Counts one user fewer of the Material `id`, keeping its entry however
-    /// few are left.
+    /// Counts one user fewer of the Material `id`; one left with none stays
+    /// loaded, the most recently used of the unused Materials.
     pub fn remove_user(&mut self, id: AssetId) {
-        if let Some((_, users)) = self.material_handles.get_mut(&id) {
-            *users = users.saturating_sub(1);
+        let Some(loaded) = self.loaded_materials.get_mut(&id) else {
+            return;
+        };
+        if loaded.users == 0 {
+            return;
+        }
+        loaded.users -= 1;
+        if loaded.users == 0 {
+            loaded.unused_since = Some(self.unused.push(id));
         }
     }
 
@@ -511,16 +704,13 @@ impl MaterialPool {
     /// it.
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
     pub fn users(&self, id: AssetId) -> u32 {
-        self.material_handles
+        self.loaded_materials
             .get(&id)
-            .map_or(0, |&(_, users)| users)
+            .map_or(0, |loaded| loaded.users)
     }
 
-    /// Loads the Material `id` from `reader`, and each Texture it samples, once
-    /// per Asset ID, written through `staging`, and returns its Handle, or
-    /// the SSBO's refusal when it is full; a load of a loaded Material counts
-    /// one more user of it. A Channel the Material lacks samples Layer 0, as
-    /// does one already full.
+    /// `load_making_room`, with no room made but by freeing unused Materials.
+    #[cfg(all(test, feature = "cook"))]
     pub fn load(
         &mut self,
         device: &wgpu::Device,
@@ -528,17 +718,55 @@ impl MaterialPool {
         reader: &dyn AssetReader,
         id: AssetId,
     ) -> anyhow::Result<MaterialHandle> {
-        if let Some((handle, users)) = self.material_handles.get_mut(&id) {
-            *users += 1;
-            return Ok(*handle);
+        self.load_making_room(device, staging, reader, id, &mut |_| false)
+    }
+
+    /// Loads the Material `id` from `reader`, and each Texture it samples, once
+    /// per Asset ID, written through `staging`, and returns its Handle, or
+    /// the SSBO's refusal when it is full; a load of a loaded Material counts
+    /// one more user of it. A full SSBO frees unused Materials, least
+    /// recently used first, to make room, and once none is left has
+    /// `make_room` free what keeps Materials in use. A Channel the Material
+    /// lacks samples Layer 0, as does one already full.
+    pub fn load_making_room(
+        &mut self,
+        device: &wgpu::Device,
+        staging: &mut LoadStaging,
+        reader: &dyn AssetReader,
+        id: AssetId,
+        make_room: &mut dyn FnMut(&mut MaterialPool) -> bool,
+    ) -> anyhow::Result<MaterialHandle> {
+        if let Some(loaded) = self.loaded_materials.get_mut(&id) {
+            loaded.users += 1;
+            if let Some(since) = loaded.unused_since.take() {
+                self.unused.remove(since);
+            }
+            return Ok(loaded.handle);
+        }
+        while self.generations.full(self.material_capacity) && self.free_for_room(reader, make_room)
+        {
+        }
+        if self.refused_as_full() {
+            anyhow::bail!("the Material pool refused Material {id}");
         }
         let material = reader.material(id)?;
         let mut layers = [Self::DEFAULT_LAYER; 5];
+        let mut textures = Vec::new();
         for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
             if let Some(texture_id) = texture_id {
-                layers[channel as usize] = self
-                    .load_texture(device, staging, reader, channel, texture_id)
-                    .with_context(|| format!("loading Material {id}"))?;
+                let loaded =
+                    self.load_texture(device, staging, reader, channel, texture_id, make_room);
+                layers[channel as usize] = match loaded {
+                    Ok(layer) => layer,
+                    Err(error) => {
+                        let freed = self.release_textures(&textures);
+                        reader.forget(&freed);
+                        return Err(error.context(format!("loading Material {id}")));
+                    }
+                };
+                if self.loaded_textures.contains_key(&texture_id) {
+                    textures.push(texture_id);
+                }
             }
         }
         let [red, green, blue] = material.emissive;
@@ -557,7 +785,13 @@ impl MaterialPool {
         let handle = self
             .insert(staging, data)
             .with_context(|| format!("the Material pool refused Material {id}"))?;
-        self.material_handles.insert(id, (handle, 1));
+        let loaded = LoadedMaterial {
+            handle,
+            users: 1,
+            unused_since: None,
+            textures,
+        };
+        self.loaded_materials.insert(id, loaded);
         tracing::debug!(material = %id, ?layers, "Material loaded");
         Ok(handle)
     }
@@ -568,19 +802,20 @@ impl MaterialPool {
 
     /// Whether `load` loaded the Material `id`.
     pub fn is_loaded(&self, id: AssetId) -> bool {
-        self.material_handles.contains_key(&id)
+        self.loaded_materials.contains_key(&id)
     }
 
     /// Whether `load_texture` placed the Texture `id`.
     pub fn is_texture_loaded(&self, id: AssetId) -> bool {
-        self.texture_layers.contains_key(&id)
+        self.loaded_textures.contains_key(&id)
     }
 
     /// Loads the Texture `id` from `reader` into `channel` once per Asset ID,
-    /// written through `staging`, and returns its Layer: a free slice of its
-    /// shape's Texture class, or of its Resident tail's when the pool holds
-    /// back finer mips or the Channel has no room for its chain, or Layer 0
-    /// when it has none for its tail either.
+    /// written through `staging`, counting one more user of it, and returns
+    /// its Layer: a free slice of its shape's Texture class, or of its
+    /// Resident tail's when the pool holds back finer mips or the Channel has
+    /// no room for its chain, or Layer 0 when it has none for its tail
+    /// either. A Channel without room frees as `load` does until it has.
     pub fn load_texture(
         &mut self,
         device: &wgpu::Device,
@@ -588,21 +823,32 @@ impl MaterialPool {
         reader: &dyn AssetReader,
         channel: MaterialChannel,
         id: AssetId,
+        make_room: &mut dyn FnMut(&mut MaterialPool) -> bool,
     ) -> anyhow::Result<u32> {
-        if let Some(&layer) = self.texture_layers.get(&id) {
-            return Ok(layer);
+        if let Some(loaded) = self.loaded_textures.get_mut(&id) {
+            loaded.users += 1;
+            return Ok(loaded.placement.layer());
         }
         let texture = reader.texture(id)?;
+        let holds_back_finer_mips = self.holds_back_finer_mips;
+        while !self.channels[channel as usize].has_room(&texture, holds_back_finer_mips)
+            && self.free_for_room(reader, make_room)
+        {}
         let channel_textures = &mut self.channels[channel as usize];
         let classes_before = channel_textures.views.len();
-        let holds_back_finer_mips = self.holds_back_finer_mips;
-        let Some(layer) = channel_textures.push(device, staging, &texture, holds_back_finer_mips)
+        let Some(placement) =
+            channel_textures.push(device, staging, &texture, holds_back_finer_mips)
         else {
             return Ok(Self::DEFAULT_LAYER);
         };
         self.bind_group_is_stale |= channel_textures.views.len() != classes_before;
-        self.texture_layers.insert(id, layer);
-        Ok(layer)
+        let loaded = LoadedTexture {
+            channel,
+            placement,
+            users: 1,
+        };
+        self.loaded_textures.insert(id, loaded);
+        Ok(placement.layer())
     }
 
     /// Rebuilds the bind group when loads since the last call opened Texture
@@ -882,6 +1128,88 @@ mod tests {
             .load(&context.device, &mut staging, &cache, AssetId(1))
             .unwrap();
         assert!(reloaded != freed && reloaded != inserted);
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// A Material freed to make room gives back both slices of its Texture,
+    /// whose Resident tail starts below its first mip, and the next Texture of
+    /// that shape takes them; a Texture another loaded Material samples
+    /// keeps its slices.
+    #[test]
+    fn a_freed_materials_texture_gives_its_slices_to_the_next_of_its_shape() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-material-slices-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let texture = CookedTexture {
+            format,
+            width: 512,
+            height: 512,
+            levels: (0..10)
+                .map(|level| vec![0; level_bytes(format, 512, 512, level)])
+                .collect(),
+        };
+        for id in [10, 11, 12] {
+            cache
+                .write(AssetId(id), "key", &texture.to_blob(1).unwrap())
+                .unwrap();
+        }
+        for (id, texture_id) in [(1, 10), (2, 11), (3, 11), (4, 12)] {
+            let material = CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures: [Some(AssetId(texture_id)), None, None, None, None],
+            };
+            cache
+                .write(AssetId(id), "key", &material.to_blob())
+                .unwrap();
+        }
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(
+            &context.device,
+            &gpu_memory(&context),
+            &mut staging,
+            &PoolCapacities::checked_in(),
+            false,
+        );
+        let mut load = |pool: &mut MaterialPool, id| {
+            pool.load(&context.device, &mut staging, &cache, AssetId(id))
+                .unwrap()
+        };
+        let placement = |pool: &MaterialPool, id| pool.loaded_textures[&AssetId(id)].placement;
+
+        let first = load(&mut pool, 1);
+        let first_placement = placement(&pool, 10);
+        assert!(first_placement.chain.is_some());
+        pool.remove_user(AssetId(1));
+        assert!(pool.free_least_recently_used(&cache));
+        assert!(pool.get(first).is_none());
+        assert!(!pool.loaded_textures.contains_key(&AssetId(10)));
+        assert_eq!(pool.take_frame_frees(), 2);
+
+        let second = load(&mut pool, 2);
+        assert_eq!(placement(&pool, 11), first_placement);
+        assert_eq!(
+            pool.get(second).map(|data| data.layers[0]),
+            Some(first_placement.layer())
+        );
+        load(&mut pool, 3);
+        pool.remove_user(AssetId(2));
+        assert!(pool.free_least_recently_used(&cache));
+        assert_eq!(pool.take_frame_frees(), 1);
+        assert_eq!(placement(&pool, 11), first_placement);
+        load(&mut pool, 4);
+        assert_ne!(placement(&pool, 12), first_placement);
+        assert!(
+            !pool.free_least_recently_used(&cache),
+            "no Material is unused"
+        );
         std::fs::remove_dir_all(&directory).ok();
     }
 

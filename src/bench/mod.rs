@@ -216,13 +216,13 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 19;
+const COUNTER_COUNT: usize = 20;
 
 /// Medians of counters, which repeat exactly on every run, but for the
 /// Instances overflowed and the refusals, from the Renderables refused to
 /// the shadow mask's light overflows: the most of any frame, so one overflow
-/// counts; and for the streaming counters, from the Late Chunks to the bytes
-/// read: the sum over the frames, as each counts events. The refusals and
+/// counts; and for the streaming counters, from the Late Chunks to the pool
+/// entries freed: the sum over the frames, as each counts events. The refusals and
 /// the streaming counters are absent from Baselines recorded before results
 /// carried them, which read as none.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -257,6 +257,8 @@ pub struct Counters {
     pub chunks_unloaded: u64,
     #[serde(default)]
     pub bytes_read: u64,
+    #[serde(default)]
+    pub pool_entries_freed: u64,
 }
 
 impl Counters {
@@ -300,6 +302,7 @@ impl Counters {
             chunks_loaded: total(|stats| stats.chunks_loaded.into()),
             chunks_unloaded: total(|stats| stats.chunks_unloaded.into()),
             bytes_read: total(|stats| stats.bytes_read),
+            pool_entries_freed: total(|stats| stats.pool_entries_freed.into()),
         }
     }
 
@@ -324,6 +327,7 @@ impl Counters {
         "chunks_loaded",
         "chunks_unloaded",
         "bytes_read",
+        "pool_entries_freed",
     ];
 
     fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
@@ -347,6 +351,7 @@ impl Counters {
             self.chunks_loaded,
             self.chunks_unloaded,
             self.bytes_read,
+            self.pool_entries_freed,
         ];
         std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
@@ -1159,6 +1164,7 @@ mod tests {
         chunks_loaded: 0,
         chunks_unloaded: 0,
         bytes_read: 0,
+        pool_entries_freed: 0,
     };
 
     #[test]
@@ -1183,6 +1189,7 @@ mod tests {
             chunks_loaded: 17,
             chunks_unloaded: 18,
             bytes_read: 19,
+            pool_entries_freed: 20,
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
@@ -1932,6 +1939,7 @@ mod tests {
                     } else {
                         0
                     },
+                    pool_entries_freed: if frame == 300 { 4 } else { 0 },
                     gpu_memory_bytes_by_kind: if warming_up {
                         [9; GpuMemoryKind::COUNT]
                     } else {
@@ -2006,10 +2014,14 @@ mod tests {
                 counters.chunks_loaded,
                 counters.chunks_unloaded,
                 counters.bytes_read,
+                counters.pool_entries_freed,
             ]
         };
-        assert_eq!(streamed(reference.counters), [2, 2, 3, 1000]);
-        assert_eq!(streamed(reference.counter_frames.counters), [0, 2, 0, 1000]);
+        assert_eq!(streamed(reference.counters), [2, 2, 3, 1000, 4]);
+        assert_eq!(
+            streamed(reference.counter_frames.counters),
+            [0, 2, 0, 1000, 0]
+        );
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);

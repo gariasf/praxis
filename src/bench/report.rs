@@ -270,6 +270,7 @@ mod tests {
         chunks_loaded: 0,
         chunks_unloaded: 0,
         bytes_read: 0,
+        pool_entries_freed: 0,
     };
 
     const BUDGETS: Budgets = Budgets {
@@ -431,6 +432,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 | `chunks_loaded` | 0 | 0 | +0 | — | — |
 | `chunks_unloaded` | 0 | 0 | +0 | — | — |
 | `bytes_read` | 0 | 0 | +0 | — | — |
+| `pool_entries_freed` | 0 | 0 | +0 | — | — |
 "
         );
     }
