@@ -531,10 +531,10 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
     <tbody>
       <tr><td>each of the eight counters</td><td>fails on any increase</td><td>none</td><td><code>gpu_memory_bytes</code> only</td></tr>
       <tr><td><code>aliasing_rmse</code>, <code>aliasing_p99</code></td><td>the ratios</td><td>none</td><td>none</td></tr>
-      <tr><td><code>cpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>CPU_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and at the p95</td></tr>
+      <tr><td><code>cpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>CPU_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median, p95 and p99, and its maximum against one 60 Hz period</td></tr>
       <tr><td>each timed pass</td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td><code>dynamic_tlas_build</code> only</td></tr>
-      <tr><td><code>gpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median</td></tr>
-      <tr><td><code>gate_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median</td></tr>
+      <tr><td><code>gpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and p99, and its maximum against one 60 Hz period</td></tr>
+      <tr><td><code>gate_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and p99</td></tr>
       <tr><td><code>shadow_ray_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>none</td></tr>
       <tr><td><code>dynamic_tlas_cpu_microseconds</code></td><td>not judged</td><td></td><td>at the median</td></tr>
       <tr><td>p95s, the lit pass's wait, the gate's passes</td><td>reported only</td><td></td><td>none</td></tr>
