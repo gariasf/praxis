@@ -6,17 +6,22 @@ use crate::{
     bench::Budgets,
     cooked::{AssetId, CookedMesh, CookedVertex},
     render::{LoadStaging, NO_MATERIAL, blas_bytes},
+    stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES,
     stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
 };
 
-/// Bytes of the geometry Arenas' Budget per Mesh table entry: 256 per Arena.
-const GEOMETRY_BYTES_PER_MESH: u64 = 1280;
+/// Thousandths of the geometry Arenas' Budget each Arena takes, in the
+/// order of `PoolCapacities`' Arenas: the shares of the bytes `helmet`'s,
+/// `town`'s and `world`'s Meshes put in each.
+const ARENA_PER_MILLE: [u64; 5] = [487, 317, 6, 85, 105];
 
-/// Bytes of the texture pool's Budget per Material table entry.
-const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 16 << 20;
+/// A Mesh's bytes in the geometry Arenas: the mean of `town`'s 19 Meshes.
+const GEOMETRY_BYTES_PER_MESH: u64 = 4488;
 
-/// Bytes of a Channel's share of the texture pool's Budget per Texture class.
-const TEXTURE_POOL_BYTES_PER_CLASS: u64 = 64 << 10;
+/// A Material's bytes in the texture pool: the largest of the Reference
+/// scenes', `helmet`'s three 2048² BC7 and BC5 Textures and its BC4 one, each
+/// past its Resident tail.
+pub(crate) const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 19_267_584;
 
 /// Unused entries each pool frees in one frame to make room for refused
 /// loads, so a load that fits nowhere cannot empty a pool in one frame; the
@@ -25,10 +30,12 @@ const TEXTURE_POOL_BYTES_PER_CLASS: u64 = 64 << 10;
 pub(crate) const ENTRIES_FREED_PER_FRAME: usize = 64;
 
 /// What each pool holds, derived from the GPU memory Budgets at device
-/// creation: the geometry Arenas' Budget in equal shares and the Mesh table
-/// beside it, the texture pool's the Material table and each Channel's
-/// Texture classes, up to what the Capability floor binds. The shares are
-/// provisional until the Budget split sets them (ADRs 0013, 0017).
+/// creation at real bytes per entry: the geometry Arenas' Budget in each
+/// Arena's share and the Mesh table beside it, the texture pool's the
+/// Material table and each Channel's Texture classes, a class for each
+/// `RESIDENT_TAIL_LEVEL_BYTES` of the Channel's share, less than any class
+/// past the Resident tail holds, up to what the Capability floor binds (ADRs
+/// 0013, 0017). The scene and pass buffers' Budget holds the two tables.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PoolCapacities {
     pub vertex_arena_bytes: u64,
@@ -43,19 +50,23 @@ pub struct PoolCapacities {
 
 impl PoolCapacities {
     pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
-        let arena_bytes = budgets.geometry_arenas / 5;
+        let [vertex, index, meshlet, meshlet_vertex, meshlet_triangle] =
+            ARENA_PER_MILLE.map(|per_mille| {
+                budgets.geometry_arenas * per_mille / 1000 / wgpu::COPY_BUFFER_ALIGNMENT
+                    * wgpu::COPY_BUFFER_ALIGNMENT
+            });
         let entries = |bytes: u64| u32::try_from(bytes).unwrap_or(u32::MAX);
         let channels = MaterialChannel::ALL.len() as u64;
         Self {
-            vertex_arena_bytes: arena_bytes,
-            index_arena_bytes: arena_bytes,
-            meshlet_arena_bytes: arena_bytes,
-            meshlet_vertex_arena_bytes: arena_bytes,
-            meshlet_triangle_arena_bytes: arena_bytes,
+            vertex_arena_bytes: vertex,
+            index_arena_bytes: index,
+            meshlet_arena_bytes: meshlet,
+            meshlet_vertex_arena_bytes: meshlet_vertex,
+            meshlet_triangle_arena_bytes: meshlet_triangle,
             meshes: entries(budgets.geometry_arenas / GEOMETRY_BYTES_PER_MESH),
             materials: entries(budgets.texture_pool / TEXTURE_POOL_BYTES_PER_MATERIAL),
             texture_classes_per_channel: entries(
-                budgets.texture_pool / (channels * TEXTURE_POOL_BYTES_PER_CLASS),
+                budgets.texture_pool / (channels * RESIDENT_TAIL_LEVEL_BYTES),
             )
             .min(CLASSES_PER_CHANNEL),
         }
@@ -1170,39 +1181,39 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_checked_in_budgets_keep_the_capacities_before_them() {
+    fn the_checked_in_budgets_give_these_pool_capacities() {
         assert_eq!(
             PoolCapacities::checked_in(),
             PoolCapacities {
-                vertex_arena_bytes: 16 << 20,
-                index_arena_bytes: 16 << 20,
-                meshlet_arena_bytes: 16 << 20,
-                meshlet_vertex_arena_bytes: 16 << 20,
-                meshlet_triangle_arena_bytes: 16 << 20,
-                meshes: 1 << 16,
-                materials: 256,
+                vertex_arena_bytes: 40_852_520,
+                index_arena_bytes: 26_591_884,
+                meshlet_arena_bytes: 503_316,
+                meshlet_vertex_arena_bytes: 7_130_316,
+                meshlet_triangle_arena_bytes: 8_808_036,
+                meshes: 18_691,
+                materials: 222,
                 texture_classes_per_channel: 13_107,
             }
         );
     }
 
-    /// Budgets for two Meshes make a Mesh table of two and five Arenas of
-    /// 512 bytes: a third triangle, which the Arenas have room for, is
-    /// refused and logged.
+    /// Budgets for two Meshes make a Mesh table of two and Arenas in their
+    /// shares of 8,976 bytes: a third triangle, which the Arenas have room
+    /// for, is refused and logged.
     #[test]
     fn a_mesh_past_the_mesh_table_its_budget_sizes_is_refused() {
         let Some(context) = gpu_context() else {
             return;
         };
         let capacities = PoolCapacities::from_budgets(&GpuMemoryBudgets {
-            geometry_arenas: 2560,
+            geometry_arenas: 2 * GEOMETRY_BYTES_PER_MESH,
             ..GpuMemoryBudgets::each(0)
         });
         let mut staging = LoadStaging::new(context.device.clone());
         let memory = gpu_memory(&context);
         let mut pool = MeshPool::new(&context.device, &memory, &capacities);
         let bytes_by_kind = memory.bytes_by_kind();
-        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 2560);
+        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 8964);
         assert_eq!(
             bytes_by_kind[GpuMemoryKind::SceneAndPassBuffers as usize],
             2 * size_of::<MeshData>() as u64

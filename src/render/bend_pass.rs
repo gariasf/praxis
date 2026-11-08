@@ -17,8 +17,8 @@ pub(crate) const BEND_PASS: &str = "bend_pass";
 
 /// Bends a frame applies at most: past it, those of the bent Meshes
 /// highest in the vertex Arena are left out, so those Meshes keep the shape
-/// they last took, and are counted and warned about. Provisional until ADR
-/// 0013's split of the 8 GB Budget sizes it.
+/// they last took, and are counted and warned about. Fixed, and held in the
+/// scene and pass buffers' and the staging Budgets.
 pub const BEND_CAPACITY: u32 = 4096;
 
 /// Vertices a workgroup of the pass bends, one per invocation.

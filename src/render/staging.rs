@@ -27,7 +27,7 @@ pub struct FrameStaging {
     slots: Vec<StagingSlot>,
     slot_size: u64,
     /// The most one frame uploads, which no slot grows past.
-    max_slot_size: u64,
+    pub(crate) max_slot_size: u64,
     next_slot: usize,
 }
 

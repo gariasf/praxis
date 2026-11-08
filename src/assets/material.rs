@@ -1715,7 +1715,7 @@ mod tests {
         };
         let mut staging = LoadStaging::new(context.device.clone());
         let capacities = PoolCapacities::from_budgets(&GpuMemoryBudgets {
-            texture_pool: 64 << 20,
+            texture_pool: 4 * crate::assets::pools::TEXTURE_POOL_BYTES_PER_MATERIAL,
             ..GpuMemoryBudgets::each(0)
         });
         let memory = gpu_memory(&context);

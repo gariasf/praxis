@@ -52,8 +52,9 @@ pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 /// is dispatched in rows of these.
 pub(crate) const MAX_WORKGROUPS_PER_DIMENSION: u32 = 65_535;
 
-/// What the frame's draw holds, provisional until ADR 0013's split of the 8 GB
-/// Budget sizes it.
+/// What the frame's draw holds: fixed, not drawn from a Budget, as the
+/// Capability floor caps its indices, and held in the scene and pass buffers'
+/// Budget.
 #[derive(Clone, Copy)]
 pub struct DrawCapacity {
     pub meshlet_records: u32,
@@ -66,7 +67,7 @@ impl DrawCapacity {
     /// M3's dense scene with culling off, as its Goldens compare.
     /// 2^20 Meshlet records, 12 MiB, are as many Meshlets of 10.7 triangles
     /// on average.
-    pub const PROVISIONAL: DrawCapacity = DrawCapacity {
+    pub const FIXED: DrawCapacity = DrawCapacity {
         meshlet_records: 1 << 20,
         packed_indices: 1 << 25,
     };

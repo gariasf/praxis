@@ -1143,12 +1143,12 @@ mod tests {
         assert_eq!(frames.prepare(), [0]);
     }
 
-    /// Budgets for one scan block of 256 slots, at 256 bytes each.
+    /// Budgets for one scan block of 256 slots.
     #[test]
     fn a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees() {
         let mut frames =
             Frames::with_capacities(RenderCapacities::from_budgets(&GpuMemoryBudgets {
-                scene_and_pass_buffers: 1 << 16,
+                scene_and_pass_buffers: 1 << 17,
                 ..GpuMemoryBudgets::each(0)
             }));
         let filled: Vec<Entity> = (0..256).map(|_| frames.spawn(0.0)).collect();
@@ -1190,7 +1190,7 @@ mod tests {
     fn a_chunk_past_capacity_is_refused_whole_and_warned_about_once() {
         let mut frames =
             Frames::with_capacities(RenderCapacities::from_budgets(&GpuMemoryBudgets {
-                scene_and_pass_buffers: 1 << 16,
+                scene_and_pass_buffers: 1 << 17,
                 ..GpuMemoryBudgets::each(0)
             }));
         let mesh = frames.mesh;
