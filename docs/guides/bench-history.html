@@ -658,10 +658,10 @@ struct SeriesRow&lt;'record&gt; {
 /// inflated the benched rows, so their spread sets no floor.
 const CPU_FRAME_SMALLEST_SHIFT: f64 = 0.03;
 
-/// The GPU frame's: above 1.13%, the farthest an M4 Pro benched row lies
-/// from the median of its scene's others (minification at 8bc34eb1 against
-/// 91fda48b, ec4dfd7c and 075919da, of every scene benched on three nights
-/// or more, Harness version 10), and under a 1.5% step.
+/// The GPU frame's: above the farthest an M4 Pro benched row lies from the
+/// median of its scene's other nights, minification at 8bc34eb1 against
+/// 91fda48b, ec4dfd7c and 075919da, and under the smallest step it must
+/// catch (measured: `docs/performance.md`, Measurements behind the code).
 const GPU_FRAME_SMALLEST_SHIFT: f64 = 0.0125;
 
 /// The timings a Series' records are judged on for suspects, each with its
@@ -1284,6 +1284,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
   <h2>Limits</h2>
   <p><b>Steps, not slopes.</b> A timing that grows a little every record never leaves a band that follows it; the rule finds steps.</p>
   <p><b>A step right after an outlier on the same side.</b> If the outlier sits within the step's tolerance of it, the step reads as continuing the outlier, which takes the mark; the night re-benches the outlier's commit, and a cleared Verdict does not re-judge the step.</p>
+  <p><b>A GPU frame step near its smallest shift.</b> The GPU frame's floor sits a few hundredths of a percent above the spread its benched nights showed, and a window of three to eight records takes its centre from a nearest-rank median, so a night slower than any measured can still be a Suspect, which the same night's re-bench of both ends then clears. A step little larger than the floor whose first record reads low is flagged a record late, against a predecessor already at the new level, and that re-bench clears it too. A held shift must show the same floor again on each night of its bisect, from two runs of each end, a spread no night has measured.</p>
   <p><b>The first three records of a line.</b> They are not judged, so a step at the second record after a Harness version, a new scene content, a Baseline or a pinned commit goes unmarked.</p>
   <p><b>One Suspect a night, one machine's Verdicts.</b> Each machine judges its own Series, from release binaries it builds itself; the RTX 2070 SUPER's task runs only while the owner is logged on, and the M4 Pro's <code>gh</code> must be logged in for an issue to open. The oldest unjudged Suspect goes first, so a backlog of Suspects takes as many nights.</p>
   <p><b>What the quiet test cannot see.</b> It reads the load once before the first scene, so load that arrives mid-run is caught only by the GPU frame spread; a CPU frame spread is not judged. An imported Baseline is quiet unless its own GPU frame spread says otherwise.</p>

@@ -422,10 +422,10 @@ type MedianOf = fn(&SeriesRow) -> Option<f64>;
 /// inflated the benched rows, so their spread sets no floor.
 const CPU_FRAME_SMALLEST_SHIFT: f64 = 0.03;
 
-/// The GPU frame's: above 1.13%, the farthest an M4 Pro benched row lies
-/// from the median of its scene's others (minification at 8bc34eb1 against
-/// 91fda48b, ec4dfd7c and 075919da, of every scene benched on three nights
-/// or more, Harness version 10), and under a 1.5% step.
+/// The GPU frame's: above the farthest an M4 Pro benched row lies from the
+/// median of its scene's other nights, minification at 8bc34eb1 against
+/// 91fda48b, ec4dfd7c and 075919da, and under the smallest step it must
+/// catch (measured: `docs/performance.md`, Measurements behind the code).
 const GPU_FRAME_SMALLEST_SHIFT: f64 = 0.0125;
 
 /// The timings a Series' records are judged on for suspects, each with its
@@ -2080,7 +2080,6 @@ mod tests {
             .enumerate()
             .filter(|(_, timings)| !timings.is_empty())
             .collect();
-        // The CPU frame keeps its 3%.
         assert_eq!(
             marked,
             [(quiet_nights, vec!["gpu_frame_microseconds".to_owned()])]
