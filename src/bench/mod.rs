@@ -102,6 +102,11 @@ impl Configuration {
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
+/// The frames a run waits for the Chunk streamer to report Settled: the
+/// warm-up before the counter frames, so every scene has loaded before
+/// them whatever the IO pool's timing. Later frames stream as a game does.
+const SETTLED_FRAMES: std::ops::RangeTo<u32> = ..COUNTER_FRAMES.start;
+
 /// The Baseline directory of `adapter` on `backend`: the adapter's name in
 /// lowercase, each run of other characters a hyphen (`Apple M4 Pro` is
 /// `apple-m4-pro`), then the backend's name unless it is Vulkan or Metal,
@@ -575,7 +580,7 @@ pub fn run(
             SIXTY_HERTZ,
             switches,
             wait,
-            false,
+            SETTLED_FRAMES,
         )?;
         anyhow::Ok((frames, scene_content_hash))
     };
@@ -1143,6 +1148,83 @@ mod tests {
     use super::*;
     use crate::render::readback::tests::RecordedFrame;
     use crate::stats::GpuFrameStats;
+    use crate::streaming::{ChunkIo, ChunkStreamer, FinishedLoad};
+
+    /// IO whose reads take as many frames as precede the counter frames,
+    /// unless a frame waits for them to settle.
+    #[derive(Default)]
+    struct SlowIo {
+        frame: u32,
+        in_flight: Vec<(u32, [i32; 2])>,
+    }
+
+    impl SlowIo {
+        fn receive_all(&mut self) {
+            for (finishes_on, _) in &mut self.in_flight {
+                *finishes_on = self.frame;
+            }
+        }
+    }
+
+    impl ChunkIo for SlowIo {
+        fn request(&mut self, coordinates: [i32; 2]) {
+            self.in_flight
+                .push((self.frame + COUNTER_FRAMES.start, coordinates));
+        }
+
+        fn take_finished(&mut self) -> Option<FinishedLoad> {
+            let position = self
+                .in_flight
+                .iter()
+                .position(|&(finishes_on, _)| finishes_on <= self.frame)?;
+            let (_, coordinates) = self.in_flight.remove(position);
+            Some(FinishedLoad {
+                coordinates,
+                assets: Vec::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn after_a_settled_warm_up_no_reference_scene_streams_in_the_counter_frames() {
+        for scene in ReferenceScene::ALL {
+            let mut streamer =
+                ChunkStreamer::new(scene.chunk_coordinates(), scene.load_radius_metres());
+            let mut io = SlowIo::default();
+            for frame in 0..COUNTER_FRAMES.end {
+                io.frame = frame;
+                let camera = scene.camera_at(frame, glam::DVec3::ZERO).position;
+                loop {
+                    let streamed = streamer.update(camera, false, &mut io);
+                    assert!(
+                        !COUNTER_FRAMES.contains(&frame)
+                            || (streamed.requested.is_empty()
+                                && streamed.loaded.is_empty()
+                                && streamed.unloaded.is_empty()),
+                        "{} streams in counter frame {frame}: {streamed:?}",
+                        scene.name()
+                    );
+                    if !SETTLED_FRAMES.contains(&frame) || streamed.settled {
+                        break;
+                    }
+                    io.receive_all();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_settles_each_frame_before_the_counter_frames_and_no_later_one() {
+        assert_eq!(SETTLED_FRAMES.end, COUNTER_FRAMES.start);
+        for configuration in [
+            Configuration::REFERENCE,
+            Configuration::CI,
+            Configuration::COUNTERS,
+            Configuration::CI_COUNTERS,
+        ] {
+            assert!(SETTLED_FRAMES.end <= configuration.warm_up_frames);
+        }
+    }
 
     const COUNTERS: Counters = Counters {
         draw_calls: 10,

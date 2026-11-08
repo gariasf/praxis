@@ -197,7 +197,7 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Settled frame**:
-A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them; the bench and a window never wait for one.
+A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, the bench its warm-up frames before the counter frames; a window never waits for one.
 _Avoid_: Blocking load, sync mode
 
 **Render switches**:
