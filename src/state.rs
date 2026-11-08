@@ -665,7 +665,11 @@ mod tests {
             placements: origin
                 .placements
                 .iter()
-                .map(|placement| crate::streaming::chunks::ChunkPlacement { ..*placement })
+                .map(|placement| crate::streaming::chunks::ChunkPlacement {
+                    transform: placement.transform,
+                    mesh: placement.mesh,
+                    material: placement.material,
+                })
                 .collect(),
             lights: origin.lights.clone(),
             meshes: Vec::new(),

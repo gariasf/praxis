@@ -189,9 +189,9 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
 
 /// Anchor cells, along any axis, between the camera's Anchor and the bound
 /// static TLAS's past which a build re-anchors it though no static Instance
-/// changed: a Chunk's edge, so the camera adds less than 320 m to what a
-/// shadow ray composes in the TLAS's frame, and less than 4.9 mm to its
-/// offset.
+/// changed: a Chunk's edge. Within it, the camera adds less than 320 m to
+/// what a shadow ray composes in the TLAS's frame, and less than 4.9 mm to
+/// its offset.
 const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
@@ -245,6 +245,15 @@ struct AnchoredTlas {
 struct InstancePosition {
     anchor: [i32; 3],
     offset: [f32; 3],
+}
+
+impl InstancePosition {
+    fn of(instance: &InstanceData) -> Self {
+        Self {
+            anchor: instance.anchor,
+            offset: instance.offset,
+        }
+    }
 }
 
 /// A static Instance as an entry takes it: its TLAS Instance, whose
@@ -364,12 +373,7 @@ impl StaticTlas {
         wait: bool,
     ) -> StaticTlasUpdate {
         self.frame += 1;
-        if self.end == 0
-            && let Some(Spare::Idle(spare)) = &mut self.spare
-        {
-            self.bound.anchor = frame.camera.anchor;
-            spare.anchor = frame.camera.anchor;
-        }
+        self.follow_the_camera_while_empty(frame.camera.anchor);
         let changes = self.entry_changes(frame, mesh_pool);
         if !changes.is_empty() {
             let changes = Arc::new(changes);
@@ -400,6 +404,17 @@ impl StaticTlas {
         update
     }
 
+    /// Moves both TLASes to `camera_anchor` while no static Instance has
+    /// taken an entry, which needs no build.
+    fn follow_the_camera_while_empty(&mut self, camera_anchor: [i32; 3]) {
+        if self.end == 0
+            && let Some(Spare::Idle(spare)) = &mut self.spare
+        {
+            self.bound.anchor = camera_anchor;
+            spare.anchor = camera_anchor;
+        }
+    }
+
     /// The entry changes of `frame`'s Instance writes, its entries taken and
     /// freed as its static Instances need.
     fn entry_changes(&mut self, frame: &FrameData, mesh_pool: &MeshPool) -> Vec<EntryChange> {
@@ -427,10 +442,7 @@ impl StaticTlas {
                 };
                 let instance = StaticInstance {
                     tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot),
-                    position: InstancePosition {
-                        anchor: instance.anchor,
-                        offset: instance.offset,
-                    },
+                    position: InstancePosition::of(instance),
                 };
                 match self.entry_of(slot) {
                     Some(entry) => changes.push(EntryChange {
@@ -501,13 +513,13 @@ impl StaticTlas {
         let built_from = self.behind[self.bound_index]
             .first()
             .map(|batch| batch.frame);
-        let far = (0..3).any(|axis| {
+        let camera_strayed = (0..3).any(|axis| {
             (i64::from(camera_anchor[axis]) - i64::from(self.bound.anchor[axis])).abs()
                 > i64::from(REANCHOR_CELLS)
         });
-        let builds = built_from.is_some() || far;
+        let records_build = built_from.is_some() || camera_strayed;
         if !matches!(self.spare, Some(Spare::Idle(_)))
-            || (self.behind[spare_index].is_empty() && !builds)
+            || (self.behind[spare_index].is_empty() && !records_build)
         {
             return false;
         }
@@ -515,7 +527,7 @@ impl StaticTlas {
             unreachable!("matched")
         };
         let batches = std::mem::take(&mut self.behind[spare_index]);
-        let device = builds.then(|| device.clone());
+        let device = records_build.then(|| device.clone());
         let worker = std::thread::Builder::new()
             .name("Static TLAS Worker".to_string())
             .spawn(move || {
@@ -922,11 +934,7 @@ fn placed_bounds(transform: &[f32; 12], bounds: [[f32; 3]; 2]) -> [glam::Vec3; 2
 /// its translation from `anchor`'s corner (`place`).
 fn anchored_transform(instance: &InstanceData, anchor: [i32; 3]) -> [f32; 12] {
     let mut transform = unplaced_transform(instance);
-    let position = InstancePosition {
-        anchor: instance.anchor,
-        offset: instance.offset,
-    };
-    place(&mut transform, position, anchor);
+    place(&mut transform, InstancePosition::of(instance), anchor);
     transform
 }
 

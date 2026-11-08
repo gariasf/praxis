@@ -289,10 +289,7 @@ fn entry_changes(&amp;mut self, frame: &amp;FrameData, mesh_pool: &amp;MeshPool)
             };
             let instance = StaticInstance {
                 tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot),
-                position: InstancePosition {
-                    anchor: instance.anchor,
-                    offset: instance.offset,
-                },
+                position: InstancePosition::of(instance),
             };
             match self.entry_of(slot) {
                 Some(entry) =&gt; changes.push(EntryChange {
@@ -413,11 +410,7 @@ struct StaticInstance {
 /// its translation from `anchor`'s corner (`place`).
 fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
     let mut transform = unplaced_transform(instance);
-    let position = InstancePosition {
-        anchor: instance.anchor,
-        offset: instance.offset,
-    };
-    place(&amp;mut transform, position, anchor);
+    place(&amp;mut transform, InstancePosition::of(instance), anchor);
     transform
 }
 
@@ -478,9 +471,9 @@ fn place(transform: &amp;mut [f32; 12], position: InstancePosition, anchor: [i32
   <p>A build moves its TLAS's Anchor to the camera's in the frame the build starts. When that Anchor differs from the one the TLAS held, the worker composes every filled entry's translation anew from the positions after taking the changes, so entries no change touched move into the new frame too; a position stays behind when its entry is emptied and is never read again until the entry is filled. Until a static Instance takes an entry, both TLASes, empty, take the camera's Anchor each frame with no build, so a scene with no static Instance still gives the dynamic TLAS a frame at the camera.</p>
 <pre class="code"><code>/// Anchor cells, along any axis, between the camera's Anchor and the bound
 /// static TLAS's past which a build re-anchors it though no static Instance
-/// changed: a Chunk's edge, so the camera adds less than 320 m to what a
-/// shadow ray composes in the TLAS's frame, and less than 4.9 mm to its
-/// offset.
+/// changed: a Chunk's edge. Within it, the camera adds less than 320 m to
+/// what a shadow ray composes in the TLAS's frame, and less than 4.9 mm to
+/// its offset.
 const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;</code></pre>
   <p class="code-source"><code>REANCHOR_CELLS</code>, <code>src/render/acceleration_structures.rs</code>: <code>CHUNK_EDGE_METRES</code>, 256 m, over <code>ANCHOR_CELL_SIZE</code>, 64 m.</p>
   <p>A shadow ray starts off its surface by 2<sup>&minus;16</sup> of the largest coordinate it composes in the TLAS's frame (<a href="shadow-mask.html#ray">the shadow mask pass, One ray</a>). With the camera's Anchor at most four cells from the TLAS's along each axis, the camera stands less than 320 m from the frame's origin along each, and adds less than 4.9 mm to that offset. A frame whose camera's Anchor is five or more cells away along any axis starts a build once the spare is idle, with no change to bring, which binds the frame after its submit.</p>
@@ -573,12 +566,7 @@ pub fn update(
     wait: bool,
 ) -&gt; StaticTlasUpdate {
     self.frame += 1;
-    if self.end == 0
-        &amp;&amp; let Some(Spare::Idle(spare)) = &amp;mut self.spare
-    {
-        self.bound.anchor = frame.camera.anchor;
-        spare.anchor = frame.camera.anchor;
-    }
+    self.follow_the_camera_while_empty(frame.camera.anchor);
     let changes = self.entry_changes(frame, mesh_pool);
     if !changes.is_empty() {
         let changes = Arc::new(changes);
@@ -607,8 +595,19 @@ pub fn update(
         }
     }
     update
+}
+
+/// Moves both TLASes to `camera_anchor` while no static Instance has
+/// taken an entry, which needs no build.
+fn follow_the_camera_while_empty(&amp;mut self, camera_anchor: [i32; 3]) {
+    if self.end == 0
+        &amp;&amp; let Some(Spare::Idle(spare)) = &amp;mut self.spare
+    {
+        self.bound.anchor = camera_anchor;
+        spare.anchor = camera_anchor;
+    }
 }</code></pre>
-  <p class="code-source"><code>StaticTlas::update</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p class="code-source"><code>StaticTlas::update</code> and <code>StaticTlas::follow_the_camera_while_empty</code>, <code>src/render/acceleration_structures.rs</code>.</p>
   <p>A frame's entry changes go, as one <code>Arc</code>, into <code>behind</code> for both TLASes, tagged with the frame. The bound TLAS's list is what its last build lacked; the spare's, what its entries lack. A spare whose build the frame before submitted is bound first, by swapping it with the bound one, and, when the build brought a change, the update reports the frames since the earliest one it brought. Then it collects the worker's result and starts the next job; with <code>wait</code> it goes round again, so a job it starts is collected in the same frame.</p>
 <pre class="code"><code>/// Hands the idle spare to a worker on `device` when its entries lack a
 /// change, the bound TLAS's build does, or the bound TLAS's Anchor is
@@ -620,13 +619,13 @@ fn start(&amp;mut self, device: &amp;wgpu::Device, camera_anchor: [i32; 3]) -&gt
     let built_from = self.behind[self.bound_index]
         .first()
         .map(|batch| batch.frame);
-    let far = (0..3).any(|axis| {
+    let camera_strayed = (0..3).any(|axis| {
         (i64::from(camera_anchor[axis]) - i64::from(self.bound.anchor[axis])).abs()
             &gt; i64::from(REANCHOR_CELLS)
     });
-    let builds = built_from.is_some() || far;
+    let records_build = built_from.is_some() || camera_strayed;
     if !matches!(self.spare, Some(Spare::Idle(_)))
-        || (self.behind[spare_index].is_empty() &amp;&amp; !builds)
+        || (self.behind[spare_index].is_empty() &amp;&amp; !records_build)
     {
         return false;
     }
@@ -634,7 +633,7 @@ fn start(&amp;mut self, device: &amp;wgpu::Device, camera_anchor: [i32; 3]) -&gt
         unreachable!("matched")
     };
     let batches = std::mem::take(&amp;mut self.behind[spare_index]);
-    let device = builds.then(|| device.clone());
+    let device = records_build.then(|| device.clone());
     let worker = std::thread::Builder::new()
         .name("Static TLAS Worker".to_string())
         .spawn(move || {
@@ -888,7 +887,7 @@ pub fn bound_index(&amp;self) -&gt; usize {
   </table>
   </div>
   <p class="note"><code>bench/baselines/apple-m4-pro</code>, by a script.</p>
-  <p>No Baseline times a rebuild. The worker's time on a build is <code>static_tlas_build_time</code>, in the frame that submits it, and the main thread's share is the <code>static_tlas_update</code> stage, which Baselines fold into the CPU frame without a field of their own; every scene's load builds before the 248 warm-up frames a bench skips, and no scene's camera strays far enough from its Anchor to re-anchor it: <code>town</code>'s comes to four cells at most, at frame 754. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
+  <p>No Baseline times a rebuild. The worker's time on a build is <code>static_tlas_build_time</code>, in the frame that submits it, and the main thread's share is the <code>static_tlas_update</code> stage, which Baselines fold into the CPU frame without a field of their own; every scene's load builds before the 248 warm-up frames a bench skips, and no scene's camera strays far enough from its Anchor to re-anchor it: <code>town</code>'s comes to four cells at most, at frame 754, and first to five at frame 2057, nine frames past a bench's last. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -900,7 +899,7 @@ pub fn bound_index(&amp;self) -&gt; usize {
   <p><b>Captures wait, frames do not.</b> Which frame finds the worker done depends on the machine, so a capture, whose image must not, waits for the worker in the frame that starts it and binds the build in the next. Frames in a window and the bench never wait.</p>
   <p><b>Tagged with the slot, indexed by none.</b> Indexing entries by slot would need no map, as an Instance keeps its slot while it is one, but it would cap slot numbers rather than static Instances: Chunks take their ranges past the highest slot taken, and the Instance buffer holds twice the static TLAS's capacity, so a Chunk's static Instances could fall past the capacity with entries to spare. A table of entries by slot keeps the old cost, one array read per Instance written, Moving ones included, for 8 bytes of CPU memory per slot up to the highest that held a static Instance; a hash map would cost a hash per Moving Instance each frame, 10,000 of them in <code>town</code>. The tag stays the slot: the frame's shaders do not read it, and a test's query reads it back to name the Instance a ray hit.</p>
   <p><b>Re-anchored at each build.</b> ADR 0014 forbids f32 World positions on the GPU and names ray-tracing acceleration structures among the subsystems that convert into a local frame they own. In a frame fixed at load, a camera 10 km from where it started would see its shadow rays start 153 mm off their surfaces, with 0.49 mm of rounding. Unreal 5 and Unity's HDRP write their TLAS entries relative to the camera, but rebuild every frame, so moving the origin costs them nothing (<code>docs/research/acceleration-structures-for-streamed-worlds.md</code>, option 8). Re-anchoring every frame here would cost a rebuild a frame, which is ruled out; a build a Chunk's load or unload already starts moves the frame for free (R1), and the dynamic TLAS, rebuilt each frame in the bound TLAS's frame, follows in the frame a new one is bound (ADR 0020). Composing each TLAS's translations from its own positions, rather than shifting the old ones, keeps a moved entry rounding as a fresh one does; it costs 24 bytes of CPU memory per entry per TLAS.</p>
-  <p><b>A Chunk's edge away.</b> A camera can travel without a Chunk change, straight up or within the Load radius of a scene that loads everything, so a build that only moves the frame runs once the camera strays (R2). Four cells, a Chunk's edge, keeps what the camera adds to a ray's offset under 4.9 mm, as Chunk crossings keep it in a streamed Game world, for the price of a full rebuild per 257 to 320 m of travel without one. No Reference scene's camera strays that far, so none rebuilds for it and no image or Baseline changes.</p>
+  <p><b>A Chunk's edge away.</b> A camera can travel without a Chunk change, straight up or within the Load radius of a scene that loads everything, so a build that only moves the frame runs once the camera strays (R2). Four cells, a Chunk's edge, keeps what the camera adds to a ray's offset under 4.9 mm, as Chunk crossings keep it in a streamed Game world, for the price of a full rebuild per just over 256 to 320 m of travel without one. No Reference scene's camera strays that far, so none rebuilds for it and no image or Baseline changes.</p>
   <p><b>A capacity sized from its Budget.</b> Every rebuild walks the full capacity, filled or not, so a larger one costs every static spawn in every scene. ADR 0013 splits the 8 GB GPU memory Budget into a Budget per kind, and the capacity takes an entry per KiB of the acceleration structures', which gives 2<sup>18</sup>, enough for <code>town</code>; the KiB per entry is provisional until the split sets it.</p>
   <p><b>A CPU wait before the build, at load.</b> Nothing on the GPU orders the build after the compaction copies of the BLASes it reads, so <code>compact_blases</code> waits for them on the main thread, which alone submits and polls under ADR 0016. A wait once, at load, costs one frame; the per-frame refit, which could not pay that every frame, orders its writes on the GPU instead (<a href="blas-refit.html">the BLAS refit</a>).</p>
 </section>
@@ -932,6 +931,7 @@ pub fn bound_index(&amp;self) -&gt; usize {
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs">wgpu 30.0.1, <code>Tlas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs">its creation</a></dt><dd>one optional entry per place of capacity from creation, each mapped when a build is recorded, and the filled ones built in order</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L27">wgpu 30.0.1, <code>CommandEncoder</code></a></dt><dd>an encoder and a TLAS can move to a worker on native; <code>wgpu-30-command-encoder-send-sync</code>, which the research cites</dd>
     <dt><a href="https://www.sci.utah.edu/~thiago/papers/async_bvh_build.pdf#page=3">Ize, Wald and Parker, <i>Asynchronous BVH Construction for Ray Tracing Dynamic Scenes on Parallel Multi-Core Architectures</i>, EGPGV 2007, Section 3.1</a></dt><dd>a BVH rebuilt over several frames and switched in with two pointer swaps; registry key ize-2007-async-bvh-swap</dd>
+    <dt><a href="https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/SceneView.cpp#L694-L696">Unreal Engine 5.8.4, FViewMatrices::Init</a>, <a href="https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Shaders/Private/RayTracing/RayTracingInstanceBufferUtil.usf#L145-L153">RayTracingInstanceBufferUtil.usf</a>; <a href="https://docs.unity.com/en-us/engine/6000.6/script-reference/unityengine/rendering/raytracingaccelerationstructure/buildsettings/relativeorigin">Unity 6000.6, BuildSettings.relativeOrigin</a>, <a href="https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/HDRaytracingManager.HDRTASManager.cs#L366-L372">HDRP's HDRTASManager.Build</a></dt><dd>shipped engines write their TLAS entries relative to the camera and rebuild every frame, so moving the origin costs them no build, as <code>docs/research/acceleration-structures-for-streamed-worlds.md</code> cites them under option 8</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>why the build must not run before the compaction copies on Metal; <code>wgpu-issue-9215</code></dd>
   </dl>
   <h3>History</h3>
