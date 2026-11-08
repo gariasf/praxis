@@ -1292,8 +1292,17 @@ mod tests {
 
         assert_eq!(opened.class, 1);
         assert_eq!((channel.textures.len(), channel.views.len()), (2, 2));
-        let widths: Vec<u32> = channel.textures.iter().map(|array| array.width()).collect();
-        assert_eq!(widths, [8, 4]);
+        let shapes: Vec<TextureShape> = channel
+            .textures
+            .iter()
+            .map(|array| TextureShape {
+                width: array.width(),
+                height: array.height(),
+                mip_level_count: array.mip_level_count(),
+                format: array.format(),
+            })
+            .collect();
+        assert_eq!(shapes, [first, second]);
     }
 
     /// Two Materials sampling one Texture load it once, and a Material
