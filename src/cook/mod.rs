@@ -5,6 +5,7 @@
 mod chunk;
 mod export;
 mod fetch;
+mod launch;
 pub(crate) mod mesh;
 mod texture;
 
@@ -18,6 +19,7 @@ use sha2::{Digest, Sha256};
 use export::AssetRecorder;
 pub use export::{SCENE_FORMAT_VERSION, export_scene};
 pub use fetch::{Fetch, absent_fetched, fetch};
+pub(crate) use launch::CookingLoader;
 pub use texture::{LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
@@ -147,6 +149,27 @@ struct Sources {
     kept_textures: Vec<AssetId>,
 }
 
+impl Sources {
+    /// Whether the Blob `reference` names may be one a cook kept as it is:
+    /// a Chunk naming a Mesh this cook did not read, or an Asset whose source
+    /// is absent. A glTF file's Materials sample its own images, and a
+    /// Primitive names a Material of its own file or scene, so only a
+    /// Texture whose image this cook did not read may be kept; a scene's
+    /// references, only while one of its own sources is.
+    fn may_be_kept(&self, (referrer, id): &(Referrer, AssetId)) -> bool {
+        if self.kept_chunks.contains(id) {
+            return true;
+        }
+        match referrer {
+            Referrer::Scene(scene) | Referrer::Chunk(scene, _) => scene
+                .source_files()
+                .iter()
+                .any(|guid| self.kept_sources.contains(guid)),
+            Referrer::Material(_) | Referrer::Mesh(_) => self.kept_textures.contains(id),
+        }
+    }
+}
+
 /// The source directory a launch cooks from, relative to the working
 /// directory.
 pub const ASSETS_DIRECTORY: &str = "assets";
@@ -165,11 +188,11 @@ pub fn cook(
     cook_sources(&sources, &references, cache, settings)
 }
 
-/// What a dev launch of `scene` cooks before it loads: the manifest
-/// sources the scene references, those present, and its procedural Assets.
-/// A source the manifest marks fetched is fetched first when absent. The
-/// Blobs of a source still absent, or of every source when the manifest is
-/// absent, stay as they are.
+/// Cooks `scene` whole, as `praxis cook <scene>`: the manifest sources the
+/// scene references, those present, and its procedural Assets. A source the
+/// manifest marks fetched is fetched first when absent. The Blobs of a
+/// source still absent, or of every source when the manifest is absent, stay
+/// as they are.
 pub fn cook_scene(
     scene: ReferenceScene,
     assets: &Path,
@@ -226,10 +249,7 @@ fn cook_sources(
         if is_fresh(cache, *id, cook_key) {
             report.unchanged.push(*id);
         } else {
-            let blob = mesh::cook(primitives)
-                .and_then(|mesh| mesh.to_blob())
-                .with_context(|| format!("cooking Mesh {name} ({id})"))?;
-            cache.write(*id, cook_key, &blob)?;
+            cache.write(*id, cook_key, &mesh_blob(*id, name, primitives)?)?;
             report.cooked.push(*id);
         }
     }
@@ -301,17 +321,7 @@ fn cook_sources(
         .chain(&report.unchanged)
         .copied()
         .collect();
-    // A glTF file's Materials sample its own images, and a Primitive names a
-    // Material of its own file or scene, so only a Texture whose image this
-    // cook did not read may be kept; a scene's references, only while one of
-    // its own sources is.
-    let may_be_kept = |(referrer, id): &(Referrer, AssetId)| match referrer {
-        Referrer::Scene(scene) | Referrer::Chunk(scene, _) => scene
-            .source_files()
-            .iter()
-            .any(|guid| sources.kept_sources.contains(guid)),
-        Referrer::Material(_) | Referrer::Mesh(_) => sources.kept_textures.contains(id),
-    };
+    let may_be_kept = |reference: &(Referrer, AssetId)| sources.may_be_kept(reference);
     report.dangling_references = dangling_references(cache, &made, &references, may_be_kept);
     report.absent_sources = sources.absent.clone();
     tracing::info!(
@@ -460,6 +470,18 @@ fn material_cook_key(blob: &[u8]) -> String {
     hasher.update(MATERIAL_FORMAT_VERSION.to_le_bytes());
     hasher.update(blob);
     hex(&hasher.finalize())
+}
+
+/// The Blob of Mesh `id`, named `name` in messages, cooked from
+/// `primitives`.
+fn mesh_blob(
+    id: AssetId,
+    name: &str,
+    primitives: &[mesh::SourcePrimitive],
+) -> anyhow::Result<Vec<u8>> {
+    mesh::cook(primitives)
+        .and_then(|mesh| mesh.to_blob())
+        .with_context(|| format!("cooking Mesh {name} ({id})"))
 }
 
 /// Whether the index holds `id` under `cook_key`, its Blob present.

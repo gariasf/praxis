@@ -270,7 +270,7 @@ fn assets() -> Check {
             "assets",
             Verdict::Warn,
             format!(
-                "{fetched} fetched; Cooked cache empty, so each launch cooks first: run `praxis cook`"
+                "{fetched} fetched; Cooked cache empty, so each launch cooks what it loads: run `praxis cook`"
             ),
         );
     }

@@ -162,20 +162,6 @@ impl State {
 
         let recorder = FrameRecorder::new();
         let cache = CookedCache::new(COOKED_CACHE_DIRECTORY);
-        // A dev launch cooks what the scene loads and has changed (ADR 0018);
-        // a load that then fails names the sources it found absent.
-        #[cfg(feature = "cook")]
-        let absent_sources = crate::cook::cook_scene(
-            scene,
-            std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
-            &cache,
-            &crate::cook::CookSettings::default(),
-        )
-        .with_context(|| format!("cooking {}", scene.name()))?
-        .absent_sources;
-        #[cfg(not(feature = "cook"))]
-        let absent_sources: Vec<String> = Vec::new();
-
         let mut loader = PoolLoader {
             device,
             staging: load_staging,
@@ -183,6 +169,23 @@ impl State {
             mesh_pool,
             material_pool,
         };
+        // A dev launch cooks each Asset it loads that is missing or stale, as
+        // it loads it (ADR 0018); a load that then fails names the sources it
+        // found absent.
+        #[cfg(feature = "cook")]
+        let mut loader = crate::cook::CookingLoader::new(
+            scene,
+            std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
+            &cache,
+            crate::cook::CookSettings::default(),
+            &mut loader,
+        )
+        .with_context(|| format!("reading {}'s sources", scene.name()))?;
+        #[cfg(feature = "cook")]
+        let absent_sources = loader.absent_sources().to_vec();
+        #[cfg(not(feature = "cook"))]
+        let absent_sources: Vec<String> = Vec::new();
+
         let mut simulation =
             Simulation::new(scene, shift, switches.crowd_form, &mut loader, &recorder).map_err(
                 |error| match absent_sources.as_slice() {
