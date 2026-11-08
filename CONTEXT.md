@@ -245,11 +245,11 @@ Bench records taken from a branch under a name, kept beside the Series and compa
 _Avoid_: Branch run, trial
 
 **Suspect**:
-A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
+A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
 _Avoid_: Alert, outlier, anomaly
 
 **Verdict**:
-What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and 3%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
+What the sweep found of one slower Suspect, kept on `bench-history`: held when a night's interleaved re-bench of it and the record before it still shows half its shift and its timing's 3% or 1.25%, else cleared. A held one is bisected along `main`'s first-parent commits until it pins the commit that changed the median, which then starts its Series' line.
 _Avoid_: Confirmation, bisect result; the code's other `Verdict`s are compare's (warn or fail of one metric) and preflight's (ok, note, warn or fail of one check); the shadow mask's verdict (`directional_verdicts`, `sample_verdicts`) is a light's hidden bit at a sample, the Shadow mask entry's word, not this one
 
 **Night**:

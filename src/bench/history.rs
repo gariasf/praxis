@@ -81,7 +81,8 @@ join its Series from CI's configuration whether or not the runner was quiet.
 A Series row's `suspects` names each frame median, CPU or GPU, that makes its
 record a suspect, with its shift as a share of the median of up to 8 records
 before it on its line: it lies outside that median ± the larger of 4 median
-absolute deviations and 3%, unless it only continues a suspect among those 8:
+absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless
+it only continues a suspect among those 8:
 on the same side, within that suspect's tolerance of its median. A new Harness
 version or scene content, an imported or re-recorded Baseline, or a commit a
 Verdict pinned starts a line. lavapipe's records are never suspects.
@@ -90,7 +91,8 @@ Verdict pinned starts a line. lavapipe's records are never suspects.
   found of the slower suspect of that source: the night re-benched it and the
   record before it on its line, interleaved, from release binaries of their
   commits, and the shift `held` when their mean medians still differed in its
-  direction by half its marked shift and by 3%, else `cleared`. A held shift
+  direction by half its marked shift and by its timing's 3% or 1.25%, else
+  `cleared`. A held shift
   is bisected along `main`'s first-parent commits of other source hashes
   between `good` and `bad`, each commit's median judged by which end's median
   of that night it lies nearer, over as many nights as it takes, until
@@ -391,7 +393,7 @@ impl SeriesRecord for StoredRecord {
                         || line_starts.contains(row.source_hash)
                 })
                 .collect();
-            for (metric, median) in JUDGED_TIMINGS {
+            for (metric, median, smallest_shift) in JUDGED_TIMINGS {
                 let points: Vec<suspects::Point> = rows
                     .iter()
                     .zip(&starts_line)
@@ -400,7 +402,8 @@ impl SeriesRecord for StoredRecord {
                         starts_line,
                     })
                     .collect();
-                for (row, shift) in rows.iter_mut().zip(suspects::suspects(&points)) {
+                let shifts = suspects::suspects(&points, smallest_shift);
+                for (row, shift) in rows.iter_mut().zip(shifts) {
                     if let Some(shift) = shift {
                         row.suspects.insert(metric, shift);
                     }
@@ -414,16 +417,39 @@ impl SeriesRecord for StoredRecord {
 /// A timing's median in a row.
 type MedianOf = fn(&SeriesRow) -> Option<f64>;
 
+/// The smallest shift of a CPU frame median that makes a Suspect and that a
+/// night's re-bench must still show, as a share of the median: a busy CPU
+/// inflated the benched rows, so their spread sets no floor.
+const CPU_FRAME_SMALLEST_SHIFT: f64 = 0.03;
+
+/// The GPU frame's: above 1.13%, the farthest an M4 Pro benched row lies
+/// from the median of its scene's others (minification at 8bc34eb1 against
+/// 91fda48b, ec4dfd7c and 075919da, of every scene benched on three nights
+/// or more, Harness version 10), and under a 1.5% step.
+const GPU_FRAME_SMALLEST_SHIFT: f64 = 0.0125;
+
 /// The timings a Series' records are judged on for suspects, each with its
-/// median in a row.
-const JUDGED_TIMINGS: [(&str, MedianOf); 2] = [
-    ("cpu_frame_microseconds", |row| {
-        row.cpu_frame_microseconds.map(|spread| spread.median)
-    }),
-    ("gpu_frame_microseconds", |row| {
-        row.gpu_frame_microseconds.map(|spread| spread.median)
-    }),
+/// median in a row and its smallest shift.
+const JUDGED_TIMINGS: [(&str, MedianOf, f64); 2] = [
+    (
+        "cpu_frame_microseconds",
+        |row| row.cpu_frame_microseconds.map(|spread| spread.median),
+        CPU_FRAME_SMALLEST_SHIFT,
+    ),
+    (
+        "gpu_frame_microseconds",
+        |row| row.gpu_frame_microseconds.map(|spread| spread.median),
+        GPU_FRAME_SMALLEST_SHIFT,
+    ),
 ];
+
+/// `metric`'s smallest shift, the largest of them for a timing not judged.
+fn smallest_shift(metric: &str) -> f64 {
+    JUDGED_TIMINGS
+        .iter()
+        .find(|(judged, ..)| *judged == metric)
+        .map_or(CPU_FRAME_SMALLEST_SHIFT, |&(.., shift)| shift)
+}
 
 impl SeriesRecord for StoredReleaseBuild {
     fn order(&self) -> (u64, &str) {
@@ -1980,6 +2006,84 @@ mod tests {
         assert_eq!(
             suspects(rows("llvmpipe (LLVM 20.1.2)", None, &[])),
             unmarked
+        );
+    }
+
+    /// Basis points each benched M4 Pro GPU frame median lies from its
+    /// scene's median, every scene benched on three nights or more, in scene
+    /// then commit order.
+    const BENCHED_NOISE: [f64; 40] = [
+        -25.0, -14.0, 42.0, 0.0, 7.0, 0.0, 35.0, -83.0, -6.0, 107.0, 1.0, -1.0, -1.0, 112.0, -13.0,
+        1.0, -11.0, 28.0, 4.0, -4.0, 0.0, 70.0, -1.0, 0.0, -41.0, -3.0, 3.0, 54.0, -39.0, 37.0,
+        30.0, -30.0, -8.0, 2.0, 26.0, -2.0, 11.0, 80.0, -19.0, -11.0,
+    ];
+
+    /// The timings each row of a Series of `medians`, CPU and GPU frames
+    /// alike, on the M4 Pro, is a Suspect on.
+    fn suspect_timings(medians: &[f64]) -> Vec<Vec<String>> {
+        let records: Vec<StoredRecord> = medians
+            .iter()
+            .enumerate()
+            .map(|(index, median)| {
+                serde_json::from_value(serde_json::json!({
+                    "adapter": "Apple M4 Pro",
+                    "committed_unix_seconds": index,
+                    "provenance": {
+                        "commit": format!("commit-{index}"),
+                        "source_hash": format!("source-{index}"),
+                        "harness_version": 10,
+                        "scene_content_hash": "content",
+                    },
+                    "measured_frames": 1800,
+                    "cpu_frame_microseconds": { "median": median, "p95": median },
+                    "gpu_frame_microseconds": { "median": median, "p95": median },
+                }))
+                .unwrap()
+            })
+            .collect();
+        let rows = serde_json::to_value(StoredRecord::rows(&records, &BTreeSet::new())).unwrap();
+        rows.as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                row["suspects"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .cloned()
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn benched_noise() -> Vec<f64> {
+        BENCHED_NOISE
+            .iter()
+            .map(|basis_points| 10_000.0 * (1.0 + basis_points / 10_000.0))
+            .collect()
+    }
+
+    #[test]
+    fn benched_noise_alone_marks_no_suspect() {
+        assert!(suspect_timings(&benched_noise()).iter().all(Vec::is_empty));
+    }
+
+    #[test]
+    fn a_gpu_frame_step_of_one_and_a_half_percent_after_benched_nights_is_a_suspect() {
+        let quiet_nights = 12;
+        let mut medians = benched_noise();
+        for median in &mut medians[quiet_nights..] {
+            *median *= 1.015;
+        }
+        let marked: Vec<(usize, Vec<String>)> = suspect_timings(&medians)
+            .into_iter()
+            .enumerate()
+            .filter(|(_, timings)| !timings.is_empty())
+            .collect();
+        // The CPU frame keeps its 3%.
+        assert_eq!(
+            marked,
+            [(quiet_nights, vec!["gpu_frame_microseconds".to_owned()])]
         );
     }
 

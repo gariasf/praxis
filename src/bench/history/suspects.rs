@@ -14,10 +14,6 @@ const FEWEST_JUDGING_RECORDS: usize = 3;
 /// the window's median before it is a suspect.
 const MEDIAN_ABSOLUTE_DEVIATIONS: f64 = 4.0;
 
-/// The smallest shift that makes a suspect, as a share of the window's
-/// median, so that a window of near-equal medians does not flag noise.
-const SMALLEST_SHIFT_FRACTION: f64 = 0.03;
-
 /// One record's median of a metric, as a Series orders them.
 pub(super) struct Point {
     /// None when the record did not measure the metric.
@@ -40,14 +36,15 @@ struct Step {
 /// Each point's shift from the median of up to `WINDOW_RECORDS` medians
 /// before it on its line, as a share of that median, when it lies outside
 /// that median ± max(`MEDIAN_ABSOLUTE_DEVIATIONS` × their median absolute
-/// deviation, `SMALLEST_SHIFT_FRACTION` of it); none for every other point,
+/// deviation, `smallest_shift` of it), which keeps a window of near-equal
+/// medians from flagging noise; none for every other point,
 /// and none for a point that only continues a step flagged among those
 /// medians: outside on the same side, and within that Suspect's tolerance of
 /// its median. So a step is flagged where it starts, not again while the
 /// window's median still lags it, even after a noisy record falls back inside;
 /// a second step on the same side is flagged again; and a lone outlier stays
 /// in later windows, outvoted.
-pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
+pub(super) fn suspects(points: &[Point], smallest_shift: f64) -> Vec<Option<f64>> {
     let mut line = Vec::new();
     let mut step: Option<Step> = None;
     points
@@ -60,7 +57,7 @@ pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
             let median = point.median?;
             let position = line.len();
             let window = &line[position.saturating_sub(WINDOW_RECORDS)..];
-            let band = band(window);
+            let band = band(window, smallest_shift);
             line.push(median);
             let (center, tolerance) = band?;
             if (median - center).abs() <= tolerance {
@@ -88,7 +85,7 @@ pub(super) fn suspects(points: &[Point]) -> Vec<Option<f64>> {
 
 /// `window`'s median and how far from it a median may lie, when it holds
 /// enough records to judge.
-fn band(window: &[f64]) -> Option<(f64, f64)> {
+fn band(window: &[f64], smallest_shift: f64) -> Option<(f64, f64)> {
     if window.len() < FEWEST_JUDGING_RECORDS {
         return None;
     }
@@ -99,7 +96,7 @@ fn band(window: &[f64]) -> Option<(f64, f64)> {
     );
     Some((
         center,
-        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(SMALLEST_SHIFT_FRACTION * center),
+        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(smallest_shift * center),
     ))
 }
 
@@ -118,9 +115,14 @@ mod tests {
             .collect()
     }
 
+    /// Each point's shift as `suspects` gives it, at a 3% smallest shift.
+    fn suspects_of(points: &[Point]) -> Vec<Option<f64>> {
+        suspects(points, 0.03)
+    }
+
     /// Indices of the suspects among `points`.
     fn flagged(points: &[Point]) -> Vec<usize> {
-        suspects(points)
+        suspects_of(points)
             .iter()
             .enumerate()
             .filter_map(|(index, shift)| shift.map(|_| index))
@@ -143,7 +145,7 @@ mod tests {
     fn a_five_percent_step_after_noise_is_flagged_at_the_step_only() {
         let mut medians = NOISE.to_vec();
         medians.extend(NOISE.iter().map(|median| median * 1.05));
-        let shifts = suspects(&line(&medians));
+        let shifts = suspects_of(&line(&medians));
         assert_eq!(flagged(&line(&medians)), [12]);
         let shift = shifts[12].unwrap();
         assert!((0.04..0.06).contains(&shift), "{shift}");
@@ -169,7 +171,7 @@ mod tests {
     fn a_step_down_is_flagged_with_its_sign() {
         let mut medians = NOISE.to_vec();
         medians.push(NOISE[0] * 0.9);
-        assert!(suspects(&line(&medians))[12].unwrap() < -0.09);
+        assert!(suspects_of(&line(&medians))[12].unwrap() < -0.09);
     }
 
     #[test]

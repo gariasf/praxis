@@ -8,17 +8,13 @@ use anyhow::Context;
 
 use super::{
     BRANCH, JUDGED_TIMINGS, Publication, README, RELEASE_BUILD, adapter_key, fetch_main, git, push,
-    remote_tip, source_hash,
+    remote_tip, smallest_shift, source_hash,
 };
 use super::{import, night};
 use crate::bench::baseline_directory;
 
 /// The branch's directory of Verdicts: `verdicts/<adapter>-<backend>/<scene>/<Suspect's source hash>.json`.
 pub(super) const VERDICTS: &str = "verdicts";
-
-/// The smallest shift a night's re-bench must still show, as a share of
-/// the good end's median, whatever the Suspect's marked shift.
-const SMALLEST_HELD_SHIFT: f64 = 0.03;
 
 /// How many runs of each end a night benches, interleaved, before it
 /// judges them.
@@ -236,7 +232,8 @@ pub(super) fn step(
     }
     let (good_median, bad_median) = (mean(&good_runs), mean(&bad_runs));
     let mut verdict = night_start.clone();
-    if !holds(night_start.shift, good_median, bad_median) {
+    let held_shift = smallest_shift(&night_start.metric);
+    if !holds(night_start.shift, held_shift, good_median, bad_median) {
         // A bisect's held shift was judged once; a night whose ends do not
         // show it judges no commit and leaves the Verdict for the next.
         if night_start.state == Some(State::Held) {
@@ -402,7 +399,7 @@ pub fn bisect(
                 .chain([format!("{}.json", verdict.scene)])
                 .collect();
             let commit = &pinned.commit.commit;
-            for (metric, _) in JUDGED_TIMINGS {
+            for (metric, ..) in JUDGED_TIMINGS {
                 let runs = night::runs(night, &verdict.scene, metric)?;
                 let (good, bad) = (medians(&runs, &start.good), medians(&runs, &start.bad));
                 if !good.is_empty() && !bad.is_empty() {
@@ -663,8 +660,8 @@ pub(super) struct Issue {
 /// The issue `verdict`'s Regression opens on the Series of `adapter_key`,
 /// its pinned commit's subject `subject`: the commit and its PR, the
 /// Series and its chart, and each judged timing the night measured slower
-/// at its bad end, the Verdict's always and any other by
-/// `SMALLEST_HELD_SHIFT`. None unless the Verdict is pinned.
+/// at its bad end, the Verdict's always and any other by its smallest
+/// shift. None unless the Verdict is pinned.
 pub(super) fn issue(verdict: &Verdict, adapter_key: &str, subject: &str) -> Option<Issue> {
     let scene = &verdict.scene;
     let Pinned {
@@ -692,11 +689,9 @@ pub(super) fn issue(verdict: &Verdict, adapter_key: &str, subject: &str) -> Opti
          | Metric | Good end median | Bad end median | Shift |\n\
          |---|---|---|---|\n"
     );
-    for (metric, ends) in measured
-        .medians
-        .iter()
-        .filter(|(metric, ends)| **metric == verdict.metric || ends.shift() >= SMALLEST_HELD_SHIFT)
-    {
+    for (metric, ends) in measured.medians.iter().filter(|(metric, ends)| {
+        **metric == verdict.metric || ends.shift() >= smallest_shift(metric)
+    }) {
         body += &format!(
             "| `{metric}` | {:.1} | {:.1} | {:+.1}% |\n",
             ends.good_median,
@@ -770,10 +765,10 @@ fn mean(values: &[f64]) -> f64 {
 
 /// Whether a re-bench holds a Suspect marked `shift` slower: the bad end's
 /// median `bad_median` is still above the good end's `good_median` by at
-/// least half that shift and by `SMALLEST_HELD_SHIFT`, both as shares of
+/// least half that shift and by `held_shift`, both as shares of
 /// `good_median`.
-fn holds(shift: f64, good_median: f64, bad_median: f64) -> bool {
-    (bad_median - good_median) / good_median >= (shift / 2.0).max(SMALLEST_HELD_SHIFT)
+fn holds(shift: f64, held_shift: f64, good_median: f64, bad_median: f64) -> bool {
+    (bad_median - good_median) / good_median >= (shift / 2.0).max(held_shift)
 }
 
 #[cfg(test)]
@@ -787,13 +782,13 @@ mod tests {
     #[test]
     fn a_shift_holds_at_half_its_marked_size_and_three_percent() {
         // Marked 10% slower: 5% still holds, 4.9% does not.
-        assert!(holds(0.10, 10_000.0, 10_500.0));
-        assert!(!holds(0.10, 10_000.0, 10_490.0));
+        assert!(holds(0.10, 0.03, 10_000.0, 10_500.0));
+        assert!(!holds(0.10, 0.03, 10_000.0, 10_490.0));
         // Marked 4% slower: half is 2%, but under 3% never holds.
-        assert!(!holds(0.04, 10_000.0, 10_290.0));
-        assert!(holds(0.04, 10_000.0, 10_300.0));
+        assert!(!holds(0.04, 0.03, 10_000.0, 10_290.0));
+        assert!(holds(0.04, 0.03, 10_000.0, 10_300.0));
         // Faster on the night is no hold.
-        assert!(!holds(0.10, 10_000.0, 9_000.0));
+        assert!(!holds(0.10, 0.03, 10_000.0, 9_000.0));
     }
 
     /// Commits named by their letter, each with the source hash `sources`
@@ -902,6 +897,29 @@ mod tests {
             (verdict.state, verdict.pinned, next),
             (Some(State::Cleared), None, None)
         );
+    }
+
+    #[test]
+    fn a_gpu_frame_shift_of_one_and_a_half_percent_holds_where_a_cpu_frames_clears() {
+        let ends = runs(&[
+            ("a", 10_000.0),
+            ("d", 10_150.0),
+            ("a", 10_000.0),
+            ("d", 10_150.0),
+        ]);
+        let state = |metric: &str| {
+            let night_start = Verdict {
+                metric: metric.to_owned(),
+                shift: 0.015,
+                ..night()
+            };
+            step(&night_start, &ends, &commits("abcd", "1234"))
+                .0
+                .unwrap()
+                .state
+        };
+        assert_eq!(state("gpu_frame_microseconds"), Some(State::Held));
+        assert_eq!(state("cpu_frame_microseconds"), Some(State::Cleared));
     }
 
     #[test]

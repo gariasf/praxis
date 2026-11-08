@@ -116,8 +116,8 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/bench/history.rs</code> &middot; <code>docs/bench/index.html</code></div>
   <h1>The Bench history</h1>
-  <p class="definition">Every bench run kept as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span> on the orphan <code>bench-history</code> branch, a JSON file at a path that is its key, the source hash of the paths that can change a measurement, the adapter, the backend and the scene; the clean, release-profile, quiet runs of <code>main</code>'s source form each machine's <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>, which every publish rebuilds and marks its <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspects</span> on, a page draws, and a nightly sweep re-benches, bisects and files as <span class="concept" data-term="Regression" data-tip="A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one needs-triage issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.">Regressions</span>.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at e251e21e (2026-11-08). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
+  <p class="definition">Every bench run kept as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span> on the orphan <code>bench-history</code> branch, a JSON file at a path that is its key, the source hash of the paths that can change a measurement, the adapter, the backend and the scene; the clean, release-profile, quiet runs of <code>main</code>'s source form each machine's <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>, which every publish rebuilds and marks its <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspects</span> on, a page draws, and a nightly sweep re-benches, bisects and files as <span class="concept" data-term="Regression" data-tip="A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one needs-triage issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.">Regressions</span>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 92643f28 (2026-11-08). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -634,7 +634,7 @@ struct SeriesRow&lt;'record&gt; {
                         || line_starts.contains(row.source_hash)
                 })
                 .collect();
-            for (metric, median) in JUDGED_TIMINGS {
+            for (metric, median, smallest_shift) in JUDGED_TIMINGS {
                 let points: Vec&lt;suspects::Point&gt; = rows
                     .iter()
                     .zip(&amp;starts_line)
@@ -643,7 +643,8 @@ struct SeriesRow&lt;'record&gt; {
                         starts_line,
                     })
                     .collect();
-                for (row, shift) in rows.iter_mut().zip(suspects::suspects(&amp;points)) {
+                let shifts = suspects::suspects(&amp;points, smallest_shift);
+                for (row, shift) in rows.iter_mut().zip(shifts) {
                     if let Some(shift) = shift {
                         row.suspects.insert(metric, shift);
                     }
@@ -652,16 +653,39 @@ struct SeriesRow&lt;'record&gt; {
         }
         rows
 …
+/// The smallest shift of a CPU frame median that makes a Suspect and that a
+/// night's re-bench must still show, as a share of the median: a busy CPU
+/// inflated the benched rows, so their spread sets no floor.
+const CPU_FRAME_SMALLEST_SHIFT: f64 = 0.03;
+
+/// The GPU frame's: above 1.13%, the farthest an M4 Pro benched row lies
+/// from the median of its scene's others (minification at 8bc34eb1 against
+/// 91fda48b, ec4dfd7c and 075919da, of every scene benched on three nights
+/// or more, Harness version 10), and under a 1.5% step.
+const GPU_FRAME_SMALLEST_SHIFT: f64 = 0.0125;
+
 /// The timings a Series' records are judged on for suspects, each with its
-/// median in a row.
-const JUDGED_TIMINGS: [(&amp;str, MedianOf); 2] = [
-    ("cpu_frame_microseconds", |row| {
-        row.cpu_frame_microseconds.map(|spread| spread.median)
-    }),
-    ("gpu_frame_microseconds", |row| {
-        row.gpu_frame_microseconds.map(|spread| spread.median)
-    }),
-];</code></pre>
+/// median in a row and its smallest shift.
+const JUDGED_TIMINGS: [(&amp;str, MedianOf, f64); 2] = [
+    (
+        "cpu_frame_microseconds",
+        |row| row.cpu_frame_microseconds.map(|spread| spread.median),
+        CPU_FRAME_SMALLEST_SHIFT,
+    ),
+    (
+        "gpu_frame_microseconds",
+        |row| row.gpu_frame_microseconds.map(|spread| spread.median),
+        GPU_FRAME_SMALLEST_SHIFT,
+    ),
+];
+
+/// `metric`'s smallest shift, the largest of them for a timing not judged.
+fn smallest_shift(metric: &amp;str) -&gt; f64 {
+    JUDGED_TIMINGS
+        .iter()
+        .find(|(judged, ..)| *judged == metric)
+        .map_or(CPU_FRAME_SMALLEST_SHIFT, |&amp;(.., shift)| shift)
+}</code></pre>
   <p>A Series is cut into lines, and only records on one line are compared. A line starts where the definition changes, at an imported or re-recorded Baseline, which accepted its level by hand, and at a commit a Verdict pinned (<code>line_starts</code>, read from the Series' Verdicts before each rebuild). Two rows share a definition when they share a Harness version and, where both know it, a scene content hash; the page's test of the same is this function's twin (section 7):</p>
   <div class="code-source"><code>src/bench/history.rs</code></div>
 <pre class="code"><code>    /// Whether `later` measures what this row does: one Harness version, and
@@ -785,7 +809,7 @@ pub(super) fn remeasured(earlier: &amp;str, current: &amp;str) -&gt; anyhow::Res
 <section class="part prose" id="suspects">
   <div class="part-mark">5 &middot; <code>suspects</code>, <code>band</code>, <code>src/bench/history/suspects.rs</code></div>
   <h2>Suspects</h2>
-  <p class="key-idea">A record is a Suspect on a timing when its median sits outside the median of up to 8 records before it on its line, &plusmn; the larger of 4 median absolute deviations of those medians and 3% of their median. A step is flagged where it starts and not again while the window lags it; a lone outlier is flagged once and outvoted after.</p>
+  <p class="key-idea">A record is a Suspect on a timing when its median sits outside the median of up to 8 records before it on its line, &plusmn; the larger of 4 median absolute deviations of those medians and the timing's smallest shift of their median: 3% for the CPU frame, 1.25% for the GPU frame. A step is flagged where it starts and not again while the window lags it; a lone outlier is flagged once and outvoted after.</p>
   <div class="code-source"><code>src/bench/history/suspects.rs</code></div>
 <pre class="code"><code>/// How many records before a record judge it.
 const WINDOW_RECORDS: usize = 8;
@@ -797,12 +821,8 @@ const FEWEST_JUDGING_RECORDS: usize = 3;
 /// How many median absolute deviations of its window a median may sit from
 /// the window's median before it is a suspect.
 const MEDIAN_ABSOLUTE_DEVIATIONS: f64 = 4.0;
-
-/// The smallest shift that makes a suspect, as a share of the window's
-/// median, so that a window of near-equal medians does not flag noise.
-const SMALLEST_SHIFT_FRACTION: f64 = 0.03;
 …
-pub(super) fn suspects(points: &amp;[Point]) -&gt; Vec&lt;Option&lt;f64&gt;&gt; {
+pub(super) fn suspects(points: &amp;[Point], smallest_shift: f64) -&gt; Vec&lt;Option&lt;f64&gt;&gt; {
     let mut line = Vec::new();
     let mut step: Option&lt;Step&gt; = None;
     points
@@ -815,7 +835,7 @@ pub(super) fn suspects(points: &amp;[Point]) -&gt; Vec&lt;Option&lt;f64&gt;&gt; 
             let median = point.median?;
             let position = line.len();
             let window = &amp;line[position.saturating_sub(WINDOW_RECORDS)..];
-            let band = band(window);
+            let band = band(window, smallest_shift);
             line.push(median);
             let (center, tolerance) = band?;
             if (median - center).abs() &lt;= tolerance {
@@ -843,7 +863,7 @@ pub(super) fn suspects(points: &amp;[Point]) -&gt; Vec&lt;Option&lt;f64&gt;&gt; 
 
 /// `window`'s median and how far from it a median may lie, when it holds
 /// enough records to judge.
-fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
+fn band(window: &amp;[f64], smallest_shift: f64) -&gt; Option&lt;(f64, f64)&gt; {
     if window.len() &lt; FEWEST_JUDGING_RECORDS {
         return None;
     }
@@ -854,10 +874,10 @@ fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
     );
     Some((
         center,
-        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(SMALLEST_SHIFT_FRACTION * center),
+        (MEDIAN_ABSOLUTE_DEVIATIONS * deviation).max(smallest_shift * center),
     ))
 }</code></pre>
-  <p>The window holds the medians of up to <code>WINDOW_RECORDS</code> records before the point on its line, a record that did not measure the timing contributing nothing, and judges only once it holds <code>FEWEST_JUDGING_RECORDS</code>; the first three records of every line are not judged. The centre and the deviation are the bench's own <code>percentile</code>, a nearest-rank median, so for a window of even length the centre is the lower of the two middle values. The band is the median and the median absolute deviation rather than the mean and the standard deviation because one far record moves neither: half the window must change before the median does. The floor of <code>SMALLEST_SHIFT_FRACTION</code> keeps a window of near-equal medians, whose deviation is nearly zero, from flagging a wobble as a step.</p>
+  <p>The window holds the medians of up to <code>WINDOW_RECORDS</code> records before the point on its line, a record that did not measure the timing contributing nothing, and judges only once it holds <code>FEWEST_JUDGING_RECORDS</code>; the first three records of every line are not judged. The centre and the deviation are the bench's own <code>percentile</code>, a nearest-rank median, so for a window of even length the centre is the lower of the two middle values. The band is the median and the median absolute deviation rather than the mean and the standard deviation because one far record moves neither: half the window must change before the median does. The floor of <code>smallest_shift</code> keeps a window of near-equal medians, whose deviation is nearly zero, from flagging a wobble as a step. Each judged timing brings its own, and the night's re-bench holds a shift by the same one (section 6). The GPU frame's, <code>GPU_FRAME_SMALLEST_SHIFT</code>, sits above the night-to-night spread of the M4 Pro's benched rows: each lies at most 1.13% from the median of its scene's others, in every scene benched on three nights or more, and one night ran up to 1.1% slow across scenes at once. A 1.5% step after those nights is still marked. The CPU frame's, <code>CPU_FRAME_SMALLEST_SHIFT</code>, stays at 3%, since a busy CPU inflated its benched rows and their spread measures that, not the bench.</p>
   <p>After a real step the window's median lags until five of its eight records are at the new level, so the next records would also lie outside; a point that continues a flagged step among the 8 before it, on the same side and within that Suspect's tolerance of its median, is not flagged again, even after a noisy record between them fell back inside the band. A second step on the same side, past the first's tolerance, is flagged again. The shift kept is the point's distance from the centre as a share of it, negative for a faster record; a row's <code>suspects</code> map holds one per judged timing. Faster records are marked too; only slower ones go to the sweep.</p>
 </section>
 
@@ -976,11 +996,7 @@ fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
   <h3>What a night does next</h3>
   <p><code>praxis history bisect &lt;night&gt;</code> is the sweep's state machine, called before every run with the runs so far: it resumes a held Verdict that has not pinned, or else starts on the oldest slower Suspect with no Verdict, keeps the Verdict it started with in the Night's directory, and returns the scene and commit to bench next, from which the command makes the next run (above), or nothing when the Night is done with this Suspect.</p>
   <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
-<pre class="code"><code>/// The smallest shift a night's re-bench must still show, as a share of
-/// the good end's median, whatever the Suspect's marked shift.
-const SMALLEST_HELD_SHIFT: f64 = 0.03;
-
-/// How many runs of each end a night benches, interleaved, before it
+<pre class="code"><code>/// How many runs of each end a night benches, interleaved, before it
 /// judges them.
 const END_RUNS: usize = 2;
 …
@@ -1046,7 +1062,8 @@ impl Verdict {
     }
     let (good_median, bad_median) = (mean(&amp;good_runs), mean(&amp;bad_runs));
     let mut verdict = night_start.clone();
-    if !holds(night_start.shift, good_median, bad_median) {
+    let held_shift = smallest_shift(&amp;night_start.metric);
+    if !holds(night_start.shift, held_shift, good_median, bad_median) {
         // A bisect's held shift was judged once; a night whose ends do not
         // show it judges no commit and leaves the Verdict for the next.
         if night_start.state == Some(State::Held) {
@@ -1069,10 +1086,10 @@ impl Verdict {
 …
 /// Whether a re-bench holds a Suspect marked `shift` slower: the bad end's
 /// median `bad_median` is still above the good end's `good_median` by at
-/// least half that shift and by `SMALLEST_HELD_SHIFT`, both as shares of
+/// least half that shift and by `held_shift`, both as shares of
 /// `good_median`.
-fn holds(shift: f64, good_median: f64, bad_median: f64) -&gt; bool {
-    (bad_median - good_median) / good_median &gt;= (shift / 2.0).max(SMALLEST_HELD_SHIFT)
+fn holds(shift: f64, held_shift: f64, good_median: f64, bad_median: f64) -&gt; bool {
+    (bad_median - good_median) / good_median &gt;= (shift / 2.0).max(held_shift)
 }</code></pre>
   <p>Until each end has <code>END_RUNS</code> runs, the next run is the end with fewer, the good end first, so the night benches good, bad, good, bad before it judges anything; the ends' medians are the means of their runs' medians of the Verdict's metric. A Suspect whose shift does not hold is cleared, and its Verdict is recorded so it is never listed again. A held shift moves each later run's commit to the good or bad end by which end's median it lies nearer, and <code>next_commit</code> picks the commit to bench: among the first-parent commits from the good end to the bad end, a run of commits sharing one source hash is one source, and the first commit of the middle source is next; with no other source between the ends, the commit that changed the source to the bad end's is pinned. A night whose ends no longer show a held shift judges no commit and leaves the Verdict for the next night.</p>
   <div class="code-source"><code>src/bench/history/verdicts.rs</code></div>
@@ -1135,7 +1152,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
         .find_map(|other| other.issue)
         .map_or(Filing::Open, Filing::Shared)
 }</code></pre>
-  <p><code>file_regressions</code>, behind <code>praxis history regressions</code>, runs every night whether or not a bisect ran, so an issue whose <code>gh</code> failed is tried again: for each Verdict of this machine that is pinned, uncovered and has no issue, it opens one with <code>gh issue create</code> under <code>TRIAGE_LABEL</code>, or shares the issue another Verdict of the same scene pinned to the same commit opened, or finds one a night opened and then failed to record by its exact title, and writes the number on the Verdict. The title names the scene, the adapter key, the commit's short hash and the PR a squash merge's subject ends in; the body names the commit and its subject, the Series, the chart's URL on <code>BENCH_PAGE</code> with the machine and scene as parameters, and a table of each judged timing the night measured slower at its bad end, the Verdict's own always and any other that shifted by <code>SMALLEST_HELD_SHIFT</code>, with the good and bad medians and the shift. A pinned commit that re-recorded the scene's Baseline is covered: the PR accepted the level by hand, and no issue opens; one that changed only its counters accepted no timing and is not.</p>
+  <p><code>file_regressions</code>, behind <code>praxis history regressions</code>, runs every night whether or not a bisect ran, so an issue whose <code>gh</code> failed is tried again: for each Verdict of this machine that is pinned, uncovered and has no issue, it opens one with <code>gh issue create</code> under <code>TRIAGE_LABEL</code>, or shares the issue another Verdict of the same scene pinned to the same commit opened, or finds one a night opened and then failed to record by its exact title, and writes the number on the Verdict. The title names the scene, the adapter key, the commit's short hash and the PR a squash merge's subject ends in; the body names the commit and its subject, the Series, the chart's URL on <code>BENCH_PAGE</code> with the machine and scene as parameters, and a table of each judged timing the night measured slower at its bad end, the Verdict's own always and any other that shifted by its own smallest shift, with the good and bad medians and the shift. A pinned commit that re-recorded the scene's Baseline is covered: the PR accepted the level by hand, and no issue opens; one that changed only its counters accepted no timing and is not.</p>
 </section>
 
 <section class="part prose" id="page">
@@ -1186,10 +1203,12 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
       <tr><td><code>an_import_records_each_changed_baseline_once_and_restamps_earlier_records</code></td><td><code>history.rs</code></td><td>the import's records, eras and tags over a made-up <code>main</code>; a record published at version 1 is re-stamped; a release build keeps what it holds</td></tr>
       <tr><td><code>a_baseline_re_recorded_after_the_history_started_is_marked_as_one</code>, <code>a_re_recorded_baselines_mark_stays_with_its_key_whichever_record_holds_it</code></td><td><code>history.rs</code></td><td>an unpushed Baseline is not yet <code>main</code>'s; the <code>baseline-rerecorded</code> source; the mark carried whether the bench's record or the import's holds the key, and a second import changes nothing</td></tr>
       <tr><td><code>a_series_marks_a_step_as_a_suspect_unless_a_baseline_a_pinned_commit_or_lavapipe_takes_it</code></td><td><code>history.rs</code></td><td>a 10% step is marked 0.1 on the GPU frame; not when the step is an imported or re-recorded Baseline, a pinned source, or on lavapipe</td></tr>
+      <tr><td><code>benched_noise_alone_marks_no_suspect</code>, <code>a_gpu_frame_step_of_one_and_a_half_percent_after_benched_nights_is_a_suspect</code></td><td><code>history.rs</code></td><td>a Series of the M4 Pro's benched rows' 40 deviations from their scenes' medians marks nothing; 1.5% added from its thirteenth record marks the GPU frame there and only there, and never the CPU frame</td></tr>
       <tr><td><code>lavapipe_in_ci_configuration_joins_its_series_quiet_or_not_and_publishes_once</code></td><td><code>history.rs</code></td><td>a noisy lavapipe run lands on the Series; a quieter one of the same source adds nothing</td></tr>
       <tr><td><code>a_release_build_lands_beside_its_results_with_a_series_and_publishes_once</code>, <code>a_release_build_needs_results_of_one_adapter_from_one_checkout</code></td><td><code>history.rs</code></td><td>the record and Series row of a release build; two adapters' results or none refuse it, and no branch is created</td></tr>
       <tr><td><code>noise_alone_is_not_flagged</code>, <code>a_five_percent_step_after_noise_is_flagged_at_the_step_only</code>, <code>a_second_step_on_the_same_side_is_flagged_again</code>, <code>a_step_is_flagged_once_when_a_noisy_record_falls_back_inside_the_band</code>, <code>a_step_down_is_flagged_with_its_sign</code>, <code>a_step_at_a_re_recorded_baseline_is_not_flagged</code>, <code>a_noisy_window_widens_past_the_smallest_shift</code>, <code>a_line_judges_only_from_its_third_record_and_skips_unmeasured_ones</code></td><td><code>suspects.rs</code></td><td>the rule on twelve medians within &plusmn;1.2% of 10 ms: no mark on noise, one at a 5% step with its shift, a second step marked again, a step marked once around a noisy record, a negative shift for a faster record, no mark across a line start, a &plusmn;8% window swallowing a 5% step, and judgement from the fourth measured record</td></tr>
-      <tr><td><code>a_shift_holds_at_half_its_marked_size_and_three_percent</code></td><td><code>verdicts.rs</code></td><td><code>holds</code> at 10% marked: 5% holds, 4.9% does not; at 4% marked, 3% holds, 2.9% does not; faster never holds</td></tr>
+      <tr><td><code>a_shift_holds_at_half_its_marked_size_and_three_percent</code></td><td><code>verdicts.rs</code></td><td><code>holds</code> at a 3% smallest shift, 10% marked: 5% holds, 4.9% does not; at 4% marked, 3% holds, 2.9% does not; faster never holds</td></tr>
+      <tr><td><code>a_gpu_frame_shift_of_one_and_a_half_percent_holds_where_a_cpu_frames_clears</code></td><td><code>verdicts.rs</code></td><td><code>step</code> on ends 1.5% apart: a GPU frame Suspect is held, a CPU frame one cleared</td></tr>
       <tr><td><code>a_bisect_benches_the_middle_source_and_pins_the_commit_that_changed_it</code></td><td><code>verdicts.rs</code></td><td><code>next_commit</code> over commits with lettered sources: the middle source, one source between, commits sharing a source, and the pin when none lies between</td></tr>
       <tr><td><code>a_night_benches_its_ends_interleaved_before_it_judges</code>, <code>a_held_bisect_waits_for_a_night_whose_ends_show_its_shift</code>, <code>a_re_bench_that_does_not_hold_clears_the_suspect</code>, <code>a_bisect_moves_its_ends_by_the_nearer_median_and_pins_the_commit</code></td><td><code>verdicts.rs</code></td><td><code>step</code>: good, bad, good, bad before any judgement; a held Verdict whose ends no longer show the shift waits; a cleared Verdict; the ends moving by the nearer median until the commit is pinned, measured at the night's ends</td></tr>
       <tr><td><code>a_night_bisects_from_where_it_started_and_pins_with_each_timings_medians</code>, <code>a_pinned_commit_that_re_recorded_its_scenes_baseline_is_covered</code>, <code>a_pinned_commit_that_changed_only_its_baselines_counters_is_not_covered</code>, <code>a_held_verdict_resumes_ahead_of_a_new_suspect</code></td><td><code>verdicts.rs</code></td><td><code>bisect</code> over a made-up <code>main</code> and branch: the ends interleaved, then the middle source, the pin with both judged timings' mean medians; covered only when the pinned commit itself added the Baseline or changed a timing it held, not when it changed only a counter; a held Verdict ahead of an older Suspect, kept as the Night's start</td></tr>
@@ -1235,7 +1254,8 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <tbody>
       <tr><td><code>PUSH_ATTEMPTS</code></td><td class="n">5</td><td>pushes a publish tries while the branch's tip keeps moving under it</td></tr>
       <tr><td><code>END_RUNS</code></td><td class="n">2</td><td>runs of each end a night benches, interleaved, before it judges: four runs of a scene before any bisect run</td></tr>
-      <tr><td><code>SMALLEST_HELD_SHIFT</code></td><td class="n">0.03</td><td>the smallest re-benched shift that holds, whatever was marked</td></tr>
+      <tr><td><code>CPU_FRAME_SMALLEST_SHIFT</code></td><td class="n">0.03</td><td>the smallest CPU frame shift that is a Suspect, and that a re-bench holds, whatever was marked</td></tr>
+      <tr><td><code>GPU_FRAME_SMALLEST_SHIFT</code></td><td class="n">0.0125</td><td>the same for the GPU frame</td></tr>
       <tr><td><code>cap_seconds</code></td><td class="n">900</td><td>seconds of benching, and of waiting between benches, a night runs before it leaves the rest to the next</td></tr>
       <tr><td><code>preparation_limit_seconds</code></td><td class="n">1800</td><td>seconds of building, cooking and waiting for the machine to settle after them a night may spend, outside the cap</td></tr>
       <tr><td>Suspects a night</td><td class="n">1</td><td><code>bisect</code> keeps to one Verdict per night</td></tr>
@@ -1285,7 +1305,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <dt><a href="https://docs.github.com/en/actions/reference/security/secure-use">GitHub, Secure use reference, Hardening for self-hosted runners</a></dt><dd>self-hosted runners should almost never be used for public repositories, because any user can open pull requests against the repository and compromise the environment; why CI benches lavapipe and the real GPUs are benched by a local scheduled task. No registry key: ADR 0024 cites the page directly, and <code>docs/references.toml</code> has no entry for it</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The history began as a decision to keep every bench run rather than only the Baselines a PR chose to commit: a record keyed by the source it measured, the Harness version numbered backwards over the Baselines' eras by an import, the quiet rule, the Series the page draws, and a Suspect rule over a window of medians, which the volume that first narrated it covered. The sweep's re-bench and bisect followed, with the Verdict kept on the branch and a pinned commit starting its Series' line, then the filing of a pinned Regression as one issue per scene, the nightly import of Baselines re-recorded since the history started, and the one-minute load average in the quiet test. Experiments, published from a branch under a name against the Series record of their merge base, and the release build's record CI publishes beside lavapipe's, had no volume; the key dropped the Harness version into the record, and the quieter-record rule learnt to hold a Series record against a tagged one. The Night's directory, first laid out by the sweep's script and read by the bisect, moved whole into the binary, the script keeping the builds, waits and time cap; the cap first counted a night's builds and the waits after them, until those moved to an allowance of their own. This page describes the mechanism as it is, from the code.</p>
+  <p class="note">The history began as a decision to keep every bench run rather than only the Baselines a PR chose to commit: a record keyed by the source it measured, the Harness version numbered backwards over the Baselines' eras by an import, the quiet rule, the Series the page draws, and a Suspect rule over a window of medians, which the volume that first narrated it covered. The sweep's re-bench and bisect followed, with the Verdict kept on the branch and a pinned commit starting its Series' line, then the filing of a pinned Regression as one issue per scene, the nightly import of Baselines re-recorded since the history started, and the one-minute load average in the quiet test. Experiments, published from a branch under a name against the Series record of their merge base, and the release build's record CI publishes beside lavapipe's, had no volume; the key dropped the Harness version into the record, and the quieter-record rule learnt to hold a Series record against a tagged one. The Night's directory, first laid out by the sweep's script and read by the bisect, moved whole into the binary, the script keeping the builds, waits and time cap; the cap first counted a night's builds and the waits after them, until those moved to an allowance of their own. Both timings once shared one smallest shift of 3%, for a Suspect and a hold alike, which no GPU frame step the M4 Pro's nights showed could reach; the GPU frame's came down to its measured spread. This page describes the mechanism as it is, from the code.</p>
   <footer class="sources">Written from <code>src/bench/history.rs</code>, <code>src/bench/history/suspects.rs</code>, <code>src/bench/history/verdicts.rs</code>, <code>src/bench/history/night.rs</code>, <code>src/bench/history/import.rs</code>, <code>src/bench/provenance.rs</code>, <code>src/bench/mod.rs</code>, <code>src/bin/praxis.rs</code>, <code>scripts/sweep.sh</code>, <code>.github/workflows/ci.yml</code>, <code>docs/bench/index.html</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013 and 0024, the <code>bench-history</code> branch at ca85090e, and the sources above, all at <code>main</code> 075919da.</footer>
 </section>
 
