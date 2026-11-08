@@ -266,6 +266,10 @@ mod tests {
         bends_left_out: 0,
         froxel_lights_overflowed: 0,
         shadow_mask_lights_overflowed: 3,
+        late_chunks: 0,
+        chunks_loaded: 0,
+        chunks_unloaded: 0,
+        bytes_read: 0,
     };
 
     const BUDGETS: Budgets = Budgets {
@@ -423,6 +427,10 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 | `bends_left_out` | 0 | 0 | +0 | — | — |
 | `froxel_lights_overflowed` | 0 | 0 | +0 | — | — |
 | `shadow_mask_lights_overflowed` | 3 | 3 | +0 | 1.000 | — |
+| `late_chunks` | 0 | 0 | +0 | — | — |
+| `chunks_loaded` | 0 | 0 | +0 | — | — |
+| `chunks_unloaded` | 0 | 0 | +0 | — | — |
+| `bytes_read` | 0 | 0 | +0 | — | — |
 "
         );
     }

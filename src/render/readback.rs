@@ -1249,6 +1249,7 @@ pub(crate) mod tests {
                 scene.frame_delta(),
                 switches,
                 FrameWait::Block,
+                true,
             )
             .expect("the scene renders");
             for (frame, stats) in frame_stats.iter().enumerate() {

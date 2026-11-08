@@ -1,14 +1,17 @@
 //! The Chunk streamer: which Chunks of a Game world to request, keep and
 //! unload around the camera, decided each frame from the camera's World
-//! position and the loads its IO finished. It reads no GPU state.
+//! position and the loads its IO finished. It reads no GPU state; `io`
+//! serves it from the IO pool.
 
 pub(crate) mod chunks;
+mod io;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use glam::DVec3;
 
 pub(crate) use chunks::{LoadedChunk, LoadedChunks, load_chunk};
+pub(crate) use io::ChunkStreaming;
 
 use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
 
@@ -238,6 +241,27 @@ fn chunks_within(camera: DVec3, radius_metres: f64) -> impl Iterator<Item = [i32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every Reference scene but the world draws all its Chunks on each
+    /// frame of a reference bench, so each keeps its Goldens and Baselines.
+    #[test]
+    fn each_reference_scene_holds_every_chunk_within_its_load_radius() {
+        for scene in crate::scenes::ReferenceScene::ALL {
+            let chunks = scene.chunk_coordinates();
+            for frame in 0..2048 {
+                let camera = scene.camera_at(frame, DVec3::ZERO).position;
+                let farthest = chunks
+                    .iter()
+                    .map(|&chunk| distance_metres(camera, chunk))
+                    .fold(0.0, f64::max);
+                assert!(
+                    farthest <= scene.load_radius_metres(),
+                    "{} frame {frame}: a Chunk {farthest} m away",
+                    scene.name()
+                );
+            }
+        }
+    }
 
     const LOAD_RADIUS_METRES: f64 = 256.0;
 

@@ -16,6 +16,12 @@ use crate::cooked::{AssetId, CookedCache, CookedChunk, TEXTURE_FORMAT_VERSION};
 pub(crate) struct CookingLoader<'a> {
     loader: &'a mut dyn AssetLoader,
     cache: &'a CookedCache,
+    cook: LaunchCook,
+}
+
+/// What a launch cooks from: its scene's sources, and each Asset it has
+/// checked.
+pub(crate) struct LaunchCook {
     settings: CookSettings,
     scene: ReferenceScene,
     sources: Sources,
@@ -73,32 +79,62 @@ impl<'a> CookingLoader<'a> {
             .chain(chunks)
             .chain(textures)
             .collect();
-        Self {
-            loader,
-            cache,
+        let cook = LaunchCook {
             settings,
             scene,
             sources,
             entry_by_id,
             checked: HashSet::new(),
+        };
+        Self {
+            loader,
+            cache,
+            cook,
         }
     }
 
     /// Each source the launch could not read, whose Blobs stay as they are.
     pub(crate) fn absent_sources(&self) -> &[String] {
-        &self.sources.absent
+        &self.cook.sources.absent
     }
 
-    /// Cooks `id`, which `referrer` names, and each Asset it names, where
-    /// the Blob is missing or stale. An ID this cook does not make warns, as
-    /// the cook's dangling references do, unless its Blob may be one kept.
-    fn cook_on_miss(&mut self, referrer: Referrer, id: AssetId) -> anyhow::Result<()> {
+    /// What it cooks from, for the launch's later loads.
+    pub(crate) fn into_cook(self) -> LaunchCook {
+        self.cook
+    }
+
+    fn cook_for_spawn(&mut self, id: AssetId) -> anyhow::Result<()> {
+        self.cook.cook_for_scene(self.cache, id)
+    }
+}
+
+impl LaunchCook {
+    /// Cooks `id` into `cache`, and each Asset it names, where missing or
+    /// stale, as the scene names it.
+    pub(crate) fn cook_for_scene(
+        &mut self,
+        cache: &CookedCache,
+        id: AssetId,
+    ) -> anyhow::Result<()> {
+        self.cook_on_miss(cache, Referrer::Scene(self.scene), id)
+    }
+
+    /// Cooks `id`, which `referrer` names, and each Asset it names, into
+    /// `cache` where the Blob is missing or stale. An ID this cook does not
+    /// make warns, as the cook's dangling references do, unless its Blob may
+    /// be one kept.
+    fn cook_on_miss(
+        &mut self,
+        cache: &CookedCache,
+        referrer: Referrer,
+        id: AssetId,
+    ) -> anyhow::Result<()> {
         if !self.checked.insert(id) {
             return Ok(());
         }
         let Some(&entry) = self.entry_by_id.get(&id) else {
             let may_be_kept = |reference: &(Referrer, AssetId)| self.sources.may_be_kept(reference);
-            dangling_references(self.cache, &HashSet::new(), &[(referrer, id)], may_be_kept);
+            dangling_references(cache, &HashSet::new(), &[(referrer, id)], may_be_kept);
             return Ok(());
         };
         let sources = &self.sources;
@@ -130,9 +166,9 @@ impl<'a> CookingLoader<'a> {
             }
         };
         for (referrer, named) in named {
-            self.cook_on_miss(referrer, named)?;
+            self.cook_on_miss(cache, referrer, named)?;
         }
-        if is_fresh(self.cache, id, &cook_key) {
+        if is_fresh(cache, id, &cook_key) {
             return Ok(());
         }
         let sources = &self.sources;
@@ -155,15 +191,9 @@ impl<'a> CookingLoader<'a> {
                 sources.textures[index].cook(&self.settings, threads)?
             }
         };
-        self.cache.write(id, &cook_key, &blob)?;
+        cache.write(id, &cook_key, &blob)?;
         tracing::debug!(asset = %id, "cooked on a miss");
         Ok(())
-    }
-
-    /// Cooks `id` and each Asset it names where missing or stale, as
-    /// `scene`'s spawn names it.
-    fn cook_for_spawn(&mut self, id: AssetId) -> anyhow::Result<()> {
-        self.cook_on_miss(Referrer::Scene(self.scene), id)
     }
 }
 
@@ -242,7 +272,7 @@ mod tests {
         load(&mut PoolLoader {
             device: &context.device,
             staging: &mut staging,
-            cache,
+            reader: cache,
             mesh_pool: &mut mesh_pool,
             material_pool: &mut material_pool,
         });

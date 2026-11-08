@@ -1284,8 +1284,8 @@ mod tests {
     }
 
     /// Prepare's Frame data gives it exactly the static Instances of the
-    /// loaded Chunks and of the static spawned Renderables: neither a Moving
-    /// Instance nor a despawned Renderable's.
+    /// loaded Chunks not held and of the static spawned Renderables: neither
+    /// a Moving Instance, a despawned Renderable's nor a held Chunk's.
     #[test]
     fn it_holds_the_loaded_chunks_and_the_static_renderables_static_instances() {
         let Some(triangle) = Triangle::new() else {
@@ -1308,6 +1308,10 @@ mod tests {
             id: AssetId(1),
             placements: vec![placement(0.0), placement(4.0)],
             lights: Vec::new(),
+            coordinates: [0, 0],
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held: false,
         }]));
         let renderable = |x| (at(x), MeshRef(triangle.mesh), MaterialRef(material));
         world.spawn(renderable(8.0));
@@ -1350,6 +1354,22 @@ mod tests {
         assert_eq!(freed.len(), 1);
         assert!(static_slots.contains(&freed[0]));
         static_slots.retain(|slot| !freed.contains(slot));
+        assert_eq!(slots_held(&tlas), static_slots);
+
+        // A held Chunk's Placements draw nothing and leave the TLAS, and
+        // return when it is drawn again.
+        world.resource_mut::<LoadedChunks>().0[0].held = true;
+        let (mut written, moving) = update(&mut world, &mut tlas);
+        written.retain(|slot| !moving.contains(slot));
+        assert_eq!(written, [0, 1]);
+        let renderables_only: Vec<u32> = static_slots
+            .iter()
+            .copied()
+            .filter(|slot| !written.contains(slot))
+            .collect();
+        assert_eq!(slots_held(&tlas), renderables_only);
+        world.resource_mut::<LoadedChunks>().0[0].held = false;
+        update(&mut world, &mut tlas);
         assert_eq!(slots_held(&tlas), static_slots);
     }
 

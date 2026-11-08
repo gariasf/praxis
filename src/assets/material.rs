@@ -3,8 +3,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 
+use crate::assets::loader::AssetReader;
 use crate::assets::pools::{Generations, PoolCapacities};
-use crate::cooked::{AssetId, CookedCache, CookedTexture, level_bytes};
+use crate::cooked::{AssetId, CookedTexture, level_bytes};
 use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
 use crate::render::bind_groups::MATERIALS;
@@ -496,9 +497,18 @@ impl MaterialPool {
         &self.generations
     }
 
-    /// How many loads returned the Material `id`: a user per loaded Chunk
-    /// whose Placements name it, per Primitive of a loaded Mesh that names
-    /// it, and per spawn that loaded it.
+    /// Counts one user fewer of the Material `id`, keeping its entry however
+    /// few are left.
+    pub fn remove_user(&mut self, id: AssetId) {
+        if let Some((_, users)) = self.material_handles.get_mut(&id) {
+            *users = users.saturating_sub(1);
+        }
+    }
+
+    /// How many loads returned the Material `id`, less those `remove_user`
+    /// took back: a user per loaded Chunk whose Placements name it, per
+    /// Primitive of a loaded Mesh that names it, and per spawn that loaded
+    /// it.
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
     pub fn users(&self, id: AssetId) -> u32 {
         self.material_handles
@@ -506,7 +516,7 @@ impl MaterialPool {
             .map_or(0, |&(_, users)| users)
     }
 
-    /// Loads the Material `id` from `cache`, and each Texture it samples, once
+    /// Loads the Material `id` from `reader`, and each Texture it samples, once
     /// per Asset ID, written through `staging`, and returns its Handle, or
     /// the SSBO's refusal when it is full; a load of a loaded Material counts
     /// one more user of it. A Channel the Material lacks samples Layer 0, as
@@ -515,19 +525,19 @@ impl MaterialPool {
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
-        cache: &CookedCache,
+        reader: &dyn AssetReader,
         id: AssetId,
     ) -> anyhow::Result<MaterialHandle> {
         if let Some((handle, users)) = self.material_handles.get_mut(&id) {
             *users += 1;
             return Ok(*handle);
         }
-        let material = cache.material(id)?;
+        let material = reader.material(id)?;
         let mut layers = [Self::DEFAULT_LAYER; 5];
         for (channel, texture_id) in MaterialChannel::ALL.into_iter().zip(material.textures) {
             if let Some(texture_id) = texture_id {
                 layers[channel as usize] = self
-                    .load_texture(device, staging, cache, channel, texture_id)
+                    .load_texture(device, staging, reader, channel, texture_id)
                     .with_context(|| format!("loading Material {id}"))?;
             }
         }
@@ -552,7 +562,7 @@ impl MaterialPool {
         Ok(handle)
     }
 
-    /// Loads the Texture `id` from `cache` into `channel` once per Asset ID,
+    /// Loads the Texture `id` from `reader` into `channel` once per Asset ID,
     /// written through `staging`, and returns its Layer: a free slice of its
     /// shape's Texture class, or of its Resident tail's when the pool holds
     /// back finer mips or the Channel has no room for its chain, or Layer 0
@@ -561,14 +571,14 @@ impl MaterialPool {
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
-        cache: &CookedCache,
+        reader: &dyn AssetReader,
         channel: MaterialChannel,
         id: AssetId,
     ) -> anyhow::Result<u32> {
         if let Some(&layer) = self.texture_layers.get(&id) {
             return Ok(layer);
         }
-        let texture = cache.texture(id)?;
+        let texture = reader.texture(id)?;
         let channel_textures = &mut self.channels[channel as usize];
         let classes_before = channel_textures.views.len();
         let holds_back_finer_mips = self.holds_back_finer_mips;
@@ -660,7 +670,7 @@ mod tests {
 
     use super::*;
     use crate::assets::pools::tests::{gpu_context, logged};
-    use crate::cooked::CookedMaterial;
+    use crate::cooked::{CookedCache, CookedMaterial};
     use crate::gpu::GpuContext;
     use crate::stats::GpuMemoryBudgets;
     use crate::stats::gpu_memory::tests::gpu_memory;

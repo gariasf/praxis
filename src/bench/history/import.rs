@@ -592,11 +592,12 @@ mod tests {
         let measured_row = &row["measured_counters"];
         assert_eq!(measured_row["instances_drawn"], measured.instances_drawn);
         assert_eq!(measured_row["triangles_drawn"], measured.triangles_drawn);
-        assert_eq!(
-            measured_row.as_object().unwrap().len(),
-            crate::bench::Counters::NAMES.len(),
-            "{row}"
-        );
+        let baseline_json: serde_json::Value = serde_json::from_str(TOWN_BASELINE).unwrap();
+        let carried = crate::bench::Counters::NAMES
+            .iter()
+            .filter(|counter| baseline_json.get(**counter).is_some())
+            .count();
+        assert_eq!(measured_row.as_object().unwrap().len(), carried, "{row}");
     }
 
     #[test]

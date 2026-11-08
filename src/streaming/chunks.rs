@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
 use crate::components::{PointLight, Transform};
-use crate::cooked::{AssetId, chunk_origin};
+use crate::cooked::{AssetId, CookedChunk, chunk_origin};
 
 /// The loaded Chunks, in load order. Prepare gives each its own range of
 /// Instance slots and writes its Placements there; no entity holds them.
@@ -13,11 +13,30 @@ use crate::cooked::{AssetId, chunk_origin};
 pub struct LoadedChunks(pub Vec<LoadedChunk>);
 
 /// A loaded Chunk: its Placements and point lights at their World
-/// positions, with the Handles its Placements draw with.
+/// positions, with the Handles its Placements draw with, and the Asset IDs
+/// it counts as a user of. A held Chunk is neither drawn, traced nor lit.
 pub struct LoadedChunk {
     pub id: AssetId,
+    pub coordinates: [i32; 2],
     pub placements: Vec<ChunkPlacement>,
     pub lights: Vec<(glam::DVec3, PointLight)>,
+    /// The Meshes its Placements name, each once, in Placement order.
+    pub meshes: Vec<AssetId>,
+    /// The Materials its Placements name, each once, in Placement order.
+    pub materials: Vec<AssetId>,
+    pub held: bool,
+}
+
+impl LoadedChunk {
+    /// Moves its Placements and lights by `shift` metres.
+    pub(crate) fn shift(&mut self, shift: glam::DVec3) {
+        for placement in &mut self.placements {
+            placement.transform.translation += shift;
+        }
+        for (position, _) in &mut self.lights {
+            *position += shift;
+        }
+    }
 }
 
 /// A Placement as prepare draws it: its World transform, its Mesh, and the
@@ -38,20 +57,39 @@ pub(crate) fn load_chunk(
     coordinates: [i32; 2],
 ) -> anyhow::Result<LoadedChunk> {
     let chunk = loader.chunk(id)?;
+    load_cooked_chunk(loader, id, coordinates, &chunk)
+}
+
+/// Loads `chunk`, the Chunk `id` at `coordinates`, as `load_chunk` does once
+/// it has read it.
+pub(crate) fn load_cooked_chunk(
+    loader: &mut dyn AssetLoader,
+    id: AssetId,
+    coordinates: [i32; 2],
+    chunk: &CookedChunk,
+) -> anyhow::Result<LoadedChunk> {
     let origin = chunk_origin(coordinates);
     let mut meshes = HashMap::new();
     let mut materials = HashMap::new();
+    let mut mesh_ids = Vec::new();
+    let mut material_ids = Vec::new();
     let mut placements = Vec::with_capacity(chunk.placements.len());
     for placement in &chunk.placements {
         let mesh = match meshes.entry(placement.mesh) {
             Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => *entry.insert(loader.mesh(placement.mesh)?),
+            Entry::Vacant(entry) => {
+                mesh_ids.push(placement.mesh);
+                *entry.insert(loader.mesh(placement.mesh)?)
+            }
         };
         let material = match placement.material {
             None => None,
             Some(material) => Some(match materials.entry(material) {
                 Entry::Occupied(entry) => *entry.get(),
-                Entry::Vacant(entry) => *entry.insert(loader.material(material)?),
+                Entry::Vacant(entry) => {
+                    material_ids.push(material);
+                    *entry.insert(loader.material(material)?)
+                }
             }),
         };
         placements.push(ChunkPlacement {
@@ -78,8 +116,12 @@ pub(crate) fn load_chunk(
         .collect();
     Ok(LoadedChunk {
         id,
+        coordinates,
         placements,
         lights,
+        meshes: mesh_ids,
+        materials: material_ids,
+        held: false,
     })
 }
 
@@ -178,7 +220,7 @@ mod tests {
         let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,
-            cache: &cache,
+            reader: &cache,
             mesh_pool: &mut mesh_pool,
             material_pool: &mut material_pool,
         };

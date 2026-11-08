@@ -77,6 +77,14 @@ pub struct FrameStats {
     /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
     /// game slowed by this much.
     pub dropped_time: Duration,
+    /// Chunks the camera came within the Load radius of before they loaded.
+    pub late_chunks: u32,
+    /// Chunks whose loads the frame took.
+    pub chunks_loaded: u32,
+    /// Chunks the frame unloaded.
+    pub chunks_unloaded: u32,
+    /// Bytes of Blobs the IO pool read for the Chunks the frame loaded.
+    pub bytes_read: u64,
     /// Readbacks of GPU stats the frame skipped, its own or an earlier
     /// frame's, as their ring slot was not ready and the main thread never
     /// waits on the GPU (ADR 0016).

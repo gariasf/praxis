@@ -459,6 +459,25 @@ impl ReferenceScene {
         }
     }
 
+    /// The scene's Load radius, in metres: the world's 256 m, or for
+    /// `far_coplanar` and `town` one that holds every Chunk they have from
+    /// each frame of their camera paths, as the others' 256 m does.
+    pub(crate) fn load_radius_metres(self) -> f64 {
+        match self {
+            Self::FarCoplanar => 4352.0,
+            Self::Town => 1024.0,
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall
+            | Self::Shadows
+            | Self::Crowd => 256.0,
+        }
+    }
+
     /// The scene's sun, white, of `SUN_ILLUMINANCE`: a directional light
     /// whose forward axis is turned to shine along the scene's direction.
     /// town's stands 33° up in the south-southwest, behind the camera's

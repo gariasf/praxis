@@ -122,10 +122,14 @@ src/
                                  around the camera, its Late Chunks, hold
                                  after a teleport and Settled report,
                                  reaching IO through a narrow trait;
-                                 chunks.rs, a Chunk loaded through the
-                                 AssetLoader into the World's
-                                 LoadedChunks, which prepare writes into
-                                 the Chunk's range of Instance slots
+                                 io.rs, the IO pool (ADR 0016) that reads
+                                 and decodes Chunks and their Assets, and
+                                 ChunkStreaming, which the State runs each
+                                 frame, Settled for captures; chunks.rs,
+                                 a Chunk loaded through the AssetLoader
+                                 into the World's LoadedChunks, which
+                                 prepare writes into the Chunk's range of
+                                 Instance slots
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's
