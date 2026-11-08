@@ -125,7 +125,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Reads</dt><dd>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>instance_writes</code> and the <code>instances</code> they cover; each static Instance's BLAS, from <code>MeshPool::blas</code>; the camera's Anchor, in the first Frame data only; the <code>wait_for_static_tlas</code> Render switch, which a capture sets.</dd>
       <dt>Writes</dt><dd>The entry each static Instance's slot holds and each frame's entry changes, which both TLASes take; the Anchor of its frame, which the camera uniform carries to the GPU as <code>tlas_anchor</code> and the dynamic TLAS shares; the static Instances it leaves out, by slot.</dd>
       <dt>Builds</dt><dd>Both TLASes, empty, at creation; then one <code>build_acceleration_structures</code> of the spare alone, recorded and finished on the worker into a command buffer of its own, which the main thread submits before the frame's, when the bound TLAS lacks a change.</dd>
-      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound</code>.</dd>
+      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound_index</code>.</dd>
       <dt>Shader</dt><dd>Queried in <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>.</dd>
       <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; <code>static_tlas_build_time</code>, the worker's time on the build a frame submits, and <code>frames_until_traced</code>, in a frame that binds a new build; both TLASes at full capacity in the acceleration structures' ledger, and so in <code>gpu_memory_bytes</code>; the main thread's share, the entry changes and the submit, in the <code>static_tlas_update</code> stage. No GPU pass time is taken of its build.</dd>
     </dl>
@@ -679,10 +679,10 @@ let shadow_ray_scenes = static_tlas.bindings().map(|static_binding| {
   <p class="code-source"><code>ShadowMaskPass::new</code>, <code>src/render/shadow_mask_pass.rs</code>: the groups, built once from <code>StaticTlas::bindings</code>, in its TLASes' order.</p>
 <pre class="code"><code>pass.set_bind_group(
     SHADOW_RAY_SCENE.index,
-    &amp;self.shadow_ray_scenes[static_tlas],
+    &amp;self.shadow_ray_scenes[static_tlas_index],
     &amp;[],
 );</code></pre>
-  <p class="code-source"><code>ShadowMaskPass::record</code>, <code>src/render/shadow_mask_pass.rs</code>, whose <code>static_tlas</code> argument the Renderer passes as <code>StaticTlas::bound</code>.</p>
+  <p class="code-source"><code>ShadowMaskPass::record</code>, <code>src/render/shadow_mask_pass.rs</code>, whose <code>static_tlas</code> argument the Renderer passes as <code>StaticTlas::bound_index</code>.</p>
 <pre class="code"><code>/// Each TLAS's binding, by index, which stays valid as it is rebuilt in
 /// place: called before its first update, while neither is on the
 /// worker.
@@ -697,10 +697,10 @@ pub fn bindings(&amp;self) -&gt; [wgpu::BindingResource&lt;'_&gt;; 2] {
 
 /// The index of the TLAS rays trace this frame, as `bindings` orders
 /// them.
-pub fn bound(&amp;self) -&gt; usize {
+pub fn bound_index(&amp;self) -&gt; usize {
     self.bound_index
 }</code></pre>
-  <p class="code-source"><code>StaticTlas::bindings</code> and <code>StaticTlas::bound</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p class="code-source"><code>StaticTlas::bindings</code> and <code>StaticTlas::bound_index</code>, <code>src/render/acceleration_structures.rs</code>.</p>
 <pre class="code"><code>fn first_intersection(flags: u32, origin: vec3&lt;f32&gt;, direction: vec3&lt;f32&gt;, start_distance: f32, end_distance: f32) -&gt; RayIntersection {
     // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
@@ -768,7 +768,7 @@ pub fn bound(&amp;self) -&gt; usize {
   <div class="part-mark">9 &middot; ADRs 0013, 0014, 0016, 0020</div>
   <h2>Why this way</h2>
   <p><b>Two TLAS, split by motion.</b> ADR 0020 splits the near field into a static TLAS, rebuilt only when its static Instances change, and a dynamic TLAS of Moving Instances, rebuilt each frame and capped at 10,000 Instances. One TLAS over everything would rebuild over every static Instance whenever anything moved, since wgpu-core 30.0.1 has no TLAS update, only rebuilds.</p>
-  <p><b>A worker records, the main thread submits.</b> Rebuilding <code>town</code>'s 254,256 Instances took 17.5 to 18.1 ms of CPU on the M4 Pro under wgpu 30.0.1, and an empty TLAS of 262,144 entries 4.3 to 6.9 ms (<code>docs/research/acceleration-structures-for-streamed-worlds.md</code>). A worker can fill, record and finish, 13 to 14 ms of it, and hand the command buffer over, as ADR 0016 lets workers do; the main thread keeps the submit, 4.3 to 4.5 ms at that size, since wgpu-core walks one dependency per entry. Recording the build in a command buffer of its own on the main thread (the research's option A) overlaps it on the GPU but leaves the whole CPU cost in the frame; several smaller static TLASes, by Chunk group or ring (option C), make each rebuild cheap, but every ray then queries each of them, at a cost not yet measured, and on Metal each is a binding of its own.</p>
+  <p><b>A worker records, the main thread submits.</b> Rebuilding <code>town</code>'s 254,256 Instances took 17.5 to 18.1 ms of CPU on the M4 Pro under wgpu 30.0.1, and an empty TLAS of 262,144 entries 4.3 to 6.9 ms (<code>docs/research/acceleration-structures-for-streamed-worlds.md</code>). A worker can fill, record and finish, 13 to 14 ms of it, and hand the command buffer over, as ADR 0016 lets workers do; the main thread keeps the submit, 4.3 to 4.5 ms at that size alone and 5.6 to 7.1 ms beside a frame's, since wgpu-core walks one dependency per entry. Recording the build in a command buffer of its own on the main thread (the research's option A) overlaps it on the GPU but leaves the whole CPU cost in the frame; several smaller static TLASes, by Chunk group or ring (option C), make each rebuild cheap, but every ray then queries each of them, at a cost not yet measured, and on Metal each is a binding of its own.</p>
   <p><b>A spare, swapped in.</b> A bind group holds its TLAS from creation, so two TLASes take two groups, and the worker builds the one no frame binds; rebuilding the bound TLAS in place (S2) would put the build in the frame that traces it and leave ordering its build after the passes that read it to Metal's hazard tracking. The spare costs a second TLAS's memory, 75.6 MB at 262,144 entries on the M4 Pro. Ize, Wald and Parker switch a BVH rebuilt over several frames in "with two pointer swaps"; the research found no shipped engine that double-buffers its TLAS. Sharing each frame's changes between the two keeps the main thread's work in proportion to the changes, not to the capacity, and the catch-up keeps the second build a change would otherwise cost.</p>
   <p><b>Captures wait, frames do not.</b> Which frame finds the worker done depends on the machine, so a capture, whose image must not, waits for the worker in the frame that starts it and binds the build in the next. Frames in a window and the bench never wait.</p>
   <p><b>Tagged with the slot, indexed by none.</b> Indexing entries by slot would need no map, as an Instance keeps its slot while it is one, but it would cap slot numbers rather than static Instances: Chunks take their ranges past the highest slot taken, and the Instance buffer holds twice the static TLAS's capacity, so a Chunk's static Instances could fall past the capacity with entries to spare. A table of entries by slot keeps the old cost, one array read per Instance written, Moving ones included, for 8 bytes of CPU memory per slot up to the highest that held a static Instance; a hash map would cost a hash per Moving Instance each frame, 10,000 of them in <code>town</code>. The tag stays the slot: the frame's shaders do not read it, and a test's query reads it back to name the Instance a ray hit.</p>
@@ -785,7 +785,7 @@ pub fn bound(&amp;self) -&gt; usize {
   <p><b>A rebuild walks every entry.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> entries, on the worker, and a submit of all of them on the main thread.</p>
   <p><b>The unbound TLAS is rebuilt after frames that read it.</b> Frames still on the GPU may trace the TLAS just unbound when its next build is submitted; queue order and Metal's hazard tracking order the two, as they ordered an in-place rebuild before.</p>
   <p><b>Changes held for the catch-up.</b> The TLAS just unbound keeps its share of the change batches until its catch-up has taken them, so a load's changes stay in CPU memory for a frame or more after its build.</p>
-  <p><b>A lock shared with the main thread.</b> <code>finish</code> holds the device's snatch lock for reading, which a buffer or texture destroy, and a poll that frees what one left, take for writing, so such a call on the main thread can wait for the worker's whole <code>finish</code>.</p>
+  <p><b>A lock shared with the main thread.</b> <code>finish</code> holds the device's snatch lock for reading, which a buffer or texture destroy, a poll that frees what one left, and a surface's present or discard take for writing, so such a call on the main thread can wait for the worker's whole <code>finish</code>.</p>
   <p><b>Left out by write order.</b> Past the capacity, which static Instances cast shadows is settled by when they were written, the left-out ones admitted lowest slot first, not by their distance from the camera.</p>
   <p><b>Memory at full capacity, twice.</b> The estimate, and wgpu-core's allocation, are for every entry of both TLASes, so the smallest scene pays what <code>town</code> does.</p>
   <p><b>One frame, fixed at load.</b> The origin never moves, so an entry far from where the camera stood at load rounds to f32 more coarsely: from 2,048 m out its step is 0.244 mm.</p>

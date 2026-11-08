@@ -543,7 +543,7 @@ impl StaticTlas {
 
     /// The index of the TLAS rays trace this frame, as `bindings` orders
     /// them.
-    pub fn bound(&self) -> usize {
+    pub fn bound_index(&self) -> usize {
         self.bound_index
     }
 
@@ -983,10 +983,10 @@ mod tests {
         /// writes nothing.
         fn update_from(&self, tlas: &mut StaticTlas, frame: &FrameData) -> bool {
             let rebuilt = self.update_once(tlas, frame, true).build_time.is_some();
-            let bound = tlas.bound();
+            let bound = tlas.bound_index();
             let binding = self.update_once(tlas, &FrameData::default(), true);
             assert_eq!(binding.frames_until_traced, rebuilt.then_some(1));
-            assert_eq!(tlas.bound() != bound, rebuilt);
+            assert_eq!(tlas.bound_index() != bound, rebuilt);
             assert_eq!(binding.build_time, None);
             rebuilt
         }
@@ -1238,18 +1238,18 @@ mod tests {
             let mut frames = 1;
             while update.build_time.is_none() {
                 assert_eq!(update.frames_until_traced, None);
-                assert_eq!(tlas.bound(), expected_index);
+                assert_eq!(tlas.bound_index(), expected_index);
                 std::thread::sleep(Duration::from_millis(1));
                 update = triangle.update_once(&mut tlas, &FrameData::default(), false);
                 frames += 1;
                 assert!(frames < 10_000, "the worker never finished");
             }
-            assert_eq!(tlas.bound(), expected_index);
+            assert_eq!(tlas.bound_index(), expected_index);
             let unbuilt = trace_down(context, &tlas.bound, &points);
             assert_eq!(unbuilt[slot as usize], None);
             let binding = triangle.update_once(&mut tlas, &FrameData::default(), false);
             expected_index = 1 - expected_index;
-            assert_eq!(tlas.bound(), expected_index);
+            assert_eq!(tlas.bound_index(), expected_index);
             assert_eq!(binding.frames_until_traced, Some(frames));
             assert_eq!(trace_down(context, &tlas.bound, &points), traced);
             // The unbound TLAS takes the change on the worker, and records

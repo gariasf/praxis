@@ -339,11 +339,11 @@ impl ShadowMaskPass {
     }
 
     /// Records the pass into `encoder`, tracing the static TLAS of index
-    /// `static_tlas`, timed into `timestamp_writes`.
+    /// `static_tlas_index`, timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        static_tlas: usize,
+        static_tlas_index: usize,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
@@ -358,7 +358,7 @@ impl ShadowMaskPass {
         pass.set_pipeline(&self.nearest_surfaces_pipeline);
         pass.set_bind_group(
             SHADOW_RAY_SCENE.index,
-            &self.shadow_ray_scenes[static_tlas],
+            &self.shadow_ray_scenes[static_tlas_index],
             &[],
         );
         pass.set_bind_group(

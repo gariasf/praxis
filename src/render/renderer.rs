@@ -812,7 +812,7 @@ impl Renderer {
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
-                self.static_tlas.bound(),
+                self.static_tlas.bound_index(),
                 timestamps
                     .as_mut()
                     .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),

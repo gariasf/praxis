@@ -159,7 +159,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <pre class="code"><code>pass.set_pipeline(&amp;self.nearest_surfaces_pipeline);
 pass.set_bind_group(
     SHADOW_RAY_SCENE.index,
-    &amp;self.shadow_ray_scenes[static_tlas],
+    &amp;self.shadow_ray_scenes[static_tlas_index],
     &amp;[],
 );
 pass.set_bind_group(
