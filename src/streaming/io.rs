@@ -1,11 +1,12 @@
 //! The IO pool (ADR 0016), and the Chunk streamer it serves each frame.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use bevy_ecs::prelude::*;
@@ -357,6 +358,11 @@ pub(crate) struct StreamedFrame {
     pub written_bytes: u64,
     pub pool_entries_freed: u32,
     pub late_mips: u32,
+    /// Whether the camera still waits for a Chunk within the Load radius
+    /// since it last arrived.
+    pub holding: bool,
+    /// On the frame a Fast travel's hold ends, its time from the jump.
+    pub fast_travel_hold: Option<Duration>,
 }
 
 /// A Reference scene's Chunks streamed around the camera: the Chunk
@@ -380,6 +386,8 @@ pub(crate) struct ChunkStreaming {
     /// that alone writes more loads alone.
     load_bytes_per_frame: u64,
     mips: MipPriority,
+    /// When the Fast travel whose hold has not ended jumped.
+    fast_travel_started: Option<Instant>,
 }
 
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
@@ -411,6 +419,7 @@ impl ChunkStreaming {
             cook_chunk: None,
             load_bytes_per_frame,
             mips: MipPriority::default(),
+            fast_travel_started: None,
         })
     }
 
@@ -419,6 +428,27 @@ impl ChunkStreaming {
     #[cfg(feature = "cook")]
     pub(crate) fn cook_each_chunk(&mut self, cook_chunk: CookChunk) {
         self.cook_chunk = Some(cook_chunk);
+    }
+
+    /// Runs the dev launch's cook, where there is one, on each Chunk within
+    /// the hold radius of any of `cameras`, World positions, now rather than
+    /// on the main thread as each is requested, so frames that stream time no
+    /// cook.
+    pub(crate) fn cook_ahead(
+        &mut self,
+        cameras: impl IntoIterator<Item = DVec3>,
+    ) -> anyhow::Result<()> {
+        let Some(cook_chunk) = &mut self.cook_chunk else {
+            return Ok(());
+        };
+        let mut chunks = BTreeSet::new();
+        for camera in cameras {
+            chunks.extend(self.streamer.within_hold_radius(camera - self.shift));
+        }
+        for coordinates in chunks {
+            cook_chunk(self.scene.chunk_id(coordinates))?;
+        }
+        Ok(())
     }
 
     /// Streams with a Load radius of `metres` instead, before any load.
@@ -462,18 +492,27 @@ impl ChunkStreaming {
     /// arrived, in coordinate order and past the frame's load bytes, so
     /// their order never depends on the IO pool's timing; a load that fails
     /// then fails the frame. Ends the frame's frees to make room, which it
-    /// reports.
+    /// reports, and clears the camera's `teleported`, timing the hold of the
+    /// Fast travel it marks.
     pub(crate) fn update(
         &mut self,
         world: &mut World,
         renderer: &mut Renderer,
         settle: bool,
     ) -> anyhow::Result<StreamedFrame> {
-        let streamed = self.stream(world, renderer, settle);
+        let started = Instant::now();
+        let teleported = std::mem::take(&mut world.resource_mut::<Camera>().teleported);
+        if teleported {
+            self.fast_travel_started = Some(started);
+        }
+        let streamed = self.stream(world, renderer, settle, teleported);
         let frees =
             renderer.mesh_pool.take_frame_frees() + renderer.material_pool.take_frame_frees();
         let mut streamed = streamed?;
         streamed.pool_entries_freed = frees as u32;
+        if !streamed.holding {
+            streamed.fast_travel_hold = self.fast_travel_started.take().map(|jump| jump.elapsed());
+        }
         Ok(streamed)
     }
 
@@ -482,6 +521,7 @@ impl ChunkStreaming {
         world: &mut World,
         renderer: &mut Renderer,
         settle: bool,
+        teleported: bool,
     ) -> anyhow::Result<StreamedFrame> {
         let camera = world.resource::<Camera>().position - self.shift;
         let mut streamed = StreamedFrame::default();
@@ -499,6 +539,7 @@ impl ChunkStreaming {
                 cook_chunk,
                 load_bytes_per_frame,
                 mips,
+                fast_travel_started: _,
             } = self;
             let mut frame_io = FrameIo {
                 cook_chunk,
@@ -517,7 +558,8 @@ impl ChunkStreaming {
                 bytes_read: &mut streamed.bytes_read,
                 error,
             };
-            let frame = streamer.update(camera, false, &mut frame_io);
+            let frame = streamer.update(camera, teleported, &mut frame_io);
+            streamed.holding = frame.holding;
             streamed.late_chunks += frame.late_chunks;
             streamed.chunks_loaded += frame.loaded.len() as u32;
             streamed.chunks_unloaded += frame.unloaded.len() as u32;

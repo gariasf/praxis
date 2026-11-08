@@ -46,6 +46,11 @@ const CAMERA_HEIGHT_METRES: f64 = 60.0;
 const CAMERA_METRES_PER_FRAME: f64 = 50.0 / 60.0;
 const APPROACH_METRES: f64 = 300.0;
 const GAZE_METRES: f64 = 250.0;
+/// The bench path's Fast travel: on its frame, over the farmland north of
+/// `CAMERA_SETTLEMENT`, the camera jumps about 5 km to the middle of
+/// another settlement, flying on north through it.
+const FAST_TRAVEL_FRAME: u32 = 1800;
+const FAST_TRAVEL_SETTLEMENT: [u32; 2] = [1, 6];
 
 /// The flocks about the camera: 320 m a side, centres between the roofs and
 /// the camera, each kept within 160 m of the camera on X and Z, so that no
@@ -159,19 +164,28 @@ fn settlement_index([column, row]: [u32; 2]) -> u32 {
     row * SETTLEMENTS_PER_SIDE + column
 }
 
-/// The camera at `frame` of its path: the bench path's first leg, flying
-/// into a settlement, onward in a straight line.
+/// The camera at `frame` of its path, the bench path: into a settlement,
+/// over the farmland beyond, then a Fast travel into another settlement.
 pub(crate) fn camera_at(frame: u32) -> Camera {
-    let centre = settlement_centre(CAMERA_SETTLEMENT);
-    let street_x = centre.x - BLOCK_PITCH_METRES / 2.0;
-    let start_z = centre.z + SETTLEMENT_HALF_SIZE_METRES + APPROACH_METRES;
+    let (street_x, start_z, frames_flown) = if frame < FAST_TRAVEL_FRAME {
+        let centre = settlement_centre(CAMERA_SETTLEMENT);
+        let start_z = centre.z + SETTLEMENT_HALF_SIZE_METRES + APPROACH_METRES;
+        (centre.x - BLOCK_PITCH_METRES / 2.0, start_z, frame)
+    } else {
+        let centre = settlement_centre(FAST_TRAVEL_SETTLEMENT);
+        let frames_flown = frame - FAST_TRAVEL_FRAME;
+        (centre.x - BLOCK_PITCH_METRES / 2.0, centre.z, frames_flown)
+    };
     let position = glam::dvec3(
         street_x,
         CAMERA_HEIGHT_METRES,
-        start_z - CAMERA_METRES_PER_FRAME * f64::from(frame),
+        start_z - CAMERA_METRES_PER_FRAME * f64::from(frames_flown),
     );
     let gaze = glam::dvec3(0.0, -CAMERA_HEIGHT_METRES, -GAZE_METRES);
-    Camera::looking_at(position, position + gaze)
+    Camera {
+        teleported: frame == FAST_TRAVEL_FRAME,
+        ..Camera::looking_at(position, position + gaze)
+    }
 }
 
 /// Spawns 10,000 birds in flocks about the camera's first position, each
@@ -600,6 +614,50 @@ mod tests {
     use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
     use crate::scenes::ReferenceScene;
     use crate::streaming::distance_metres;
+
+    /// The jumps of `path`, frame by frame from 0 to `frames`: each frame
+    /// that teleported and how far it jumped. Every other frame flies
+    /// 50 m/s at 60 Hz.
+    fn jumps(path: fn(u32) -> Camera, frames: u32) -> Vec<(u32, f64)> {
+        assert!(!path(0).teleported);
+        let mut jumps = Vec::new();
+        for frame in 1..frames {
+            let (before, camera) = (path(frame - 1), path(frame));
+            let metres = before.position.distance(camera.position);
+            if camera.teleported {
+                jumps.push((frame, metres));
+            } else {
+                assert!(
+                    (metres - 50.0 / 60.0).abs() < 1e-6,
+                    "frame {frame} flew {metres} m"
+                );
+            }
+        }
+        jumps
+    }
+
+    fn over_a_settlement(position: glam::DVec3) -> bool {
+        (0..SETTLEMENTS_PER_SIDE).any(|column| {
+            (0..SETTLEMENTS_PER_SIDE).any(|row| {
+                let centre = settlement_centre([column, row]);
+                (position.x - centre.x).abs() < 377.0 && (position.z - centre.z).abs() < 377.0
+            })
+        })
+    }
+
+    #[test]
+    fn the_bench_path_flies_into_a_settlement_over_farmland_then_fast_travels_into_another() {
+        // The bench path's 60 s at 60 Hz.
+        let [(jump_frame, jump_metres)] = jumps(camera_at, 60 * 60)[..] else {
+            panic!("the bench path jumps other than once");
+        };
+        // Past twice the 512 m hold radius, so no Chunk stays loaded.
+        assert!(jump_metres > 1024.0, "{jump_metres} m");
+        assert!(over_a_settlement(camera_at(599).position));
+        let before = camera_at(jump_frame - 1).position;
+        assert!(!over_a_settlement(before), "{before}");
+        assert!(over_a_settlement(camera_at(jump_frame).position));
+    }
 
     /// From a camera anywhere on a 64 m grid, the static Instances of the
     /// Chunks within the Load radius fit the static TLAS, and those within

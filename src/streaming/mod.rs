@@ -228,6 +228,18 @@ impl ChunkStreamer {
     }
 }
 
+impl ChunkStreamer {
+    /// The Chunks within the hold radius of `camera`: the most it requests
+    /// or keeps from there.
+    pub(crate) fn within_hold_radius(&self, camera: DVec3) -> impl Iterator<Item = [i32; 2]> + '_ {
+        let hold_radius_metres = self.load_radius_metres + CHUNK_EDGE_METRES;
+        chunks_within(camera, hold_radius_metres, &self.bounds).filter(move |coordinates| {
+            self.chunks.contains(coordinates)
+                && distance_metres(camera, *coordinates) <= hold_radius_metres
+        })
+    }
+}
+
 /// The horizontal distance from `camera` to the nearest point of the Chunk
 /// at `coordinates`.
 pub(crate) fn distance_metres(camera: DVec3, [x, z]: [i32; 2]) -> f64 {

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::camera::Camera;
 use crate::gpu::GpuContext;
 use crate::render::{FRAMES_IN_FLIGHT, RenderSwitches};
 use crate::scenes::ReferenceScene;
@@ -118,6 +119,7 @@ pub fn capture(
         context,
         scene,
         shift,
+        &|frame| scene.camera_at(frame, shift),
         width,
         height,
         0..FRAME_COUNT,
@@ -164,6 +166,7 @@ pub fn capture_frames(
         context,
         scene,
         shift,
+        &|frame| scene.camera_at(frame, shift),
         width,
         height,
         drawn,
@@ -179,21 +182,26 @@ pub fn capture_frames(
     Ok(pixels)
 }
 
-/// Renders `scene` as `capture` does, drawing each of `drawn`, in ascending
-/// order, after the World runs undrawn through the frames before it, each
-/// frame advancing by `frame_delta`. Returns the pixels of each of
-/// `read_back`, which `drawn` holds, with each drawn frame's stats and the
-/// scene's content hash, from the Blobs it loaded. Up to
-/// `FRAMES_IN_FLIGHT` frames are in flight, as a window's swapchain allows:
-/// the GPU stays busy, and the CPU never runs further ahead than a window
-/// would. The CPU waits for the oldest frame as `wait` says, and on each
-/// drawn frame `settled` holds for the Chunk streamer to report it Settled;
-/// a load that fails on such a frame fails the render.
+/// Renders `scene` as `capture` does, with its camera at `camera_at` each
+/// frame of its path, drawing each of `drawn`, in ascending order, after the
+/// World runs undrawn through the frames before it, each frame advancing by
+/// `frame_delta`. While the Chunk streamer holds after the camera arrives,
+/// the path pauses: its frame is drawn again until the hold ends. Returns
+/// the pixels of each of `read_back`, which `drawn` holds, as the hold left
+/// them, with the stats of each frame rendered, held ones included, and the
+/// scene's content hash, from the Blobs it loaded. Up to `FRAMES_IN_FLIGHT`
+/// frames are in flight, as a window's swapchain allows: the GPU stays busy,
+/// and the CPU never runs further ahead than a window would. The CPU waits
+/// for the oldest frame as `wait` says, and on each drawn frame `settled`
+/// holds for the Chunk streamer to report it Settled; a load that fails on
+/// such a frame fails the render. A dev launch cooks the Chunks that the
+/// other drawn frames reach before the first frame.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn render_frames(
     context: &GpuContext,
     scene: ReferenceScene,
     shift: glam::DVec3,
+    camera_at: &dyn Fn(u32) -> Camera,
     width: u32,
     height: u32,
     drawn: impl IntoIterator<Item = u32>,
@@ -234,48 +242,53 @@ pub(crate) fn render_frames(
     });
     let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
     let mut pixels = Vec::with_capacity(read_back.len());
-    let drawn = drawn.into_iter();
-    let mut frame_stats = Vec::with_capacity(drawn.size_hint().0);
+    let drawn: Vec<u32> = drawn.into_iter().collect();
+    let streamed = drawn.iter().filter(|&&frame| !settled.contains(&frame));
+    (state.streaming).cook_ahead(streamed.map(|&frame| camera_at(frame).position))?;
+    let mut frame_stats = Vec::with_capacity(drawn.len());
     let mut in_flight = std::collections::VecDeque::with_capacity(FRAMES_IN_FLIGHT);
     let mut next_frame = 0;
     for frame in drawn {
         for undrawn in next_frame..frame {
-            state
-                .simulation
-                .world
-                .insert_resource(scene.camera_at(undrawn, shift));
+            state.simulation.world.insert_resource(camera_at(undrawn));
             state.simulation.simulate(frame_delta);
         }
         next_frame = frame + 1;
-        if in_flight.len() == FRAMES_IN_FLIGHT {
-            let oldest = in_flight.pop_front();
-            let timeout = match wait {
-                FrameWait::Block => None,
-                FrameWait::Spin => Some(Duration::ZERO),
-            };
-            loop {
-                match context.device.poll(wgpu::PollType::Wait {
-                    submission_index: oldest.clone(),
-                    timeout,
-                }) {
-                    Ok(_) => break,
-                    Err(wgpu::PollError::Timeout) => std::hint::spin_loop(),
-                    Err(error) => return Err(error.into()),
+        state.simulation.world.insert_resource(camera_at(frame));
+        for held_frames in 0.. {
+            anyhow::ensure!(
+                held_frames < MAX_HELD_FRAMES,
+                "the Chunk streamer held frame {frame} of the camera path for {MAX_HELD_FRAMES} frames"
+            );
+            if in_flight.len() == FRAMES_IN_FLIGHT {
+                let oldest = in_flight.pop_front();
+                let timeout = match wait {
+                    FrameWait::Block => None,
+                    FrameWait::Spin => Some(Duration::ZERO),
+                };
+                loop {
+                    match context.device.poll(wgpu::PollType::Wait {
+                        submission_index: oldest.clone(),
+                        timeout,
+                    }) {
+                        Ok(_) => break,
+                        Err(wgpu::PollError::Timeout) => std::hint::spin_loop(),
+                        Err(error) => return Err(error.into()),
+                    }
                 }
             }
+            if settled.contains(&frame) {
+                state.update_settled(frame_delta)?;
+            } else {
+                state.update(frame_delta);
+            }
+            in_flight.push_back(state.render(&target_view));
+            frame_stats.push(state.frame_stats());
+            add_gpu_stats(&mut frame_stats, &state);
+            if !frame_stats.last().is_some_and(|stats| stats.holding) {
+                break;
+            }
         }
-        state
-            .simulation
-            .world
-            .insert_resource(scene.camera_at(frame, shift));
-        if settled.contains(&frame) {
-            state.update_settled(frame_delta)?;
-        } else {
-            state.update(frame_delta);
-        }
-        in_flight.push_back(state.render(&target_view));
-        frame_stats.push(state.frame_stats());
-        add_gpu_stats(&mut frame_stats, &state);
         if read_back.contains(&frame) {
             pixels.push(self::read_back(context, &target)?);
         }
@@ -288,6 +301,10 @@ pub(crate) fn render_frames(
     add_gpu_stats(&mut frame_stats, &state);
     Ok((pixels, frame_stats, state.scene_content_hash()))
 }
+
+/// A minute of frames at 60 Hz: a hold past it fails the render, as a load
+/// that never finishes would hold for ever.
+const MAX_HELD_FRAMES: u32 = 3600;
 
 /// How `render_frames` waits for the oldest frame in flight.
 #[derive(Clone, Copy)]
@@ -504,6 +521,59 @@ mod tests {
             paused[WARM_UP_FRAMES..],
             "heap allocations per frame, retired between frames {retired:?}, left finished with pauses before submitting {paused:?}"
         );
+    }
+
+    /// The camera jumps 4 km away from the scene's one Chunk, which
+    /// unloads, then jumps back: a load that does not wait finishes on a
+    /// later frame, so the hold lasts a frame at least.
+    #[test]
+    fn a_fast_travel_pauses_the_camera_path_until_its_hold_ends() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::UvGrid;
+        let path_frames_asked = std::cell::RefCell::new(Vec::new());
+        let camera_at = |frame: u32| {
+            path_frames_asked.borrow_mut().push(frame);
+            let camera = scene.camera_at(frame, glam::DVec3::ZERO);
+            let away = glam::DVec3::X * if frame == 1 { 4096.0 } else { 0.0 };
+            Camera {
+                position: camera.position + away,
+                teleported: frame == 1 || frame == 2,
+                ..camera
+            }
+        };
+        let (_, frames, _) = render_frames(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            &camera_at,
+            64,
+            36,
+            0..4,
+            &[],
+            scene.frame_delta(),
+            RenderSwitches::default(),
+            FrameWait::Block,
+            ..1,
+        )
+        .expect("the scene renders");
+        let path_frames_asked = path_frames_asked.into_inner();
+        assert_eq!(
+            path_frames_asked[path_frames_asked.len() - 4..],
+            [0, 1, 2, 3]
+        );
+        let holding: Vec<bool> = frames.iter().map(|stats| stats.holding).collect();
+        let held = holding.iter().filter(|&&holding| holding).count();
+        assert!(held > 0);
+        let mut expected = vec![false; 4 + held];
+        expected[2..2 + held].fill(true);
+        assert_eq!(holding, expected);
+        let holds_ended: Vec<usize> = (frames.iter().enumerate())
+            .filter(|(_, stats)| stats.fast_travel_hold.is_some())
+            .map(|(frame, _)| frame)
+            .collect();
+        assert_eq!(holds_ended, [1, 2 + held]);
     }
 
     #[test]

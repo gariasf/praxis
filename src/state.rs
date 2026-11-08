@@ -277,6 +277,8 @@ impl State {
         self.recorder.counters.uploaded_bytes += streamed.written_bytes;
         self.recorder.counters.pool_entries_freed = streamed.pool_entries_freed;
         self.recorder.counters.late_mips = streamed.late_mips;
+        self.recorder.counters.holding = streamed.holding;
+        self.recorder.counters.fast_travel_hold = streamed.fast_travel_hold;
         self.recorder.stage("stream_chunks", started);
 
         let started = Instant::now();

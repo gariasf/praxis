@@ -170,6 +170,10 @@ _Avoid_: Pop-in, streaming miss
 A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
 _Avoid_: Missing mip, texture pop
 
+**Fast travel**:
+A teleport of the camera. The Chunk streamer holds until every Chunk within the Load radius has loaded, the camera path pauses until then, and the bench measures the hold from the jump. None of its Chunks is a Late Chunk.
+_Avoid_: Warp, jump
+
 **View distance**:
 How far from the camera the Game world is drawn: 2 km at target scale (ADR 0013), never less than the Load radius.
 _Avoid_: Draw distance, far plane (depth has none, ADR 0015), LOD distance

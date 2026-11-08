@@ -26,6 +26,9 @@ pub struct Camera {
     /// Its exposure as an EV100, which each Reference scene sets by hand
     /// (ADR 0023).
     pub ev100: f32,
+    /// Whether it arrived at `position` without travelling, as a Fast
+    /// travel does, since Chunk streaming last ran, which clears it.
+    pub teleported: bool,
 }
 
 impl Camera {
@@ -38,6 +41,7 @@ impl Camera {
             sensitivity: 0.003,
             // Sunny 16: a sunny day's exposure.
             ev100: 15.0,
+            teleported: false,
         }
     }
 
