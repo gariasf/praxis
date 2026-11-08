@@ -842,7 +842,7 @@ impl DynamicTlas {
         // wgpu-core creates a scratch buffer for each build as the encoder
         // finishes [ref:wgpu-30-tlas-scratch-per-build] (gfx-rs/wgpu#10881), and on
         // Vulkan and DX12 gpu-allocator's chunk map, keyed under a random hash
-        // seed, grows in whichever frame its deleted entries run out
+        // seed, grows in whichever frame its tombstones use up its growth room
         // [ref:gpu-allocator-0.28-chunk-map] [ref:hashbrown-0.16-rehash-grows],
         // so what this finish allocates is counted apart as well.
         let command_buffer = crate::stats::counting_as_tlas_build(|| encoder.finish());
