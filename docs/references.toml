@@ -4212,6 +4212,12 @@ section = "wgpu-core 30.0.1, device/queue.rs, Queue::submit: every submission en
 quote = '''// This will schedule destruction of all resources that are no longer needed // by the user but used in the command stream, among other things. // `device.maintain` consumes and will release the snatch guard. let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);'''
 checked = 2026-11-01
 
+["wgpu-30-poll-retires"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L793-L798"
+section = "wgpu-core 30.0.1, device/resource.rs, Device::poll_and_return_closures and maintain: a poll maintains the device as a submission does, with PollType::Poll waiting for nothing (L863) before the queue retires the submissions the GPU finished (L917), whose encoders return to the pool"
+quote = '''let maintain_result = self.maintain(poll_type, snatch_guard); [...] wgt::PollType::Poll => None, [...] let queue_result = queue.maintain(current_finished_submission, &snatch_guard);'''
+checked = 2026-11-08
+
 ["wgpu-hal-30-metal-command-state"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L432-L441"
 section = "wgpu-hal 30.0.1, metal/command.rs, CommandState::reset: an encoder's per-pipeline and per-binding state is cleared for reuse, keeping what it allocated"

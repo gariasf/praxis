@@ -290,6 +290,10 @@ pub struct Renderer {
     /// `render` takes it to record the frame's passes and submit them.
     frame_encoder: Option<wgpu::CommandEncoder>,
     gpu_stats: GpuStatsReadback,
+    /// How long `render` waits before it submits the frame's encoder, so
+    /// the GPU can finish the frame's earlier submissions first.
+    #[cfg(test)]
+    pub(crate) pause_before_frame_submit: std::time::Duration,
 }
 
 impl Renderer {
@@ -553,6 +557,8 @@ impl Renderer {
             frame_staging,
             frame_encoder: None,
             gpu_stats,
+            #[cfg(test)]
+            pause_before_frame_submit: std::time::Duration::ZERO,
         }
     }
 
@@ -593,11 +599,18 @@ impl Renderer {
     /// copies of `frame`'s uniforms, the camera's with the static TLAS's
     /// Anchor, the Instances it writes, its bends and its Instance slot
     /// count, if it changed, into the frame's encoder, which `render` submits; every
-    /// upload is followed by a render. First it submits the loads staged
-    /// since the last frame, and, when they loaded Meshes, waits for the GPU
-    /// to build their BLASes and to compact them.
+    /// upload is followed by a render. First it retires the frames the GPU
+    /// has finished [ref:wgpu-30-poll-retires], so which encoder records what
+    /// never depends on which of this frame's submissions would have found
+    /// them finished; then it submits the loads staged since the last frame,
+    /// and, when they loaded Meshes, waits for the GPU to build their BLASes
+    /// and to compact them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
+        // wgpu reuses the encoder retired last, so retire before taking any.
+        if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
+            tracing::error!(%error, "retiring finished frames failed");
+        }
         debug_assert!(
             self.frame_encoder.is_none(),
             "an upload whose frame was not rendered"
@@ -869,6 +882,8 @@ impl Renderer {
         }
         recorder.stage(DYNAMIC_TLAS_SUBMIT, started);
 
+        #[cfg(test)]
+        std::thread::sleep(self.pause_before_frame_submit);
         let started = Instant::now();
         let submission = self.queue.submit(std::iter::once(command_buffer));
         recorder.stage("submit", started);

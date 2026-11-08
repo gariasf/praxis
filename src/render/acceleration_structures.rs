@@ -846,7 +846,10 @@ impl DynamicTlas {
     /// one: called before the frame creates its own. A new encoder reuses
     /// the encoder the GPU finished with last [ref:wgpu-30-command-encoder-pool],
     /// and a frame submits the dynamic TLAS's build before its passes, so the
-    /// build's encoder is released first. Created in this order, when no
+    /// build's encoder is released first. `Renderer::upload` retires the
+    /// finished frames before it calls this, so both are back in the pool
+    /// even when the passes' submission retired the build before them.
+    /// Created in this order, when no
     /// other submission takes an encoder, the two swap roles every frame, so
     /// every encoder the frames reuse records the frame's passes within its
     /// first two frames, and the state Metal keeps per encoder, which grows

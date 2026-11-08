@@ -322,6 +322,13 @@ impl State {
         self.renderer.frames_completed()
     }
 
+    /// Makes each `render` wait `pause` before it submits the frame's
+    /// encoder, after the frame's earlier submissions.
+    #[cfg(test)]
+    pub(crate) fn pause_before_frame_submit(&mut self, pause: Duration) {
+        self.renderer.pause_before_frame_submit = pause;
+    }
+
     /// The GPU stats of earlier frames that the last `update` or
     /// `flush_gpu_frame_stats` read back, by frame number, counted from 0.
     pub fn gpu_frame_stats(&self) -> &[GpuFrameStats] {
