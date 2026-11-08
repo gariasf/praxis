@@ -647,10 +647,10 @@ impl MeshPool {
     /// after `compact_blas`'s copy on any backend, and Metal has no
     /// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
     /// its compacted BLAS, or the one built where compaction failed, as
-    /// logged.
-    pub fn compact_blases(&mut self, queue: &wgpu::Queue) {
+    /// logged. Returns whether it waited.
+    pub fn compact_blases(&mut self, queue: &wgpu::Queue) -> bool {
         if self.awaiting_compaction.is_empty() {
-            return;
+            return false;
         }
         for &(handle, _) in &self.awaiting_compaction {
             if let Some(blas) = &self.blases[handle.index as usize] {
@@ -684,6 +684,7 @@ impl MeshPool {
         if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
             tracing::error!(%error, "waiting for BLAS compaction failed");
         }
+        true
     }
 
     /// The BLAS of `handle`'s Mesh, or None when the pool has no such Mesh

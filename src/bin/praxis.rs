@@ -455,8 +455,8 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
     })
 }
 
-/// Benches the named Reference scenes, or with none every scene but `world`
-/// whose assets are present, prints one line per scene, and writes
+/// Benches the named Reference scenes, or with none every scene whose
+/// assets are present, prints one line per scene, and writes
 /// `<scene>.json` into `output`. A crowd form other than the default
 /// benches `crowd` alone, written as `crowd-<form>.json`. With `publish`,
 /// the results then join the Bench history, as the `experiment` named; a
@@ -486,7 +486,6 @@ fn bench(
         ReferenceScene::ALL
             .into_iter()
             .filter(|&scene| scene != ReferenceScene::Helmet || helmet_fetched)
-            .filter(|&scene| scene != ReferenceScene::World)
             .collect()
     } else {
         scene_names

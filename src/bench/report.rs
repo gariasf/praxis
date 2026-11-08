@@ -5,14 +5,20 @@ use std::fmt::Write;
 
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 
-use super::{Budgets, COUNTER_COUNT, Measurements, Spread, compared_counters, ensure_comparable};
+use super::{
+    Budgets, COUNTER_COUNT, Measurements, Spread, compared_counters, compares_counter_frames,
+    ensure_comparable,
+};
 
 /// `current`'s times and counters, its aliasing among them when it was
 /// measured, as markdown tables, each against its `baseline`, when there is
 /// one, and the Budgets. Times compare only with a Baseline of as many
 /// frames on the same adapter, whatever its backend, though `compare` also
 /// requires the backend, each pass with the Baseline's pass of its name; counters compare
-/// as `compare` reads them. A Baseline of another scene, profile, size or
+/// as `compare` reads them. A run whose measured frames streamed also shows
+/// what they streamed: Late Chunks, late mips, Chunks loaded, the Fast
+/// travel's hold, the frames until traced and the longest wait on BLAS
+/// compaction, or none. A Baseline of another scene, profile, size or
 /// counter frames is refused.
 pub fn report(
     current: &Measurements,
@@ -42,7 +48,7 @@ pub fn report(
                 baseline.measured_frames, baseline.adapter
             )?;
         }
-        if baseline.measured_frames != current.measured_frames {
+        if compares_counter_frames(current, baseline) {
             write!(
                 report,
                 "; counters of frames {:?}",
@@ -94,9 +100,15 @@ pub fn report(
         let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
         (format!("`{pass}`"), time, baseline_time, budget)
     });
+    let blas_compaction = current.blas_compaction_microseconds.map(|time| {
+        let baseline_time =
+            times_baseline.and_then(|baseline| baseline.blas_compaction_microseconds);
+        ("BLAS compaction".to_owned(), time, baseline_time, None)
+    });
     let times = frame_times
         .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
         .into_iter()
+        .chain(blas_compaction)
         .chain(pass_times);
     for (name, time, baseline_time, budget) in times {
         let compared = match baseline_time {
@@ -201,6 +213,43 @@ pub fn report(
             grouped(value, 0)
         )?;
     }
+
+    let streamed = &current.counters;
+    if streamed.streamed() {
+        report.push_str(
+            "\n| Streamed, measured frames | Value |\n\
+             |---|---:|\n",
+        );
+        let hold = current.fast_travel_hold;
+        let rows = [
+            ("Late Chunks", Some(streamed.late_chunks as f64), 0),
+            ("Late mips", Some(streamed.late_mips as f64), 0),
+            ("Chunks loaded", Some(streamed.chunks_loaded as f64), 0),
+            (
+                "Fast-travel hold, ms",
+                hold.map(|hold| hold.milliseconds),
+                1,
+            ),
+            (
+                "Fast-travel hold, frames",
+                hold.map(|hold| f64::from(hold.frames)),
+                0,
+            ),
+            (
+                "Frames until traced, most",
+                current.frames_until_traced.map(f64::from),
+                0,
+            ),
+        ];
+        for (name, value, decimals) in rows {
+            let value = value.map_or("—".to_owned(), |value| grouped(value, decimals));
+            writeln!(report, "| {name} | {value} |")?;
+        }
+        let compaction = (current.blas_compaction_microseconds)
+            .and_then(|waits| waits.maximum)
+            .map_or("none".to_owned(), |most| grouped(most, 1));
+        writeln!(report, "| BLAS compaction, most µs | {compaction} |")?;
+    }
     Ok(report)
 }
 
@@ -247,7 +296,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::bench::{Aliasing, CounterFrames, Counters, Spread};
+    use crate::bench::{Aliasing, CounterFrames, Counters, FastTravelHold, Spread};
     use crate::stats::GpuMemoryBudgets;
 
     const COUNTERS: Counters = Counters {
@@ -335,6 +384,9 @@ mod tests {
                 frames: 8..72,
                 counters,
             },
+            fast_travel_hold: None,
+            frames_until_traced: None,
+            blas_compaction_microseconds: None,
             aliasing: None,
             provenance: None,
         }
@@ -470,6 +522,55 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
                 "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
             ]
         );
+    }
+
+    #[test]
+    fn a_streamed_run_shows_what_it_streamed_and_compares_its_counter_frames() {
+        let mut streamed = current();
+        streamed.counters.chunks_loaded = 120;
+        streamed.counters.late_mips = 1234;
+        streamed.counter_frames.counters.heap_allocations = 310;
+        streamed.fast_travel_hold = Some(FastTravelHold {
+            milliseconds: 412.34,
+            frames: 25,
+        });
+        streamed.frames_until_traced = Some(3);
+        streamed.blas_compaction_microseconds = Some(tailed(850.0, 1900.0, 2400.0, 3100.0));
+        let mut baseline_streamed = baseline();
+        baseline_streamed.counters.chunks_loaded = 118;
+        let report = report(&streamed, Some(&baseline_streamed), &BUDGETS).expect("comparable");
+        let names = [
+            "BLAS compaction",
+            "`heap_allocations`",
+            "Late Chunks",
+            "Late mips",
+            "Chunks loaded",
+            "Fast-travel hold, ms",
+            "Fast-travel hold, frames",
+            "Frames until traced, most",
+            "BLAS compaction, most µs",
+        ];
+        assert_eq!(
+            lines(&report, &names),
+            [
+                "**helmet** on Apple M4 Pro, release, 2560x1440, 1800 measured frames; counters \
+                 of frames 8..72",
+                "| BLAS compaction | 850.0 | 1,900.0 | 2,400.0 | 3,100.0 | — | — | — | — | — |",
+                "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
+                "| Late Chunks | 0 |",
+                "| Late mips | 1,234 |",
+                "| Chunks loaded | 120 |",
+                "| Fast-travel hold, ms | 412.3 |",
+                "| Fast-travel hold, frames | 25 |",
+                "| Frames until traced, most | 3 |",
+                "| BLAS compaction, most µs | 3,100.0 |",
+            ]
+        );
+        streamed.blas_compaction_microseconds = None;
+        let report = super::report(&streamed, None, &BUDGETS).expect("no Baseline to refuse");
+        assert!(report.contains("| BLAS compaction, most µs | none |"));
+        let still = super::report(&current(), Some(&baseline()), &BUDGETS).expect("comparable");
+        assert!(!still.contains("Late Chunks"));
     }
 
     #[test]

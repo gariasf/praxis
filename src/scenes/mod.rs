@@ -25,7 +25,7 @@ use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::{PreviousWorldTransform, Teleported};
 
 mod town;
-mod world;
+pub(crate) mod world;
 
 pub(crate) use town::spawn_town;
 pub(crate) use world::spawn_world;

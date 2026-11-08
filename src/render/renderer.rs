@@ -65,6 +65,10 @@ pub(crate) const STATIC_TLAS_UPDATE: &str = "static_tlas_update";
 /// The CPU stage that submits the dynamic TLAS's build, on its own.
 pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 
+/// The CPU stage that waits for newly loaded Meshes' BLASes to build and
+/// compact, recorded only on frames that wait.
+pub(crate) const BLAS_COMPACTION: &str = "blas_compaction";
+
 /// The Render switches a Renderer is created with and keeps. The defaults are
 /// what ships; capture and bench take others, for equivalence checks and
 /// A/Bs.
@@ -619,7 +623,12 @@ impl Renderer {
         // draws, and their BLASes are compacted before the static TLAS
         // takes them.
         recorder.counters.uploaded_bytes += self.load_staging.submit(&self.queue);
-        self.mesh_pool.compact_blases(&self.queue);
+        let compacting = Instant::now();
+        let compaction_time = if self.mesh_pool.compact_blases(&self.queue) {
+            recorder.stage(BLAS_COMPACTION, compacting)
+        } else {
+            std::time::Duration::ZERO
+        };
         // Before the frame's encoder, as `prepare_encoder` says; it counts
         // as the dynamic TLAS's recording.
         let preparing = Instant::now();
@@ -647,7 +656,7 @@ impl Renderer {
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
             self.dynamic_tlas.fill(frame, &self.mesh_pool, tlas_anchor);
         let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
-        let started = started + prepare_time + update_time + fill_time;
+        let started = started + compaction_time + prepare_time + update_time + fill_time;
         let camera = CameraUniform {
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.

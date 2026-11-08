@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; Chunks &middot; <code>src/streaming/mips.rs</code></div>
   <h1>Mip streaming</h1>
   <p class="definition">The mechanism that brings a <span class="concept" data-term="Texture" data-tip="One Channel's image with its mips. A Layer refers to one Texture.">Texture</span>'s mips finer than its <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span> into GPU memory as the camera nears: each frame it finds the finest mip any drawn <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#39;s, if any.">Placement</span> of a loaded Chunk needs, from its distance and its Primitive's UV texel density, requests the missing mips from the IO pool finest-needed first, and moves each Texture whose mips arrive to the <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span> of its new finest mip, first evicting the finest mip of the lowest-priority Texture when its Channel has no room for that class; the mips a frame needs and lacks are its <span class="concept" data-term="Late mip" data-tip="A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.">late mips</span>.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 752fa6c7 (2026-11-08), with mip streaming as the floor for rays leaves it. A change to mip streaming rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-texture.html#blob">Texture cooking</a> for the Blob, the Resident tail and the Texture classes a load writes into; <a href="chunk-streamer.html">The Chunk streamer</a> for the IO pool and Settled frames.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 88941ee2 (2026-11-08), with mip streaming as the world's bench segment leaves it. A change to mip streaming rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-texture.html#blob">Texture cooking</a> for the Blob, the Resident tail and the Texture classes a load writes into; <a href="chunk-streamer.html">The Chunk streamer</a> for the IO pool and Settled frames.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -285,7 +285,7 @@ loaded.placement.chain = coarser_chain;</code></pre>
 <section class="part prose" id="settled">
   <div class="part-mark">6 &middot; <code>MipStreaming::stream</code></div>
   <h2>Settled frames and late mips</h2>
-  <p class="key-idea">A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames before the counter frames; a window never waits for one.">Settled frame</span> waits until no mip request is in flight, and while settling applies arrivals only once nothing at all is in flight, in that same order, so which slices and classes Textures take never depends on the IO pool's timing. The late mips a frame counts are, per Texture, how many mips its need is finer than its finest Resident one.</p>
+  <p class="key-idea">A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.">Settled frame</span> waits until no mip request is in flight, and while settling applies arrivals only once nothing at all is in flight, in that same order, so which slices and classes Textures take never depends on the IO pool's timing. The late mips a frame counts are, per Texture, how many mips its need is finer than its finest Resident one.</p>
 <pre class="code"><code>if !self.settle {
     self.io.receive();
     self.apply(streamed);
@@ -299,7 +299,7 @@ if !settle || (frame.settled &amp;&amp; mips_settled) {
     return Ok(streamed);
 }</code></pre>
   <p class="code-source"><code>ChunkStreaming::update</code>, <code>src/streaming/io.rs</code>.</p>
-  <p>A Settled frame's Textures therefore hold every mip its Placements need from the camera, by a footprint no larger than any pixel's of a 1440p view, and a capture smaller than that samples no finer: the Goldens render bit-exact against images drawn with every mip loaded. A window never waits, nor the bench from its counter frames on, so a mip that is late shows as its coarser mips, magnified, until it arrives.</p>
+  <p>A Settled frame's Textures therefore hold every mip its Placements need from the camera, by a footprint no larger than any pixel's of a 1440p view, and a capture smaller than that samples no finer: the Goldens render bit-exact against images drawn with every mip loaded. A window never waits, nor the bench after its counter frames, so a mip that is late shows as its coarser mips, magnified, until it arrives.</p>
 </section>
 
 <section class="part prose" id="tests">
@@ -325,7 +325,7 @@ if !settle || (frame.settled &amp;&amp; mips_settled) {
 <section class="part prose" id="cost">
   <div class="part-mark">8 &middot; <code>praxis bench</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">No Baseline measures a streaming frame: the bench settles its frames before the counter frames, so every Reference scene's Textures have finished streaming by then, and every counter equals its Baseline on every scene. A frame with nothing to stream costs a pass over the loaded Chunks' uses.</p>
+  <p class="key-idea">One Baseline times streaming frames, the world's on the M4 Pro: its 3,352 measured frames load 42 Chunks and count 65 late mips, which <code>praxis report</code> shows and <code>compare</code> does not judge; <code>compare</code> judges a run against a Baseline whose measured frames stream by its counter frames, which are Settled. A frame with nothing to stream costs a pass over the loaded Chunks' uses.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th><code>texture-wall</code>, CPU frame median</th><th class="n">Round 1, &micro;s</th><th class="n">Round 2, &micro;s</th><th class="n">Round 3, &micro;s</th><th class="n">Round 4, &micro;s</th></tr></thead>
@@ -379,7 +379,7 @@ if !settle || (frame.settled &amp;&amp; mips_settled) {
   </dl>
   <h3>History</h3>
   <p class="note">Textures first loaded every mip at once, then their Resident tails first, moved to their whole chains' classes in the same load, with a Render switch that held every Texture to its tail. The Mesh Blob gained each Primitive's UV texel density for a priority not yet computed. Mip streaming then split the two steps across frames: a Chunk's Textures arrive as their tails, and the mips their Placements need follow by priority, with the late mips counted. Eviction followed, so that a move into a full Channel takes a finest mip from a Texture that needs it less. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/streaming/mips.rs</code>, <code>src/streaming/io.rs</code>, <code>src/assets/material.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/camera/mod.rs</code>, <code>src/state.rs</code>, the tests named above, <code>CONTEXT.md</code> and ADR 0017, all as this change leaves <code>main</code> at 92643f28.</footer>
+  <footer class="sources">Written from <code>src/streaming/mips.rs</code>, <code>src/streaming/io.rs</code>, <code>src/assets/material.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/camera/mod.rs</code>, <code>src/state.rs</code>, the tests named above, <code>CONTEXT.md</code> and ADR 0017, all as this change leaves <code>main</code> at 88941ee2.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="chunk-streamer.html">Previous: The Chunk streamer</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>

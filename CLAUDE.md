@@ -128,7 +128,7 @@ src/
                                  mips streamed after it, and
                                  ChunkStreaming, which the State runs each
                                  frame, Settled for captures and the
-                                 bench's frames before its counter
+                                 bench's frames through its counter
                                  frames, timing a Fast travel's hold;
                                  mips.rs, mip priority: the
                                  finest mip each streamed Texture needs

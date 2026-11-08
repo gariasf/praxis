@@ -22,9 +22,11 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::culling_pass::CullingPhase;
 use crate::render::main_pass::LIT_PASS;
 use crate::render::{
-    BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches, TIMED_PASSES,
+    BLAS_COMPACTION, BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches,
+    TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
+use crate::scenes::world::BENCH_SEGMENT_FRAMES;
 use crate::stats::{FrameStats, GpuFrameStats, GpuMemoryBudgets, GpuMemoryKind};
 use crate::time::SIXTY_HERTZ;
 
@@ -39,7 +41,8 @@ pub const BUDGETS_PATH: &str = "bench/budgets.json";
 
 /// A bench run's render size and frame counts. A run compares only with a
 /// Baseline of the same size: every metric when both measured as many
-/// frames, the counter frames' counters otherwise.
+/// frames, though counters on the counter frames where the Baseline's
+/// measured frames streamed, and the counter frames' counters otherwise.
 #[derive(Clone, Copy, Debug)]
 pub struct Configuration {
     pub width: u32,
@@ -93,6 +96,31 @@ impl Configuration {
         aliasing: Self::CI.aliasing,
         ..Self::COUNTERS
     };
+
+    /// This configuration for `scene`: the reference configuration runs the
+    /// world's bench segment, the warm-up included, which outlasts the
+    /// others' runs; any other is as it is.
+    pub fn for_scene(self, scene: ReferenceScene) -> Self {
+        let frames = |configuration: Self| {
+            let Self {
+                width,
+                height,
+                warm_up_frames,
+                measured_frames,
+                aliasing: _,
+            } = configuration;
+            (width, height, warm_up_frames, measured_frames)
+        };
+        let reference = frames(self) == frames(Self::REFERENCE);
+        if scene == ReferenceScene::World && reference {
+            Self {
+                measured_frames: BENCH_SEGMENT_FRAMES - self.warm_up_frames,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
 }
 
 /// The frames whose counters every run also records, whatever its length:
@@ -102,10 +130,11 @@ impl Configuration {
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
-/// The frames a run waits for the Chunk streamer to report Settled: the
-/// warm-up before the counter frames, so every scene has loaded before
-/// them whatever the IO pool's timing. Later frames stream as a game does.
-const SETTLED_FRAMES: std::ops::RangeTo<u32> = ..COUNTER_FRAMES.start;
+/// The frames a run waits for the Chunk streamer to report Settled: up to
+/// the end of the counter frames, so their counters repeat whatever the IO
+/// pool's timing, though the world streams in them. Later frames, which the
+/// reference and CI configurations time, stream as a game does.
+const SETTLED_FRAMES: std::ops::RangeTo<u32> = ..COUNTER_FRAMES.end;
 
 /// The Baseline directory of `adapter` on `backend`: the adapter's name in
 /// lowercase, each run of other characters a hyphen (`Apple M4 Pro` is
@@ -203,6 +232,16 @@ pub struct Measurements {
     #[serde(flatten)]
     pub counters: Counters,
     pub counter_frames: CounterFrames,
+    /// The measured frames' Fast travel, when one's hold ended in them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fast_travel_hold: Option<FastTravelHold>,
+    /// The most frames a newly loaded Chunk's Instances waited to be traced
+    /// in the measured frames, when a static TLAS build brought one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frames_until_traced: Option<u32>,
+    /// The waits for BLAS compaction, over the measured frames that waited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blas_compaction_microseconds: Option<Spread>,
     /// Measured unless the run skipped it.
     #[serde(flatten)]
     pub aliasing: Option<Aliasing>,
@@ -316,6 +355,25 @@ impl Counters {
             tlas_build_allocations: median(|stats| stats.tlas_build_allocations),
         }
     }
+
+    /// Whether the frames these count loaded or unloaded a Chunk or read a
+    /// byte.
+    pub(super) fn streamed(&self) -> bool {
+        self.chunks_loaded + self.chunks_unloaded + self.bytes_read > 0
+    }
+
+    /// The counters of refusals, each the most of any frame: one refusal on
+    /// any frame is a defect, whatever the IO pool's timing.
+    const REFUSALS: [&'static str; 8] = [
+        "instances_overflowed",
+        "renderables_refused",
+        "lights_overflowed",
+        "static_instances_left_out",
+        "moving_instances_left_out",
+        "bends_left_out",
+        "froxel_lights_overflowed",
+        "shadow_mask_lights_overflowed",
+    ];
 
     /// Each counter's name, as results and Bench records spell it.
     pub(super) const NAMES: [&'static str; COUNTER_COUNT] = [
@@ -478,6 +536,28 @@ pub struct CounterFrames {
     pub counters: Counters,
 }
 
+/// A Fast travel's hold: the longest time from a jump until every Chunk
+/// within the Load radius loaded, and the frames every hold took.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FastTravelHold {
+    pub milliseconds: f64,
+    pub frames: u32,
+}
+
+impl FastTravelHold {
+    /// The hold of the Fast travels whose holds ended in `frames`.
+    fn of(frames: &[FrameStats]) -> Option<Self> {
+        let longest = frames
+            .iter()
+            .filter_map(|stats| stats.fast_travel_hold)
+            .max()?;
+        Some(Self {
+            milliseconds: longest.as_secs_f64() * 1e3,
+            frames: frames.iter().filter(|stats| stats.holding).count() as u32,
+        })
+    }
+}
+
 /// A time's median, p95, p99 and maximum over frames, by nearest rank; the
 /// p99 and maximum are absent from Baselines and Bench records from before
 /// results carried them.
@@ -557,7 +637,8 @@ impl std::fmt::Display for Finding {
 
 /// Renders `scene` for `configuration`'s warm-up and measured frames, as
 /// `switches` set, and again with shadow rays off, and returns the measured
-/// frames' medians and p95s, and the counter frames' counters.
+/// frames' medians and p95s, and the counter frames' counters. The world's
+/// run lasts as `Configuration::for_scene` says.
 pub fn run(
     context: &GpuContext,
     scene: ReferenceScene,
@@ -565,6 +646,7 @@ pub fn run(
     switches: RenderSwitches,
     start: &BenchStart,
 ) -> anyhow::Result<Measurements> {
+    let configuration = configuration.for_scene(scene);
     let started = std::time::SystemTime::now();
     let busy_at_start = crate::preflight::busy_processes();
     let frame_count = configuration.warm_up_frames + configuration.measured_frames;
@@ -609,6 +691,15 @@ pub fn run(
     })
 }
 
+/// How a bench waits for the oldest frame in flight on `context`'s adapter:
+/// a software rasterizer's threads would share the CPU with the spin.
+fn frame_wait(context: &GpuContext) -> FrameWait {
+    match context.adapter.get_info().device_type {
+        wgpu::DeviceType::Cpu => FrameWait::Block,
+        _ => FrameWait::Spin,
+    }
+}
+
 /// Every frame's stats of one render of a `configuration` run of `scene` as
 /// `switches` set, and the scene's content hash.
 fn render_run(
@@ -617,11 +708,7 @@ fn render_run(
     configuration: Configuration,
     switches: RenderSwitches,
 ) -> anyhow::Result<(Vec<FrameStats>, String)> {
-    // A software rasterizer's threads would share the CPU with the spin.
-    let wait = match context.adapter.get_info().device_type {
-        wgpu::DeviceType::Cpu => FrameWait::Block,
-        _ => FrameWait::Spin,
-    };
+    let wait = frame_wait(context);
     let (_, frames, scene_content_hash) = render_frames(
         context,
         scene,
@@ -737,12 +824,9 @@ fn measure(
                 .collect(),
         ),
         shadow_ray_microseconds: spread(
-            measured_gpu
-                .iter()
-                .zip(measured_without_rays)
-                .map(|(with, without)| {
-                    microseconds(with.frame_time) - microseconds(without.frame_time)
-                })
+            path_frame_times(frames, warm_up_frames)
+                .zip(path_frame_times(frames_without_rays, warm_up_frames))
+                .map(|(with, without)| microseconds(with) - microseconds(without))
                 .collect(),
         ),
         lit_pass_wait_microseconds: Some(spread(
@@ -772,16 +856,42 @@ fn measure(
                 &frames[COUNTER_FRAMES.start as usize..COUNTER_FRAMES.end as usize],
             ),
         },
+        fast_travel_hold: FastTravelHold::of(measured),
+        frames_until_traced: (measured.iter())
+            .filter_map(|stats| stats.frames_until_traced)
+            .max(),
+        blas_compaction_microseconds: {
+            let waits: Vec<f64> = (measured.iter())
+                .flat_map(|stats| &stats.cpu_times)
+                .filter(|(stage, _)| stage == BLAS_COMPACTION)
+                .map(|&(_, time)| microseconds(time))
+                .collect();
+            (!waits.is_empty()).then(|| spread(waits))
+        },
         aliasing: None,
         provenance: None,
     })
+}
+
+/// The GPU frame times of `frames` after the first `warm_up_frames`, one a
+/// camera path frame: a frame drawn again while its path paused for a hold
+/// is left out, as the other run may hold for other frames.
+fn path_frame_times(
+    frames: &[FrameStats],
+    warm_up_frames: usize,
+) -> impl Iterator<Item = Duration> + '_ {
+    (warm_up_frames..frames.len())
+        .filter(|&index| index == 0 || !frames[index - 1].holding)
+        .filter_map(|index| frames[index].gpu.map(|gpu| gpu.frame_time))
 }
 
 /// One line, `key=value` pairs after the scene name: the CPU frame's
 /// median, p95, p99 and maximum, the dynamic TLAS's CPU median, the same
 /// four of the GPU frame and the gate, the median and p95 of shadow-ray time
 /// and, when measured, of the lit pass's wait, each pass's median, the
-/// counters, then the aliasing figures when measured.
+/// counters, the aliasing figures when measured, then the Fast travel's
+/// hold, the frames until traced and the BLAS compaction's waits, where the
+/// measured frames had them.
 impl std::fmt::Display for Measurements {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let write_spread = |formatter: &mut std::fmt::Formatter<'_>, spread: Spread| {
@@ -826,6 +936,20 @@ impl std::fmt::Display for Measurements {
         for (counter, value) in self.counters.named().into_iter().chain(aliasing) {
             write!(formatter, " {counter}={value}")?;
         }
+        if let Some(hold) = self.fast_travel_hold {
+            write!(
+                formatter,
+                " fast_travel_hold_ms={:.1} fast_travel_hold_frames={}",
+                hold.milliseconds, hold.frames
+            )?;
+        }
+        if let Some(frames) = self.frames_until_traced {
+            write!(formatter, " frames_until_traced={frames}")?;
+        }
+        if let Some(waits) = self.blas_compaction_microseconds {
+            write!(formatter, " blas_compaction_us")?;
+            write_spread(formatter, waits)?;
+        }
         Ok(())
     }
 }
@@ -839,9 +963,10 @@ impl std::fmt::Display for Measurements {
 /// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
 /// GPU memory in total and by kind; other p95s are reported only, as they
 /// move with one slow frame. Runs that measured as many frames compare their
-/// measured frames' counters; runs of other lengths compare their counter
-/// frames', and only with `CompareMode::Ci`, as their times cover other
-/// frames.
+/// measured frames' counters, unless the Baseline's measured frames streamed:
+/// then their counter frames', and the measured frames' refusals as well.
+/// Runs of other lengths compare their counter frames', and only with
+/// `CompareMode::Ci`, as their times cover other frames.
 pub fn compare(
     current: &Measurements,
     baseline: &Measurements,
@@ -860,6 +985,25 @@ pub fn compare(
                 verdict: Verdict::Fail,
                 detail: format!("{current} against Baseline {baseline}"),
             });
+        }
+    }
+    if current.measured_frames == baseline.measured_frames
+        && compares_counter_frames(current, baseline)
+    {
+        let measured = current.counters.named().into_iter();
+        let refusals = measured
+            .zip(baseline.counters.named())
+            .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
+        for ((metric, value), (_, baseline_value)) in refusals {
+            if value > baseline_value {
+                findings.push(Finding {
+                    metric,
+                    verdict: Verdict::Fail,
+                    detail: format!(
+                        "{value} in the measured frames against Baseline {baseline_value}"
+                    ),
+                });
+            }
         }
     }
     check_budget(
@@ -1046,10 +1190,12 @@ fn ensure_comparable(current: &Measurements, baseline: &Measurements) -> anyhow:
     Ok(())
 }
 
-/// The counters `current` and `baseline` compare: their measured frames'
-/// when both measured as many frames, their counter frames' otherwise.
+/// The counters `current` and `baseline` compare: their counter frames',
+/// which are Settled, as `compares_counter_frames` says, since counters
+/// repeat only where no load's timing moves them; their measured frames'
+/// otherwise.
 fn compared_counters(current: &Measurements, baseline: &Measurements) -> (Counters, Counters) {
-    if current.measured_frames == baseline.measured_frames {
+    if !compares_counter_frames(current, baseline) {
         (current.counters, baseline.counters)
     } else {
         (
@@ -1057,6 +1203,14 @@ fn compared_counters(current: &Measurements, baseline: &Measurements) -> (Counte
             baseline.counter_frames.counters,
         )
     }
+}
+
+/// Whether `current` and `baseline` compare their counter frames' counters
+/// rather than their measured frames': when they measured other lengths, or
+/// the Baseline's measured frames streamed. A run that streams where its
+/// Baseline did not compares its measured frames, and fails.
+fn compares_counter_frames(current: &Measurements, baseline: &Measurements) -> bool {
+    current.measured_frames != baseline.measured_frames || baseline.counters.streamed()
 }
 
 /// Judges `current`'s aliasing against `baseline`'s by the ratios times
@@ -1174,74 +1328,6 @@ mod tests {
     use super::*;
     use crate::render::readback::tests::RecordedFrame;
     use crate::stats::GpuFrameStats;
-    use crate::streaming::{ChunkIo, ChunkStreamer, FinishedLoad};
-
-    /// IO whose reads take as many frames as precede the counter frames,
-    /// unless a frame waits for them to settle.
-    #[derive(Default)]
-    struct SlowIo {
-        frame: u32,
-        in_flight: Vec<(u32, [i32; 2])>,
-    }
-
-    impl SlowIo {
-        fn finish_every_read_now(&mut self) {
-            for (finishes_on, _) in &mut self.in_flight {
-                *finishes_on = self.frame;
-            }
-        }
-    }
-
-    impl ChunkIo for SlowIo {
-        fn request(&mut self, coordinates: [i32; 2]) {
-            self.in_flight
-                .push((self.frame + COUNTER_FRAMES.start, coordinates));
-        }
-
-        fn take_finished(&mut self) -> Option<FinishedLoad> {
-            let position = self
-                .in_flight
-                .iter()
-                .position(|&(finishes_on, _)| finishes_on <= self.frame)?;
-            let (_, coordinates) = self.in_flight.remove(position);
-            Some(FinishedLoad {
-                coordinates,
-                assets: Vec::new(),
-            })
-        }
-    }
-
-    #[test]
-    fn after_a_settled_warm_up_no_reference_scene_but_the_world_streams_in_the_counter_frames() {
-        // The world's camera flies on, so it streams as a game does.
-        for scene in ReferenceScene::ALL
-            .into_iter()
-            .filter(|&scene| scene != ReferenceScene::World)
-        {
-            let mut streamer =
-                ChunkStreamer::new(scene.chunk_coordinates(), scene.load_radius_metres());
-            let mut io = SlowIo::default();
-            for frame in 0..COUNTER_FRAMES.end {
-                io.frame = frame;
-                let camera = scene.camera_at(frame, glam::DVec3::ZERO).position;
-                loop {
-                    let streamed = streamer.update(camera, false, &mut io);
-                    assert!(
-                        !COUNTER_FRAMES.contains(&frame)
-                            || (streamed.requested.is_empty()
-                                && streamed.loaded.is_empty()
-                                && streamed.unloaded.is_empty()),
-                        "{} streams in counter frame {frame}: {streamed:?}",
-                        scene.name()
-                    );
-                    if !SETTLED_FRAMES.contains(&frame) || streamed.settled {
-                        break;
-                    }
-                    io.finish_every_read_now();
-                }
-            }
-        }
-    }
 
     /// A Chunk requested on a frame that does not wait for it loads on a
     /// later frame at the earliest.
@@ -1267,14 +1353,26 @@ mod tests {
     }
 
     #[test]
-    fn every_configuration_settles_only_warm_up_frames_up_to_the_counter_frames() {
-        assert_eq!(SETTLED_FRAMES.end, COUNTER_FRAMES.start);
+    fn the_world_runs_its_bench_segment_in_the_reference_configuration_alone() {
+        let world = Configuration::REFERENCE.for_scene(ReferenceScene::World);
+        assert_eq!(world.warm_up_frames + world.measured_frames, 3600);
+        assert_eq!((world.width, world.height), (2560, 1440));
         for configuration in [
-            Configuration::REFERENCE,
             Configuration::CI,
             Configuration::COUNTERS,
             Configuration::CI_COUNTERS,
         ] {
+            let world = configuration.for_scene(ReferenceScene::World);
+            assert_eq!(world.measured_frames, configuration.measured_frames);
+        }
+        let town = Configuration::REFERENCE.for_scene(ReferenceScene::Town);
+        assert_eq!(town.measured_frames, 1800);
+    }
+
+    #[test]
+    fn the_counter_frames_are_settled_and_the_timed_configurations_measure_after_them() {
+        assert_eq!(SETTLED_FRAMES.end, COUNTER_FRAMES.end);
+        for configuration in [Configuration::REFERENCE, Configuration::CI] {
             assert!(SETTLED_FRAMES.end <= configuration.warm_up_frames);
         }
     }
@@ -1400,6 +1498,9 @@ mod tests {
                 frames: COUNTER_FRAMES,
                 counters: COUNTERS,
             },
+            fast_travel_hold: None,
+            frames_until_traced: None,
+            blas_compaction_microseconds: None,
             aliasing: None,
             provenance: None,
         }
@@ -2236,6 +2337,100 @@ mod tests {
     }
 
     #[test]
+    fn the_measured_frames_fast_travel_hold_traced_frames_and_blas_compaction_are_measured() {
+        let configuration = Configuration::REFERENCE;
+        let mut frames = frames(configuration);
+        let compaction = |stats: &mut FrameStats, microseconds| {
+            let time = Duration::from_micros(microseconds);
+            stats.cpu_times.push((BLAS_COMPACTION.to_owned(), time));
+        };
+        frames[5].fast_travel_hold = Some(Duration::from_secs(9));
+        frames[5].holding = true;
+        frames[6].frames_until_traced = Some(9);
+        compaction(&mut frames[7], 9000);
+        frames[400].holding = true;
+        frames[401].holding = true;
+        frames[402].fast_travel_hold = Some(Duration::from_millis(250));
+        frames[500].frames_until_traced = Some(2);
+        frames[600].frames_until_traced = Some(4);
+        compaction(&mut frames[700], 1000);
+        compaction(&mut frames[701], 3000);
+        let measurements = measure(
+            ReferenceScene::World,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &frames,
+            &frames_without_rays(configuration),
+        )
+        .expect("every frame read back its GPU stats");
+        assert_eq!(
+            measurements.fast_travel_hold,
+            Some(FastTravelHold {
+                milliseconds: 250.0,
+                frames: 2
+            })
+        );
+        assert_eq!(measurements.frames_until_traced, Some(4));
+        let compaction = measurements.blas_compaction_microseconds;
+        assert_eq!(compaction.map(|spread| spread.median), Some(1000.0));
+        assert_eq!(compaction.and_then(|spread| spread.maximum), Some(3000.0));
+        let still = measure(
+            ReferenceScene::PbrSweep,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &self::frames(configuration),
+            &frames_without_rays(configuration),
+        )
+        .expect("every frame read back its GPU stats");
+        let measured = (still.fast_travel_hold, still.frames_until_traced);
+        assert_eq!(measured, (None, None));
+        assert_eq!(still.blas_compaction_microseconds, None);
+    }
+
+    /// The runs with and without shadow rays hold for different frames
+    /// after one Fast travel, so their shadow-ray time pairs frames by
+    /// their camera path's frame.
+    #[test]
+    fn shadow_ray_time_pairs_the_runs_frames_by_their_path_frame() {
+        let configuration = Configuration::REFERENCE;
+        let mut with_rays = frames(configuration);
+        let mut without_rays = frames_without_rays(configuration);
+        let drawn_again = |frames: &mut Vec<FrameStats>, holds: &[bool]| {
+            frames[400].holding = true;
+            for (offset, &holding) in holds.iter().enumerate() {
+                let again = FrameStats {
+                    holding,
+                    ..frames[400].clone()
+                };
+                frames.insert(401 + offset, again);
+            }
+        };
+        drawn_again(&mut with_rays, &[true, false]);
+        drawn_again(&mut without_rays, &[false]);
+        let slower = |frames: &mut Vec<FrameStats>, index: usize, microseconds| {
+            let gpu = frames[index]
+                .gpu
+                .as_mut()
+                .expect("every frame has GPU stats");
+            gpu.frame_time = Duration::from_micros(microseconds);
+        };
+        slower(&mut with_rays, 403, 1300);
+        slower(&mut without_rays, 402, 1250);
+        let measurements = measure(
+            ReferenceScene::World,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &with_rays,
+            &without_rays,
+        )
+        .expect("every frame read back its GPU stats");
+        assert_eq!(measurements.shadow_ray_microseconds.maximum, Some(50.0));
+    }
+
+    #[test]
     fn a_run_with_a_frame_that_read_back_no_gpu_stats_fails() {
         let configuration = Configuration::COUNTERS;
         let without_rays = frames_without_rays(configuration);
@@ -2288,6 +2483,55 @@ mod tests {
         let mut smaller = baseline();
         smaller.width /= 2;
         assert!(compare(&smaller, &baseline(), &BUDGETS, CompareMode::Ci).is_err());
+    }
+
+    #[test]
+    fn a_run_whose_measured_frames_streamed_compares_its_counter_frames() {
+        let mut streamed = baseline();
+        streamed.counters.chunks_loaded = 40;
+        streamed.counters.heap_allocations += 1;
+        let mut baseline_streamed = baseline();
+        baseline_streamed.counters.chunks_loaded = 39;
+        assert_eq!(
+            verdicts(&streamed, &baseline_streamed, CompareMode::Local),
+            []
+        );
+        streamed.counter_frames.counters.heap_allocations += 1;
+        assert_eq!(
+            verdicts(&streamed, &baseline_streamed, CompareMode::Local),
+            [("heap_allocations", Verdict::Fail)]
+        );
+        let mut still = baseline();
+        still.counters.heap_allocations += 1;
+        assert_eq!(
+            verdicts(&still, &baseline(), CompareMode::Local),
+            [("heap_allocations", Verdict::Fail)]
+        );
+        // A still scene's Baseline judges its measured frames, so a run that
+        // starts streaming in them fails.
+        let mut started_streaming = baseline();
+        started_streaming.counters.chunks_loaded = 1;
+        assert_eq!(
+            verdicts(&started_streaming, &baseline(), CompareMode::Local),
+            [("chunks_loaded", Verdict::Fail)]
+        );
+    }
+
+    #[test]
+    fn a_streamed_run_still_fails_on_a_refusal_in_its_measured_frames() {
+        let mut baseline_streamed = baseline();
+        baseline_streamed.counters.chunks_loaded = 39;
+        let mut streamed = baseline_streamed.clone();
+        streamed.counters.late_chunks += 1;
+        streamed.counters.renderables_refused += 1;
+        streamed.counters.instances_overflowed += 1;
+        assert_eq!(
+            verdicts(&streamed, &baseline_streamed, CompareMode::Local),
+            [
+                ("instances_overflowed", Verdict::Fail),
+                ("renderables_refused", Verdict::Fail)
+            ]
+        );
     }
 
     #[test]
