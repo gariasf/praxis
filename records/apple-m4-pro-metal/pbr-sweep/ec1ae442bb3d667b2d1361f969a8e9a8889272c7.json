@@ -37,68 +37,68 @@
     "uploaded_bytes": 416
   },
   "cpu_frame_microseconds": {
-    "maximum": 567.042,
-    "median": 193.708,
-    "p95": 229.167,
-    "p99": 296.16700000000003
+    "maximum": 783.875,
+    "median": 197.458,
+    "p95": 232.709,
+    "p99": 307.666
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "maximum": 7.209,
-    "median": 0.08299999999999999,
-    "p95": 0.16699999999999998,
-    "p99": 0.376
+    "maximum": 8.458,
+    "median": 0.083,
+    "p95": 0.16799999999999998,
+    "p99": 0.6260000000000001
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
-    "maximum": 1045.875,
-    "median": 779.2909999999999,
-    "p95": 797.541,
-    "p99": 805.208
+    "maximum": 1090.5,
+    "median": 781.291,
+    "p95": 798.4580000000001,
+    "p99": 810.0
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "maximum": 39.167,
-      "median": 31.374999999999996,
-      "p95": 32.417,
-      "p99": 32.833999999999996
+      "maximum": 79.917,
+      "median": 31.417,
+      "p95": 32.458,
+      "p99": 33.0
     },
     "culling_phase_two": {
-      "maximum": 54.208,
-      "median": 18.958000000000002,
-      "p95": 19.583,
-      "p99": 19.958000000000002
+      "maximum": 22.958,
+      "median": 19.541,
+      "p95": 20.125,
+      "p99": 20.458
     },
     "depth_prepass": {
-      "maximum": 194.25,
-      "median": 96.042,
-      "p95": 98.417,
-      "p99": 100.166
+      "maximum": 271.708,
+      "median": 95.916,
+      "p95": 98.125,
+      "p99": 99.583
     },
     "depth_pyramid_pass": {
-      "maximum": 498.792,
-      "median": 203.417,
-      "p95": 206.667,
-      "p99": 208.166
+      "maximum": 215.625,
+      "median": 203.375,
+      "p95": 206.417,
+      "p99": 207.334
     },
     "froxel_pass": {
-      "maximum": 77.5,
-      "median": 6.792000000000001,
-      "p95": 7.291,
-      "p99": 7.458
+      "maximum": 77.959,
+      "median": 6.7909999999999995,
+      "p95": 7.25,
+      "p99": 7.459
     },
     "lit_pass": {
-      "maximum": 461.95799999999997,
-      "median": 416.5,
-      "p95": 432.75,
-      "p99": 440.29200000000003
+      "maximum": 725.5,
+      "median": 417.83299999999997,
+      "p95": 433.209,
+      "p99": 441.66700000000003
     }
   },
   "gpu_frame_microseconds": {
-    "maximum": 4481.584,
-    "median": 3879.625,
-    "p95": 3986.4999999999995,
-    "p99": 4017.083
+    "maximum": 4528.125,
+    "median": 3900.4159999999997,
+    "p95": 4005.7909999999997,
+    "p99": 4027.5
   },
   "gpu_memory_bytes": 738956358,
   "gpu_memory_bytes_by_kind": {
@@ -124,28 +124,28 @@
       "p99": 0.0
     },
     "culling_phase_one": {
-      "maximum": 86.042,
-      "median": 29.459,
-      "p95": 30.167,
-      "p99": 30.583000000000002
+      "maximum": 44.083,
+      "median": 34.291000000000004,
+      "p95": 35.375,
+      "p99": 35.833
     },
     "culling_phase_two": {
-      "maximum": 37.875,
-      "median": 20.334,
-      "p95": 20.958000000000002,
-      "p99": 21.208000000000002
+      "maximum": 24.375,
+      "median": 20.208000000000002,
+      "p95": 20.833,
+      "p99": 21.291999999999998
     },
     "depth_prepass": {
-      "maximum": 242.625,
-      "median": 167.0,
-      "p95": 168.333,
-      "p99": 169.0
+      "maximum": 342.875,
+      "median": 164.0,
+      "p95": 164.83399999999997,
+      "p99": 166.958
     },
     "depth_pyramid_pass": {
-      "maximum": 489.66600000000005,
-      "median": 204.041,
-      "p95": 207.0,
-      "p99": 208.834
+      "maximum": 220.0,
+      "median": 204.542,
+      "p95": 207.834,
+      "p99": 209.5
     },
     "dynamic_tlas_build": {
       "maximum": 0.0,
@@ -154,34 +154,34 @@
       "p99": 0.0
     },
     "froxel_pass": {
-      "maximum": 36.625,
-      "median": 6.7909999999999995,
-      "p95": 7.167,
-      "p99": 7.334
+      "maximum": 45.0,
+      "median": 6.916,
+      "p95": 7.333,
+      "p99": 7.5
     },
     "lit_pass": {
-      "maximum": 1097.958,
-      "median": 463.95799999999997,
-      "p95": 478.917,
-      "p99": 482.958
+      "maximum": 954.0,
+      "median": 475.916,
+      "p95": 490.042,
+      "p99": 493.541
     },
     "phase_two_depth_pass": {
-      "maximum": 14.667,
-      "median": 11.833,
-      "p95": 12.25,
-      "p99": 12.584
+      "maximum": 294.375,
+      "median": 12.083,
+      "p95": 12.415999999999999,
+      "p99": 12.666
     },
     "shadow_mask_pass": {
-      "maximum": 3228.459,
-      "median": 2636.583,
-      "p95": 2733.625,
-      "p99": 2748.334
+      "maximum": 3252.875,
+      "median": 2635.5,
+      "p95": 2730.208,
+      "p99": 2745.791
     },
     "tonemapping_pass": {
-      "maximum": 600.875,
-      "median": 322.125,
-      "p95": 322.625,
-      "p99": 323.0
+      "maximum": 600.0,
+      "median": 321.834,
+      "p95": 322.333,
+      "p99": 322.75
     }
   },
   "heap_allocations": 347,
@@ -192,10 +192,10 @@
   "late_mips": 0,
   "lights_overflowed": 0,
   "lit_pass_wait_microseconds": {
-    "maximum": 85.333,
-    "median": 5.625,
-    "p95": 6.0,
-    "p99": 6.167000000000001
+    "maximum": 6.958,
+    "median": 5.791,
+    "p95": 6.167000000000001,
+    "p99": 6.458
   },
   "measured_frames": 1800,
   "moving_instances_left_out": 0,
@@ -208,29 +208,26 @@
     "dirty": false,
     "driver": "",
     "driver_info": "",
-    "gpu_frame_p95_over_median": 1.027547765570126,
+    "gpu_frame_p95_over_median": 1.0270163490253348,
     "gpu_load_percent": 0,
     "harness_version": 11,
-    "one_minute_load_average": 2.09,
+    "one_minute_load_average": 1.46,
     "other_processes": [],
-    "quiet": false,
+    "quiet": true,
     "scene_content_hash": "bb32c11fa0691025d8bb5619ea32fad0db60634477a7299f8b91539a91e9bead",
     "source_hash": "ec1ae442bb3d667b2d1361f969a8e9a8889272c7",
-    "started_unix_seconds": 1794158761
+    "started_unix_seconds": 1794159033
   },
   "renderables_refused": 0,
   "scene": "pbr-sweep",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
-    "maximum": 3359.959,
-    "median": 2768.708,
-    "p95": 2869.584,
-    "p99": 2911.292
+    "maximum": 3415.542,
+    "median": 2789.3740000000003,
+    "p95": 2886.7919999999995,
+    "p99": 2914.333
   },
   "static_instances_left_out": 0,
-  "tags": [
-    "machine not quiet"
-  ],
   "triangles_drawn": 22080,
   "uploaded_bytes": 416,
   "width": 2560
