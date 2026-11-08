@@ -66,7 +66,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     let triangles = 48 * 24 * 2 - 2 * 48;
     // Its BLAS, of the 25 rings of 49 vertices less the two the cook's weld
     // drops (below), at the adapter's compacted fraction of the bytes its
-    // driver gives, rounded to a whole byte; the two static TLASes' 2^18
+    // driver gives, rounded to a whole byte; the two static TLASes' 264,720
     // Instances each and the dynamic TLAS's 10,000 at theirs.
     let input = context.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("Frame Stats Size Query Input"),

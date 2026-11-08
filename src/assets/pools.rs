@@ -50,19 +50,24 @@ pub struct PoolCapacities {
 
 impl PoolCapacities {
     pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
-        let [vertex, index, meshlet, meshlet_vertex, meshlet_triangle] =
-            ARENA_PER_MILLE.map(|per_mille| {
-                budgets.geometry_arenas * per_mille / 1000 / wgpu::COPY_BUFFER_ALIGNMENT
-                    * wgpu::COPY_BUFFER_ALIGNMENT
-            });
+        let [
+            vertex_bytes,
+            index_bytes,
+            meshlet_bytes,
+            meshlet_vertex_bytes,
+            meshlet_triangle_bytes,
+        ] = ARENA_PER_MILLE.map(|per_mille| {
+            budgets.geometry_arenas * per_mille / 1000 / wgpu::COPY_BUFFER_ALIGNMENT
+                * wgpu::COPY_BUFFER_ALIGNMENT
+        });
         let entries = |bytes: u64| u32::try_from(bytes).unwrap_or(u32::MAX);
         let channels = MaterialChannel::ALL.len() as u64;
         Self {
-            vertex_arena_bytes: vertex,
-            index_arena_bytes: index,
-            meshlet_arena_bytes: meshlet,
-            meshlet_vertex_arena_bytes: meshlet_vertex,
-            meshlet_triangle_arena_bytes: meshlet_triangle,
+            vertex_arena_bytes: vertex_bytes,
+            index_arena_bytes: index_bytes,
+            meshlet_arena_bytes: meshlet_bytes,
+            meshlet_vertex_arena_bytes: meshlet_vertex_bytes,
+            meshlet_triangle_arena_bytes: meshlet_triangle_bytes,
             meshes: entries(budgets.geometry_arenas / GEOMETRY_BYTES_PER_MESH),
             materials: entries(budgets.texture_pool / TEXTURE_POOL_BYTES_PER_MATERIAL),
             texture_classes_per_channel: entries(

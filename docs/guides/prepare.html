@@ -259,7 +259,7 @@ const _: () = {
     </tbody>
   </table>
   </div>
-  <p class="note">The Instance slots and lights are what <code>RenderCapacities::checked_in</code> derives from <code>bench/budgets.json</code> at device creation: 30% of the scene and pass buffers' Budget at 136 bytes a slot, its Instance, its offsets and its visibility bit, in whole 256-slot scan blocks, and 0.1% of it at a 48-byte <code>LightData</code> a light. The others are constants of <code>acceleration_structures.rs</code>, <code>bend_pass.rs</code> and <code>instance.rs</code> at the commit above; the two capacities among them are fixed and held within their kinds' Budgets. Each capacity is counted in Frame stats when reached.</p>
+  <p class="note">The Instance slots and lights are what <code>RenderCapacities::checked_in</code> derives from <code>bench/budgets.json</code> at device creation: 30% of the scene and pass buffers' Budget at 136.2 bytes a slot, its Instance, its offsets and its visibility bit, in whole 256-slot scan blocks, and 0.1% of it at a 48-byte <code>LightData</code> a light. The others are constants of <code>acceleration_structures.rs</code>, <code>bend_pass.rs</code> and <code>instance.rs</code> at the commit above; the two capacities among them are fixed and held within their kinds' Budgets. Each capacity is counted in Frame stats when reached.</p>
 </section>
 
 <section class="part prose" id="camera">
