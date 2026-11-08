@@ -165,6 +165,7 @@ impl State {
         }
 
         let mut renderer = Renderer::new(context, target_format, width, height, switches);
+        let load_bytes_per_frame = renderer.capacities().load_bytes_per_frame;
         let Renderer {
             device,
             mesh_pool,
@@ -175,8 +176,13 @@ impl State {
 
         let recorder = FrameRecorder::new();
         let cache = Arc::new(CookedCache::new(COOKED_CACHE_DIRECTORY));
-        let mut streaming =
-            ChunkStreaming::new(scene, shift, scene.load_radius_metres(), cache.clone())?;
+        let mut streaming = ChunkStreaming::new(
+            scene,
+            shift,
+            scene.load_radius_metres(),
+            load_bytes_per_frame,
+            cache.clone(),
+        )?;
         let reader = streaming.reader();
         let mut loader = PoolLoader {
             device,
@@ -266,6 +272,7 @@ impl State {
         self.recorder.counters.chunks_loaded = streamed.chunks_loaded;
         self.recorder.counters.chunks_unloaded = streamed.chunks_unloaded;
         self.recorder.counters.bytes_read = streamed.bytes_read;
+        self.recorder.counters.uploaded_bytes += streamed.written_bytes;
         self.recorder.stage("stream_chunks", started);
 
         let started = Instant::now();
@@ -772,5 +779,62 @@ mod tests {
         assert_eq!(counters.late_chunks, 2);
         let bytes_read: u64 = frame_stats.iter().map(|stats| stats.bytes_read).sum();
         assert_eq!(counters.bytes_read, bytes_read);
+    }
+
+    /// Read before any loads, `texture_wall`'s four Chunks, each writing
+    /// about 2 KB of its own Materials into the load staging, arrive one a
+    /// frame under a 3,000-byte cap, nearest the camera first.
+    #[test]
+    fn streamed_loads_past_the_frames_load_bytes_wait_in_priority_order() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        const LOAD_BYTES_PER_FRAME: u64 = 3000;
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            64,
+            36,
+            ReferenceScene::TextureWall,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("texture_wall loads");
+        state
+            .streaming
+            .set_load_bytes_per_frame(LOAD_BYTES_PER_FRAME);
+        let position = glam::dvec3(10.0, 5.0, 30.0);
+        state
+            .simulation
+            .world
+            .insert_resource(crate::camera::Camera::looking_at(
+                position,
+                position - glam::DVec3::Z,
+            ));
+
+        let mut written_bytes = Vec::new();
+        for frame in 0..6 {
+            let streamed = state
+                .streaming
+                .update(&mut state.simulation.world, &mut state.renderer, false)
+                .expect("the Chunks stream");
+            written_bytes.push(streamed.written_bytes);
+            if frame == 0 {
+                state.streaming.wait_for_reads().expect("the Chunks read");
+            }
+        }
+
+        let loaded = state.simulation.world.resource::<LoadedChunks>();
+        let arrivals: Vec<[i32; 2]> = loaded.0.iter().map(|chunk| chunk.coordinates).collect();
+        assert_eq!(arrivals, [[0, 0], [-1, 0], [0, -1], [-1, -1]]);
+        assert_eq!(written_bytes[0], 0, "nothing read before the requests");
+        let loading_frames = &written_bytes[1..5];
+        assert!(
+            loading_frames
+                .iter()
+                .all(|&bytes| bytes > 0 && bytes <= LOAD_BYTES_PER_FRAME),
+            "{written_bytes:?}"
+        );
+        assert_eq!(written_bytes[5], 0);
     }
 }

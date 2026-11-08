@@ -231,6 +231,35 @@ impl MeshPool {
         Some(*handle)
     }
 
+    /// Whether `load_asset` loaded the Mesh `id` for `mesh_use`.
+    pub fn is_loaded(&self, id: AssetId, mesh_use: MeshUse) -> bool {
+        self.asset_handles.contains_key(&(id, mesh_use))
+    }
+
+    /// The bytes `load_for` writes through its staging for `mesh` loaded
+    /// for `mesh_use`.
+    pub fn written_bytes(mesh: &CookedMesh, mesh_use: MeshUse) -> u64 {
+        let mut word_count = 0;
+        if mesh_use.traced() {
+            word_count += mesh.indices.len();
+        }
+        let mut meshlet_count = 0;
+        if mesh_use.drawn() {
+            for meshlet in mesh
+                .primitives
+                .iter()
+                .flat_map(|primitive| &primitive.meshlets)
+            {
+                meshlet_count += 1;
+                word_count += meshlet.vertices.len() + meshlet.triangles.len();
+            }
+        }
+        (mesh.vertices.len() * size_of::<CookedVertex>()
+            + word_count * size_of::<u32>()
+            + meshlet_count * size_of::<MeshletData>()
+            + size_of::<MeshData>()) as u64
+    }
+
     /// Counts one user fewer of the Mesh `id` for `mesh_use`, keeping its
     /// entry however few are left.
     pub fn remove_user(&mut self, id: AssetId, mesh_use: MeshUse) {

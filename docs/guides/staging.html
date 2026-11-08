@@ -469,7 +469,7 @@ pub uploaded_bytes: u64,</code></pre>
 <section class="part prose" id="load">
   <div class="part-mark">7 &middot; <code>LoadStaging</code></div>
   <h2>The load path</h2>
-  <p class="key-idea">Loads use a <code>StagingBelt</code> and one encoder that live only until <code>submit</code>: the belt goes with the submission, so load staging never stays resident and never counts in <code>gpu_memory_bytes</code>. Its bound is in time, not in bytes. The same encoder takes the texture-to-texture copies that move a Texture between Texture classes, after the writes they read.</p>
+  <p class="key-idea">Loads use a <code>StagingBelt</code> and one encoder that live only until <code>submit</code>: the belt goes with the submission, so load staging never stays resident and never counts in <code>gpu_memory_bytes</code>. Its bound is in time, and for streamed Chunks also in bytes: each frame's Chunk loads write at most a share of the staging Budget into it (<a href="chunk-streamer.html#engine">Chunk streamer</a>), counted by <code>written_bytes</code>. The same encoder takes the texture-to-texture copies that move a Texture between Texture classes, after the writes they read.</p>
 <pre class="code"><code>/// The `StagingBelt`'s allocation unit at load: a larger write gets a chunk
 /// of its own.
 const LOAD_CHUNK_BYTES: u64 = 1 &lt;&lt; 20;
@@ -534,10 +534,11 @@ pub fn submit(&amp;mut self, queue: &amp;wgpu::Queue) -&gt; u64 {
         belt.finish();
         queue.submit(std::iter::once(encoder.finish()));
     }
+    self.written_bytes = 0;
     std::mem::take(&amp;mut self.moved_bytes)
 }</code></pre>
   <p class="code-source"><code>LoadStaging::submit</code>, <code>src/render/staging.rs</code>.</p>
-  <p>The belt's chunk size, <code>LOAD_CHUNK_BYTES</code>, 1 MiB, is only its allocation unit: a write larger than every free chunk gets a chunk of its own. Nothing caps the bytes one load stages, so a Scene's whole load can sit in the belt until <code>upload</code> submits it at the head of the next frame, after which the belt is dropped and its buffers are freed once the GPU has run the copies. <code>upload</code> then compacts the new BLASes before the static TLAS takes them.</p>
+  <p>The belt's chunk size, <code>LOAD_CHUNK_BYTES</code>, 1 MiB, is only its allocation unit: a write larger than every free chunk gets a chunk of its own. Nothing caps the bytes a spawn's loads stage, only a frame's streamed Chunk loads, so a Scene's whole spawn can sit in the belt until <code>upload</code> submits it at the head of the next frame, after which the belt is dropped and its buffers are freed once the GPU has run the copies. <code>upload</code> then compacts the new BLASes before the static TLAS takes them.</p>
 </section>
 
 <section class="part prose" id="tests">

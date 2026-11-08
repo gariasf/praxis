@@ -17,8 +17,8 @@ use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
 use crate::render::{
-    CameraUniform, DynamicTlas, FrameData, FrameStaging, InstanceData, LightData, LightUniform,
-    LoadStaging, StaticTlas,
+    CameraUniform, DynamicTlas, FRAMES_IN_FLIGHT, FrameData, FrameStaging, InstanceData, LightData,
+    LightUniform, LoadStaging, StaticTlas,
 };
 use crate::stats::{
     Counted, FrameRecorder, GpuFrameStats, GpuMemory, GpuMemoryBudgets, GpuMemoryKind,
@@ -184,6 +184,8 @@ const ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE: u64 = 1 << 10;
 /// its kind's Budget gives at a fixed number of bytes per entry, the Instance
 /// slots in whole scan blocks. The bytes per entry keep the capacities the
 /// checked-in Budgets gave before; the Budget split sets them (ADR 0013).
+/// Beside them, the bytes a frame's streamed loads write into the load
+/// staging (ADR 0017).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RenderCapacities {
     /// Slots the Instance buffer holds.
@@ -195,6 +197,10 @@ pub struct RenderCapacities {
     /// warned about. In wgpu a TLAS rebuild's CPU time grows with its
     /// capacity, filled or not.
     pub static_tlas_instances: u32,
+    /// The staging Budget's share per frame: a frame's load staging lives
+    /// until the GPU has run its copies, so the frames in flight and the one
+    /// being written hold at most the Budget between them.
+    pub load_bytes_per_frame: u64,
 }
 
 impl RenderCapacities {
@@ -218,6 +224,7 @@ impl RenderCapacities {
                 budgets.acceleration_structures,
                 ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE,
             ),
+            load_bytes_per_frame: budgets.staging / (FRAMES_IN_FLIGHT as u64 + 1),
         }
     }
 
@@ -974,6 +981,7 @@ pub(crate) mod tests {
                 instances: 524_288,
                 lights: 4096,
                 static_tlas_instances: 262_144,
+                load_bytes_per_frame: 44_739_242,
             }
         );
     }

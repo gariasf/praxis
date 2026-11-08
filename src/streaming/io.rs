@@ -10,14 +10,14 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use glam::DVec3;
 
-use crate::assets::{AssetReader, MeshUse, PoolLoader};
+use crate::assets::{AssetReader, MaterialPool, MeshPool, MeshUse, PoolLoader};
 use crate::camera::Camera;
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
-use crate::render::Renderer;
+use crate::render::{Renderer, texture_written_bytes};
 use crate::scenes::ReferenceScene;
 use crate::streaming::chunks::load_cooked_chunk;
 use crate::streaming::{
-    ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks,
+    ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks, distance_metres,
 };
 
 const IO_THREADS: usize = 4;
@@ -293,6 +293,8 @@ pub(crate) struct StreamedFrame {
     pub chunks_loaded: u32,
     pub chunks_unloaded: u32,
     pub bytes_read: u64,
+    /// Bytes the frame's loads wrote into the load staging.
+    pub written_bytes: u64,
 }
 
 /// A Reference scene's Chunks streamed around the camera: the Chunk
@@ -312,6 +314,9 @@ pub(crate) struct ChunkStreaming {
     /// A load's failure while settling, which ends the wait.
     error: Option<anyhow::Error>,
     cook_chunk: Option<CookChunk>,
+    /// The bytes a frame's loads may write into the load staging; a Chunk
+    /// that alone writes more loads alone.
+    load_bytes_per_frame: u64,
 }
 
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
@@ -320,11 +325,13 @@ type CookChunk = Box<dyn FnMut(AssetId) -> anyhow::Result<()>>;
 
 impl ChunkStreaming {
     /// Streams `scene`'s Chunks, moved by `shift` metres, from `cache`, those
-    /// within `load_radius_metres` of the camera drawn.
+    /// within `load_radius_metres` of the camera drawn, writing at most
+    /// `load_bytes_per_frame` into the load staging a frame.
     pub(crate) fn new(
         scene: ReferenceScene,
         shift: DVec3,
         load_radius_metres: f64,
+        load_bytes_per_frame: u64,
         cache: Arc<CookedCache>,
     ) -> anyhow::Result<Self> {
         let claimed = Claimed::default();
@@ -339,6 +346,7 @@ impl ChunkStreaming {
             finished: BTreeMap::new(),
             error: None,
             cook_chunk: None,
+            load_bytes_per_frame,
         })
     }
 
@@ -353,6 +361,18 @@ impl ChunkStreaming {
     #[cfg(test)]
     pub(crate) fn set_load_radius(&mut self, metres: f64) {
         self.streamer = ChunkStreamer::new(self.scene.chunk_coordinates(), metres);
+    }
+
+    /// Writes at most `bytes` a frame into the load staging instead.
+    #[cfg(test)]
+    pub(crate) fn set_load_bytes_per_frame(&mut self, bytes: u64) {
+        self.load_bytes_per_frame = bytes;
+    }
+
+    /// Waits until the IO pool has read every Chunk requested so far.
+    #[cfg(test)]
+    pub(crate) fn wait_for_reads(&mut self) -> anyhow::Result<()> {
+        self.io.receive_all()
     }
 
     /// A reader of the Cooked cache whose reads the IO pool then skips, for
@@ -371,11 +391,13 @@ impl ChunkStreaming {
     }
 
     /// Runs the Chunk streamer for the World's camera: loads the Chunks whose
-    /// reads finished into `renderer`'s pools, in coordinate order, and
-    /// keeps the World's `LoadedChunks` to what the streamer holds. With
-    /// `settle`, waits until the frame is Settled, loading the Chunks of each
-    /// wait together once all have arrived, so their order never depends on
-    /// the IO pool's timing; a load that fails then fails the frame.
+    /// reads finished into `renderer`'s pools, nearest the camera first, up
+    /// to the frame's load bytes, and keeps the World's `LoadedChunks` to
+    /// what the streamer holds. With `settle`, waits until the frame is
+    /// Settled, loading the Chunks of each wait together once all have
+    /// arrived, in coordinate order and past the frame's load bytes, so
+    /// their order never depends on the IO pool's timing; a load that fails
+    /// then fails the frame.
     pub(crate) fn update(
         &mut self,
         world: &mut World,
@@ -396,18 +418,22 @@ impl ChunkStreaming {
                 finished,
                 error,
                 cook_chunk,
+                load_bytes_per_frame,
             } = self;
             let mut frame_io = FrameIo {
                 cook_chunk,
                 io,
                 scene: *scene,
                 shift: *shift,
+                camera,
                 cache,
                 claimed,
                 decoded,
                 finished,
                 renderer,
                 settle,
+                load_bytes_per_frame: *load_bytes_per_frame,
+                written_bytes: &mut streamed.written_bytes,
                 bytes_read: &mut streamed.bytes_read,
                 error,
             };
@@ -486,19 +512,119 @@ struct FrameIo<'a> {
     io: &'a mut IoPool,
     scene: ReferenceScene,
     shift: DVec3,
+    /// The camera's position in the scene's own placement.
+    camera: DVec3,
     cache: &'a CookedCache,
     claimed: &'a Mutex<HashSet<AssetId>>,
     decoded: &'a mut DecodedAssets,
     finished: &'a mut BTreeMap<[i32; 2], LoadedChunk>,
     renderer: &'a mut Renderer,
     settle: bool,
+    load_bytes_per_frame: u64,
+    /// The bytes the frame's loads wrote into the load staging so far.
+    written_bytes: &'a mut u64,
     bytes_read: &'a mut u64,
     error: &'a mut Option<anyhow::Error>,
 }
 
 impl FrameIo<'_> {
+    /// The ready load to take next: the Chunk nearest the camera, lowest
+    /// coordinates first, or the lowest coordinates while settling.
+    fn next_ready(&self) -> Option<[i32; 2]> {
+        let mut ready = self.io.ready.keys().copied();
+        if self.settle {
+            return ready.next();
+        }
+        ready.min_by(|&left, &right| {
+            distance_metres(self.camera, left).total_cmp(&distance_metres(self.camera, right))
+        })
+    }
+
+    /// Whether loading `chunk` keeps the frame's load bytes within the cap:
+    /// always while settling and while the frame's loads have written
+    /// nothing.
+    fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
+        if self.settle || *self.written_bytes == 0 {
+            return Ok(true);
+        }
+        let bytes = self.most_written_bytes(chunk)?;
+        Ok(*self.written_bytes + bytes <= self.load_bytes_per_frame)
+    }
+
+    /// The most bytes loading `chunk` writes into the load staging: those of
+    /// each Mesh, Material and Texture it names that the pools lack, each
+    /// read into what the IO pool decoded, if it is not there, for the load.
+    fn most_written_bytes(&mut self, chunk: &CookedChunk) -> anyhow::Result<u64> {
+        let Renderer {
+            mesh_pool,
+            material_pool,
+            ..
+        } = &*self.renderer;
+        let reader = DecodedReader {
+            decoded: RefCell::new(&mut *self.decoded),
+            cache: self.cache,
+            claimed: self.claimed,
+        };
+        let mut seen = HashSet::new();
+        let mut bytes = 0;
+        let mut materials: Vec<AssetId> = chunk
+            .placements
+            .iter()
+            .filter_map(|placement| placement.material)
+            .collect();
+        for placement in &chunk.placements {
+            let id = placement.mesh;
+            if !seen.insert(id) || mesh_pool.is_loaded(id, MeshUse::DrawnAndTraced) {
+                continue;
+            }
+            let mesh = reader.mesh(id)?;
+            bytes += MeshPool::written_bytes(&mesh, MeshUse::DrawnAndTraced);
+            let primitive_materials = mesh
+                .primitives
+                .iter()
+                .filter_map(|primitive| primitive.material);
+            materials.extend(primitive_materials);
+            reader.decoded.borrow_mut().meshes.insert(id, mesh);
+        }
+        let mut textures = Vec::new();
+        for id in materials {
+            if !seen.insert(id) || material_pool.is_loaded(id) {
+                continue;
+            }
+            let material = reader.material(id)?;
+            bytes += MaterialPool::WRITTEN_BYTES;
+            textures.extend(material.textures.iter().flatten());
+            reader.decoded.borrow_mut().materials.insert(id, material);
+        }
+        for id in textures {
+            if !seen.insert(id) || material_pool.is_texture_loaded(id) {
+                continue;
+            }
+            let texture = reader.texture(id)?;
+            bytes += texture_written_bytes(&texture);
+            reader.decoded.borrow_mut().textures.insert(id, texture);
+        }
+        Ok(bytes)
+    }
+
+    /// Loads `decoded` into the pools, counting what it read and wrote.
     fn load(&mut self, decoded: DecodedChunk) -> anyhow::Result<LoadedChunk> {
         *self.bytes_read += decoded.bytes_read;
+        #[cfg(debug_assertions)]
+        let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
+        let written_before = self.renderer.load_staging.written_bytes();
+        let loaded = self.load_into_pools(&decoded);
+        let written_bytes = self.renderer.load_staging.written_bytes() - written_before;
+        #[cfg(debug_assertions)]
+        assert!(
+            written_bytes <= most_written_bytes,
+            "a Chunk wrote {written_bytes} bytes, past the {most_written_bytes} it was sized at"
+        );
+        *self.written_bytes += written_bytes;
+        loaded
+    }
+
+    fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk> {
         let reader = DecodedReader {
             decoded: RefCell::new(&mut *self.decoded),
             cache: self.cache,
@@ -546,8 +672,20 @@ impl ChunkIo for FrameIo<'_> {
             return None;
         }
         loop {
-            let (coordinates, decoded) = self.io.ready.pop_first()?;
-            match decoded.and_then(|decoded| self.load(decoded)) {
+            let coordinates = self.next_ready()?;
+            let decoded = self.io.ready.remove(&coordinates)?;
+            let loaded = match decoded {
+                Ok(decoded) => match self.fits(&decoded.chunk) {
+                    Ok(true) => self.load(decoded),
+                    Ok(false) => {
+                        self.io.ready.insert(coordinates, Ok(decoded));
+                        return None;
+                    }
+                    Err(error) => Err(error),
+                },
+                Err(error) => Err(error),
+            };
+            match loaded {
                 Ok(chunk) => {
                     let assets = chunk
                         .meshes
