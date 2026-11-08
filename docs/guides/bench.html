@@ -116,17 +116,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/bench/mod.rs</code></div>
   <h1>The bench</h1>
-  <p class="definition">The command that renders a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> along its camera path twice, with shadow rays on and off, and reduces every frame's <a href="frame-stats.html">Frame stats</a> to one record of medians, p95s and counters; its two companions judge such a record against the scene's committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI&#39;s lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> and the <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget is to split into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, at sizes M4 sets (ADRs 0013, 0017); today it is one number, and each kind&#39;s capacity is provisional. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budgets</span>, and print it as the markdown tables a PR quotes.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A change to the bench, to what it compares or to how a record is kept rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html">The Reference scenes</a> for the camera paths and injected time a run follows, <a href="frame-stats.html">Frame stats</a> for the per-frame figures it reduces, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for why the bench's main thread spins rather than blocks.</p>
+  <p class="definition">The command that renders a <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> along its camera path twice, with shadow rays on and off, and reduces every frame's <a href="frame-stats.html">Frame stats</a> to one record of each time's median, p95, p99 and maximum and of counters; its two companions judge such a record against the scene's committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI&#39;s lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> and the <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019&#39;s gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools&#39; capacities, the Instance slots, the light buffer&#39;s and the static TLAS&#39;s derive from them at device creation (ADRs 0013, 0017); their sizes are provisional until M4 sets them. Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.">Budgets</span>, and print it as the markdown tables a PR quotes.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 2dbd1ec1 (2026-11-08). A change to the bench, to what it compares or to how a record is kept rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html">The Reference scenes</a> for the camera paths and injected time a run follows, <a href="frame-stats.html">Frame stats</a> for the per-frame figures it reduces, <a href="chunk-streamer.html">The Chunk streamer</a> for the Settled frames its warm-up waits on, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for why the bench's main thread spins rather than blocks.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd><code>praxis bench &lt;output directory&gt; [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment &lt;name&gt;] [&lt;scene&gt;...]</code>, on a headless GPU context, every scene whose assets are present when none is named; then <code>praxis compare &lt;bench directory&gt; [--ci]</code> and <code>praxis report &lt;bench directory&gt;</code>, which run no GPU. The verify command runs the first two with <code>--counters</code>, <code>--no-publish</code> and <code>--ci</code>; CI runs them with <code>--ci-counters</code>.</dd>
-      <dt>Reads</dt><dd>The scene through <code>render_frames</code>: its camera path and injected time at a 60 Hz frame delta, with the default <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#39;s point lights, and the form the crowd scene&#39;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switches</span> and again with <code>shadow_rays</code> off; every frame's Frame stats, GPU stats included; the checkout through git and the machine's load through preflight, once before the first scene; <code>bench/budgets.json</code>; the Baseline at <code>bench/baselines/&lt;adapter key&gt;/&lt;scene&gt;.json</code>.</dd>
+      <dt>Runs</dt><dd><code>praxis bench &lt;output directory&gt; [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment &lt;name&gt;] [&lt;scene&gt;...]</code>, on a headless GPU context, every scene but <code>world</code> whose assets are present when none is named, as <code>world</code> has no Baseline yet; then <code>praxis compare &lt;bench directory&gt; [--ci]</code> and <code>praxis report &lt;bench directory&gt;</code>, which run no GPU. The verify command runs the first two with <code>--counters</code>, <code>--no-publish</code> and <code>--ci</code>; CI runs them with <code>--ci-counters</code>.</dd>
+      <dt>Reads</dt><dd>The scene through <code>render_frames</code>: its camera path and injected time at a 60 Hz frame delta, its warm-up up to the counter frames as Settled frames, with the default <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel&#39;s point lights, and the form the crowd scene&#39;s deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switches</span> and again with <code>shadow_rays</code> off; every frame's Frame stats, GPU stats included; the checkout through git and the machine's load through preflight, once before the first scene; <code>bench/budgets.json</code>; the Baseline at <code>bench/baselines/&lt;adapter key&gt;/&lt;scene&gt;.json</code>.</dd>
       <dt>Writes</dt><dd>One <code>&lt;scene&gt;.json</code> per scene into the output directory, a <code>Measurements</code> in pretty JSON, and one line of its figures to standard output; a crowd form other than the default writes <code>crowd-&lt;form&gt;.json</code>. <code>compare</code> prints a line per scene and per finding and exits non-zero when any metric failed; <code>report</code> prints markdown tables.</dd>
-      <dt>Compared</dt><dd>Times by their median against the Baseline's, warning past 5% and failing past 10% and a noise floor, and against the Budgets; counters exactly, any increase failing; the two aliasing counters by the same ratios with no floor. With <code>--ci</code>, counters alone.</dd>
+      <dt>Compared</dt><dd>Times by their median against the Baseline's, warning past 5% and failing past 10% and a noise floor; the CPU frame, GPU frame and gate against their Budgets at the median and p99, the CPU frame at its p95 too, and the two frames' maximum against one 60 Hz period; counters exactly, any increase failing but in the late mips; GPU memory against its Budget in total and per kind; the two aliasing counters by the ratios with no floor. With <code>--ci</code>, counters, GPU memory and aliasing alone.</dd>
       <dt>Published</dt><dd>Unless given <code>--no-publish</code>, the results join the <a href="bench-history.html">Bench history</a> as <span class="concept" data-term="Bench record" data-tip="One bench run&#39;s measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build&#39;s record beside lavapipe&#39;s: the binary&#39;s size and the build&#39;s wall time.">Bench records</span>, under an <span class="concept" data-term="Experiment" data-tip="Bench records taken from a branch under a name, kept beside the Series and compared with them, never part of one.">Experiment</span>'s name with <code>--experiment</code>; a failed publish warns and fails no bench.</dd>
-      <dt>Where in the code</dt><dd><code>src/bench/mod.rs</code>: <code>Configuration</code>, <code>run</code>, <code>measure</code>, <code>Measurements</code>, <code>Counters</code>, <code>Aliasing</code>, <code>compare</code> and its checks, <code>baseline_directory</code>. <code>src/bench/provenance.rs</code>: <code>BenchStart</code>, <code>Provenance</code>, <code>Checkout</code>, <code>source_hash</code>, <code>HARNESS_VERSION</code>. <code>src/bench/report.rs</code>: <code>report</code>. <code>src/capture/mod.rs</code>: <code>render_frames</code> and <code>FrameWait</code>. <code>src/bin/praxis.rs</code>: the three commands' arguments. <code>scripts/verify.sh</code>: the bench step.</dd>
+      <dt>Where in the code</dt><dd><code>src/bench/mod.rs</code>: <code>Configuration</code>, <code>COUNTER_FRAMES</code>, <code>SETTLED_FRAMES</code>, <code>run</code>, <code>render_run</code>, <code>measure</code>, <code>Measurements</code>, <code>Counters</code>, <code>Spread</code>, <code>Aliasing</code>, <code>Budgets</code>, <code>compare</code> and its checks, <code>baseline_directory</code>. <code>src/bench/provenance.rs</code>: <code>BenchStart</code>, <code>Provenance</code>, <code>Checkout</code>, <code>source_hash</code>, <code>busy_during_scene</code>, <code>HARNESS_VERSION</code>. <code>src/bench/report.rs</code>: <code>report</code>. <code>src/stats/gpu_memory.rs</code>: <code>GpuMemoryKind</code> and <code>GpuMemoryBudgets</code>. <code>src/capture/mod.rs</code>: <code>render_frames</code> and <code>FrameWait</code>. <code>src/bin/praxis.rs</code>: the three commands' arguments. <code>scripts/verify.sh</code>: the bench step.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -205,34 +205,39 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   </table>
   </div>
   <p class="note">Frames per run is warm-up plus measured; a scene renders twice that, once per switch setting, and the configurations that measure aliasing capture 120 frames more (<a href="#aliasing">section 3</a>). <code>--skip-aliasing</code> turns the measurement off in any configuration.</p>
-  <p><code>run</code> refuses a configuration too short to reach the end of the counter frames, chooses how the main thread waits, and renders the stretch twice through <code>render_frames</code>, with the camera shift at the origin, no frame read back and a 60 Hz frame delta, the display ADR 0022 judges Budgets at.</p>
+  <p><code>run</code> lists the busy processes at the scene's start, refuses a configuration too short to reach the end of the counter frames, and renders the stretch twice through <code>render_run</code>, then measures the two renders, the aliasing when the configuration asks for it, and the Provenance with the busy processes listed again at the end.</p>
   <div class="code-source"><code>run</code>, <code>src/bench/mod.rs</code></div>
+<pre class="code"><code>    let (frames, scene_content_hash) = render_run(context, scene, configuration, switches)?;
+    let (frames_without_rays, _) = render_run(
+        context,
+        scene,
+        configuration,
+        RenderSwitches {
+            shadow_rays: false,
+            ..switches
+        },
+    )?;</code></pre>
+  <p><code>render_run</code> is one of the two renders: it chooses how the main thread waits and calls <code>render_frames</code> with the camera shift at the origin, no frame read back, a 60 Hz frame delta, the display ADR 0022 judges Budgets at, and the frames to render Settled.</p>
+  <div class="code-source"><code>render_run</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>    // A software rasterizer's threads would share the CPU with the spin.
     let wait = match context.adapter.get_info().device_type {
         wgpu::DeviceType::Cpu =&gt; FrameWait::Block,
         _ =&gt; FrameWait::Spin,
     };
-    let render = |switches| {
-        let (_, frames, scene_content_hash) = render_frames(
-            context,
-            scene,
-            glam::DVec3::ZERO,
-            configuration.width,
-            configuration.height,
-            0..frame_count,
-            &amp;[],
-            // ADR 0022 judges Budgets at 60 Hz.
-            SIXTY_HERTZ,
-            switches,
-            wait,
-        )?;
-        anyhow::Ok((frames, scene_content_hash))
-    };
-    let (frames, scene_content_hash) = render(switches)?;
-    let (frames_without_rays, _) = render(RenderSwitches {
-        shadow_rays: false,
-        ..switches
-    })?;</code></pre>
+    let (_, frames, scene_content_hash) = render_frames(
+        context,
+        scene,
+        glam::DVec3::ZERO,
+        configuration.width,
+        configuration.height,
+        0..configuration.warm_up_frames + configuration.measured_frames,
+        &amp;[],
+        // ADR 0022 judges Budgets at 60 Hz.
+        SIXTY_HERTZ,
+        switches,
+        wait,
+        SETTLED_FRAMES,
+    )?;</code></pre>
   <h3>The wait on the oldest frame</h3>
   <p><code>render_frames</code> keeps up to <code>FRAMES_IN_FLIGHT</code> frames, two, in flight, as a window's swapchain allows, so the GPU stays busy and the CPU never runs further ahead than a window would. Before it records a third, it waits for the oldest. How it waits is the <code>FrameWait</code> its caller passes: the Goldens' captures block, as a window does in <code>get_current_texture</code>; the bench polls the device with a zero timeout and spins until the frame is done.</p>
   <div class="code-source"><code>render_frames</code> and <code>FrameWait</code>, <code>src/capture/mod.rs</code></div>
@@ -279,12 +284,20 @@ pub(crate) enum FrameWait {
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range&lt;u32&gt; = 8..72;</code></pre>
   <p>The window is absolute: frames 8 to 71 of the run, which in the reference configuration lie inside the warm-up. The counters-only configurations are exactly that window, with a warm-up of 8 and 64 measured frames, so their measured frames and their counter frames are the same frames.</p>
+  <h3>A settled warm-up</h3>
+  <p>Every scene streams its Chunks through the IO pool, whose reads land when the pool finishes them, so a frame that drew whatever had arrived would count a load on one run and not the next. The frames before the counter frames are therefore <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames before the counter frames; a window never waits for one.">Settled frames</span>: on each, <code>render_frames</code> calls <code>update_settled</code>, which waits until the Chunk streamer reports every load it requested Resident, and a load that fails there fails the run.</p>
+  <div class="code-source"><code>src/bench/mod.rs</code></div>
+<pre class="code"><code>/// The frames a run waits for the Chunk streamer to report Settled: the
+/// warm-up before the counter frames, so every scene has loaded before
+/// them whatever the IO pool's timing. Later frames stream as a game does.
+const SETTLED_FRAMES: std::ops::RangeTo&lt;u32&gt; = ..COUNTER_FRAMES.start;</code></pre>
+  <p>By the counter frames every scene has loaded what its camera path needs there, so the streaming counters of <a href="#measured">section 2</a> read the same on every run. From frame 8 on, the run streams as a window does and waits for nothing; a load that lands late in the measured frames of a reference run counts as a <span class="concept" data-term="Late Chunk" data-tip="A Chunk the camera came within the Load radius of before it was loaded.">Late Chunk</span> or a <span class="concept" data-term="Late mip" data-tip="A mip of a Texture that a frame&#39;s drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.">Late mip</span> there, as it would in a game.</p>
 </section>
 
 <section class="part prose" id="measured">
   <div class="part-mark">2 &middot; <code>measure</code> &middot; <code>Measurements</code> &middot; <code>Spread</code></div>
   <h2>What is measured</h2>
-  <p class="key-idea">A record holds, for each time, its median and p95 over the measured frames, and for each counter one value: the median over the measured frames and again over the counter frames. Nothing is a mean, and nothing reads the wall clock.</p>
+  <p class="key-idea">A record holds, for each time, its median, p95, p99 and maximum over the measured frames, and for each counter one value over the measured frames and again over the counter frames: a median for what repeats every frame, the most of any frame for a refusal, the sum for a streaming event. Nothing is a mean, and nothing reads the wall clock.</p>
   <p><code>measure</code> takes the two runs' Frame stats and fails unless every frame of both read back its GPU stats. It drops the warm-up and reduces the rest. The lines, as a <code>Measurements</code> holds them and as the Baselines spell them:</p>
   <div class="table-wrap">
   <table class="facts compact">
@@ -298,7 +311,8 @@ const COUNTER_FRAMES: std::ops::Range&lt;u32&gt; = 8..72;</code></pre>
       <tr><td><code>lit_pass_wait_microseconds</code></td><td>rays off</td><td>the lit pass's wait, which with the gate's passes makes up the gate</td></tr>
       <tr><td><code>gate_pass_microseconds</code></td><td>rays off</td><td>each pass the gate spans that those frames ran, its own time in them; the passes only shadow rays run are not among them</td></tr>
       <tr><td><code>gpu_pass_microseconds</code></td><td>rays on</td><td>each of the twelve timed passes, its own time, by name</td></tr>
-      <tr><td>the eight counters</td><td>rays on</td><td>medians over the measured frames, and under <code>counter_frames</code> over frames 8 to 71</td></tr>
+      <tr><td><code>gpu_memory_bytes_by_kind</code></td><td>rays on</td><td>the median of each kind of GPU memory over the measured frames, by the kind's name</td></tr>
+      <tr><td>the 21 counters</td><td>rays on</td><td>over the measured frames, and under <code>counter_frames</code> over frames 8 to 71</td></tr>
     </tbody>
   </table>
   </div>
@@ -329,25 +343,50 @@ const COUNTER_FRAMES: std::ops::Range&lt;u32&gt; = 8..72;</code></pre>
                 .collect(),
         ),</code></pre>
   <h3>Counters</h3>
-  <p>The eight counters are <code>draw_calls</code>, <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>instances_overflowed</code>, <code>uploaded_bytes</code>, <code>gpu_memory_bytes</code>, <code>arena_bytes_in_use</code> and <code>heap_allocations</code>, in the order <code>Counters::NAMES</code> gives and a test holds the JSON to. Each is the median of its frames but one: Instances overflowed is the most of any frame, so a single frame whose draw had no room for an Instance counts.</p>
+  <p>The 21 counters are named in the order <code>Counters::NAMES</code> gives and a test holds the JSON to, and fall into three groups by how a run reduces them. <a href="frame-stats.html">Frame stats</a> says what most of them count; the culling pass, Froxel pass and shadow mask pages say which overflows their passes count, and <a href="chunk-streamer.html">The Chunk streamer</a> and <a href="mip-streaming.html">Mip streaming</a> the streaming counters.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Counters</th><th>Reduced as</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>draw_calls</code>, <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>uploaded_bytes</code>, <code>gpu_memory_bytes</code>, <code>arena_bytes_in_use</code>, <code>heap_allocations</code></td><td>the median of the frames</td><td>each frame has one value, and they repeat exactly from run to run</td></tr>
+      <tr><td><code>instances_overflowed</code> and the refusals: <code>renderables_refused</code>, <code>lights_overflowed</code>, <code>static_instances_left_out</code>, <code>moving_instances_left_out</code>, <code>bends_left_out</code>, <code>froxel_lights_overflowed</code>, <code>shadow_mask_lights_overflowed</code></td><td>the most of any frame</td><td>a single frame that had no room for something counts</td></tr>
+      <tr><td>the streaming counters: <code>late_chunks</code>, <code>chunks_loaded</code>, <code>chunks_unloaded</code>, <code>bytes_read</code>, <code>pool_entries_freed</code>, <code>late_mips</code></td><td>the sum over the frames</td><td>each frame counts the events it saw, so the run's are their total</td></tr>
+    </tbody>
+  </table>
+  </div>
   <div class="code-source"><code>Counters::of</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>        let most = |value: fn(&amp;FrameStats) -&gt; u64| frames.iter().map(value).max().unwrap_or(0);
+        let total = |value: fn(&amp;FrameStats) -&gt; u64| frames.iter().map(value).sum();
         Self {
             draw_calls: median(|stats| u64::from(stats.draw_calls)),
-            instances_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.instances_drawn.into())),
-            triangles_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.triangles_drawn.into())),
+…
             instances_overflowed: most(|stats| {
                 stats.gpu.map_or(0, |gpu| gpu.instances_overflowed.into())
             }),
-            uploaded_bytes: median(|stats| stats.uploaded_bytes),
-            gpu_memory_bytes: median(|stats| stats.gpu_memory_bytes),
-            arena_bytes_in_use: median(|stats| stats.arena_bytes_in_use),
-            heap_allocations: median(|stats| stats.heap_allocations),
+…
+            renderables_refused: most(|stats| stats.renderables_refused.into()),
+…
+            late_chunks: total(|stats| stats.late_chunks.into()),
+            chunks_loaded: total(|stats| stats.chunks_loaded.into()),
+            chunks_unloaded: total(|stats| stats.chunks_unloaded.into()),
+            bytes_read: total(|stats| stats.bytes_read),
+            pool_entries_freed: total(|stats| stats.pool_entries_freed.into()),
+            late_mips: total(|stats| stats.late_mips.into()),
         }</code></pre>
-  <h3>Median and p95</h3>
-  <p>A <code>Spread</code> is a median and a p95, both by nearest rank: the values sorted, and the smallest one with at least the fraction at or below it. Over 1,800 measured frames the median is the 900th smallest value and the p95 the 1,710th; over the 64 counter frames the median is the 32nd. The rank is a frame that was measured, never a value between two.</p>
+  <p>The refusals and the streaming counters are absent from a record written before results carried them, and read there as none. Beside the counters, <code>gpu_memory_bytes_by_kind</code> holds the median of each <code>GpuMemoryKind</code> over the measured frames: the geometry Arenas, the texture pool, the Resident tails, the render targets, the acceleration structures, staging, and the scene and pass buffers, whose sum is <code>gpu_memory_bytes</code>.</p>
+  <h3>Median, p95, p99 and maximum</h3>
+  <p>A <code>Spread</code> is a median, a p95, a p99 and a maximum, each by nearest rank: the values sorted, and the smallest one with at least the fraction at or below it. Over 1,800 measured frames the median is the 900th smallest value, the p95 the 1,710th, the p99 the 1,782nd and the maximum the 1,800th; over the 64 counter frames the median is the 32nd. The rank is a frame that was measured, never a value between two. The p99 and maximum are optional, absent from a record written before results carried them.</p>
   <div class="code-source"><code>src/bench/mod.rs</code></div>
-<pre class="code"><code>/// The nearest-rank percentile: the smallest value with at least `fraction`
+<pre class="code"><code>fn spread(values: Vec&lt;f64&gt;) -&gt; Spread {
+    Spread {
+        median: percentile(values.clone(), 0.5),
+        p95: percentile(values.clone(), 0.95),
+        p99: Some(percentile(values.clone(), 0.99)),
+        maximum: Some(percentile(values, 1.0)),
+    }
+}
+
+/// The nearest-rank percentile: the smallest value with at least `fraction`
 /// of `values` at or below it.
 fn percentile(mut values: Vec&lt;f64&gt;, fraction: f64) -&gt; f64 {
     values.sort_by(f64::total_cmp);
@@ -360,7 +399,7 @@ fn percentile(mut values: Vec&lt;f64&gt;, fraction: f64) -&gt; f64 {
   <div class="part-mark">3 &middot; <code>Aliasing::between</code> &middot; <code>measure_aliasing</code></div>
   <h2>The aliasing counters</h2>
   <p class="key-idea">Two counters measure how far one frame of the scene lies from the same frame rendered at three times its size and box-filtered down in linear light. The reference is the engine's own render, so they measure aliasing, not bias; they are integers in millionths, so they compare as counters do.</p>
-  <p>A configuration that measures aliasing captures the scene twice more after its two runs, through <code>capture</code>, which renders 60 frames and reads the last back: once at the Goldens' size, 640&times;360, and once at 1920&times;1080, both with the run's switches. The frame captured, the 60th, lies inside the counter frames. Each pixel of the small image is set against the mean of the 3&times;3 block of the large one that covers it, every value decoded from sRGB to linear light first, through the EOTF the Khronos data format specification gives.</p>
+  <p>A configuration that measures aliasing captures the scene twice more after its two runs, through <code>capture</code>, which renders 60 Settled frames, waiting for the static TLAS as the Goldens do, and reads the last back: once at the Goldens' size, 640&times;360, and once at 1920&times;1080, both with the run's switches. The frame captured, the 60th, lies inside the counter frames. Each pixel of the small image is set against the mean of the 3&times;3 block of the large one that covers it, every value decoded from sRGB to linear light first, through the EOTF the Khronos data format specification gives.</p>
   <div class="code-source"><code>Aliasing::between</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>        // The sRGB EOTF, ≤ at the knee [ref:khronos-dfs-srgb-eotf].
         let linear: [f64; 256] = std::array::from_fn(|value| {
@@ -398,13 +437,13 @@ fn percentile(mut values: Vec&lt;f64&gt;, fraction: f64) -&gt; f64 {
   <div class="part-mark">4 &middot; <code>BenchStart</code> &middot; <code>Provenance</code> &middot; <code>src/bench/provenance.rs</code></div>
   <h2>Provenance: what was measured, where, and how quietly</h2>
   <p class="key-idea">A record names the source it measured, as one git tree hash over the paths that can change a measurement, the adapter, backend and driver, the <span class="concept" data-term="Harness version" data-tip="A number that names what the bench&#39;s metrics mean. It rises whenever a change alters how a metric is measured, so that two Bench records compare only when they share it.">Harness version</span>, the Cooked cache's hash of the Blobs the scene loaded, and whether the machine was quiet. <code>compare</code> reads one field of it, the load average, to print beside a CPU line it fails; the rest is for the Bench history.</p>
-  <p><code>BenchStart::read</code> runs once before the first scene: it reads the checkout, and the GPU utilisation, the one-minute load average, the other praxis processes and preflight's power and display warnings while no scene runs, since a reading taken right after a scene would include that scene's load. Since 2026-11-08 each scene also lists the busy processes at its start and end, which leaves praxis's own processes out by name and process ID and so reads none of the scene's load. A checkout git cannot read, such as a run outside a repository, warns and leaves the results without Provenance; such a result is skipped at publish.</p>
+  <p><code>BenchStart::read</code> runs once before the first scene: it reads the checkout, and the GPU utilisation, the one-minute load average, the other praxis processes and preflight's power and display warnings while no scene runs, since a reading taken right after a scene would include that scene's load. Each scene also lists the busy processes at its start and end, through preflight's <code>busy_processes</code>, which leaves this process and praxis's binaries out and so reads none of the scene's load; <code>busy_during_scene</code> tags each one <code>start:</code> or <code>end:</code> into the Provenance's <code>busy_processes</code>. A checkout git cannot read, such as a run outside a repository, warns and leaves the results without Provenance; such a result is skipped at publish.</p>
   <div class="code-source"><code>src/bench/provenance.rs</code></div>
 <pre class="code"><code>/// Names what the bench's metrics mean: raised by any change to how a
 /// metric is measured, so that two Bench records compare only when they
 /// share it. The lower versions name the eras before the Bench history,
 /// numbered by its import of the Baselines from 1.
-pub const HARNESS_VERSION: u32 = 10;
+pub const HARNESS_VERSION: u32 = 11;
 
 /// The top-level paths whose changes can change a measurement, which the
 /// source hash covers. Every other tracked top-level path is in the tests'
@@ -436,7 +475,7 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
     git(repository, &amp;["mktree"], Some(&amp;entries))
 }</code></pre>
   <h3>Quiet</h3>
-  <p>A run was quiet when preflight would have warned of nothing at its start, the scene's GPU frames held steady and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each reading that could not be taken is a preflight note, not a warning, so it passes; the spread of the GPU frames must have been read.</p>
+  <p>A run was quiet when preflight would have warned of nothing at its start, the scene's GPU frames held steady and no process outside praxis held half a core or more at the scene's start or end. Each reading that could not be taken is a preflight note, not a warning, so it passes; the spread of the GPU frames must have been read.</p>
   <div class="code-source"><code>is_quiet</code>, <code>src/bench/provenance.rs</code></div>
 <pre class="code"><code>    gpu_load_percent.is_none_or(|percent| percent &lt;= BUSY_GPU_PERCENT)
         &amp;&amp; one_minute_load_average.is_none_or(|load| load &lt;= BUSY_LOAD_AVERAGE)
@@ -451,20 +490,20 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
       <tr><td>the busiest GPU's utilisation at the start</td><td class="n">above 10%</td><td><code>BUSY_GPU_PERCENT</code>, <code>src/preflight/mod.rs</code></td></tr>
       <tr><td>the one-minute load average at the start</td><td class="n">above 2.0</td><td><code>BUSY_LOAD_AVERAGE</code>, <code>src/preflight/mod.rs</code></td></tr>
       <tr><td>another praxis process at the start</td><td class="n">any</td><td><code>other_praxis_processes</code></td></tr>
-      <tr><td>a process outside praxis at the scene's start or end, since 2026-11-08</td><td class="n">at or over 50% of a core</td><td><code>BUSY_PROCESS_PERCENT</code>, <code>busy_processes</code></td></tr>
+      <tr><td>a process outside praxis at the scene's start or end</td><td class="n">at or over 50% of a core</td><td><code>BUSY_PROCESS_PERCENT</code>, <code>busy_processes</code></td></tr>
       <tr><td>a Mac on battery, read from <code>pmset -g batt</code></td><td class="n">warned</td><td><code>machine_warnings</code>, the power check</td></tr>
       <tr><td>a full-screen application or presentation settings on Windows</td><td class="n">warned</td><td><code>machine_warnings</code>, the display check</td></tr>
       <tr><td>the scene's GPU frame p95 over its median</td><td class="n">at or above 1.06</td><td><code>QUIET_P95_OVER_MEDIAN</code></td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">The thresholds are the constants named, at the commit above, but for the busy-process row, added after it. That row and the last are judged per scene, so a run that started quiet can still be marked otherwise. Windows gives no CPU shares, so there the busy-process listing is unknown and passes.</p>
+  <p class="note">The thresholds are the constants named, at the commit above. The busy-process row and the last are judged per scene, so a run that started quiet can still be marked otherwise. Windows gives no CPU shares, so there the busy-process listing is unknown and passes.</p>
 </section>
 
 <section class="part prose" id="compare">
   <div class="part-mark">5 &middot; <code>compare</code> &middot; <code>check_regression</code> &middot; <code>check_budget</code></div>
   <h2>Compare: medians against the Baseline, every line against its Budget</h2>
-  <p class="key-idea">A time regresses by its median: past 5% of its Baseline it warns, past 10% it fails, but only when it also grew by more than a noise floor, since a short time moves by more than the ratios between runs. A counter fails on any increase, because it is the same on every run. A Budget fails whatever the Baseline says.</p>
+  <p class="key-idea">A time regresses by its median: past 5% of its Baseline it warns, past 10% it fails, but only when it also grew by more than a noise floor, since a short time moves by more than the ratios between runs. A counter fails on any increase, because it is the same on every run. A Budget fails whatever the Baseline says, and the frame's Budgets bound its tail as well as its median: the p99 answers to the same number, and no frame may outlast one 60 Hz period.</p>
   <p><code>praxis compare</code> reads every result in the directory, finds each one's Baseline by its adapter and backend, and runs <code>compare</code> in one of two modes: <code>Local</code>, every metric, and <code>Ci</code>, with <code>--ci</code>, the deterministic counters only, since times depend on the machine and its load. It prints <code>ok</code> for a clean scene, else one line per <code>Finding</code>, <code>warn</code> or <code>FAIL</code> with the metric and its detail, and exits non-zero when any failed.</p>
   <h3>What refuses a Baseline</h3>
   <p><code>ensure_comparable</code> runs first in both modes and in <code>report</code>: the Baseline must be of the same scene, profile (<code>debug</code> or <code>release</code>, whose allocations differ) and size, and must have counted the same counter frames. A Baseline in another form, from a version of the bench that spelled its records differently, is refused earlier, by <code>Measurements::from_baseline_json</code>, with a message to re-record it. In <code>Local</code> mode two more checks follow the counters: the run and the Baseline must have measured as many frames, since their times cover other frames otherwise, and must have run on the same adapter through the same backend; and before the passes are compared, the run's timed passes must be the Baseline's, else the Baseline is re-recorded.</p>
@@ -475,7 +514,7 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if current &gt; baseline {
+        if current &gt; baseline &amp;&amp; metric != "late_mips" {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
@@ -489,11 +528,18 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
         current.counters.gpu_memory_bytes as f64,
         budgets.gpu_memory_bytes as f64,
     );
+    for kind in GpuMemoryKind::ALL {
+        if let Some(&amp;bytes) = current.gpu_memory_bytes_by_kind.get(kind.name()) {
+            let budget = budgets.gpu_memory_bytes_by_kind.of(kind);
+            check_budget(&amp;mut findings, kind.name(), bytes as f64, budget as f64);
+        }
+    }
     check_aliasing(&amp;mut findings, current.aliasing, baseline.aliasing);
     if mode == CompareMode::Ci {
         return Ok(findings);
     }</code></pre>
-  <p>Which counters compare depends on the lengths: runs that measured as many frames compare their measured frames' counters; runs of other lengths compare their counter frames', the window of <a href="#run">section 1</a>. That is how the verify command's 72-frame run and CI's judge their counters against Baselines of 2,048 frames.</p>
+  <p>Which counters compare depends on the lengths: runs that measured as many frames compare their measured frames' counters; runs of other lengths compare their counter frames', the window of <a href="#run">section 1</a>. That is how the verify command's 72-frame run and CI's judge their counters against Baselines of 2,048 frames. The late mips alone are reported and not judged: how many mips arrive late depends on when the IO pool's reads land, which no Settled warm-up fixes past the frames it covers.</p>
+  <p>GPU memory answers to two kinds of Budget in both modes: its total to <code>gpu_memory_bytes</code>, and each kind the record carries to that kind's Budget in <code>gpu_memory_bytes_by_kind</code>. The pools are created at capacities derived from those Budgets, so a kind created whole, such as the geometry Arenas, reads its Budget exactly and passes, and one that grew past it fails under the kind's name. A record without the kinds, from before results carried them, is judged on its total alone.</p>
   <h3>Ratios and floors</h3>
   <div class="code-source"><code>src/bench/mod.rs</code></div>
 <pre class="code"><code>const WARN_RATIO: f64 = 1.05;
@@ -525,11 +571,24 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
     };</code></pre>
   <div class="code-source"><code>check_regression</code>, <code>src/bench/mod.rs</code></div>
   <p>A time that did not grow passes whatever its sign. From a Baseline at or below zero any growth is past every ratio, so it is the floor alone that judges it: this is the rule for shadow-ray time, whose median can read below zero where the rays cost little, so that a frame's worth of noise in either direction neither fails a scene nor hides a real rise. A growth past 10% that stays within the floor only warns.</p>
+  <h3>The tail Budgets</h3>
+  <p>The CPU frame's p95 and p99, and the GPU frame's and the gate's p99, answer to the same Budget as the line's median; the two frames' maximums answer to <code>maximum_frame_microseconds</code>, 16,667, one 60 Hz period. A tail statistic fails with its name before the detail, and a record that lacks it passes, so a Baseline from before the p99 and maximum were kept is judged on its median and p95.</p>
+  <div class="code-source"><code>check_tail_budget</code>, <code>src/bench/mod.rs</code></div>
+<pre class="code"><code>    let Some(current) = current else {
+        return;
+    };
+    let earlier = findings.len();
+    check_budget(findings, metric, current, budget);
+    for finding in &amp;mut findings[earlier..] {
+        finding.detail = format!("{statistic} {}", finding.detail);
+    }</code></pre>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Line</th><th>Against its Baseline</th><th>Noise floor</th><th>Against a Budget</th></tr></thead>
     <tbody>
-      <tr><td>each of the eight counters</td><td>fails on any increase</td><td>none</td><td><code>gpu_memory_bytes</code> only</td></tr>
+      <tr><td>each counter but <code>late_mips</code></td><td>fails on any increase</td><td>none</td><td><code>gpu_memory_bytes</code> only</td></tr>
+      <tr><td><code>late_mips</code></td><td>reported only</td><td></td><td>none</td></tr>
+      <tr><td>each kind of <code>gpu_memory_bytes_by_kind</code></td><td>not judged</td><td></td><td>its kind's Budget</td></tr>
       <tr><td><code>aliasing_rmse</code>, <code>aliasing_p99</code></td><td>the ratios</td><td>none</td><td>none</td></tr>
       <tr><td><code>cpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>CPU_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median, p95 and p99, and its maximum against one 60 Hz period</td></tr>
       <tr><td>each timed pass</td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td><code>dynamic_tlas_build</code> only</td></tr>
@@ -537,11 +596,11 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
       <tr><td><code>gate_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and p99</td></tr>
       <tr><td><code>shadow_ray_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>none</td></tr>
       <tr><td><code>dynamic_tlas_cpu_microseconds</code></td><td>not judged</td><td></td><td>at the median</td></tr>
-      <tr><td>p95s, the lit pass's wait, the gate's passes</td><td>reported only</td><td></td><td>none</td></tr>
+      <tr><td>the other p95s, p99s and maximums, the lit pass's wait, the gate's passes</td><td>reported only</td><td></td><td>none</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">What <code>compare</code> judges in <code>Local</code> mode, in its order; in <code>Ci</code> mode the first two rows alone. The GPU frame answers to its Baseline as well as each pass, so a frame that grew within every pass's tolerance still fails; the CPU frame's p95 answers to the Budget because that Budget bounds the frame's p95 as well as its median.</p>
+  <p class="note">What <code>compare</code> judges in <code>Local</code> mode, in its order; in <code>Ci</code> mode the first four rows alone. The GPU frame answers to its Baseline as well as each pass, so a frame that grew within every pass's tolerance still fails; the CPU frame's p95 answers to the Budget because ADR 0013 bounds its p95 as well as its median and p99. The gate's maximum is reported, not judged.</p>
   <p>Aliasing has no floor: on the M4 Pro two runs of every Reference scene measured equal aliasing counters, so a rise past the ratios is a change of the image. A run that skipped them passes; a run that measured them against a Baseline without them fails both, with a message to re-record the Baseline, since the Baseline cannot say whether the image changed.</p>
   <p>Last, a failed CPU line gains the one-minute load average both runs started under, <code>unknown</code> for a record without Provenance, because CPU times move with the machine's load where GPU times hold: a reader of the line sees at once whether the run or the machine was slower.</p>
   <h3>Publishing</h3>
@@ -552,15 +611,15 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
   <div class="part-mark">6 &middot; <code>report</code> &middot; <code>src/bench/report.rs</code> &middot; <code>scripts/verify.sh</code></div>
   <h2>Report, and the verify command's bench step</h2>
   <p class="key-idea"><code>praxis report</code> prints each result as markdown tables against its Baseline and the Budgets, so no figure a PR quotes is retyped by hand. The verify command benches the counter frames alone and compares counters only, since counters repeat exactly and times do not.</p>
-  <p>A report opens with one line naming the scene, adapter, profile, size and measured frames, then three tables: the times, with each line's median and p95, the Baseline's, the delta and ratio of the medians and the Budget where one applies; the gate's passes with the lit pass's wait, their medians' sum and the gate itself, when the record carries them; and the counters, with the aliasing counters after them when measured. Times compare only with a Baseline of as many frames on the same adapter; a Baseline of another scene, profile, size or counter frames is refused as <code>compare</code> refuses it, and a result with no Baseline gets a line saying why and tables of its own figures.</p>
+  <p>A report opens with one line naming the scene, adapter, profile, size and measured frames, then three tables: the times, with each line's median, p95, p99 and maximum, the Baseline's median and p95, the delta and ratio of the medians and the Budget where one applies, followed by a line saying that the Budget column bounds the median and p99 and that the frames' maximum answers to 16,667 µs; the gate's passes with the lit pass's wait, their medians' sum and the gate itself, when the record carries them; and the 21 counters, with the aliasing counters after them when measured. GPU memory by kind is in the record but not in the report. Times compare only with a Baseline of as many frames on the same adapter; a Baseline of another scene, profile, size or counter frames is refused as <code>compare</code> refuses it, and a result with no Baseline gets a line saying why and tables of its own figures.</p>
   <div class="code-source"><code>report</code>, <code>src/bench/report.rs</code></div>
 <pre class="code"><code>    let times_baseline = baseline.filter(|baseline| {
         (&amp;baseline.adapter, baseline.measured_frames) == (&amp;current.adapter, current.measured_frames)
     });
 …
     report.push_str(
-        "\n\n| Time, µs | Median | p95 | Baseline median | Baseline p95 | Δ median | Ratio | Budget |\n\
-         |---|---:|---:|---:|---:|---:|---:|---:|\n",
+        "\n\n| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |\n\
+         |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
     );
 …
         (
@@ -577,7 +636,7 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
         let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
         (format!("`{pass}`"), time, baseline_time, budget)
     });</code></pre>
-  <p>Figures print with their whole part in groups of three digits and one decimal for times, none for counters; a ratio over a Baseline at or below zero prints as a dash, where it would mean nothing, which is how shadow-ray time's row reads on a scene whose rays cost nothing.</p>
+  <p>Figures print with their whole part in groups of three digits and one decimal for times, none for counters; a p99 or maximum the record lacks, written before results carried them, prints as a dash, and so does a ratio over a Baseline at or below zero, where it would mean nothing, which is how shadow-ray time's row reads on a scene whose rays cost nothing.</p>
   <h3>The verify command's bench step</h3>
   <p><code>scripts/verify.sh</code> runs after formatting, lint, build and the tests. It lists every scene that has a Baseline on any adapter, so a fetched helmet does not fail for lack of one, benches them with <code>--counters</code> and <code>--no-publish</code> into <code>target/verify/bench</code>, and compares with <code>--ci</code>. Aliasing renders each scene twice more, so it is measured only when the branch's diff against <code>main</code>, or an untracked file, touches what can change the image: <code>src/render</code>, <code>src/cook</code>, <code>src/scenes</code> or <code>assets</code>. Otherwise the step passes <code>--skip-aliasing</code> and prints that it did.</p>
   <div class="code-source"><code>scripts/verify.sh</code></div>
@@ -624,14 +683,14 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
   <table class="facts compact">
     <thead><tr><th>Directory</th><th>Adapter, backend</th><th>Judged</th><th>What its files hold</th></tr></thead>
     <tbody>
-      <tr><td><code>bench/baselines/apple-m4-pro</code></td><td>Apple M4 Pro, Metal: the reference machine</td><td>every metric, and the Budgets</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters; no Provenance, lit pass's wait or gate passes</td></tr>
-      <tr><td><code>bench/baselines/nvidia-geforce-rtx-2070-super</code></td><td>RTX 2070 SUPER, Vulkan: the hardware floor</td><td>every metric</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters; no Provenance, lit pass's wait or gate passes</td></tr>
-      <tr><td><code>bench/baselines/nvidia-geforce-rtx-2070-super-dx12</code></td><td>RTX 2070 SUPER, DX12</td><td>every metric</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters, Provenance at Harness version 10, each quiet, the lit pass's wait and the gate's passes</td></tr>
-      <tr><td><code>bench/baselines/llvmpipe-llvm-20-1-2-256-bits</code></td><td>lavapipe, Vulkan: CI</td><td>counters only</td><td>ten scenes, no helmet, at 640&times;360: nine over 256 measured frames, <code>town</code> over 64; no aliasing counters</td></tr>
+      <tr><td><code>bench/baselines/apple-m4-pro</code></td><td>Apple M4 Pro, Metal: the reference machine</td><td>every metric, and the Budgets</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters, Provenance at Harness version 11, the lit pass's wait, the gate's passes and GPU memory by kind</td></tr>
+      <tr><td><code>bench/baselines/nvidia-geforce-rtx-2070-super</code></td><td>RTX 2070 SUPER, Vulkan: the hardware floor</td><td>every metric</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters, Provenance at Harness version 11, the lit pass's wait, the gate's passes and GPU memory by kind</td></tr>
+      <tr><td><code>bench/baselines/nvidia-geforce-rtx-2070-super-dx12</code></td><td>RTX 2070 SUPER, DX12</td><td>every metric</td><td>eleven scenes at 2560&times;1440 over 1,800 measured frames, with aliasing counters, Provenance at Harness version 11, the lit pass's wait, the gate's passes and GPU memory by kind</td></tr>
+      <tr><td><code>bench/baselines/llvmpipe-llvm-20-1-2-256-bits</code></td><td>lavapipe, Vulkan: CI</td><td>counters only</td><td>ten scenes, no helmet, at 640&times;360 over 64 measured frames, with Provenance at Harness version 11 and GPU memory by kind; no aliasing counters</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Read from the committed files at the commit above; a test parses every one of them. The lavapipe key is <code>llvmpipe (LLVM 20.1.2, 256 bits)</code> through <code>adapter_key</code>.</p>
+  <p class="note">Read from the committed files at the commit above; a test parses every one of them. None yet holds the streaming counters, which read there as none. The lavapipe key is <code>llvmpipe (LLVM 20.1.2, 256 bits)</code> through <code>adapter_key</code>.</p>
   <h3>Re-recording</h3>
   <p>The bench writes <code>&lt;scene&gt;.json</code> into whatever directory it is given, so <code>praxis bench bench/baselines/&lt;adapter key&gt; &lt;scene&gt;</code> writes the new Baseline in place; <code>praxis compare</code> prints that command when it finds no Baseline for a scene, naming <code>--crowd-form</code> for a crowd form's result. A lavapipe Baseline is copied from CI's <code>bench-results</code> artifact instead, since a session's lavapipe is not CI's. Baselines are recorded while no other session loads the machine, by hand and by choice: the Bench history keeps every run, and a re-recorded Baseline's record is marked as one (ADR 0024). A Baseline moves when a change moves what it measures and the change is accepted; a Budget moves down freely and up only through an ADR or a map comment (ADR 0013).</p>
 </section>
@@ -639,17 +698,19 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
 <section class="part prose" id="tests">
   <div class="part-mark">8 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The reductions, the verdicts and the record's form are pinned on synthetic frames and records, with no GPU: a fixture of frames with known times and counters runs through <code>measure</code>, a fixture Baseline through <code>compare</code> and <code>report</code>, and temporary git repositories through the Provenance.</p>
+  <p class="key-idea">The reductions, the verdicts and the record's form are pinned on synthetic frames and records, with no GPU: a fixture of frames with known times and counters runs through <code>measure</code>, a fixture Baseline through <code>compare</code> and <code>report</code>, and temporary git repositories through the Provenance. The settled warm-up is pinned on every scene's camera path with an IO pool whose reads land late, and once on the GPU.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Tests</th><th>Where</th><th>What they pin</th></tr></thead>
     <tbody>
-      <tr><td><code>every_run_counts_its_measured_frames_and_the_counter_frames</code>, <code>a_run_with_a_frame_that_read_back_no_gpu_stats_fails</code></td><td><code>src/bench/mod.rs</code></td><td>over fixture frames, the measured frames' and the counter frames' counters, the overflow as the most of any frame, the CPU and dynamic TLAS lines, the GPU frame, the gate and the lit pass's wait from the rays-off run, shadow-ray time as the difference, the gate's passes without the shadow-ray passes, and that one frame without GPU stats in either run fails</td></tr>
+      <tr><td><code>every_run_counts_its_measured_frames_and_the_counter_frames</code>, <code>a_run_with_a_frame_that_read_back_no_gpu_stats_fails</code></td><td><code>src/bench/mod.rs</code></td><td>over fixture frames, the measured frames' and the counter frames' counters, the overflow as the most of any frame, the refusals as the most of any frame and the streaming counters as sums, in both sets of frames, the CPU and dynamic TLAS lines, the GPU frame, the gate and the lit pass's wait from the rays-off run, shadow-ray time as the difference, each kind of GPU memory's median, the gate's passes without the shadow-ray passes, and that one frame without GPU stats in either run fails</td></tr>
+      <tr><td><code>every_configuration_settles_only_warm_up_frames_up_to_the_counter_frames</code>, <code>after_a_settled_warm_up_no_reference_scene_streams_in_the_counter_frames</code>, <code>a_run_loads_every_chunk_of_its_scene_on_its_first_frame</code></td><td><code>src/bench/mod.rs</code></td><td>the Settled frames end where the counter frames start, inside every configuration's warm-up; along every scene's camera path, with reads that take eight frames unless the frame settles, no Chunk is requested, loaded or unloaded in the counter frames; on the GPU, a run of <code>normal-tangent</code> loads all its Chunks on frame 0</td></tr>
       <tr><td><code>each_counter_is_named_as_results_spell_it</code></td><td><code>src/bench/mod.rs</code></td><td><code>Counters::NAMES</code> matches the JSON keys serde writes, in number and value</td></tr>
-      <tr><td><code>nearest_rank_percentiles</code></td><td><code>src/bench/mod.rs</code></td><td>the median of 1 to 20 is 10 and the p95 is 19; a single value is its own p95</td></tr>
+      <tr><td><code>nearest_rank_percentiles</code>, <code>a_spread_holds_the_nearest_rank_median_p95_p99_and_maximum</code></td><td><code>src/bench/mod.rs</code></td><td>the median of 1 to 20 is 10 and the p95 is 19; a single value is its own p95 and its own maximum; over 200 values the median, p95, p99 and maximum are the 100th, 190th, 198th and 200th</td></tr>
       <tr><td><code>a_time_warns_above_5_percent_and_fails_above_10</code>, <code>exactly_5_percent_and_improvements_pass</code>, <code>cpu_time_within_the_noise_floor_only_warns</code>, <code>a_pass_time_within_the_noise_floor_only_warns</code></td><td><code>src/bench/mod.rs</code></td><td>the two ratios, exactly 5% passing, improvements passing, and a CPU or pass time past 10% that only warns inside its floor and fails just past it</td></tr>
-      <tr><td><code>a_counter_fails_on_any_increase</code>, <code>ci_mode_ignores_times_and_fails_on_counters</code>, <code>a_run_of_another_length_compares_its_counter_frames</code></td><td><code>src/bench/mod.rs</code></td><td>one more allocation fails; <code>Ci</code> mode fails each of seven raised counters on another adapter and ignores doubled times; a shorter run compares its counter frames in <code>Ci</code> mode, is refused in <code>Local</code>, and moved counter frames or another size refuse in both</td></tr>
-      <tr><td><code>over_budget_fails_even_without_regression</code>, <code>a_cpu_frame_p95_over_budget_fails_with_its_median_within</code>, <code>the_gpu_frame_fails_against_its_baseline_and_over_its_budget</code>, <code>the_gate_fails_over_6_ms_and_both_lines_against_their_baselines</code>, <code>the_dynamic_tlas_fails_over_its_ceilings</code></td><td><code>src/bench/mod.rs</code></td><td>each Budget fails with a Baseline that is itself over it; the CPU p95 fails on its own with the detail <code>p95</code>; the GPU frame to its Baseline, with every pass under the warn ratio, and to its Budget; the gate and shadow-ray time to their Baselines; the dynamic TLAS's two ceilings, and none of these in <code>Ci</code> mode</td></tr>
+      <tr><td><code>a_counter_fails_on_any_increase</code>, <code>a_refusal_fails_on_any_increase_in_ci_too</code>, <code>late_mips_are_reported_not_judged</code>, <code>ci_mode_ignores_times_and_fails_on_counters</code>, <code>a_run_of_another_length_compares_its_counter_frames</code></td><td><code>src/bench/mod.rs</code></td><td>one more allocation fails, and one more light the light buffer or the shadow mask had no room for fails in <code>Ci</code> mode; more late mips pass; <code>Ci</code> mode fails each of seven raised counters on another adapter and ignores doubled times; a shorter run compares its counter frames in <code>Ci</code> mode, is refused in <code>Local</code>, and moved counter frames or another size refuse in both</td></tr>
+      <tr><td><code>over_budget_fails_even_without_regression</code>, <code>a_cpu_frame_p95_over_budget_fails_with_its_median_within</code>, <code>a_p99_over_its_budget_fails_with_its_median_within</code>, <code>a_maximum_over_16_667_microseconds_fails</code>, <code>a_spread_without_tails_passes_its_budgets</code>, <code>the_gpu_frame_fails_against_its_baseline_and_over_its_budget</code>, <code>the_gate_fails_over_6_ms_and_both_lines_against_their_baselines</code>, <code>the_dynamic_tlas_fails_over_its_ceilings</code></td><td><code>src/bench/mod.rs</code></td><td>each Budget fails with a Baseline that is itself over it; the CPU p95 fails on its own with the detail <code>p95</code>, and the three p99s each with <code>p99</code>; a CPU or GPU frame maximum past 16,667 fails with <code>maximum</code>, one at it passes, and the gate's is not judged; a record without p99s and maximums passes; the GPU frame to its Baseline, with every pass under the warn ratio, and to its Budget; the gate and shadow-ray time to their Baselines; the dynamic TLAS's two ceilings, and none of these in <code>Ci</code> mode</td></tr>
+      <tr><td><code>a_kind_over_its_gpu_memory_budget_fails</code>, <code>the_checked_in_gpu_memory_budgets_fit_the_whole</code></td><td><code>src/bench/mod.rs</code></td><td>a kind one byte over its Budget fails in <code>Ci</code> mode under its own name while another at its Budget passes; the kinds' Budgets in <code>bench/budgets.json</code> sum to no more than the total</td></tr>
       <tr><td><code>less_shadow_ray_time_passes_below_zero</code></td><td><code>src/bench/mod.rs</code></td><td>from a Baseline below zero, less passes and a rise past the floor fails</td></tr>
       <tr><td><code>another_adapter_or_profile_is_refused_locally</code>, <code>another_scenes_baseline_is_refused</code>, <code>a_baseline_of_other_passes_is_refused_with_a_message_to_re_record_it</code>, <code>a_baseline_in_the_old_form_is_refused_with_a_message_to_re_record_it</code></td><td><code>src/bench/mod.rs</code></td><td>what refuses a Baseline: another adapter or backend in <code>Local</code> mode, another profile or scene in both, other timed passes, and a record in the form before GPU time was split by pass, each with its message</td></tr>
       <tr><td><code>the_baseline_compares_clean</code>, <code>a_result_with_provenance_round_trips_and_compares_clean_with_a_baseline_without</code>, <code>provenance_round_trips_with_or_without_a_load_average</code>, <code>aliasing_is_written_only_when_measured</code>, <code>every_committed_baseline_parses</code></td><td><code>src/bench/mod.rs</code></td><td>the record's form: a Baseline against itself finds nothing; Provenance, the load average and the aliasing counters round-trip through JSON and are absent when not measured; every file under <code>bench/baselines</code> parses</td></tr>
@@ -658,111 +719,176 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
       <tr><td><code>baseline_directories_are_keyed_by_adapter_and_any_backend_but_vulkan_or_metal</code></td><td><code>src/bench/mod.rs</code></td><td>the four directory keys above</td></tr>
       <tr><td><code>every_tracked_top_level_path_is_measured_or_unmeasured_but_not_both</code>, <code>the_harness_version_is_read_from_this_file_as_a_commit_holds_it</code></td><td><code>src/bench/provenance.rs</code></td><td>every top-level path git tracks is classified exactly once; a commit's Harness version is read from its copy of the file</td></tr>
       <tr><td><code>only_a_measured_path_moves_the_source_hash</code>, <code>two_clean_checkouts_of_a_commit_share_its_source_hash</code>, <code>a_dirty_or_untracked_measured_path_moves_the_source_hash_and_another_path_does_not</code></td><td><code>src/bench/provenance.rs</code></td><td>in temporary repositories: a docs commit keeps the hash and a source commit moves it; a clone shares it; a dirty or untracked measured file moves it and an unmeasured one does not, from a subdirectory too, leaving the checkout's index untouched</td></tr>
-      <tr><td><code>a_run_is_quiet_only_when_preflight_would_warn_of_nothing_and_its_frames_hold_steady</code></td><td><code>src/bench/provenance.rs</code></td><td>each disqualifier of the table above, and that unknown readings pass</td></tr>
+      <tr><td><code>a_run_is_quiet_only_when_preflight_would_warn_of_nothing_and_its_frames_hold_steady</code>, <code>a_process_busy_at_a_scenes_end_marks_that_scene_alone_not_quiet_and_is_named</code></td><td><code>src/bench/provenance.rs</code></td><td>each disqualifier of the table above, and that unknown readings pass; of three scenes, the one with a busy process at its end alone is not quiet, and names it tagged <code>end:</code></td></tr>
       <tr><td><code>a_run_renders_against_its_baseline_and_the_budgets</code>, <code>a_shorter_run_compares_its_counter_frames_and_no_times</code>, <code>a_run_without_a_baseline_shows_only_its_own_figures_and_the_budgets</code>, <code>aliasing_shows_beside_the_counters</code>, <code>a_baseline_of_another_size_is_refused</code></td><td><code>src/bench/report.rs</code></td><td>the whole markdown of one report, character for character; dashes where times compare with none; the aliasing rows after the counters, dashes without a Baseline's; the refusal</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Test names at the commit above. None needs a GPU; <code>cargo test</code> runs them with the rest.</p>
+  <p class="note">Test names at the commit above. All but <code>a_run_loads_every_chunk_of_its_scene_on_its_first_frame</code> run without a GPU, and that one passes without checking anything where no adapter is found; <code>cargo test</code> runs them with the rest.</p>
 </section>
 
 <section class="part prose" id="cost">
   <div class="part-mark">9 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">The lines the Budgets judge, from the committed Baselines of the three hardware adapters. On the reference machine two scenes are over a Budget, <code>texture-wall</code> and <code>town</code>, each over the GPU frame's and the gate's; no scene is over the CPU frame's, the dynamic TLAS's or GPU memory's there.</p>
+  <p class="key-idea">The lines the Budgets judge, from the committed Baselines of the three hardware adapters. On the reference machine one scene is over a Budget, <code>town</code>: over the CPU frame's at its median, p95 and p99, the GPU frame's at its median and p99 and in its longest frame, the gate's at its median and p99, and the dynamic TLAS's CPU ceiling. No scene is over a GPU memory Budget, in total or by kind.</p>
   <p>Medians in microseconds, and GPU memory in bytes, from the committed Baselines: release builds at 2560&times;1440 over 1,800 measured frames, as <code>praxis report</code> prints them. CI's lavapipe Baselines, whose times are not judged, are left out.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame</th><th class="n">GPU frame</th><th class="n">Gate</th><th class="n">Dynamic TLAS CPU</th><th class="n">GPU memory bytes</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">265.9</td><td class="n">4,094.7</td><td class="n">849.5</td><td class="n">0.1</td><td class="n">663,385,447</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">482.6</td><td class="n">2,338.8</td><td class="n">672.9</td><td class="n">0.2</td><td class="n">767,625,381</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">707.4</td><td class="n">2,341.4</td><td class="n">750.5</td><td class="n">0.2</td><td class="n">767,625,381</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">186.1</td><td class="n">6,689.1</td><td class="n">1,210.1</td><td class="n">0.1</td><td class="n">683,925,801</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">362.8</td><td class="n">2,736.3</td><td class="n">865.1</td><td class="n">0.2</td><td class="n">787,821,023</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.8</td><td class="n">2,717.7</td><td class="n">908.4</td><td class="n">0.2</td><td class="n">787,821,023</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">181.6</td><td class="n">3,851.5</td><td class="n">773.8</td><td class="n">0.1</td><td class="n">663,389,964</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">342.1</td><td class="n">1,692.5</td><td class="n">548.0</td><td class="n">0.2</td><td class="n">767,629,931</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.0</td><td class="n">1,611.1</td><td class="n">571.4</td><td class="n">0.2</td><td class="n">767,629,931</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">208.6</td><td class="n">3,664.5</td><td class="n">818.2</td><td class="n">0.1</td><td class="n">683,213,657</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">355.0</td><td class="n">1,680.2</td><td class="n">565.2</td><td class="n">0.2</td><td class="n">787,362,898</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">528.3</td><td class="n">1,639.2</td><td class="n">595.9</td><td class="n">0.2</td><td class="n">787,362,898</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">184.0</td><td class="n">2,917.0</td><td class="n">763.0</td><td class="n">0.1</td><td class="n">668,878,951</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">354.6</td><td class="n">1,747.0</td><td class="n">537.6</td><td class="n">0.2</td><td class="n">773,154,875</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.9</td><td class="n">1,685.5</td><td class="n">563.1</td><td class="n">0.2</td><td class="n">773,154,875</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">192.7</td><td class="n">3,003.5</td><td class="n">835.2</td><td class="n">0.1</td><td class="n">663,547,207</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">336.6</td><td class="n">1,846.3</td><td class="n">634.8</td><td class="n">0.2</td><td class="n">767,823,131</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">532.2</td><td class="n">1,819.8</td><td class="n">720.9</td><td class="n">0.2</td><td class="n">767,823,131</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">185.8</td><td class="n">2,598.5</td><td class="n">677.2</td><td class="n">0.1</td><td class="n">663,286,519</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">327.6</td><td class="n">1,594.7</td><td class="n">715.6</td><td class="n">0.2</td><td class="n">767,562,443</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">527.3</td><td class="n">1,622.2</td><td class="n">870.4</td><td class="n">0.2</td><td class="n">767,562,443</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">358.8</td><td class="n">2,917.3</td><td class="n">642.6</td><td class="n">180.8</td><td class="n">668,982,396</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">915.3</td><td class="n">1,424.8</td><td class="n">422.4</td><td class="n">586.1</td><td class="n">773,222,363</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,169.5</td><td class="n">1,110.5</td><td class="n">448.5</td><td class="n">641.0</td><td class="n">773,222,363</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,138.5</td><td class="n">15,975.0</td><td class="n">14,109.0</td><td class="n">0.3</td><td class="n">663,812,599</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,181.9</td><td class="n">1,207.2</td><td class="n">513.6</td><td class="n">0.2</td><td class="n">768,088,523</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,539.8</td><td class="n">1,095.3</td><td class="n">558.9</td><td class="n">0.2</td><td class="n">768,088,523</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">744.5</td><td class="n">3,747.5</td><td class="n">1,297.0</td><td class="n">343.7</td><td class="n">664,077,523</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,469.2</td><td class="n">2,169.8</td><td class="n">840.5</td><td class="n">739.2</td><td class="n">768,350,709</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,085.5</td><td class="n">1,970.2</td><td class="n">924.8</td><td class="n">950.9</td><td class="n">768,350,709</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,734.8</td><td class="n">19,935.0</td><td class="n">8,612.1</td><td class="n">1,097.4</td><td class="n">764,009,624</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,194.9</td><td class="n">9,395.0</td><td class="n">4,991.8</td><td class="n">2,031.1</td><td class="n">868,263,022</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">8,122.8</td><td class="n">9,279.4</td><td class="n">5,306.9</td><td class="n">1,995.4</td><td class="n">868,263,022</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">433.3</td><td class="n">4,123.9</td><td class="n">850.5</td><td class="n">0.1</td><td class="n">738,951,843</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">314.0</td><td class="n">2,419.0</td><td class="n">686.5</td><td class="n">0.2</td><td class="n">830,085,522</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">536.9</td><td class="n">2,353.1</td><td class="n">749.6</td><td class="n">0.2</td><td class="n">830,085,522</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">246.0</td><td class="n">6,707.8</td><td class="n">1,227.1</td><td class="n">0.1</td><td class="n">759,795,240</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">338.2</td><td class="n">2,740.9</td><td class="n">870.7</td><td class="n">0.2</td><td class="n">850,585,349</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">535.6</td><td class="n">2,727.7</td><td class="n">909.3</td><td class="n">0.2</td><td class="n">850,585,349</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">276.8</td><td class="n">3,870.2</td><td class="n">774.5</td><td class="n">0.1</td><td class="n">738,956,358</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">330.7</td><td class="n">1,718.9</td><td class="n">546.6</td><td class="n">0.2</td><td class="n">830,090,130</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">529.1</td><td class="n">1,617.7</td><td class="n">576.9</td><td class="n">0.2</td><td class="n">830,090,130</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">230.9</td><td class="n">3,704.0</td><td class="n">826.8</td><td class="n">0.1</td><td class="n">759,085,265</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">335.1</td><td class="n">1,741.8</td><td class="n">570.2</td><td class="n">0.2</td><td class="n">850,128,637</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">533.9</td><td class="n">1,644.5</td><td class="n">599.7</td><td class="n">0.2</td><td class="n">850,128,637</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">243.0</td><td class="n">2,944.4</td><td class="n">775.1</td><td class="n">0.1</td><td class="n">744,533,034</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">333.8</td><td class="n">1,748.8</td><td class="n">541.0</td><td class="n">0.2</td><td class="n">835,701,503</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">528.5</td><td class="n">1,692.4</td><td class="n">567.1</td><td class="n">0.2</td><td class="n">835,701,503</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">321.1</td><td class="n">3,008.5</td><td class="n">842.5</td><td class="n">0.1</td><td class="n">739,113,882</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">319.7</td><td class="n">1,941.1</td><td class="n">639.2</td><td class="n">0.2</td><td class="n">830,282,351</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">537.1</td><td class="n">1,828.0</td><td class="n">726.4</td><td class="n">0.2</td><td class="n">830,282,351</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">339.5</td><td class="n">2,638.6</td><td class="n">723.2</td><td class="n">0.1</td><td class="n">740,422,986</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">340.3</td><td class="n">1,809.3</td><td class="n">863.0</td><td class="n">0.2</td><td class="n">831,591,455</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">565.2</td><td class="n">1,732.6</td><td class="n">958.2</td><td class="n">0.2</td><td class="n">831,591,455</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">439.6</td><td class="n">2,951.0</td><td class="n">655.7</td><td class="n">208.0</td><td class="n">744,636,198</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">757.6</td><td class="n">1,435.8</td><td class="n">422.9</td><td class="n">440.3</td><td class="n">835,769,970</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,163.1</td><td class="n">1,107.5</td><td class="n">450.7</td><td class="n">631.6</td><td class="n">835,769,970</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">194.0</td><td class="n">2,300.3</td><td class="n">608.6</td><td class="n">0.1</td><td class="n">739,390,746</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">315.5</td><td class="n">1,226.1</td><td class="n">454.7</td><td class="n">0.2</td><td class="n">830,559,215</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">540.8</td><td class="n">1,098.8</td><td class="n">490.9</td><td class="n">0.2</td><td class="n">830,559,215</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,105.6</td><td class="n">3,736.6</td><td class="n">1,260.5</td><td class="n">460.0</td><td class="n">739,644,267</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,434.2</td><td class="n">2,235.6</td><td class="n">844.2</td><td class="n">749.5</td><td class="n">830,810,627</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,738.6</td><td class="n">1,976.8</td><td class="n">928.4</td><td class="n">755.0</td><td class="n">830,810,627</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,986.8</td><td class="n">19,970.1</td><td class="n">8,622.2</td><td class="n">1,351.1</td><td class="n">839,578,814</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,577.8</td><td class="n">9,686.6</td><td class="n">4,972.3</td><td class="n">1,848.5</td><td class="n">930,738,876</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">7,931.3</td><td class="n">9,281.7</td><td class="n">5,273.4</td><td class="n">1,944.6</td><td class="n">930,738,876</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. The RTX 2070 SUPER's <code>town</code> is over the CPU frame's Budget, at the median and the p95, and over the dynamic TLAS's CPU ceiling on both backends; <code>compare</code> reports that there too, though ADR 0013 judges Budgets on the reference machine.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. The RTX 2070 SUPER's <code>town</code> is over the CPU frame's Budget, at the median, p95 and p99, and over the dynamic TLAS's CPU ceiling on both backends; <code>compare</code> reports that there too, though ADR 0013 judges Budgets on the reference machine.</p>
+  <p>The tails the Budgets bound, in microseconds, from the same Baselines and the same report: the CPU frame's p95, p99 and maximum, the GPU frame's p99 and maximum, and the gate's p99.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU p95</th><th class="n">CPU p99</th><th class="n">CPU maximum</th><th class="n">GPU p99</th><th class="n">GPU maximum</th><th class="n">Gate p99</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">522.4</td><td class="n">631.1</td><td class="n">765.4</td><td class="n">4,650.3</td><td class="n">4,901.0</td><td class="n">860.2</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">334.9</td><td class="n">358.8</td><td class="n">2,198.6</td><td class="n">2,486.0</td><td class="n">2,912.7</td><td class="n">725.6</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">559.9</td><td class="n">591.2</td><td class="n">891.1</td><td class="n">2,385.9</td><td class="n">2,803.1</td><td class="n">780.3</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">475.1</td><td class="n">561.9</td><td class="n">712.8</td><td class="n">7,785.8</td><td class="n">8,261.4</td><td class="n">1,855.5</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">459.3</td><td class="n">648.3</td><td class="n">2,279.3</td><td class="n">3,303.8</td><td class="n">3,662.9</td><td class="n">898.4</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">574.5</td><td class="n">716.3</td><td class="n">969.4</td><td class="n">2,985.4</td><td class="n">3,401.1</td><td class="n">931.8</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">387.2</td><td class="n">511.0</td><td class="n">737.3</td><td class="n">3,997.6</td><td class="n">4,595.8</td><td class="n">810.7</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">359.5</td><td class="n">484.1</td><td class="n">2,210.0</td><td class="n">1,767.7</td><td class="n">2,210.1</td><td class="n">572.1</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">565.8</td><td class="n">833.8</td><td class="n">884.4</td><td class="n">1,667.1</td><td class="n">2,236.2</td><td class="n">601.2</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">405.9</td><td class="n">496.3</td><td class="n">624.6</td><td class="n">4,345.9</td><td class="n">4,887.2</td><td class="n">1,110.9</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">356.4</td><td class="n">442.8</td><td class="n">2,226.3</td><td class="n">1,775.5</td><td class="n">2,201.2</td><td class="n">598.2</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">594.2</td><td class="n">841.4</td><td class="n">951.7</td><td class="n">1,670.7</td><td class="n">2,115.6</td><td class="n">624.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">405.0</td><td class="n">507.0</td><td class="n">663.7</td><td class="n">3,640.9</td><td class="n">4,369.9</td><td class="n">1,415.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">374.8</td><td class="n">541.8</td><td class="n">2,239.9</td><td class="n">1,783.3</td><td class="n">2,208.4</td><td class="n">572.5</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">581.9</td><td class="n">752.8</td><td class="n">985.6</td><td class="n">1,732.8</td><td class="n">2,138.5</td><td class="n">596.0</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">393.2</td><td class="n">529.3</td><td class="n">684.1</td><td class="n">3,085.2</td><td class="n">3,707.5</td><td class="n">854.2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">341.0</td><td class="n">363.2</td><td class="n">2,218.6</td><td class="n">1,993.2</td><td class="n">2,411.3</td><td class="n">675.9</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">557.7</td><td class="n">582.9</td><td class="n">941.1</td><td class="n">1,887.8</td><td class="n">2,301.9</td><td class="n">763.9</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">471.7</td><td class="n">606.5</td><td class="n">695.1</td><td class="n">2,714.8</td><td class="n">3,341.4</td><td class="n">735.2</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">378.6</td><td class="n">414.6</td><td class="n">2,240.3</td><td class="n">1,853.1</td><td class="n">2,462.7</td><td class="n">895.2</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">587.5</td><td class="n">611.2</td><td class="n">724.2</td><td class="n">1,773.6</td><td class="n">2,426.6</td><td class="n">981.2</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">674.4</td><td class="n">778.9</td><td class="n">921.0</td><td class="n">3,688.3</td><td class="n">4,365.0</td><td class="n">1,273.0</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">849.2</td><td class="n">959.4</td><td class="n">2,632.6</td><td class="n">1,511.3</td><td class="n">1,881.6</td><td class="n">452.3</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,252.3</td><td class="n">1,743.8</td><td class="n">2,069.8</td><td class="n">1,157.7</td><td class="n">1,792.3</td><td class="n">475.3</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">228.1</td><td class="n">294.7</td><td class="n">1,896.2</td><td class="n">2,693.2</td><td class="n">2,830.6</td><td class="n">898.1</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">335.4</td><td class="n">355.6</td><td class="n">2,264.4</td><td class="n">1,248.2</td><td class="n">1,672.4</td><td class="n">482.2</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">568.6</td><td class="n">672.8</td><td class="n">917.4</td><td class="n">1,130.4</td><td class="n">1,566.7</td><td class="n">517.2</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,257.3</td><td class="n">1,404.5</td><td class="n">4,899.2</td><td class="n">4,134.2</td><td class="n">4,509.2</td><td class="n">1,293.4</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,568.6</td><td class="n">1,593.5</td><td class="n">3,355.8</td><td class="n">2,277.9</td><td class="n">2,698.0</td><td class="n">878.8</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,812.5</td><td class="n">1,919.3</td><td class="n">2,544.0</td><td class="n">2,012.9</td><td class="n">2,447.6</td><td class="n">950.2</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">7,530.4</td><td class="n">7,999.8</td><td class="n">8,587.9</td><td class="n">21,222.2</td><td class="n">21,927.1</td><td class="n">9,161.5</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">8,057.3</td><td class="n">8,322.5</td><td class="n">10,571.6</td><td class="n">10,178.3</td><td class="n">10,438.9</td><td class="n">5,345.1</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">10,208.8</td><td class="n">10,690.3</td><td class="n">13,622.3</td><td class="n">9,751.8</td><td class="n">10,176.5</td><td class="n">5,642.8</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">A maximum is one frame of 1,800, so it moves with whatever else the machine did in that frame; only <code>town</code>'s GPU frame on the reference machine is over one 60 Hz period.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Budget</th><th class="n">Value</th><th>Judged at</th></tr></thead>
     <tbody>
-      <tr><td><code>cpu_frame_microseconds</code></td><td class="n">6,000</td><td>the median and the p95</td></tr>
-      <tr><td><code>gpu_frame_microseconds</code></td><td class="n">12,000</td><td>the median</td></tr>
-      <tr><td><code>gate_microseconds</code></td><td class="n">6,000</td><td>the median, with shadow rays off</td></tr>
+      <tr><td><code>cpu_frame_microseconds</code></td><td class="n">6,000</td><td>the median, p95 and p99</td></tr>
+      <tr><td><code>gpu_frame_microseconds</code></td><td class="n">12,000</td><td>the median and p99</td></tr>
+      <tr><td><code>gate_microseconds</code></td><td class="n">6,000</td><td>the median and p99, with shadow rays off</td></tr>
+      <tr><td><code>maximum_frame_microseconds</code></td><td class="n">16,667</td><td>the CPU frame's and the GPU frame's maximum</td></tr>
       <tr><td><code>dynamic_tlas_cpu_microseconds</code></td><td class="n">1,100</td><td>the median</td></tr>
       <tr><td><code>dynamic_tlas_gpu_microseconds</code></td><td class="n">1,000</td><td>the median of <code>dynamic_tlas_build</code>, where timed</td></tr>
       <tr><td><code>gpu_memory_bytes</code></td><td class="n">8,000,000,000</td><td>the counter</td></tr>
+      <tr><td><code>gpu_memory_bytes_by_kind</code></td><td class="n">7 kinds</td><td>each kind's median, in the table below</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/budgets.json</code> at the commit above: ADR 0013's per-frame limits, ADR 0019's gate and ADR 0020's dynamic TLAS ceilings.</p>
+  <p class="note"><code>bench/budgets.json</code> at the commit above: ADR 0013's per-frame limits and its split of the 8 GB, ADR 0019's gate and ADR 0020's dynamic TLAS ceilings.</p>
+  <p>GPU memory by kind on the reference machine, in bytes, from its Baselines' <code>gpu_memory_bytes_by_kind</code>, which <code>praxis report</code> does not print, with each kind's Budget last:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th class="n">Geometry Arenas</th><th class="n">Texture pool</th><th class="n">Resident tails</th><th class="n">Render targets</th><th class="n">Acceleration structures</th><th class="n">Staging</th><th class="n">Scene and pass buffers</th></tr></thead>
+    <tbody>
+      <tr><td><code>shadows</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">24</td><td class="n">270,335,860</td><td class="n">154,180,495</td><td class="n">1,536</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">83,886,080</td><td class="n">19,267,584</td><td class="n">611,880</td><td class="n">270,335,860</td><td class="n">155,139,844</td><td class="n">6,144</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">24</td><td class="n">270,335,860</td><td class="n">154,180,402</td><td class="n">6,144</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">83,886,080</td><td class="n">19,267,584</td><td class="n">611,880</td><td class="n">270,335,860</td><td class="n">154,432,941</td><td class="n">3,072</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">83,886,080</td><td class="n">5,505,024</td><td class="n">174,840</td><td class="n">270,335,860</td><td class="n">154,080,310</td><td class="n">3,072</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>minification</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">262,248</td><td class="n">270,335,860</td><td class="n">154,080,310</td><td class="n">1,536</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">24</td><td class="n">270,335,860</td><td class="n">154,080,310</td><td class="n">1,572,864</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">83,886,080</td><td class="n">5,505,024</td><td class="n">174,840</td><td class="n">270,335,860</td><td class="n">154,180,402</td><td class="n">6,144</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">491,496</td><td class="n">270,335,860</td><td class="n">154,080,310</td><td class="n">49,152</td><td class="n">230,547,848</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">24</td><td class="n">270,335,860</td><td class="n">154,088,023</td><td class="n">786,432</td><td class="n">230,547,848</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">83,886,080</td><td class="n">0</td><td class="n">24</td><td class="n">270,335,860</td><td class="n">154,145,706</td><td class="n">100,663,296</td><td class="n">230,547,848</td></tr>
+      <tr><td>Budget</td><td class="n">83,886,080</td><td class="n">4,294,967,296</td><td class="n">1,073,741,824</td><td class="n">536,870,912</td><td class="n">268,435,456</td><td class="n">134,217,728</td><td class="n">230,547,848</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code> and <code>bench/budgets.json</code> at the commit above. The geometry Arenas and the scene and pass buffers are created at device creation at capacities derived from their Budgets, and every scene reads those Budgets exactly; the render targets depend on the size alone, and the texture pool holds only what a scene's Textures stream beyond their Resident tails.</p>
   <p>The aliasing counters, in millionths, from the three hardware adapters' Baselines:</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>aliasing_rmse</code></th><th class="n"><code>aliasing_p99</code></th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,182</td><td class="n">6,670</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,178</td><td class="n">6,677</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,182</td><td class="n">6,635</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,181</td><td class="n">6,668</td></tr>
       <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,182</td><td class="n">6,668</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">13,706</td><td class="n">39,984</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">13,785</td><td class="n">40,784</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">13,846</td><td class="n">40,102</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">13,844</td><td class="n">40,060</td></tr>
       <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">13,826</td><td class="n">39,817</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">10,958</td><td class="n">15,042</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">10,954</td><td class="n">15,100</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">11,010</td><td class="n">14,959</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">11,008</td><td class="n">15,023</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">11,001</td><td class="n">15,019</td></tr>
       <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">18,973</td><td class="n">35,784</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">20,044</td><td class="n">38,865</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">20,043</td><td class="n">38,708</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">18,883</td><td class="n">35,523</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,558</td><td class="n">33,364</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,340</td><td class="n">49,559</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,569</td><td class="n">33,476</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,352</td><td class="n">49,643</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">7,112</td><td class="n">35,657</td></tr>
       <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">32,960</td><td class="n">143,799</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">35,304</td><td class="n">145,354</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">35,459</td><td class="n">147,720</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,557</td><td class="n">3,033</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,556</td><td class="n">2,985</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,557</td><td class="n">3,049</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,556</td><td class="n">2,979</td></tr>
       <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,556</td><td class="n">2,979</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,817</td><td class="n">4,686</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,157</td><td class="n">6,213</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,825</td><td class="n">4,686</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,160</td><td class="n">6,180</td></tr>
       <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,915</td><td class="n">4,372</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,221</td><td class="n">13,754</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,219</td><td class="n">13,744</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,222</td><td class="n">13,721</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,220</td><td class="n">13,718</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,220</td><td class="n">13,728</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,161</td><td class="n">17,296</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">4,156</td><td class="n">17,311</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,172</td><td class="n">17,331</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">4,169</td><td class="n">17,352</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,325</td><td class="n">12,537</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,078</td><td class="n">15,451</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5,092</td><td class="n">15,431</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,098</td><td class="n">15,501</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5,097</td><td class="n">15,455</td></tr>
       <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">5,097</td><td class="n">15,455</td></tr>
     </tbody>
   </table>
@@ -772,10 +898,14 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
 </section>
 
 <section class="part prose" id="why">
-  <div class="part-mark">10 &middot; ADRs 0013, 0019, 0020, 0022, 0024</div>
+  <div class="part-mark">10 &middot; ADRs 0013, 0017, 0019, 0020, 0022, 0024</div>
   <h2>Why this way</h2>
-  <p><b>Medians over a fixed camera path, not frames per second.</b> ADR 0013 sets the Budgets as per-frame times at 1440p on the reference machine, and ADR 0019 phrases its gate as the median over the scene's camera path. A Reference scene's injected time means frame 700 is the same frame on every run and on every machine, so a median over it is a property of the code, where a frame rate over wall-clock seconds is a property of the run. The p95 is kept beside the median for the tail, and judged only where ADR 0013 bounds the tail, the CPU frame.</p>
+  <p><b>Medians over a fixed camera path, not frames per second.</b> ADR 0013 sets the Budgets as per-frame times at 1440p on the reference machine, and ADR 0019 phrases its gate as the median over the scene's camera path. A Reference scene's injected time means frame 700 is the same frame on every run and on every machine, so a median over it is a property of the code, where a frame rate over wall-clock seconds is a property of the run. The p95, p99 and maximum are kept beside the median for the tail, and judged where ADR 0013 bounds it.</p>
+  <p><b>The tail answers to the Budget too.</b> A median within its Budget says nothing of the frames a player notices: ADR 0013 holds the CPU frame, the GPU frame and the gate to their Budgets at the p99 as at the median, the CPU frame at its p95 as well, and no CPU or GPU frame to longer than one 60 Hz period, the frame a 60 Hz display would miss. The tail statistics are nearest-rank like the median, so each is a frame that was measured; over 1,800 frames the p99 sets aside 18 of them, and the maximum none, which is why it answers to the period rather than to the per-frame Budget.</p>
   <p><b>Counters exactly, times by ratio and floor.</b> Counters repeat exactly from run to run, so any increase is a change in the code and fails; there is nothing to tolerate. Times move with the machine, so a time is judged by its ratio to the Baseline, with the 5% and 10% set above the noise of GPU medians over repeated runs on the M4 Pro under the owner's usual load. CPU medians of tens of microseconds and short passes move by more than those ratios between runs, so a time fails only when it also grew past a floor in microseconds; within it, it warns.</p>
+  <p><b>A settled warm-up, then streaming as a game does.</b> Every scene's Chunks come through an IO pool whose reads land when they land, so the frame a load arrives on varies from run to run, and counters that varied would fail on any rise. The frames before the counter frames wait until every requested load is Resident, so the counter frames and everything after start from the same world on every run; the measured frames then stream without waiting, so a reference run's times include what streaming costs a game. The late mips stay reported only, since they still depend on when reads land.</p>
+  <p><b>A refusal counts its worst frame, a streaming event its every frame.</b> The median of a counter that is zero on most frames is zero, so a refusal, a light or Instance something had no room for, is the most of any frame, and a single such frame fails. Streaming counts events, a Chunk loaded or a byte read, so the run's figure is their sum, and over the counter frames, which follow the Settled ones, two runs sum to the same.</p>
+  <p><b>GPU memory by kind.</b> ADR 0013's 8 GB splits into one Budget per kind of GPU memory (ADR 0017), and the pools are sized from those Budgets at device creation, so a kind that holds more than its Budget is a pool that grew where it should not. The total is still judged, and a test holds the kinds' Budgets to no more than it.</p>
   <p><b>Two runs, so that the gate reads the main pass.</b> ADR 0019's gate is timed with shadow rays off, since every main-pass design it weighs traces the same rays; with them in, the gate would measure the rays as much as the pass. No pass is only the rays, so their cost is read as the difference of the two runs' frames, and the second run is the price of two lines the first cannot give.</p>
   <p><b>A spin wait in the bench alone.</b> The CPU Budgets price the main thread's work when the frame waits on it. Behind a GPU-bound frame on the M4 Pro a blocked main thread runs the whole next frame on a slower clock, so blocking measures the clock. Spinning measures the work, at the cost of a performance core and the thermal headroom Apple asks games not to spend, which is why the window keeps blocking and lavapipe, which rasterises on the CPU the spin would take a core from, blocks too. Reading the CPU lines from a run with one frame in flight was weighed and set aside: the clock's ramp after each wait stays in the lines, and every scene would run a third time.</p>
   <p><b>Aliasing against the engine's own render, in linear light.</b> A reference from another renderer would measure bias, every place the shading differs, as much as aliasing. The same frame at three times the size, box-filtered down, differs from the frame only where one sample per pixel missed what nine resolve: specular sparkle, shimmering edges, terminator steps. The filter runs on decoded values because the average of two sRGB-encoded bytes is not the encoding of their average light; a test holds the block of three white and six black pixels to a third, not to the 0.0908 the encoded mean would decode to. The counters are integers in millionths so that they compare as the other counters do, and the p99 is kept beside the root mean square because a few sparkling pixels move the one and barely the other.</p>
@@ -787,7 +917,11 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
 <section class="part prose" id="limits">
   <div class="part-mark">11</div>
   <h2>Limits</h2>
-  <p><b>A Baseline without the aliasing counters.</b> A run that measured them against a Baseline that lacks them fails both until the Baseline is re-recorded. Only the lavapipe Baselines lack them, and CI's configuration skips them, so the gap fails no run; the DX12 Baselines alone hold Provenance, the lit pass's wait and the gate's passes.</p>
+  <p><b>A Baseline without the aliasing counters.</b> A run that measured them against a Baseline that lacks them fails both until the Baseline is re-recorded. Only the lavapipe Baselines lack them, and CI's configuration skips them, so the gap fails no run.</p>
+  <p><b>No Baseline holds the streaming counters.</b> Every committed Baseline predates them, so they read as zero there, and a run that counted a Chunk loaded or a byte read in the frames it compares would fail against it until the Baseline is re-recorded. The settled warm-up keeps the counter frames free of streaming, which is what the verify command and CI compare.</p>
+  <p><b>Late mips are not judged.</b> A change that makes more mips arrive late passes <code>compare</code>; only the report shows it.</p>
+  <p><b>GPU memory by kind is not in the report.</b> <code>compare</code> judges each kind, but <code>praxis report</code> prints only the total, so a PR quoting the kinds reads them from the result's JSON.</p>
+  <p><b>The gate's maximum is not judged.</b> It is measured and reported; only the CPU and GPU frames' maximums answer to the 60 Hz period.</p>
   <p><b>Budgets on every adapter.</b> <code>compare</code> does not know which machine is the reference one, so the RTX 2070 SUPER's <code>town</code> fails the CPU frame's Budget and the dynamic TLAS's CPU ceiling there, lines ADR 0013 judges on the M4 Pro alone.</p>
   <p><b>Harness version unchecked.</b> A Baseline is refused for its form, its scene, profile, size, counter frames, frame count, adapter, backend and passes, not for its Harness version; a Baseline recorded under an earlier version whose records still parse compares as if it were current.</p>
   <p><b>One frame of aliasing, at the Goldens' size.</b> The counters judge the 60th frame at 640&times;360, not the bench's size or its camera path; aliasing that appears elsewhere along the path, or only at 1440p, is not measured.</p>
@@ -805,15 +939,16 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
   <dl class="reading">
     <dt><a href="https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB_EOTF">Khronos Data Format Specification 1.3, &sect;13.3.1 sRGB EOTF</a></dt><dd>the decoding the aliasing counters apply before they filter and difference, with the knee at 0.04045 and the division by 12.92 below it; <code>khronos-dfs-srgb-eotf</code></dd>
     <dt><a href="https://developer.apple.com/videos/play/tech-talks/110147/">Apple Tech Talk 110147, Tune CPU job scheduling for Apple silicon games, 2021</a></dt><dd>why the window never busy-waits: a busy wait can lock a performance core, keep the scheduler from promoting a thread, and spend thermal headroom; <code>apple-tech-talk-110147-busy-waits</code></dd>
-    <dt>ADR 0013, Reference hardware and provisional budgets</dt><dd>the reference machine, the per-frame Budgets and the GPU memory count; the RTX 2070 SUPER as the floor benched for comparison; a Budget moves down freely and up through an ADR or a map comment</dd>
+    <dt>ADR 0013, Reference hardware and provisional budgets</dt><dd>the reference machine, the per-frame Budgets at the median and p99, the CPU frame's p95, the 16,667 µs longest frame, the GPU memory count and its split by kind; the RTX 2070 SUPER as the floor benched for comparison; a Budget moves down freely and up through an ADR or a map comment</dd>
+    <dt>ADR 0017, Textures stream by mip, geometry lives in fixed arenas</dt><dd>the 8 GB split into a Budget per kind of GPU memory, and the geometry arenas sized from theirs at device creation</dd>
     <dt>ADR 0019, Clustered forward main pass with 4x MSAA</dt><dd>the gate: the median over the camera path from the first culling dispatch to the end of the lit pass with shadow rays off, against half of ADR 0013's GPU frame</dd>
     <dt>ADR 0020, Ray-traced probe GI and hard ray-traced shadows</dt><dd>the dynamic TLAS's two ceilings, on its CPU cost and its build</dd>
     <dt>ADR 0022, Fixed 64 Hz simulation with interpolation</dt><dd>Budgets stay judged at 60 Hz</dd>
     <dt>ADR 0024, Bench history is git-stored Bench records keyed by engine source</dt><dd>the source hash over the measured paths, the Harness version, the quiet rule, and that the history observes while Baselines gate</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The bench began beside the Instance buffer's fixed capacity, as a way to prove a change had not moved the counters or the medians: one run per scene, counters held exactly, times by the 5% and 10% ratios with a floor for the short CPU frames, and a scene-order trap found while recording the first Baselines. The dense scene's Baselines brought the second run, with ADR 0019's gate and shadow-ray time read as a difference, the dynamic TLAS build timed from the frame before, and the ceilings on that build. The spin wait came when <code>town</code>'s CPU lines on the M4 Pro were found to read a slowed clock behind its GPU-bound frames, told in <a href="waiting-on-the-gpu.html">Waiting on the GPU</a>. Provenance, the Harness version and the publish to the Bench history came with ADR 0024, and the aliasing counters last, which every hardware Baseline holds. The volumes that narrated the earlier steps are absorbed into this page, which describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/bench/mod.rs</code>, <code>src/bench/provenance.rs</code>, <code>src/bench/report.rs</code>, <code>src/capture/mod.rs</code>, <code>src/bin/praxis.rs</code>, <code>src/preflight/mod.rs</code>, <code>scripts/verify.sh</code>, <code>.github/workflows/ci.yml</code>, <code>bench/budgets.json</code>, the committed Baselines, the tests named above, <code>CONTEXT.md</code>, ADRs 0013, 0019, 0020, 0022 and 0024, and the sources above, all at <code>main</code> 075919da.</footer>
+  <p class="note">The bench began beside the Instance buffer's fixed capacity, as a way to prove a change had not moved the counters or the medians: one run per scene, counters held exactly, times by the 5% and 10% ratios with a floor for the short CPU frames, and a scene-order trap found while recording the first Baselines. The dense scene's Baselines brought the second run, with ADR 0019's gate and shadow-ray time read as a difference, the dynamic TLAS build timed from the frame before, and the ceilings on that build. The spin wait came when <code>town</code>'s CPU lines on the M4 Pro were found to read a slowed clock behind its GPU-bound frames, told in <a href="waiting-on-the-gpu.html">Waiting on the GPU</a>. Provenance, the Harness version and the publish to the Bench history came with ADR 0024, and the aliasing counters after them, which every hardware Baseline holds. Then the p99 and maximum joined each time with their Budgets, the refusal counters beside the overflow, GPU memory by kind with a Budget per kind, the streaming counters when every scene began to stream its Chunks, and last the settled warm-up, once a slow IO pool was found to move a Chunk load into the counter frames. The volumes that narrated the earlier steps are absorbed into this page, which describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/bench/mod.rs</code>, <code>src/bench/provenance.rs</code>, <code>src/bench/report.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/capture/mod.rs</code>, <code>src/state.rs</code>, <code>src/bin/praxis.rs</code>, <code>src/preflight/mod.rs</code>, <code>scripts/verify.sh</code>, <code>.github/workflows/ci.yml</code>, <code>bench/budgets.json</code>, the committed Baselines, the tests named above, <code>CONTEXT.md</code>, ADRs 0013, 0017, 0019, 0020, 0022 and 0024, and the sources above, all at <code>main</code> 2dbd1ec1.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="frame-stats.html">Previous: Frame stats</a><a href="index.html">All field guides</a><a href="bench-history.html">Next: The Bench history</a></nav>
