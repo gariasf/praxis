@@ -6,8 +6,8 @@ use std::fmt::Write;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 
 use super::{
-    Budgets, COUNTER_COUNT, Measurements, Spread, compared_counters, compares_counter_frames,
-    ensure_comparable,
+    Budgets, COUNTER_COUNT, Measurements, Spread, Traversal, compared_counters,
+    compares_counter_frames, ensure_comparable,
 };
 
 /// `current`'s times and counters, its aliasing among them when it was
@@ -288,6 +288,49 @@ fn ratio(current: f64, baseline: f64) -> String {
         "—".to_owned()
     } else {
         format!("{:.3}", current / baseline)
+    }
+}
+
+/// The Traversal as a markdown table, for the PR or milestone it is
+/// pasted on.
+impl std::fmt::Display for Traversal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            formatter,
+            "**world** traversal, {} frames: a side, the diagonal and a Fast travel at 50 m/s\n",
+            self.frames
+        )?;
+        writeln!(formatter, "| Traversal | Value |\n|---|---:|")?;
+        let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
+        let hold = self.fast_travel_hold;
+        let rows = [
+            ("CPU frame p99, µs", cpu.p99, 1),
+            ("CPU frame maximum, µs", cpu.maximum, 1),
+            ("GPU frame p99, µs", gpu.p99, 1),
+            ("GPU frame maximum, µs", gpu.maximum, 1),
+            ("Late Chunks", Some(self.late_chunks as f64), 0),
+            ("Late mips", Some(self.late_mips as f64), 0),
+            (
+                "Peak GPU memory, bytes",
+                Some(self.peak_gpu_memory_bytes as f64),
+                0,
+            ),
+            (
+                "Fast-travel hold, ms",
+                hold.map(|hold| hold.milliseconds),
+                1,
+            ),
+            (
+                "Fast-travel hold, frames",
+                hold.map(|hold| f64::from(hold.frames)),
+                0,
+            ),
+        ];
+        for (name, value, decimals) in rows {
+            let value = value.map_or("—".to_owned(), |value| grouped(value, decimals));
+            writeln!(formatter, "| {name} | {value} |")?;
+        }
+        Ok(())
     }
 }
 

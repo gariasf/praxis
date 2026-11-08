@@ -98,6 +98,7 @@ enum Command {
     Report {
         results: String,
     },
+    Traverse,
 }
 
 fn run_command(arguments: &[String]) -> anyhow::Result<()> {
@@ -157,6 +158,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::Regressions => regressions(),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
+        Command::Traverse => traverse(),
     }
 }
 
@@ -335,6 +337,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command, results] if command == "report" => Command::Report {
             results: results.clone(),
         },
+        [command] if command == "traverse" => Command::Traverse,
         [scene] if ReferenceScene::from_name(scene).is_some() => {
             Command::Window(parse_scene(scene)?)
         }
@@ -353,7 +356,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, or `report <bench directory>`; {crowd_form_clause} \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )
@@ -761,6 +764,15 @@ fn report(results: &str) -> anyhow::Result<()> {
         };
         writeln!(stdout, "{tables}")?;
     }
+    Ok(())
+}
+
+/// Renders the world's traversal and prints what it measured as a markdown
+/// table.
+fn traverse() -> anyhow::Result<()> {
+    let context = pollster::block_on(GpuContext::headless())?;
+    let traversal = praxis::bench::traverse(&context)?;
+    writeln!(std::io::stdout(), "{traversal}")?;
     Ok(())
 }
 
@@ -1227,5 +1239,6 @@ mod tests {
             panic!("report parsed as another command");
         };
         assert_eq!(results, "out");
+        assert!(matches!(parse(&["traverse"]).unwrap(), Command::Traverse));
     }
 }

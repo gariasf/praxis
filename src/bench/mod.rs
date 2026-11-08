@@ -26,7 +26,7 @@ use crate::render::{
     TIMED_PASSES,
 };
 use crate::scenes::ReferenceScene;
-use crate::scenes::world::BENCH_SEGMENT_FRAMES;
+use crate::scenes::world::{BENCH_SEGMENT_FRAMES, TRAVERSAL_FRAMES, traversal_camera_at};
 use crate::stats::{FrameStats, GpuFrameStats, GpuMemoryBudgets, GpuMemoryKind};
 use crate::time::SIXTY_HERTZ;
 
@@ -558,6 +558,55 @@ impl FastTravelHold {
     }
 }
 
+/// What `traverse` measured of the world's traversal: the CPU and GPU
+/// frames after the reference warm-up, and over every frame its Late
+/// Chunks, late mips, peak GPU memory and Fast travel's hold.
+#[derive(Debug)]
+pub struct Traversal {
+    pub frames: usize,
+    pub cpu_frame_microseconds: Spread,
+    pub gpu_frame_microseconds: Spread,
+    pub late_chunks: u64,
+    pub late_mips: u64,
+    pub peak_gpu_memory_bytes: u64,
+    pub fast_travel_hold: Option<FastTravelHold>,
+}
+
+impl Traversal {
+    /// The Traversal of `frames`, of which the first `warm_up_frames` are
+    /// not timed, each frame's GPU time as far as it was read back.
+    fn of(frames: &[FrameStats], warm_up_frames: usize) -> Self {
+        let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
+        let timed = &frames[warm_up_frames.min(frames.len())..];
+        Self {
+            frames: frames.len(),
+            cpu_frame_microseconds: spread(
+                timed
+                    .iter()
+                    .map(|stats| microseconds(stats.cpu_frame_time))
+                    .collect(),
+            ),
+            gpu_frame_microseconds: spread(
+                timed
+                    .iter()
+                    .filter_map(|stats| stats.gpu)
+                    .map(|gpu| microseconds(gpu.frame_time))
+                    .collect(),
+            ),
+            late_chunks: frames
+                .iter()
+                .map(|stats| u64::from(stats.late_chunks))
+                .sum(),
+            late_mips: frames.iter().map(|stats| u64::from(stats.late_mips)).sum(),
+            peak_gpu_memory_bytes: (frames.iter())
+                .map(|stats| stats.gpu_memory_bytes)
+                .max()
+                .unwrap_or(0),
+            fast_travel_hold: FastTravelHold::of(frames),
+        }
+    }
+}
+
 /// A time's median, p95, p99 and maximum over frames, by nearest rank; the
 /// p99 and maximum are absent from Baselines and Bench records from before
 /// results carried them.
@@ -689,6 +738,36 @@ pub fn run(
         provenance,
         ..measurements
     })
+}
+
+/// Renders the world's traversal, at the reference size and Hz as the bench
+/// renders its segment, and measures it.
+pub fn traverse(context: &GpuContext) -> anyhow::Result<Traversal> {
+    let configuration = Configuration::REFERENCE;
+    let (_, frames, _) = render_frames(
+        context,
+        ReferenceScene::World,
+        glam::DVec3::ZERO,
+        &traversal_camera_at,
+        configuration.width,
+        configuration.height,
+        0..TRAVERSAL_FRAMES,
+        &[],
+        SIXTY_HERTZ,
+        RenderSwitches::default(),
+        frame_wait(context),
+        SETTLED_FRAMES,
+    )?;
+    let unread = frames.iter().filter(|stats| stats.gpu.is_none()).count();
+    anyhow::ensure!(
+        unread == 0,
+        "{unread} of {} frames read back no GPU stats",
+        frames.len()
+    );
+    Ok(Traversal::of(
+        &frames,
+        configuration.warm_up_frames as usize,
+    ))
 }
 
 /// How a bench waits for the oldest frame in flight on `context`'s adapter:
@@ -2428,6 +2507,31 @@ mod tests {
         )
         .expect("every frame read back its GPU stats");
         assert_eq!(measurements.shadow_ray_microseconds.maximum, Some(50.0));
+    }
+
+    #[test]
+    fn a_traversal_times_frames_after_its_warm_up_and_counts_the_rest_over_every_frame() {
+        let configuration = Configuration::REFERENCE;
+        let mut frames = frames(configuration);
+        frames[3].gpu_memory_bytes = 7_000_000_000;
+        frames[1000].gpu_memory_bytes = 6_000_000_000;
+        frames[1000].cpu_frame_time = Duration::from_micros(5000);
+        frames[1001].holding = true;
+        frames[1002].fast_travel_hold = Some(Duration::from_millis(80));
+        let traversal = Traversal::of(&frames, configuration.warm_up_frames as usize);
+        assert_eq!(traversal.frames, 2048);
+        assert_eq!(traversal.cpu_frame_microseconds.maximum, Some(5000.0));
+        assert_eq!(traversal.cpu_frame_microseconds.p99, Some(100.0));
+        assert_eq!(traversal.gpu_frame_microseconds.maximum, Some(300.0));
+        assert_eq!((traversal.late_chunks, traversal.late_mips), (2, 5));
+        assert_eq!(traversal.peak_gpu_memory_bytes, 7_000_000_000);
+        assert_eq!(
+            traversal.fast_travel_hold,
+            Some(FastTravelHold {
+                milliseconds: 80.0,
+                frames: 1
+            })
+        );
     }
 
     #[test]

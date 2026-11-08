@@ -108,7 +108,8 @@ src/
                                  state, a line per check
   bench/                       # Reference scene medians, compared with
                                  Baselines and Budgets, published as
-                                 Bench records on `bench-history`;
+                                 Bench records on `bench-history`, and
+                                 `praxis traverse`, the world's traversal;
                                  history/import.rs, `praxis history
                                  import`: the Baselines committed before
                                  it, by Harness version era;

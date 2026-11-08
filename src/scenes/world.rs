@@ -53,6 +53,13 @@ pub(crate) const BENCH_SEGMENT_FRAMES: u32 = 3600;
 /// another settlement, flying on north through it.
 const FAST_TRAVEL_FRAME: u32 = 1800;
 const FAST_TRAVEL_SETTLEMENT: [u32; 2] = [1, 6];
+/// The traversal flies as the bench path does, half a Chunk in from the
+/// world's edge: west to east along its south side, then, after a Fast
+/// travel to its north-east corner, its diagonal to the south-west corner.
+const TRAVERSAL_CORNER_METRES: f64 = WORLD_HALF_SIZE_METRES - CHUNK_EDGE_METRES / 2.0;
+const TRAVERSAL_SIDE_FRAMES: u32 = (2.0 * TRAVERSAL_CORNER_METRES / CAMERA_METRES_PER_FRAME) as u32;
+pub(crate) const TRAVERSAL_FRAMES: u32 =
+    TRAVERSAL_SIDE_FRAMES + (TRAVERSAL_SIDE_FRAMES as f64 * std::f64::consts::SQRT_2) as u32;
 
 /// The flocks about the camera: 320 m a side, centres between the roofs and
 /// the camera, each kept within 160 m of the camera on X and Z, so that no
@@ -186,6 +193,34 @@ pub(crate) fn camera_at(frame: u32) -> Camera {
     let gaze = glam::dvec3(0.0, -CAMERA_HEIGHT_METRES, -GAZE_METRES);
     Camera {
         teleported: frame == FAST_TRAVEL_FRAME,
+        ..Camera::looking_at(position, position + gaze)
+    }
+}
+
+/// The camera at `frame` of the traversal, exposed as the scene's path is.
+pub(crate) fn traversal_camera_at(frame: u32) -> Camera {
+    let corner = TRAVERSAL_CORNER_METRES;
+    let (start, end, frames_flown) = if frame < TRAVERSAL_SIDE_FRAMES {
+        (
+            glam::dvec3(-corner, 0.0, corner),
+            glam::dvec3(corner, 0.0, corner),
+            frame,
+        )
+    } else {
+        let frames_flown = frame - TRAVERSAL_SIDE_FRAMES;
+        (
+            glam::dvec3(corner, 0.0, -corner),
+            glam::dvec3(-corner, 0.0, corner),
+            frames_flown,
+        )
+    };
+    let heading = (end - start).normalize();
+    let flown = heading * (CAMERA_METRES_PER_FRAME * f64::from(frames_flown));
+    let position = start + flown + glam::DVec3::Y * CAMERA_HEIGHT_METRES;
+    let gaze = heading * GAZE_METRES - glam::DVec3::Y * CAMERA_HEIGHT_METRES;
+    Camera {
+        teleported: frame == TRAVERSAL_SIDE_FRAMES,
+        ev100: ReferenceScene::World.ev100(),
         ..Camera::looking_at(position, position + gaze)
     }
 }
@@ -661,6 +696,33 @@ mod tests {
         let before = camera_at(jump_frame - 1).position;
         assert!(!over_a_settlement(before), "{before}");
         assert!(over_a_settlement(camera_at(jump_frame).position));
+    }
+
+    #[test]
+    fn the_traversal_flies_a_side_then_the_diagonal_through_one_fast_travel() {
+        let [(jump_frame, _)] = jumps(traversal_camera_at, TRAVERSAL_FRAMES)[..] else {
+            panic!("the traversal jumps other than once");
+        };
+        let start = traversal_camera_at(0).position;
+        let side = traversal_camera_at(jump_frame - 1).position - start;
+        assert!(
+            side.z.abs() < 1e-9 && (9_900.0..10_240.0).contains(&side.x.abs()),
+            "{side}"
+        );
+        let diagonal = traversal_camera_at(TRAVERSAL_FRAMES - 1).position
+            - traversal_camera_at(jump_frame).position;
+        assert!((diagonal.x - diagonal.z).abs() < 1e-6 || (diagonal.x + diagonal.z).abs() < 1e-6);
+        assert!(
+            (9_900.0..10_240.0).contains(&diagonal.x.abs()),
+            "{diagonal}"
+        );
+        for frame in (0..TRAVERSAL_FRAMES).step_by(60) {
+            let position = traversal_camera_at(frame).position;
+            assert!(
+                position.x.abs().max(position.z.abs()) < 5_120.0,
+                "{position}"
+            );
+        }
     }
 
     /// From a camera anywhere on a 64 m grid, the static Instances of the
