@@ -1,0 +1,213 @@
+{
+  "adapter": "NVIDIA GeForce RTX 2070 SUPER",
+  "aliasing_p99": 15455,
+  "aliasing_rmse": 5097,
+  "arena_bytes_in_use": 85280,
+  "backend": "vulkan",
+  "bends_left_out": 0,
+  "committed_unix_seconds": 1794042138,
+  "counter_frames": {
+    "arena_bytes_in_use": 85280,
+    "bends_left_out": 0,
+    "draw_calls": 4,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "froxel_lights_overflowed": 0,
+    "gpu_memory_bytes": 868289340,
+    "heap_allocations": 10510,
+    "instances_drawn": 5634,
+    "instances_overflowed": 0,
+    "lights_overflowed": 0,
+    "moving_instances_left_out": 0,
+    "renderables_refused": 0,
+    "shadow_mask_lights_overflowed": 0,
+    "static_instances_left_out": 0,
+    "triangles_drawn": 204008,
+    "uploaded_bytes": 1969376
+  },
+  "cpu_frame_microseconds": {
+    "maximum": 10571.6,
+    "median": 7577.8,
+    "p95": 8057.3,
+    "p99": 8322.5
+  },
+  "draw_calls": 4,
+  "dynamic_tlas_cpu_microseconds": {
+    "maximum": 3684.6,
+    "median": 1848.5,
+    "p95": 1885.5,
+    "p99": 2036.1
+  },
+  "froxel_lights_overflowed": 0,
+  "gate_microseconds": {
+    "maximum": 5565.28,
+    "median": 4972.2880000000005,
+    "p95": 5148.0,
+    "p99": 5345.12
+  },
+  "gate_pass_microseconds": {
+    "culling_phase_one": {
+      "maximum": 1086.976,
+      "median": 646.304,
+      "p95": 672.16,
+      "p99": 674.336
+    },
+    "culling_phase_two": {
+      "maximum": 560.992,
+      "median": 129.312,
+      "p95": 132.096,
+      "p99": 134.944
+    },
+    "depth_prepass": {
+      "maximum": 1475.648,
+      "median": 1012.128,
+      "p95": 1038.336,
+      "p99": 1045.2479999999998
+    },
+    "depth_pyramid_pass": {
+      "maximum": 563.616,
+      "median": 153.85600000000002,
+      "p95": 156.544,
+      "p99": 158.048
+    },
+    "froxel_pass": {
+      "maximum": 750.24,
+      "median": 326.048,
+      "p95": 329.056,
+      "p99": 331.2
+    },
+    "lit_pass": {
+      "maximum": 3179.808,
+      "median": 2651.424,
+      "p95": 2774.048,
+      "p99": 2796.576
+    }
+  },
+  "gpu_frame_microseconds": {
+    "maximum": 10438.88,
+    "median": 9686.592,
+    "p95": 9885.088,
+    "p99": 10178.272
+  },
+  "gpu_memory_bytes": 868289340,
+  "gpu_memory_bytes_by_kind": {
+    "acceleration_structures": 64891432,
+    "geometry_arenas": 83886080,
+    "render_targets": 388300660,
+    "resident_tails": 24,
+    "scene_and_pass_buffers": 230547848,
+    "staging": 100663296,
+    "texture_pool": 0
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "maximum": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "blas_refit": {
+      "maximum": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "culling_phase_one": {
+      "maximum": 1093.536,
+      "median": 646.08,
+      "p95": 672.288,
+      "p99": 674.336
+    },
+    "culling_phase_two": {
+      "maximum": 202.976,
+      "median": 128.192,
+      "p95": 131.712,
+      "p99": 135.072
+    },
+    "depth_prepass": {
+      "maximum": 1433.504,
+      "median": 1057.056,
+      "p95": 1080.544,
+      "p99": 1087.264
+    },
+    "depth_pyramid_pass": {
+      "maximum": 573.28,
+      "median": 153.792,
+      "p95": 156.416,
+      "p99": 158.304
+    },
+    "dynamic_tlas_build": {
+      "maximum": 645.12,
+      "median": 215.36,
+      "p95": 221.184,
+      "p99": 239.456
+    },
+    "froxel_pass": {
+      "maximum": 755.84,
+      "median": 326.048,
+      "p95": 327.74399999999997,
+      "p99": 331.008
+    },
+    "lit_pass": {
+      "maximum": 3722.208,
+      "median": 2981.024,
+      "p95": 3123.04,
+      "p99": 3160.576
+    },
+    "phase_two_depth_pass": {
+      "maximum": 100.896,
+      "median": 8.192,
+      "p95": 18.336,
+      "p99": 22.112
+    },
+    "shadow_mask_pass": {
+      "maximum": 4376.352,
+      "median": 3891.232,
+      "p95": 3927.7440000000006,
+      "p99": 4220.928
+    },
+    "tonemapping_pass": {
+      "maximum": 641.024,
+      "median": 187.776,
+      "p95": 188.416,
+      "p99": 189.44
+    }
+  },
+  "heap_allocations": 10510,
+  "height": 1440,
+  "instances_drawn": 137775,
+  "instances_overflowed": 0,
+  "lights_overflowed": 0,
+  "lit_pass_wait_microseconds": {
+    "maximum": 18.4,
+    "median": 14.048,
+    "p95": 16.384,
+    "p99": 17.535999999999998
+  },
+  "measured_frames": 1800,
+  "moving_instances_left_out": 0,
+  "profile": "release",
+  "provenance": {
+    "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super/town.json",
+    "commit": "2032db50478203100483d23316a0d7629c7c98e2",
+    "gpu_frame_p95_over_median": 1.0204918303568478,
+    "harness_version": 11,
+    "source": "baseline-rerecorded",
+    "source_hash": "d9bad5bb16521723c28bd837af5bf7521961334c"
+  },
+  "renderables_refused": 0,
+  "scene": "town",
+  "shadow_mask_lights_overflowed": 0,
+  "shadow_ray_microseconds": {
+    "maximum": 5139.936,
+    "median": 4297.088000000001,
+    "p95": 4359.68,
+    "p99": 4725.344
+  },
+  "static_instances_left_out": 0,
+  "triangles_drawn": 5552306,
+  "uploaded_bytes": 1969376,
+  "width": 2560
+}
