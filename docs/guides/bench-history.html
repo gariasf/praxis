@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/bench/history.rs</code> &middot; <code>docs/bench/index.html</code></div>
   <h1>The Bench history</h1>
   <p class="definition">Every bench run kept as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span> on the orphan <code>bench-history</code> branch, a JSON file at a path that is its key, the source hash of the paths that can change a measurement, the adapter, the backend and the scene; the clean, release-profile, quiet runs of <code>main</code>'s source form each machine's <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>, which every publish rebuilds and marks its <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3%, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspects</span> on, a page draws, and a nightly sweep re-benches, bisects and files as <span class="concept" data-term="Regression" data-tip="A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one needs-triage issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.">Regressions</span>.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 4abdfd44 (2026-11-08). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at e251e21e (2026-11-08). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -866,22 +866,38 @@ fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
   <h2>The sweep, Verdicts, bisect and Regressions</h2>
   <p class="key-idea">Each night a machine re-benches one slower Suspect beside the record before it, interleaved, from release binaries of both commits; a shift that holds is bisected along <code>main</code>'s first-parent commits over as many nights as it takes, and the commit pinned starts its Series' line. A pinned commit no re-recorded Baseline covers is a Regression and opens one issue per scene. Then the night benches the scenes <code>main</code>'s source lacks a record on here.</p>
   <div class="code-source"><code>scripts/sweep.sh</code></div>
-<pre class="code"><code>  cargo build --release --quiet || fail "cargo build --release"
+<pre class="code"><code>  preparation_start_seconds=$SECONDS
+  cargo build --release --quiet || fail "cargo build --release"
   praxis=target/release/praxis
   # A Baseline re-recorded since the last night becomes its source's record,
   # which starts a line, before the night reads which scenes lack one.
   "$praxis" history import || log "praxis history import failed"
   scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
   "$praxis" fetch &amp;&amp; "$praxis" cook || fail "fetch and cook"
+  log "built and cooked in $((SECONDS - preparation_start_seconds))s"
 …
-  preflight=$("$praxis" preflight)
-  [ -n "$preflight" ] || fail "praxis preflight printed nothing"
-  warnings=$(printf '%s\n' "$preflight" | grep '^warn' | sed 's/  */ /g')
-  if [ -n "$warnings" ]; then
-    log "skipped, the machine is not quiet:"
-    printf '%s\n' "$warnings"
+  quiet_by() {
+    local deadline_seconds=$1 pattern=$2 busy
+    while busy=$(warnings | grep "^$pattern"); do
+      log "busy: ${busy//$'\n'/; }"
+      [ "$SECONDS" -lt "$deadline_seconds" ] || return 1
+      sleep 5
+    done
+  }
+…
+  if ! quiet_by $((preparation_start_seconds + preparation_limit_seconds)) ''; then
+    log "skipped, the machine is not quiet; the busiest processes:"
+    ps -A -o pcpu=,comm= 2&gt;/dev/null | sort -rn | head -3
     exit 0
   fi
+  preparation_seconds=$((SECONDS - preparation_start_seconds))
+…
+  may_start() {
+    [ $((SECONDS - benching_start_seconds)) -lt "$cap_seconds" ] &amp;&amp;
+      quiet_by $((benching_start_seconds + cap_seconds)) '[cg]pu load' &amp;&amp; return 0
+    log "time cap of ${cap_seconds}s of benching reached; left for the next night: $1 and after"
+    return 1
+  }
 …
   while true; do
     job=$("$praxis" history bisect "$night") || {
@@ -897,10 +913,26 @@ fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
       read -r run
       read -r arguments
     } &lt;&lt;&lt;"$job"
-    tree=$(tree_at "$commit") || {
-      log "no release binary of $commit"
-      break
-    }
+    tree="$PWD/target/sweep/trees/$commit"
+    if [ ! -x "$tree/praxis" ]; then
+      [ "$preparation_seconds" -lt "$preparation_limit_seconds" ] || {
+        log "allowance of ${preparation_limit_seconds}s for preparing reached; left for the next night: the re-bench at $commit and after"
+        break
+      }
+      tree_start_seconds=$SECONDS
+      tree_problem=""
+      if ! make_tree "$tree" "$commit"; then
+        tree_problem="no release binary of $commit"
+      elif ! quiet_by $((tree_start_seconds + preparation_limit_seconds - preparation_seconds)) '[cg]pu load'; then
+        tree_problem="allowance of ${preparation_limit_seconds}s for preparing reached while the GPU or CPU was busy; left for the next night: the re-bench at $commit and after"
+      fi
+      preparation_seconds=$((preparation_seconds + SECONDS - tree_start_seconds))
+      benching_start_seconds=$((benching_start_seconds + SECONDS - tree_start_seconds))
+      [ -z "$tree_problem" ] || {
+        log "$tree_problem"
+        break
+      }
+    fi
     may_start "the re-bench at $commit" || break
     (cd "$tree" &amp;&amp; ./praxis bench "$run" $arguments) || {
       log "re-bench at $commit failed"
@@ -922,7 +954,7 @@ fn band(window: &amp;[f64]) -&gt; Option&lt;(f64, f64)&gt; {
   if compgen -G "$results/*.json" &gt;/dev/null; then
     "$praxis" publish "$results" || fail "praxis publish $results"
   fi</code></pre>
-  <p>The sweep runs in a clone of its own, which it moves to <code>main</code> each night and re-executes itself from whenever its checkout moved, as a launchd job at 04:00 on the M4 Pro (<code>scripts/sweep.plist</code>; a job missed asleep runs at the next wake) and a Task Scheduler task at 04:00 on the RTX 2070 SUPER (<code>scripts/sweep-task.xml</code>), <code>WGPU_BACKEND</code> choosing its backend. After its own build and cook it waits up to 300 s for the one-minute load average to fall under preflight's threshold, then runs preflight once and ends the night on any warning. Before every bench, after its tree's build, <code>may_start</code> waits for the GPU and CPU load to fall, since a utilisation reading lags the work it measures and the one-minute load average takes minutes to shed a build or a bench, and stops the night once a cap of 450 s of building, benching and waiting has passed (<code>PRAXIS_SWEEP_CAP_SECONDS</code> overrides it), so outside load holds a night no longer than the cap. Each commit the bisect names is built once in a worktree under <code>target/sweep/trees</code> and kept for later nights until no bisect waits. The script names nothing inside a <span class="concept" data-term="Night" data-tip="One run of the nightly sweep on one machine: the re-bench and bisect of at most one Suspect, each run in a directory of its own under the Night's, then main's scenes that lack a record on a Series there.">Night</span>&rsquo;s directory, <code>target/sweep/bisect-&lt;time&gt;</code>: <code>night.rs</code> owns it, and the script only reads the three lines <code>history bisect</code> prints, three because launchd's <code>/bin/bash</code> 3.2 has no <code>mapfile</code> and a Windows path may hold a space.</p>
+  <p>The sweep runs in a clone of its own, which it moves to <code>main</code> each night and re-executes itself from whenever its checkout moved, as a launchd job at 04:00 on the M4 Pro (<code>scripts/sweep.plist</code>; a job missed asleep runs at the next wake) and a Task Scheduler task at 04:00 on the RTX 2070 SUPER (<code>scripts/sweep-task.xml</code>), <code>WGPU_BACKEND</code> choosing its backend. A night keeps two clocks. Preparing (its own build and cook, each tree's build, and the waits for the machine to settle after them) draws on an allowance of 1800 s (<code>PRAXIS_SWEEP_PREPARATION_SECONDS</code>). Benching (the benches and the waits between them) is bounded by a cap of 900 s (<code>PRAXIS_SWEEP_CAP_SECONDS</code>), about twice the last full pass a night took. Time spent preparing moves <code>benching_start_seconds</code> forward, so a slow build never eats the cap. After its own build and cook, <code>quiet_by</code> waits, within the allowance, for preflight to warn of nothing, and the night ends if the allowance runs out first. A night that ends there logs the three busiest processes, since preflight names only praxis ones. Before every bench, <code>may_start</code> waits for the GPU and CPU load to fall within the cap, since a utilisation reading lags the work it measures and the one-minute load average takes minutes to shed a build or a bench. So outside load holds a night no longer than the allowance and the cap. Every check that finds the machine busy logs preflight's warn lines on one line, so a skipped or capped night shows each reason it waited. Each commit the bisect names is built once in a worktree under <code>target/sweep/trees</code> by <code>make_tree</code>, and no tree build starts once the allowance is spent. Each tree is kept for later nights until no bisect waits. The script names nothing inside a <span class="concept" data-term="Night" data-tip="One run of the nightly sweep on one machine: the re-bench and bisect of at most one Suspect, each run in a directory of its own under the Night's, then main's scenes that lack a record on a Series there.">Night</span>&rsquo;s directory, <code>target/sweep/bisect-&lt;time&gt;</code>: <code>night.rs</code> owns it, and the script only reads the three lines <code>history bisect</code> prints, three because launchd's <code>/bin/bash</code> 3.2 has no <code>mapfile</code> and a Windows path may hold a space.</p>
   <h3>The Night's directory</h3>
   <p>A Night's directory holds <code>NIGHT_VERDICT</code>, the Verdict it started from, then a directory per run numbered from <code>001</code> in the order benched, each holding a <code>commit</code> file and the <code>&lt;scene&gt;.json</code> the bench wrote. After <code>bisect</code> names a scene and commit, <code>next_run</code> creates the next run's directory and writes its commit, and the command prints the commit, the directory, then the rest of <code>bench</code>'s arguments: <code>--no-publish</code> and the scene when <code>NO_PUBLISH_ADDED</code>, the commit that added the flag, is an ancestor of the commit, else the scene alone with a warning, as an older binary refuses the flag and publishes nothing without it. A commit whose ancestry git cannot tell fails the command, and the sweep ends the bisect.</p>
   <div class="code-source"><code>src/bench/history/night.rs</code></div>
@@ -1204,8 +1236,8 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
       <tr><td><code>PUSH_ATTEMPTS</code></td><td class="n">5</td><td>pushes a publish tries while the branch's tip keeps moving under it</td></tr>
       <tr><td><code>END_RUNS</code></td><td class="n">2</td><td>runs of each end a night benches, interleaved, before it judges: four runs of a scene before any bisect run</td></tr>
       <tr><td><code>SMALLEST_HELD_SHIFT</code></td><td class="n">0.03</td><td>the smallest re-benched shift that holds, whatever was marked</td></tr>
-      <tr><td><code>cap_seconds</code></td><td class="n">450</td><td>seconds of building, benching and waiting a night runs before it leaves the rest to the next</td></tr>
-      <tr><td>the load wait</td><td class="n">300</td><td>seconds the sweep waits for its own build and cook to fall out of the one-minute load average</td></tr>
+      <tr><td><code>cap_seconds</code></td><td class="n">900</td><td>seconds of benching, and of waiting between benches, a night runs before it leaves the rest to the next</td></tr>
+      <tr><td><code>preparation_limit_seconds</code></td><td class="n">1800</td><td>seconds of building, cooking and waiting for the machine to settle after them a night may spend, outside the cap</td></tr>
       <tr><td>Suspects a night</td><td class="n">1</td><td><code>bisect</code> keeps to one Verdict per night</td></tr>
       <tr><td><code>WINDOW_RECORDS</code></td><td class="n">8</td><td>the records before a point that judge it</td></tr>
     </tbody>
@@ -1253,7 +1285,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <dt><a href="https://docs.github.com/en/actions/reference/security/secure-use">GitHub, Secure use reference, Hardening for self-hosted runners</a></dt><dd>self-hosted runners should almost never be used for public repositories, because any user can open pull requests against the repository and compromise the environment; why CI benches lavapipe and the real GPUs are benched by a local scheduled task. No registry key: ADR 0024 cites the page directly, and <code>docs/references.toml</code> has no entry for it</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The history began as a decision to keep every bench run rather than only the Baselines a PR chose to commit: a record keyed by the source it measured, the Harness version numbered backwards over the Baselines' eras by an import, the quiet rule, the Series the page draws, and a Suspect rule over a window of medians, which the volume that first narrated it covered. The sweep's re-bench and bisect followed, with the Verdict kept on the branch and a pinned commit starting its Series' line, then the filing of a pinned Regression as one issue per scene, the nightly import of Baselines re-recorded since the history started, and the one-minute load average in the quiet test. Experiments, published from a branch under a name against the Series record of their merge base, and the release build's record CI publishes beside lavapipe's, had no volume; the key dropped the Harness version into the record, and the quieter-record rule learnt to hold a Series record against a tagged one. The Night's directory, first laid out by the sweep's script and read by the bisect, moved whole into the binary, the script keeping the builds, waits and time cap. This page describes the mechanism as it is, from the code.</p>
+  <p class="note">The history began as a decision to keep every bench run rather than only the Baselines a PR chose to commit: a record keyed by the source it measured, the Harness version numbered backwards over the Baselines' eras by an import, the quiet rule, the Series the page draws, and a Suspect rule over a window of medians, which the volume that first narrated it covered. The sweep's re-bench and bisect followed, with the Verdict kept on the branch and a pinned commit starting its Series' line, then the filing of a pinned Regression as one issue per scene, the nightly import of Baselines re-recorded since the history started, and the one-minute load average in the quiet test. Experiments, published from a branch under a name against the Series record of their merge base, and the release build's record CI publishes beside lavapipe's, had no volume; the key dropped the Harness version into the record, and the quieter-record rule learnt to hold a Series record against a tagged one. The Night's directory, first laid out by the sweep's script and read by the bisect, moved whole into the binary, the script keeping the builds, waits and time cap; the cap first counted a night's builds and the waits after them, until those moved to an allowance of their own. This page describes the mechanism as it is, from the code.</p>
   <footer class="sources">Written from <code>src/bench/history.rs</code>, <code>src/bench/history/suspects.rs</code>, <code>src/bench/history/verdicts.rs</code>, <code>src/bench/history/night.rs</code>, <code>src/bench/history/import.rs</code>, <code>src/bench/provenance.rs</code>, <code>src/bench/mod.rs</code>, <code>src/bin/praxis.rs</code>, <code>scripts/sweep.sh</code>, <code>.github/workflows/ci.yml</code>, <code>docs/bench/index.html</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0013 and 0024, the <code>bench-history</code> branch at ca85090e, and the sources above, all at <code>main</code> 075919da.</footer>
 </section>
 
