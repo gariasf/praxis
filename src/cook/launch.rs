@@ -4,9 +4,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use anyhow::Context;
-
-use super::{CookSettings, Referrer, Sources, fetch, is_fresh, mesh, read_sources};
+use super::{
+    CookSettings, Referrer, Sources, dangling_references, fetch, is_fresh, mesh_blob, read_sources,
+};
 use crate::ReferenceScene;
 use crate::assets::{AssetLoader, MaterialChannel, MaterialHandle, MeshHandle};
 use crate::cooked::{AssetId, CookedCache, CookedChunk, TEXTURE_FORMAT_VERSION};
@@ -20,14 +20,14 @@ pub(crate) struct CookingLoader<'a> {
     scene: ReferenceScene,
     sources: Sources,
     /// Where each Asset this cook may write lies in `sources`.
-    index: HashMap<AssetId, Source>,
+    entry_by_id: HashMap<AssetId, SourceEntry>,
     /// Each Asset checked so far, once per launch.
     checked: HashSet<AssetId>,
 }
 
 /// An Asset by its kind and its index in `Sources`.
 #[derive(Copy, Clone)]
-enum Source {
+enum SourceEntry {
     Material(usize),
     Mesh(usize),
     Chunk(usize),
@@ -60,15 +60,15 @@ impl<'a> CookingLoader<'a> {
         loader: &'a mut dyn AssetLoader,
     ) -> Self {
         let materials = sources.materials.iter().enumerate();
-        let materials = materials.map(|(index, (id, ..))| (*id, Source::Material(index)));
+        let materials = materials.map(|(index, (id, ..))| (*id, SourceEntry::Material(index)));
         let meshes = sources.meshes.iter().enumerate();
-        let meshes = meshes.map(|(index, (id, ..))| (*id, Source::Mesh(index)));
+        let meshes = meshes.map(|(index, (id, ..))| (*id, SourceEntry::Mesh(index)));
         let chunks = (sources.chunks.iter().enumerate())
             .filter(|(_, (id, ..))| !sources.kept_chunks.contains(id))
-            .map(|(index, (id, ..))| (*id, Source::Chunk(index)));
+            .map(|(index, (id, ..))| (*id, SourceEntry::Chunk(index)));
         let textures = sources.textures.iter().enumerate();
-        let textures = textures.map(|(index, texture)| (texture.id, Source::Texture(index)));
-        let index = materials
+        let textures = textures.map(|(index, texture)| (texture.id, SourceEntry::Texture(index)));
+        let entry_by_id = materials
             .chain(meshes)
             .chain(chunks)
             .chain(textures)
@@ -79,7 +79,7 @@ impl<'a> CookingLoader<'a> {
             settings,
             scene,
             sources,
-            index,
+            entry_by_id,
             checked: HashSet::new(),
         }
     }
@@ -90,34 +90,32 @@ impl<'a> CookingLoader<'a> {
     }
 
     /// Cooks `id`, which `referrer` names, and each Asset it names, where
-    /// the Blob is missing or stale. An ID no source defines warns, as the
-    /// cook's dangling references do, unless its Blob may be one kept.
+    /// the Blob is missing or stale. An ID this cook does not make warns, as
+    /// the cook's dangling references do, unless its Blob may be one kept.
     fn cook_on_miss(&mut self, referrer: Referrer, id: AssetId) -> anyhow::Result<()> {
         if !self.checked.insert(id) {
             return Ok(());
         }
-        let Some(&source) = self.index.get(&id) else {
-            let reference = (referrer, id);
-            if !(self.sources.may_be_kept(&reference) && self.cache.entry(id).is_some()) {
-                tracing::warn!(%referrer, asset = %id, "references an Asset ID this cook does not make");
-            }
+        let Some(&entry) = self.entry_by_id.get(&id) else {
+            let may_be_kept = |reference: &(Referrer, AssetId)| self.sources.may_be_kept(reference);
+            dangling_references(self.cache, &HashSet::new(), &[(referrer, id)], may_be_kept);
             return Ok(());
         };
         let sources = &self.sources;
-        let (cook_key, named): (String, Vec<_>) = match source {
-            Source::Material(index) => {
+        let (cook_key, named): (String, Vec<_>) = match entry {
+            SourceEntry::Material(index) => {
                 let (_, cook_key, material) = &sources.materials[index];
                 let textures = material.textures.iter().flatten();
                 let named = textures.map(|texture| (Referrer::Material(id), *texture));
                 (cook_key.clone(), named.collect())
             }
-            Source::Mesh(index) => {
+            SourceEntry::Mesh(index) => {
                 let (_, _, cook_key, primitives) = &sources.meshes[index];
                 let materials = primitives.iter().filter_map(|(_, material)| *material);
                 let named = materials.map(|material| (Referrer::Mesh(id), material));
                 (cook_key.clone(), named.collect())
             }
-            Source::Chunk(index) => {
+            SourceEntry::Chunk(index) => {
                 let (_, referrer, cook_key, chunk) = &sources.chunks[index];
                 let placements = chunk.placements.iter();
                 let named =
@@ -125,7 +123,7 @@ impl<'a> CookingLoader<'a> {
                 let named = named.flatten().map(|named| (*referrer, named));
                 (cook_key.clone(), named.collect())
             }
-            Source::Texture(index) => {
+            SourceEntry::Texture(index) => {
                 let texture = &sources.textures[index];
                 let cook_key = texture.cook_key(&self.settings, TEXTURE_FORMAT_VERSION);
                 (cook_key, Vec::new())
@@ -138,16 +136,20 @@ impl<'a> CookingLoader<'a> {
             return Ok(());
         }
         let sources = &self.sources;
-        let blob = match source {
-            Source::Material(index) => sources.materials[index].2.to_blob(),
-            Source::Mesh(index) => {
-                let (_, name, _, primitives) = &sources.meshes[index];
-                mesh::cook(primitives)
-                    .and_then(|mesh| mesh.to_blob())
-                    .with_context(|| format!("cooking Mesh {name} ({id})"))?
+        let blob = match entry {
+            SourceEntry::Material(index) => {
+                let (_, _, material) = &sources.materials[index];
+                material.to_blob()
             }
-            Source::Chunk(index) => sources.chunks[index].3.to_blob()?,
-            Source::Texture(index) => {
+            SourceEntry::Mesh(index) => {
+                let (_, name, _, primitives) = &sources.meshes[index];
+                mesh_blob(id, name, primitives)?
+            }
+            SourceEntry::Chunk(index) => {
+                let (_, _, _, chunk) = &sources.chunks[index];
+                chunk.to_blob()?
+            }
+            SourceEntry::Texture(index) => {
                 let threads =
                     std::thread::available_parallelism().map_or(1, |threads| threads.get());
                 sources.textures[index].cook(&self.settings, threads)?
@@ -210,7 +212,7 @@ mod tests {
     use super::*;
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::assets::{MaterialPool, MeshPool, PoolCapacities, PoolLoader};
-    use crate::cook::chunk;
+    use crate::cook::{chunk, mesh};
     use crate::cooked::CookedPlacement;
     use crate::render::LoadStaging;
     use crate::scenes::ground_plane;
@@ -362,7 +364,9 @@ mod tests {
             let cooked = cook_keys();
 
             let changed = plane_sources(2.0);
-            let changed_keys = [changed.meshes[0].2.clone(), changed.chunks[0].2.clone()];
+            let (_, _, mesh_key, _) = &changed.meshes[0];
+            let (_, _, chunk_key, _) = &changed.chunks[0];
+            let changed_keys = [mesh_key.clone(), chunk_key.clone()];
             assert_ne!(changed_keys, cooked);
             let mut loader =
                 CookingLoader::from_sources(scene, changed, &cache, settings, pool_loader);

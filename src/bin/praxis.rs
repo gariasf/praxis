@@ -910,6 +910,19 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "cook")]
+    #[test]
+    fn cook_takes_one_scene_to_cook_whole() {
+        assert!(matches!(
+            parse(&["cook"]).unwrap(),
+            Command::Cook { scene: None }
+        ));
+        let Command::Cook { scene: Some(scene) } = parse(&["cook", "town"]).unwrap() else {
+            panic!("`cook town` parsed as another command");
+        };
+        assert_eq!(scene, "town");
+    }
+
     #[test]
     fn an_unknown_scene_name_is_refused_with_the_scene_names() {
         let error = parse(&["no-such-scene"]).unwrap_err().to_string();
