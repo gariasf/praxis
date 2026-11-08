@@ -4,7 +4,7 @@ pub mod material;
 pub mod mesh;
 pub mod pools;
 
-pub use loader::{AssetLoader, PoolLoader};
+pub use loader::{AssetLoader, AssetReader, PoolLoader};
 pub use material::{MaterialChannel, MaterialHandle, MaterialPool};
 pub use mesh::{Mesh, MeshData, MeshHandle, MeshletData};
 pub use pools::{LoadedMeshes, MeshPool, MeshUse, PoolCapacities};

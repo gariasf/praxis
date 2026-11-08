@@ -1,7 +1,7 @@
 use anyhow::Context;
 
 use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool, MeshUse};
-use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMesh};
+use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
 use crate::render::LoadStaging;
 
 /// What a scene's spawn loads its Assets through, by Asset ID (ADR 0018),
@@ -34,15 +34,43 @@ pub trait AssetLoader {
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
 
     /// Reads the Chunk `id`, loading none of the Assets it names.
+    #[cfg_attr(not(feature = "cook"), allow(dead_code))]
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk>;
 }
 
-/// Loads Assets from a Cooked cache into the Pools, through the load's
-/// staging.
+/// Where the Pools read decoded Assets from, by Asset ID: the Cooked cache,
+/// or what the IO pool decoded.
+pub trait AssetReader {
+    fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial>;
+    fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture>;
+    fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh>;
+    #[cfg_attr(not(feature = "cook"), allow(dead_code))]
+    fn chunk(&self, id: AssetId) -> anyhow::Result<CookedChunk>;
+}
+
+impl AssetReader for CookedCache {
+    fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial> {
+        CookedCache::material(self, id)
+    }
+
+    fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture> {
+        CookedCache::texture(self, id)
+    }
+
+    fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh> {
+        CookedCache::mesh(self, id)
+    }
+
+    fn chunk(&self, id: AssetId) -> anyhow::Result<CookedChunk> {
+        CookedCache::chunk(self, id)
+    }
+}
+
+/// Loads Assets from `reader` into the Pools, through the load's staging.
 pub struct PoolLoader<'a> {
     pub device: &'a wgpu::Device,
     pub staging: &'a mut LoadStaging,
-    pub cache: &'a CookedCache,
+    pub reader: &'a dyn AssetReader,
     pub mesh_pool: &'a mut MeshPool,
     pub material_pool: &'a mut MaterialPool,
 }
@@ -50,12 +78,12 @@ pub struct PoolLoader<'a> {
 impl AssetLoader for PoolLoader<'_> {
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
         self.material_pool
-            .load(self.device, self.staging, self.cache, id)
+            .load(self.device, self.staging, self.reader, id)
     }
 
     fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
         self.material_pool
-            .load_texture(self.device, self.staging, self.cache, channel, id)
+            .load_texture(self.device, self.staging, self.reader, channel, id)
     }
 
     fn mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
@@ -75,7 +103,7 @@ impl AssetLoader for PoolLoader<'_> {
     }
 
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
-        self.cache.chunk(id)
+        self.reader.chunk(id)
     }
 }
 
@@ -86,7 +114,7 @@ impl PoolLoader<'_> {
         if let Some(handle) = self.mesh_pool.add_user(id, mesh_use) {
             return Ok(handle);
         }
-        let mesh = self.cache.mesh(id)?;
+        let mesh = self.reader.mesh(id)?;
         let materials = if mesh_use.drawn() {
             self.materials(id, &mesh)?
         } else {
@@ -181,7 +209,7 @@ mod tests {
         let mut loader = PoolLoader {
             device: &context.device,
             staging: &mut staging,
-            cache: &cache,
+            reader: &cache,
             mesh_pool: &mut mesh_pool,
             material_pool: &mut material_pool,
         };

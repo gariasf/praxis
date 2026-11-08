@@ -231,8 +231,17 @@ impl MeshPool {
         Some(*handle)
     }
 
-    /// How many loads returned the Mesh `id` for `mesh_use`: a user per
-    /// loaded Chunk that names it and per spawn that loaded it.
+    /// Counts one user fewer of the Mesh `id` for `mesh_use`, keeping its
+    /// entry however few are left.
+    pub fn remove_user(&mut self, id: AssetId, mesh_use: MeshUse) {
+        if let Some((_, users)) = self.asset_handles.get_mut(&(id, mesh_use)) {
+            *users = users.saturating_sub(1);
+        }
+    }
+
+    /// How many loads returned the Mesh `id` for `mesh_use`, less those
+    /// `remove_user` took back: a user per loaded Chunk that names it and
+    /// per spawn that loaded it.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn users(&self, id: AssetId, mesh_use: MeshUse) -> u32 {
         self.asset_handles

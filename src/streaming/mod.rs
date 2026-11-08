@@ -1,14 +1,20 @@
 //! The Chunk streamer: which Chunks of a Game world to request, keep and
 //! unload around the camera, decided each frame from the camera's World
-//! position and the loads its IO finished. It reads no GPU state.
+//! position and the loads its IO finished. It reads no GPU state; `io`
+//! serves it from the IO pool.
 
 pub(crate) mod chunks;
+mod io;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::RangeInclusive;
 
 use glam::DVec3;
 
-pub(crate) use chunks::{LoadedChunk, LoadedChunks, load_chunk};
+#[cfg(feature = "cook")]
+pub(crate) use chunks::load_chunk;
+pub(crate) use chunks::{LoadedChunk, LoadedChunks};
+pub(crate) use io::ChunkStreaming;
 
 use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
 
@@ -58,6 +64,8 @@ pub(crate) struct ChunkFrame {
 
 pub(crate) struct ChunkStreamer {
     chunks: HashSet<[i32; 2]>,
+    /// The lowest and highest coordinates of `chunks`, x then z.
+    bounds: [RangeInclusive<i32>; 2],
     load_radius_metres: f64,
     loaded: BTreeMap<[i32; 2], Vec<AssetId>>,
     /// How many times loaded Chunks name each Asset.
@@ -82,8 +90,16 @@ impl ChunkStreamer {
     /// A streamer over the Chunks at `chunks`, loading those within
     /// `load_radius_metres` of the camera.
     pub(crate) fn new(chunks: impl IntoIterator<Item = [i32; 2]>, load_radius_metres: f64) -> Self {
+        let chunks: HashSet<[i32; 2]> = chunks.into_iter().collect();
+        let along = |axis: usize| {
+            let coordinates = chunks.iter().map(|chunk| chunk[axis]);
+            let lowest = coordinates.clone().min().unwrap_or(0);
+            let highest = coordinates.max().unwrap_or(-1);
+            lowest..=highest
+        };
         Self {
-            chunks: chunks.into_iter().collect(),
+            bounds: [along(0), along(1)],
+            chunks,
             load_radius_metres,
             loaded: BTreeMap::new(),
             users: HashMap::new(),
@@ -167,7 +183,7 @@ impl ChunkStreamer {
         self.within_load_radius.clear();
         let mut every_chunk_within_load_radius_loaded = true;
         frame.settled = true;
-        for coordinates in chunks_within(camera, request_radius_metres) {
+        for coordinates in chunks_within(camera, request_radius_metres, &self.bounds) {
             if !self.chunks.contains(&coordinates) {
                 continue;
             }
@@ -223,21 +239,48 @@ fn distance_metres(camera: DVec3, [x, z]: [i32; 2]) -> f64 {
     along(camera.x, x).hypot(along(camera.z, z))
 }
 
-/// The coordinates of every Chunk that overlaps the square of half-size
-/// `radius_metres` around `camera`.
-fn chunks_within(camera: DVec3, radius_metres: f64) -> impl Iterator<Item = [i32; 2]> {
-    let range = |position: f64| {
+/// The coordinates within `bounds`, x then z, of every Chunk that overlaps
+/// the square of half-size `radius_metres` around `camera`.
+fn chunks_within(
+    camera: DVec3,
+    radius_metres: f64,
+    bounds: &[RangeInclusive<i32>; 2],
+) -> impl Iterator<Item = [i32; 2]> + use<> {
+    let range = |position: f64, bounds: &RangeInclusive<i32>| {
         let chunk = |metres: f64| (metres / CHUNK_EDGE_METRES).floor() as i32;
-        chunk(position - radius_metres)..=chunk(position + radius_metres)
+        let lowest = chunk(position - radius_metres).max(*bounds.start());
+        let highest = chunk(position + radius_metres).min(*bounds.end());
+        lowest..=highest
     };
-    let columns = range(camera.x);
-    let rows = range(camera.z);
+    let columns = range(camera.x, &bounds[0]);
+    let rows = range(camera.z, &bounds[1]);
     columns.flat_map(move |x| rows.clone().map(move |z| [x, z]))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every Reference scene but the world draws all its Chunks on each
+    /// frame of a reference bench, so each keeps its Goldens and Baselines.
+    #[test]
+    fn each_reference_scene_holds_every_chunk_within_its_load_radius() {
+        for scene in crate::scenes::ReferenceScene::ALL {
+            let chunks = scene.chunk_coordinates();
+            for frame in 0..2048 {
+                let camera = scene.camera_at(frame, DVec3::ZERO).position;
+                let farthest = chunks
+                    .iter()
+                    .map(|&chunk| distance_metres(camera, chunk))
+                    .fold(0.0, f64::max);
+                assert!(
+                    farthest <= scene.load_radius_metres(),
+                    "{} frame {frame}: a Chunk {farthest} m away",
+                    scene.name()
+                );
+            }
+        }
+    }
 
     const LOAD_RADIUS_METRES: f64 = 256.0;
 

@@ -225,15 +225,22 @@ fn fill_instances(
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
-/// Renderable, and each loaded Chunk's range of slots (ADR 0003); a slot
-/// freed in an earlier frame is taken again before a fresh one, and once all
-/// `capacity` are taken a Renderable is refused one.
+/// Renderable, and each loaded Chunk's range of slots, kept until it unloads
+/// (ADR 0003); a slot or range freed in an earlier frame is taken again
+/// before a fresh one, and once all `capacity` are taken a Renderable is
+/// refused one.
 #[derive(Default)]
 struct InstanceSlots {
     capacity: u32,
     by_entity: bevy_ecs::entity::EntityHashMap<u32>,
-    by_chunk: HashMap<AssetId, Range<u32>>,
+    by_chunk: HashMap<AssetId, ChunkSlots>,
     free: Vec<u32>,
+    /// Ranges unloaded Chunks gave back, in slot order, none touching
+    /// another.
+    free_ranges: Vec<Range<u32>>,
+    /// Ranges freed this frame, which take Instances with no Mesh before
+    /// they join `free_ranges`.
+    freed_ranges: Vec<Range<u32>>,
     /// Slots freed this frame, which take an Instance with no Mesh before
     /// they join `free`.
     freed: Vec<u32>,
@@ -270,11 +277,26 @@ impl InstanceSlots {
         Some(slot)
     }
 
-    /// A range of `count` fresh slots for the Chunk `chunk`, past the highest
-    /// slot taken, kept for as long as the preparer lives; None when the
-    /// Instance buffer has no room for it, warned the first time `chunk` is
-    /// refused.
+    /// A range of `count` slots for the Chunk `chunk`: the start of the first
+    /// free range long enough, else fresh slots past the highest slot taken;
+    /// None when the Instance buffer has no room for it, warned the first
+    /// time `chunk` is refused.
     fn take_range(&mut self, chunk: AssetId, count: u32) -> Option<Range<u32>> {
+        if let Some(index) = self
+            .free_ranges
+            .iter()
+            .position(|free| free.end - free.start >= count)
+        {
+            let free = &mut self.free_ranges[index];
+            let range = free.start..free.start + count;
+            free.start = range.end;
+            if free.start == free.end {
+                self.free_ranges.remove(index);
+            }
+            self.refused_chunks.remove(&chunk);
+            self.by_chunk.insert(chunk, ChunkSlots::new(range.clone()));
+            return Some(range);
+        }
         let end = self
             .end
             .checked_add(count)
@@ -293,8 +315,44 @@ impl InstanceSlots {
         let range = self.end..end;
         self.end = end;
         self.refused_chunks.remove(&chunk);
-        self.by_chunk.insert(chunk, range.clone());
+        self.by_chunk.insert(chunk, ChunkSlots::new(range.clone()));
         Some(range)
+    }
+
+    /// Gives back the ranges of the Chunks `loaded` no longer holds, into
+    /// `freed_ranges`.
+    fn free_unloaded(&mut self, loaded: &[LoadedChunk]) {
+        let loaded: HashSet<AssetId> = loaded.iter().map(|chunk| chunk.id).collect();
+        let freed_ranges = &mut self.freed_ranges;
+        self.by_chunk.retain(|chunk, slots| {
+            let kept = loaded.contains(chunk);
+            if !kept {
+                freed_ranges.push(slots.range.clone());
+            }
+            kept
+        });
+        self.refused_chunks.retain(|chunk| loaded.contains(chunk));
+    }
+
+    /// Moves the ranges freed in the frame before into `free_ranges`, each
+    /// merged with the free ranges it touches.
+    fn join_freed_ranges(&mut self) {
+        for freed in self.freed_ranges.drain(..) {
+            let index = self
+                .free_ranges
+                .partition_point(|free| free.start < freed.start);
+            self.free_ranges.insert(index, freed);
+            if index + 1 < self.free_ranges.len()
+                && self.free_ranges[index].end == self.free_ranges[index + 1].start
+            {
+                let next = self.free_ranges.remove(index + 1);
+                self.free_ranges[index].end = next.end;
+            }
+            if index > 0 && self.free_ranges[index - 1].end == self.free_ranges[index].start {
+                let merged = self.free_ranges.remove(index);
+                self.free_ranges[index - 1].end = merged.end;
+            }
+        }
     }
 
     fn free(&mut self, entity: Entity) {
@@ -302,6 +360,20 @@ impl InstanceSlots {
         if let Some(slot) = self.by_entity.remove(&entity) {
             self.freed.push(slot);
         }
+    }
+}
+
+/// A loaded Chunk's range of slots, and whether its Instances there were
+/// last written as held, with no Mesh.
+struct ChunkSlots {
+    range: Range<u32>,
+    held: bool,
+}
+
+impl ChunkSlots {
+    /// A range not yet written.
+    fn new(range: Range<u32>) -> Self {
+        Self { range, held: false }
     }
 }
 
@@ -404,15 +476,18 @@ impl FramePreparer {
     /// appear.
     ///
     /// Each Chunk in the World's `LoadedChunks` takes a range of slots, one
-    /// per Placement, past the highest slot taken, on the first `prepare`
-    /// that sees it and before new Renderables take slots, and its
-    /// Placements' Instances are written there in its order; its point lights
-    /// follow the entities'. A Placement that a Renderable's checks would
-    /// skip writes an Instance with no Mesh, warned about, and is not
-    /// retried. A Chunk the Instance buffer has no room for is refused, warned
-    /// about once and its Placements counted among the refused Renderables
-    /// every frame; as ranges come only past the highest slot taken, it stays
-    /// refused.
+    /// per Placement, on the first `prepare` that sees it and before new
+    /// Renderables take slots, and its Placements' Instances are written
+    /// there in its order; its point lights follow the entities'. A held
+    /// Chunk writes Instances with no Mesh there instead and has no lights
+    /// drawn, and writes its Placements' again when it is no longer held. A
+    /// Placement that a Renderable's checks would skip writes an Instance
+    /// with no Mesh, warned about, and is not retried. A Chunk the Instance
+    /// buffer has no room for is refused, warned about once and its
+    /// Placements counted among the refused Renderables every frame until a
+    /// range fits it. A Chunk gone from `LoadedChunks` gives its range back:
+    /// its slots take Instances with no Mesh, and Chunks may take the range
+    /// from the next frame.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -472,9 +547,11 @@ impl FramePreparer {
             a: 1.0,
         };
         let blend_weight = world.resource::<FixedTime>().blend_weight;
-        let chunks = world
-            .get_resource::<LoadedChunks>()
-            .map_or(&[][..], |chunks| &chunks.0);
+        let loaded_chunks = world.get_resource_ref::<LoadedChunks>();
+        let chunks_changed = loaded_chunks
+            .as_ref()
+            .is_some_and(|chunks| chunks.is_changed());
+        let chunks = loaded_chunks.map_or(&[][..], |chunks| &chunks.into_inner().0);
         let directional_light_count = prepare_lights(
             world,
             directional_light_query,
@@ -510,20 +587,51 @@ impl FramePreparer {
         frame.instance_writes.clear();
         frame.moving_instances.clear();
         *renderables_refused = 0;
-        for chunk in chunks {
-            let slots = match instance_slots.by_chunk.get(&chunk.id) {
-                Some(_) if !*rewrite_every_instance => continue,
-                Some(slots) => slots.clone(),
-                None => {
-                    let count = chunk.placements.len() as u32;
-                    let Some(slots) = instance_slots.take_range(chunk.id, count) else {
-                        *renderables_refused += count;
-                        continue;
-                    };
-                    slots
+        instance_slots.join_freed_ranges();
+        if chunks_changed {
+            instance_slots.free_unloaded(chunks);
+        }
+        let rewritten_free_ranges = if *rewrite_every_instance {
+            instance_slots.free_ranges.as_slice()
+        } else {
+            &[]
+        };
+        for slot in instance_slots
+            .freed_ranges
+            .iter()
+            .chain(rewritten_free_ranges)
+            .flat_map(Range::clone)
+        {
+            frame.write_instance(slot, no_mesh_instance(), false);
+        }
+        if chunks_changed || *rewrite_every_instance || !instance_slots.refused_chunks.is_empty() {
+            for chunk in chunks {
+                let slots = match instance_slots.by_chunk.get_mut(&chunk.id) {
+                    Some(slots) if !*rewrite_every_instance && slots.held == chunk.held => continue,
+                    Some(slots) => {
+                        slots.held = chunk.held;
+                        slots.range.clone()
+                    }
+                    None => {
+                        let count = chunk.placements.len() as u32;
+                        let Some(slots) = instance_slots.take_range(chunk.id, count) else {
+                            *renderables_refused += count;
+                            continue;
+                        };
+                        if let Some(taken) = instance_slots.by_chunk.get_mut(&chunk.id) {
+                            taken.held = chunk.held;
+                        }
+                        slots
+                    }
+                };
+                if chunk.held {
+                    for slot in slots {
+                        frame.write_instance(slot, no_mesh_instance(), false);
+                    }
+                } else {
+                    write_chunk(frame, chunk, slots, meshes, material_generations);
                 }
-            };
-            write_chunk(frame, chunk, slots, meshes, material_generations);
+            }
         }
         let renderables = renderable_query.query(world);
         // Slots of entities that stopped being Renderables are freed before new
@@ -789,7 +897,11 @@ fn prepare_lights(
             let position = current.drawn(previous, blend_weight).translation();
             (position, *light)
         });
-    let chunk_point_lights = chunks.iter().flat_map(|chunk| &chunk.lights).copied();
+    let chunk_point_lights = chunks
+        .iter()
+        .filter(|chunk| !chunk.held)
+        .flat_map(|chunk| &chunk.lights)
+        .copied();
     let point_lights = entity_point_lights
         .chain(chunk_point_lights)
         .map(|(position, light)| {
@@ -1094,6 +1206,10 @@ mod tests {
                 })
                 .collect(),
             lights: Vec::new(),
+            coordinates: [0, 0],
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held: false,
         };
         let chunks = LoadedChunks(vec![chunk(1, 200), chunk(2, 100), chunk(3, 55)]);
         frames.world.insert_resource(chunks);
@@ -1114,6 +1230,90 @@ mod tests {
         });
         assert_eq!(log.matches("Chunk refused").count(), 1, "{log:?}");
         assert!(!log.contains("Renderable refused"), "{log:?}");
+    }
+
+    /// A held Chunk's slots take Instances with no Mesh, and its lights go
+    /// dark, until it is drawn again; an unloaded Chunk's slots take
+    /// Instances with no Mesh, and its range is taken again, by first fit,
+    /// from the next frame on.
+    #[test]
+    fn a_held_chunk_draws_nothing_and_an_unloaded_chunks_range_is_taken_again() {
+        let mut frames = Frames::new();
+        let mesh = frames.mesh;
+        let chunk = |id: u128, placements: u32| LoadedChunk {
+            id: AssetId(id),
+            coordinates: [id as i32, 0],
+            placements: (0..placements)
+                .map(|x| ChunkPlacement {
+                    transform: Transform::from_translation(glam::dvec3(x.into(), 0.0, 0.0)),
+                    mesh,
+                    material: Some(MaterialHandle {
+                        index: 0,
+                        generation: 0,
+                    }),
+                })
+                .collect(),
+            lights: vec![(
+                glam::DVec3::ZERO,
+                PointLight {
+                    color: glam::Vec3::ONE,
+                    intensity: 1.0,
+                    range: 1.0,
+                },
+            )],
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held: false,
+        };
+        let drawn = |frames: &Frames| -> Vec<bool> {
+            let frame = frames.preparer.frame();
+            frame
+                .instances
+                .iter()
+                .map(|instance| instance.mesh != NO_MESH)
+                .collect()
+        };
+        let point_lights = |frames: &Frames| frames.preparer.frame().light.point_light_count;
+        frames
+            .world
+            .insert_resource(LoadedChunks(vec![chunk(1, 3), chunk(2, 2)]));
+        assert_eq!(frames.prepare(), [0, 1, 2, 3, 4]);
+        assert_eq!(point_lights(&frames), 2);
+
+        frames.world.resource_mut::<LoadedChunks>().0[0].held = true;
+        assert_eq!(frames.prepare(), [0, 1, 2]);
+        assert_eq!(drawn(&frames), [false; 3]);
+        assert_eq!(point_lights(&frames), 1);
+        assert!(frames.prepare().is_empty());
+        frames.world.resource_mut::<LoadedChunks>().0[0].held = false;
+        assert_eq!(frames.prepare(), [0, 1, 2]);
+        assert_eq!(drawn(&frames), [true; 3]);
+        assert_eq!(point_lights(&frames), 2);
+
+        let mut chunks = frames.world.resource_mut::<LoadedChunks>();
+        chunks.0.remove(0);
+        chunks.0.push(chunk(3, 2));
+        assert_eq!(frames.prepare(), [0, 1, 2, 5, 6]);
+        assert_eq!(drawn(&frames), [false, false, false, true, true]);
+        frames
+            .world
+            .resource_mut::<LoadedChunks>()
+            .0
+            .push(chunk(4, 2));
+        assert_eq!(frames.prepare(), [0, 1]);
+        frames
+            .world
+            .resource_mut::<LoadedChunks>()
+            .0
+            .push(chunk(5, 2));
+        assert_eq!(frames.prepare(), [7, 8]);
+        frames
+            .world
+            .resource_mut::<LoadedChunks>()
+            .0
+            .push(chunk(6, 1));
+        assert_eq!(frames.prepare(), [2]);
+        assert_eq!(frames.preparer.frame().instance_slot_count, 9);
     }
 
     #[test]

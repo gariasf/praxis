@@ -216,13 +216,15 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 15;
+const COUNTER_COUNT: usize = 19;
 
 /// Medians of counters, which repeat exactly on every run, but for the
 /// Instances overflowed and the refusals, from the Renderables refused to
 /// the shadow mask's light overflows: the most of any frame, so one overflow
-/// counts. The refusals are absent from Baselines recorded before results
-/// carried them, which read as none refused.
+/// counts; and for the streaming counters, from the Late Chunks to the bytes
+/// read: the sum over the frames, as each counts events. The refusals and
+/// the streaming counters are absent from Baselines recorded before results
+/// carried them, which read as none.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
@@ -247,11 +249,19 @@ pub struct Counters {
     pub froxel_lights_overflowed: u64,
     #[serde(default)]
     pub shadow_mask_lights_overflowed: u64,
+    #[serde(default)]
+    pub late_chunks: u64,
+    #[serde(default)]
+    pub chunks_loaded: u64,
+    #[serde(default)]
+    pub chunks_unloaded: u64,
+    #[serde(default)]
+    pub bytes_read: u64,
 }
 
 impl Counters {
     /// The counters of `frames`, each with its GPU stats.
-    fn of(frames: &[FrameStats]) -> Self {
+    pub(crate) fn of(frames: &[FrameStats]) -> Self {
         let median = |value: fn(&FrameStats) -> u64| {
             percentile(
                 frames.iter().map(|stats| value(stats) as f64).collect(),
@@ -259,6 +269,7 @@ impl Counters {
             ) as u64
         };
         let most = |value: fn(&FrameStats) -> u64| frames.iter().map(value).max().unwrap_or(0);
+        let total = |value: fn(&FrameStats) -> u64| frames.iter().map(value).sum();
         Self {
             draw_calls: median(|stats| u64::from(stats.draw_calls)),
             instances_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.instances_drawn.into())),
@@ -285,6 +296,10 @@ impl Counters {
                     .gpu
                     .map_or(0, |gpu| gpu.shadow_mask_lights_overflowed.into())
             }),
+            late_chunks: total(|stats| stats.late_chunks.into()),
+            chunks_loaded: total(|stats| stats.chunks_loaded.into()),
+            chunks_unloaded: total(|stats| stats.chunks_unloaded.into()),
+            bytes_read: total(|stats| stats.bytes_read),
         }
     }
 
@@ -305,6 +320,10 @@ impl Counters {
         "bends_left_out",
         "froxel_lights_overflowed",
         "shadow_mask_lights_overflowed",
+        "late_chunks",
+        "chunks_loaded",
+        "chunks_unloaded",
+        "bytes_read",
     ];
 
     fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
@@ -324,6 +343,10 @@ impl Counters {
             self.bends_left_out,
             self.froxel_lights_overflowed,
             self.shadow_mask_lights_overflowed,
+            self.late_chunks,
+            self.chunks_loaded,
+            self.chunks_unloaded,
+            self.bytes_read,
         ];
         std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
@@ -546,6 +569,7 @@ pub fn run(
             SIXTY_HERTZ,
             switches,
             wait,
+            false,
         )?;
         anyhow::Ok((frames, scene_content_hash))
     };
@@ -1121,6 +1145,10 @@ mod tests {
         bends_left_out: 0,
         froxel_lights_overflowed: 0,
         shadow_mask_lights_overflowed: 0,
+        late_chunks: 0,
+        chunks_loaded: 0,
+        chunks_unloaded: 0,
+        bytes_read: 0,
     };
 
     #[test]
@@ -1141,6 +1169,10 @@ mod tests {
             bends_left_out: 13,
             froxel_lights_overflowed: 14,
             shadow_mask_lights_overflowed: 15,
+            late_chunks: 16,
+            chunks_loaded: 17,
+            chunks_unloaded: 18,
+            bytes_read: 19,
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
@@ -1865,6 +1897,14 @@ mod tests {
                     static_instances_left_out: refused(3),
                     moving_instances_left_out: refused(4),
                     bends_left_out: refused(5),
+                    late_chunks: u32::from(frame == 300 || frame == 301),
+                    chunks_loaded: if matches!(frame, 10 | 300) { 2 } else { 0 },
+                    chunks_unloaded: if frame == 300 { 3 } else { 0 },
+                    bytes_read: if matches!(frame, 0 | 10 | 300) {
+                        1000
+                    } else {
+                        0
+                    },
                     gpu_memory_bytes_by_kind: if warming_up {
                         [9; GpuMemoryKind::COUNT]
                     } else {
@@ -1933,6 +1973,16 @@ mod tests {
         };
         assert_eq!(refusals(reference.counters), [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(refusals(reference.counter_frames.counters), [0; 7]);
+        let streamed = |counters: Counters| {
+            [
+                counters.late_chunks,
+                counters.chunks_loaded,
+                counters.chunks_unloaded,
+                counters.bytes_read,
+            ]
+        };
+        assert_eq!(streamed(reference.counters), [2, 2, 3, 1000]);
+        assert_eq!(streamed(reference.counter_frames.counters), [0, 2, 0, 1000]);
         assert_eq!(reference.cpu_frame_microseconds.median, 100.0);
         assert_eq!(reference.dynamic_tlas_cpu_microseconds.median, 60.0);
         assert_eq!(reference.gpu_frame_microseconds.median, 300.0);

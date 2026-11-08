@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
@@ -17,7 +18,7 @@ use crate::scenes::{
     spawn_town, spawn_traced_crowd, spin, sway,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
-use crate::streaming::LoadedChunks;
+use crate::streaming::{ChunkStreaming, LoadedChunks};
 use crate::threading::{init_compute_pool, single_threaded_schedule};
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
@@ -35,12 +36,12 @@ pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
 /// that draws that into a target view.
 pub struct State {
     pub(crate) simulation: Simulation,
+    pub(crate) streaming: ChunkStreaming,
     recorder: FrameRecorder,
     preparer: FramePreparer,
     renderer: Renderer,
-    /// The Cooked cache's `content_hash` once the scene loaded: the Blobs
-    /// it loaded.
-    pub(crate) scene_content_hash: String,
+    /// The sources the launch's cook found absent, which a failed load names.
+    absent_sources: Vec<String>,
 }
 
 /// A Reference scene's ECS World and the schedules that advance it: what
@@ -52,10 +53,32 @@ pub(crate) struct Simulation {
 }
 
 impl Simulation {
-    /// `scene`'s World at frame 0, moved with its camera by `shift` metres,
-    /// its crowd spawned for `crowd_form` and its Assets loaded through
-    /// `loader`, with its systems timed by `recorder`.
+    /// `scene`'s World at frame 0, as `spawned` leaves it, with every Chunk
+    /// of the scene loaded through `loader` and moved by `shift` metres.
+    #[cfg(feature = "cook")]
     pub(crate) fn new(
+        scene: ReferenceScene,
+        shift: glam::DVec3,
+        crowd_form: CrowdForm,
+        loader: &mut dyn AssetLoader,
+        recorder: &FrameRecorder,
+    ) -> anyhow::Result<Self> {
+        let mut simulation = Self::spawned(scene, shift, crowd_form, loader, recorder)?;
+        let mut chunks = scene
+            .load_chunks(loader)
+            .with_context(|| format!("loading {}'s Chunks", scene.name()))?;
+        for chunk in &mut chunks.0 {
+            chunk.shift(shift);
+        }
+        simulation.world.insert_resource(chunks);
+        Ok(simulation)
+    }
+
+    /// `scene`'s World at frame 0, moved with its camera by `shift` metres,
+    /// its crowd spawned for `crowd_form` and its spawn's Assets loaded
+    /// through `loader`, with its systems timed by `recorder`, and no Chunk
+    /// loaded.
+    pub(crate) fn spawned(
         scene: ReferenceScene,
         shift: glam::DVec3,
         crowd_form: CrowdForm,
@@ -87,24 +110,14 @@ impl Simulation {
             },
             ReferenceScene::Town => spawn_town,
         };
-        let chunks = spawn(&mut world, loader)
-            .and_then(|()| scene.load_chunks(loader))
-            .with_context(|| format!("loading {}", scene.name()))?;
-        world.insert_resource(chunks);
+        spawn(&mut world, loader).with_context(|| format!("loading {}", scene.name()))?;
+        world.insert_resource(LoadedChunks::default());
         world.insert_resource(scene.environment());
         world.spawn(scene.sun());
         // A child's translation is relative to its parent, so only roots move.
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
         for mut transform in root_query.iter_mut(&mut world) {
             transform.translation += shift;
-        }
-        for chunk in &mut world.resource_mut::<LoadedChunks>().0 {
-            for placement in &mut chunk.placements {
-                placement.transform.translation += shift;
-            }
-            for (position, _) in &mut chunk.lights {
-                *position += shift;
-            }
         }
         // Ticks propagate World transforms as they end; frames drawn before
         // the first Tick draw these.
@@ -161,11 +174,14 @@ impl State {
         } = &mut renderer;
 
         let recorder = FrameRecorder::new();
-        let cache = CookedCache::new(COOKED_CACHE_DIRECTORY);
+        let cache = Arc::new(CookedCache::new(COOKED_CACHE_DIRECTORY));
+        let mut streaming =
+            ChunkStreaming::new(scene, shift, scene.load_radius_metres(), cache.clone())?;
+        let reader = streaming.reader();
         let mut loader = PoolLoader {
             device,
             staging: load_staging,
-            cache: &cache,
+            reader: &reader,
             mesh_pool,
             material_pool,
         };
@@ -187,20 +203,23 @@ impl State {
         let absent_sources: Vec<String> = Vec::new();
 
         let mut simulation =
-            Simulation::new(scene, shift, switches.crowd_form, &mut loader, &recorder).map_err(
-                |error| match absent_sources.as_slice() {
-                    [] => error,
-                    absent => error.context(format!("absent sources: {}", absent.join(", "))),
-                },
-            )?;
+            Simulation::spawned(scene, shift, switches.crowd_form, &mut loader, &recorder)
+                .map_err(|error| naming_absent_sources(error, &absent_sources))?;
+        #[cfg(feature = "cook")]
+        {
+            let mut launch_cook = loader.into_cook();
+            let cache = cache.clone();
+            streaming.cook_each_chunk(Box::new(move |id| launch_cook.cook_for_scene(&cache, id)));
+        }
         let preparer = FramePreparer::new(&mut simulation.world, renderer.capacities());
 
         Ok(Self {
             simulation,
+            streaming,
             recorder,
             preparer,
             renderer,
-            scene_content_hash: cache.content_hash(),
+            absent_sources,
         })
     }
 
@@ -220,11 +239,34 @@ impl State {
     }
 
     /// Runs the Ticks `frame_delta` completes, moves the camera by it,
-    /// prepares the frame's Frame data, blended between the two newest Ticks,
-    /// and uploads it.
+    /// streams the Chunks around it, prepares the frame's Frame data,
+    /// blended between the two newest Ticks, and uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
+        if let Err(error) = self.advance(frame_delta, false) {
+            tracing::error!(error = format!("{error:#}"), "Chunk streaming failed");
+        }
+    }
+
+    /// `update`, waiting until the Chunk streamer reports the frame Settled;
+    /// fails when a load fails.
+    pub(crate) fn update_settled(&mut self, frame_delta: Duration) -> anyhow::Result<()> {
+        self.advance(frame_delta, true)
+            .map_err(|error| naming_absent_sources(error, &self.absent_sources))
+    }
+
+    fn advance(&mut self, frame_delta: Duration, settle: bool) -> anyhow::Result<()> {
         self.recorder.begin();
         self.recorder.counters.dropped_time = self.simulation.simulate(frame_delta);
+
+        let started = Instant::now();
+        let streamed =
+            self.streaming
+                .update(&mut self.simulation.world, &mut self.renderer, settle)?;
+        self.recorder.counters.late_chunks = streamed.late_chunks;
+        self.recorder.counters.chunks_loaded = streamed.chunks_loaded;
+        self.recorder.counters.chunks_unloaded = streamed.chunks_unloaded;
+        self.recorder.counters.bytes_read = streamed.bytes_read;
+        self.recorder.stage("stream_chunks", started);
 
         let started = Instant::now();
         // Writes a failed upload lost are written again, with every Instance.
@@ -245,6 +287,12 @@ impl State {
         self.recorder.counters.moving_instances_left_out =
             self.preparer.moving_instances_left_out();
         self.recorder.counters.bends_left_out = self.preparer.bends_left_out();
+        Ok(())
+    }
+
+    /// The Cooked cache's `content_hash`: the Blobs the scene loaded so far.
+    pub(crate) fn scene_content_hash(&self) -> String {
+        self.streaming.content_hash()
     }
 
     /// Draws the frame into `target`, a view in the format and size this
@@ -286,6 +334,14 @@ impl State {
             allocator_report_bytes: self.renderer.allocator_report_bytes(),
             ..self.recorder.stats()
         }
+    }
+}
+
+/// `error`, naming the `absent` sources when there are any.
+fn naming_absent_sources(error: anyhow::Error, absent: &[String]) -> anyhow::Error {
+    match absent {
+        [] => error,
+        absent => error.context(format!("absent sources: {}", absent.join(", "))),
     }
 }
 
@@ -541,5 +597,86 @@ mod tests {
         });
         assert!(world.contains_resource::<Spawned>());
         assert!(frames_after_jump > 0, "no frame drawn just after the jump");
+    }
+
+    /// Flown past with a Load radius of 0 m, a Chunk of `far_coplanar` loads
+    /// once the camera is over it and is drawn; is held, so drawn no more,
+    /// once the camera is 172 m past it; and unloads 944 m past it. Each
+    /// frame waits until it is Settled, and the bench's Counters count it.
+    #[test]
+    fn a_chunk_loads_is_drawn_held_and_unloaded_as_the_camera_flies_past() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::FarCoplanar;
+        let (width, height) = (64, 36);
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            width,
+            height,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("far_coplanar loads");
+        state.streaming.set_load_radius(0.0);
+        let target = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Chunk Flight Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: crate::capture::TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let watched = [0, -8];
+        let middle_z = -7.5 * crate::cooked::CHUNK_EDGE_METRES;
+        let mut frame_stats = Vec::new();
+        let mut watched_states = Vec::new();
+        for x in [128.0, 428.0, 1200.0] {
+            let position = glam::dvec3(x, 50.0, middle_z);
+            state
+                .simulation
+                .world
+                .insert_resource(crate::camera::Camera::looking_at(
+                    position,
+                    position + glam::dvec3(1.0, -10.0, 0.0),
+                ));
+            state
+                .update_settled(scene.frame_delta())
+                .expect("the frame settles");
+            state.render(&target_view);
+            frame_stats.push(state.frame_stats());
+            let loaded = state.simulation.world.resource::<LoadedChunks>();
+            let watched_chunk = loaded.0.iter().find(|chunk| chunk.coordinates == watched);
+            watched_states.push(watched_chunk.map(|chunk| chunk.held));
+        }
+        state.flush_gpu_frame_stats().expect("GPU stats read back");
+
+        assert_eq!(watched_states, [Some(false), Some(true), None]);
+        let loads = frame_stats.iter().map(|stats| stats.chunks_loaded);
+        let unloads = frame_stats.iter().map(|stats| stats.chunks_unloaded);
+        assert_eq!(loads.collect::<Vec<_>>(), [1, 8, 9]);
+        assert_eq!(unloads.collect::<Vec<_>>(), [0, 0, 9]);
+        assert!(frame_stats.iter().all(|stats| stats.bytes_read > 0));
+        let first_frame = state.gpu_frame_stats()[0];
+        assert!(
+            first_frame.instances_drawn > 0,
+            "the watched Chunk is drawn"
+        );
+
+        let counters = crate::bench::Counters::of(&frame_stats);
+        assert_eq!(counters.chunks_loaded, 18);
+        assert_eq!(counters.chunks_unloaded, 9);
+        assert_eq!(counters.late_chunks, 2);
+        let bytes_read: u64 = frame_stats.iter().map(|stats| stats.bytes_read).sum();
+        assert_eq!(counters.bytes_read, bytes_read);
     }
 }

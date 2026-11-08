@@ -16,6 +16,7 @@ use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
+#[cfg(feature = "cook")]
 use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
@@ -348,6 +349,7 @@ impl ReferenceScene {
     }
 
     /// Loads the scene's Chunks through `loader`, in coordinate order.
+    #[cfg(feature = "cook")]
     pub(crate) fn load_chunks(self, loader: &mut dyn AssetLoader) -> anyhow::Result<LoadedChunks> {
         let chunks = self
             .chunk_coordinates()
@@ -456,6 +458,25 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town => SIXTY_HERTZ,
+        }
+    }
+
+    /// The scene's Load radius, in metres: the world's 256 m, or for
+    /// `far_coplanar` and `town` one that holds every Chunk they have from
+    /// each frame of their camera paths, as the others' 256 m does.
+    pub(crate) fn load_radius_metres(self) -> f64 {
+        match self {
+            Self::FarCoplanar => 4352.0,
+            Self::Town => 1024.0,
+            Self::Helmet
+            | Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall
+            | Self::Shadows
+            | Self::Crowd => 256.0,
         }
     }
 
