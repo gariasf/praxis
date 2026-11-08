@@ -213,7 +213,7 @@ A span of a frame's GPU work that the GPU timestamps at its start and end for Fr
 _Avoid_: GPU pass (unqualified), timer, query
 
 **Baseline**:
-The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.
+The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-records one when it changes a timing the Baseline held or its Harness version; a commit that changes only its counters does not, and starts no line on its Series.
 _Avoid_: Benchmark result
 
 **Cycles Baseline**:

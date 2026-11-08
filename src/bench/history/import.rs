@@ -135,8 +135,8 @@ struct BaselineCommit<'commit> {
 /// otherwise the later keeps it unless the earlier's GPU frame spread is lower
 /// and neither is lavapipe's. Up to `history_started` each is imported with the
 /// Harness version `breaks` give its commit; after it, re-recorded with
-/// the version its commit defined. A file only renamed, or given fields
-/// without a value it held changing, was not measured again.
+/// the version its commit defined. A file only renamed, or with no timing
+/// it held nor its Harness version changed, was not measured again.
 fn baseline_records(
     repository: &Path,
     history_started: &str,
@@ -263,7 +263,7 @@ fn commit_records(
             tracing::info!(
                 path,
                 commit,
-                "Baseline not imported: its values are its parent's"
+                "Baseline not imported: its timings and Harness version are its parent's"
             );
             continue;
         }
@@ -276,14 +276,25 @@ fn commit_records(
 }
 
 /// Whether the Baseline `current` measured again what `earlier`, the same
-/// file in the commit before, held: whether any value `earlier` held
-/// differs or is gone, rather than only fields added.
-fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
+/// file in the commit before, held: whether a timing `earlier` held (a
+/// field ending `_microseconds`) or its Harness version differs or is gone.
+/// Counters alone changing, or fields added, measured nothing again.
+pub(super) fn remeasured(earlier: &str, current: &str) -> anyhow::Result<bool> {
     let earlier: serde_json::Map<String, serde_json::Value> = serde_json::from_str(earlier)?;
     let current: serde_json::Map<String, serde_json::Value> = serde_json::from_str(current)?;
-    Ok(earlier
+    let harness_version = |baseline: &serde_json::Map<String, serde_json::Value>| {
+        baseline
+            .get("provenance")
+            .and_then(|provenance| provenance.get("harness_version"))
+            .cloned()
+    };
+    let retimed = earlier
         .iter()
-        .any(|(key, value)| current.get(key) != Some(value)))
+        .filter(|(key, _)| key.ends_with("_microseconds"))
+        .any(|(key, value)| current.get(key) != Some(value));
+    let earlier_version = harness_version(&earlier);
+    let version_changed = earlier_version.is_some() && harness_version(&current) != earlier_version;
+    Ok(retimed || version_changed)
 }
 
 /// What the import reads from every Baseline, whichever bench wrote it.
@@ -664,6 +675,17 @@ mod tests {
         assert!(!remeasured(earlier, with_backend).unwrap());
         assert!(remeasured(earlier, remeasured_baseline).unwrap());
         assert!(remeasured(earlier, renamed_metric).unwrap());
+    }
+
+    #[test]
+    fn a_baseline_whose_counters_alone_changed_was_not_measured_again() {
+        let earlier = r#"{"scene": "town", "gpu_pass_microseconds": {"lit_pass": {"median": 3.0}}, "gpu_memory_bytes": 8, "counter_frames": {"heap_allocations": 2}, "provenance": {"commit": "a", "harness_version": 11}}"#;
+        let counters_changed = r#"{"scene": "town", "gpu_pass_microseconds": {"lit_pass": {"median": 3.0}}, "gpu_memory_bytes": 9, "counter_frames": {"heap_allocations": 3}, "provenance": {"commit": "b", "harness_version": 11}}"#;
+        let pass_retimed = r#"{"scene": "town", "gpu_pass_microseconds": {"lit_pass": {"median": 3.5}}, "gpu_memory_bytes": 8, "counter_frames": {"heap_allocations": 2}, "provenance": {"commit": "a", "harness_version": 11}}"#;
+        let harness_raised = r#"{"scene": "town", "gpu_pass_microseconds": {"lit_pass": {"median": 3.0}}, "gpu_memory_bytes": 8, "counter_frames": {"heap_allocations": 2}, "provenance": {"commit": "a", "harness_version": 12}}"#;
+        assert!(!remeasured(earlier, counters_changed).unwrap());
+        assert!(remeasured(earlier, pass_retimed).unwrap());
+        assert!(remeasured(earlier, harness_raised).unwrap());
     }
 
     #[test]

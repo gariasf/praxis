@@ -6,11 +6,11 @@ use std::path::Path;
 
 use anyhow::Context;
 
-use super::night;
 use super::{
     BRANCH, JUDGED_TIMINGS, Publication, README, RELEASE_BUILD, adapter_key, fetch_main, git, push,
     remote_tip, source_hash,
 };
+use super::{import, night};
 use crate::bench::baseline_directory;
 
 /// The branch's directory of Verdicts: `verdicts/<adapter>-<backend>/<scene>/<Suspect's source hash>.json`.
@@ -44,8 +44,8 @@ pub(super) enum State {
 pub(super) struct Pinned {
     #[serde(flatten)]
     pub commit: Commit,
-    /// Whether the commit changed the scene's Baseline for the adapter, so
-    /// re-recorded it at the new level.
+    /// Whether the commit re-recorded the scene's Baseline for the adapter
+    /// at the new level: added it, or changed a timing or its Harness version.
     pub covered_by_baseline: bool,
     /// What the night that pinned it measured.
     pub measured: Measured,
@@ -415,19 +415,19 @@ pub fn bisect(
                     );
                 }
             }
-            pinned.covered_by_baseline = !git(
-                repository,
-                &[
-                    "diff",
-                    "--name-only",
-                    &format!("{commit}^"),
-                    commit,
-                    "--",
-                    &baseline.join("/"),
-                ],
-                None,
-            )?
-            .is_empty();
+            let baseline = baseline.join("/");
+            let baseline_at = |commit: &str| {
+                git(repository, &["show", &format!("{commit}:{baseline}")], None).ok()
+            };
+            pinned.covered_by_baseline =
+                match (baseline_at(&format!("{commit}^")), baseline_at(commit)) {
+                    (_, None) => false,
+                    (None, Some(_)) => true,
+                    (Some(earlier), Some(current)) => import::remeasured(&earlier, &current)
+                        .with_context(|| {
+                            format!("comparing {baseline} at {commit} with its parent's")
+                        })?,
+                };
         }
         record(repository, &key, &verdict)?;
     }
@@ -1125,24 +1125,28 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
     const BACKEND: &str = "metal";
     const KEY: &str = "apple-m4-pro-metal";
 
+    /// A Baseline holding a timing and a counter.
+    const TIMED_BASELINE: &str =
+        r#"{"cpu_frame_microseconds": {"median": 10000.0}, "heap_allocations": 1}"#;
+
     fn head(checkout: &Path) -> String {
         git(checkout, &["rev-parse", "HEAD"], None).unwrap()
     }
 
     /// A fixture whose `main` runs from a to f, each a source of its own,
-    /// the commit named `rerecords_baseline` also re-recording town's M4 Pro
-    /// Baseline, with town's Series holding records of a, b and c at one
+    /// each commit `baselines` names also writing town's M4 Pro Baseline as
+    /// it gives, with town's Series holding records of a, b and c at one
     /// CPU frame median and of f 10% slower: a Suspect after c. Returns it
     /// with its commits in order.
-    fn stepped(name: &str, rerecords_baseline: &str) -> (Fixture, Vec<String>) {
+    fn stepped(name: &str, baselines: &[(&str, &str)]) -> (Fixture, Vec<String>) {
         let fixture = Fixture::new(name);
         let checkout = &fixture.checkout;
         let mut commits = vec![head(checkout)];
         for letter in ["b", "c", "d", "e", "f"] {
-            if letter == rerecords_baseline {
+            for (_, json) in baselines.iter().filter(|(writer, _)| *writer == letter) {
                 let baseline = checkout.join("bench/baselines/apple-m4-pro/town.json");
                 std::fs::create_dir_all(baseline.parent().unwrap()).unwrap();
-                std::fs::write(baseline, format!("{{\"recorded_at\": \"{letter}\"}}")).unwrap();
+                std::fs::write(baseline, json).unwrap();
             }
             commit(checkout, &format!("src/{letter}.rs"), letter);
             commits.push(head(checkout));
@@ -1208,8 +1212,8 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
     /// Bisects `stepped`'s Suspect in a night where e and f run 10% slower
     /// on the CPU and GPU. Returns the commits' letters as benched, the
     /// night's `verdict.json` and the Verdict on the remote.
-    fn bisected(name: &str, rerecords_baseline: &str) -> (Vec<char>, Verdict, Verdict) {
-        let (fixture, commits) = stepped(name, rerecords_baseline);
+    fn bisected(name: &str, baselines: &[(&str, &str)]) -> (Vec<char>, Verdict, Verdict) {
+        let (fixture, commits) = stepped(name, baselines);
         let letter = |commit: &str| {
             let index = commits.iter().position(|each| each == commit).unwrap();
             "abcdef".chars().nth(index).unwrap()
@@ -1252,7 +1256,7 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
 
     #[test]
     fn a_night_bisects_from_where_it_started_and_pins_with_each_timings_medians() {
-        let (benched, started, recorded) = bisected("bisect-pins", "d");
+        let (benched, started, recorded) = bisected("bisect-pins", &[("d", TIMED_BASELINE)]);
         // The ends interleaved, then the middle source e, then d.
         assert_eq!(benched, ['c', 'f', 'c', 'f', 'e', 'd']);
         assert_eq!(
@@ -1299,13 +1303,25 @@ Measured the night it was pinned, from 2 interleaved runs of each end: b \
 
     #[test]
     fn a_pinned_commit_that_re_recorded_its_scenes_baseline_is_covered() {
-        let (_, _, recorded) = bisected("bisect-covered", "e");
+        let (_, _, recorded) = bisected("bisect-covered", &[("e", TIMED_BASELINE)]);
+        assert!(recorded.pinned.unwrap().covered_by_baseline);
+        let retimed = TIMED_BASELINE.replace("10000.0", "11000.0");
+        let (_, _, recorded) =
+            bisected("bisect-retimed", &[("d", TIMED_BASELINE), ("e", &retimed)]);
         assert!(recorded.pinned.unwrap().covered_by_baseline);
     }
 
     #[test]
+    fn a_pinned_commit_that_changed_only_its_baselines_counters_is_not_covered() {
+        let counted = TIMED_BASELINE.replace("\"heap_allocations\": 1", "\"heap_allocations\": 2");
+        let (_, _, recorded) =
+            bisected("bisect-counters", &[("d", TIMED_BASELINE), ("e", &counted)]);
+        assert!(!recorded.pinned.unwrap().covered_by_baseline);
+    }
+
+    #[test]
     fn a_held_verdict_resumes_ahead_of_a_new_suspect() {
-        let (fixture, commits) = stepped("bisect-resumes", "d");
+        let (fixture, commits) = stepped("bisect-resumes", &[("d", TIMED_BASELINE)]);
         let checkout = &fixture.checkout;
         let first_night = night_directory(&fixture, "first-night");
         assert_eq!(
