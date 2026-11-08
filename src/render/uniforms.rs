@@ -41,9 +41,9 @@ pub struct CameraUniform {
     pub exposure: f32,
     pub offset: [f32; 3],
     pub _pad_offset: u32,
-    /// The Anchor whose corner is the origin of the static TLAS's frame
-    /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
-    /// camera's Anchor in the first Frame data.
+    /// The Anchor whose corner is the origin of the bound static TLAS's
+    /// frame (ADR 0020), where shadow rays start: the Renderer sets it from
+    /// the static TLAS (`StaticTlas::anchor`).
     pub tlas_anchor: [i32; 3],
     /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
     pub dynamic_tlas_entries: u32,

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::assets::MeshPool;
+use crate::cooked::CHUNK_EDGE_METRES;
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::readback::PassQueries;
@@ -186,17 +187,26 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
     Some(sizes.acceleration_structure_size + instance_buffer_bytes)
 }
 
+/// Anchor cells, along any axis, between the camera's Anchor and the bound
+/// static TLAS's past which a build re-anchors it though no static Instance
+/// changed: a Chunk's edge. Within it, the camera adds less than 320 m to
+/// what a shadow ray composes in the TLAS's frame, and less than 4.9 mm to
+/// its offset.
+const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
+
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
-/// tagged with its slot, in a frame whose origin is the corner of the
-/// camera's Anchor in the first Frame data it takes, never re-anchored.
-/// Two TLASes hold it: rays trace the bound one while a worker thread brings
-/// the spare up to date and records its build, which the main thread submits
-/// (ADR 0016), and the spare is bound from the frame after that submit. A
-/// frame that changes a static Instance or frees one's slot starts a build
-/// once the spare is idle; both are built empty at creation, so rays can
-/// always query them.
+/// tagged with its slot, in a frame whose origin is the corner of an Anchor:
+/// the camera's when the build started (ADR 0014). Two TLASes hold it: rays
+/// trace the bound one while a worker thread brings the spare up to date
+/// and records its build, which the main thread submits (ADR 0016), and the
+/// spare is bound from the frame after that submit. A frame that changes a
+/// static Instance or frees one's slot starts a build once the spare is
+/// idle, as does a frame whose camera's Anchor is more than
+/// `REANCHOR_CELLS` from the bound TLAS's along an axis. Both are built
+/// empty at creation, so rays can always query them, and take the camera's
+/// Anchor with no build until a static Instance takes an entry.
 pub struct StaticTlas {
-    bound: Counted<wgpu::Tlas>,
+    bound: AnchoredTlas,
     /// Which of the two `bound` is: 0 for the one bound at creation.
     bound_index: usize,
     spare: Option<Spare>,
@@ -206,7 +216,6 @@ pub struct StaticTlas {
     /// Frames it has taken.
     frame: u64,
     capacity: u32,
-    anchor: Option<[i32; 3]>,
     /// The entry each slot's static Instance holds, by slot, up to the
     /// highest slot that held one.
     entry_by_slot: Vec<Option<u32>>,
@@ -216,30 +225,66 @@ pub struct StaticTlas {
     end: u32,
     /// Static Instances it had no free entry for, by slot, which take the
     /// entries still free after a later frame's writes, lowest slot first.
-    left_out: BTreeMap<u32, wgpu::TlasInstance>,
+    left_out: BTreeMap<u32, StaticInstance>,
+}
+
+/// One of the static TLAS's two TLASes, in the frame whose origin is the
+/// corner of `anchor`, with the position of each entry's Instance, from
+/// which a build that moves `anchor` composes every entry's translation
+/// anew.
+struct AnchoredTlas {
+    tlas: Counted<wgpu::Tlas>,
+    anchor: [i32; 3],
+    /// By entry, up to the highest entry filled; an emptied entry's is stale.
+    positions: Vec<InstancePosition>,
+}
+
+/// An Instance's position: its Anchor and its offset from that cell's corner
+/// (ADR 0014).
+#[derive(Clone, Copy, Default)]
+struct InstancePosition {
+    anchor: [i32; 3],
+    offset: [f32; 3],
+}
+
+impl InstancePosition {
+    fn of(instance: &InstanceData) -> Self {
+        Self {
+            anchor: instance.anchor,
+            offset: instance.offset,
+        }
+    }
+}
+
+/// A static Instance as an entry takes it: its TLAS Instance, whose
+/// translation the TLAS composes from `position` in its own frame.
+#[derive(Clone)]
+struct StaticInstance {
+    tlas_instance: wgpu::TlasInstance,
+    position: InstancePosition,
 }
 
 /// The TLAS that is not bound.
 enum Spare {
     /// On the main thread.
-    Idle(Counted<wgpu::Tlas>),
-    /// On the worker, which takes the entry changes it lacks and records its
-    /// build when `built_from` is set: the frame of the earliest change the
-    /// bound TLAS lacks.
+    Idle(AnchoredTlas),
+    /// On the worker, which takes the entry changes it lacks and, when it
+    /// builds, re-anchors it at the camera's Anchor and records its build.
+    /// `built_from` is the frame of the earliest change the bound TLAS lacks.
     Working {
         worker: std::thread::JoinHandle<Work>,
         built_from: Option<u64>,
     },
     /// Its build submitted, bound from the next frame.
     Submitted {
-        tlas: Counted<wgpu::Tlas>,
-        built_from: u64,
+        tlas: AnchoredTlas,
+        built_from: Option<u64>,
     },
 }
 
 /// What the worker hands back.
 struct Work {
-    tlas: Counted<wgpu::Tlas>,
+    tlas: AnchoredTlas,
     build: Option<wgpu::CommandBuffer>,
     time: Duration,
 }
@@ -252,7 +297,7 @@ struct ChangeBatch {
 
 struct EntryChange {
     entry: u32,
-    instance: Option<wgpu::TlasInstance>,
+    instance: Option<StaticInstance>,
 }
 
 /// What a static TLAS's update did on the main thread's behalf.
@@ -261,9 +306,9 @@ pub struct StaticTlasUpdate {
     /// The worker's time on the build the update submitted: taking the
     /// entry changes, recording and finishing.
     pub build_time: Option<Duration>,
-    /// When the update bound a newly built TLAS, the frames since the
-    /// earliest change it brings: how long a newly loaded Chunk's Instances
-    /// waited to be traced.
+    /// When the update bound a newly built TLAS that brings a change, the
+    /// frames since the earliest change it brings: how long a newly loaded
+    /// Chunk's Instances waited to be traced.
     pub frames_until_traced: Option<u32>,
 }
 
@@ -276,24 +321,27 @@ impl StaticTlas {
         queue: &wgpu::Queue,
         capacity: u32,
     ) -> Self {
-        let create = |label| {
-            memory.create_tlas(
+        let create = |label| AnchoredTlas {
+            tlas: memory.create_tlas(
                 device,
                 &wgpu::CreateTlasDescriptor {
                     label: Some(label),
                     max_instances: capacity,
-                    // Rebuilt only when its Instances change, traced every frame.
+                    // Rebuilt only when its Instances change or it re-anchors,
+                    // traced every frame.
                     flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: wgpu::AccelerationStructureUpdateMode::Build,
                 },
-            )
+            ),
+            anchor: [0; 3],
+            positions: Vec::new(),
         };
         let bound = create("Static TLAS 0");
         let spare = create("Static TLAS 1");
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Static TLAS Encoder"),
         });
-        encoder.build_acceleration_structures(std::iter::empty(), [&*bound, &*spare]);
+        encoder.build_acceleration_structures(std::iter::empty(), [&*bound.tlas, &*spare.tlas]);
         queue.submit(std::iter::once(encoder.finish()));
         Self {
             bound,
@@ -302,7 +350,6 @@ impl StaticTlas {
             behind: [Vec::new(), Vec::new()],
             frame: 0,
             capacity,
-            anchor: None,
             entry_by_slot: Vec::new(),
             free_entries: Vec::new(),
             end: 0,
@@ -314,8 +361,9 @@ impl StaticTlas {
     /// `mesh_pool`; binds the spare if its build was submitted in the
     /// frame before; collects the worker's result, submitting its build
     /// through `queue`; and hands the idle spare to a new worker on
-    /// `device` when either TLAS lacks a change. With `wait`, it waits for
-    /// that worker, so no frame depends on the worker's timing.
+    /// `device` when either TLAS lacks a change or the bound one is to
+    /// re-anchor at `frame`'s camera. With `wait`, it waits for that worker,
+    /// so no frame depends on the worker's timing.
     pub fn update(
         &mut self,
         frame: &FrameData,
@@ -325,6 +373,7 @@ impl StaticTlas {
         wait: bool,
     ) -> StaticTlasUpdate {
         self.frame += 1;
+        self.follow_the_camera_while_empty(frame.camera.anchor);
         let changes = self.entry_changes(frame, mesh_pool);
         if !changes.is_empty() {
             let changes = Arc::new(changes);
@@ -343,22 +392,33 @@ impl StaticTlas {
             let unbound = std::mem::replace(&mut self.bound, tlas);
             self.bound_index = 1 - self.bound_index;
             self.spare = Some(Spare::Idle(unbound));
-            update.frames_until_traced = Some((self.frame - built_from) as u32);
+            update.frames_until_traced =
+                built_from.map(|built_from| (self.frame - built_from) as u32);
         }
         loop {
             self.collect(queue, wait, &mut update);
-            if !self.start(device) || !wait {
+            if !self.start(device, frame.camera.anchor) || !wait {
                 break;
             }
         }
         update
     }
 
+    /// Moves both TLASes to `camera_anchor` while no static Instance has
+    /// taken an entry, which needs no build.
+    fn follow_the_camera_while_empty(&mut self, camera_anchor: [i32; 3]) {
+        if self.end == 0
+            && let Some(Spare::Idle(spare)) = &mut self.spare
+        {
+            self.bound.anchor = camera_anchor;
+            spare.anchor = camera_anchor;
+        }
+    }
+
     /// The entry changes of `frame`'s Instance writes, its entries taken and
     /// freed as its static Instances need.
     fn entry_changes(&mut self, frame: &FrameData, mesh_pool: &MeshPool) -> Vec<EntryChange> {
         let mut changes = Vec::new();
-        let anchor = *self.anchor.get_or_insert(frame.camera.anchor);
         let was_leaving_out = !self.left_out.is_empty();
         for write in &frame.instance_writes {
             let instances = &frame.instances[write.instances.clone()];
@@ -380,7 +440,10 @@ impl StaticTlas {
                     }
                     continue;
                 };
-                let instance = tlas_instance(blas, anchored_transform(instance, anchor), slot);
+                let instance = StaticInstance {
+                    tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot),
+                    position: InstancePosition::of(instance),
+                };
                 match self.entry_of(slot) {
                     Some(entry) => changes.push(EntryChange {
                         entry,
@@ -427,8 +490,8 @@ impl StaticTlas {
         let work = worker
             .join()
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-        self.spare = Some(match (work.build, built_from) {
-            (Some(build), Some(built_from)) => {
+        self.spare = Some(match work.build {
+            Some(build) => {
                 queue.submit(std::iter::once(build));
                 update.build_time = Some(work.time);
                 Spare::Submitted {
@@ -436,20 +499,27 @@ impl StaticTlas {
                     built_from,
                 }
             }
-            _ => Spare::Idle(work.tlas),
+            None => Spare::Idle(work.tlas),
         });
     }
 
     /// Hands the idle spare to a worker on `device` when its entries lack a
-    /// change or the bound TLAS's build does, the worker recording a build
-    /// in the latter case. Returns whether it did.
-    fn start(&mut self, device: &wgpu::Device) -> bool {
+    /// change, the bound TLAS's build does, or the bound TLAS's Anchor is
+    /// more than `REANCHOR_CELLS` from `camera_anchor` along an axis; in the
+    /// latter two cases the worker re-anchors it at `camera_anchor` and
+    /// records its build. Returns whether it did.
+    fn start(&mut self, device: &wgpu::Device, camera_anchor: [i32; 3]) -> bool {
         let spare_index = 1 - self.bound_index;
         let built_from = self.behind[self.bound_index]
             .first()
             .map(|batch| batch.frame);
+        let camera_strayed = (0..3).any(|axis| {
+            (i64::from(camera_anchor[axis]) - i64::from(self.bound.anchor[axis])).abs()
+                > i64::from(REANCHOR_CELLS)
+        });
+        let records_build = built_from.is_some() || camera_strayed;
         if !matches!(self.spare, Some(Spare::Idle(_)))
-            || (self.behind[spare_index].is_empty() && built_from.is_none())
+            || (self.behind[spare_index].is_empty() && !records_build)
         {
             return false;
         }
@@ -457,24 +527,29 @@ impl StaticTlas {
             unreachable!("matched")
         };
         let batches = std::mem::take(&mut self.behind[spare_index]);
-        let device = built_from.map(|_| device.clone());
+        let device = records_build.then(|| device.clone());
         let worker = std::thread::Builder::new()
             .name("Static TLAS Worker".to_string())
             .spawn(move || {
                 let started = Instant::now();
+                let moved = device.is_some()
+                    && std::mem::replace(&mut tlas.anchor, camera_anchor) != camera_anchor;
                 for change in batches.iter().flat_map(|batch| batch.changes.iter()) {
-                    *tlas
-                        .get_mut_single(change.entry as usize)
-                        .expect("entries are taken under its capacity") = change.instance.clone();
+                    tlas.apply(change);
                 }
                 drop(batches);
+                if moved {
+                    tlas.place_every_entry();
+                }
                 let build = device.map(|device| {
                     let mut encoder =
                         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                             label: Some("Static TLAS Encoder"),
                         });
-                    encoder
-                        .build_acceleration_structures(std::iter::empty(), std::iter::once(&*tlas));
+                    encoder.build_acceleration_structures(
+                        std::iter::empty(),
+                        std::iter::once(&*tlas.tlas),
+                    );
                     encoder.finish()
                 });
                 Work {
@@ -536,7 +611,7 @@ impl StaticTlas {
         let Some(Spare::Idle(spare)) = &self.spare else {
             panic!("the spare is on the worker");
         };
-        let mut bindings = [self.bound.as_binding(), spare.as_binding()];
+        let mut bindings = [self.bound.tlas.as_binding(), spare.tlas.as_binding()];
         bindings.rotate_left(self.bound_index);
         bindings
     }
@@ -547,15 +622,51 @@ impl StaticTlas {
         self.bound_index
     }
 
-    /// The Anchor whose corner is its frame's origin: the camera's in the
-    /// first Frame data it took, zero before.
+    /// The Anchor whose corner is the bound TLAS's frame's origin: the
+    /// camera's when its build started, or in this frame's Frame data until
+    /// a static Instance takes an entry.
     pub fn anchor(&self) -> [i32; 3] {
-        self.anchor.unwrap_or_default()
+        self.bound.anchor
     }
 
     /// Static Instances it leaves out, as it is full.
     pub fn instances_left_out(&self) -> u32 {
         self.left_out.len() as u32
+    }
+}
+
+impl AnchoredTlas {
+    /// Takes `change`, composing its Instance's translation in its frame.
+    fn apply(&mut self, change: &EntryChange) {
+        let entry = change.entry as usize;
+        let instance = change.instance.as_ref().map(|instance| {
+            if entry >= self.positions.len() {
+                self.positions
+                    .resize(entry + 1, InstancePosition::default());
+            }
+            self.positions[entry] = instance.position;
+            let mut tlas_instance = instance.tlas_instance.clone();
+            place(&mut tlas_instance.transform, instance.position, self.anchor);
+            tlas_instance
+        });
+        *self
+            .tlas
+            .get_mut_single(entry)
+            .expect("entries are taken under its capacity") = instance;
+    }
+
+    /// Composes every entry's translation anew in its frame.
+    fn place_every_entry(&mut self) {
+        let anchor = self.anchor;
+        let entries = self
+            .tlas
+            .get_mut_slice(0..self.positions.len())
+            .expect("positions are held for entries under its capacity");
+        for (entry, &position) in entries.iter_mut().zip(&self.positions) {
+            if let Some(instance) = entry {
+                place(&mut instance.transform, position, anchor);
+            }
+        }
     }
 }
 
@@ -820,16 +931,28 @@ fn placed_bounds(transform: &[f32; 12], bounds: [[f32; 3]; 2]) -> [glam::Vec3; 2
 }
 
 /// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
-/// its translation from `anchor`'s corner composed in f64, so only the f32
-/// result rounds (ADR 0014).
+/// its translation from `anchor`'s corner (`place`).
 fn anchored_transform(instance: &InstanceData, anchor: [i32; 3]) -> [f32; 12] {
+    let mut transform = unplaced_transform(instance);
+    place(&mut transform, InstancePosition::of(instance), anchor);
+    transform
+}
+
+/// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
+/// with no translation.
+fn unplaced_transform(instance: &InstanceData) -> [f32; 12] {
     let [x_axis, y_axis, z_axis] = instance.rotation_scale;
-    let row = |axis: usize| {
-        let cells = i64::from(instance.anchor[axis]) - i64::from(anchor[axis]);
-        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(instance.offset[axis]);
-        [x_axis[axis], y_axis[axis], z_axis[axis], translation as f32]
-    };
-    bytemuck::cast([0, 1, 2].map(row))
+    bytemuck::cast([0, 1, 2].map(|axis| [x_axis[axis], y_axis[axis], z_axis[axis], 0.0]))
+}
+
+/// Sets `transform`'s translation to `position` from `anchor`'s corner,
+/// composed in f64, so only the f32 result rounds (ADR 0014).
+fn place(transform: &mut [f32; 12], position: InstancePosition, anchor: [i32; 3]) {
+    for axis in 0..3 {
+        let cells = i64::from(position.anchor[axis]) - i64::from(anchor[axis]);
+        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(position.offset[axis]);
+        transform[axis * 4 + 3] = translation as f32;
+    }
 }
 
 #[cfg(test)]
@@ -980,12 +1103,20 @@ mod tests {
 
         /// Updates `tlas` with `frame`, waiting for its worker; returns
         /// whether it rebuilt, after binding the build with an update that
-        /// writes nothing.
+        /// writes nothing, from the same camera.
         fn update_from(&self, tlas: &mut StaticTlas, frame: &FrameData) -> bool {
             let rebuilt = self.update_once(tlas, frame, true).build_time.is_some();
             let bound = tlas.bound_index();
-            let binding = self.update_once(tlas, &FrameData::default(), true);
-            assert_eq!(binding.frames_until_traced, rebuilt.then_some(1));
+            let unchanged = FrameData {
+                camera: frame.camera,
+                ..FrameData::default()
+            };
+            let binding = self.update_once(tlas, &unchanged, true);
+            let brought_change = !frame.instance_writes.is_empty();
+            assert_eq!(
+                binding.frames_until_traced,
+                (rebuilt && brought_change).then_some(1)
+            );
             assert_eq!(tlas.bound_index() != bound, rebuilt);
             assert_eq!(binding.build_time, None);
             rebuilt
@@ -1013,6 +1144,7 @@ mod tests {
     fn entries(tlas: &StaticTlas) -> Vec<(u32, [f32; 12])> {
         let mut entries: Vec<(u32, [f32; 12])> = tlas
             .bound
+            .tlas
             .get()
             .iter()
             .flatten()
@@ -1060,7 +1192,7 @@ mod tests {
         let moving = triangle.instance(LOAD_ANCHOR, [0.0; 3], glam::Mat3::IDENTITY);
         assert!(!triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
         assert_eq!(
-            trace_down(&triangle.context, &empty.bound, &[[0.8, 0.0, 0.0]]),
+            trace_down(&triangle.context, &empty.bound.tlas, &[[0.8, 0.0, 0.0]]),
             [None]
         );
         assert!(!triangle.update(&mut empty, LOAD_ANCHOR, vec![(0, moving, true)]));
@@ -1109,25 +1241,85 @@ mod tests {
             [0.8, 0.0, 0.0],
             [5.8, 0.0, 0.0],
         ];
-        let traced = trace_down(&triangle.context, &tlas.bound, &points);
+        let traced = trace_down(&triangle.context, &tlas.bound.tlas, &points);
         assert_eq!(traced, [Some(0), None, None, Some(2)]);
 
         // The camera moves on and only the Moving Instance is written: no
-        // rebuild, and the frame keeps the load Anchor.
-        let away = [1600, 2, -3];
+        // rebuild.
+        let away = LOAD_ANCHOR.map(|cell| cell + REANCHOR_CELLS);
         assert!(!triangle.update(&mut tlas, away, vec![(1, unturned(0.0), true)]));
         // A static spawn and a despawn each rebuild it in their frame.
-        assert!(triangle.update(&mut tlas, away, vec![(3, unturned(-4.0), false)]));
-        assert!(triangle.update(&mut tlas, away, vec![(2, freed(), false)]));
+        let writes = vec![(3, unturned(-4.0), false)];
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, writes));
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, vec![(2, freed(), false)]));
         let traced = trace_down(
             &triangle.context,
-            &tlas.bound,
+            &tlas.bound.tlas,
             &[[-3.2, 0.0, 0.0], points[3]],
         );
         assert_eq!(traced, [Some(3), None]);
         assert_eq!(slots_held(&tlas), [0, 3]);
         // Freeing a Moving Instance's slot leaves it as it was.
-        assert!(!triangle.update(&mut tlas, away, vec![(1, freed(), false)]));
+        assert!(!triangle.update(&mut tlas, LOAD_ANCHOR, vec![(1, freed(), false)]));
+    }
+
+    /// Each build composes every entry from the camera's Anchor in the frame
+    /// it starts, entries an earlier frame changed included, and a camera
+    /// more than `REANCHOR_CELLS` from the bound TLAS's Anchor along an axis
+    /// starts one with no change, which brings none to trace.
+    #[test]
+    fn a_build_re_anchors_it_at_the_cameras_anchor_and_a_far_camera_starts_one() {
+        let Some(triangle) = Triangle::new() else {
+            return;
+        };
+        let context = &triangle.context;
+        let mut tlas = StaticTlas::new(&context.device, &gpu_memory(context), &context.queue, 8);
+        let at = |x| triangle.instance(LOAD_ANCHOR, [x, 0.0, 0.0], glam::Mat3::IDENTITY);
+        let translations = |tlas: &StaticTlas| {
+            entries(tlas)
+                .into_iter()
+                .map(|(slot, transform)| (slot, [transform[3], transform[7], transform[11]]))
+                .collect::<Vec<_>>()
+        };
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, vec![(0, at(5.0), false)]));
+        assert_eq!(tlas.anchor(), LOAD_ANCHOR);
+        assert_eq!(translations(&tlas), [(0, [5.0, 0.0, 0.0])]);
+
+        let edge = [
+            LOAD_ANCHOR[0] + REANCHOR_CELLS,
+            LOAD_ANCHOR[1] - REANCHOR_CELLS,
+            LOAD_ANCHOR[2] + REANCHOR_CELLS,
+        ];
+        assert!(!triangle.update(&mut tlas, edge, Vec::new()));
+        assert_eq!(tlas.anchor(), LOAD_ANCHOR);
+        let past = [edge[0] + 1, edge[1], edge[2]];
+        assert!(triangle.update(&mut tlas, past, Vec::new()));
+        assert_eq!(tlas.anchor(), past);
+        let cells = REANCHOR_CELLS as f32 * ANCHOR_CELL_SIZE as f32;
+        let placed = [5.0 - cells - ANCHOR_CELL_SIZE as f32, cells, -cells];
+        assert_eq!(translations(&tlas), [(0, placed)]);
+        let point = [placed[0] + 0.8, placed[1], placed[2]];
+        assert_eq!(trace_down(context, &tlas.bound.tlas, &[point]), [Some(0)]);
+
+        // The TLAS bound before the move catches up in its own frame, then
+        // builds in the camera's.
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, vec![(1, at(-4.0), false)]));
+        assert_eq!(tlas.anchor(), LOAD_ANCHOR);
+        assert!(triangle.update(&mut tlas, LOAD_ANCHOR, vec![(2, at(1.0), false)]));
+        assert_eq!(
+            translations(&tlas),
+            [
+                (0, [5.0, 0.0, 0.0]),
+                (1, [-4.0, 0.0, 0.0]),
+                (2, [1.0, 0.0, 0.0])
+            ]
+        );
+        let traced = trace_down(
+            context,
+            &tlas.bound.tlas,
+            &[[5.8, 0.0, 0.0], [-3.2, 0.0, 0.0]],
+        );
+        assert_eq!(traced, [Some(0), Some(1)]);
     }
 
     /// The dynamic TLAS's fill returns the box that holds each Moving
@@ -1240,22 +1432,22 @@ mod tests {
                 assert_eq!(update.frames_until_traced, None);
                 assert_eq!(tlas.bound_index(), expected_index);
                 std::thread::sleep(Duration::from_millis(1));
-                update = triangle.update_once(&mut tlas, &FrameData::default(), false);
+                update = triangle.update_once(&mut tlas, &frame(Vec::new()), false);
                 frames += 1;
                 assert!(frames < 10_000, "the worker never finished");
             }
             assert_eq!(tlas.bound_index(), expected_index);
-            let unbuilt = trace_down(context, &tlas.bound, &points);
+            let unbuilt = trace_down(context, &tlas.bound.tlas, &points);
             assert_eq!(unbuilt[slot as usize], None);
-            let binding = triangle.update_once(&mut tlas, &FrameData::default(), false);
+            let binding = triangle.update_once(&mut tlas, &frame(Vec::new()), false);
             expected_index = 1 - expected_index;
             assert_eq!(tlas.bound_index(), expected_index);
             assert_eq!(binding.frames_until_traced, Some(frames));
-            assert_eq!(trace_down(context, &tlas.bound, &points), traced);
+            assert_eq!(trace_down(context, &tlas.bound.tlas, &points), traced);
             // The unbound TLAS takes the change on the worker, and records
             // no build: the bound one lacks none.
             while !matches!(tlas.spare, Some(Spare::Idle(_))) {
-                let update = triangle.update_once(&mut tlas, &FrameData::default(), false);
+                let update = triangle.update_once(&mut tlas, &frame(Vec::new()), false);
                 assert_eq!(update, StaticTlasUpdate::default());
             }
         }
@@ -1278,7 +1470,7 @@ mod tests {
         let writes = vec![(0, at(0.0), true), (5, at(5.0), false)];
         assert!(triangle.update(&mut tlas, LOAD_ANCHOR, writes));
         let points = [[0.8, 0.0, 0.0], [5.8, 0.0, 0.0]];
-        let traced = trace_down(&triangle.context, &tlas.bound, &points);
+        let traced = trace_down(&triangle.context, &tlas.bound.tlas, &points);
         assert_eq!(traced, [None, Some(5)]);
         assert_eq!(tlas.instances_left_out(), 0);
     }

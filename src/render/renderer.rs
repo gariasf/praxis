@@ -618,9 +618,9 @@ impl Renderer {
             static_tlas_update.build_time.unwrap_or_default();
         recorder.counters.frames_until_traced = static_tlas_update.frames_until_traced;
         recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
-        // Shadow rays start in the static TLAS's frame, whose Anchor the
-        // first Frame data's camera set, and the dynamic TLAS shares it. Its
-        // fill counts as its recording, not as the upload.
+        // Shadow rays start in the bound static TLAS's frame, which the
+        // update may have just swapped in at a new Anchor, and the dynamic
+        // TLAS shares it. Its fill counts as its recording, not as the upload.
         let tlas_anchor = self.static_tlas.anchor();
         let filling = Instant::now();
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
@@ -1416,7 +1416,7 @@ pub(crate) mod tests {
         // turn by one Renderer. After the first, which anchors the static
         // TLAS, the camera's position is given from the next Anchor cell
         // over: the same position, so the same image, as long as both TLAS
-        // keep the first frame's Anchor.
+        // trace in one frame.
         let images = |switches, occluders: &[Occluder]| {
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
             let white = renderer
@@ -1523,6 +1523,95 @@ pub(crate) mod tests {
             moved[2] == unshadowed,
             "a freed Moving Instance still shadows"
         );
+    }
+
+    /// A white floor ahead of the camera, under a directional light shining
+    /// the way the camera looks, and a square 0.1 m in front of the floor,
+    /// turned away from the camera, so the main pass culls it while shadow
+    /// rays meet it. Both stand at the origin and again 160 Anchor cells
+    /// (10,240 m) along +X. Seen from the origin, then from 10,240 m with
+    /// nothing written, the floor's middle is shadowed alike: the static
+    /// TLAS re-anchors at the camera, where a shadow ray's offset from the
+    /// first Anchor, 156 mm, would have started it past the square.
+    #[test]
+    fn an_occluder_nearer_than_the_first_anchors_ray_offset_shadows_ten_km_away() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const FAR_ANCHOR: [i32; 3] = [160, 0, 0];
+        let images = |switches| {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
+            let quad = load_quad(&mut renderer);
+            let square = |anchor, size: f32, facing: f32, distance: f32| InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    facing * size,
+                    size,
+                    facing,
+                ))),
+                anchor,
+                offset: [0.0, 0.0, -distance],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let instances = [[0; 3], FAR_ANCHOR]
+                .into_iter()
+                .flat_map(|anchor| {
+                    [
+                        square(anchor, 4.0, 1.0, 2.0),
+                        square(anchor, 1.0, -1.0, 1.9),
+                    ]
+                })
+                .collect();
+            let mut frame = frame_of(instances);
+            frame.camera = CameraUniform {
+                view_proj: (projection_matrix(1.0) * Camera::new().view_matrix())
+                    .to_cols_array_2d(),
+                exposure: 1.0,
+                ..CameraUniform::default()
+            };
+            frame.light = LightUniform {
+                ambient_illuminance: [0.1, 0.1, 0.1, 0.0],
+                directional_light_count: 1,
+                ..LightUniform::default()
+            };
+            frame.lights = vec![LightData {
+                offset: [0.0, 0.0, -1.0],
+                intensity: [1.0; 3],
+                ..LightData::default()
+            }];
+            let near = render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE).0;
+            frame.instance_writes.clear();
+            frame.camera.anchor = FAR_ANCHOR;
+            let far = render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE).0;
+            assert_eq!(renderer.static_tlas.anchor(), FAR_ANCHOR);
+            (near, far)
+        };
+        let (near, far) = images(RenderSwitches::default());
+        let (untraced, _) = images(RenderSwitches {
+            shadow_rays: false,
+            ..RenderSwitches::default()
+        });
+
+        let middle = |image: &image::RgbaImage| image.get_pixel(SIZE / 2, SIZE / 2).0;
+        assert!(
+            middle(&near)[0].saturating_add(32) < middle(&untraced)[0],
+            "{:?} not darker than {:?}",
+            middle(&near),
+            middle(&untraced)
+        );
+        assert!(far == near, "10,240 m away, the floor is lit otherwise");
     }
 
     /// A white floor ahead of the camera, lit by a point light 1 m behind
