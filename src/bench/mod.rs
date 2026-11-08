@@ -1205,8 +1205,12 @@ mod tests {
     }
 
     #[test]
-    fn after_a_settled_warm_up_no_reference_scene_streams_in_the_counter_frames() {
-        for scene in ReferenceScene::ALL {
+    fn after_a_settled_warm_up_no_reference_scene_but_the_world_streams_in_the_counter_frames() {
+        // The world's camera flies on, so it streams as a game does.
+        for scene in ReferenceScene::ALL
+            .into_iter()
+            .filter(|&scene| scene != ReferenceScene::World)
+        {
             let mut streamer =
                 ChunkStreamer::new(scene.chunk_coordinates(), scene.load_radius_metres());
             let mut io = SlowIo::default();

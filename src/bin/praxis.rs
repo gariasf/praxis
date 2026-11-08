@@ -50,7 +50,7 @@ enum Command {
         output: String,
         size: String,
         crowd_form: CrowdForm,
-        frame: Option<u32>,
+        frames: Vec<u32>,
     },
     #[cfg(feature = "cook")]
     ExportScene {
@@ -115,8 +115,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             output,
             size,
             crowd_form,
-            frame,
-        } => capture(&scene, &output, &size, crowd_form, frame),
+            frames,
+        } => capture(&scene, &output, &size, crowd_form, &frames),
         #[cfg(feature = "cook")]
         Command::ExportScene {
             scene,
@@ -170,13 +170,19 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             })
         })
         .transpose()?;
-    let frame = take_option(&mut arguments, "--frame")?
-        .map(|frame| {
-            frame
-                .parse::<u32>()
-                .map_err(|_| anyhow::anyhow!("--frame takes a frame number, not {frame:?}"))
+    let frames = take_option(&mut arguments, "--frame")?
+        .map(|frames| {
+            frames
+                .split(',')
+                .map(|frame| {
+                    frame
+                        .parse::<u32>()
+                        .map_err(|_| anyhow::anyhow!("--frame takes frame numbers, not {frames:?}"))
+                })
+                .collect::<anyhow::Result<Vec<_>>>()
         })
-        .transpose()?;
+        .transpose()?
+        .unwrap_or_default();
     let release_build_seconds = take_option(&mut arguments, "--release-build-seconds")?
         .map(|seconds| {
             seconds.parse::<u64>().map_err(|_| {
@@ -220,8 +226,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         "only `bench` and `capture` take --crowd-form"
     );
     anyhow::ensure!(
-        frame.is_none() || matches!(command, Some("capture" | "export-scene")),
+        frames.is_empty() || matches!(command, Some("capture" | "export-scene")),
         "only `capture` and `export-scene` take --frame"
+    );
+    anyhow::ensure!(
+        frames.len() <= 1 || command == Some("capture"),
+        "`export-scene` takes one --frame"
     );
     let crowd_form = crowd_form.unwrap_or_default();
     let bench = |output: &String, configuration: Configuration, scenes: &[String]| Command::Bench {
@@ -253,7 +263,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: DEFAULT_CAPTURE_SIZE.into(),
             crowd_form,
-            frame,
+            frames,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => Command::Capture {
@@ -261,13 +271,13 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             output: output.clone(),
             size: size.clone(),
             crowd_form,
-            frame,
+            frames,
         },
         #[cfg(feature = "cook")]
         [command, scene, directory] if command == "export-scene" => Command::ExportScene {
             scene: scene.clone(),
             directory: directory.clone(),
-            frame,
+            frame: frames.first().copied(),
         },
         #[cfg(feature = "cook")]
         [command, expected, actual, output] if command == "difference" => Command::Difference {
@@ -332,7 +342,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             // Like the commands, their usage exists only in a `cook` build.
             let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
-                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...]]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
                     "`capture` and `bench` also take",
@@ -782,17 +792,19 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, its crowd in `crowd_form`, and writes `frame` of its
-/// camera path to `output` as a PNG. With no `frame`, it writes the last
-/// frame `praxis::capture` renders and prints that frame's stats, its point
-/// lights per lit pixel counted. The PNG encoder comes with `cook`.
+/// `<width>x<height>`, its crowd in `crowd_form`, and writes `frames` of its
+/// camera path, rendered in one run, as PNGs: one frame to `output`, each of
+/// several beside it as `<output stem>-frame-<n>.png`. With no frame, it
+/// writes the last frame `praxis::capture` renders and prints that frame's
+/// stats, its point lights per lit pixel counted. The PNG encoder comes with
+/// `cook`.
 #[cfg(feature = "cook")]
 fn capture(
     scene: &str,
     output: &str,
     size: &str,
     crowd_form: CrowdForm,
-    frame: Option<u32>,
+    frames: &[u32],
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
@@ -801,45 +813,42 @@ fn capture(
         .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
     let context = pollster::block_on(GpuContext::headless())?;
     let switches = RenderSwitches {
-        count_point_lights: frame.is_none(),
+        count_point_lights: frames.is_empty(),
         crowd_form,
         ..RenderSwitches::default()
     };
-    let (pixels, last_frame) = match frame {
-        Some(frame) => {
-            let mut pixels = praxis::capture_frames(
-                &context,
-                scene,
-                glam::DVec3::ZERO,
-                width,
-                height,
-                &[frame],
-                switches,
-            )?;
-            (pixels.remove(0), None)
-        }
-        None => {
-            let (pixels, mut frame_stats) =
-                praxis::capture(&context, scene, glam::DVec3::ZERO, width, height, switches)?;
-            (pixels, frame_stats.pop())
-        }
+    let (captures, last_frame) = if frames.is_empty() {
+        let (pixels, mut frame_stats) =
+            praxis::capture(&context, scene, glam::DVec3::ZERO, width, height, switches)?;
+        (vec![(output.to_owned(), pixels)], frame_stats.pop())
+    } else {
+        let pixels = praxis::capture_frames(
+            &context,
+            scene,
+            glam::DVec3::ZERO,
+            width,
+            height,
+            frames,
+            switches,
+        )?;
+        let stem = output.strip_suffix(".png").unwrap_or(output);
+        let paths = frames.iter().map(|frame| match frames {
+            [_] => output.to_owned(),
+            _ => format!("{stem}-frame-{frame}.png"),
+        });
+        (paths.zip(pixels).collect(), None)
     };
-    image::save_buffer_with_format(
-        output,
-        &pixels,
-        width,
-        height,
-        image::ExtendedColorType::Rgba8,
-        image::ImageFormat::Png,
-    )?;
-    tracing::info!(
-        scene = scene.name(),
-        path = output,
-        width,
-        height,
-        frame,
-        "capture written"
-    );
+    for (path, pixels) in &captures {
+        image::save_buffer_with_format(
+            path,
+            pixels,
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+            image::ImageFormat::Png,
+        )?;
+        tracing::info!(scene = scene.name(), path, width, height, "capture written");
+    }
     if let Some(last_frame) = last_frame {
         std::io::stdout().write_all(last_frame.to_string().as_bytes())?;
     }
@@ -1148,12 +1157,27 @@ mod tests {
             ["capture", "town", "out.png", "64x36", "--frame", "300"],
             ["capture", "--frame", "300", "town", "out.png", "64x36"],
         ] {
-            let Command::Capture { scene, frame, .. } = parse(&arguments).unwrap() else {
+            let Command::Capture { scene, frames, .. } = parse(&arguments).unwrap() else {
                 panic!("capture parsed as another command");
             };
             assert_eq!(scene, "town");
-            assert_eq!(frame, Some(300));
+            assert_eq!(frames, [300]);
         }
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn capture_parses_frames_in_one_run_and_export_scene_refuses_them() {
+        let Command::Capture { frames, .. } =
+            parse(&["capture", "world", "out.png", "--frame", "59,300,599"]).unwrap()
+        else {
+            panic!("capture parsed as another command");
+        };
+        assert_eq!(frames, [59, 300, 599]);
+        let error = parse(&["export-scene", "world", "out", "--frame", "59,300"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("one --frame"), "{error}");
     }
 
     #[cfg(feature = "cook")]

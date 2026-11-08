@@ -168,6 +168,10 @@ jobs:
       - name: Cook
         run: cargo run -- cook
 
+      # Its frames must be the Goldens test's WORLD_FRAMES.
+      - name: Cook what world's Goldens load
+        run: cargo run -- capture world target/world.png --frame 59,300,599
+
       - name: Remove sources
         run: rm -r assets
 

@@ -22,12 +22,13 @@ use crate::render::CrowdForm;
 #[cfg(feature = "cook")]
 use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
-use crate::transform::PreviousWorldTransform;
+use crate::transform::{PreviousWorldTransform, Teleported};
 
 mod town;
 mod world;
 
 pub(crate) use town::spawn_town;
+pub(crate) use world::spawn_world;
 
 /// The Reference scenes `capture` renders, each with a camera path in frames
 /// and a frame delta.
@@ -857,6 +858,30 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
     }
 }
 
+/// Keeps an entity within half `span_metres` of the camera on X and Z by
+/// moving it whole spans: what falls behind the camera jumps ahead of it.
+#[derive(Component)]
+pub(crate) struct WrapsAroundCamera {
+    pub(crate) span_metres: f64,
+}
+
+/// Moves each wrapping entity the whole spans that bring it within half a
+/// span of the camera on X and Z, as a jump.
+pub(crate) fn wrap_around_camera(
+    mut commands: Commands,
+    camera: Res<Camera>,
+    mut wrapping: Query<(Entity, &WrapsAroundCamera, &mut Transform)>,
+) {
+    for (entity, wraps, mut transform) in &mut wrapping {
+        let spans = ((camera.position - transform.translation) / wraps.span_metres).round();
+        let jump = glam::dvec3(spans.x, 0.0, spans.z) * wraps.span_metres;
+        if jump != glam::DVec3::ZERO {
+            transform.translation += jump;
+            commands.entity(entity).insert(Teleported);
+        }
+    }
+}
+
 /// minification's floor: half its side, in metres, and its UV range, so
 /// each Texture repeats every metre.
 #[cfg(feature = "cook")]
@@ -1523,6 +1548,78 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A flock centre stays put while the camera is within half a span of
+    /// it on X and Z, and jumps whole spans once the camera passes that,
+    /// to within half a span again: its bird is drawn at its new place
+    /// alone, never swept from the old.
+    #[test]
+    fn a_wrapping_entity_jumps_whole_spans_to_within_half_a_span_of_the_camera() {
+        use crate::transform::{
+            WorldTransform, propagate_world_transforms, record_previous_world_transforms,
+            reset_teleported,
+        };
+        let span_metres = 500.0;
+        let mut world = World::new();
+        world.insert_resource(Camera::new());
+        let centre = world
+            .spawn((
+                Transform::from_translation(glam::dvec3(100.0, 40.0, 0.0)),
+                WrapsAroundCamera { span_metres },
+                PreviousWorldTransform::default(),
+            ))
+            .id();
+        let bird = world
+            .spawn((
+                Transform::from_translation(glam::dvec3(10.0, 0.0, 0.0)),
+                ChildOf(centre),
+                PreviousWorldTransform::default(),
+            ))
+            .id();
+        let mut schedule = crate::time::fixed_schedule();
+        schedule.add_systems(
+            (
+                record_previous_world_transforms,
+                wrap_around_camera,
+                reset_teleported,
+                propagate_world_transforms,
+            )
+                .chain(),
+        );
+        let mut tick_with_camera_at = |x: f64, z: f64| {
+            world.resource_mut::<Camera>().position = glam::dvec3(x, 60.0, z);
+            schedule.run(&mut world);
+            let drawn_at = |entity| world.get::<WorldTransform>(entity).unwrap().translation();
+            let previous = world.get::<PreviousWorldTransform>(bird).unwrap().0;
+            (drawn_at(centre), drawn_at(bird), previous.is_some())
+        };
+
+        tick_with_camera_at(0.0, 0.0);
+        assert_eq!(
+            tick_with_camera_at(340.0, -249.0),
+            (
+                glam::dvec3(100.0, 40.0, 0.0),
+                glam::dvec3(110.0, 40.0, 0.0),
+                true
+            )
+        );
+        assert_eq!(
+            tick_with_camera_at(360.0, -1240.0),
+            (
+                glam::dvec3(600.0, 40.0, -1000.0),
+                glam::dvec3(610.0, 40.0, -1000.0),
+                false
+            )
+        );
+        assert_eq!(
+            tick_with_camera_at(360.0, -1240.0),
+            (
+                glam::dvec3(600.0, 40.0, -1000.0),
+                glam::dvec3(610.0, 40.0, -1000.0),
+                true
+            )
+        );
     }
 
     /// Every vertex of a crowd figure, bent by curvatures from barely any to

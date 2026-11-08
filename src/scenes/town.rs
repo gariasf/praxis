@@ -16,7 +16,7 @@ use bevy_ecs::prelude::*;
 use glam::FloatExt;
 
 use super::{ReferenceScene, Spin};
-use crate::assets::AssetLoader;
+use crate::assets::{AssetLoader, MeshHandle};
 use crate::camera::Camera;
 use crate::components::{MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
@@ -237,24 +237,42 @@ const LAMP_LIGHT: PointLight = PointLight {
     range: 18.0,
 };
 
-/// Flocks of pigeons over the town, `FLOCKS_PER_SIDE` a side on a grid
-/// `FLOCK_PITCH` apart, each of `BIRDS_PER_FLOCK` circling its centre in
-/// the fixed schedule: 10,000 Moving Instances, the dynamic TLAS's capacity
-/// (ADR 0020). Centres stand `FLOCK_HEIGHT` up, clear of every roof's plant,
-/// and turn at `FLOCK_SPIN` radians a second, either way.
+/// Flocks of birds, `FLOCKS_PER_SIDE` a side on a grid, each of
+/// `BIRDS_PER_FLOCK` circling its centre in the fixed schedule: 10,000
+/// Moving Instances, the dynamic TLAS's capacity (ADR 0020). Centres turn
+/// at `FLOCK_SPIN` radians a second, either way.
 const FLOCKS_PER_SIDE: u32 = 10;
-const FLOCK_PITCH: f64 = 100.0;
 const BIRDS_PER_FLOCK: u32 = 100;
 const _: () = assert!(FLOCKS_PER_SIDE * FLOCKS_PER_SIDE * BIRDS_PER_FLOCK == DYNAMIC_TLAS_CAPACITY);
-const FLOCK_HEIGHT: std::ops::Range<f64> = 30.0..55.0;
 const FLOCK_SPIN: std::ops::Range<f64> = 0.2..0.6;
-/// A bird's distance from its flock's centre, and how far above or below
-/// it.
-const FLOCK_RADIUS: std::ops::Range<f64> = 6.0..30.0;
+/// How far above or below its flock's centre a bird flies.
 const FLOCK_DEPTH: f64 = 4.0;
-/// How far a flock's centre strays from its grid cell's middle, each way:
-/// as far as keeps the whole flock within its cell, so within the town.
-const FLOCK_STRAY: f64 = FLOCK_PITCH / 2.0 - FLOCK_RADIUS.end;
+
+/// Where a scene's flocks fly: the middle of their grid on the ground, the
+/// grid's pitch, the heights their centres stand at and each bird's
+/// distance from its centre.
+pub(super) struct FlockGrid {
+    pub(super) middle: glam::DVec3,
+    pub(super) pitch_metres: f64,
+    pub(super) height_metres: std::ops::Range<f64>,
+    pub(super) radius_metres: std::ops::Range<f64>,
+}
+
+impl FlockGrid {
+    /// The grid's side.
+    pub(super) fn span_metres(&self) -> f64 {
+        self.pitch_metres * f64::from(FLOCKS_PER_SIDE)
+    }
+}
+
+/// The town's pigeons, 100 m apart over the whole town, their centres
+/// clear of every roof's plant.
+const TOWN_FLOCKS: FlockGrid = FlockGrid {
+    middle: glam::DVec3::ZERO,
+    pitch_metres: 100.0,
+    height_metres: 30.0..55.0,
+    radius_metres: 6.0..30.0,
+};
 
 /// Utility poles along every street, `POLE_SPACING` apart, each span between
 /// two holding a wire at each of `WIRE_HEIGHTS`.
@@ -727,11 +745,14 @@ struct Flock {
     birds: Vec<Transform>,
 }
 
-/// The town's flocks, row by row: each centre at random about its grid
-/// cell's middle, and each bird at random about its centre, facing the way
-/// it circles.
-fn flocks() -> Vec<Flock> {
-    let offset = |index: u32| -TOWN_HALF_SIZE + FLOCK_PITCH * (f64::from(index) + 0.5);
+/// The flocks of `grid`, row by row: each centre at random about its grid
+/// cell's middle, as far as keeps the whole flock within its cell, and each
+/// bird at random about its centre, facing the way it circles.
+fn flocks(grid: &FlockGrid) -> Vec<Flock> {
+    let half_span = grid.span_metres() / 2.0;
+    let offset =
+        |middle: f64, index: u32| middle - half_span + grid.pitch_metres * (f64::from(index) + 0.5);
+    let stray = grid.pitch_metres / 2.0 - grid.radius_metres.end;
     (0..FLOCKS_PER_SIDE * FLOCKS_PER_SIDE)
         .map(|flock| {
             let (column, row) = (flock % FLOCKS_PER_SIDE, flock / FLOCKS_PER_SIDE);
@@ -739,11 +760,12 @@ fn flocks() -> Vec<Flock> {
                 random([column.into(), row.into(), choice as u64, item])
             };
             let centre = glam::dvec3(
-                offset(column) + FLOCK_STRAY * (2.0 * flock_random(Choice::Flock, 0) - 1.0),
-                FLOCK_HEIGHT
+                offset(grid.middle.x, column)
+                    + stray * (2.0 * flock_random(Choice::Flock, 0) - 1.0),
+                grid.height_metres
                     .start
-                    .lerp(FLOCK_HEIGHT.end, flock_random(Choice::Flock, 1)),
-                offset(row) + FLOCK_STRAY * (2.0 * flock_random(Choice::Flock, 2) - 1.0),
+                    .lerp(grid.height_metres.end, flock_random(Choice::Flock, 1)),
+                offset(grid.middle.z, row) + stray * (2.0 * flock_random(Choice::Flock, 2) - 1.0),
             );
             let turning = if flock_random(Choice::Flock, 3) < 0.5 {
                 1.0
@@ -761,7 +783,8 @@ fn flocks() -> Vec<Flock> {
                     // Uniform over the ring's area, so the flock is no
                     // denser towards its middle than towards its edge.
                     let [inner_squared, outer_squared] =
-                        [FLOCK_RADIUS.start, FLOCK_RADIUS.end].map(|radius| radius * radius);
+                        [grid.radius_metres.start, grid.radius_metres.end]
+                            .map(|radius| radius * radius);
                     let radius = inner_squared.lerp(outer_squared, bird_random(0)).sqrt();
                     let angle = std::f64::consts::TAU * bird_random(1);
                     // A turn about +Y by the flock's spin moves this point
@@ -787,12 +810,20 @@ fn flocks() -> Vec<Flock> {
         .collect()
 }
 
-/// Spawns the town's flocks: each a spinning centre with its birds as its
-/// children, all moved in the fixed schedule, so each carries its previous
-/// World transform (ADR 0022).
+/// Spawns the town's flocks.
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let bird = loader.mesh(ReferenceScene::Town.mesh_id(TownMesh::Bird.name()))?;
-    for flock in flocks() {
+    spawn_flocks(world, bird, &TOWN_FLOCKS);
+    Ok(())
+}
+
+/// Spawns the flocks of `grid`, each bird drawing `bird`: each a spinning
+/// centre with its birds as its children, all moved in the fixed schedule,
+/// so each carries its previous World transform (ADR 0022). Returns the
+/// centres.
+pub(super) fn spawn_flocks(world: &mut World, bird: MeshHandle, grid: &FlockGrid) -> Vec<Entity> {
+    let mut centres = Vec::with_capacity((FLOCKS_PER_SIDE * FLOCKS_PER_SIDE) as usize);
+    for flock in flocks(grid) {
         let centre = world
             .spawn((
                 Transform::from_translation(flock.centre),
@@ -810,8 +841,9 @@ pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> any
                 PreviousWorldTransform::default(),
             )
         }));
+        centres.push(centre);
     }
-    Ok(())
+    centres
 }
 
 /// The camera's path: at street level up the avenue at X = 0, facing north
@@ -871,6 +903,8 @@ pub(crate) fn camera_at(frame: u32) -> Camera {
     }
 }
 
+#[cfg(feature = "cook")]
+pub(super) use generators::bird;
 #[cfg(feature = "cook")]
 pub(crate) use generators::{materials, meshes};
 
@@ -1113,16 +1147,7 @@ mod generators {
                     ],
                 )],
             ),
-            (
-                TownMesh::Bird,
-                vec![of(
-                    "slate",
-                    vec![
-                        cuboid(vec3(-0.04, -0.03, -0.2), vec3(0.04, 0.03, 0.2)),
-                        cuboid(vec3(-0.3, -0.005, -0.06), vec3(0.3, 0.005, 0.08)),
-                    ],
-                )],
-            ),
+            (TownMesh::Bird, bird()),
             (
                 TownMesh::Bin,
                 vec![of(
@@ -1143,6 +1168,16 @@ mod generators {
     /// `geometry` raised by `height` along +Y.
     fn raised(geometry: Geometry, height: f32) -> Geometry {
         moved(geometry, Quat::IDENTITY, vec3(0.0, height, 0.0))
+    }
+
+    /// A bird of the slate Material, which every scene with flocks has: a
+    /// body and its wings.
+    pub(in crate::scenes) fn bird() -> Vec<ScenePrimitive> {
+        let parts = vec![
+            cuboid(vec3(-0.04, -0.03, -0.2), vec3(0.04, 0.03, 0.2)),
+            cuboid(vec3(-0.3, -0.005, -0.06), vec3(0.3, 0.005, 0.08)),
+        ];
+        vec![(merged(parts), Some("slate"))]
     }
 
     /// `parts` as one Geometry.

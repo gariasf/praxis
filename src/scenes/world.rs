@@ -7,7 +7,11 @@
 
 #![cfg_attr(not(feature = "cook"), allow(dead_code))]
 
-use super::town::random;
+use bevy_ecs::prelude::*;
+
+use super::town::{FlockGrid, random, spawn_flocks};
+use super::{ReferenceScene, WrapsAroundCamera};
+use crate::assets::AssetLoader;
 use crate::camera::Camera;
 use crate::cooked::CHUNK_EDGE_METRES;
 #[cfg(feature = "cook")]
@@ -33,8 +37,22 @@ const SETTLEMENT_HALF_SIZE_METRES: f64 = BLOCKS_PER_SIDE as f64 * BLOCK_PITCH_ME
 /// 64 m of open land between neighbouring settlements.
 const SETTLEMENT_STRAY_METRES: f64 = REGION_METRES / 2.0 - SETTLEMENT_HALF_SIZE_METRES - 32.0;
 
-/// The settlement whose region holds the camera, column then row.
+/// The settlement whose region the camera flies into, column then row.
 const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
+/// The camera flies north along a street, over the roofs and the birds, at
+/// 50 m/s, from farmland `APPROACH_METRES` south of its settlement's edge,
+/// looking at the ground `GAZE_METRES` ahead.
+const CAMERA_HEIGHT_METRES: f64 = 60.0;
+const CAMERA_METRES_PER_FRAME: f64 = 50.0 / 60.0;
+const APPROACH_METRES: f64 = 300.0;
+const GAZE_METRES: f64 = 250.0;
+
+/// The flocks about the camera: 320 m a side, centres between the roofs and
+/// the camera, each kept within 160 m of the camera on X and Z, so that no
+/// bird flies past the Load radius.
+const FLOCK_PITCH_METRES: f64 = 32.0;
+const FLOCK_HEIGHT_METRES: std::ops::Range<f64> = 34.0..50.0;
+const FLOCK_RADIUS_METRES: std::ops::Range<f64> = 6.0..14.0;
 
 /// Each settlement's own brick Materials, one Texture each.
 const FACADES_PER_SETTLEMENT: u32 = 24;
@@ -141,14 +159,38 @@ fn settlement_index([column, row]: [u32; 2]) -> u32 {
     row * SETTLEMENTS_PER_SIDE + column
 }
 
-/// The camera, fixed over the middle of one settlement and looking along
-/// its streets.
-pub(crate) fn camera_at(_frame: u32) -> Camera {
+/// The camera at `frame` of its path: the bench path's first leg, flying
+/// into a settlement, onward in a straight line.
+pub(crate) fn camera_at(frame: u32) -> Camera {
     let centre = settlement_centre(CAMERA_SETTLEMENT);
-    Camera::looking_at(
-        centre + glam::dvec3(0.0, 30.0, 120.0),
-        centre + glam::dvec3(0.0, 0.0, -60.0),
-    )
+    let street_x = centre.x - BLOCK_PITCH_METRES / 2.0;
+    let start_z = centre.z + SETTLEMENT_HALF_SIZE_METRES + APPROACH_METRES;
+    let position = glam::dvec3(
+        street_x,
+        CAMERA_HEIGHT_METRES,
+        start_z - CAMERA_METRES_PER_FRAME * f64::from(frame),
+    );
+    let gaze = glam::dvec3(0.0, -CAMERA_HEIGHT_METRES, -GAZE_METRES);
+    Camera::looking_at(position, position + gaze)
+}
+
+/// Spawns 10,000 birds in flocks about the camera's first position, each
+/// flock kept within half the flocks' span of the camera as it flies.
+pub(crate) fn spawn_world(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+    let bird = loader.mesh(ReferenceScene::World.mesh_id("bird"))?;
+    let grid = FlockGrid {
+        middle: camera_at(0).position * glam::DVec3::new(1.0, 0.0, 1.0),
+        pitch_metres: FLOCK_PITCH_METRES,
+        height_metres: FLOCK_HEIGHT_METRES,
+        radius_metres: FLOCK_RADIUS_METRES,
+    };
+    let span_metres = grid.span_metres();
+    for centre in spawn_flocks(world, bird, &grid) {
+        world
+            .entity_mut(centre)
+            .insert(WrapsAroundCamera { span_metres });
+    }
+    Ok(())
 }
 
 #[cfg(feature = "cook")]
@@ -164,9 +206,8 @@ mod generators {
     use crate::assets::MaterialChannel;
     use crate::cook::{ImageGenerator, LoadedImage};
     use crate::cooked::CookedMaterial;
-    use crate::scenes::{
-        Geometry, ReferenceScene, ScenePrimitive, ground_plane, ground_tile_centres,
-    };
+    use crate::scenes::town::bird;
+    use crate::scenes::{Geometry, ScenePrimitive, ground_plane, ground_tile_centres};
 
     /// The Materials `world`'s Meshes name: a base colour in linear sRGB
     /// and a roughness.
@@ -266,6 +307,7 @@ mod generators {
                 vec![(ground_plane(half_tile_metres, 1.0), Some("grass"))],
             ),
             ("window", vec![(window(), Some("glass"))]),
+            ("bird", bird()),
         ];
         for building in &BUILDINGS {
             meshes.push((building.walls, vec![(walls(building), None)]));

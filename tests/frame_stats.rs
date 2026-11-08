@@ -13,10 +13,11 @@ const MEBIBYTE: u64 = 1 << 20;
 /// (`src/scenes/town.rs`).
 const TOWN_INSTANCES: u32 = 254_319;
 const TOWN_TRIANGLES: u32 = 9_994_316;
-/// The Instances within `world`'s Load radius of its camera and their
-/// triangles, as its generator places them (`src/scenes/world.rs`).
-const WORLD_INSTANCES: u32 = 164_912;
-const WORLD_TRIANGLES: u32 = 1_645_574;
+/// The Instances within `world`'s Load radius of its first camera, as its
+/// generator places them (`src/scenes/world.rs`), and its 10,000 birds of
+/// 24 triangles, and their triangles.
+const WORLD_INSTANCES: u32 = 164_332;
+const WORLD_TRIANGLES: u32 = 1_779_800;
 
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
@@ -314,13 +315,14 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn.
 /// far-coplanar's tiles, town and `world`'s settlement lie partly out of
-/// any one view, so all three are drawn with culling off, which the first
-/// two's Goldens compare with culling on: the frame's draw holds every
-/// tile, the whole town and every Instance within `world`'s Load radius.
+/// any one view, so all three are drawn with culling off, which their
+/// Goldens compare with culling on: the frame's draw holds every tile, the
+/// whole town and every Instance within `world`'s Load radius.
 /// After the first frame, each frame writes the Instances of what moves
-/// alone, town's 10,000 birds among them, and leaves no Moving Instance out
-/// of the dynamic TLAS; town's birds fill it, each uploading its entry
-/// every frame.
+/// alone, town's and `world`'s 10,000 birds among them, and those of the
+/// Chunks `world`'s camera leaves, and leaves no Moving Instance out of the
+/// dynamic TLAS; town's birds fill it, each uploading its entry every
+/// frame.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {
@@ -374,8 +376,9 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             // birds circle.
             ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES, 10_000),
             // Every Instance of the Chunks within its Load radius of the
-            // camera, as its generator places them, and their triangles.
-            ReferenceScene::World => (WORLD_INSTANCES, WORLD_TRIANGLES, 0),
+            // camera, as its generator places them, and their triangles;
+            // its birds circle.
+            ReferenceScene::World => (WORLD_INSTANCES, WORLD_TRIANGLES, 10_000),
         };
         // The 144-byte camera and 32-byte light uniforms, the sun and the
         // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance
@@ -389,21 +392,40 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             let Some(gpu) = stats.gpu else {
                 panic!("{} frame {frame} read back no GPU stats", scene.name());
             };
+            // world's camera flies on, and a Chunk it leaves past the Load
+            // radius is written to draw nothing, so only its first frame is
+            // closed-form.
+            let closed_form = scene != ReferenceScene::World || frame == 0;
+            if closed_form {
+                assert_eq!(
+                    (
+                        gpu.instances_drawn,
+                        gpu.triangles_drawn,
+                        gpu.instances_overflowed
+                    ),
+                    (instances, triangles, 0),
+                    "{} frame {frame}",
+                    scene.name()
+                );
+            }
             assert_eq!(
-                (
-                    gpu.instances_drawn,
-                    gpu.triangles_drawn,
-                    gpu.instances_overflowed
-                ),
-                (instances, triangles, 0),
-                "{} frame {frame}",
+                gpu.instances_overflowed,
+                0,
+                "{} frame {frame}: Instances overflowed",
                 scene.name()
             );
             if frame > 0 {
+                assert!(
+                    stats.instances_written == moving
+                        || !closed_form && stats.instances_written > moving,
+                    "{} frame {frame}: {} Instances written",
+                    scene.name(),
+                    stats.instances_written
+                );
                 assert_eq!(
-                    (stats.instances_written, stats.moving_instances_left_out),
-                    (moving, 0),
-                    "{} frame {frame}: Instances written and Moving Instances left out",
+                    stats.moving_instances_left_out,
+                    0,
+                    "{} frame {frame}: Moving Instances left out",
                     scene.name()
                 );
                 if scene == ReferenceScene::Town {

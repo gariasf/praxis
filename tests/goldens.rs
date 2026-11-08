@@ -8,7 +8,9 @@
 //! removes no visible Instance, as each lit with every light at every pixel
 //! must match it lit through Froxel lists, both with shadow rays off, so no
 //! list misses a light that reaches its Froxel. `town` takes both checks at
-//! eight frames along its camera path, the others at the Golden's frame.
+//! eight frames along its camera path, the others at their Goldens' frames.
+//! `world` has Goldens at three frames along its flight into a settlement,
+//! `<scene>-frame-<n>.png` beside `<scene>.png`; the others one.
 //! The helmet scene has no Golden, since its source is fetched, and takes
 //! those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
@@ -26,12 +28,12 @@
 //! fails when its links and the scenes checked disagree.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use praxis::gpu::GpuContext;
 use praxis::{ReferenceScene, RenderSwitches};
 
-const SCENES: [ReferenceScene; 10] = [
+const SCENES: [ReferenceScene; 11] = [
     ReferenceScene::PbrSweep,
     ReferenceScene::UvGrid,
     ReferenceScene::NormalTangent,
@@ -42,6 +44,7 @@ const SCENES: [ReferenceScene; 10] = [
     ReferenceScene::Shadows,
     ReferenceScene::Town,
     ReferenceScene::Crowd,
+    ReferenceScene::World,
 ];
 
 /// The capture command's default size.
@@ -136,11 +139,11 @@ fn reference_scenes_match_their_goldens() {
     }
     let helmet = helmet_is_fetched.then_some(ReferenceScene::Helmet);
     for scene in SCENES.into_iter().chain(helmet) {
-        let golden_path = golden_path(&golden_directory, scene);
         let frames = equivalence_frames(scene);
-        let culled = capture_frames(scene, frames, RenderSwitches::default());
+        let culled = capture_frames(scene, glam::DVec3::ZERO, frames, RenderSwitches::default());
         let unculled = capture_frames(
             scene,
+            glam::DVec3::ZERO,
             frames,
             RenderSwitches {
                 culling: false,
@@ -152,9 +155,10 @@ fn reference_scenes_match_their_goldens() {
             shadow_rays: false,
             ..RenderSwitches::default()
         };
-        let froxel_lit = capture_frames(scene, frames, unshadowed);
+        let froxel_lit = capture_frames(scene, glam::DVec3::ZERO, frames, unshadowed);
         let brute_force = capture_frames(
             scene,
+            glam::DVec3::ZERO,
             frames,
             RenderSwitches {
                 froxel_lights: false,
@@ -182,46 +186,45 @@ fn reference_scenes_match_their_goldens() {
                 &difference_directory,
             ));
         }
-        let culled = &culled[frames
-            .iter()
-            .position(|&frame| frame == GOLDEN_FRAME)
-            .expect("the frames checked hold the Golden's")];
         if scene == ReferenceScene::Helmet {
             continue;
         }
-        if !golden_path.exists() {
-            // Saved so a Golden for a machine one cannot run locally (CI's
-            // lavapipe) can be taken from the job's artifact.
-            std::fs::create_dir_all(&difference_directory).expect("difference directory");
-            let actual_path = difference_directory.join(format!("{}-actual.png", scene.name()));
-            culled.save(&actual_path).expect("write capture");
-            failures.push(format!(
-                "{}: no Golden at {}; capture {}",
-                scene.name(),
-                golden_path.display(),
-                actual_path.display()
+        let golden_frames = golden_frames(scene);
+        let shifted = golden_captures(scene, FAR_SHIFT);
+        for (&frame, shifted) in golden_frames.iter().zip(&shifted) {
+            let culled = &culled[frames
+                .iter()
+                .position(|&checked| checked == frame)
+                .expect("the frames checked hold each Golden's")];
+            let label = golden_label(scene, frame);
+            let golden_path = golden_directory.join(format!("{label}.png"));
+            if !golden_path.exists() {
+                // Saved so a Golden for a machine one cannot run locally (CI's
+                // lavapipe) can be taken from the job's artifact.
+                std::fs::create_dir_all(&difference_directory).expect("difference directory");
+                let actual_path = difference_directory.join(format!("{label}-actual.png"));
+                culled.save(&actual_path).expect("write capture");
+                failures.push(format!(
+                    "{label}: no Golden at {}; capture {}",
+                    golden_path.display(),
+                    actual_path.display()
+                ));
+                continue;
+            }
+            let golden = image::open(&golden_path)
+                .unwrap_or_else(|error| {
+                    panic!("Golden {} unreadable: {error}", golden_path.display())
+                })
+                .into_rgba8();
+            failures.extend(mismatch(&golden, culled, &label, 0, &difference_directory));
+            failures.extend(mismatch(
+                &golden,
+                shifted,
+                &format!("{label}-100km"),
+                0,
+                &difference_directory,
             ));
-            continue;
         }
-        let golden = image::open(&golden_path)
-            .unwrap_or_else(|error| panic!("Golden {} unreadable: {error}", golden_path.display()))
-            .into_rgba8();
-        failures.extend(mismatch(
-            &golden,
-            culled,
-            scene.name(),
-            0,
-            &difference_directory,
-        ));
-
-        let shifted = capture(scene, FAR_SHIFT, RenderSwitches::default());
-        failures.extend(mismatch(
-            &golden,
-            &shifted,
-            &format!("{}-100km", scene.name()),
-            0,
-            &difference_directory,
-        ));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -294,6 +297,46 @@ fn capture(
 /// The frame a Golden is: `praxis::capture`'s last.
 const GOLDEN_FRAME: u32 = 59;
 
+/// `world`'s Golden frames: over farmland with its settlement popping in at
+/// the Load radius, at the settlement's edge, and over its roofs. CI's
+/// shipping job cooks what these load (`.github/workflows/ci.yml`).
+const WORLD_FRAMES: [u32; 3] = [GOLDEN_FRAME, 300, 599];
+const _: () = assert!(WORLD_FRAMES[0] == GOLDEN_FRAME);
+
+/// The frames of `scene` its Goldens are.
+fn golden_frames(scene: ReferenceScene) -> &'static [u32] {
+    match scene {
+        ReferenceScene::World => &WORLD_FRAMES,
+        _ => &[GOLDEN_FRAME],
+    }
+}
+
+/// `scene`'s Golden frames, moved with its camera by `shift`: the first as
+/// `praxis::capture` renders it, drawing every frame, and any later ones as
+/// `praxis::capture_frames` does.
+fn golden_captures(scene: ReferenceScene, shift: glam::DVec3) -> Vec<image::RgbaImage> {
+    let mut captures = vec![capture(scene, shift, RenderSwitches::default())];
+    if let [_, later @ ..] = golden_frames(scene)
+        && !later.is_empty()
+    {
+        captures.extend(capture_frames(
+            scene,
+            shift,
+            later,
+            RenderSwitches::default(),
+        ));
+    }
+    captures
+}
+
+/// The name of `scene`'s Golden at `frame`, without its extension.
+fn golden_label(scene: ReferenceScene, frame: u32) -> String {
+    match frame {
+        GOLDEN_FRAME => scene.name().to_owned(),
+        _ => format!("{}-frame-{frame}", scene.name()),
+    }
+}
+
 /// `town`'s frames whose culling and Froxel lists the test checks, spread
 /// along its camera path: two on the street, two on the rise over the
 /// rooftops, four round the circle.
@@ -304,21 +347,23 @@ const TOWN_FRAMES: [u32; 8] = [GOLDEN_FRAME, 300, 500, 700, 900, 1200, 1500, 180
 fn equivalence_frames(scene: ReferenceScene) -> &'static [u32] {
     match scene {
         ReferenceScene::Town => &TOWN_FRAMES,
-        _ => &[GOLDEN_FRAME],
+        _ => golden_frames(scene),
     }
 }
 
-/// The pixels `praxis::capture_frames` renders of `scene` at `frames`, at
-/// the Goldens' size, as `switches` set, on a device of its own.
+/// The pixels `praxis::capture_frames` renders of `scene`, moved with its
+/// camera by `shift`, at `frames`, at the Goldens' size, as `switches` set,
+/// on a device of its own.
 fn capture_frames(
     scene: ReferenceScene,
+    shift: glam::DVec3,
     frames: &[u32],
     switches: RenderSwitches,
 ) -> Vec<image::RgbaImage> {
     praxis::capture_frames(
         &fresh_context(),
         scene,
-        glam::DVec3::ZERO,
+        shift,
         WIDTH,
         HEIGHT,
         frames,
@@ -328,10 +373,6 @@ fn capture_frames(
     .into_iter()
     .map(|pixels| image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels"))
     .collect()
-}
-
-fn golden_path(directory: &Path, scene: ReferenceScene) -> PathBuf {
-    directory.join(format!("{}.png", scene.name()))
 }
 
 /// The README's link to a scene's Golden, relative to the repository root.
@@ -425,25 +466,28 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
     );
 }
 
-/// Writes each scene's capture as its Golden and prints the scenes whose
-/// pixels changed, or that had no Golden.
+/// Writes each scene's captures as its Goldens and prints the Goldens whose
+/// pixels changed, or that were absent.
 fn update_goldens(directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
-        let path = golden_path(directory, scene);
-        let actual = capture(scene, glam::DVec3::ZERO, RenderSwitches::default());
-        let unchanged =
-            image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
-        if unchanged {
-            continue;
+        let frames = golden_frames(scene);
+        let captures = golden_captures(scene, glam::DVec3::ZERO);
+        for (&frame, actual) in frames.iter().zip(&captures) {
+            let label = golden_label(scene, frame);
+            let path = directory.join(format!("{label}.png"));
+            let unchanged = image::open(&path)
+                .is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
+            if unchanged {
+                continue;
+            }
+            actual.save(&path).expect("write Golden");
+            writeln!(
+                std::io::stderr(),
+                "updated Golden {label}: {}",
+                path.display()
+            )
+            .ok();
         }
-        actual.save(&path).expect("write Golden");
-        writeln!(
-            std::io::stderr(),
-            "updated Golden {}: {}",
-            scene.name(),
-            path.display()
-        )
-        .ok();
     }
 }
