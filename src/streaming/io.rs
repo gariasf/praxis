@@ -72,6 +72,7 @@ struct DecodedMips {
 
 /// What the IO pool reads: the Chunk with an Asset ID at its coordinates,
 /// with the Assets it names, or a Texture's mips.
+#[derive(Debug)]
 enum IoRequest {
     Chunk([i32; 2], AssetId),
     Mips(MipRequest),
@@ -93,9 +94,9 @@ struct IoPool {
     /// Loads the threads finished and the main thread has not taken, by
     /// coordinates.
     ready: BTreeMap<[i32; 2], anyhow::Result<DecodedChunk>>,
-    /// Mips the threads read and the main thread has not applied, by
-    /// Texture, with the mips requested.
-    ready_mips: BTreeMap<AssetId, (Range<u32>, anyhow::Result<DecodedMips>)>,
+    /// Mips the threads read and the main thread has not applied, by the
+    /// finest requested, then Texture, with the mips requested.
+    ready_mips: BTreeMap<(u32, AssetId), (Range<u32>, anyhow::Result<DecodedMips>)>,
 }
 
 impl IoPool {
@@ -119,7 +120,7 @@ impl IoPool {
                                 .lock()
                                 .unwrap_or_else(PoisonError::into_inner)
                                 .recv();
-                            let done = match request {
+                            let finished_load = match request {
                                 Ok(IoRequest::Chunk(coordinates, id)) => Finished::Chunk(
                                     coordinates,
                                     Box::new(decode_chunk(&cache, &claimed, id, coordinates)),
@@ -130,7 +131,7 @@ impl IoPool {
                                 }
                                 Err(_) => return,
                             };
-                            if finished.send(done).is_err() {
+                            if finished.send(finished_load).is_err() {
                                 return;
                             }
                         }
@@ -149,14 +150,13 @@ impl IoPool {
     }
 
     fn request(&mut self, request: IoRequest) {
-        let sent = self
-            .requests
-            .as_ref()
-            .is_some_and(|requests| requests.send(request).is_ok());
-        if sent {
-            self.in_flight += 1;
-        } else {
-            tracing::error!("nothing requested: the IO pool stopped");
+        let refused = match &self.requests {
+            Some(requests) => requests.send(request).err().map(|error| error.0),
+            None => Some(request),
+        };
+        match refused {
+            None => self.in_flight += 1,
+            Some(request) => tracing::error!(?request, "not requested: the IO pool stopped"),
         }
     }
 
@@ -190,8 +190,8 @@ impl IoPool {
                 self.ready.insert(coordinates, *decoded);
             }
             Finished::Mips(request, decoded) => {
-                self.ready_mips
-                    .insert(request.texture, (request.levels, decoded));
+                let key = (request.levels.start, request.texture);
+                self.ready_mips.insert(key, (request.levels, decoded));
             }
         }
         self.in_flight -= 1;
@@ -552,8 +552,8 @@ struct MipStreaming<'a> {
 }
 
 impl MipStreaming<'_> {
-    /// Applies the mips the IO pool read, in Asset ID order, up to the
-    /// frame's load bytes, or, while settling, all of them once nothing is
+    /// Applies the mips the IO pool read, finest-needed first, then in Asset
+    /// ID order, up to the frame's load bytes, or, while settling, all of them once nothing is
     /// in flight, as the Chunk streamer's last take found it; then requests
     /// the mips the loaded Chunks' drawn Placements need from the camera,
     /// finest-needed first, and counts the late mips. Returns whether no
@@ -595,7 +595,7 @@ impl MipStreaming<'_> {
             ..
         } = &mut *self.renderer;
         while let Some(entry) = self.io.ready_mips.first_entry() {
-            let texture = *entry.key();
+            let (_, texture) = *entry.key();
             if let (levels, Ok(_)) = entry.get()
                 && let Some((shape, _)) = material_pool.texture_residency(texture)
             {

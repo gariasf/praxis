@@ -10,6 +10,7 @@ use glam::DVec3;
 
 use crate::assets::{LoadedMeshes, MaterialPool};
 use crate::camera::FIELD_OF_VIEW;
+use crate::components::Transform;
 use crate::cooked::AssetId;
 use crate::streaming::LoadedChunk;
 
@@ -28,9 +29,12 @@ fn finest_pixel_metres_per_metre() -> f64 {
 
 /// The finest mip a surface sampling a Texture at `texels_per_metre` of its
 /// mip 0 needs, seen from `distance_metres` away: the mip whose texels are
-/// no larger than the finest pixel's footprint there, which trilinear and
-/// anisotropic filtering sample no finer than.
-pub(crate) fn finest_mip_needed(texels_per_metre: f64, distance_metres: f64) -> u32 {
+/// no larger than the finest pixel's footprint there, face on. Trilinear
+/// filtering samples no finer, nor does anisotropic filtering whose ratio
+/// of anisotropy is not rounded up, as its level of detail then follows the
+/// footprint's minor axis: Vulkan's `log2(ρmax / min(ρmax / ρmin,
+/// maxAniso))` [ref:vulkan-anisotropy-lod].
+fn finest_mip_needed(texels_per_metre: f64, distance_metres: f64) -> u32 {
     let texels_per_pixel = texels_per_metre * distance_metres * finest_pixel_metres_per_metre();
     texels_per_pixel.max(1.0).log2().floor() as u32
 }
@@ -63,9 +67,12 @@ pub(crate) struct MipPriority {
     requests: Vec<MipRequest>,
     /// The Textures whose mips are requested and not yet applied.
     in_flight: HashSet<AssetId>,
-    /// Textures whose move found no room in their Channel, which are not
-    /// requested again.
+    /// Textures whose move found no room in their Channel, or whose read
+    /// failed, which are not requested again until the Material pool frees
+    /// an entry.
     refused: HashSet<AssetId>,
+    /// The Material pool's frees the last `plan` saw.
+    material_frees: u64,
 }
 
 impl MipPriority {
@@ -83,6 +90,10 @@ impl MipPriority {
         if self.uses.len() > chunks.len() {
             let loaded: HashSet<AssetId> = chunks.iter().map(|chunk| chunk.id).collect();
             self.uses.retain(|chunk, _| loaded.contains(chunk));
+        }
+        let material_frees = materials.generations().frees();
+        if std::mem::replace(&mut self.material_frees, material_frees) != material_frees {
+            self.refused.clear();
         }
         self.needed.clear();
         for chunk in chunks {
@@ -152,7 +163,7 @@ fn texture_uses(
         let Some(mesh) = meshes.get(placement.mesh) else {
             continue;
         };
-        let first_use = uses.len();
+        let mut sphere = None;
         for (&texel_density, &primitive_material) in
             mesh.texel_densities.iter().zip(&mesh.materials)
         {
@@ -163,36 +174,33 @@ fn texture_uses(
                 let Some((shape, resident_level)) = materials.texture_residency(texture) else {
                     continue;
                 };
-                if resident_level > 0 {
-                    let side = shape.width.max(shape.height);
-                    uses.push(TextureUse {
-                        texture,
-                        centre: DVec3::ZERO,
-                        radius: 0.0,
-                        texels_per_metre: f64::from(texel_density) * f64::from(side),
-                    });
+                if resident_level == 0 {
+                    continue;
                 }
+                let (centre, radius, smallest_scale) = *sphere
+                    .get_or_insert_with(|| placement_sphere(&placement.transform, mesh.bounds));
+                let side = shape.width.max(shape.height);
+                uses.push(TextureUse {
+                    texture,
+                    centre,
+                    radius,
+                    texels_per_metre: f64::from(texel_density) * f64::from(side) / smallest_scale,
+                });
             }
-        }
-        if uses.len() == first_use {
-            continue;
-        }
-        let transform = &placement.transform;
-        let [lowest, highest] = mesh
-            .bounds
-            .map(|corner| glam::Vec3::from(corner).as_dvec3());
-        let scale = transform.scale.as_dvec3().abs();
-        let centre = transform.translation
-            + transform.rotation.as_dquat()
-                * (transform.scale.as_dvec3() * (lowest + highest) / 2.0);
-        let radius = scale.max_element() * (highest - lowest).length() / 2.0;
-        for texture_use in &mut uses[first_use..] {
-            texture_use.centre = centre;
-            texture_use.radius = radius;
-            texture_use.texels_per_metre /= scale.min_element();
         }
     }
     uses
+}
+
+/// The centre and radius of the sphere around `bounds`, a Mesh's, placed
+/// by `transform`, and the transform's smallest scale.
+fn placement_sphere(transform: &Transform, bounds: [[f32; 3]; 2]) -> (DVec3, f64, f64) {
+    let [lowest, highest] = bounds.map(|corner| glam::Vec3::from(corner).as_dvec3());
+    let scale = transform.scale.as_dvec3();
+    let centre =
+        transform.translation + transform.rotation.as_dquat() * (scale * (lowest + highest) / 2.0);
+    let radius = scale.abs().max_element() * (highest - lowest).length() / 2.0;
+    (centre, radius, scale.abs().min_element())
 }
 
 #[cfg(test)]

@@ -484,8 +484,8 @@ pub struct CookedPrimitive {
     /// UV units per mesh-space metre: the square root of its triangles'
     /// summed UV area over their summed mesh-space area, zero when either sum
     /// is, as without UVs; the inverse of [ref:unity-6000-uv-distribution-metric]
-    /// as a length. Times a Texture's side and the Instance's scale it is
-    /// texels per metre, which mip priority reads (ADR 0017).
+    /// as a length. Times a Texture's side and over the Instance's scale it
+    /// is texels per metre, which mip priority reads (ADR 0017).
     pub texel_density: f32,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,

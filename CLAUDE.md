@@ -123,11 +123,16 @@ src/
                                  after a teleport and Settled report,
                                  reaching IO through a narrow trait;
                                  io.rs, the IO pool (ADR 0016) that reads
-                                 and decodes Chunks and their Assets, and
+                                 and decodes Chunks and their Assets, a
+                                 Texture's Resident tail first, and the
+                                 mips streamed after it, and
                                  ChunkStreaming, which the State runs each
                                  frame, Settled for captures and the
                                  bench's frames before its counter
-                                 frames; chunks.rs,
+                                 frames; mips.rs, mip priority: the
+                                 finest mip each streamed Texture needs
+                                 and the requests for it, finest-needed
+                                 first; chunks.rs,
                                  a Chunk loaded through the AssetLoader
                                  into the World's LoadedChunks, which
                                  prepare writes into the Chunk's range of

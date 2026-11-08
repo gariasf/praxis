@@ -826,7 +826,8 @@ impl std::fmt::Display for Measurements {
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count
 /// against Baselines, the GPU frame's and each pass's included, except the
-/// dynamic TLAS's CPU median. Against the Budgets, the CPU frame, the GPU
+/// dynamic TLAS's CPU median; counters count too, but the late mips, which
+/// depend on when the IO pool's reads land and are reported only. Against the Budgets, the CPU frame, the GPU
 /// frame and the gate count at the median and p99, the CPU frame at the p95
 /// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
 /// GPU memory in total and by kind; other p95s are reported only, as they
@@ -846,7 +847,7 @@ pub fn compare(
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if current > baseline {
+        if current > baseline && metric != "late_mips" {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
@@ -1554,6 +1555,13 @@ mod tests {
             verdicts(&current, &baseline(), CompareMode::Local),
             [("heap_allocations", Verdict::Fail)]
         );
+    }
+
+    #[test]
+    fn late_mips_are_reported_not_judged() {
+        let mut current = baseline();
+        current.counters.late_mips = 12;
+        assert_eq!(verdicts(&current, &baseline(), CompareMode::Ci), []);
     }
 
     #[test]
