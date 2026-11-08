@@ -143,9 +143,9 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
-/// Likewise for a GPU time, a pass's or the frame's: a short pass moves by more than the
-/// ratios between runs on the M4 Pro (measured: `docs/performance.md`,
-/// Measurements behind the code).
+/// Likewise for a GPU time, a pass's or the frame's: a short pass moves by
+/// more than the ratios between runs on the M4 Pro (measured:
+/// `docs/performance.md`, Measurements behind the code).
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;
 
 /// The steady-state cost of one Reference scene: medians over the measured
@@ -798,14 +798,14 @@ impl std::fmt::Display for Measurements {
 
 /// Compares `current` with its `baseline` and the Budgets. Medians count
 /// against Baselines, the GPU frame's and each pass's included, except the
-/// dynamic TLAS's CPU median. Against the Budgets, the CPU frame, the GPU frame and
-/// the gate count at the median and p99, the CPU frame at the p95 too, and
-/// the CPU and GPU frames' maximums against one 60 Hz period, and GPU
-/// memory in total and by kind; other p95s are reported only, as they move
-/// with one slow frame. Runs that
-/// measured as many frames compare their measured frames' counters; runs of
-/// other lengths compare their counter frames', and only with
-/// `CompareMode::Ci`, as their times cover other frames.
+/// dynamic TLAS's CPU median. Against the Budgets, the CPU frame, the GPU
+/// frame and the gate count at the median and p99, the CPU frame at the p95
+/// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
+/// GPU memory in total and by kind; other p95s are reported only, as they
+/// move with one slow frame. Runs that measured as many frames compare their
+/// measured frames' counters; runs of other lengths compare their counter
+/// frames', and only with `CompareMode::Ci`, as their times cover other
+/// frames.
 pub fn compare(
     current: &Measurements,
     baseline: &Measurements,
