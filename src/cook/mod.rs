@@ -9,7 +9,7 @@ mod launch;
 pub(crate) mod mesh;
 mod texture;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Context;
@@ -135,10 +135,15 @@ struct Sources {
     textures: Vec<TextureSource>,
     /// Each Mesh with its name, its Cook key and its Primitives.
     meshes: Vec<(AssetId, String, String, Vec<mesh::SourcePrimitive>)>,
-    /// Each Chunk with what names it in a warning and its Cook key.
-    chunks: Vec<(AssetId, Referrer, String, CookedChunk)>,
-    /// Each Chunk a Placement of which names a Mesh this cook did not read,
-    /// so its Blob, if any, stays as it is.
+    /// Each Chunk by its scene and coordinates, generated as it cooks.
+    chunks: Vec<(ReferenceScene, [i32; 2])>,
+    /// Each read Mesh's bounds, which a Chunk's bounds hold.
+    mesh_bounds: HashMap<AssetId, [glam::Vec3; 2]>,
+    /// Each scene's Chunks cut from its whole static content, once, for a
+    /// scene whose generator makes no Chunk alone.
+    cut_chunks: Vec<(ReferenceScene, BTreeMap<[i32; 2], CookedChunk>)>,
+    /// Each Chunk generated so far a Placement of which names a Mesh this
+    /// cook did not read, so its Blob, if any, stays as it is.
     kept_chunks: Vec<AssetId>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
@@ -149,7 +154,73 @@ struct Sources {
     kept_textures: Vec<AssetId>,
 }
 
+/// A Chunk as a cook generates it.
+struct GeneratedChunk {
+    id: AssetId,
+    referrer: Referrer,
+    cook_key: String,
+    chunk: CookedChunk,
+    /// Whether a Placement names a Mesh this cook did not read, so the
+    /// Chunk's Blob, if any, stays as it is.
+    kept: bool,
+}
+
+impl GeneratedChunk {
+    /// Each Mesh and Material the Chunk's Placements name, once.
+    fn references(&self) -> impl Iterator<Item = (Referrer, AssetId)> + '_ {
+        let placements = self.chunk.placements.iter();
+        let named = placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
+        let mut named: Vec<_> = named.flatten().collect();
+        named.sort_unstable();
+        named.dedup();
+        named.into_iter().map(|id| (self.referrer, id))
+    }
+}
+
 impl Sources {
+    /// `scene`'s Chunk at `coordinates`, its bounds holding its Placements'
+    /// read Meshes: generated alone where the scene's generator can, else cut
+    /// from the scene's whole static content, which is generated once.
+    fn chunk(
+        &mut self,
+        scene: ReferenceScene,
+        coordinates: [i32; 2],
+    ) -> anyhow::Result<GeneratedChunk> {
+        let referrer = Referrer::Chunk(scene, coordinates);
+        let chunk = match scene.chunk_content(coordinates) {
+            Some((placements, lights)) => {
+                chunk::chunks(placements, lights, &self.mesh_bounds).remove(&coordinates)
+            }
+            None => {
+                let cut_scene =
+                    (self.cut_chunks.iter()).position(|(cut_scene, _)| *cut_scene == scene);
+                let index = cut_scene.unwrap_or_else(|| {
+                    let (placements, lights) = scene.static_content();
+                    let chunks = chunk::chunks(placements, lights, &self.mesh_bounds);
+                    self.cut_chunks.push((scene, chunks));
+                    self.cut_chunks.len() - 1
+                });
+                let (_, chunks) = &self.cut_chunks[index];
+                chunks.get(&coordinates).cloned()
+            }
+        };
+        let chunk = chunk
+            .with_context(|| format!("{referrer} holds none of the scene's static content"))?;
+        let unread = (chunk.placements.iter())
+            .find(|placement| !self.mesh_bounds.contains_key(&placement.mesh));
+        if let Some(placement) = unread {
+            tracing::warn!(chunk = %referrer, mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; the Chunk's Blob, if any, stays as it is");
+        }
+        let kept = unread.is_some();
+        Ok(GeneratedChunk {
+            id: scene.chunk_id(coordinates),
+            referrer,
+            cook_key: chunk::cook_key(&chunk),
+            chunk,
+            kept,
+        })
+    }
+
     /// Whether the Blob `reference` names may be one a cook kept as it is:
     /// a Chunk naming a Mesh this cook did not read, or an Asset whose source
     /// is absent. A glTF file's Materials sample its own images, and a
@@ -183,9 +254,9 @@ pub fn cook(
     cache: &CookedCache,
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
-    let sources = read_sources(assets, scenes, None)?;
-    let references = scene_references(scenes, &sources.chunks)?;
-    cook_sources(&sources, &references, cache, settings)
+    let mut sources = read_sources(assets, scenes, None)?;
+    let references = scene_references(scenes)?;
+    cook_sources(&mut sources, &references, cache, settings)
 }
 
 /// Cooks `scene` whole, as `praxis cook <scene>`: the manifest sources the
@@ -200,22 +271,20 @@ pub fn cook_scene(
     settings: &CookSettings,
 ) -> anyhow::Result<CookReport> {
     fetch::fetch_for_launch(assets, scene.source_files());
-    let sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
-    let references = scene_references(&[scene], &sources.chunks)?;
-    cook_sources(&sources, &references, cache, settings)
+    let mut sources = read_sources(assets, &[scene], Some(scene.source_files()))?;
+    let references = scene_references(&[scene])?;
+    cook_sources(&mut sources, &references, cache, settings)
 }
 
-/// Each Asset ID `scenes` load as they spawn from `chunks`, once per scene.
-fn scene_references(
-    scenes: &[ReferenceScene],
-    chunks: &[(AssetId, Referrer, String, CookedChunk)],
-) -> anyhow::Result<Vec<(Referrer, AssetId)>> {
+/// Each Asset ID `scenes` load as they spawn, before any Chunk, once per
+/// scene; a Chunk names what its Placements load.
+fn scene_references(scenes: &[ReferenceScene]) -> anyhow::Result<Vec<(Referrer, AssetId)>> {
     let mut references = Vec::new();
     for &scene in scenes {
-        let mut recorder = AssetRecorder::new(chunks.iter().map(|(id, _, _, chunk)| (*id, chunk)));
+        let mut recorder = AssetRecorder::default();
         // The default crowd form loads the shadow proxies besides every
         // Asset the traced forms load.
-        Simulation::new(
+        Simulation::spawned(
             scene,
             glam::DVec3::ZERO,
             CrowdForm::default(),
@@ -231,7 +300,7 @@ fn scene_references(
 }
 
 fn cook_sources(
-    sources: &Sources,
+    sources: &mut Sources,
     scene_references: &[(Referrer, AssetId)],
     cache: &CookedCache,
     settings: &CookSettings,
@@ -253,17 +322,21 @@ fn cook_sources(
             report.cooked.push(*id);
         }
     }
-    for (id, _, cook_key, chunk) in &sources.chunks {
-        if sources.kept_chunks.contains(id) {
-            continue;
-        }
-        if is_fresh(cache, *id, cook_key) {
-            report.unchanged.push(*id);
+    let (mut placement_references, mut kept_chunks) = (Vec::new(), Vec::new());
+    for (scene, coordinates) in sources.chunks.clone() {
+        let generated = sources.chunk(scene, coordinates)?;
+        placement_references.extend(generated.references());
+        let (id, cook_key) = (generated.id, &generated.cook_key);
+        if generated.kept {
+            kept_chunks.push(id);
+        } else if is_fresh(cache, id, cook_key) {
+            report.unchanged.push(id);
         } else {
-            cache.write(*id, cook_key, &chunk.to_blob()?)?;
-            report.cooked.push(*id);
+            cache.write(id, cook_key, &generated.chunk.to_blob()?)?;
+            report.cooked.push(id);
         }
     }
+    sources.kept_chunks.extend(kept_chunks);
     let mut stale = Vec::new();
     for texture in &sources.textures {
         let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);
@@ -301,14 +374,6 @@ fn cook_sources(
     let material_references = sources.meshes.iter().flat_map(|(id, _, _, primitives)| {
         let materials = primitives.iter().filter_map(|(_, material)| *material);
         materials.map(|material| (Referrer::Mesh(*id), material))
-    });
-    let placement_references = sources.chunks.iter().flat_map(|(_, referrer, _, chunk)| {
-        let placements = chunk.placements.iter();
-        let named = placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
-        let mut named: Vec<_> = named.flatten().collect();
-        named.sort_unstable();
-        named.dedup();
-        named.into_iter().map(|id| (*referrer, id))
     });
     let references: Vec<_> = texture_references
         .chain(material_references)
@@ -439,25 +504,14 @@ fn read_sources(
             sources.meshes.push((id, name, cook_key, primitives));
         }
     }
-    let mesh_bounds: HashMap<_, _> = sources
-        .meshes
-        .iter()
+    sources.mesh_bounds = (sources.meshes.iter())
         .map(|(id, _, _, primitives)| (*id, chunk::source_bounds(primitives)))
         .collect();
     for &scene in scenes {
-        let (placements, lights) = scene.static_content();
-        for (coordinates, chunk) in chunk::chunks(placements, lights, &mesh_bounds) {
-            let id = scene.chunk_id(coordinates);
-            let cook_key = chunk::cook_key(&chunk);
-            let referrer = Referrer::Chunk(scene, coordinates);
-            let unread = (chunk.placements.iter())
-                .find(|placement| !mesh_bounds.contains_key(&placement.mesh));
-            if let Some(placement) = unread {
-                tracing::warn!(chunk = %referrer, mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; the Chunk's Blob, if any, stays as it is");
-                sources.kept_chunks.push(id);
-            }
-            sources.chunks.push((id, referrer, cook_key, chunk));
-        }
+        let coordinates = scene.chunk_coordinates().into_iter();
+        sources
+            .chunks
+            .extend(coordinates.map(|coordinates| (scene, coordinates)));
     }
     Ok(sources)
 }
@@ -708,8 +762,13 @@ mod tests {
         let directory =
             std::env::temp_dir().join(format!("praxis-removed-assets-{}", std::process::id()));
         let cache = CookedCache::new(&directory);
+        let scene = ReferenceScene::PbrSweep;
+        let (placements, _) = scene.static_content();
+        let placed = (placements.iter())
+            .find(|placement| crate::cooked::chunk_holding(placement.translation) == [0, 0])
+            .unwrap();
         let (removed_mesh, removed_material, removed_texture) =
-            (AssetId(1), AssetId(2), AssetId(3));
+            (placed.mesh, placed.material.unwrap(), AssetId(3));
         for removed in [removed_mesh, removed_material, removed_texture] {
             cache.write(removed, "cook key", b"stale Blob").unwrap();
         }
@@ -722,36 +781,28 @@ mod tests {
             normal_scale: 1.0,
             textures: [Some(removed_texture), None, None, None, None],
         };
-        let placement = crate::cooked::CookedPlacement {
-            mesh: removed_mesh,
-            material: Some(removed_material),
-            translation: glam::DVec3::ZERO,
-            rotation: glam::Quat::IDENTITY,
-            scale: glam::Vec3::ONE,
-        };
-        let chunk = CookedChunk {
-            placements: vec![placement],
-            lights: Vec::new(),
-            bounds: [glam::DVec3::ZERO; 2],
-        };
-        let chunk_referrer = Referrer::Chunk(ReferenceScene::Town, [-2, 1]);
-        let sources = Sources {
+        let chunk_referrer = Referrer::Chunk(scene, [0, 0]);
+        let mut sources = Sources {
             materials: vec![(material_id, "material cook key".into(), material)],
-            chunks: vec![(AssetId(20), chunk_referrer, "chunk cook key".into(), chunk)],
+            chunks: vec![(scene, [0, 0])],
+            mesh_bounds: HashMap::from([(removed_mesh, [glam::Vec3::ZERO; 2])]),
             ..Sources::default()
         };
-        let report = cook_sources(&sources, &[], &cache, &CookSettings::default()).unwrap();
+        let report = cook_sources(&mut sources, &[], &cache, &CookSettings::default()).unwrap();
+        let dangling = &report.dangling_references;
         assert_eq!(
-            report.dangling_references,
-            [
-                (Referrer::Material(material_id), removed_texture),
-                (chunk_referrer, removed_mesh),
-                (chunk_referrer, removed_material),
-            ]
+            dangling[0],
+            (Referrer::Material(material_id), removed_texture)
         );
+        for removed in [removed_mesh, removed_material] {
+            assert!(
+                dangling.contains(&(chunk_referrer, removed)),
+                "{dangling:?}"
+            );
+        }
         assert_eq!(
             chunk_referrer.to_string(),
-            "Chunk (-2, 1) of Reference scene town"
+            "Chunk (0, 0) of Reference scene pbr-sweep"
         );
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -761,15 +812,7 @@ mod tests {
     #[test]
     fn a_scene_references_the_textures_it_loads() {
         let scene = ReferenceScene::TextureWall;
-        let (placements, lights) = scene.static_content();
-        let chunks: Vec<_> = chunk::split(placements, lights)
-            .into_iter()
-            .map(|(coordinates, chunk)| {
-                let referrer = Referrer::Chunk(scene, coordinates);
-                (scene.chunk_id(coordinates), referrer, String::new(), chunk)
-            })
-            .collect();
-        let references = scene_references(&[scene], &chunks).unwrap();
+        let references = scene_references(&[scene]).unwrap();
         let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }

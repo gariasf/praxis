@@ -69,9 +69,10 @@ impl<'a> CookingLoader<'a> {
         let materials = materials.map(|(index, (id, ..))| (*id, SourceEntry::Material(index)));
         let meshes = sources.meshes.iter().enumerate();
         let meshes = meshes.map(|(index, (id, ..))| (*id, SourceEntry::Mesh(index)));
-        let chunks = (sources.chunks.iter().enumerate())
-            .filter(|(_, (id, ..))| !sources.kept_chunks.contains(id))
-            .map(|(index, (id, ..))| (*id, SourceEntry::Chunk(index)));
+        let chunks = sources.chunks.iter().enumerate();
+        let chunks = chunks.map(|(index, (scene, coordinates))| {
+            (scene.chunk_id(*coordinates), SourceEntry::Chunk(index))
+        });
         let textures = sources.textures.iter().enumerate();
         let textures = textures.map(|(index, texture)| (texture.id, SourceEntry::Texture(index)));
         let entry_by_id = materials
@@ -133,67 +134,82 @@ impl LaunchCook {
             return Ok(());
         }
         let Some(&entry) = self.entry_by_id.get(&id) else {
-            let may_be_kept = |reference: &(Referrer, AssetId)| self.sources.may_be_kept(reference);
-            dangling_references(cache, &HashSet::new(), &[(referrer, id)], may_be_kept);
+            self.warn_unless_kept(cache, referrer, id);
             return Ok(());
         };
         let sources = &self.sources;
-        let (cook_key, named): (String, Vec<_>) = match entry {
+        match entry {
             SourceEntry::Material(index) => {
                 let (_, cook_key, material) = &sources.materials[index];
                 let textures = material.textures.iter().flatten();
                 let named = textures.map(|texture| (Referrer::Material(id), *texture));
-                (cook_key.clone(), named.collect())
+                let (named, cook_key) = (named.collect(), cook_key.clone());
+                self.cook_after_named(cache, id, &cook_key, named, |sources| {
+                    let (_, _, material) = &sources.materials[index];
+                    Ok(material.to_blob())
+                })
             }
             SourceEntry::Mesh(index) => {
                 let (_, _, cook_key, primitives) = &sources.meshes[index];
                 let materials = primitives.iter().filter_map(|(_, material)| *material);
                 let named = materials.map(|material| (Referrer::Mesh(id), material));
-                (cook_key.clone(), named.collect())
+                let (named, cook_key) = (named.collect(), cook_key.clone());
+                self.cook_after_named(cache, id, &cook_key, named, |sources| {
+                    let (_, name, _, primitives) = &sources.meshes[index];
+                    mesh_blob(id, name, primitives)
+                })
             }
             SourceEntry::Chunk(index) => {
-                let (_, referrer, cook_key, chunk) = &sources.chunks[index];
-                let placements = chunk.placements.iter();
-                let named =
-                    placements.flat_map(|placement| [Some(placement.mesh), placement.material]);
-                let named = named.flatten().map(|named| (*referrer, named));
-                (cook_key.clone(), named.collect())
+                let (scene, coordinates) = sources.chunks[index];
+                let generated = self.sources.chunk(scene, coordinates)?;
+                if generated.kept {
+                    self.sources.kept_chunks.push(id);
+                    return Ok(());
+                }
+                let named = generated.references().collect();
+                self.cook_after_named(cache, id, &generated.cook_key, named, |_| {
+                    generated.chunk.to_blob()
+                })
             }
             SourceEntry::Texture(index) => {
-                let texture = &sources.textures[index];
-                let cook_key = texture.cook_key(&self.settings, TEXTURE_FORMAT_VERSION);
-                (cook_key, Vec::new())
+                let cook_key =
+                    sources.textures[index].cook_key(&self.settings, TEXTURE_FORMAT_VERSION);
+                let settings = self.settings;
+                self.cook_after_named(cache, id, &cook_key, Vec::new(), |sources| {
+                    let threads =
+                        std::thread::available_parallelism().map_or(1, |threads| threads.get());
+                    sources.textures[index].cook(&settings, threads)
+                })
             }
-        };
+        }
+    }
+
+    /// Cooks each Asset in `named`, then writes `id`'s Blob from `blob` under
+    /// `cook_key` into `cache` where it is missing or stale.
+    fn cook_after_named(
+        &mut self,
+        cache: &CookedCache,
+        id: AssetId,
+        cook_key: &str,
+        named: Vec<(Referrer, AssetId)>,
+        blob: impl FnOnce(&Sources) -> anyhow::Result<Vec<u8>>,
+    ) -> anyhow::Result<()> {
         for (referrer, named) in named {
             self.cook_on_miss(cache, referrer, named)?;
         }
-        if is_fresh(cache, id, &cook_key) {
+        if is_fresh(cache, id, cook_key) {
             return Ok(());
         }
-        let sources = &self.sources;
-        let blob = match entry {
-            SourceEntry::Material(index) => {
-                let (_, _, material) = &sources.materials[index];
-                material.to_blob()
-            }
-            SourceEntry::Mesh(index) => {
-                let (_, name, _, primitives) = &sources.meshes[index];
-                mesh_blob(id, name, primitives)?
-            }
-            SourceEntry::Chunk(index) => {
-                let (_, _, _, chunk) = &sources.chunks[index];
-                chunk.to_blob()?
-            }
-            SourceEntry::Texture(index) => {
-                let threads =
-                    std::thread::available_parallelism().map_or(1, |threads| threads.get());
-                sources.textures[index].cook(&self.settings, threads)?
-            }
-        };
-        cache.write(id, &cook_key, &blob)?;
+        cache.write(id, cook_key, &blob(&self.sources)?)?;
         tracing::debug!(asset = %id, "cooked on a miss");
         Ok(())
+    }
+
+    /// Warns of `id`, which `referrer` names and this cook does not make, as
+    /// the cook's dangling references do, unless its Blob may be one kept.
+    fn warn_unless_kept(&self, cache: &CookedCache, referrer: Referrer, id: AssetId) {
+        let may_be_kept = |reference: &(Referrer, AssetId)| self.sources.may_be_kept(reference);
+        dangling_references(cache, &HashSet::new(), &[(referrer, id)], may_be_kept);
     }
 }
 
@@ -243,7 +259,6 @@ mod tests {
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::assets::{MaterialPool, MeshPool, PoolCapacities, PoolLoader};
     use crate::cook::{chunk, mesh};
-    use crate::cooked::CookedPlacement;
     use crate::render::LoadStaging;
     use crate::scenes::ground_plane;
     use crate::stats::gpu_memory::tests::gpu_memory;
@@ -353,30 +368,21 @@ mod tests {
         assert!(textures_cooked > 0, "no loaded Chunk named a Texture");
     }
 
-    /// The sources of Mesh 1, a plane `half_size` metres to each edge, and of
-    /// Chunk 2, uv-grid's Chunk (0, 0), which places it at the World's origin.
+    /// The sources of uv-grid's Mesh `plane`, `half_size` metres to each
+    /// edge, and of its Chunk (0, 0), which places it at the World's origin.
     fn plane_sources(half_size: f32) -> Sources {
-        let mesh = AssetId(1);
+        let scene = ReferenceScene::UvGrid;
+        let mesh = scene.mesh_id("plane");
         let primitives = vec![(ground_plane(half_size, 1.0), None)];
-        let mesh_bounds = HashMap::from([(mesh, chunk::source_bounds(&primitives))]);
-        let placement = CookedPlacement {
-            mesh,
-            material: None,
-            translation: glam::DVec3::ZERO,
-            rotation: glam::Quat::IDENTITY,
-            scale: glam::Vec3::ONE,
-        };
-        let referrer = Referrer::Chunk(ReferenceScene::UvGrid, [0, 0]);
-        let chunks = chunk::chunks(vec![placement], Vec::new(), &mesh_bounds).into_values();
-        let chunks = chunks.map(|chunk| (AssetId(2), referrer, chunk::cook_key(&chunk), chunk));
         Sources {
+            mesh_bounds: HashMap::from([(mesh, chunk::source_bounds(&primitives))]),
             meshes: vec![(
                 mesh,
                 "plane".into(),
                 mesh::cook_key(&primitives),
                 primitives,
             )],
-            chunks: chunks.collect(),
+            chunks: vec![(scene, [0, 0])],
             ..Sources::default()
         }
     }
@@ -388,7 +394,8 @@ mod tests {
     fn a_changed_mesh_re_cooks_when_a_chunk_placing_it_loads() {
         let directory = scratch("changed-mesh");
         let cache = CookedCache::new(directory.join("cooked"));
-        let (scene, mesh, chunk) = (ReferenceScene::UvGrid, AssetId(1), AssetId(2));
+        let scene = ReferenceScene::UvGrid;
+        let (mesh, chunk) = (scene.mesh_id("plane"), scene.chunk_id([0, 0]));
         let cook_keys = || [mesh, chunk].map(|id| cache.entry(id).unwrap().cook_key);
         let settings = CookSettings::default();
         let loaded = with_pool_loader(&cache, |pool_loader| {
@@ -398,10 +405,10 @@ mod tests {
             load_chunk(&mut loader, chunk, [0, 0]).unwrap();
             let cooked = cook_keys();
 
-            let changed = plane_sources(2.0);
+            let mut changed = plane_sources(2.0);
+            let chunk_key = changed.chunk(scene, [0, 0]).unwrap().cook_key;
             let (_, _, mesh_key, _) = &changed.meshes[0];
-            let (_, _, chunk_key, _) = &changed.chunks[0];
-            let changed_keys = [mesh_key.clone(), chunk_key.clone()];
+            let changed_keys = [mesh_key.clone(), chunk_key];
             assert_ne!(changed_keys, cooked);
             let mut loader =
                 CookingLoader::from_sources(scene, changed, &cache, settings, pool_loader);
@@ -422,7 +429,8 @@ mod tests {
     fn a_chunk_placing_a_removed_mesh_warns_and_loads_its_stale_blob() {
         let directory = scratch("removed-mesh");
         let cache = CookedCache::new(directory.join("cooked"));
-        let (scene, mesh, chunk) = (ReferenceScene::UvGrid, AssetId(1), AssetId(2));
+        let scene = ReferenceScene::UvGrid;
+        let (mesh, chunk) = (scene.mesh_id("plane"), scene.chunk_id([0, 0]));
         let settings = CookSettings::default();
         with_pool_loader(&cache, |pool_loader| {
             let sources = plane_sources(1.0);

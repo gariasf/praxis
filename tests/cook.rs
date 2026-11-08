@@ -732,9 +732,10 @@ fn a_scene_cook_cooks_exactly_what_its_scene_references_and_changed() {
 }
 
 /// Renaming a Mesh gives it a new Asset ID, while the Cooked cache keeps the
-/// old ID's Blob: the normal-tangent scene, which names the Mesh by its old
-/// name, then references an Asset no cook makes any more, and the cook warns
-/// of it, naming the scene and the ID, whatever other source is absent.
+/// old ID's Blob: the normal-tangent scene's Chunk, which places the Mesh by
+/// its old name, then references an Asset no cook makes any more, and the
+/// cook warns of it, naming the Chunk and the ID, whatever other source is
+/// absent.
 #[test]
 fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
     let directory = scratch("rename-mesh");
@@ -762,7 +763,10 @@ fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
         AssetKind::Mesh,
         AssetName::Name("NormalTangentTest_low"),
     );
-    let reference = (Referrer::Scene(ReferenceScene::NormalTangent), old_mesh);
+    let reference = (
+        Referrer::Chunk(ReferenceScene::NormalTangent, [0, 0]),
+        old_mesh,
+    );
     let report = cook(&assets, &cache).unwrap();
     assert!(!report.dangling_references.contains(&reference));
 

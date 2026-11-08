@@ -8,8 +8,8 @@ use sha2::{Digest, Sha256};
 
 use super::mesh::SourcePrimitive;
 use crate::cooked::{
-    AssetId, CHUNK_EDGE_METRES, CHUNK_FORMAT_VERSION, CHUNK_MAGIC, CookedChunk, CookedLight,
-    CookedPlacement, chunk_origin, hex,
+    AssetId, CHUNK_FORMAT_VERSION, CHUNK_MAGIC, CookedChunk, CookedLight, CookedPlacement,
+    chunk_holding, chunk_origin, hex,
 };
 
 /// Each Chunk that holds the pivot of one of `placements` or `lights`,
@@ -51,12 +51,12 @@ pub(super) fn split(
 ) -> BTreeMap<[i32; 2], CookedChunk> {
     let mut chunks = BTreeMap::new();
     for mut placement in placements {
-        let (origin, chunk) = chunk_holding(&mut chunks, placement.translation);
+        let (origin, chunk) = chunk_entry(&mut chunks, placement.translation);
         placement.translation -= origin;
         chunk.placements.push(placement);
     }
     for mut light in lights {
-        let (origin, chunk) = chunk_holding(&mut chunks, light.translation);
+        let (origin, chunk) = chunk_entry(&mut chunks, light.translation);
         light.translation -= origin;
         chunk.lights.push(light);
     }
@@ -64,11 +64,11 @@ pub(super) fn split(
 }
 
 /// The origin of the Chunk that holds `pivot` (ADR 0014), and its entry.
-fn chunk_holding(
+fn chunk_entry(
     chunks: &mut BTreeMap<[i32; 2], CookedChunk>,
     pivot: DVec3,
 ) -> (DVec3, &mut CookedChunk) {
-    let coordinates = [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);
+    let coordinates = chunk_holding(pivot);
     let chunk = chunks.entry(coordinates).or_insert_with(|| CookedChunk {
         placements: Vec::new(),
         lights: Vec::new(),
@@ -325,6 +325,35 @@ mod tests {
         let again = cook_scene(scene, &assets, &cache, &settings).unwrap();
         assert_eq!(again.cooked, []);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// Each Chunk a scene's generator makes alone holds what its cut from
+    /// the whole scene holds, in the same order, so its Cook key is the same.
+    #[test]
+    fn every_chunk_generated_alone_has_its_cut_from_the_whole_scenes_cook_key() {
+        let mut generated_alone = 0;
+        for scene in ReferenceScene::ALL {
+            let (placements, lights) = scene.static_content();
+            for (coordinates, cut) in split(placements, lights) {
+                let Some((placements, lights)) = scene.chunk_content(coordinates) else {
+                    continue;
+                };
+                let alone = split(placements, lights);
+                let keys: Vec<_> = alone.keys().copied().collect();
+                assert_eq!(keys, [coordinates], "{}", scene.name());
+                assert_eq!(
+                    cook_key(&alone[&coordinates]),
+                    cook_key(&cut),
+                    "{} Chunk {coordinates:?}",
+                    scene.name()
+                );
+                generated_alone += 1;
+            }
+        }
+        assert_eq!(
+            generated_alone,
+            ReferenceScene::World.chunk_coordinates().len()
+        );
     }
 
     /// Each scene's Chunks lie at the coordinates its spawn loads, and its
