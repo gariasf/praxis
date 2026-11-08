@@ -562,6 +562,20 @@ impl MaterialPool {
         Ok(handle)
     }
 
+    /// The bytes `load` writes through its staging for a Material, its
+    /// Textures' aside.
+    pub const WRITTEN_BYTES: u64 = size_of::<MaterialData>() as u64;
+
+    /// Whether `load` loaded the Material `id`.
+    pub fn is_loaded(&self, id: AssetId) -> bool {
+        self.material_handles.contains_key(&id)
+    }
+
+    /// Whether `load_texture` placed the Texture `id`.
+    pub fn is_texture_loaded(&self, id: AssetId) -> bool {
+        self.texture_layers.contains_key(&id)
+    }
+
     /// Loads the Texture `id` from `reader` into `channel` once per Asset ID,
     /// written through `staging`, and returns its Layer: a free slice of its
     /// shape's Texture class, or of its Resident tail's when the pool holds

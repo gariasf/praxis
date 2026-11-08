@@ -50,8 +50,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Every frame writes the 144-byte camera and 32-byte light uniforms and
     // the sun and four point lights, 48 bytes each; only the first also
     // writes the ten 128-byte Instances and the 4-byte count of Instance
-    // slots in use.
-    assert_eq!(frames[0].uploaded_bytes, 10 * 128 + 144 + 32 + 5 * 48 + 4);
+    // slots in use, and streams the Chunks: the sphere Mesh's 76,720 bytes
+    // and ten 80-byte Materials.
+    let streamed_bytes = 76_720 + 10 * 80;
+    assert_eq!(
+        frames[0].uploaded_bytes,
+        10 * 128 + 144 + 32 + 5 * 48 + 4 + streamed_bytes
+    );
     assert_eq!(last.uploaded_bytes, 144 + 32 + 5 * 48);
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
     // pole.

@@ -469,7 +469,7 @@ pub uploaded_bytes: u64,</code></pre>
 <section class="part prose" id="load">
   <div class="part-mark">7 &middot; <code>LoadStaging</code></div>
   <h2>The load path</h2>
-  <p class="key-idea">Loads use a <code>StagingBelt</code> and one encoder that live only until <code>submit</code>: the belt goes with the submission, so load staging never stays resident and never counts in <code>gpu_memory_bytes</code>. Its bound is in time, not in bytes. The same encoder takes the texture-to-texture copies that move a Texture between Texture classes, after the writes they read.</p>
+  <p class="key-idea">Loads use a <code>StagingBelt</code> and one encoder that live only until <code>submit</code>: the belt goes with the submission, so load staging never stays resident and never counts in <code>gpu_memory_bytes</code>. Its bound is in time, and for streamed Chunks also in bytes: since e9019be8 each frame's Chunk loads write at most a share of the staging Budget into it (<a href="chunk-streamer.html#engine">Chunk streamer</a>). The same encoder takes the texture-to-texture copies that move a Texture between Texture classes, after the writes they read.</p>
 <pre class="code"><code>/// The `StagingBelt`'s allocation unit at load: a larger write gets a chunk
 /// of its own.
 const LOAD_CHUNK_BYTES: u64 = 1 &lt;&lt; 20;

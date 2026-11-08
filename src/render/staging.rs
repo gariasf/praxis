@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::cooked::CookedTexture;
 use crate::render::FRAMES_IN_FLIGHT;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -175,6 +176,9 @@ const LOAD_CHUNK_BYTES: u64 = 1 << 20;
 pub struct LoadStaging {
     device: wgpu::Device,
     pending: Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
+    /// Bytes written into the belt since the last submit, row padding
+    /// included.
+    written_bytes: u64,
     /// Bytes the pending Texture moves copy.
     moved_bytes: u64,
 }
@@ -184,6 +188,7 @@ impl LoadStaging {
         Self {
             device,
             pending: None,
+            written_bytes: 0,
             moved_bytes: 0,
         }
     }
@@ -194,9 +199,15 @@ impl LoadStaging {
         let Some(size) = wgpu::BufferSize::new(bytes.len() as u64) else {
             return;
         };
+        self.written_bytes += size.get();
         let (belt, encoder) = self.pending();
         belt.write_buffer(encoder, target, offset, size)
             .copy_from_slice(bytes);
+    }
+
+    /// Bytes written into the belt since the last submit.
+    pub fn written_bytes(&self) -> u64 {
+        self.written_bytes
     }
 
     /// Records a copy of `bytes`, mip `level` of array layer `slice` of
@@ -204,19 +215,12 @@ impl LoadStaging {
     /// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT` as it is written into the belt.
     pub fn write_texture(&mut self, texture: &wgpu::Texture, level: u32, slice: u32, bytes: &[u8]) {
         let format = texture.format();
-        let (block_width, block_height) = format.block_dimensions();
-        let block_bytes = format.block_copy_size(None).expect("a colour format");
-        // A mip smaller than a block still copies a whole one.
-        let size = wgpu::Extent3d {
-            depth_or_array_layers: 1,
-            ..texture
-                .size()
-                .mip_level_size(level, texture.dimension())
-                .physical_size(format)
-        };
-        let row_bytes = (size.width / block_width * block_bytes) as usize;
-        let rows = size.height / block_height;
-        let pitch = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
+        let MipCopy {
+            size,
+            row_bytes,
+            rows,
+            pitch,
+        } = MipCopy::of(format, texture.width(), texture.height(), level);
         assert_eq!(
             bytes.len(),
             row_bytes * rows as usize,
@@ -225,6 +229,7 @@ impl LoadStaging {
         let Some(staged_bytes) = wgpu::BufferSize::new((pitch * rows as usize) as u64) else {
             return;
         };
+        self.written_bytes += staged_bytes.get();
         let (belt, encoder) = self.pending();
         // A copy's offset is a multiple of the block size, which divides 256.
         let alignment = wgpu::BufferSize::new(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT.into())
@@ -344,7 +349,52 @@ impl LoadStaging {
             belt.finish();
             queue.submit(std::iter::once(encoder.finish()));
         }
+        self.written_bytes = 0;
         std::mem::take(&mut self.moved_bytes)
+    }
+}
+
+/// The bytes `write_texture` writes into the belt for every mip of
+/// `texture`, row padding included.
+pub fn texture_written_bytes(texture: &CookedTexture) -> u64 {
+    (0..texture.levels.len() as u32)
+        .map(|level| {
+            let copy = MipCopy::of(texture.format, texture.width, texture.height, level);
+            (copy.pitch * copy.rows as usize) as u64
+        })
+        .sum()
+}
+
+/// One mip's copy from the belt, as rows of blocks.
+struct MipCopy {
+    /// Its size in texels, whole blocks: a mip smaller than a block still
+    /// copies a whole one.
+    size: wgpu::Extent3d,
+    row_bytes: usize,
+    rows: u32,
+    /// The bytes between rows in the belt.
+    pitch: usize,
+}
+
+impl MipCopy {
+    fn of(format: wgpu::TextureFormat, width: u32, height: u32, level: u32) -> Self {
+        let (block_width, block_height) = format.block_dimensions();
+        let block_bytes = format.block_copy_size(None).expect("a colour format");
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        }
+        .mip_level_size(level, wgpu::TextureDimension::D2)
+        .physical_size(format);
+        let row_bytes = (size.width / block_width * block_bytes) as usize;
+        let pitch = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize);
+        Self {
+            size,
+            row_bytes,
+            rows: size.height / block_height,
+            pitch,
+        }
     }
 }
 
