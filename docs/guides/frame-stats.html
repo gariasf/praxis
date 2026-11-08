@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/stats/mod.rs</code> &middot; <code>src/render/readback.rs</code></div>
   <h1>Frame stats</h1>
   <p class="definition"><span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, Instances written, Renderables and Placements refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, bends the bend pass had no room for, bytes uploaded, heap allocations, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span> are what one frame cost, measured by the engine itself: on the CPU, a clock around each ECS system and each renderer stage, the thread's allocation count and the counters the frame's own code keeps; on the GPU, a timestamp at each end of every timed pass and the counts the passes wrote, which come back through a ring of mapped buffers seven frames later and are turned into a time per pass, a GPU frame total that is a span rather than a sum, ADR 0019's gate and the lit pass's wait.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7d8f0a57 (2026-11-06). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 5ee3ddd7 (2026-11-08). A change to what a frame measures, when it reads it back or how its timestamps become times rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="dynamic-tlas.html#build">The dynamic TLAS</a> and <a href="blas-refit.html#marker">the BLAS refit</a> for the markers that time work no pass brackets, <a href="bench.html">The bench</a> for what reduces these stats into Baselines, <a href="waiting-on-the-gpu.html">Waiting on the GPU Explained</a> for the frames in flight the ring is sized by and where the main thread waits.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -179,6 +179,11 @@ pub struct FrameStats {
     …
     /// Heap allocations and reallocations on the thread that ran the frame.
     pub heap_allocations: u64,
+    /// Of `heap_allocations`, those the dynamic TLAS build made as its
+    /// encoder finished: wgpu's work per Instance, and a scratch buffer whose
+    /// allocator, under a random hash seed, grows its map in a frame no
+    /// earlier frame predicts.
+    pub tlas_build_allocations: u64,
     /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
     /// game slowed by this much.
     pub dropped_time: Duration,
@@ -200,6 +205,7 @@ pub struct FrameStats {
       <tr><td><code>static_instances_left_out</code></td><td>static Instances the full static TLAS left out</td><td><code>Renderer::upload</code></td></tr>
       <tr><td><code>gpu_memory_bytes</code>, <code>gpu_memory_bytes_by_kind</code>, <code>arena_bytes_in_use</code>, <code>allocator_report_bytes</code></td><td>the GPU memory ledger's totals and the Arenas' use, section 2</td><td><code>State::frame_stats</code>, when asked</td></tr>
       <tr><td><code>heap_allocations</code></td><td>allocations and reallocations on the frame's thread between <code>begin</code> and <code>end</code></td><td><code>FrameRecorder::end</code></td></tr>
+      <tr><td><code>tlas_build_allocations</code></td><td>of those, the ones the dynamic TLAS build's <code>finish</code> made, inside <code>counting_as_tlas_build</code></td><td><code>FrameRecorder::end</code></td></tr>
       <tr><td><code>dropped_time</code></td><td>simulated time the <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span> skipped past their cap</td><td><code>State::update</code>, from <code>simulate</code></td></tr>
       <tr><td><code>gpu_readbacks_skipped</code></td><td>slots not ready when their frame came round</td><td><code>GpuStatsReadback::begin_frame</code></td></tr>
     </tbody>
@@ -270,6 +276,7 @@ pub struct GpuFrameStats {
         self.stages.clear();
         self.counters = FrameStats::default();
         self.allocations_at_start = thread_allocations();
+        self.tlas_build_allocations_at_start = thread_tlas_build_allocations();
         self.started = Instant::now();
     }
 
@@ -289,6 +296,8 @@ pub struct GpuFrameStats {
     pub(crate) fn end(&amp;mut self) {
         self.counters.cpu_frame_time = self.started.elapsed();
         self.counters.heap_allocations = thread_allocations() - self.allocations_at_start;
+        self.counters.tlas_build_allocations =
+            thread_tlas_build_allocations() - self.tlas_build_allocations_at_start;
     }</code></pre>
   <div class="table-wrap">
   <table class="facts compact">
@@ -333,12 +342,16 @@ impl tracing::Subscriber for SystemTimer {
     }</code></pre>
   <h3>Heap allocations</h3>
   <p>The crate's global allocator is <code>CountingAllocator</code>, the system allocator with a thread-local counter in front of it. Every <code>alloc</code>, <code>alloc_zeroed</code> and <code>realloc</code> adds one; <code>dealloc</code> adds nothing. The counter is read through <code>try_with</code>, since an allocator may not panic, and the cell has no destructor, so it outlives everything its thread allocates. A frame's count is the difference between the two readings on the thread that ran it: whatever the compute pool's workers allocate is not in it.</p>
+  <p>A second counter holds the share of the dynamic TLAS build. <code>DynamicTlas::record</code> finishes its encoder inside <code>counting_as_tlas_build</code>, and every allocation made there adds one to both counters. wgpu-core does its per-Instance work as that encoder finishes, most of town's allocations a frame, and creates a scratch buffer for each build. On Vulkan and DX12 that buffer goes through gpu-allocator, which keeps a block's chunks in a hash map under a random seed. When its deleted entries use up its growth room and it is more than half full, the map grows, one allocation, in a frame the seed picks. <code>heap_allocations</code> still counts the whole frame. A test that compares frames one by one compares them without the build's share.</p>
   <div class="code-source"><code>CountingAllocator</code>, <code>src/stats/mod.rs</code></div>
 <pre class="code"><code>impl CountingAllocator {
     fn count(&amp;self) {
-        // `try_with`, as an allocator must not panic. The counter has no
-        // destructor, so it is never gone while its thread allocates.
+        // `try_with`, as an allocator must not panic. The counters have no
+        // destructor, so they are never gone while their thread allocates.
         let _ = THREAD_ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        if TLAS_BUILD_DEPTH.try_with(Cell::get).unwrap_or(0) &gt; 0 {
+            let _ = THREAD_TLAS_BUILD_ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        }
     }
 }
 …
@@ -792,7 +805,8 @@ enum SlotState {
       <tr><td><code>each_reference_scene_draws_its_closed_form_instances_and_triangles</code></td><td><code>tests/frame_stats.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s <code>instances_drawn</code> and <code>triangles_drawn</code> equal its closed-form counts, none overflowed; after the first frame only what moves is written; <code>town</code>'s uploaded bytes</td></tr>
       <tr><td><code>the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame</code></td><td><code>tests/frame_stats.rs</code></td><td>the orrery's entries join <code>uploaded_bytes</code> every frame, and its build never exceeds the frame</td></tr>
       <tr><td><code>camera_motion_writes_no_instances</code></td><td><code>tests/frame_stats.rs</code></td><td>on the scenes whose camera moves, <code>instances_written</code> is 0 after the first frame</td></tr>
-      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery's <code>heap_allocations</code> per frame are equal whether each frame's work was retired by a poll between frames or left finished for the next frame's submissions</td></tr>
+      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery's <code>heap_allocations</code> per frame, less <code>tlas_build_allocations</code>, are equal whether each frame's work was retired by a poll between frames or left finished for the next frame's submissions</td></tr>
+      <tr><td><code>a_tlas_builds_allocations_count_in_the_total_and_apart</code></td><td><code>src/stats/mod.rs</code></td><td>allocations inside <code>counting_as_tlas_build</code>, nested or not, add one to the thread's total and one to its TLAS build share; those around it add to the total only</td></tr>
       <tr><td><code>a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing</code></td><td><code>src/assets/pools.rs</code></td><td>a refused Mesh leaves the ledger's totals and <code>arena_bytes_in_use</code> as they were</td></tr>
       <tr><td><code>a_buffer_created_through_the_ledger_counts_in_its_kind_until_dropped</code></td><td><code>src/stats/gpu_memory.rs</code></td><td>a buffer created through the ledger adds its size to its kind alone, and dropping it takes the total back to 0</td></tr>
       <tr><td><code>a_texture_two_materials_share_loads_once</code></td><td><code>src/assets/material.rs</code></td><td>a shared texture grows the texture pool's total once</td></tr>

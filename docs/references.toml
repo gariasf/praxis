@@ -6000,3 +6000,15 @@ quote = '''    /// Checks that we are operating within the memory budget reporte
             .check_if_oom()
             .map_err(|e| self.handle_hal_error(e));'''
 checked = 2026-11-07
+
+["gpu-allocator-0.28-chunk-map"]
+url = "https://github.com/Traverse-Research/gpu-allocator/blob/0.28.0/src/allocator/free_list_allocator/mod.rs#L53"
+section = "gpu-allocator 0.28.0, allocator/free_list_allocator/mod.rs, FreeListAllocator: a block's chunks in a HashMap, hashbrown's under the `hashbrown` feature (L14-L15), each allocation inserting a chunk under a fresh ID (L280)"
+quote = '''pub(crate) chunks: HashMap<core::num::NonZeroU64, MemoryChunk>, [...] self.chunks.insert(new_chunk_id, new_chunk);'''
+checked = 2026-11-08
+
+["hashbrown-0.16-rehash-grows"]
+url = "https://github.com/rust-lang/hashbrown/blob/v0.16.1/src/raw/mod.rs#L2798-L2830"
+section = "hashbrown 0.16.1, raw/mod.rs, reserve_rehash_inner: with no growth room left, a table at most half full rehashes in place, else it reallocates; its default hasher is foldhash's RandomState (hasher.rs L4)"
+quote = '''if new_items <= full_capacity / 2 { // Rehash in-place without re-allocating if we have plenty of spare // capacity that is locked up due to DELETED entries. [...] } else { // Otherwise, conservatively resize to at least the next size up'''
+checked = 2026-11-08

@@ -74,6 +74,11 @@ pub struct FrameStats {
     pub allocator_report_bytes: Option<u64>,
     /// Heap allocations and reallocations on the thread that ran the frame.
     pub heap_allocations: u64,
+    /// Of `heap_allocations`, those the dynamic TLAS build made as its
+    /// encoder finished: wgpu's work per Instance, and a scratch buffer whose
+    /// allocator, under a random hash seed, grows its map in a frame no
+    /// earlier frame predicts.
+    pub tlas_build_allocations: u64,
     /// Simulated time the frame skipped past its Tick cap (ADR 0022): the
     /// game slowed by this much.
     pub dropped_time: Duration,
@@ -209,7 +214,7 @@ impl std::fmt::Display for FrameStats {
         }
         writeln!(
             formatter,
-            " uploaded_bytes={} instances_written={} renderables_refused={} lights_overflowed={} static_instances_left_out={} moving_instances_left_out={} bends_left_out={} heap_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
+            " uploaded_bytes={} instances_written={} renderables_refused={} lights_overflowed={} static_instances_left_out={} moving_instances_left_out={} bends_left_out={} heap_allocations={} tlas_build_allocations={} dropped_us={:.1} gpu_readbacks_skipped={}",
             self.uploaded_bytes,
             self.instances_written,
             self.renderables_refused,
@@ -218,6 +223,7 @@ impl std::fmt::Display for FrameStats {
             self.moving_instances_left_out,
             self.bends_left_out,
             self.heap_allocations,
+            self.tlas_build_allocations,
             microseconds(&self.dropped_time),
             self.gpu_readbacks_skipped
         )?;
@@ -242,6 +248,7 @@ pub(crate) struct FrameRecorder {
     pub(crate) systems: SystemTimer,
     started: Instant,
     allocations_at_start: u64,
+    tlas_build_allocations_at_start: u64,
     stages: Vec<(&'static str, Duration)>,
     /// The frame's counters, CPU frame time and heap allocations; `stats`
     /// adds the CPU times of its systems and stages, and `State` the GPU
@@ -255,6 +262,7 @@ impl FrameRecorder {
             systems: SystemTimer::default(),
             started: Instant::now(),
             allocations_at_start: 0,
+            tlas_build_allocations_at_start: 0,
             stages: Vec::new(),
             counters: FrameStats::default(),
         }
@@ -266,6 +274,7 @@ impl FrameRecorder {
         self.stages.clear();
         self.counters = FrameStats::default();
         self.allocations_at_start = thread_allocations();
+        self.tlas_build_allocations_at_start = thread_tlas_build_allocations();
         self.started = Instant::now();
     }
 
@@ -285,6 +294,8 @@ impl FrameRecorder {
     pub(crate) fn end(&mut self) {
         self.counters.cpu_frame_time = self.started.elapsed();
         self.counters.heap_allocations = thread_allocations() - self.allocations_at_start;
+        self.counters.tlas_build_allocations =
+            thread_tlas_build_allocations() - self.tlas_build_allocations_at_start;
     }
 
     /// The stats of the last frame measured.
@@ -411,11 +422,35 @@ impl tracing::field::Visit for SystemName {
 
 thread_local! {
     static THREAD_ALLOCATIONS: Cell<u64> = const { Cell::new(0) };
+    /// Of those, the ones made inside `counting_as_tlas_build`.
+    static THREAD_TLAS_BUILD_ALLOCATIONS: Cell<u64> = const { Cell::new(0) };
+    /// How many `counting_as_tlas_build` calls this thread is inside.
+    static TLAS_BUILD_DEPTH: Cell<u32> = const { Cell::new(0) };
 }
 
 /// Heap allocations and reallocations made so far on this thread.
 fn thread_allocations() -> u64 {
     THREAD_ALLOCATIONS.with(Cell::get)
+}
+
+/// Of `thread_allocations`, those made inside `counting_as_tlas_build`.
+fn thread_tlas_build_allocations() -> u64 {
+    THREAD_TLAS_BUILD_ALLOCATIONS.with(Cell::get)
+}
+
+/// Runs `work`, the dynamic TLAS build, counting the heap allocations it
+/// makes on this thread among the frame's and apart, as the frame's
+/// `tlas_build_allocations`.
+pub(crate) fn counting_as_tlas_build<R>(work: impl FnOnce() -> R) -> R {
+    struct Inside;
+    impl Drop for Inside {
+        fn drop(&mut self) {
+            TLAS_BUILD_DEPTH.with(|depth| depth.set(depth.get() - 1));
+        }
+    }
+    TLAS_BUILD_DEPTH.with(|depth| depth.set(depth.get() + 1));
+    let _inside = Inside;
+    work()
 }
 
 /// The system allocator, counting allocations per thread, so a frame's count
@@ -424,9 +459,12 @@ struct CountingAllocator;
 
 impl CountingAllocator {
     fn count(&self) {
-        // `try_with`, as an allocator must not panic. The counter has no
-        // destructor, so it is never gone while its thread allocates.
+        // `try_with`, as an allocator must not panic. The counters have no
+        // destructor, so they are never gone while their thread allocates.
         let _ = THREAD_ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        if TLAS_BUILD_DEPTH.try_with(Cell::get).unwrap_or(0) > 0 {
+            let _ = THREAD_TLAS_BUILD_ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        }
     }
 }
 
@@ -459,3 +497,28 @@ unsafe impl GlobalAlloc for CountingAllocator {
 
 #[global_allocator]
 static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Allocations inside `counting_as_tlas_build`, nested or not, count
+    /// once in the thread's total and once apart; those around it count in
+    /// the total only.
+    #[test]
+    fn a_tlas_builds_allocations_count_in_the_total_and_apart() {
+        let (total, apart) = (thread_allocations(), thread_tlas_build_allocations());
+        let built = counting_as_tlas_build(|| {
+            let outer = std::hint::black_box(vec![1u8; 64]);
+            let inner = counting_as_tlas_build(|| std::hint::black_box(vec![2u8; 64]));
+            [outer, inner]
+        });
+        assert_eq!(thread_allocations(), total + 2);
+        assert_eq!(thread_tlas_build_allocations(), apart + 2);
+
+        let around = std::hint::black_box(vec![3u8; 64]);
+        assert_eq!(thread_allocations(), total + 3);
+        assert_eq!(thread_tlas_build_allocations(), apart + 2);
+        drop((built, around));
+    }
+}

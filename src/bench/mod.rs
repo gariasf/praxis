@@ -221,15 +221,15 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 21;
+const COUNTER_COUNT: usize = 22;
 
 /// Medians of counters, which repeat exactly on every run, but for the
 /// Instances overflowed and the refusals, from the Renderables refused to
 /// the shadow mask's light overflows: the most of any frame, so one overflow
 /// counts; and for the streaming counters, from the Late Chunks to the late
-/// mips: the sum over the frames, as each counts events. The refusals and
-/// the streaming counters are absent from Baselines recorded before results
-/// carried them, which read as none.
+/// mips: the sum over the frames, as each counts events. The refusals, the
+/// streaming counters and the TLAS build's allocations are absent from
+/// Baselines recorded before results carried them, which read as none.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
@@ -266,6 +266,8 @@ pub struct Counters {
     pub pool_entries_freed: u64,
     #[serde(default)]
     pub late_mips: u64,
+    #[serde(default)]
+    pub tlas_build_allocations: u64,
 }
 
 impl Counters {
@@ -311,6 +313,7 @@ impl Counters {
             bytes_read: total(|stats| stats.bytes_read),
             pool_entries_freed: total(|stats| stats.pool_entries_freed.into()),
             late_mips: total(|stats| stats.late_mips.into()),
+            tlas_build_allocations: median(|stats| stats.tlas_build_allocations),
         }
     }
 
@@ -337,6 +340,7 @@ impl Counters {
         "bytes_read",
         "pool_entries_freed",
         "late_mips",
+        "tlas_build_allocations",
     ];
 
     fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
@@ -362,6 +366,7 @@ impl Counters {
             self.bytes_read,
             self.pool_entries_freed,
             self.late_mips,
+            self.tlas_build_allocations,
         ];
         std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
@@ -828,7 +833,8 @@ impl std::fmt::Display for Measurements {
 /// Compares `current` with its `baseline` and the Budgets. Medians count
 /// against Baselines, the GPU frame's and each pass's included, except the
 /// dynamic TLAS's CPU median; counters count too, but the late mips, which
-/// depend on when the IO pool's reads land and are reported only. Against the Budgets, the CPU frame, the GPU
+/// depend on when the IO pool's reads land, and the TLAS build's
+/// allocations, which the heap allocations already hold, are reported only. Against the Budgets, the CPU frame, the GPU
 /// frame and the gate count at the median and p99, the CPU frame at the p95
 /// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
 /// GPU memory in total and by kind; other p95s are reported only, as they
@@ -848,7 +854,7 @@ pub fn compare(
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if current > baseline && metric != "late_mips" {
+        if current > baseline && !matches!(metric, "late_mips" | "tlas_build_allocations") {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
@@ -1295,6 +1301,7 @@ mod tests {
         bytes_read: 0,
         pool_entries_freed: 0,
         late_mips: 0,
+        tlas_build_allocations: 0,
     };
 
     #[test]
@@ -1321,6 +1328,7 @@ mod tests {
             bytes_read: 19,
             pool_entries_freed: 20,
             late_mips: 21,
+            tlas_build_allocations: 22,
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
@@ -1566,6 +1574,13 @@ mod tests {
     fn late_mips_are_reported_not_judged() {
         let mut current = baseline();
         current.counters.late_mips = 12;
+        assert_eq!(verdicts(&current, &baseline(), CompareMode::Ci), []);
+    }
+
+    #[test]
+    fn tlas_build_allocations_are_reported_not_judged() {
+        let mut current = baseline();
+        current.counters.tlas_build_allocations = 12;
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Ci), []);
     }
 
