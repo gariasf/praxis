@@ -599,6 +599,96 @@ mod tests {
         assert!(frames_after_jump > 0, "no frame drawn just after the jump");
     }
 
+    /// `shadows`'s Chunk, with a copy of it loaded 40 Chunks (10,240 m) along
+    /// +X, draws the same image seen from the copy, once the camera has
+    /// moved there, as seen from the origin: with both Chunks kept loaded,
+    /// so no static Instance changes, the static TLAS, anchored at the
+    /// origin, re-anchors at the camera, and the copy's shadow rays compose
+    /// and lift as the origin's did (ADR 0014).
+    #[test]
+    fn one_chunks_content_draws_alike_at_the_origin_and_ten_km_away() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::Shadows;
+        let (width, height) = (640, 360);
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            width,
+            height,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches {
+                wait_for_static_tlas: true,
+                ..RenderSwitches::default()
+            },
+        )
+        .expect("shadows loads");
+        state.streaming.set_load_radius(20_000.0);
+        let target = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Ten Kilometre Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: crate::capture::TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let copy_chunks = 40;
+        let shift = glam::dvec3(
+            f64::from(copy_chunks) * crate::cooked::CHUNK_EDGE_METRES,
+            0.0,
+            0.0,
+        );
+        let draw = |state: &mut State, frame: u32, shift| {
+            let camera = scene.camera_at(frame, shift);
+            state.simulation.world.insert_resource(camera);
+            state
+                .update_settled(scene.frame_delta())
+                .expect("the frame settles");
+            state.render(&target_view);
+            crate::capture::read_back(&context, &target).expect("the frame reads back")
+        };
+        draw(&mut state, 0, glam::DVec3::ZERO);
+        let mut loaded = state.simulation.world.resource_mut::<LoadedChunks>();
+        let origin = &loaded.0[0];
+        let mut copy = crate::streaming::LoadedChunk {
+            id: crate::cooked::AssetId(!origin.id.0),
+            coordinates: [origin.coordinates[0] + copy_chunks, origin.coordinates[1]],
+            placements: origin
+                .placements
+                .iter()
+                .map(|placement| crate::streaming::chunks::ChunkPlacement { ..*placement })
+                .collect(),
+            lights: origin.lights.clone(),
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held: false,
+        };
+        copy.shift(shift);
+        loaded.0.push(copy);
+
+        let at_origin = (1..4)
+            .map(|frame| draw(&mut state, frame, glam::DVec3::ZERO))
+            .last();
+        let at_copy = (4..8).map(|frame| draw(&mut state, frame, shift)).last();
+        let (at_origin, at_copy) = (at_origin.expect("drawn"), at_copy.expect("drawn"));
+        let difference = crate::capture::compare_images(&at_origin, &at_copy);
+        assert!(
+            at_origin == at_copy,
+            "seen from 10,240 m, the copy draws otherwise: {} pixels past the Goldens' tolerance, by up to {}",
+            difference.differing_pixels,
+            difference.max_channel_delta
+        );
+    }
+
     /// Flown past with a Load radius of 0 m, a Chunk of `far_coplanar` loads
     /// once the camera is over it and is drawn; is held, so drawn no more,
     /// once the camera is 172 m past it; and unloads 944 m past it. Each
