@@ -541,7 +541,8 @@ impl FrameIo<'_> {
     }
 
     /// Whether loading `chunk` keeps the frame's load bytes within the cap:
-    /// always while settling and for the frame's first load.
+    /// always while settling and while the frame's loads have written
+    /// nothing.
     fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
         if self.settle || *self.written_bytes == 0 {
             return Ok(true);
@@ -578,11 +579,11 @@ impl FrameIo<'_> {
             }
             let mesh = reader.mesh(id)?;
             bytes += MeshPool::written_bytes(&mesh, MeshUse::DrawnAndTraced);
-            let named = mesh
+            let primitive_materials = mesh
                 .primitives
                 .iter()
                 .filter_map(|primitive| primitive.material);
-            materials.extend(named);
+            materials.extend(primitive_materials);
             reader.decoded.borrow_mut().meshes.insert(id, mesh);
         }
         let mut textures = Vec::new();
@@ -615,7 +616,10 @@ impl FrameIo<'_> {
         let loaded = self.load_into_pools(&decoded);
         let written_bytes = self.renderer.load_staging.written_bytes() - written_before;
         #[cfg(debug_assertions)]
-        assert!(written_bytes <= most_written_bytes);
+        assert!(
+            written_bytes <= most_written_bytes,
+            "a Chunk wrote {written_bytes} bytes, past the {most_written_bytes} it was sized at"
+        );
         *self.written_bytes += written_bytes;
         loaded
     }

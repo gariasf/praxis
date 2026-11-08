@@ -239,9 +239,9 @@ impl MeshPool {
     /// The bytes `load_for` writes through its staging for `mesh` loaded
     /// for `mesh_use`.
     pub fn written_bytes(mesh: &CookedMesh, mesh_use: MeshUse) -> u64 {
-        let mut words = 0;
+        let mut word_count = 0;
         if mesh_use.traced() {
-            words += mesh.indices.len();
+            word_count += mesh.indices.len();
         }
         let mut meshlet_count = 0;
         if mesh_use.drawn() {
@@ -251,11 +251,11 @@ impl MeshPool {
                 .flat_map(|primitive| &primitive.meshlets)
             {
                 meshlet_count += 1;
-                words += meshlet.vertices.len() + meshlet.triangles.len();
+                word_count += meshlet.vertices.len() + meshlet.triangles.len();
             }
         }
         (mesh.vertices.len() * size_of::<CookedVertex>()
-            + words * size_of::<u32>()
+            + word_count * size_of::<u32>()
             + meshlet_count * size_of::<MeshletData>()
             + size_of::<MeshData>()) as u64
     }
