@@ -14,8 +14,9 @@ use crate::helmet::{HelmetAssets, RuntimeHelmets, despawn_helmet, spawn_helmet};
 use crate::input::{Input, clear_just_pressed};
 use crate::render::{CrowdForm, FramePreparer, RenderSwitches, Renderer};
 use crate::scenes::{
-    ReferenceScene, sci_fi_helmet_mesh_id, spawn_crowd, spawn_orrery, spawn_texture_wall,
-    spawn_town, spawn_traced_crowd, spin, sway,
+    ReferenceScene, WrapsAroundCamera, sci_fi_helmet_mesh_id, spawn_crowd, spawn_orrery,
+    spawn_texture_wall, spawn_town, spawn_traced_crowd, spawn_world, spin, sway,
+    wrap_around_camera,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::streaming::{ChunkStreaming, LoadedChunks};
@@ -101,8 +102,7 @@ impl Simulation {
             | ReferenceScene::NormalTangent
             | ReferenceScene::FarCoplanar
             | ReferenceScene::Minification
-            | ReferenceScene::Shadows
-            | ReferenceScene::World => |_, _| Ok(()),
+            | ReferenceScene::Shadows => |_, _| Ok(()),
             ReferenceScene::Orrery => spawn_orrery,
             ReferenceScene::TextureWall => spawn_texture_wall,
             ReferenceScene::Crowd => match crowd_form {
@@ -110,6 +110,7 @@ impl Simulation {
                 CrowdForm::Refit | CrowdForm::Rebuild => spawn_traced_crowd,
             },
             ReferenceScene::Town => spawn_town,
+            ReferenceScene::World => spawn_world,
         };
         spawn(&mut world, loader).with_context(|| format!("loading {}", scene.name()))?;
         world.insert_resource(LoadedChunks::default());
@@ -384,6 +385,7 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
                 (spawn_helmet, despawn_helmet)
                     .chain()
                     .run_if(resource_exists::<HelmetAssets>),
+                wrap_around_camera.run_if(any_with_component::<WrapsAroundCamera>),
                 spin,
                 sway,
                 clear_just_pressed,

@@ -117,6 +117,7 @@ Test scenes, each one benched. Images are the Metal goldens, 640×360.
 | <img src="tests/goldens/metal/shadows.png" width="320" alt="shadows"> | **shadows**: sphere over a plane, sun and point light; ray-traced shadow against the analytic one. |
 | <img src="tests/goldens/metal/crowd.png" width="320" alt="crowd"> | **crowd**: 100 figures bent on the GPU every frame, a stand-in for skinning, with shadows from per-bone proxies. |
 | <img src="tests/goldens/metal/town.png" width="320" alt="town"> | **town**: the scene at the top, here as its golden; the top image is the same view at 2560×1440. |
+| <img src="tests/goldens/metal/world.png" width="320" alt="world"> | **world**: a streamed 40 × 40-Chunk Game world, flown into at 50 m/s; its settlement pops in at the 256 m Load radius. |
 
 Plus one without a golden:
 

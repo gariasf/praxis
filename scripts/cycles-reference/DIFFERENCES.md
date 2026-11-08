@@ -92,3 +92,18 @@ samples. Shows where a Texture is minified, as differences in contrast and
 in the moiré of fine patterns (`minification`, `texture-wall`, `uv-grid`).
 
 ![Minification's distant checker](differences/mips-and-compression.png)
+
+## Nothing drawn past the Load radius
+
+Tag: `deliberate until M5's LOD and far field land`.
+
+praxis draws a Chunk only while it lies within its scene's Load radius,
+256 m in `world`: past it the ground and all that stands on it stop, and
+the background shows. As the camera flies, each Chunk pops in whole as it
+comes within the radius and out as it leaves. Every other scene's radius
+holds all its Chunks, so only `world` shows it. `world` has no Cycles render,
+as `praxis export-scene` would generate all its Chunks, so its Golden shows
+the pop instead: at frame 59 its settlement is cut off at the radius, with
+the sky behind.
+
+![world's Golden at frame 59: farmland, and its settlement cut off at the 256 m Load radius](../../tests/goldens/metal/world.png)

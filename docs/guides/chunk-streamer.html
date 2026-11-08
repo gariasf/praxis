@@ -354,7 +354,7 @@ io.receive_all()?;</code></pre>
 <section class="part prose" id="limits">
   <div class="part-mark">11</div>
   <h2>Limits</h2>
-  <p><b>No scene streams yet.</b> Every Reference scene holds all its Chunks from every frame of its path, so only the flight test loads, holds and unloads a Chunk.</p>
+  <p><b>Only the world streams.</b> Every other Reference scene holds all its Chunks from every frame of its path. The world&#39;s camera flies on at 50 m/s, so its captures load the Chunks ahead of it and hold, undrawn, those it leaves past the Load radius, until they pass the hold radius and unload.</p>
   <p><b>A Chunk past the cap loads alone.</b> A Chunk is not sized while the frame's loads have written nothing, so one that writes more than the frame's load bytes loads without other writes in its frame and crosses the cap.</p>
   <p><b>Settled waits are uncapped.</b> A Settled frame, a capture's or one of the bench's before its counter frames, loads every Chunk it waited for in one frame, whatever their bytes.</p>
   <p><b>Waiting reads count against no one.</b> A Chunk that waits is sized again each frame, and one the camera has left still takes its turn before it is dropped.</p>

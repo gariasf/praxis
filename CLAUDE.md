@@ -141,8 +141,10 @@ src/
                                  Instance slots
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
-                                 the Spin system (the orrery, town's
-                                 flocks) and the crowd's Sway system;
+                                 the Spin system (the orrery, town's and
+                                 world's flocks), the wrap that keeps
+                                 world's flocks about its camera and the
+                                 crowd's Sway system;
                                  town.rs, the dense scene's generator;
                                  world.rs, the streamed Game world's
                                  generator
