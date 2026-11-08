@@ -7,7 +7,8 @@
 # target/sweep/trees, which a later night's bisect reuses. `praxis history
 # bisect` keeps the Night's directory and names each run, and `history
 # publish-night` publishes its runs; this script builds and runs the
-# binaries, waits for a quiet machine and keeps to the time cap. The records
+# binaries, waits for a quiet machine and keeps to the time cap and the
+# allowance for preparing. The records
 # publish to `bench-history`, and each night's Verdict lands there too, as
 # does a Baseline re-recorded since the night before. A
 # commit a bisect pinned that no re-recorded Baseline covers opens one
@@ -46,7 +47,7 @@
 # "Unregister-ScheduledTask praxis-sweep -Confirm:\$false"` (Git Bash
 # turns schtasks's /Run into a path).
 # PRAXIS_SWEEP_CAP_SECONDS overrides the time cap,
-# PRAXIS_SWEEP_PREPARATION_SECONDS the allowance for building, and
+# PRAXIS_SWEEP_PREPARATION_SECONDS the allowance for preparing, and
 # WGPU_BACKEND the backend benched.
 #
 # The body is one block, so bash has read all of it before the checkout
@@ -62,12 +63,13 @@
   # Runs start until this many seconds of benching, and of waiting for the
   # GPU and CPU between benches, have passed, the rest left to the next
   # night: about twice the slower machine's last full pass of the Reference
-  # scenes, the M4 Pro's 429 s in this sweep on 2026-11-05 (the RTX 2070
-  # SUPER's was 155 s on 2026-10-31).
+  # scenes, the M4 Pro's 429 s, waits included, in this sweep of ec4dfd7 on
+  # 2026-11-05 (plain passes took 219 s there and 155 s on the RTX 2070
+  # SUPER on 2026-10-31).
   cap_seconds="${PRAXIS_SWEEP_CAP_SECONDS:-900}"
-  # Building, cooking, and waiting for the load they raise to fall count
-  # against this allowance instead: nights that benched from 2026-11-02 to
-  # 2026-11-06 spent 17 to 77 s of it.
+  # Preparing, which is building, cooking, and waiting for the machine to
+  # settle after them, counts against this allowance instead: nights that
+  # benched from 2026-11-02 to 2026-11-06 spent 17 to 77 s of it.
   preparation_limit_seconds="${PRAXIS_SWEEP_PREPARATION_SECONDS:-1800}"
 
   log() { printf '%s sweep: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
@@ -84,7 +86,7 @@
   fi
   log "main at $(git rev-parse --short HEAD)"
 
-  preparation_start=$SECONDS
+  preparation_start_seconds=$SECONDS
   cargo build --release --quiet || fail "cargo build --release"
   praxis=target/release/praxis
   # A Baseline re-recorded since the last night becomes its source's record,
@@ -92,12 +94,13 @@
   "$praxis" history import || log "praxis history import failed"
   scenes=$("$praxis" history unrecorded) || fail "praxis history unrecorded"
   "$praxis" fetch && "$praxis" cook || fail "fetch and cook"
-  log "built and cooked in $((SECONDS - preparation_start))s"
+  log "built and cooked in $((SECONDS - preparation_start_seconds))s"
 
   # Preflight's warn lines, without their verdict. A FAIL line, such as a
   # scene without a Golden here, spoils no bench, and one that does, such as
   # no adapter, fails the bench itself; preflight then exits nonzero, which
-  # must not end the pipeline that reads its output.
+  # under pipefail would read as a quiet machine below, so its output is
+  # captured before it is read.
   warnings() {
     local checks
     checks=$("$praxis" preflight 2>/dev/null)
@@ -106,23 +109,23 @@
   # Waits until preflight warns of nothing the pattern $2 matches, logging
   # its warnings at each check; fails once SECONDS has reached $1.
   quiet_by() {
-    local busy
-    while busy=$(warnings | grep "^$2"); do
+    local deadline_seconds=$1 pattern=$2 busy
+    while busy=$(warnings | grep "^$pattern"); do
       log "busy: ${busy//$'\n'/; }"
-      [ "$SECONDS" -lt "$1" ] || return 1
+      [ "$SECONDS" -lt "$deadline_seconds" ] || return 1
       sleep 5
     done
   }
   [ -n "$("$praxis" preflight)" ] || fail "praxis preflight printed nothing"
   # The build and cook above raise the one-minute load average, which falls
   # by a factor of e a minute, so a few minutes pass before it is under
-  # preflight's threshold again.
-  if ! quiet_by $((preparation_start + preparation_limit_seconds)) ''; then
+  # preflight's threshold again; any other warning may clear meanwhile.
+  if ! quiet_by $((preparation_start_seconds + preparation_limit_seconds)) ''; then
     log "skipped, the machine is not quiet; the busiest processes:"
     ps -A -o pcpu=,comm= 2>/dev/null | sort -rn | head -3
     exit 0
   fi
-  preparation_seconds=$((SECONDS - preparation_start))
+  preparation_seconds=$((SECONDS - preparation_start_seconds))
 
   # Each scene's bench reads the GPU load at its start, and a utilisation
   # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
@@ -132,40 +135,36 @@
   # average, which takes minutes to fall, as above. So each bench waits for
   # preflight to see the GPU idle and the CPU load under its threshold, for
   # as long as the time cap allows, or after a tree's build the allowance
-  # for building. Whether the next run, $1, may start: within the time cap,
+  # for preparing. Whether the next run, $1, may start: within the time cap,
   # once the machine is idle; it logs why not.
   may_start() {
-    [ $((SECONDS - benching_start)) -lt "$cap_seconds" ] &&
-      quiet_by $((benching_start + cap_seconds)) '[cg]pu load' && return 0
+    [ $((SECONDS - benching_start_seconds)) -lt "$cap_seconds" ] &&
+      quiet_by $((benching_start_seconds + cap_seconds)) '[cg]pu load' && return 0
     log "time cap of ${cap_seconds}s of benching reached; left for the next night: $1 and after"
     return 1
   }
-  # A worktree of commit $1 under target/sweep/trees, with its release
-  # binary, the fetched sources and its Cooked cache, made once and kept
-  # for later nights: prints its path. Every tree builds into one target
-  # directory, so the dependencies build once; this clone's fetched sources
-  # and Cooked cache are copied in, so only what differs is fetched and
-  # cooked again.
-  tree_at() {
-    local tree="$PWD/target/sweep/trees/$1" build="$PWD/target/sweep/build" fetched
-    if [ ! -x "$tree/praxis" ]; then
-      rm -rf "$tree"
-      git worktree prune
-      git worktree add --quiet --detach "$tree" "$1" || return 1
-      (cd "$tree" && CARGO_TARGET_DIR="$build" cargo build --release --quiet) || return 1
-      # praxis.exe on Windows, which Git Bash runs as ./praxis; cargo's
-      # dependency file and debug symbols are not needed.
-      cp "$build/release/praxis"* "$tree/" 2>/dev/null
-      rm -f "$tree/praxis.d" "$tree/praxis.pdb"
-      git ls-files --others --ignored --exclude-standard --directory -- assets |
-        while read -r fetched; do cp -R "$fetched" "$tree/$fetched"; done
-      cp -R cooked "$tree/cooked" &&
-        (cd "$tree" && ./praxis fetch && ./praxis cook) >/dev/null || return 1
-    fi
-    printf '%s\n' "$tree"
+  # Makes the worktree $1, of commit $2, with its release binary, the
+  # fetched sources and its Cooked cache, kept for later nights. Every tree
+  # builds into one target directory, so the dependencies build once; this
+  # clone's fetched sources and Cooked cache are copied in, so only what
+  # differs is fetched and cooked again.
+  make_tree() {
+    local tree=$1 build="$PWD/target/sweep/build" fetched
+    rm -rf "$tree"
+    git worktree prune
+    git worktree add --quiet --detach "$tree" "$2" || return 1
+    (cd "$tree" && CARGO_TARGET_DIR="$build" cargo build --release --quiet) || return 1
+    # praxis.exe on Windows, which Git Bash runs as ./praxis; cargo's
+    # dependency file and debug symbols are not needed.
+    cp "$build/release/praxis"* "$tree/" 2>/dev/null
+    rm -f "$tree/praxis.d" "$tree/praxis.pdb"
+    git ls-files --others --ignored --exclude-standard --directory -- assets |
+      while read -r fetched; do cp -R "$fetched" "$tree/$fetched"; done
+    cp -R cooked "$tree/cooked" &&
+      (cd "$tree" && ./praxis fetch && ./praxis cook) >/dev/null
   }
 
-  benching_start=$SECONDS
+  benching_start_seconds=$SECONDS
   # Not mapfile: launchd's bash 3.2 lacks it [ref:gnu-bash-news-4.0-mapfile].
   night="$PWD/target/sweep/bisect-$(date '+%Y%m%dT%H%M%S')"
   bisect_done=0
@@ -186,18 +185,18 @@
     tree="$PWD/target/sweep/trees/$commit"
     if [ ! -x "$tree/praxis" ]; then
       [ "$preparation_seconds" -lt "$preparation_limit_seconds" ] || {
-        log "allowance of ${preparation_limit_seconds}s for building reached; left for the next night: the re-bench at $commit and after"
+        log "allowance of ${preparation_limit_seconds}s for preparing reached; left for the next night: the re-bench at $commit and after"
         break
       }
-      tree_start=$SECONDS
+      tree_start_seconds=$SECONDS
       tree_problem=""
-      if ! tree_at "$commit" >/dev/null; then
+      if ! make_tree "$tree" "$commit"; then
         tree_problem="no release binary of $commit"
-      elif ! quiet_by $((tree_start + preparation_limit_seconds - preparation_seconds)) '[cg]pu load'; then
-        tree_problem="allowance of ${preparation_limit_seconds}s for building reached while the GPU or CPU was busy; left for the next night: the re-bench at $commit and after"
+      elif ! quiet_by $((tree_start_seconds + preparation_limit_seconds - preparation_seconds)) '[cg]pu load'; then
+        tree_problem="allowance of ${preparation_limit_seconds}s for preparing reached while the GPU or CPU was busy; left for the next night: the re-bench at $commit and after"
       fi
-      preparation_seconds=$((preparation_seconds + SECONDS - tree_start))
-      benching_start=$((benching_start + SECONDS - tree_start))
+      preparation_seconds=$((preparation_seconds + SECONDS - tree_start_seconds))
+      benching_start_seconds=$((benching_start_seconds + SECONDS - tree_start_seconds))
       [ -z "$tree_problem" ] || {
         log "$tree_problem"
         break
@@ -229,6 +228,6 @@
   if compgen -G "$results/*.json" >/dev/null; then
     "$praxis" publish "$results" || fail "praxis publish $results"
   fi
-  log "done in $((SECONDS - benching_start))s of benching and ${preparation_seconds}s of building"
+  log "done in $((SECONDS - benching_start_seconds))s of benching and ${preparation_seconds}s of preparing"
   exit 0
 }
