@@ -102,6 +102,11 @@ impl Configuration {
 /// moving them refuses every Baseline until it is re-recorded.
 const COUNTER_FRAMES: std::ops::Range<u32> = 8..72;
 
+/// The frames a run waits for the Chunk streamer to report Settled: the
+/// warm-up before the counter frames, so every scene has loaded before
+/// them whatever the IO pool's timing. Later frames stream as a game does.
+const SETTLED_FRAMES: std::ops::RangeTo<u32> = ..COUNTER_FRAMES.start;
+
 /// The Baseline directory of `adapter` on `backend`: the adapter's name in
 /// lowercase, each run of other characters a hyphen (`Apple M4 Pro` is
 /// `apple-m4-pro`), then the backend's name unless it is Vulkan or Metal,
@@ -557,33 +562,16 @@ pub fn run(
         frame_count >= COUNTER_FRAMES.end,
         "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
     );
-    // A software rasterizer's threads would share the CPU with the spin.
-    let wait = match context.adapter.get_info().device_type {
-        wgpu::DeviceType::Cpu => FrameWait::Block,
-        _ => FrameWait::Spin,
-    };
-    let render = |switches| {
-        let (_, frames, scene_content_hash) = render_frames(
-            context,
-            scene,
-            glam::DVec3::ZERO,
-            configuration.width,
-            configuration.height,
-            0..frame_count,
-            &[],
-            // ADR 0022 judges Budgets at 60 Hz.
-            SIXTY_HERTZ,
-            switches,
-            wait,
-            false,
-        )?;
-        anyhow::Ok((frames, scene_content_hash))
-    };
-    let (frames, scene_content_hash) = render(switches)?;
-    let (frames_without_rays, _) = render(RenderSwitches {
-        shadow_rays: false,
-        ..switches
-    })?;
+    let (frames, scene_content_hash) = render_run(context, scene, configuration, switches)?;
+    let (frames_without_rays, _) = render_run(
+        context,
+        scene,
+        configuration,
+        RenderSwitches {
+            shadow_rays: false,
+            ..switches
+        },
+    )?;
     let adapter = context.adapter.get_info();
     let measurements = measure(
         scene,
@@ -609,6 +597,36 @@ pub fn run(
         provenance,
         ..measurements
     })
+}
+
+/// Every frame's stats of one render of a `configuration` run of `scene` as
+/// `switches` set, and the scene's content hash.
+fn render_run(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    configuration: Configuration,
+    switches: RenderSwitches,
+) -> anyhow::Result<(Vec<FrameStats>, String)> {
+    // A software rasterizer's threads would share the CPU with the spin.
+    let wait = match context.adapter.get_info().device_type {
+        wgpu::DeviceType::Cpu => FrameWait::Block,
+        _ => FrameWait::Spin,
+    };
+    let (_, frames, scene_content_hash) = render_frames(
+        context,
+        scene,
+        glam::DVec3::ZERO,
+        configuration.width,
+        configuration.height,
+        0..configuration.warm_up_frames + configuration.measured_frames,
+        &[],
+        // ADR 0022 judges Budgets at 60 Hz.
+        SIXTY_HERTZ,
+        switches,
+        wait,
+        SETTLED_FRAMES,
+    )?;
+    Ok((frames, scene_content_hash))
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
@@ -1143,6 +1161,106 @@ mod tests {
     use super::*;
     use crate::render::readback::tests::RecordedFrame;
     use crate::stats::GpuFrameStats;
+    use crate::streaming::{ChunkIo, ChunkStreamer, FinishedLoad};
+
+    /// IO whose reads take as many frames as precede the counter frames,
+    /// unless a frame waits for them to settle.
+    #[derive(Default)]
+    struct SlowIo {
+        frame: u32,
+        in_flight: Vec<(u32, [i32; 2])>,
+    }
+
+    impl SlowIo {
+        fn finish_every_read_now(&mut self) {
+            for (finishes_on, _) in &mut self.in_flight {
+                *finishes_on = self.frame;
+            }
+        }
+    }
+
+    impl ChunkIo for SlowIo {
+        fn request(&mut self, coordinates: [i32; 2]) {
+            self.in_flight
+                .push((self.frame + COUNTER_FRAMES.start, coordinates));
+        }
+
+        fn take_finished(&mut self) -> Option<FinishedLoad> {
+            let position = self
+                .in_flight
+                .iter()
+                .position(|&(finishes_on, _)| finishes_on <= self.frame)?;
+            let (_, coordinates) = self.in_flight.remove(position);
+            Some(FinishedLoad {
+                coordinates,
+                assets: Vec::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn after_a_settled_warm_up_no_reference_scene_streams_in_the_counter_frames() {
+        for scene in ReferenceScene::ALL {
+            let mut streamer =
+                ChunkStreamer::new(scene.chunk_coordinates(), scene.load_radius_metres());
+            let mut io = SlowIo::default();
+            for frame in 0..COUNTER_FRAMES.end {
+                io.frame = frame;
+                let camera = scene.camera_at(frame, glam::DVec3::ZERO).position;
+                loop {
+                    let streamed = streamer.update(camera, false, &mut io);
+                    assert!(
+                        !COUNTER_FRAMES.contains(&frame)
+                            || (streamed.requested.is_empty()
+                                && streamed.loaded.is_empty()
+                                && streamed.unloaded.is_empty()),
+                        "{} streams in counter frame {frame}: {streamed:?}",
+                        scene.name()
+                    );
+                    if !SETTLED_FRAMES.contains(&frame) || streamed.settled {
+                        break;
+                    }
+                    io.finish_every_read_now();
+                }
+            }
+        }
+    }
+
+    /// A Chunk requested on a frame that does not wait for it loads on a
+    /// later frame at the earliest.
+    #[test]
+    fn a_run_loads_every_chunk_of_its_scene_on_its_first_frame() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::NormalTangent;
+        let configuration = Configuration {
+            width: 64,
+            height: 36,
+            warm_up_frames: COUNTER_FRAMES.start,
+            measured_frames: 1,
+            aliasing: false,
+        };
+        let (frames, _) = render_run(&context, scene, configuration, RenderSwitches::default())
+            .expect("the scene renders");
+        assert_eq!(
+            frames[0].chunks_loaded as usize,
+            scene.chunk_coordinates().len()
+        );
+    }
+
+    #[test]
+    fn every_configuration_settles_only_warm_up_frames_up_to_the_counter_frames() {
+        assert_eq!(SETTLED_FRAMES.end, COUNTER_FRAMES.start);
+        for configuration in [
+            Configuration::REFERENCE,
+            Configuration::CI,
+            Configuration::COUNTERS,
+            Configuration::CI_COUNTERS,
+        ] {
+            assert!(SETTLED_FRAMES.end <= configuration.warm_up_frames);
+        }
+    }
 
     const COUNTERS: Counters = Counters {
         draw_calls: 10,

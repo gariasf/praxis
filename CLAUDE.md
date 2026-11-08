@@ -125,7 +125,9 @@ src/
                                  io.rs, the IO pool (ADR 0016) that reads
                                  and decodes Chunks and their Assets, and
                                  ChunkStreaming, which the State runs each
-                                 frame, Settled for captures; chunks.rs,
+                                 frame, Settled for captures and the
+                                 bench's frames before its counter
+                                 frames; chunks.rs,
                                  a Chunk loaded through the AssetLoader
                                  into the World's LoadedChunks, which
                                  prepare writes into the Chunk's range of

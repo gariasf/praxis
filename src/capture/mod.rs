@@ -128,7 +128,7 @@ pub fn capture(
             ..switches
         },
         FrameWait::Block,
-        true,
+        ..,
     )?;
     Ok((pixels.remove(0), frame_stats))
 }
@@ -174,7 +174,7 @@ pub fn capture_frames(
             ..switches
         },
         FrameWait::Block,
-        true,
+        ..,
     )?;
     Ok(pixels)
 }
@@ -186,8 +186,9 @@ pub fn capture_frames(
 /// scene's content hash, from the Blobs it loaded. Up to
 /// `FRAMES_IN_FLIGHT` frames are in flight, as a window's swapchain allows:
 /// the GPU stays busy, and the CPU never runs further ahead than a window
-/// would. The CPU waits for the oldest frame as `wait` says, and with
-/// `settle` for the Chunk streamer to report each drawn frame Settled.
+/// would. The CPU waits for the oldest frame as `wait` says, and on each
+/// drawn frame `settled` holds for the Chunk streamer to report it Settled;
+/// a load that fails on such a frame fails the render.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn render_frames(
     context: &GpuContext,
@@ -200,7 +201,7 @@ pub(crate) fn render_frames(
     frame_delta: Duration,
     switches: RenderSwitches,
     wait: FrameWait,
-    settle: bool,
+    settled: impl std::ops::RangeBounds<u32>,
 ) -> anyhow::Result<(Vec<Vec<u8>>, Vec<FrameStats>, String)> {
     let max_dimension = context.device.limits().max_texture_dimension_2d;
     anyhow::ensure!(
@@ -267,7 +268,7 @@ pub(crate) fn render_frames(
             .simulation
             .world
             .insert_resource(scene.camera_at(frame, shift));
-        if settle {
+        if settled.contains(&frame) {
             state.update_settled(frame_delta)?;
         } else {
             state.update(frame_delta);
