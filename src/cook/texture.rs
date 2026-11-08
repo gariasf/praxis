@@ -28,6 +28,9 @@ pub struct LoadedImage {
     pub height: u32,
 }
 
+/// Makes a procedural Texture's RGBA8 pixels, the same each call.
+pub type ImageGenerator = std::sync::Arc<dyn Fn() -> LoadedImage + Send + Sync>;
+
 /// One Texture to cook: an image a Material samples in one Channel.
 #[derive(Clone)]
 pub struct TextureSource {
@@ -45,8 +48,9 @@ pub struct TextureSource {
 enum SourceImage {
     /// An image file (PNG or JPEG), decoded only when its Texture is stale.
     Encoded(Vec<u8>),
-    /// A procedural Texture's generated RGBA8 pixels.
-    Generated(LoadedImage),
+    /// A procedural Texture's pixels, generated only when its Cook key or
+    /// its Blob is.
+    Generated(ImageGenerator),
 }
 
 impl TextureSource {
@@ -70,9 +74,9 @@ impl TextureSource {
         id: AssetId,
         channel: MaterialChannel,
         name: String,
-        image: LoadedImage,
+        generate: ImageGenerator,
     ) -> Self {
-        let image = SourceImage::Generated(image);
+        let image = SourceImage::Generated(generate);
         Self {
             id,
             channel,
@@ -105,11 +109,7 @@ impl TextureSource {
                     pixels: image.into_raw(),
                 })
             }
-            SourceImage::Generated(image) => Ok(LoadedImage {
-                pixels: image.pixels.clone(),
-                width: image.width,
-                height: image.height,
-            }),
+            SourceImage::Generated(generate) => Ok(generate()),
         }
     }
 
@@ -131,7 +131,8 @@ impl TextureSource {
         }
         match &self.image {
             SourceImage::Encoded(bytes) => hasher.update(bytes),
-            SourceImage::Generated(image) => {
+            SourceImage::Generated(generate) => {
+                let image = generate();
                 hasher.update(image.width.to_le_bytes());
                 hasher.update(image.height.to_le_bytes());
                 hasher.update(&image.pixels);
@@ -554,13 +555,17 @@ mod tests {
 
     #[test]
     fn the_cook_key_covers_the_format_version() {
-        let image = LoadedImage {
+        let white = || LoadedImage {
             pixels: vec![255; 64],
             width: 4,
             height: 4,
         };
-        let source =
-            TextureSource::generated(AssetId(1), MaterialChannel::Albedo, "white".into(), image);
+        let source = TextureSource::generated(
+            AssetId(1),
+            MaterialChannel::Albedo,
+            "white".into(),
+            std::sync::Arc::new(white),
+        );
         let settings = CookSettings::default();
         assert_ne!(
             source.cook_key(&settings, TEXTURE_FORMAT_VERSION),

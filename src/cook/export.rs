@@ -14,7 +14,7 @@ use serde_json::json;
 
 use super::chunk;
 use super::mesh::SourcePrimitive;
-use super::{LoadedImage, asset_names, gltf_material, material_textures, read_manifest};
+use super::{ImageGenerator, asset_names, gltf_material, material_textures, read_manifest};
 use crate::ReferenceScene;
 use crate::assets::{AssetLoader, MaterialChannel, MaterialHandle, MeshHandle};
 use crate::camera::{Camera, FIELD_OF_VIEW};
@@ -403,7 +403,10 @@ struct CatalogMesh {
 /// Where a Texture's image is.
 enum TextureFile {
     /// A Reference scene's generated image, before its cook.
-    Generated { name: String, image: LoadedImage },
+    Generated {
+        name: String,
+        generate: ImageGenerator,
+    },
     /// An image file a glTF file names.
     File(PathBuf),
     /// Image `image` held inside the glTF file at `path`.
@@ -428,9 +431,9 @@ impl Catalog {
             let id = scene.material_id(&name);
             catalog.materials.insert(id, (name, material));
         }
-        for (name, channel, image) in scene.textures() {
+        for (name, channel, generate) in scene.textures() {
             let id = scene.texture_id(channel, &name);
-            let file = TextureFile::Generated { name, image };
+            let file = TextureFile::Generated { name, generate };
             catalog.textures.insert(id, (channel, file));
         }
         for (name, primitives) in scene.meshes() {
@@ -619,10 +622,8 @@ impl Exported<'_> {
                 format!("Texture {texture} of Material {name:?} is in none of the scene's sources")
             })?;
             let (file, image) = match file {
-                TextureFile::Generated {
-                    name,
-                    image: generated,
-                } => {
+                TextureFile::Generated { name, generate } => {
+                    let generated = generate();
                     let channel = channel_name(*channel);
                     let file = format!("textures/{}-{channel}.png", file_name(name));
                     let path = self.directory.join(&file);
@@ -986,16 +987,20 @@ mod tests {
         }
     }
 
-    /// Every Reference scene but crowd, and town, which its own test
-    /// exports: each Renderable's Mesh and Material, and each file they name.
+    /// Every Reference scene but crowd, `world`, whose 1,600 Chunks and
+    /// 8 GB of Textures no reference renderer takes whole, and town, which
+    /// its own test exports: each Renderable's Mesh and Material, and each
+    /// file they name.
     #[test]
     fn every_reference_scene_but_crowd_exports_whole() {
         let helmet_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(crate::DEFAULT_MODEL)
             .exists();
         for scene in ReferenceScene::ALL {
-            if matches!(scene, ReferenceScene::Crowd | ReferenceScene::Town)
-                || (scene == ReferenceScene::Helmet && !helmet_fetched)
+            if matches!(
+                scene,
+                ReferenceScene::Crowd | ReferenceScene::Town | ReferenceScene::World
+            ) || (scene == ReferenceScene::Helmet && !helmet_fetched)
             {
                 continue;
             }

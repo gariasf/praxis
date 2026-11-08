@@ -291,11 +291,16 @@ mod tests {
     /// A launch cooks nothing before it loads. Loading one Chunk into an
     /// empty Cooked cache then cooks that Chunk and each Mesh, Material and
     /// Texture it names, and no other Blob: none of town's other 15 Chunks
-    /// or the Meshes only they place, and none of uv-grid's other 3.
+    /// or the Meshes only they place, none of uv-grid's other 3, and none of
+    /// `world`'s other 1,599 Chunks or the Textures only they name.
     #[test]
     fn loading_one_chunk_cooks_that_chunk_and_the_assets_it_names() {
         let mut textures_cooked = 0;
-        for scene in [ReferenceScene::Town, ReferenceScene::UvGrid] {
+        for scene in [
+            ReferenceScene::Town,
+            ReferenceScene::UvGrid,
+            ReferenceScene::World,
+        ] {
             let directory = scratch(&format!("one-chunk-{}", scene.name()));
             let cache_path = directory.join("cooked");
             let cache = CookedCache::new(&cache_path);

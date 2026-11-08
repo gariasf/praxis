@@ -10,7 +10,10 @@ use crate::camera::{Camera, ev100_for_exposure};
 use crate::components::PointLight;
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, Transform};
 #[cfg(feature = "cook")]
-use crate::cook::LoadedImage;
+use std::sync::Arc;
+
+#[cfg(feature = "cook")]
+use crate::cook::{ImageGenerator, LoadedImage};
 use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
@@ -22,6 +25,7 @@ use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
 
 mod town;
+mod world;
 
 pub(crate) use town::spawn_town;
 
@@ -70,10 +74,14 @@ pub enum ReferenceScene {
     /// 1,024 street lamps, seen from street level, then from over the
     /// rooftops (`town.rs`).
     Town,
+    /// A generated Game world of 40 × 40 Chunks, settlements with sparse
+    /// farms between them, whose library of Textures outgrows the texture
+    /// pool, seen within its 256 m Load radius (`world.rs`).
+    World,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -85,6 +93,7 @@ impl ReferenceScene {
         Self::Shadows,
         Self::Crowd,
         Self::Town,
+        Self::World,
     ];
 
     /// The name the capture command selects the scene by.
@@ -101,6 +110,7 @@ impl ReferenceScene {
             Self::Shadows => "shadows",
             Self::Crowd => "crowd",
             Self::Town => "town",
+            Self::World => "world",
         }
     }
 
@@ -140,7 +150,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::Town => &[],
+            | Self::Town
+            | Self::World => &[],
         }
     }
 
@@ -232,6 +243,7 @@ impl ReferenceScene {
                 })
                 .collect(),
             Self::Town => town::materials(),
+            Self::World => world::materials(),
         }
     }
 
@@ -239,28 +251,36 @@ impl ReferenceScene {
     /// metallic-roughness Texture cooks widened by the normal Texture of the
     /// Material that samples it (Toksvig).
     #[cfg(feature = "cook")]
-    pub(crate) fn textures(self) -> Vec<(String, MaterialChannel, LoadedImage)> {
+    pub(crate) fn textures(self) -> Vec<(String, MaterialChannel, ImageGenerator)> {
         match self {
             Self::UvGrid | Self::Orrery => {
-                let grid = LoadedImage {
+                let grid = || LoadedImage {
                     pixels: grid_texture(),
                     width: GRID_TEXTURE_SIZE,
                     height: GRID_TEXTURE_SIZE,
                 };
-                vec![("grid".into(), MaterialChannel::Albedo, grid)]
+                vec![("grid".into(), MaterialChannel::Albedo, Arc::new(grid))]
             }
             Self::Minification => vec![
-                ("checker".into(), MaterialChannel::Albedo, checker_texture()),
-                ("bumps".into(), MaterialChannel::Normal, bump_texture()),
+                (
+                    "checker".into(),
+                    MaterialChannel::Albedo,
+                    Arc::new(checker_texture),
+                ),
+                (
+                    "bumps".into(),
+                    MaterialChannel::Normal,
+                    Arc::new(bump_texture),
+                ),
                 (
                     "gloss".into(),
                     MaterialChannel::MetallicRoughness,
-                    gloss_texture(),
+                    Arc::new(gloss_texture),
                 ),
             ],
             Self::TextureWall => (0..TEXTURE_WALL_TEXTURES)
                 .map(|index| {
-                    let texture = wall_texture(index);
+                    let texture: ImageGenerator = Arc::new(move || wall_texture(index));
                     (wall_texture_name(index), MaterialChannel::Albedo, texture)
                 })
                 .collect(),
@@ -271,6 +291,7 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town => Vec::new(),
+            Self::World => world::textures(),
         }
     }
 
@@ -316,6 +337,7 @@ impl ReferenceScene {
                 ]
             }
             Self::Town => town::meshes(),
+            Self::World => world::meshes(),
         }
     }
 
@@ -345,6 +367,7 @@ impl ReferenceScene {
                 coordinates
             }
             Self::Town => chunk_square(-2..2),
+            Self::World => chunk_square(-world::CHUNKS_PER_SIDE / 2..world::CHUNKS_PER_SIDE / 2),
         }
     }
 
@@ -386,6 +409,7 @@ impl ReferenceScene {
             ),
             Self::Crowd => (at_origin("ground"), Vec::new()),
             Self::Town => town::static_content(),
+            Self::World => world::static_content(),
         }
     }
 
@@ -417,6 +441,7 @@ impl ReferenceScene {
             Self::Shadows => Camera::looking_at(SHADOWS_CAMERA, SHADOWS_CAMERA_TARGET),
             Self::Crowd => Camera::looking_at(CROWD_CAMERA, CROWD_CAMERA_TARGET),
             Self::Town => town::camera_at(frame),
+            Self::World => world::camera_at(frame),
         };
         camera.position += shift;
         camera.ev100 = self.ev100();
@@ -438,7 +463,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::Town => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+            | Self::Town
+            | Self::World => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
         }
     }
 
@@ -457,7 +483,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::Town => SIXTY_HERTZ,
+            | Self::Town
+            | Self::World => SIXTY_HERTZ,
         }
     }
 
@@ -476,7 +503,8 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => 256.0,
+            | Self::Crowd
+            | Self::World => 256.0,
         }
     }
 
@@ -495,7 +523,8 @@ impl ReferenceScene {
             | Self::Minification
             | Self::TextureWall
             | Self::Shadows
-            | Self::Crowd => glam::vec3(0.5, -1.0, -0.3),
+            | Self::Crowd
+            | Self::World => glam::vec3(0.5, -1.0, -0.3),
             Self::Town => glam::vec3(0.25, -0.55, -0.8),
         };
         let transform = Transform {
@@ -524,7 +553,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::Town => Environment {
+            | Self::Town
+            | Self::World => Environment {
                 ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },

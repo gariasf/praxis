@@ -20,7 +20,7 @@ use export::AssetRecorder;
 pub use export::{SCENE_FORMAT_VERSION, export_scene};
 pub use fetch::{Fetch, absent_fetched, fetch};
 pub(crate) use launch::CookingLoader;
-pub use texture::{LoadedImage, TextureSource};
+pub use texture::{ImageGenerator, LoadedImage, TextureSource};
 
 use crate::ReferenceScene;
 use crate::cooked::{
@@ -395,10 +395,10 @@ fn read_sources(
         let textures: Vec<_> = scene
             .textures()
             .into_iter()
-            .map(|(name, channel, image)| {
+            .map(|(name, channel, generate)| {
                 let id = scene.texture_id(channel, &name);
                 let name = format!("{} {name}", scene.name());
-                TextureSource::generated(id, channel, name, image)
+                TextureSource::generated(id, channel, name, generate)
             })
             .collect();
         // Toksvig, as in `read_gltf`: a metallic-roughness Texture cooks from
@@ -772,6 +772,46 @@ mod tests {
         let references = scene_references(&[scene], &chunks).unwrap();
         let texture = scene.texture_id(MaterialChannel::Albedo, "texture-0");
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
+    }
+
+    /// `praxis cook world` cooks 1,600 Chunks, and `world`'s Textures, each
+    /// of one size and cooked to the full mip chain one of them cooks to,
+    /// take more than 8,000,000,000 bytes of GPU memory together: more than
+    /// the texture pool's Budget, so its residency must free and evict.
+    #[test]
+    fn the_world_cooks_1600_chunks_and_over_8_gb_of_unique_textures() {
+        let scene = ReferenceScene::World;
+        let sources = read_sources(Path::new(ASSETS_DIRECTORY), &[scene], Some(&[])).unwrap();
+        assert_eq!(sources.chunks.len(), 1600);
+
+        let textures = &sources.textures;
+        let ids: HashSet<_> = textures.iter().map(|texture| texture.id).collect();
+        assert_eq!(ids.len(), textures.len());
+        let samples = [0, 1, 24, textures.len() - 1].map(|index| textures[index].decode().unwrap());
+        for (index, sample) in samples.iter().enumerate() {
+            for other in &samples[index + 1..] {
+                assert_ne!(
+                    sample.pixels, other.pixels,
+                    "two of `world`'s Textures match"
+                );
+            }
+        }
+        let side = samples[0].width;
+        assert!(
+            samples
+                .iter()
+                .all(|sample| (sample.width, sample.height) == (side, side))
+        );
+        let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
+        let blob = textures[0].cook(&CookSettings::default(), threads).unwrap();
+        let cooked = crate::cooked::CookedTexture::from_blob(&blob).unwrap();
+        assert_eq!(
+            (cooked.width, cooked.height, cooked.first_level),
+            (side, side, 0)
+        );
+        let chain_bytes: usize = cooked.levels.iter().map(Vec::len).sum();
+        let library_bytes = chain_bytes * textures.len();
+        assert!(library_bytes > 8_000_000_000, "{library_bytes} bytes");
     }
 
     /// Each scene's dev launch finds the sources it references.
