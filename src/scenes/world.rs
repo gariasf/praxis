@@ -378,9 +378,12 @@ mod generators {
         let lowest = chunk_origin(coordinates);
         let highest = lowest + glam::DVec3::splat(CHUNK_EDGE_METRES);
         let reaches = |centre: glam::DVec3, reach_metres: f64| {
-            let near = centre - lowest + reach_metres;
-            let far = highest - centre + reach_metres;
-            near.x >= 0.0 && near.z >= 0.0 && far.x >= 0.0 && far.z >= 0.0
+            let above_lowest = centre - lowest + reach_metres;
+            let below_highest = highest - centre + reach_metres;
+            above_lowest.x >= 0.0
+                && above_lowest.z >= 0.0
+                && below_highest.x >= 0.0
+                && below_highest.z >= 0.0
         };
         (placements_reaching(&reaches), Vec::new())
     }

@@ -192,13 +192,16 @@ impl Sources {
                 chunk::chunks(placements, lights, &self.mesh_bounds).remove(&coordinates)
             }
             None => {
-                if !self.cut_chunks.iter().any(|(cut, _)| *cut == scene) {
+                let cut_scene =
+                    (self.cut_chunks.iter()).position(|(cut_scene, _)| *cut_scene == scene);
+                let index = cut_scene.unwrap_or_else(|| {
                     let (placements, lights) = scene.static_content();
                     let chunks = chunk::chunks(placements, lights, &self.mesh_bounds);
                     self.cut_chunks.push((scene, chunks));
-                }
-                let cut = self.cut_chunks.iter().find(|(cut, _)| *cut == scene);
-                cut.and_then(|(_, chunks)| chunks.get(&coordinates).cloned())
+                    self.cut_chunks.len() - 1
+                });
+                let (_, chunks) = &self.cut_chunks[index];
+                chunks.get(&coordinates).cloned()
             }
         };
         let chunk = chunk
@@ -759,9 +762,14 @@ mod tests {
         let directory =
             std::env::temp_dir().join(format!("praxis-removed-assets-{}", std::process::id()));
         let cache = CookedCache::new(&directory);
-        let scene = ReferenceScene::UvGrid;
-        let (removed_mesh, removed_texture) = (scene.mesh_id("plane"), AssetId(3));
-        for removed in [removed_mesh, removed_texture] {
+        let scene = ReferenceScene::PbrSweep;
+        let (placements, _) = scene.static_content();
+        let placed = (placements.iter())
+            .find(|placement| crate::cooked::chunk_holding(placement.translation) == [0, 0])
+            .unwrap();
+        let (removed_mesh, removed_material, removed_texture) =
+            (placed.mesh, placed.material.unwrap(), AssetId(3));
+        for removed in [removed_mesh, removed_material, removed_texture] {
             cache.write(removed, "cook key", b"stale Blob").unwrap();
         }
         let material_id = AssetId(10);
@@ -781,16 +789,20 @@ mod tests {
             ..Sources::default()
         };
         let report = cook_sources(&mut sources, &[], &cache, &CookSettings::default()).unwrap();
+        let dangling = &report.dangling_references;
         assert_eq!(
-            report.dangling_references,
-            [
-                (Referrer::Material(material_id), removed_texture),
-                (chunk_referrer, removed_mesh),
-            ]
+            dangling[0],
+            (Referrer::Material(material_id), removed_texture)
         );
+        for removed in [removed_mesh, removed_material] {
+            assert!(
+                dangling.contains(&(chunk_referrer, removed)),
+                "{dangling:?}"
+            );
+        }
         assert_eq!(
             chunk_referrer.to_string(),
-            "Chunk (0, 0) of Reference scene uv-grid"
+            "Chunk (0, 0) of Reference scene pbr-sweep"
         );
         std::fs::remove_dir_all(directory).unwrap();
     }

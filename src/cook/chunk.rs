@@ -350,7 +350,10 @@ mod tests {
                 generated_alone += 1;
             }
         }
-        assert_eq!(generated_alone, 1600);
+        assert_eq!(
+            generated_alone,
+            ReferenceScene::World.chunk_coordinates().len()
+        );
     }
 
     /// Each scene's Chunks lie at the coordinates its spawn loads, and its

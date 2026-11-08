@@ -164,7 +164,6 @@ impl LaunchCook {
                 let generated = self.sources.chunk(scene, coordinates)?;
                 if generated.kept {
                     self.sources.kept_chunks.push(id);
-                    self.warn_unless_kept(cache, referrer, id);
                     return Ok(());
                 }
                 let named = generated.references().collect();

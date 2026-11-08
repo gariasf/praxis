@@ -62,6 +62,7 @@ pub(crate) fn chunk_origin([x, z]: [i32; 2]) -> glam::DVec3 {
 }
 
 /// The coordinates, x then z, of the Chunk that holds `pivot`.
+#[cfg(feature = "cook")]
 pub(crate) fn chunk_holding(pivot: glam::DVec3) -> [i32; 2] {
     [pivot.x, pivot.z].map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32)
 }
