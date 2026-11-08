@@ -538,7 +538,7 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
   <p><b>Sizes, not allocations.</b> The count is the size the driver asks for; what its allocator rounds that up to, or the scratch each build takes and returns, is not counted.</p>
   <p><b>Compaction can fail.</b> One that is not ready after its build keeps its built size, counted as built, with a warning.</p>
   <p><b>Opaque only.</b> No triangle has an alpha test, so a cutout Material would cast a solid shadow.</p>
-  <p><b>Freed only by tests.</b> <code>MeshPool::free</code> drops a Mesh's BLAS and gives back its bytes, but nothing outside tests calls it yet, and it refuses a refitted Mesh, whose refit scratch holds a region per refitted BLAS in load order.</p>
+  <p><b>Freed only by tests, at this page's commit.</b> <code>MeshPool::free</code> drops a Mesh's BLAS and gives back its bytes, and it refuses a refitted Mesh, whose refit scratch holds a region per refitted BLAS in load order. Since 2026-11-08 a load refused for room frees an unused Mesh the same way (<code>MeshPool::free_least_recently_used</code>), and never a refitted one.</p>
   <p><b>One build per Mesh.</b> Each Mesh's build is its own <code>build_acceleration_structures</code> call on the load encoder; builds are not batched across Meshes.</p>
 </section>
 

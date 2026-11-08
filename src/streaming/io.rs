@@ -23,7 +23,7 @@ use crate::streaming::{
 const IO_THREADS: usize = 4;
 
 /// The Asset IDs the IO pool need not decode: those loaded, and those
-/// decoded but not yet loaded. Nothing is freed yet, so none leaves it.
+/// decoded but not yet loaded. One the pools free leaves it as it is freed.
 type Claimed = Arc<Mutex<HashSet<AssetId>>>;
 
 /// Decoded Assets by Asset ID.
@@ -284,6 +284,13 @@ impl AssetReader for DecodedReader<'_> {
     fn chunk(&self, id: AssetId) -> anyhow::Result<CookedChunk> {
         self.cache.chunk(id)
     }
+
+    fn forget(&self, assets: &[AssetId]) {
+        let mut claimed = self.claimed.lock().unwrap_or_else(PoisonError::into_inner);
+        for asset in assets {
+            claimed.remove(asset);
+        }
+    }
 }
 
 /// What streaming did in one frame, for its Frame stats.
@@ -295,6 +302,7 @@ pub(crate) struct StreamedFrame {
     pub bytes_read: u64,
     /// Bytes the frame's loads wrote into the load staging.
     pub written_bytes: u64,
+    pub pool_entries_freed: u32,
 }
 
 /// A Reference scene's Chunks streamed around the camera: the Chunk
@@ -397,8 +405,23 @@ impl ChunkStreaming {
     /// Settled, loading the Chunks of each wait together once all have
     /// arrived, in coordinate order and past the frame's load bytes, so
     /// their order never depends on the IO pool's timing; a load that fails
-    /// then fails the frame.
+    /// then fails the frame. Ends the frame's frees to make room, which it
+    /// reports.
     pub(crate) fn update(
+        &mut self,
+        world: &mut World,
+        renderer: &mut Renderer,
+        settle: bool,
+    ) -> anyhow::Result<StreamedFrame> {
+        let streamed = self.stream(world, renderer, settle);
+        let frees =
+            renderer.mesh_pool.take_frame_frees() + renderer.material_pool.take_frame_frees();
+        let mut streamed = streamed?;
+        streamed.pool_entries_freed = frees as u32;
+        Ok(streamed)
+    }
+
+    fn stream(
         &mut self,
         world: &mut World,
         renderer: &mut Renderer,
@@ -708,5 +731,44 @@ impl ChunkIo for FrameIo<'_> {
                 }
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "cook"))]
+mod tests {
+    use super::*;
+    use crate::cooked::CookedMaterial;
+
+    /// An Asset the pools freed leaves the claimed set, so a later read of it
+    /// on the main thread claims it afresh instead of waiting for a decoded
+    /// copy no IO thread is making.
+    #[test]
+    fn an_asset_the_pools_freed_is_claimed_afresh_by_its_next_read() {
+        let directory =
+            std::env::temp_dir().join(format!("praxis-io-forget-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        cache.write(AssetId(1), "key", &material.to_blob()).unwrap();
+        let claimed = Mutex::new(HashSet::from([AssetId(1)]));
+        let mut decoded = DecodedAssets::default();
+        let reader = DecodedReader {
+            decoded: RefCell::new(&mut decoded),
+            cache: &cache,
+            claimed: &claimed,
+        };
+
+        reader.forget(&[AssetId(1)]);
+        assert!(!claimed.lock().unwrap().contains(&AssetId(1)));
+        reader.material(AssetId(1)).unwrap();
+        assert!(claimed.lock().unwrap().contains(&AssetId(1)));
+        assert!(decoded.read_from_cache.is_empty());
+        std::fs::remove_dir_all(&directory).ok();
     }
 }

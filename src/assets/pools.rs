@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     assets::material::CLASSES_PER_CHANNEL,
@@ -17,6 +17,12 @@ const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 16 << 20;
 
 /// Bytes of a Channel's share of the texture pool's Budget per Texture class.
 const TEXTURE_POOL_BYTES_PER_CLASS: u64 = 64 << 10;
+
+/// Unused entries each pool frees in one frame to make room for refused
+/// loads, so a load that fits nowhere cannot empty a pool in one frame; the
+/// Textures freed with a Material count, and may take the Material pool past
+/// it.
+pub(crate) const ENTRIES_FREED_PER_FRAME: usize = 64;
 
 /// What each pool holds, derived from the GPU memory Budgets at device
 /// creation: the geometry Arenas' Budget in equal shares and the Mesh table
@@ -118,9 +124,16 @@ pub struct MeshPool {
     meshes: LoadedMeshes,
     /// What freeing each loaded Mesh gives back, at its Handle's index.
     allocations: Vec<Option<MeshAllocation>>,
-    /// The Handle of each Mesh loaded by Asset ID for a shared use, and how
-    /// many loads returned it.
-    asset_handles: HashMap<(AssetId, MeshUse), (MeshHandle, u32)>,
+    /// Each Mesh loaded by Asset ID for a shared use.
+    asset_handles: HashMap<(AssetId, MeshUse), SharedMesh>,
+    /// The shared Meshes no load uses any more, which stay loaded until a
+    /// refused load frees them.
+    unused: Unused<(AssetId, MeshUse)>,
+    /// The Asset IDs of the Meshes freed since `take_freed`.
+    freed: Vec<AssetId>,
+    /// Meshes freed to make room since `take_frame_frees`, up to
+    /// `ENTRIES_FREED_PER_FRAME`.
+    frame_frees: usize,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
@@ -157,6 +170,9 @@ impl MeshPool {
             meshes: LoadedMeshes::default(),
             allocations: Vec::new(),
             asset_handles: HashMap::new(),
+            unused: Unused::default(),
+            freed: Vec::new(),
+            frame_frees: 0,
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
             refitted_blases: Vec::new(),
@@ -211,7 +227,8 @@ impl MeshPool {
         }
     }
 
-    /// Loads `mesh` to be drawn and traced, as `load_for` loads it.
+    /// Loads `mesh` to be drawn and traced, as `load_for` loads it, its
+    /// refusal logged.
     #[cfg(test)]
     pub fn load(
         &mut self,
@@ -220,15 +237,20 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
     ) -> Option<MeshHandle> {
         self.load_for(staging, mesh, materials, MeshUse::DrawnAndTraced)
+            .map_err(MeshRefusal::log)
+            .ok()
     }
 
     /// The Handle of the Mesh `id` that `load_asset` loaded for `mesh_use`,
     /// counting one more user of it, unless a bent Mesh's use, which no two
     /// Renderables share.
     pub fn add_user(&mut self, id: AssetId, mesh_use: MeshUse) -> Option<MeshHandle> {
-        let (handle, users) = self.asset_handles.get_mut(&(id, mesh_use))?;
-        *users += 1;
-        Some(*handle)
+        let shared = self.asset_handles.get_mut(&(id, mesh_use))?;
+        shared.users += 1;
+        if let Some(since) = shared.unused_since.take() {
+            self.unused.remove(since);
+        }
+        Some(shared.handle)
     }
 
     /// Whether `load_asset` loaded the Mesh `id` for `mesh_use`.
@@ -260,11 +282,18 @@ impl MeshPool {
             + size_of::<MeshData>()) as u64
     }
 
-    /// Counts one user fewer of the Mesh `id` for `mesh_use`, keeping its
-    /// entry however few are left.
+    /// Counts one user fewer of the Mesh `id` for `mesh_use`; one left with
+    /// none stays loaded, the most recently used of the unused Meshes.
     pub fn remove_user(&mut self, id: AssetId, mesh_use: MeshUse) {
-        if let Some((_, users)) = self.asset_handles.get_mut(&(id, mesh_use)) {
-            *users = users.saturating_sub(1);
+        let Some(shared) = self.asset_handles.get_mut(&(id, mesh_use)) else {
+            return;
+        };
+        if shared.users == 0 {
+            return;
+        }
+        shared.users -= 1;
+        if shared.users == 0 {
+            shared.unused_since = Some(self.unused.push((id, mesh_use)));
         }
     }
 
@@ -275,12 +304,16 @@ impl MeshPool {
     pub fn users(&self, id: AssetId, mesh_use: MeshUse) -> u32 {
         self.asset_handles
             .get(&(id, mesh_use))
-            .map_or(0, |&(_, users)| users)
+            .map_or(0, |shared| shared.users)
     }
 
     /// The Handle of `mesh`, the Mesh `id`, for `mesh_use`: the one `add_user`
     /// returns, or else a load as `load_for` does, kept for `add_user` with
-    /// one user unless the Mesh is bent.
+    /// one user unless the Mesh is bent. A refused load frees unused Meshes,
+    /// least recently used first, and is retried, each freed Mesh's Material
+    /// Asset IDs, one per Primitive, pushed onto `released_materials` for the
+    /// Material pool to count a user fewer of, and `mesh`'s own when it is
+    /// refused still.
     pub fn load_asset(
         &mut self,
         staging: &mut LoadStaging,
@@ -288,15 +321,72 @@ impl MeshPool {
         mesh: &CookedMesh,
         materials: &[Option<MaterialHandle>],
         mesh_use: MeshUse,
+        released_materials: &mut Vec<AssetId>,
     ) -> Option<MeshHandle> {
         if let Some(handle) = self.add_user(id, mesh_use) {
             return Some(handle);
         }
-        let handle = self.load_for(staging, mesh, materials, mesh_use)?;
+        let material_ids = mesh
+            .primitives
+            .iter()
+            .zip(materials)
+            .filter_map(|(primitive, handle)| handle.and(primitive.material));
+        let handle = loop {
+            match self.load_for(staging, mesh, materials, mesh_use) {
+                Ok(handle) => break handle,
+                Err(refusal) => {
+                    if !self.free_least_recently_used(released_materials) {
+                        refusal.log();
+                        released_materials.extend(material_ids);
+                        return None;
+                    }
+                }
+            }
+        };
         if mesh_use.shared() {
-            self.asset_handles.insert((id, mesh_use), (handle, 1));
+            let materials = material_ids.collect();
+            let shared = SharedMesh {
+                handle,
+                users: 1,
+                unused_since: None,
+                materials,
+            };
+            self.asset_handles.insert((id, mesh_use), shared);
         }
         Some(handle)
+    }
+
+    /// Frees the least recently used unused Mesh, pushing its Material Asset
+    /// IDs onto `released_materials`; false when none is unused or the frame
+    /// freed `ENTRIES_FREED_PER_FRAME` already.
+    pub fn free_least_recently_used(&mut self, released_materials: &mut Vec<AssetId>) -> bool {
+        if self.frame_frees >= ENTRIES_FREED_PER_FRAME {
+            return false;
+        }
+        let Some(key) = self.unused.pop_least_recent() else {
+            return false;
+        };
+        let shared = self
+            .asset_handles
+            .remove(&key)
+            .expect("an unused Mesh is shared");
+        self.release(shared.handle);
+        released_materials.extend(shared.materials);
+        self.freed.push(key.0);
+        self.frame_frees += 1;
+        true
+    }
+
+    /// The Asset IDs of the Meshes loaded by Asset ID and freed since the
+    /// last call.
+    pub fn take_freed(&mut self) -> Vec<AssetId> {
+        std::mem::take(&mut self.freed)
+    }
+
+    /// Meshes freed to make room since the last call, which renews the
+    /// frame's `ENTRIES_FREED_PER_FRAME`.
+    pub fn take_frame_frees(&mut self) -> usize {
+        std::mem::take(&mut self.frame_frees)
     }
 
     /// Writes `mesh` through `staging` into one range of each Arena, and its
@@ -304,17 +394,17 @@ impl MeshPool {
     /// `materials`, in Primitive order, where no Renderable overrides it; and,
     /// where `mesh_use` has rays trace it, its index stream and its BLAS's
     /// build from its vertex and index ranges, which `compact_blases`
-    /// compacts once `staging` is submitted, unless it is refitted. A Mesh no pass draws keeps no
-    /// Meshlets. Returns its Handle, or None
-    /// after logging when the Mesh table is full or an Arena's longest free
-    /// range is too short; a refused Mesh leaves the pool as it was.
+    /// compacts once `staging` is submitted, unless it is refitted. A Mesh no
+    /// pass draws keeps no Meshlets. Returns its Handle, or why it was
+    /// refused, unlogged, when the Mesh table is full or an Arena's longest
+    /// free range is too short; a refused Mesh leaves the pool as it was.
     pub fn load_for(
         &mut self,
         staging: &mut LoadStaging,
         mesh: &CookedMesh,
         materials: &[Option<MaterialHandle>],
         mesh_use: MeshUse,
-    ) -> Option<MeshHandle> {
+    ) -> Result<MeshHandle, MeshRefusal> {
         assert_eq!(
             materials.len(),
             mesh.primitives.len(),
@@ -347,11 +437,9 @@ impl MeshPool {
             triangle_count,
         ];
         if self.meshes.full(self.mesh_capacity) {
-            tracing::error!(
-                capacity = self.mesh_capacity,
-                "Mesh refused: the Mesh table is full"
-            );
-            return None;
+            return Err(MeshRefusal::TableFull {
+                capacity: self.mesh_capacity,
+            });
         }
         let Some(
             [
@@ -363,21 +451,10 @@ impl MeshPool {
             ],
         ) = allocate_all(self.arenas_mut(), counts)
         else {
-            tracing::error!(
-                vertices = mesh.vertices.len(),
-                indices = index_stream.len(),
-                meshlets = meshlet_count,
-                meshlet_vertices = meshlet_vertex_count,
-                triangles = triangle_count,
-                longest_free_vertex_range = self.vertex_arena.longest_free_range(),
-                longest_free_index_range = self.index_arena.longest_free_range(),
-                longest_free_meshlet_range = self.meshlet_arena.longest_free_range(),
-                longest_free_meshlet_vertex_range = self.meshlet_vertex_arena.longest_free_range(),
-                longest_free_meshlet_triangle_range =
-                    self.meshlet_triangle_arena.longest_free_range(),
-                "Mesh refused: an Arena's longest free range is too short"
-            );
-            return None;
+            return Err(MeshRefusal::ArenaShort {
+                counts,
+                longest_free_ranges: self.arenas().map(Arena::longest_free_range),
+            });
         };
         let handle = self.meshes.insert(Mesh {
             needs_material_handle: mesh_use.drawn() && materials.contains(&None),
@@ -495,7 +572,7 @@ impl MeshPool {
             self.allocations[index] = Some(allocation);
         }
         if !mesh_use.traced() {
-            return Some(handle);
+            return Ok(handle);
         }
         let blas = self.device.create_blas(
             &wgpu::CreateBlasDescriptor {
@@ -523,7 +600,7 @@ impl MeshPool {
         }
         self.uncompacted_blas_bytes += built_bytes;
         self.charge_blases();
-        Some(handle)
+        Ok(handle)
     }
 
     /// The build of `blas` from its ranges of the vertex and index Arenas:
@@ -638,9 +715,29 @@ impl MeshPool {
             tracing::warn!(?handle, "Mesh not freed: its BLAS is refitted");
             return;
         }
-        if !self.meshes.remove(handle) {
+        if !self.release(handle) {
             tracing::warn!(?handle, "Mesh not freed: its Handle finds no Mesh");
             return;
+        }
+        let freed_key = self
+            .asset_handles
+            .iter()
+            .find_map(|(&key, shared)| (shared.handle == handle).then_some(key));
+        if let Some(key) = freed_key
+            && let Some(shared) = self.asset_handles.remove(&key)
+        {
+            if let Some(since) = shared.unused_since {
+                self.unused.remove(since);
+            }
+            self.freed.push(key.0);
+        }
+    }
+
+    /// Frees `handle`'s Mesh as `free` does, unchecked and unlogged but for
+    /// its debug event; false, changing nothing, when it finds no Mesh.
+    fn release(&mut self, handle: MeshHandle) -> bool {
+        if !self.meshes.remove(handle) {
+            return false;
         }
         let index = handle.index as usize;
         let allocation = self.allocations[index]
@@ -659,9 +756,8 @@ impl MeshPool {
             }
             self.charge_blases();
         }
-        self.asset_handles
-            .retain(|_, (asset_handle, _)| *asset_handle != handle);
         tracing::debug!(?handle, "Mesh freed");
+        true
     }
 
     /// The loaded Meshes, as prepare reads them.
@@ -784,6 +880,98 @@ impl LoadedMeshes {
     /// changing nothing, when it finds no Mesh.
     pub(crate) fn remove(&mut self, handle: MeshHandle) -> bool {
         self.generations.free(handle.index, handle.generation)
+    }
+}
+
+/// A Mesh loaded by Asset ID for a shared use: its Handle, how many loads
+/// returned it, less those `remove_user` took back, when its last user left,
+/// and the Material Asset IDs its Primitives name, which count it as a user.
+struct SharedMesh {
+    handle: MeshHandle,
+    users: u32,
+    unused_since: Option<u64>,
+    materials: Vec<AssetId>,
+}
+
+/// Why `load_for` refused a Mesh.
+#[derive(Debug)]
+pub enum MeshRefusal {
+    TableFull {
+        capacity: u32,
+    },
+    /// The elements it needed of each Arena, and each one's longest free
+    /// range, in `MeshPool::arenas` order.
+    ArenaShort {
+        counts: [usize; 5],
+        longest_free_ranges: [u32; 5],
+    },
+}
+
+impl MeshRefusal {
+    pub fn log(self) {
+        match self {
+            MeshRefusal::TableFull { capacity } => {
+                tracing::error!(capacity, "Mesh refused: the Mesh table is full");
+            }
+            MeshRefusal::ArenaShort {
+                counts: [vertices, indices, meshlets, meshlet_vertices, triangles],
+                longest_free_ranges:
+                    [
+                        longest_free_vertex_range,
+                        longest_free_index_range,
+                        longest_free_meshlet_range,
+                        longest_free_meshlet_vertex_range,
+                        longest_free_meshlet_triangle_range,
+                    ],
+            } => tracing::error!(
+                vertices,
+                indices,
+                meshlets,
+                meshlet_vertices,
+                triangles,
+                longest_free_vertex_range,
+                longest_free_index_range,
+                longest_free_meshlet_range,
+                longest_free_meshlet_vertex_range,
+                longest_free_meshlet_triangle_range,
+                "Mesh refused: an Arena's longest free range is too short"
+            ),
+        }
+    }
+}
+
+/// A pool's unused entries in the order their last users left, keyed by
+/// the tick `push` returned, so the least recently used comes first.
+pub(crate) struct Unused<Key> {
+    order: BTreeMap<u64, Key>,
+    next_tick: u64,
+}
+
+impl<Key> Default for Unused<Key> {
+    fn default() -> Self {
+        Self {
+            order: BTreeMap::new(),
+            next_tick: 0,
+        }
+    }
+}
+
+impl<Key> Unused<Key> {
+    /// Adds `key` as the most recently used, returning its tick.
+    pub(crate) fn push(&mut self, key: Key) -> u64 {
+        let tick = self.next_tick;
+        self.next_tick += 1;
+        self.order.insert(tick, key);
+        tick
+    }
+
+    /// Takes out the key `push` returned `tick` for.
+    pub(crate) fn remove(&mut self, tick: u64) {
+        self.order.remove(&tick);
+    }
+
+    pub(crate) fn pop_least_recent(&mut self) -> Option<Key> {
+        self.order.pop_first().map(|(_, key)| key)
     }
 }
 
@@ -1062,9 +1250,16 @@ pub(crate) mod tests {
         );
         let triangle = mesh(3, vec![0, 1, 2]);
         let mut load = |id, mesh_use| {
-            pool.load_asset(&mut staging, AssetId(id), &triangle, &[None], mesh_use)
-                .expect("a triangle fits")
-                .index
+            pool.load_asset(
+                &mut staging,
+                AssetId(id),
+                &triangle,
+                &[None],
+                mesh_use,
+                &mut Vec::new(),
+            )
+            .expect("a triangle fits")
+            .index
         };
         let handles = [
             MeshUse::DrawnAndTraced,
@@ -1196,6 +1391,7 @@ pub(crate) mod tests {
                 &mesh(4, vec![0, 1, 2, 2, 1, 3]),
                 &[None],
                 MeshUse::DrawnAndTraced,
+                &mut Vec::new(),
             )
             .expect("a quad fits");
         let quad_arena_bytes = pool.arena_bytes_in_use() - arena_bytes_in_use;
@@ -1233,6 +1429,59 @@ pub(crate) mod tests {
         bounds = [entry.bounds_min, entry.bounds_max];
         assert_eq!(bounds, replacement.bounds);
         assert_eq!(entry.triangle_count, 2);
+    }
+
+    /// Arenas full of Meshes whose last users left: the next load frees the
+    /// one whose last user left first, takes its ranges and succeeds, giving
+    /// back the Material its Primitive named; the freed Handle finds nothing,
+    /// and with every Mesh used again a load is refused.
+    #[test]
+    fn a_load_into_full_arenas_frees_the_least_recently_used_unused_mesh() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MeshPool::new(&context.device, &gpu_memory(&context), &arenas_of(CAPACITY));
+        let mut released = Vec::new();
+        let mut load = |pool: &mut MeshPool, released: &mut Vec<AssetId>, id| {
+            let mut two_vertices = mesh(2, vec![0, 1, 1]);
+            two_vertices.primitives[0].material = Some(AssetId(id + 100));
+            let material = MaterialHandle {
+                index: id as u32,
+                generation: 0,
+            };
+            pool.load_asset(
+                &mut staging,
+                AssetId(id),
+                &two_vertices,
+                &[Some(material)],
+                MeshUse::DrawnAndTraced,
+                released,
+            )
+        };
+        let first = load(&mut pool, &mut released, 1).expect("two vertices fit");
+        let second = load(&mut pool, &mut released, 2).expect("two more fit");
+        let second_vertices = pool.get(second).unwrap().vertices.clone();
+        pool.remove_user(AssetId(2), MeshUse::DrawnAndTraced);
+        pool.remove_user(AssetId(1), MeshUse::DrawnAndTraced);
+
+        let third = load(&mut pool, &mut released, 3).expect("an unused Mesh is freed");
+        assert!(pool.get(second).is_none() && pool.blas(second).is_none());
+        assert!(pool.get(first).is_some());
+        assert_eq!(pool.get(third).unwrap().vertices, second_vertices);
+        assert_eq!(pool.add_user(AssetId(2), MeshUse::DrawnAndTraced), None);
+        assert_eq!(released, [AssetId(102)]);
+        assert_eq!(pool.take_freed(), [AssetId(2)]);
+
+        assert_eq!(
+            pool.add_user(AssetId(1), MeshUse::DrawnAndTraced),
+            Some(first)
+        );
+        let (refused, log) = logged(|| load(&mut pool, &mut released, 4));
+        assert!(refused.is_none(), "a Mesh in use was freed");
+        assert!(log.contains("Mesh refused"), "not logged: {log:?}");
+        assert!(pool.get(first).is_some() && pool.get(third).is_some());
+        assert!(pool.take_freed().is_empty());
     }
 
     /// A Mesh loaded after one whose triangle is degenerate, so that its
