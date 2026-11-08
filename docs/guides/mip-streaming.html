@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Mip Streaming</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; Chunks &middot; <code>src/streaming/mips.rs</code></div>
+  <h1>Mip streaming</h1>
+  <p class="definition">The mechanism that brings a <span class="concept" data-term="Texture" data-tip="One Channel's image with its mips. A Layer refers to one Texture.">Texture</span>'s mips finer than its <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span> into GPU memory as the camera nears: each frame it finds the finest mip any drawn <span class="concept" data-term="Placement" data-tip="One Mesh Asset positioned inside a Chunk, with the Material that overrides its Mesh&#39;s, if any.">Placement</span> of a loaded Chunk needs, from its distance and its Primitive's UV texel density, requests the missing mips from the IO pool finest-needed first, and moves each Texture whose mips arrive to the <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span> of its new finest mip; the mips a frame needs and lacks are its <span class="concept" data-term="Late mip" data-tip="A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.">late mips</span>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 882d714b (2026-11-08), with mip streaming as its change leaves it. A change to mip streaming rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-texture.html#blob">Texture cooking</a> for the Blob, the Resident tail and the Texture classes a load writes into; <a href="chunk-streamer.html">The Chunk streamer</a> for the IO pool and Settled frames.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Once a frame, in <code>ChunkStreaming::update</code> after the frame's Chunk loads; with a Settled wait, again until no mip request is in flight. Off when the residency Render switch holds every Texture to its tail. The IO pool's threads read and decode the mips beside the frame.</dd>
+      <dt>Reads</dt><dd>The camera's World position; the World's <code>LoadedChunks</code>, each Placement's World transform, Mesh and Material; each Mesh's bounds, Primitive texel densities and Materials, from <code>LoadedMeshes</code>; each Material's Textures and each Texture's shape and finest Resident mip, from the Material pool.</dd>
+      <dt>Writes</dt><dd>Requests to the IO pool, one per Texture, for the mips from the finest needed to the finest Resident. For each Texture whose mips arrive, through the load staging: the mips into a slice of the class of its mips from the finest, its Resident mips copied after them on the GPU, and each loaded Material that samples it with its new <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span>.</dd>
+      <dt>Counted</dt><dd>Frame stats' <code>late_mips</code>, which the bench's <code>Counters</code> sum over their frames; the Blob bytes each request read, in <code>bytes_read</code>; the bytes its moves write into the load staging, and those their copies move, in <code>uploaded_bytes</code>; its time within the CPU stage <code>stream_chunks</code>.</dd>
+      <dt>Where in the code</dt><dd><code>MipPriority</code>, <code>MipRequest</code> and <code>finest_mip_needed</code> in <code>src/streaming/mips.rs</code>; <code>MipStreaming</code>, <code>IoRequest</code> and <code>decode_mips</code> in <code>src/streaming/io.rs</code>; <code>MaterialPool::stream_mips</code>, <code>texture_residency</code> and <code>textures_of</code> in <code>src/assets/material.rs</code>; <code>CookedTexture::resident_tail_from_blob</code>, <code>mips_from_blob</code> and <code>resident_tail_level</code> in <code>src/assets/cooked.rs</code>.</dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#tail-first">1 &middot; The tail first</a>
+    <a href="#priority">2 &middot; The finest mip a Placement needs</a>
+    <a href="#requests">3 &middot; Requests</a>
+    <a href="#move">4 &middot; The move</a>
+    <a href="#settled">5 &middot; Settled frames and late mips</a>
+    <a href="#tests">6 &middot; How it is tested</a>
+    <a href="#cost">7 &middot; What it costs</a>
+    <a href="#why">8 &middot; Why this way</a>
+    <a href="#limits">9 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="tail-first">
+  <div class="part-mark">1 &middot; <code>decode_chunk</code> &middot; <code>resident_tail_from_blob</code></div>
+  <h2>The tail first</h2>
+  <p class="key-idea">A Texture a Chunk names reaches the GPU as its Resident tail alone: the IO pool decodes only the tail's levels from its Blob, and the load writes them into a slice of the tail's own Texture class. Its finer mips come later, when a Placement needs them.</p>
+<pre class="code"><code>let texture = CookedTexture::resident_tail_from_blob(&amp;read(texture_id)?)
+    .with_context(|| format!("reading Texture {texture_id}"))?;</code></pre>
+  <p class="code-source"><code>decode_chunk</code>, <code>src/streaming/io.rs</code>.</p>
+  <p>The tail is the mips from the first of 64 KiB or less, as <code>resident_tail_level</code> finds it from the Blob's format, size and mip count; a <code>CookedTexture</code> holds its mips from <code>first_level</code> on, here the tail's first. <code>ChannelTextures::push</code> writes whatever mips it is given: the tail into the tail's class, then any finer ones into the class of its mips from its finest, with the tail copied after them. So a Texture read whole, as a spawn reads it from the Cooked cache, still loads every mip at once, and one read tail first stops at its tail. A Texture whose mip 0 is 64 KiB or less is all tail and never streams.</p>
+</section>
+
+<section class="part prose" id="priority">
+  <div class="part-mark">2 &middot; <code>finest_mip_needed</code> &middot; <code>MipPriority::plan</code></div>
+  <h2>The finest mip a Placement needs</h2>
+  <p class="key-idea">A surface needs the mip whose texels are no larger than a pixel's footprint on it. The footprint is taken at the narrowest pixel of a 16:9 view 1,440 pixels tall, at the nearest point of the sphere around the Placement's Mesh, so neither trilinear filtering nor anisotropic filtering with an unrounded ratio samples a finer mip than the one requested there.</p>
+<pre class="code"><code>fn finest_pixel_metres_per_metre() -&gt; f64 {
+    let half_height = (f64::from(FIELD_OF_VIEW) / 2.0).tan();
+    let corner_squared = half_height.powi(2) * (1.0 + PRIORITY_VIEW_ASPECT_RATIO.powi(2));
+    2.0 * half_height / PRIORITY_VIEW_HEIGHT_PIXELS / (1.0 + corner_squared)
+}
+
+fn finest_mip_needed(texels_per_metre: f64, distance_metres: f64) -&gt; u32 {
+    let texels_per_pixel = texels_per_metre * distance_metres * finest_pixel_metres_per_metre();
+    texels_per_pixel.max(1.0).log2().floor() as u32
+}</code></pre>
+  <p class="code-source"><code>src/streaming/mips.rs</code>.</p>
+  <p>A pixel on the view axis spans 2&nbsp;tan(&theta;/2)&nbsp;/&nbsp;1440 radians, 0.0005753 at the 45&deg; field of view: that many metres per metre of distance. A pixel off the axis spans less, by the square of the cosine of its angle off it, and the corners are farthest off: there tan&sup2; of that angle is tan&sup2;(&theta;/2)&nbsp;(1&nbsp;+&nbsp;(16/9)&sup2;), so the corner pixel spans 1.7138 times less. Times the distance that is the pixel's footprint on a surface facing it, which is also the shorter axis of its footprint on a surface at any slant. The bound rests on Vulkan's LOD formula: &lambda;<sub>base</sub> = log<sub>2</sub>(&rho;<sub>max</sub>/&eta;), with &eta; = min(&rho;<sub>max</sub>/&rho;<sub>min</sub>, maxAniso), &rho;<sub>max</sub> and &rho;<sub>min</sub> the footprint's longer and shorter axes in texels. Within the anisotropy cap that is log<sub>2</sub>(&rho;<sub>min</sub>), the shorter axis; past it, and with no anisotropy, coarser. So no filter reads finer than the face-on footprint gives, and trilinear reads the mip of the floor of &lambda;, and the one after it.</p>
+  <p>Texels per metre come from the Primitive's UV texel density, UV units per metre of the Mesh, times the larger side of the Texture's mip 0, over the Placement's smallest scale. The distance is to the nearest point of the sphere around the Mesh's bounds, placed and scaled as the Placement is, and none when the camera is inside it:</p>
+<pre class="code"><code>for texture_use in uses.iter() {
+    let distance = (camera.distance(texture_use.centre) - texture_use.radius).max(0.0);
+    let level = finest_mip_needed(texture_use.texels_per_metre, distance);
+    let needed = self.needed.entry(texture_use.texture).or_insert(level);
+    *needed = (*needed).min(level);
+}</code></pre>
+  <p class="code-source"><code>MipPriority::plan</code>, <code>src/streaming/mips.rs</code>.</p>
+  <p>The uses are built once per loaded Chunk, the first frame that sees it: for each Placement, each Primitive's Material, or the Placement's own, and each Texture of it that has mips finer than those Resident. A Placement whose Materials have nothing to stream costs no transform. Every drawn Placement counts, in front of the camera or behind it; a held Chunk keeps its uses but adds no need, and an unloaded one's are dropped. A Texture's need is the finest any of its uses gives.</p>
+</section>
+
+<section class="part prose" id="requests">
+  <div class="part-mark">3 &middot; <code>MipPriority::plan</code> &middot; <code>decode_mips</code></div>
+  <h2>Requests</h2>
+  <p class="key-idea">A Texture whose need is finer than its finest Resident mip is requested once, for exactly the mips between the two, and the frame's requests go to the IO pool finest-needed first, then by Asset ID. A Texture with a request in flight is not requested again.</p>
+<pre class="code"><code>for (&amp;texture, &amp;needed) in &amp;self.needed {
+    let Some((_, resident)) = materials.texture_residency(texture) else {
+        continue;
+    };
+    if needed &gt;= resident {
+        continue;
+    }
+    late_mips += resident - needed;
+    if !self.in_flight.contains(&amp;texture) &amp;&amp; !self.refused.contains(&amp;texture) {
+        self.requests.push(MipRequest {
+            texture,
+            levels: needed..resident,
+        });
+    }
+}
+self.requests
+    .sort_unstable_by_key(|request| (request.levels.start, request.texture.0));</code></pre>
+  <p class="code-source"><code>MipPriority::plan</code>, <code>src/streaming/mips.rs</code>.</p>
+  <p>The IO pool's threads serve these requests from the same channel as the Chunk streamer's, as an <code>IoRequest::Mips</code>. <code>decode_mips</code> reads the Texture's Blob from the Cooked cache and decompresses only the requested levels through <code>CookedTexture::mips_from_blob</code>; the Blob's bytes count in <code>bytes_read</code>. A need that grows finer while a request is in flight waits for that request to be applied, then asks for the rest.</p>
+</section>
+
+<section class="part prose" id="move">
+  <div class="part-mark">4 &middot; <code>MaterialPool::stream_mips</code></div>
+  <h2>The move</h2>
+  <p class="key-idea">A Texture whose mips arrive moves to the Texture class of its mips from the finest: the new mips are written into a slice there, its Resident mips are copied after them on the GPU, and every loaded Material that samples it is written again with the new Layer. The tail's slice stays taken; an earlier chain's slice is given back.</p>
+<pre class="code"><code>let Some(target) = channel.place(device, loaded.shape.mips_from(first_level)) else {
+    return StreamedMips::Refused;
+};
+self.bind_group_is_stale |= channel.views.len() != classes_before;
+let target_array = &amp;channel.textures[target.class as usize];
+for (level, bytes) in levels.iter().enumerate() {
+    staging.write_texture(target_array, level as u32, target.slice, bytes);
+}
+let source = loaded.placement.chain.unwrap_or(loaded.placement.tail);
+let source_array = &amp;channel.textures[source.class as usize];
+let first_copied_level = levels.len() as u32;
+staging.copy_texture(
+    source_array,
+    source.slice,
+    target_array,
+    target.slice,
+    first_copied_level,
+);
+if let Some(chain) = loaded.placement.chain.replace(target) {
+    channel.table.release(chain);
+}
+loaded.resident_level = first_level;</code></pre>
+  <p class="code-source"><code>MaterialPool::stream_mips</code>, <code>src/assets/material.rs</code>.</p>
+  <p>Arrivals are applied finest-needed first, then in Asset ID order, each only while the frame's writes into the load staging stay within its load bytes, the share of the staging Budget a frame's Chunk loads also take; the rest wait for a later frame. Arrivals whose Texture is gone, or whose finest Resident mip is no longer the one they end before, are dropped as stale. The writes, copies and Material writes go on the load's encoder, which the frame submits before its passes, so the frame that applies a move draws with it. A class the move opens marks the material bind group stale, and the frame rebuilds it once before it draws.</p>
+  <p>Keeping the tail's slice charges the tail twice in <code>resident_tails</code>: 87,408 bytes for a 2,048&sup2; BC7 or BC5 Texture, 1.6% of its whole chain. In return a Texture always has its tail in a slice of its own, which an eviction can fall back to by rewriting its Layer, without a copy.</p>
+</section>
+
+<section class="part prose" id="settled">
+  <div class="part-mark">5 &middot; <code>MipStreaming::stream</code></div>
+  <h2>Settled frames and late mips</h2>
+  <p class="key-idea">A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames before the counter frames; a window never waits for one.">Settled frame</span> waits until no mip request is in flight, and while settling applies arrivals only once nothing at all is in flight, in that same order, so which slices and classes Textures take never depends on the IO pool's timing. The late mips a frame counts are, per Texture, how many mips its need is finer than its finest Resident one.</p>
+<pre class="code"><code>if !self.settle {
+    self.io.receive();
+    self.apply(streamed);
+} else if self.io.in_flight == 0 {
+    self.apply(streamed);
+}</code></pre>
+  <p class="code-source"><code>MipStreaming::stream</code>, <code>src/streaming/io.rs</code>. While settling, the Chunk streamer's own take of the IO pool's finished reads, earlier in the same pass, is the one this reads.</p>
+  <p>The Settled wait loops until the Chunk streamer reports the frame Settled and no mip request is in flight, waiting on the IO pool between passes:</p>
+<pre class="code"><code>let mips_settled = mip_streaming.stream(world, &amp;mut streamed);
+if !settle || (frame.settled &amp;&amp; mips_settled) {
+    return Ok(streamed);
+}</code></pre>
+  <p class="code-source"><code>ChunkStreaming::update</code>, <code>src/streaming/io.rs</code>.</p>
+  <p>A Settled frame's Textures therefore hold every mip its Placements need from the camera, by a footprint no larger than any pixel's of a 1440p view, and a capture smaller than that samples no finer: the Goldens render bit-exact against images drawn with every mip loaded. A window never waits, nor the bench from its counter frames on, so a mip that is late shows as its coarser mips, magnified, until it arrives.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">6 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">One test flies the engine's camera toward a quad whose Texture has a colour per mip, through the IO pool and the Settled wait, and reads the drawn pixel and the Texture's finest Resident mip at each distance; the priority's formula has its own test against values worked out by hand.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_textures_finer_mips_stream_in_finest_needed_as_the_camera_nears</code></td><td><code>src/state.rs</code></td><td>on a headless adapter, a Chunk whose 10 m quad samples a 2,048&sup2; BC5 Texture with mip 0 red, mip 1 green and its tail, mip 3 on, yellow: from 200 m, Settled, the tail alone is Resident and drawn; 40 m away, Settled, mip 1 is the finest Resident, with no late mip; 0.2 m away, the next frame still draws mip 1 and counts 1 late mip, and once Settled draws mip 0, with none late</td></tr>
+      <tr><td><code>a_surface_needs_the_mip_whose_texels_fit_the_finest_pixel_footprint</code></td><td><code>src/streaming/mips.rs</code></td><td>at 1,024 texels per pixel at 1 m, mip 0 to just under 2/1,024 m and mip 1 just past it; mip 9 just under 1 m, mip 10 just past it, mip 11 just past 2 m</td></tr>
+      <tr><td><code>texture_blob_round_trips_smallest_mip_first_and_refuses_another_version</code></td><td><code>src/assets/cooked.rs</code></td><td>among its checks, <code>mips_from_blob</code> returns exactly the levels asked for, and a 512&sup2; BC4 Blob's Resident tail decodes from mip 1, its every level as written</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every Reference scene, its Textures streamed by priority through Settled frames, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, recorded with every mip loaded, bit for bit</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">7 &middot; <code>praxis bench</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">No Baseline measures a streaming frame: the bench settles its frames before the counter frames, so every Reference scene's Textures have finished streaming by then, and every counter equals its Baseline on every scene. A frame with nothing to stream costs a pass over the loaded Chunks' uses.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th><code>texture-wall</code>, CPU frame median</th><th class="n">Round 1, &micro;s</th><th class="n">Round 2, &micro;s</th><th class="n">Round 3, &micro;s</th><th class="n">Round 4, &micro;s</th></tr></thead>
+    <tbody>
+      <tr><td>before mip streaming</td><td class="n">264.1</td><td class="n">269.1</td><td class="n">280.5</td><td class="n">238.5</td></tr>
+      <tr class="focus"><td>with mip streaming</td><td class="n">257.2</td><td class="n">260.9</td><td class="n">266.6</td><td class="n">236.5</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Release builds on the Apple M4 Pro at 2560&times;1440, 1,800 measured frames each, the two builds interleaved over four rounds while the one-minute load average stood between 2.8 and 3.8. The GPU frame median was 2,299 to 2,304 &micro;s in both. <code>texture-wall</code>'s Textures are 4&times;4 and wholly Resident tail, so it measures only the per-frame planning over its four Chunks; the difference between the builds lies within the spread of the rounds.</p>
+  <p>The per-frame work is one distance, one logarithm and one map entry per use, a use per Placement and Texture that had mips to stream when its Chunk loaded; its map and request list are cleared each frame, not dropped, so a frame with nothing to request allocates nothing. Building a Chunk's uses visits each of its Placements once, on the first frame that sees it.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">8 &middot; ADR 0017</div>
+  <h2>Why this way</h2>
+  <p><b>A mip at a time, not tail or whole.</b> ADR 0017 streams Textures a whole mip at a time. A Texture held to its finest needed mip rather than its whole chain keeps about a quarter of the chain's bytes when it needs mip 1, as mip 0 is three quarters of it, and each nearer step adds one class's move.</p>
+  <p><b>On the CPU, from distance and texel density.</b> ADR 0017 computes priority on the CPU from distance and the Primitive's UV texel density against the 1440p pixel footprint, with no GPU feedback until a measured miss rate asks for it. Taken at the narrowest pixel and the nearest point, the estimate errs fine; the Limits below name where a GPU can still sample finer.</p>
+  <p><b>Every drawn Placement, frustum aside.</b> A need that followed the view would drop and return as the camera turned, and a turn would show late mips; counting every drawn Placement of the loaded Chunks spends memory instead, which eviction, under the texture pool's Budget, is there to bound.</p>
+  <p><b>Exactly the missing mips, once.</b> A request reads only the mips between the finest needed and the finest Resident, and the Resident ones move by a copy on the GPU, never read or written through the belt again. One request per Texture in flight keeps a need that grows while it travels from reading the same mips twice.</p>
+  <p><b>The tail's slice kept.</b> Releasing the tail's slice after a move would save 1.6% of a chain; keeping it gives eviction a fallback that needs no copy, and every Texture a slice it is never without.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">9</div>
+  <h2>Limits</h2>
+  <p><b>Chunks only.</b> Renderables outside Chunks give no priority: a spawn loads its Textures whole, and a Texture a Chunk loaded first and a spawn also samples streams by the Chunks' Placements alone.</p>
+  <p><b>No eviction.</b> A mip, once Resident, stays until its Texture is freed, and a Texture whose move finds no room in its Channel, or whose read fails, is not requested again until the Material pool next frees an entry.</p>
+  <p><b>The whole Blob per request.</b> A request reads the Texture's whole Blob from the Cooked cache and decompresses only the levels it asked for; the Blob keeps each mip a byte range of its own, which a ranged read would take alone.</p>
+  <p><b>Every Material per move.</b> A move looks through every loaded Material for those that sample its Texture.</p>
+  <p><b>A mean density.</b> The texel density is the Primitive's mean over its triangles, and the sphere and the larger side treat its mapping as even: where its UVs are denser than their mean, or stretched along one axis, the GPU can sample finer than the mip requested, and shows the finest Resident one magnified there.</p>
+  <p><b>A rounded ratio.</b> A GPU may round the ratio of anisotropy up before it divides by it, as Vulkan allows an implementation to use its sample count &lceil;&eta;&rceil; for &eta;. Within the cap that can pick up to one mip finer than the one requested, where the finest Resident mip then shows magnified.</p>
+  <p><b>Unbounded requests.</b> Every Texture whose need grows is requested in the same frame, ahead of Chunks requested after it on the same channel.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <dl class="reading">
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md">ADR 0017: Textures stream by mip, geometry lives in fixed arenas</a></dt>
+    <dd>A mip at a time in wgpu's safe API, priority on the CPU from distance and each Primitive's UV texel density against the 1440p pixel footprint, the Resident tail that never leaves, and the move by copy.</dd>
+    <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/textures.adoc?plain=1#L1645-L1694">Vulkan specification 1.4.367, Textures, Scale Factor Operation and LOD Operation</a></dt>
+    <dd>The ratio of anisotropy &eta; = min(&rho;<sub>max</sub>/&rho;<sub>min</sub>, maxAniso), &lambda;<sub>base</sub> = log<sub>2</sub>(&rho;<sub>max</sub>/&eta;), and an implementation's leave to use its sample count &lceil;&eta;&rceil; for &eta;. Registry key vulkan-anisotropy-lod.</dd>
+    <dt>Unity 6, UV distribution metric</dt>
+    <dd>The texel density the cook stores per Primitive is the inverse of this metric, as a length. Registry key unity-6000-uv-distribution-metric, as <code>CookedPrimitive</code>'s <code>texel_density</code> cites it.</dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">Textures first loaded every mip at once, then their Resident tails first, moved to their whole chains' classes in the same load, with a Render switch that held every Texture to its tail. The Mesh Blob gained each Primitive's UV texel density for a priority not yet computed. Mip streaming then split the two steps across frames: a Chunk's Textures arrive as their tails, and the mips their Placements need follow by priority, with the late mips counted. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/streaming/mips.rs</code>, <code>src/streaming/io.rs</code>, <code>src/assets/material.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/camera/mod.rs</code>, <code>src/state.rs</code>, the tests named above, <code>CONTEXT.md</code> and ADR 0017, all as this change leaves <code>main</code> at 882d714b.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="chunk-streamer.html">Previous: The Chunk streamer</a><a href="index.html">All field guides</a><a href="blas.html">Next: A BLAS per Mesh</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
