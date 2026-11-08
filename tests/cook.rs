@@ -655,12 +655,12 @@ fn touch_embedded_normal_texture(path: &Path) {
     fs::write(path, glb.to_vec().unwrap()).unwrap();
 }
 
-/// A dev launch of the normal-tangent scene cooks its source and nothing
+/// Cooking the normal-tangent scene whole cooks its source and nothing
 /// else, cooks nothing when nothing changed, re-cooks exactly a touched
 /// normal Texture and the metallic-roughness Texture widened by it, and keeps
 /// the Blobs of a source, or a manifest, gone absent.
 #[test]
-fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
+fn a_scene_cook_cooks_exactly_what_its_scene_references_and_changed() {
     let directory = scratch("touch-embedded-image");
     let (assets, cache) = (directory.join("assets"), directory.join("cooked"));
     let cache = CookedCache::new(&cache);
@@ -682,11 +682,11 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
         {"path": "box.gltf", "guid": format!("{GUID:032x}")},
     ]);
     fs::write(assets.join("manifest.json"), manifest.to_string()).unwrap();
-    let launch = || {
+    let cook_scene = || {
         let settings = CookSettings::default();
         praxis::cook::cook_scene(ReferenceScene::NormalTangent, &assets, &cache, &settings).unwrap()
     };
-    let first = launch();
+    let first = cook_scene();
     // The scratch cache holds every procedural scene: a full cook would
     // find this one unchanged.
     let other_scene = AssetId::new(
@@ -698,10 +698,14 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     for other in [other_scene, material_id(PAINTED)] {
         assert!(!first.cooked.contains(&other) && !first.unchanged.contains(&other));
     }
-    assert_eq!(launch().cooked, [], "nothing changed, yet a launch cooked");
+    assert_eq!(
+        cook_scene().cooked,
+        [],
+        "nothing changed, yet a scene cook cooked"
+    );
 
     touch_embedded_normal_texture(&glb);
-    let mut cooked = launch().cooked;
+    let mut cooked = cook_scene().cooked;
     cooked.sort();
     // Unnamed, NormalTangentTest's images are named by their index; image 1
     // is its metallic-roughness and its occlusion.
@@ -720,7 +724,7 @@ fn a_dev_launch_cooks_exactly_what_its_scene_references_and_changed() {
     let kept = cache.texture(expected[0]).unwrap();
     for absent in [glb, assets.join("manifest.json")] {
         fs::remove_file(absent).unwrap();
-        assert_eq!(launch().cooked, []);
+        assert_eq!(cook_scene().cooked, []);
         assert_eq!(cache.texture(expected[0]).unwrap(), kept);
     }
     fs::remove_dir_all(&directory).unwrap();

@@ -37,7 +37,11 @@ enum Command {
     Capabilities,
     Preflight,
     #[cfg(feature = "cook")]
-    Cook,
+    Cook {
+        /// The one Reference scene to cook whole; every scene and source
+        /// when absent.
+        scene: Option<String>,
+    },
     #[cfg(feature = "cook")]
     Fetch,
     #[cfg(feature = "cook")]
@@ -102,7 +106,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::Capabilities => print_capabilities(),
         Command::Preflight => preflight(),
         #[cfg(feature = "cook")]
-        Command::Cook => cook(),
+        Command::Cook { scene } => cook(scene.as_deref()),
         #[cfg(feature = "cook")]
         Command::Fetch => fetch(),
         #[cfg(feature = "cook")]
@@ -236,7 +240,11 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [command] if command == "capabilities" => Command::Capabilities,
         [command] if command == "preflight" => Command::Preflight,
         #[cfg(feature = "cook")]
-        [command] if command == "cook" => Command::Cook,
+        [command] if command == "cook" => Command::Cook { scene: None },
+        #[cfg(feature = "cook")]
+        [command, scene] if command == "cook" => Command::Cook {
+            scene: Some(scene.clone()),
+        },
         #[cfg(feature = "cook")]
         [command] if command == "fetch" => Command::Fetch,
         #[cfg(feature = "cook")]
@@ -324,7 +332,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             // Like the commands, their usage exists only in a `cook` build.
             let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
-                    "`cook`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
+                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
                     "`capture` and `bench` also take",
@@ -388,15 +396,17 @@ fn preflight() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Cooks `assets/` and every procedural Reference scene into `cooked/`.
+/// Cooks `assets/` and every procedural Reference scene into `cooked/`, or
+/// with `scene`, that scene whole.
 #[cfg(feature = "cook")]
-fn cook() -> anyhow::Result<()> {
-    let report = praxis::cook::cook(
-        Path::new(praxis::cook::ASSETS_DIRECTORY),
-        &ReferenceScene::ALL,
-        &praxis::cooked::CookedCache::new(praxis::cooked::COOKED_CACHE_DIRECTORY),
-        &praxis::cook::CookSettings::default(),
-    )?;
+fn cook(scene: Option<&str>) -> anyhow::Result<()> {
+    let assets = Path::new(praxis::cook::ASSETS_DIRECTORY);
+    let cache = praxis::cooked::CookedCache::new(praxis::cooked::COOKED_CACHE_DIRECTORY);
+    let settings = praxis::cook::CookSettings::default();
+    let report = match scene {
+        None => praxis::cook::cook(assets, &ReferenceScene::ALL, &cache, &settings)?,
+        Some(scene) => praxis::cook::cook_scene(parse_scene(scene)?, assets, &cache, &settings)?,
+    };
     writeln!(
         std::io::stdout(),
         "cooked {}, unchanged {}, dangling references {}",
@@ -914,7 +924,7 @@ mod tests {
         assert!(error.contains("praxis [<scene>]"), "{error}");
         assert!(error.contains("`preflight`"), "{error}");
         for command in [
-            "`cook`",
+            "`cook ",
             "`fetch`",
             "`capture ",
             "`export-scene ",

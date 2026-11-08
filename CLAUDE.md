@@ -142,7 +142,9 @@ src/
   cook/                        # the cooker behind the default-on `cook`
                                  feature: `praxis cook` turns manifest
                                  sources and Reference scenes into Blobs
-                                 in git-ignored `cooked/` (ADR 0018);
+                                 in git-ignored `cooked/` (ADR 0018), and
+                                 launch.rs a dev launch's Assets as each
+                                 load finds its Blob missing or stale;
                                  `praxis fetch` downloads the manifest's
                                  fetched sources, as a dev launch that
                                  lacks one does; `praxis export-scene`
