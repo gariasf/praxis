@@ -562,33 +562,16 @@ pub fn run(
         frame_count >= COUNTER_FRAMES.end,
         "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
     );
-    // A software rasterizer's threads would share the CPU with the spin.
-    let wait = match context.adapter.get_info().device_type {
-        wgpu::DeviceType::Cpu => FrameWait::Block,
-        _ => FrameWait::Spin,
-    };
-    let render = |switches| {
-        let (_, frames, scene_content_hash) = render_frames(
-            context,
-            scene,
-            glam::DVec3::ZERO,
-            configuration.width,
-            configuration.height,
-            0..frame_count,
-            &[],
-            // ADR 0022 judges Budgets at 60 Hz.
-            SIXTY_HERTZ,
-            switches,
-            wait,
-            SETTLED_FRAMES,
-        )?;
-        anyhow::Ok((frames, scene_content_hash))
-    };
-    let (frames, scene_content_hash) = render(switches)?;
-    let (frames_without_rays, _) = render(RenderSwitches {
-        shadow_rays: false,
-        ..switches
-    })?;
+    let (frames, scene_content_hash) = render_run(context, scene, configuration, switches)?;
+    let (frames_without_rays, _) = render_run(
+        context,
+        scene,
+        configuration,
+        RenderSwitches {
+            shadow_rays: false,
+            ..switches
+        },
+    )?;
     let adapter = context.adapter.get_info();
     let measurements = measure(
         scene,
@@ -614,6 +597,36 @@ pub fn run(
         provenance,
         ..measurements
     })
+}
+
+/// Every frame's stats of one render of a `configuration` run of `scene` as
+/// `switches` set, and the scene's content hash.
+fn render_run(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    configuration: Configuration,
+    switches: RenderSwitches,
+) -> anyhow::Result<(Vec<FrameStats>, String)> {
+    // A software rasterizer's threads would share the CPU with the spin.
+    let wait = match context.adapter.get_info().device_type {
+        wgpu::DeviceType::Cpu => FrameWait::Block,
+        _ => FrameWait::Spin,
+    };
+    let (_, frames, scene_content_hash) = render_frames(
+        context,
+        scene,
+        glam::DVec3::ZERO,
+        configuration.width,
+        configuration.height,
+        0..configuration.warm_up_frames + configuration.measured_frames,
+        &[],
+        // ADR 0022 judges Budgets at 60 Hz.
+        SIXTY_HERTZ,
+        switches,
+        wait,
+        SETTLED_FRAMES,
+    )?;
+    Ok((frames, scene_content_hash))
 }
 
 /// The Measurements of `frames`, a `configuration` run of `scene` on
@@ -1159,7 +1172,7 @@ mod tests {
     }
 
     impl SlowIo {
-        fn receive_all(&mut self) {
+        fn finish_every_read_now(&mut self) {
             for (finishes_on, _) in &mut self.in_flight {
                 *finishes_on = self.frame;
             }
@@ -1207,14 +1220,37 @@ mod tests {
                     if !SETTLED_FRAMES.contains(&frame) || streamed.settled {
                         break;
                     }
-                    io.receive_all();
+                    io.finish_every_read_now();
                 }
             }
         }
     }
 
+    /// A Chunk requested on a frame that does not wait for it loads on a
+    /// later frame at the earliest.
     #[test]
-    fn a_run_settles_each_frame_before_the_counter_frames_and_no_later_one() {
+    fn a_run_loads_every_chunk_of_its_scene_on_its_first_frame() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::NormalTangent;
+        let configuration = Configuration {
+            width: 64,
+            height: 36,
+            warm_up_frames: COUNTER_FRAMES.start,
+            measured_frames: 1,
+            aliasing: false,
+        };
+        let (frames, _) = render_run(&context, scene, configuration, RenderSwitches::default())
+            .expect("the scene renders");
+        assert_eq!(
+            frames[0].chunks_loaded as usize,
+            scene.chunk_coordinates().len()
+        );
+    }
+
+    #[test]
+    fn every_configuration_settles_only_warm_up_frames_up_to_the_counter_frames() {
         assert_eq!(SETTLED_FRAMES.end, COUNTER_FRAMES.start);
         for configuration in [
             Configuration::REFERENCE,
