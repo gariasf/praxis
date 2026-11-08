@@ -116,25 +116,25 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; the frame's upload &middot; <code>src/render/acceleration_structures.rs</code></div>
   <h1>The static TLAS</h1>
-  <p class="definition">A <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> over every static <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instance</span>, each in an entry of its own and tagged with its slot, placed in a frame whose origin is the corner of the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> in the first Frame data; built in that frame's upload and rebuilt only in a frame that writes, frees or admits a static Instance, it is the first structure every shadow ray queries.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 79c2cf5f (2026-11-07). A change to the static TLAS rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="blas.html">A BLAS per Mesh</a> for the structures its entries place, <a href="instance-buffer.html">Instance Buffer Explained</a> for the slots and writes it follows. <a href="dynamic-tlas.html">The dynamic TLAS</a> holds the Instances it leaves out; <a href="shadow-mask.html">the shadow mask pass</a> traces against both.</p>
+  <p class="definition">A <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> over every static <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instance</span>, each in an entry of its own and tagged with its slot, placed in a frame whose origin is the corner of the camera's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> in the first Frame data; held in two TLASes, one bound for rays while a worker thread brings the other up to date and records its build, which the main thread submits and binds the frame after, it is the first structure every shadow ray queries.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 73aec1f3 (2026-11-07). A change to the static TLAS rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="blas.html">A BLAS per Mesh</a> for the structures its entries place, <a href="instance-buffer.html">Instance Buffer Explained</a> for the slots and writes it follows. <a href="dynamic-tlas.html">The dynamic TLAS</a> holds the Instances it leaves out; <a href="shadow-mask.html">the shadow mask pass</a> traces against both.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd>In every frame's <code>Renderer::upload</code>, after the loads' BLASes are compacted and before the dynamic TLAS's fill. It records a build in the first frame, and in a frame whose Instance writes change one of its entries.</dd>
-      <dt>Reads</dt><dd>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>instance_writes</code> and the <code>instances</code> they cover; each static Instance's BLAS, from <code>MeshPool::blas</code>; the camera's Anchor, in the first Frame data only.</dd>
-      <dt>Writes</dt><dd>Its entries, one per static Instance up to its capacity, and the entry each such Instance's slot holds; the Anchor of its frame, which the camera uniform carries to the GPU as <code>tlas_anchor</code> and the dynamic TLAS shares; the static Instances it leaves out, by slot.</dd>
-      <dt>Builds</dt><dd>One <code>build_acceleration_structures</code> of the TLAS alone, recorded into the frame's encoder ahead of the frame's copies and passes, in a frame that changes it.</dd>
-      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>, built once since the TLAS is rebuilt in place.</dd>
+      <dt>Runs</dt><dd>In every frame's <code>Renderer::upload</code>, after the loads' BLASes are compacted and before the dynamic TLAS's fill: <code>StaticTlas::update</code> takes the frame's entry changes, binds the spare whose build the frame before submitted, submits a build the worker has finished, and hands the idle spare to a new worker when either TLAS lacks a change. The build runs on the worker thread, never in the frame's encoder.</dd>
+      <dt>Reads</dt><dd>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>instance_writes</code> and the <code>instances</code> they cover; each static Instance's BLAS, from <code>MeshPool::blas</code>; the camera's Anchor, in the first Frame data only; the <code>wait_for_static_tlas</code> Render switch, which a capture sets.</dd>
+      <dt>Writes</dt><dd>The entry each static Instance's slot holds and each frame's entry changes, which both TLASes take; the Anchor of its frame, which the camera uniform carries to the GPU as <code>tlas_anchor</code> and the dynamic TLAS shares; the static Instances it leaves out, by slot.</dd>
+      <dt>Builds</dt><dd>Both TLASes, empty, at creation; then one <code>build_acceleration_structures</code> of the spare alone, recorded and finished on the worker into a command buffer of its own, which the main thread submits before the frame's, when the bound TLAS lacks a change.</dd>
+      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound_index</code>.</dd>
       <dt>Shader</dt><dd>Queried in <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>.</dd>
-      <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; its estimate at full capacity in the acceleration structures' estimate, and so in <code>gpu_memory_bytes</code>; its recording in the <code>upload</code> stage. No GPU pass time is taken of its build.</dd>
+      <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; <code>static_tlas_build_time</code>, the worker's time on the build a frame submits, and <code>frames_until_traced</code>, in a frame that binds a new build; both TLASes at full capacity in the acceleration structures' ledger, and so in <code>gpu_memory_bytes</code>; the main thread's share, the entry changes and the submit, in the <code>static_tlas_update</code> stage. No GPU pass time is taken of its build.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
     <a href="#frame">1 &middot; Where it sits</a>
     <a href="#entries">2 &middot; An entry per static Instance</a>
     <a href="#anchor">3 &middot; A frame anchored at load</a>
-    <a href="#rebuild">4 &middot; When it rebuilds</a>
+    <a href="#rebuild">4 &middot; Two TLASes and a worker</a>
     <a href="#capacity">5 &middot; Capacity and what it leaves out</a>
     <a href="#rays">6 &middot; What the rays read</a>
     <a href="#tests">7 &middot; How it is tested</a>
@@ -148,7 +148,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <section class="part prose" id="frame">
   <div class="part-mark">1 &middot; <code>Renderer::upload</code></div>
   <h2>Where it sits in the frame</h2>
-  <p class="key-idea">The static TLAS is updated at the head of the frame's encoder, after the frame's loads have been built and compacted and before anything else the frame records, so the shadow mask pass later in the same command buffer reads it built.</p>
+  <p class="key-idea">The static TLAS is updated in the upload, after the frame's loads have been built and compacted and before the dynamic TLAS's fill. It records nothing into the frame's encoder: a build lands on the GPU in a command buffer of its own, and rays trace it from the frame after its submit.</p>
 <pre class="code"><code>// Loads staged since the last frame land before its copies and
 // draws, and their BLASes are compacted before the static TLAS
 // takes them.
@@ -160,29 +160,51 @@ let preparing = Instant::now();
 self.dynamic_tlas.prepare_encoder(&amp;self.device);
 let prepare_time = recorder.stage(DYNAMIC_TLAS_RECORDING, preparing);
 let mut encoder = create_frame_encoder(&amp;self.device);
-self.static_tlas
-    .update(frame, &amp;self.mesh_pool, &amp;mut encoder);
+let updating = Instant::now();
+let static_tlas_update = self.static_tlas.update(
+    frame,
+    &amp;self.mesh_pool,
+    &amp;self.device,
+    &amp;self.queue,
+    self.wait_for_static_tlas,
+);
+let update_time = recorder.stage(STATIC_TLAS_UPDATE, updating);
+recorder.counters.static_tlas_build_time =
+    static_tlas_update.build_time.unwrap_or_default();
+recorder.counters.frames_until_traced = static_tlas_update.frames_until_traced;
 recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
 // Shadow rays start in the static TLAS's frame, whose Anchor the
 // first Frame data's camera set, and the dynamic TLAS shares it. Its
 // fill counts as its recording, not as the upload.
 let tlas_anchor = self.static_tlas.anchor();</code></pre>
-  <p class="code-source"><code>Renderer::upload</code>, <code>src/render/renderer.rs</code>; the dynamic TLAS's encoder and fill are <a href="dynamic-tlas.html">the dynamic TLAS</a>'s.</p>
-  <p><code>Renderer::new</code> creates it empty with <code>capacities.static_tlas_instances</code> entries, the capacity it derives from the Budgets (section 5). Each frame's upload first submits the loads staged since the last frame, counting the bytes their Texture moves copy as uploaded, and, when they loaded Meshes, waits for their BLASes to be built and compacted (<a href="blas.html#compaction">A BLAS per Mesh, Compaction</a>); only then does <code>StaticTlas::update</code> take the frame's Instance writes and record a build into the new frame encoder, which <code>render</code> later fills with the frame's copies and passes and submits. The update also hands Frame stats the count of Instances it left out, and its Anchor goes into the camera uniform, which shadow rays start from.</p>
+   TLAS's encoder and fill are <a href="dynamic-tlas.html">the dynamic TLAS</a>'s.</p>
+  <p><code>Renderer::new</code> creates it with <code>capacities.static_tlas_instances</code> entries in each of its two TLASes, the capacity it derives from the Budgets (section 5), and builds both empty at once, so rays can query either from the first frame. Each frame's upload first submits the loads staged since the last frame and, when they loaded Meshes, waits for their BLASes to be built and compacted (<a href="blas.html#compaction">A BLAS per Mesh, Compaction</a>); only then does <code>StaticTlas::update</code> take the frame's Instance writes. Its time on the main thread is the <code>static_tlas_update</code> stage, taken out of <code>upload</code>; the worker's time on the build the update submits goes into Frame stats as <code>static_tlas_build_time</code>, apart from the frame, and the frames a change waited to be traced as <code>frames_until_traced</code>. The update also hands Frame stats the count of Instances it left out, and its Anchor goes into the camera uniform, which shadow rays start from.</p>
 </section>
 
 <section class="part prose" id="entries">
-  <div class="part-mark">2 &middot; <code>StaticTlas::update</code> &middot; <code>tlas_instance</code></div>
+  <div class="part-mark">2 &middot; <code>StaticTlas::entry_changes</code> &middot; <code>tlas_instance</code></div>
   <h2>An entry per static Instance</h2>
-  <p class="key-idea">A static Instance whose Mesh has a BLAS takes an entry of its own, a freed one before a fresh one, tagged with its slot; a Moving Instance, a freed slot and a Mesh no ray traces empty its entry and free it. Its slot is only the key that finds the entry, so a slot past the capacity traces like any other.</p>
+  <p class="key-idea">A static Instance whose Mesh has a BLAS takes an entry of its own, a freed one before a fresh one, tagged with its slot; a Moving Instance, a freed slot and a Mesh no ray traces empty its entry and free it. Each is an entry change, which both TLASes take in turn. Its slot is only the key that finds the entry, so a slot past the capacity traces like any other.</p>
 <pre class="code"><code>/// The static TLAS (ADR 0020): each static Instance in an entry of its own,
 /// tagged with its slot, in a frame whose origin is the corner of the
-/// camera's Anchor in the first Frame data it takes, never re-anchored in M3.
-/// It is built from that Frame data, empty or
-/// not, so rays can always query it, and rebuilt in a frame that changes a
-/// static Instance or frees one's slot.
+/// camera's Anchor in the first Frame data it takes, never re-anchored.
+/// Two TLASes hold it: rays trace the bound one while a worker thread brings
+/// the spare up to date and records its build, which the main thread submits
+/// (ADR 0016), and the spare is bound from the frame after that submit. A
+/// frame that changes a static Instance or frees one's slot starts a build
+/// once the spare is idle; both are built empty at creation, so rays can
+/// always query them.
 pub struct StaticTlas {
-    tlas: Counted&lt;wgpu::Tlas&gt;,
+    bound: Counted&lt;wgpu::Tlas&gt;,
+    /// Which of the two `bound` is: 0 for the one bound at creation.
+    bound_index: usize,
+    spare: Option&lt;Spare&gt;,
+    /// The entry changes each TLAS's entries lack, by TLAS, oldest first;
+    /// the bound one's are those its last build lacked.
+    behind: [Vec&lt;ChangeBatch&gt;; 2],
+    /// Frames it has taken.
+    frame: u64,
+    capacity: u32,
     anchor: Option&lt;[i32; 3]&gt;,
     /// The entry each slot's static Instance holds, by slot, up to the
     /// highest slot that held one.
@@ -194,41 +216,53 @@ pub struct StaticTlas {
     /// Static Instances it had no free entry for, by slot, which take the
     /// entries still free after a later frame's writes, lowest slot first.
     left_out: BTreeMap&lt;u32, wgpu::TlasInstance&gt;,
-}
-
-impl StaticTlas {
-    /// An empty static TLAS of `capacity` entries, counted in `memory`.
-    pub fn new(device: &amp;wgpu::Device, memory: &amp;GpuMemory, capacity: u32) -&gt; Self {
-        Self {
-            tlas: memory.create_tlas(
-                device,
-                &amp;wgpu::CreateTlasDescriptor {
-                    label: Some("Static TLAS"),
-                    max_instances: capacity,
-                    // Rebuilt only when its Instances change, traced every frame.
-                    flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-                },
-            ),
-            anchor: None,
-            entry_by_slot: Vec::new(),
-            free_entries: Vec::new(),
-            end: 0,
-            left_out: BTreeMap::new(),
-        }
-    }</code></pre>
-  <p class="code-source"><code>StaticTlas</code> and <code>StaticTlas::new</code>, <code>src/render/acceleration_structures.rs</code>. <code>GpuMemory::create_tlas</code> counts it in the GPU memory ledger at its estimated bytes, under acceleration structures.</p>
-<pre class="code"><code>/// Takes `frame`'s Instance writes, each static one's BLAS from
-/// `mesh_pool`, and records its build into `encoder` for the first Frame
-/// data and when they change a static Instance or free one's slot.
-/// Returns whether it did.
-pub fn update(
-    &amp;mut self,
-    frame: &amp;FrameData,
-    mesh_pool: &amp;MeshPool,
-    encoder: &amp;mut wgpu::CommandEncoder,
-) -&gt; bool {
-    let mut changed = self.anchor.is_none();
+}</code></pre>
+<pre class="code"><code>/// An empty static TLAS of `capacity` entries, both TLASes counted in
+/// `memory` and built at once through `queue`.
+pub fn new(
+    device: &amp;wgpu::Device,
+    memory: &amp;GpuMemory,
+    queue: &amp;wgpu::Queue,
+    capacity: u32,
+) -&gt; Self {
+    let create = |label| {
+        memory.create_tlas(
+            device,
+            &amp;wgpu::CreateTlasDescriptor {
+                label: Some(label),
+                max_instances: capacity,
+                // Rebuilt only when its Instances change, traced every frame.
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            },
+        )
+    };
+    let bound = create("Static TLAS 0");
+    let spare = create("Static TLAS 1");
+    let mut encoder = device.create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+        label: Some("Static TLAS Encoder"),
+    });
+    encoder.build_acceleration_structures(std::iter::empty(), [&amp;*bound, &amp;*spare]);
+    queue.submit(std::iter::once(encoder.finish()));
+    Self {
+        bound,
+        bound_index: 0,
+        spare: Some(Spare::Idle(spare)),
+        behind: [Vec::new(), Vec::new()],
+        frame: 0,
+        capacity,
+        anchor: None,
+        entry_by_slot: Vec::new(),
+        free_entries: Vec::new(),
+        end: 0,
+        left_out: BTreeMap::new(),
+    }
+}</code></pre>
+  <p class="code-source"><code>StaticTlas</code> and <code>StaticTlas::new</code>, <code>src/render/acceleration_structures.rs</code>. <code>GpuMemory::create_tlas</code> counts each TLAS in the GPU memory ledger at its estimated bytes, under acceleration structures.</p>
+<pre class="code"><code>/// The entry changes of `frame`'s Instance writes, its entries taken and
+/// freed as its static Instances need.
+fn entry_changes(&amp;mut self, frame: &amp;FrameData, mesh_pool: &amp;MeshPool) -&gt; Vec&lt;EntryChange&gt; {
+    let mut changes = Vec::new();
     let anchor = *self.anchor.get_or_insert(frame.camera.anchor);
     let was_leaving_out = !self.left_out.is_empty();
     for write in &amp;frame.instance_writes {
@@ -243,18 +277,22 @@ pub fn update(
                 })
                 .flatten();
             let Some(blas) = blas else {
-                changed |= self.release(slot);
+                if let Some(entry) = self.release(slot) {
+                    changes.push(EntryChange {
+                        entry,
+                        instance: None,
+                    });
+                }
                 continue;
             };
-            let transform = anchored_transform(instance, anchor);
+            let instance = tlas_instance(blas, anchored_transform(instance, anchor), slot);
             match self.entry_of(slot) {
-                Some(entry) =&gt; {
-                    *self.entry_mut(entry) = Some(tlas_instance(blas, transform, slot));
-                    changed = true;
-                }
+                Some(entry) =&gt; changes.push(EntryChange {
+                    entry,
+                    instance: Some(instance),
+                }),
                 None =&gt; {
-                    self.left_out
-                        .insert(slot, tlas_instance(blas, transform, slot));
+                    self.left_out.insert(slot, instance);
                 }
             }
         }
@@ -264,22 +302,21 @@ pub fn update(
     {
         let (slot, instance) = self.left_out.pop_first().expect("not empty");
         self.hold(slot, entry);
-        *self.entry_mut(entry) = Some(instance);
-        changed = true;
+        changes.push(EntryChange {
+            entry,
+            instance: Some(instance),
+        });
     }
     if !was_leaving_out &amp;&amp; !self.left_out.is_empty() {
         tracing::warn!(
             left_out = self.left_out.len(),
-            capacity = self.tlas.get().len(),
+            capacity = self.capacity,
             "Static Instances left out of the static TLAS: it is full, so they cast no shadow"
         );
     }
-    if changed {
-        encoder.build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;*self.tlas));
-    }
-    changed
+    changes
 }</code></pre>
-  <p class="code-source"><code>StaticTlas::update</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p class="code-source"><code>StaticTlas::entry_changes</code>, <code>src/render/acceleration_structures.rs</code>, which <code>StaticTlas::update</code> calls first.</p>
 <pre class="code"><code>/// The entry of `slot`'s static Instance, taking one if it has none;
 /// None when it is full.
 fn entry_of(&amp;mut self, slot: u32) -&gt; Option&lt;u32&gt; {
@@ -292,20 +329,16 @@ fn entry_of(&amp;mut self, slot: u32) -&gt; Option&lt;u32&gt; {
     Some(entry)
 }
 
-/// Empties `slot`'s entry, if it has one, and frees it; drops its
-/// Instance if left out. Returns whether an entry changed.
-fn release(&amp;mut self, slot: u32) -&gt; bool {
+/// Frees `slot`'s entry, if it has one, and returns it; drops its
+/// Instance if left out.
+fn release(&amp;mut self, slot: u32) -&gt; Option&lt;u32&gt; {
     self.left_out.remove(&amp;slot);
-    let Some(entry) = self
+    let entry = self
         .entry_by_slot
         .get_mut(slot as usize)
-        .and_then(Option::take)
-    else {
-        return false;
-    };
+        .and_then(Option::take)?;
     self.free_entries.push(entry);
-    *self.entry_mut(entry) = None;
-    true
+    Some(entry)
 }
 
 fn hold(&amp;mut self, slot: u32, entry: u32) {
@@ -319,20 +352,14 @@ fn hold(&amp;mut self, slot: u32, entry: u32) {
 /// A freed entry, else a fresh one, else None when it is full.
 fn take_entry(&amp;mut self) -&gt; Option&lt;u32&gt; {
     self.free_entries.pop().or_else(|| {
-        let fresh = (self.end &lt; self.tlas.get().len() as u32).then_some(self.end)?;
+        let fresh = (self.end &lt; self.capacity).then_some(self.end)?;
         self.end += 1;
         Some(fresh)
     })
-}
-
-fn entry_mut(&amp;mut self, entry: u32) -&gt; &amp;mut Option&lt;wgpu::TlasInstance&gt; {
-    self.tlas
-        .get_mut_single(entry as usize)
-        .expect("entries are taken under its capacity")
 }</code></pre>
-  <p class="code-source"><code>StaticTlas::entry_of</code>, <code>StaticTlas::release</code>, <code>StaticTlas::hold</code>, <code>StaticTlas::take_entry</code> and <code>StaticTlas::entry_mut</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p class="code-source"><code>StaticTlas::entry_of</code>, <code>StaticTlas::release</code>, <code>StaticTlas::hold</code> and <code>StaticTlas::take_entry</code>, <code>src/render/acceleration_structures.rs</code>.</p>
   <p>Prepare writes Instances in runs of consecutive slots, each run an <code>InstanceWrite</code> flagged <code>moving</code> where its Instances are <span class="concept" data-term="Moving Instance" data-tip="An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.">Moving Instances</span>, and splits a run where the flag changes. The update walks every written slot. A static Instance gets its Mesh's BLAS, found through the Handle of the Mesh at the index the Instance names (<code>MeshPool::handle_at</code>); a Moving Instance gets none, so a static Instance that starts to move empties its entry the frame it does. A freed slot is written an Instance whose Mesh is <code>NO_MESH</code>, which no Mesh is loaded at, and a Mesh loaded <code>MeshUse::Drawn</code> has no BLAS, so both empty the entry.</p>
-  <p>A written static Instance asks <code>entry_of</code> for its slot's entry: the one the slot already holds, else the last entry freed, else the next fresh one below the capacity, and when neither is left its Instance waits in <code>left_out</code>, keyed by slot. The entry is filled in place, where the Instance is built, so a frame that writes every static Instance copies none. A write with no BLAS calls <code>release</code>, which frees the slot's entry into <code>free_entries</code> and drops it from <code>entry_by_slot</code>, a table indexed by slot. After the writes, the waiting Instances take whatever entries are still free, lowest slot first, each a change that rebuilds. So prepare's slots never limit what it holds: a <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>'s range, which comes past the highest slot taken, traces whether it lies under the capacity or not. Entries are taken in write order, and wgpu-core builds from the filled entries in entry order, skipping empty ones, so a scene whose first frame writes its static Instances in slot order builds from the list it built from when entries were slots.</p>
+  <p>A written static Instance asks <code>entry_of</code> for its slot's entry: the one the slot already holds, else the last entry freed, else the next fresh one below the capacity, and when neither is left its Instance waits in <code>left_out</code>, keyed by slot. The entry's new Instance becomes an <code>EntryChange</code>, pushed into the frame's list; a frame that changes nothing static allocates no list. A write with no BLAS calls <code>release</code>, which frees the slot's entry into <code>free_entries</code>, drops it from <code>entry_by_slot</code>, a table indexed by slot, and returns the entry to empty. After the writes, the waiting Instances take whatever entries are still free, lowest slot first, each a change. So prepare's slots never limit what it holds: a <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk&#39;s edge.">Chunk</span>'s range, which comes past the highest slot taken, traces whether it lies under the capacity or not. Entries are taken in write order, and wgpu-core builds from the filled entries in entry order, skipping empty ones, so a scene whose first frame writes its static Instances in slot order builds from the list it built from when entries were slots.</p>
 <pre class="code"><code>/// An Instance's entry in a TLAS: `blas`, placed by `transform`
 /// (`anchored_transform`) and tagged with its `slot`.
 fn tlas_instance(blas: &amp;wgpu::Blas, transform: [f32; 12], slot: u32) -&gt; wgpu::TlasInstance {
@@ -377,24 +404,202 @@ fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32;
 </section>
 
 <section class="part prose" id="rebuild">
-  <div class="part-mark">4 &middot; <code>changed</code></div>
-  <h2>When it rebuilds</h2>
-  <p class="key-idea">wgpu 30 cannot update a TLAS in place, so every change is a full rebuild, and the static TLAS rebuilds only in a frame that changes one of its entries: the first frame, a static Instance written, a static Instance's entry emptied, or a left-out one admitted.</p>
+  <div class="part-mark">4 &middot; <code>StaticTlas::update</code> &middot; <code>Spare</code></div>
+  <h2>Two TLASes and a worker</h2>
+  <p class="key-idea">wgpu 30 cannot update a TLAS in place, so every change is a full rebuild, whose CPU cost a worker thread takes: rays trace the bound TLAS while the worker applies the changes the other lacks and records its build, the main thread submits it, and the frame after binds it. Each frame's changes are one shared batch that both TLASes take, so neither ever copies the other.</p>
+<pre class="code"><code>/// What a static TLAS's update did on the main thread's behalf.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StaticTlasUpdate {
+    /// The worker's time on the build the update submitted: taking the
+    /// entry changes, recording and finishing.
+    pub build_time: Option&lt;Duration&gt;,
+    /// When the update bound a newly built TLAS, the frames since the
+    /// earliest change it brings: how long a newly loaded Chunk's Instances
+    /// waited to be traced.
+    pub frames_until_traced: Option&lt;u32&gt;,
+}</code></pre>
+<pre class="code"><code>/// The TLAS that is not bound.
+enum Spare {
+    /// On the main thread.
+    Idle(Counted&lt;wgpu::Tlas&gt;),
+    /// On the worker, which takes the entry changes it lacks and records its
+    /// build when `built_from` is set: the frame of the earliest change the
+    /// bound TLAS lacks.
+    Working {
+        worker: std::thread::JoinHandle&lt;Work&gt;,
+        built_from: Option&lt;u64&gt;,
+    },
+    /// Its build submitted, bound from the next frame.
+    Submitted {
+        tlas: Counted&lt;wgpu::Tlas&gt;,
+        built_from: u64,
+    },
+}
+
+/// What the worker hands back.
+struct Work {
+    tlas: Counted&lt;wgpu::Tlas&gt;,
+    build: Option&lt;wgpu::CommandBuffer&gt;,
+    time: Duration,
+}
+
+/// The entry changes of one frame.
+struct ChangeBatch {
+    frame: u64,
+    changes: Arc&lt;Vec&lt;EntryChange&gt;&gt;,
+}
+
+struct EntryChange {
+    entry: u32,
+    instance: Option&lt;wgpu::TlasInstance&gt;,
+}</code></pre>
+  <p class="code-source"><code>StaticTlasUpdate</code>, <code>Spare</code>, <code>Work</code>, <code>ChangeBatch</code> and <code>EntryChange</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+<pre class="code"><code>/// Takes `frame`'s Instance writes, each static one's BLAS from
+/// `mesh_pool`; binds the spare if its build was submitted in the
+/// frame before; collects the worker's result, submitting its build
+/// through `queue`; and hands the idle spare to a new worker on
+/// `device` when either TLAS lacks a change. With `wait`, it waits for
+/// that worker, so no frame depends on the worker's timing.
+pub fn update(
+    &amp;mut self,
+    frame: &amp;FrameData,
+    mesh_pool: &amp;MeshPool,
+    device: &amp;wgpu::Device,
+    queue: &amp;wgpu::Queue,
+    wait: bool,
+) -&gt; StaticTlasUpdate {
+    self.frame += 1;
+    let changes = self.entry_changes(frame, mesh_pool);
+    if !changes.is_empty() {
+        let changes = Arc::new(changes);
+        for behind in &amp;mut self.behind {
+            behind.push(ChangeBatch {
+                frame: self.frame,
+                changes: changes.clone(),
+            });
+        }
+    }
+    let mut update = StaticTlasUpdate::default();
+    if let Some(Spare::Submitted { .. }) = self.spare {
+        let Some(Spare::Submitted { tlas, built_from }) = self.spare.take() else {
+            unreachable!("matched")
+        };
+        let unbound = std::mem::replace(&amp;mut self.bound, tlas);
+        self.bound_index = 1 - self.bound_index;
+        self.spare = Some(Spare::Idle(unbound));
+        update.frames_until_traced = Some((self.frame - built_from) as u32);
+    }
+    loop {
+        self.collect(queue, wait, &amp;mut update);
+        if !self.start(device) || !wait {
+            break;
+        }
+    }
+    update
+}</code></pre>
+  <p class="code-source"><code>StaticTlas::update</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p>A frame's entry changes go, as one <code>Arc</code>, into <code>behind</code> for both TLASes, tagged with the frame. The bound TLAS's list is what its last build lacked; the spare's, what its entries lack. A spare whose build the frame before submitted is bound first, by swapping it with the bound one, and the update reports the frames since the earliest change the build brought. Then it collects the worker's result and starts the next job; with <code>wait</code> it goes round again, so a job it starts is collected in the same frame.</p>
+<pre class="code"><code>/// Hands the idle spare to a worker on `device` when its entries lack a
+/// change or the bound TLAS's build does, the worker recording a build
+/// in the latter case. Returns whether it did.
+fn start(&amp;mut self, device: &amp;wgpu::Device) -&gt; bool {
+    let spare_index = 1 - self.bound_index;
+    let built_from = self.behind[self.bound_index]
+        .first()
+        .map(|batch| batch.frame);
+    if !matches!(self.spare, Some(Spare::Idle(_)))
+        || (self.behind[spare_index].is_empty() &amp;&amp; built_from.is_none())
+    {
+        return false;
+    }
+    let Some(Spare::Idle(mut tlas)) = self.spare.take() else {
+        unreachable!("matched")
+    };
+    let batches = std::mem::take(&amp;mut self.behind[spare_index]);
+    let device = built_from.map(|_| device.clone());
+    let worker = std::thread::Builder::new()
+        .name("Static TLAS Worker".to_string())
+        .spawn(move || {
+            let started = Instant::now();
+            for change in batches.iter().flat_map(|batch| batch.changes.iter()) {
+                *tlas
+                    .get_mut_single(change.entry as usize)
+                    .expect("entries are taken under its capacity") = change.instance.clone();
+            }
+            drop(batches);
+            let build = device.map(|device| {
+                let mut encoder =
+                    device.create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+                        label: Some("Static TLAS Encoder"),
+                    });
+                encoder
+                    .build_acceleration_structures(std::iter::empty(), std::iter::once(&amp;*tlas));
+                encoder.finish()
+            });
+            Work {
+                tlas,
+                build,
+                time: started.elapsed(),
+            }
+        })
+        .expect("the OS starts a thread");
+    self.spare = Some(Spare::Working { worker, built_from });
+    true
+}</code></pre>
+<pre class="code"><code>/// Takes the worker's result, with `wait` waiting for it, else once it
+/// is done, and submits its build through `queue`.
+fn collect(&amp;mut self, queue: &amp;wgpu::Queue, wait: bool, update: &amp;mut StaticTlasUpdate) {
+    let Some(Spare::Working { worker, .. }) = &amp;self.spare else {
+        return;
+    };
+    if !wait &amp;&amp; !worker.is_finished() {
+        return;
+    }
+    let Some(Spare::Working { worker, built_from }) = self.spare.take() else {
+        unreachable!("matched")
+    };
+    let work = worker
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+    self.spare = Some(match (work.build, built_from) {
+        (Some(build), Some(built_from)) =&gt; {
+            queue.submit(std::iter::once(build));
+            update.build_time = Some(work.time);
+            Spare::Submitted {
+                tlas: work.tlas,
+                built_from,
+            }
+        }
+        _ =&gt; Spare::Idle(work.tlas),
+    });
+}</code></pre>
+  <p class="code-source"><code>StaticTlas::start</code> and <code>StaticTlas::collect</code>, <code>src/render/acceleration_structures.rs</code>.</p>
+  <p>A job starts only on an idle spare, when its entries lack a change or the bound TLAS lacks one. The worker, a thread spawned for the job, applies every batch the spare lacks, oldest first, so an entry changed twice ends as its last change says, and drops its share of the batches. It records a build only when the bound TLAS lacks a change: <code>built_from</code>, the frame of the earliest change the bound TLAS lacks, is then set, and the job's <code>Work</code> carries a finished command buffer. <code>CommandEncoder</code> and <code>Tlas</code> are <code>Send</code>, so the worker records and finishes, and only the main thread submits, as ADR 0016 rules. Once the worker is done, or at once with <code>wait</code>, <code>collect</code> joins it, submits a build through the queue and reports the worker's time; a job without one, a catch-up, returns the spare to idle. A panic on the worker resumes on the main thread.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>In a frame that</th><th>The entry</th><th>Rebuilt</th></tr></thead>
+    <thead><tr><th>In a frame that</th><th>The entry</th><th>A change</th></tr></thead>
     <tbody>
-      <tr class="focus"><td>is the first Frame data, whatever it holds</td><td>&mdash;</td><td>yes: <code>changed</code> starts true while there is no anchor</td></tr>
       <tr><td>writes a static Instance whose Mesh has a BLAS: spawned, moved, given another Mesh or Material, or written again unchanged, as when every Instance is rewritten after lost uploads</td><td>filled</td><td>yes</td></tr>
       <tr><td>frees a static Instance's slot, makes it a Moving Instance, or gives it a Mesh with no BLAS</td><td>emptied</td><td>yes</td></tr>
       <tr><td>writes a Moving Instance, or frees its slot</td><td>already empty</td><td>no</td></tr>
       <tr><td>writes a static Instance with no entry while every entry is filled</td><td>none: left out, by slot</td><td>no</td></tr>
       <tr><td>empties an entry while static Instances are left out</td><td>filled with the lowest left-out slot's Instance</td><td>yes</td></tr>
       <tr><td>writes no Instance, as when only the camera moves</td><td>&mdash;</td><td>no</td></tr>
+      <tr class="focus"><td>is the first Frame data, whatever it holds</td><td>&mdash;</td><td>only as above: both TLASes were built empty at creation</td></tr>
     </tbody>
   </table>
   </div>
-  <p>The first Frame data always builds it, even with no static Instance, since wgpu-core refuses a pass that uses a TLAS never built, and the shadow mask pass binds it from the first frame. Any write of a static Instance rebuilds, whether or not its data changed. The update returns whether it recorded a build.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Frame</th><th>Without waiting</th><th>With <code>wait_for_static_tlas</code></th></tr></thead>
+    <tbody>
+      <tr><td>F, a Chunk loads</td><td>its changes join both lists; the idle spare goes to a worker, which builds it</td><td>the same, and the update waits for the worker and submits the build</td></tr>
+      <tr><td>F + 1 &hellip;</td><td>each update checks the worker; the one that finds it done submits the build and reports <code>static_tlas_build_time</code></td><td>the spare is bound: <code>frames_until_traced</code> is 1; the TLAS just unbound goes to a worker to take the changes, recording no build</td></tr>
+      <tr><td>the frame after the submit</td><td>the spare is bound and <code>frames_until_traced</code> reported; the unbound one catches up on a worker</td><td>&mdash;</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Any write of a static Instance is a change, whether or not its data changed. The catch-up keeps both TLASes' entries level without a second build: the unbound one builds only when a later change finds the bound one lacking, from entries that by then hold everything. Captures set the <code>wait_for_static_tlas</code> Render switch, so which frame binds a build never depends on the worker's timing; off, as it ships and as the bench runs, the frame never waits.</p>
 </section>
 
 <section class="part prose" id="capacity">
@@ -435,20 +640,20 @@ static_tlas_instances: power_of_two(
     ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE,
 ),</code></pre>
   <p class="code-source"><code>RenderCapacities::from_budgets</code>, <code>src/render/renderer.rs</code>. At creation the Renderer takes <code>RenderCapacities::checked_in</code>, the capacities of the Budgets the build was compiled with, and creates the static TLAS with <code>capacities.static_tlas_instances</code> entries.</p>
-  <p>The checked-in <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019&#x27;s gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS&#x27;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools&#x27; capacities, the Instance slots, the light buffer&#x27;s and the static TLAS&#x27;s derive from them at device creation (ADRs 0013, 0017); their sizes are provisional until M4 sets them. Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.">Budget</span> for acceleration structures, <code>acceleration_structures</code> in <code>bench/budgets.json</code>, is 268,435,456 bytes: an entry per KiB of it is 2<sup>18</sup> = 262,144 entries, already a power of two. In wgpu 30 a TLAS holds one optional entry per place of its capacity from its creation, and recording a build maps every one of them, filled or not, into what wgpu-core builds from; wgpu-core sizes the structure and its buffer of entries by capacity too. At the adapter's estimate per entry, 288.5 bytes on the M4 Pro, the static TLAS takes 75,628,544 of those bytes, the rest left to the BLASes and the dynamic TLAS. <code>town</code>'s 254,319 Instances, as <code>tests/frame_stats.rs</code> counts them, are 244,319 static ones and 10,000 Moving ones, so its static Instances fill all but 17,825 entries.</p>
+  <p>The checked-in <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019&#x27;s gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS&#x27;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools&#x27; capacities, the Instance slots, the light buffer&#x27;s and the static TLAS&#x27;s derive from them at device creation (ADRs 0013, 0017); their sizes are provisional until M4 sets them. Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.">Budget</span> for acceleration structures, <code>acceleration_structures</code> in <code>bench/budgets.json</code>, is 268,435,456 bytes: an entry per KiB of it is 2<sup>18</sup> = 262,144 entries, already a power of two. In wgpu 30 a TLAS holds one optional entry per place of its capacity from its creation, and recording a build maps every one of them, filled or not, into what wgpu-core builds from; wgpu-core sizes the structure and its buffer of entries by capacity too. As <code>tlas_bytes</code> gives it on the M4 Pro, each of its two TLASes takes 75,597,888 of those bytes, 151,195,776 together, the rest left to the BLASes and the dynamic TLAS. <code>town</code>'s 254,319 Instances, as <code>tests/frame_stats.rs</code> counts them, are 244,319 static ones and 10,000 Moving ones, so its static Instances fill all but 17,825 entries.</p>
   <p>A static Instance written while every entry is filled joins the left-out set, keyed by its slot; a later write to that slot replaces or, with no BLAS, removes it, and an entry freed in a later frame admits the lowest slot's. Frame stats read the set's size as <code>static_instances_left_out</code>, shown on the counts line, so it counts only Instances refused for want of an entry. The frame whose update takes the set from empty to holding one warns once, "Static Instances left out of the static TLAS: it is full, so they cast no shadow", with the count and the capacity; the next warning waits until the set has emptied and filled again.</p>
 </section>
 
 <section class="part prose" id="rays">
   <div class="part-mark">6 &middot; <code>SHADOW_RAY_SCENE</code> &middot; <code>first_intersection</code></div>
   <h2>What the rays read</h2>
-  <p class="key-idea">The shadow mask pass binds the static TLAS once, since a rebuild writes it in place, and queries it first for every ray, before the dynamic TLAS.</p>
-<pre class="code"><code>/// Group 2 of the shadow mask pass, built once since its TLAS are rebuilt in
-/// place: the static and dynamic TLAS it traces shadow rays against (ADR
-/// 0020). No other pass binds them, but the dynamic TLAS's markers bind the
-/// dynamic one: at submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one
-/// BLAS per Instance it holds, for each flush of a group holding it, at
-/// least once per pass that binds one
+  <p class="key-idea">The shadow mask pass holds one group per static TLAS, each built once since a rebuild writes its TLAS in place, sets the bound one's, and queries it first for every ray, before the dynamic TLAS.</p>
+<pre class="code"><code>/// Group 2 of the shadow mask pass, built once per static TLAS since each
+/// TLAS is rebuilt in place: a static TLAS and the dynamic TLAS it traces
+/// shadow rays against (ADR 0020). No other pass binds them, but the
+/// dynamic TLAS's markers bind the dynamic one: at submit, wgpu-core 30.0.1
+/// walks a TLAS's dependencies, one BLAS per Instance it holds, for each
+/// flush of a group holding it, at least once per pass that binds one
 /// [ref:wgpu-30-tlas-dependency-per-instance] [ref:wgpu-30-use-tlas-per-flush]
 /// [ref:wgpu-30-submit-tlas-dependencies].
 pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
@@ -461,15 +666,41 @@ pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
 };</code></pre>
   <p class="code-source"><code>SHADOW_RAY_SCENE</code>, <code>src/render/bind_groups.rs</code>.</p>
 <pre class="code"><code>let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
-let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
-    device,
-    &amp;shadow_ray_scene_layout,
-    [
-        ("static_tlas", static_tlas.binding()),
-        ("dynamic_tlas", dynamic_tlas.binding()),
-    ],
+let shadow_ray_scenes = static_tlas.bindings().map(|static_binding| {
+    SHADOW_RAY_SCENE.bind_group(
+        device,
+        &amp;shadow_ray_scene_layout,
+        [
+            ("static_tlas", static_binding),
+            ("dynamic_tlas", dynamic_tlas.binding()),
+        ],
+    )
+});</code></pre>
+  <p class="code-source"><code>ShadowMaskPass::new</code>, <code>src/render/shadow_mask_pass.rs</code>: the groups, built once from <code>StaticTlas::bindings</code>, in its TLASes' order.</p>
+<pre class="code"><code>pass.set_bind_group(
+    SHADOW_RAY_SCENE.index,
+    &amp;self.shadow_ray_scenes[static_tlas_index],
+    &amp;[],
 );</code></pre>
-  <p class="code-source"><code>ShadowMaskPass::new</code>, <code>src/render/shadow_mask_pass.rs</code>: the group, built once from <code>StaticTlas::binding</code>.</p>
+  <p class="code-source"><code>ShadowMaskPass::record</code>, <code>src/render/shadow_mask_pass.rs</code>, whose <code>static_tlas</code> argument the Renderer passes as <code>StaticTlas::bound_index</code>.</p>
+<pre class="code"><code>/// Each TLAS's binding, by index, which stays valid as it is rebuilt in
+/// place: called before its first update, while neither is on the
+/// worker.
+pub fn bindings(&amp;self) -&gt; [wgpu::BindingResource&lt;'_&gt;; 2] {
+    let Some(Spare::Idle(spare)) = &amp;self.spare else {
+        panic!("the spare is on the worker");
+    };
+    let mut bindings = [self.bound.as_binding(), spare.as_binding()];
+    bindings.rotate_left(self.bound_index);
+    bindings
+}
+
+/// The index of the TLAS rays trace this frame, as `bindings` orders
+/// them.
+pub fn bound_index(&amp;self) -&gt; usize {
+    self.bound_index
+}</code></pre>
+  <p class="code-source"><code>StaticTlas::bindings</code> and <code>StaticTlas::bound_index</code>, <code>src/render/acceleration_structures.rs</code>.</p>
 <pre class="code"><code>fn first_intersection(flags: u32, origin: vec3&lt;f32&gt;, direction: vec3&lt;f32&gt;, start_distance: f32, end_distance: f32) -&gt; RayIntersection {
     // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
@@ -483,20 +714,22 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
 <section class="part prose" id="tests">
   <div class="part-mark">7 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">Ray queries against the static TLAS itself pin its entries, tags, transforms 100 km out and rebuild rule; a capacity of 2 pins that a slot past it traces and what it leaves out; prepare's Frame data pins what it holds; an eight-device stress test pins the wait that keeps its build from reading an unfinished BLAS; Renderer tests and Goldens see its shadows.</p>
+  <p class="key-idea">Ray queries against the bound static TLAS pin its entries, tags, transforms 100 km out, rebuild rule and swap; a capacity of 2 pins that a slot past it traces and what it leaves out; prepare's Frame data pins what it holds; a capture pins when a loaded Chunk is traced; an eight-device stress test pins the wait that keeps its build from reading an unfinished BLAS; Renderer tests and Goldens see its shadows.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
-      <tr><td><code>the_static_tlas_holds_each_static_instance_tagged_with_its_slot_from_the_load_anchor</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>the first Frame data builds it with only a Moving Instance, and the same frame again does not; with the anchor at cell [1562, 0, &minus;3], 99,968 m out, a turned and doubled static Instance in slot 0 and an unturned one in slot 2 are held tagged 0 and 2, with the rows expected, and rays hit them where they lie and not where a transposed rotation would put them, nor the Moving Instance; a frame that writes only the Moving Instance after the camera moves does not rebuild and keeps the anchor; a static spawn and a free each rebuild; freeing the Moving Instance's slot does not</td></tr>
+      <tr><td><code>the_static_tlas_holds_each_static_instance_tagged_with_its_slot_from_the_load_anchor</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>built empty at creation, it is not rebuilt for a Moving Instance, and rays miss it; each step below waits for the worker and binds the build with a frame that writes nothing, which reports one frame until traced; with the anchor at cell [1562, 0, &minus;3], 99,968 m out, a turned and doubled static Instance in slot 0 and an unturned one in slot 2 are held tagged 0 and 2, with the rows expected, and rays hit them where they lie and not where a transposed rotation would put them, nor the Moving Instance; a frame that writes only the Moving Instance after the camera moves does not rebuild and keeps the anchor; a static spawn and a free each rebuild; freeing the Moving Instance's slot does not</td></tr>
+      <tr class="focus"><td><code>the_spare_swaps_in_the_frame_after_its_build_is_submitted</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>without waiting, frames keep the bound TLAS until one submits the worker's build, which still misses the new Instance; the next binds the other TLAS, reports the frames since the change, and rays hit; the unbound one then catches up with no build; a second change builds into the first TLAS, which holds both</td></tr>
+      <tr><td><code>a_chunk_loaded_in_the_first_frame_is_traced_from_the_second</code></td><td><code>tests/frame_stats.rs</code></td><td>a capture of the pbr sweep, which loads its Chunk in its first frame, reports the worker's build time in frame 0 alone and one frame until traced in frame 1 alone</td></tr>
       <tr><td><code>a_static_instance_in_a_slot_past_its_capacity_is_traced</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>at a capacity of 2, beside a Moving Instance in slot 0, a static Instance in slot 5 is hit by a ray and none is left out</td></tr>
       <tr><td><code>it_holds_the_loaded_chunks_and_the_static_renderables_static_instances</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>from <code>FramePreparer</code>'s Frame data, a loaded Chunk's two Placements and two static Renderables are held and a Moving Renderable is not; despawning one static Renderable drops its slot</td></tr>
       <tr><td><code>static_instances_past_its_capacity_are_left_out_counted_and_warned_about_once</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>at a capacity of 2, static Instances in slots 0 to 3 leave 2 out, freeing slot 3 leaves 1, rewriting slot 2 leaves 1, freeing slot 0 admits slot 2's and leaves none, slots 1 and 2 are held, and one warning is logged</td></tr>
       <tr><td><code>the_checked_in_budgets_keep_the_render_capacities_before_them</code></td><td><code>src/render/renderer.rs</code></td><td>the checked-in Budgets give the static TLAS 262,144 entries, beside the Instance slots and the lights</td></tr>
       <tr><td><code>every_slot_the_checked_in_budgets_give_fits_an_entrys_custom_data</code></td><td><code>src/render/acceleration_structures.rs</code></td><td>the checked-in Budgets' Instance slots and static TLAS entries stay within the 2<sup>24</sup> an entry's custom data holds, so every slot reaches a hit whole</td></tr>
-      <tr class="focus"><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>the regression test for the load path: eight threads, each with its own device, load a triangle, compact it and build a TLAS of it 25 times, and every ray hits, so a TLAS built after <code>compact_blases</code> returns reads the finished copy</td></tr>
-      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>src/render/renderer.rs</code></td><td>a static square shadows the floor's middle through the static TLAS, and shadows alike as a Moving Instance through the dynamic one</td></tr>
-      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the acceleration structures' estimate counts the static TLAS at its 2<sup>18</sup> entries by the adapter's bytes per entry</td></tr>
+      <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>the regression test for the load path: eight threads, each with its own device, load a triangle, compact it and build a TLAS of it 25 times, and every ray hits, so a TLAS built after <code>compact_blases</code> returns reads the finished copy</td></tr>
+      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>src/render/renderer.rs</code></td><td>a static square shadows the floor's middle through the static TLAS, rendered again without writes so its build is bound, and shadows alike as a Moving Instance through the dynamic one</td></tr>
+      <tr><td><code>capture_reports_the_pbr_sweep_frame_stats</code></td><td><code>tests/frame_stats.rs</code></td><td>the acceleration structures' estimate counts both static TLASes at their 2<sup>18</sup> entries each by the adapter's bytes per entry</td></tr>
       <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s frame, at the origin and shifted 100 km from it, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, its static shadows included</td></tr>
     </tbody>
   </table>
@@ -507,58 +740,39 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
 <section class="part prose" id="cost">
   <div class="part-mark">8 &middot; <code>bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">The static TLAS's cost is memory, counted at full capacity whatever it holds: 9.9% to 11.4% of each scene's GPU memory on the Apple M4 Pro, 7.2% to 8.1% on the RTX 2070 SUPER. Its CPU cost is a rebuild's, paid in the first frame and in frames that change a static Instance.</p>
-  <p>Each scene's <code>gpu_memory_bytes</code> from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, at 2560&times;1440 with 4x MSAA, beside the static TLAS's estimate, 2<sup>18</sup> entries at the adapter's bytes per entry: the M4 Pro's 288.5 and NVIDIA's 238.2, wgpu-core's buffer of entries included. CI's lavapipe Baselines, at 640&times;360, are left out; lavapipe's figure is 240 bytes per entry.</p>
+  <p class="key-idea">The static TLAS's cost is memory, two TLASes counted at full capacity whatever they hold: 18.0% to 20.5% of each scene's GPU memory on the Apple M4 Pro. A rebuild's CPU cost falls on the worker thread, and the main thread pays the entry changes and the submit.</p>
+  <p>Each scene's <code>gpu_memory_bytes</code> from the M4 Pro's Baselines as this page's code leaves them, at 2560&times;1440 with 4x MSAA, beside the two static TLASes' bytes, 75,597,888 each at 2<sup>18</sup> entries, as <code>tlas_bytes</code> gives them on Metal, wgpu-core's buffer of entries included. lavapipe's Baselines carry its 62,914,592 bytes each; the RTX 2070 SUPER's still count one static TLAS until that machine benches again.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>gpu_memory_bytes</code></th><th class="n">Static TLAS</th><th class="n">Share</th></tr></thead>
+    <thead><tr><th>Scene</th><th class="n"><code>gpu_memory_bytes</code></th><th class="n">Two static TLASes</th><th class="n">Share</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,385,447</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,625,381</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,625,381</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">684,231,729</td><td class="n">75,628,544</td><td class="n">11.1%</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">787,821,023</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">787,821,023</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,389,964</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,629,931</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,629,931</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">683,519,585</td><td class="n">75,628,544</td><td class="n">11.1%</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">787,362,898</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">787,362,898</td><td class="n">62,442,701</td><td class="n">7.9%</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">668,966,359</td><td class="n">75,628,544</td><td class="n">11.3%</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">773,154,875</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">773,154,875</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,547,207</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,823,131</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,823,131</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">664,856,311</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">767,562,443</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">767,562,443</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">669,069,804</td><td class="n">75,628,544</td><td class="n">11.3%</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">773,222,363</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">773,222,363</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">663,824,071</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">768,088,523</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">768,088,523</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">664,077,523</td><td class="n">75,628,544</td><td class="n">11.4%</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">768,350,709</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">768,350,709</td><td class="n">62,442,701</td><td class="n">8.1%</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">764,009,624</td><td class="n">75,628,544</td><td class="n">9.9%</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">868,263,022</td><td class="n">62,442,701</td><td class="n">7.2%</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">868,263,022</td><td class="n">62,442,701</td><td class="n">7.2%</td></tr>
+      <tr><td><code>helmet</code></td><td class="n">759,795,240</td><td class="n">151,195,776</td><td class="n">19.9%</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td class="n">738,956,358</td><td class="n">151,195,776</td><td class="n">20.5%</td></tr>
+      <tr><td><code>uv-grid</code></td><td class="n">744,533,034</td><td class="n">151,195,776</td><td class="n">20.3%</td></tr>
+      <tr><td><code>normal-tangent</code></td><td class="n">759,085,265</td><td class="n">151,195,776</td><td class="n">19.9%</td></tr>
+      <tr><td><code>far-coplanar</code></td><td class="n">740,422,986</td><td class="n">151,195,776</td><td class="n">20.4%</td></tr>
+      <tr><td><code>orrery</code></td><td class="n">744,636,198</td><td class="n">151,195,776</td><td class="n">20.3%</td></tr>
+      <tr><td><code>minification</code></td><td class="n">739,113,882</td><td class="n">151,195,776</td><td class="n">20.5%</td></tr>
+      <tr><td><code>texture-wall</code></td><td class="n">739,390,746</td><td class="n">151,195,776</td><td class="n">20.4%</td></tr>
+      <tr><td><code>shadows</code></td><td class="n">738,951,843</td><td class="n">151,195,776</td><td class="n">20.5%</td></tr>
+      <tr><td><code>crowd</code></td><td class="n">739,644,267</td><td class="n">151,195,776</td><td class="n">20.4%</td></tr>
+      <tr class="focus"><td><code>town</code></td><td class="n">839,578,814</td><td class="n">151,195,776</td><td class="n">18.0%</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, and the ledger's estimates per entry, at the commit above, by a script. Both NVIDIA rows use NVIDIA's figures, which the estimate picks by vendor on any backend.</p>
-  <p>No Baseline times a rebuild. A rebuild records in the <code>upload</code> stage of its frame, which Baselines fold into the CPU frame without a field of its own, and the first frame's build, which every scene makes, comes before the 248 warm-up frames a bench skips. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, by a script.</p>
+  <p>No Baseline times a rebuild. The worker's time on a build is <code>static_tlas_build_time</code>, in the frame that submits it, and the main thread's share is the <code>static_tlas_update</code> stage, which Baselines fold into the CPU frame without a field of their own; every scene's load builds before the 248 warm-up frames a bench skips. What the TLAS costs each ray is the shadow mask pass's, in <a href="shadow-mask.html#cost">its cost table</a>.</p>
 </section>
 
 <section class="part prose" id="why">
   <div class="part-mark">9 &middot; ADRs 0013, 0014, 0016, 0020</div>
   <h2>Why this way</h2>
   <p><b>Two TLAS, split by motion.</b> ADR 0020 splits the near field into a static TLAS, rebuilt only when its static Instances change, and a dynamic TLAS of Moving Instances, rebuilt each frame and capped at 10,000 Instances. One TLAS over everything would rebuild over every static Instance whenever anything moved, since wgpu-core 30.0.1 has no TLAS update, only rebuilds.</p>
+  <p><b>A worker records, the main thread submits.</b> Rebuilding <code>town</code>'s 254,256 Instances took 17.5 to 18.1 ms of CPU on the M4 Pro under wgpu 30.0.1, and an empty TLAS of 262,144 entries 4.3 to 6.9 ms (<code>docs/research/acceleration-structures-for-streamed-worlds.md</code>). A worker can fill, record and finish, 13 to 14 ms of it, and hand the command buffer over, as ADR 0016 lets workers do; the main thread keeps the submit, 4.3 to 4.5 ms at that size alone and 5.6 to 7.1 ms beside a frame's, since wgpu-core walks one dependency per entry. Recording the build in a command buffer of its own on the main thread (the research's option A) overlaps it on the GPU but leaves the whole CPU cost in the frame; several smaller static TLASes, by Chunk group or ring (option C), make each rebuild cheap, but every ray then queries each of them, at a cost not yet measured, and on Metal each is a binding of its own.</p>
+  <p><b>A spare, swapped in.</b> A bind group holds its TLAS from creation, so two TLASes take two groups, and the worker builds the one no frame binds; rebuilding the bound TLAS in place (S2) would put the build in the frame that traces it and leave ordering its build after the passes that read it to Metal's hazard tracking. The spare costs a second TLAS's memory, 75.6 MB at 262,144 entries on the M4 Pro. Ize, Wald and Parker switch a BVH rebuilt over several frames in "with two pointer swaps"; the research found no shipped engine that double-buffers its TLAS. Sharing each frame's changes between the two keeps the main thread's work in proportion to the changes, not to the capacity, and the catch-up keeps the second build a change would otherwise cost.</p>
+  <p><b>Captures wait, frames do not.</b> Which frame finds the worker done depends on the machine, so a capture, whose image must not, waits for the worker in the frame that starts it and binds the build in the next. Frames in a window and the bench never wait.</p>
   <p><b>Tagged with the slot, indexed by none.</b> Indexing entries by slot would need no map, as an Instance keeps its slot while it is one, but it would cap slot numbers rather than static Instances: Chunks take their ranges past the highest slot taken, and the Instance buffer holds twice the static TLAS's capacity, so a Chunk's static Instances could fall past the capacity with entries to spare. A table of entries by slot keeps the old cost, one array read per Instance written, Moving ones included, for 8 bytes of CPU memory per slot up to the highest that held a static Instance; a hash map would cost a hash per Moving Instance each frame, 10,000 of them in <code>town</code>. The tag stays the slot: the frame's shaders do not read it, and a test's query reads it back to name the Instance a ray hit.</p>
-  <p><b>Anchored at load, never re-anchored.</b> ADR 0014 forbids f32 World positions on the GPU and names ray-tracing acceleration structures among the subsystems that convert into a local frame they own; ADR 0020 anchors this one at scene load and never re-anchors it until Chunk streaming decides re-anchoring together with the TLAS's radius. Measured from that corner, a scene's entries round to f32 as near ones do, so the 100 km check holds for shadows.</p>
+  <p><b>Anchored at load, never re-anchored.</b> ADR 0014 forbids f32 World positions on the GPU and names ray-tracing acceleration structures among the subsystems that convert into a local frame they own; ADR 0020 anchors this one at scene load and never re-anchors it until re-anchoring is decided with Chunk streaming. Measured from that corner, a scene's entries round to f32 as near ones do, so the 100 km check holds for shadows.</p>
   <p><b>A capacity sized from its Budget.</b> Every rebuild walks the full capacity, filled or not, so a larger one costs every static spawn in every scene. ADR 0013 splits the 8 GB GPU memory Budget into a Budget per kind, and the capacity takes an entry per KiB of the acceleration structures', which gives 2<sup>18</sup>, enough for <code>town</code>; the KiB per entry is provisional until the split sets it.</p>
   <p><b>A CPU wait before the build, at load.</b> Nothing on the GPU orders the build after the compaction copies of the BLASes it reads, so <code>compact_blases</code> waits for them on the main thread, which alone submits and polls under ADR 0016. A wait once, at load, costs one frame; the per-frame refit, which could not pay that every frame, orders its writes on the GPU instead (<a href="blas-refit.html">the BLAS refit</a>).</p>
 </section>
@@ -567,9 +781,13 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
   <div class="part-mark">10</div>
   <h2>Limits</h2>
   <p><b>A CPU wait in each frame that loads Meshes.</b> Before its update, the upload waits on the main thread for the GPU to build and then to compact the frame's new BLASes, since wgpu-core 30.0.1 records no barrier after a compaction copy on any backend and wgpu-hal 30.0.1 records none on Metal. A Mesh whose BLAS lost that race would cast no shadow until the next rebuild, which, where nothing static changes, never comes. Today every Mesh loads before the first frame, so the first frame alone waits; Meshes streamed during play would make every load frame wait, until a wgpu release orders the copy on every backend, a version change that is the owner's call.</p>
-  <p><b>A rebuild walks every entry.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> entries, on the CPU in the frame that does it.</p>
+  <p><b>A build lands a frame or more after its change.</b> A change is traced from the frame after the build that brings it is submitted, and a change made while a build or a catch-up is on the worker waits for it to come back first. <code>frames_until_traced</code> counts the wait.</p>
+  <p><b>A rebuild walks every entry.</b> Spawning or despawning one static Instance costs a full rebuild at 2<sup>18</sup> entries, on the worker, and a submit of all of them on the main thread.</p>
+  <p><b>The unbound TLAS is rebuilt after frames that read it.</b> Frames still on the GPU may trace the TLAS just unbound when its next build is submitted; queue order and Metal's hazard tracking order the two, as they ordered an in-place rebuild before.</p>
+  <p><b>Changes held for the catch-up.</b> The TLAS just unbound keeps its share of the change batches until its catch-up has taken them, so a load's changes stay in CPU memory for a frame or more after its build.</p>
+  <p><b>A lock shared with the main thread.</b> <code>finish</code> holds the device's snatch lock for reading, which a buffer or texture destroy, a poll that frees what one left, and a surface's present or discard take for writing, so such a call on the main thread can wait for the worker's whole <code>finish</code>.</p>
   <p><b>Left out by write order.</b> Past the capacity, which static Instances cast shadows is settled by when they were written, the left-out ones admitted lowest slot first, not by their distance from the camera.</p>
-  <p><b>Memory at full capacity.</b> The estimate, and wgpu-core's allocation, are for every slot, so the smallest scene pays what <code>town</code> does.</p>
+  <p><b>Memory at full capacity, twice.</b> The estimate, and wgpu-core's allocation, are for every entry of both TLASes, so the smallest scene pays what <code>town</code> does.</p>
   <p><b>One frame, fixed at load.</b> The origin never moves, so an entry far from where the camera stood at load rounds to f32 more coarsely: from 2,048 m out its step is 0.244 mm.</p>
   <p><b>A pinned wgpu.</b> No update in place and no barrier after compaction are wgpu 30.0.1's; each holds while the pin does.</p>
 </section>
@@ -582,11 +800,13 @@ let shadow_ray_scene = SHADOW_RAY_SCENE.bind_group(
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L336-L341">wgpu-core 30.0.1, TLAS descriptors in <code>build_acceleration_structures</code></a></dt><dd>a TLAS update is always passed down as a build: no refit; <code>wgpu-30-tlas-rebuild-only</code>, which ADR 0020 cites</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L269-L271">wgpu-core 30.0.1, the TLAS build's dependencies</a>, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174">each flush of a group that holds a TLAS</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577">their walk at submit</a></dt><dd>what binding the TLAS in a pass costs at submit, one BLAS per entry it holds; <code>wgpu-30-tlas-dependency-per-instance</code>, <code>wgpu-30-use-tlas-per-flush</code>, <code>wgpu-30-submit-tlas-dependencies</code>, which <code>SHADOW_RAY_SCENE</code> cites</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs">wgpu 30.0.1, <code>Tlas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs">its creation</a></dt><dd>one optional entry per place of capacity from creation, each mapped when a build is recorded, and the filled ones built in order</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L27">wgpu 30.0.1, <code>CommandEncoder</code></a></dt><dd>an encoder and a TLAS can move to a worker on native; <code>wgpu-30-command-encoder-send-sync</code>, which the research cites</dd>
+    <dt><a href="https://www.sci.utah.edu/~thiago/papers/async_bvh_build.pdf#page=3">Ize, Wald and Parker, <i>Asynchronous BVH Construction for Ray Tracing Dynamic Scenes on Parallel Multi-Core Architectures</i>, EGPGV 2007, Section 3.1</a></dt><dd>a BVH rebuilt over several frames and switched in with two pointer swaps; registry key ize-2007-async-bvh-swap</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu#9215, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>why the build must not run before the compaction copies on Metal; <code>wgpu-issue-9215</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The static TLAS arrived on 2026-10-20, together with the BLAS per Mesh, anchored at load and rebuilt only when a static Instance changes; its first build in every scene, empty or not, came when the orrery, whose bodies all move, showed it could stay unbuilt. Shadow rays then came to read it, and the dynamic TLAS took the Moving Instances beside it. On 2026-10-23 a test that sometimes missed a triangle showed the build could read a BLAS whose compaction had not finished, and the upload has waited for the copies since. On 2026-11-07 its entries stopped being the slots below its capacity, once Chunks took ranges of slots past the highest taken. The race and its routes are on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>; <a href="reference-scenes.html#town">The Reference scenes</a> describes the scene whose Instances the capacity was sized for. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/shadow_mask_pass.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, the tests named above, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0014, 0016 and 0020, <code>bench/budgets.json</code>, the committed Baselines, and the sources above, all at <code>main</code> 79c2cf5f and the change on it.</footer>
+  <p class="note">The static TLAS arrived on 2026-10-20, together with the BLAS per Mesh, anchored at load and rebuilt only when a static Instance changes; its first build in every scene, empty or not, came when the orrery, whose bodies all move, showed it could stay unbuilt. Shadow rays then came to read it, and the dynamic TLAS took the Moving Instances beside it. On 2026-10-23 a test that sometimes missed a triangle showed the build could read a BLAS whose compaction had not finished, and the upload has waited for the copies since. On 2026-11-07 its entries stopped being the slots below its capacity, once Chunks took ranges of slots past the highest taken. On 2026-11-08 its build moved off the frame's critical path: a second TLAS, built on a worker thread and bound the frame after the main thread submits it, while rays trace the first; captures wait for the worker so their images do not depend on its timing. The race and its routes are on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>; <a href="reference-scenes.html#town">The Reference scenes</a> describes the scene whose Instances the capacity was sized for. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/shadow_mask_pass.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, <code>src/capture/mod.rs</code>, the tests named above, the wgpu 30.0.1 sources, <code>docs/research/acceleration-structures-for-streamed-worlds.md</code>, <code>CONTEXT.md</code>, ADRs 0013, 0014, 0016 and 0020, <code>bench/budgets.json</code>, the committed Baselines, and the sources above, all at <code>main</code> 73aec1f3 and the change on it.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="blas.html">Previous: A BLAS per Mesh</a><a href="index.html">All field guides</a><a href="waiting-on-the-gpu.html">Next: Waiting on the GPU</a></nav>

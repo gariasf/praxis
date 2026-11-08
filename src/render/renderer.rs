@@ -58,6 +58,10 @@ pub(crate) const DYNAMIC_TLAS_RECORDING: &str = "dynamic_tlas";
 /// them.
 pub(crate) const BLAS_REFIT: &str = "blas_refit";
 
+/// The CPU stage that hands Frame data to the static TLAS: its entry
+/// changes, and the submit of a build its worker finished.
+pub(crate) const STATIC_TLAS_UPDATE: &str = "static_tlas_update";
+
 /// The CPU stage that submits the dynamic TLAS's build, on its own.
 pub(crate) const DYNAMIC_TLAS_SUBMIT: &str = "dynamic_tlas_submit";
 
@@ -91,6 +95,11 @@ pub struct RenderSwitches {
     /// tail, so it samples its tail alone, as one whose finer mips have not
     /// arrived. Off, as it ships, every mip loads.
     pub residency: bool,
+    /// Whether a frame that hands the static TLAS's spare to its worker
+    /// waits for it, so which frame binds a build never depends on the
+    /// worker's timing, as a capture needs. Off, as it ships, a frame takes
+    /// the worker's result once it is done.
+    pub wait_for_static_tlas: bool,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -143,6 +152,7 @@ impl Default for RenderSwitches {
             count_point_lights: false,
             crowd_form: CrowdForm::Proxies,
             residency: false,
+            wait_for_static_tlas: false,
         }
     }
 }
@@ -259,6 +269,7 @@ pub struct Renderer {
     scene_geometry_bind_group: wgpu::BindGroup,
     capacities: RenderCapacities,
     static_tlas: StaticTlas,
+    wait_for_static_tlas: bool,
     dynamic_tlas: DynamicTlas,
     memory: GpuMemory,
     /// Set when a frame's uploads failed after it queued Instance writes,
@@ -442,7 +453,8 @@ impl Renderer {
             uploaded_buffers.iter().map(|buffer| buffer.size()).sum(),
         );
 
-        let static_tlas = StaticTlas::new(&device, &memory, capacities.static_tlas_instances);
+        let static_tlas =
+            StaticTlas::new(&device, &memory, &queue, capacities.static_tlas_instances);
         let dynamic_tlas =
             DynamicTlas::new(&device, &memory, &queue, context.backend(), &capacities);
         let blas_refit = BlasRefit::new(
@@ -524,6 +536,7 @@ impl Renderer {
             instance_buffer,
             scene_geometry_bind_group,
             static_tlas,
+            wait_for_static_tlas: switches.wait_for_static_tlas,
             dynamic_tlas,
             capacities,
             memory,
@@ -567,7 +580,8 @@ impl Renderer {
         self.capacities
     }
 
-    /// Records the static TLAS's rebuild, if `frame` changes it, and the
+    /// Hands `frame`'s static Instance changes to the static TLAS, which
+    /// binds, submits and starts its builds on its own, and records the
     /// copies of `frame`'s uniforms, the camera's with the static TLAS's
     /// Anchor, the Instances it writes, its bends and its Instance slot
     /// count, if it changed, into the frame's encoder, which `render` submits; every
@@ -591,8 +605,18 @@ impl Renderer {
         self.dynamic_tlas.prepare_encoder(&self.device);
         let prepare_time = recorder.stage(DYNAMIC_TLAS_RECORDING, preparing);
         let mut encoder = create_frame_encoder(&self.device);
-        self.static_tlas
-            .update(frame, &self.mesh_pool, &mut encoder);
+        let updating = Instant::now();
+        let static_tlas_update = self.static_tlas.update(
+            frame,
+            &self.mesh_pool,
+            &self.device,
+            &self.queue,
+            self.wait_for_static_tlas,
+        );
+        let update_time = recorder.stage(STATIC_TLAS_UPDATE, updating);
+        recorder.counters.static_tlas_build_time =
+            static_tlas_update.build_time.unwrap_or_default();
+        recorder.counters.frames_until_traced = static_tlas_update.frames_until_traced;
         recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
         // Shadow rays start in the static TLAS's frame, whose Anchor the
         // first Frame data's camera set, and the dynamic TLAS shares it. Its
@@ -602,7 +626,7 @@ impl Renderer {
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] =
             self.dynamic_tlas.fill(frame, &self.mesh_pool, tlas_anchor);
         let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
-        let started = started + prepare_time + fill_time;
+        let started = started + prepare_time + update_time + fill_time;
         let camera = CameraUniform {
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.
@@ -788,6 +812,7 @@ impl Renderer {
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
+                self.static_tlas.bound_index(),
                 timestamps
                     .as_mut()
                     .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
@@ -1453,7 +1478,7 @@ pub(crate) mod tests {
                         frame.camera.anchor = [1, 0, 0];
                         frame.camera.offset = [-(ANCHOR_CELL_SIZE as f32), 0.0, 0.0];
                     }
-                    render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+                    render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE).0
                 })
                 .collect::<Vec<_>>()
         };
@@ -1560,13 +1585,13 @@ pub(crate) mod tests {
             };
             let mut instances = vec![square(4.0, 2.0)];
             instances.extend(behind.map(|distance| square(0.2, -distance)));
-            let frame = FrameData {
+            let mut frame = FrameData {
                 camera,
                 light,
                 lights: vec![point],
                 ..frame_of(instances)
             };
-            render_frame(&context, &mut renderer, &frame, SIZE, SIZE).0
+            render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE).0
         };
         let unoccluded = image(None);
         // 0.5 m from the light, its shadow covers the floor's middle 1.2 m; 1 m
@@ -1646,7 +1671,7 @@ pub(crate) mod tests {
         );
         // A directional light has no range.
         let directional_light_count = lights.iter().filter(|light| light.range == 0.0).count();
-        let frame = FrameData {
+        let mut frame = FrameData {
             camera: CameraUniform {
                 view_proj: (projection_matrix(1.0) * Camera::new().view_matrix())
                     .to_cols_array_2d(),
@@ -1663,7 +1688,7 @@ pub(crate) mod tests {
             ..frame_of(instances)
         };
         let ((image, _, gpu), log) =
-            logged(|| render_frame(context, &mut renderer, &frame, SIZE, SIZE));
+            logged(|| render_traced_frame(context, &mut renderer, &mut frame, SIZE, SIZE));
         (renderer, image, gpu, log)
     }
 
@@ -2925,6 +2950,24 @@ pub(crate) mod tests {
             moving_instances: Vec::new(),
             bends: Vec::new(),
         }
+    }
+
+    /// As `render_frame`, after rendering `frame` with the Renderer waiting
+    /// for the static TLAS's worker, then `frame` again without its
+    /// Instance writes, which binds the build its changes started.
+    fn render_traced_frame(
+        context: &GpuContext,
+        renderer: &mut Renderer,
+        frame: &mut FrameData,
+        width: u32,
+        height: u32,
+    ) -> (image::RgbaImage, FrameRecorder, GpuFrameStats) {
+        renderer.wait_for_static_tlas = true;
+        render_frame(context, renderer, frame, width, height);
+        let writes = std::mem::take(&mut frame.instance_writes);
+        let traced = render_frame(context, renderer, frame, width, height);
+        frame.instance_writes = writes;
+        traced
     }
 
     /// Uploads and renders `frame` into a new `width` × `height` target, and
