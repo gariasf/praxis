@@ -412,7 +412,7 @@ fn parse_load_average(report: &str) -> Option<f64> {
 }
 
 /// The power and display checks that warn: what spoils a bench's times on
-/// this machine besides GPU load and other praxis processes.
+/// this machine besides GPU load and other or busy processes.
 pub(crate) fn machine_warnings() -> Vec<String> {
     power()
         .into_iter()
@@ -509,9 +509,11 @@ pub(crate) fn other_praxis_processes() -> Option<Vec<String>> {
     )
 }
 
-/// Each process outside praxis at or over `BUSY_PROCESS_PERCENT` of a core,
-/// as `name id at percent%`, when the process listing gives CPU shares;
-/// none on Windows, whose `tasklist` gives none.
+/// Each process other than this one and praxis's binaries at or over
+/// `BUSY_PROCESS_PERCENT` of a core, as `name id at percent%`, when the
+/// process listing gives CPU shares; none on Windows, whose `tasklist` gives
+/// none. macOS's `ps` averages a share over the last minute, Linux's over the
+/// process's lifetime, so there a process that just turned busy reads low.
 pub(crate) fn busy_processes() -> Option<Vec<String>> {
     if cfg!(windows) {
         return None;
@@ -519,6 +521,7 @@ pub(crate) fn busy_processes() -> Option<Vec<String>> {
     let listing = output("ps", &["-A", "-o", "pid=,%cpu=,comm="])?;
     Some(busy_outside_praxis(
         &parse_ps_with_cpu(&listing),
+        std::process::id(),
         &binary_names(),
     ))
 }
@@ -594,13 +597,19 @@ fn parse_ps_with_cpu(listing: &str) -> Vec<(u32, f64, String)> {
         .collect()
 }
 
-/// Each of `processes` at or over `BUSY_PROCESS_PERCENT` that runs none of
-/// `binary_names`, as `name id at percent%`.
-fn busy_outside_praxis(processes: &[(u32, f64, String)], binary_names: &[String]) -> Vec<String> {
+/// Each of `processes` other than `own_id` at or over `BUSY_PROCESS_PERCENT`
+/// that runs none of `binary_names`, as `name id at percent%`.
+fn busy_outside_praxis(
+    processes: &[(u32, f64, String)],
+    own_id: u32,
+    binary_names: &[String],
+) -> Vec<String> {
     processes
         .iter()
-        .filter(|(_, percent, name)| {
-            *percent >= BUSY_PROCESS_PERCENT && !is_praxis_binary(name, binary_names)
+        .filter(|(id, percent, name)| {
+            *id != own_id
+                && *percent >= BUSY_PROCESS_PERCENT
+                && !is_praxis_binary(name, binary_names)
         })
         .map(|(id, percent, name)| format!("{name} {id} at {percent:.0}%"))
         .collect()
@@ -924,8 +933,9 @@ mod tests {
                        77 120,4 /Library/Daemon Agent/agentd\n\
                        78  50.0 /usr/bin/indexer\n\
                        79  49.9 /bin/zsh\n\
-                       80 99.0 goldens-7ecf3aef1db514ba\n";
-        let busy = busy_outside_praxis(&parse_ps_with_cpu(listing), &binaries);
+                       80 99.0 goldens-7ecf3aef1db514ba\n\
+                       81 100.0 target/release/praxis-before\n";
+        let busy = busy_outside_praxis(&parse_ps_with_cpu(listing), 81, &binaries);
         assert_eq!(
             busy,
             [
