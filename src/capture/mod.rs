@@ -388,6 +388,9 @@ mod tests {
     /// last submission, as when the CPU runs other threads mid-frame, so the
     /// GPU finishes the frame's dynamic TLAS build before that submission
     /// retires it.
+    /// The dynamic TLAS build's own allocations are left out of the
+    /// comparison: on Vulkan and DX12 its allocator grows a map in a frame
+    /// its random hash seed picks, whenever the GPU finished.
     /// A run whose GPU had not finished a frame when the next began, as when
     /// other work holds the GPU, is not left finished, so it runs again
     /// with the wait doubled.
@@ -481,7 +484,8 @@ mod tests {
                     .ok();
                     return None;
                 }
-                allocations_per_frame.push(state.frame_stats().heap_allocations);
+                let stats = state.frame_stats();
+                allocations_per_frame.push(stats.heap_allocations - stats.tlas_build_allocations);
             }
             Some(allocations_per_frame)
         };
@@ -497,12 +501,12 @@ mod tests {
         assert_eq!(
             retired[WARM_UP_FRAMES..],
             left_finished[WARM_UP_FRAMES..],
-            "heap allocations per frame, retired between frames {retired:?}, left finished {left_finished:?}"
+            "heap allocations per frame but the dynamic TLAS build's, retired between frames {retired:?}, left finished {left_finished:?}"
         );
         assert_eq!(
             retired[WARM_UP_FRAMES..],
             paused[WARM_UP_FRAMES..],
-            "heap allocations per frame, retired between frames {retired:?}, left finished with pauses before submitting {paused:?}"
+            "heap allocations per frame but the dynamic TLAS build's, retired between frames {retired:?}, left finished with pauses before submitting {paused:?}"
         );
     }
 

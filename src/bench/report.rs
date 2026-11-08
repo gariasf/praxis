@@ -272,6 +272,7 @@ mod tests {
         bytes_read: 0,
         pool_entries_freed: 0,
         late_mips: 0,
+        tlas_build_allocations: 0,
     };
 
     const BUDGETS: Budgets = Budgets {
@@ -435,6 +436,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 | `bytes_read` | 0 | 0 | +0 | — | — |
 | `pool_entries_freed` | 0 | 0 | +0 | — | — |
 | `late_mips` | 0 | 0 | +0 | — | — |
+| `tlas_build_allocations` | 0 | 0 | +0 | — | — |
 "
         );
     }
