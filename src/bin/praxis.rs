@@ -396,7 +396,8 @@ fn preflight() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Cooks `assets/` and every procedural Reference scene into `cooked/`, or
+/// Cooks `assets/` and every procedural Reference scene but the world, whose
+/// library of more than 8 GB cooks by name or on a miss, into `cooked/`, or
 /// with `scene`, that scene whole.
 #[cfg(feature = "cook")]
 fn cook(scene: Option<&str>) -> anyhow::Result<()> {
@@ -404,7 +405,12 @@ fn cook(scene: Option<&str>) -> anyhow::Result<()> {
     let cache = praxis::cooked::CookedCache::new(praxis::cooked::COOKED_CACHE_DIRECTORY);
     let settings = praxis::cook::CookSettings::default();
     let report = match scene {
-        None => praxis::cook::cook(assets, &ReferenceScene::ALL, &cache, &settings)?,
+        None => {
+            let scenes: Vec<_> = (ReferenceScene::ALL.into_iter())
+                .filter(|&scene| scene != ReferenceScene::World)
+                .collect();
+            praxis::cook::cook(assets, &scenes, &cache, &settings)?
+        }
         Some(scene) => praxis::cook::cook_scene(parse_scene(scene)?, assets, &cache, &settings)?,
     };
     writeln!(
@@ -439,8 +445,8 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
     })
 }
 
-/// Benches the named Reference scenes, or with none every scene whose assets
-/// are present, prints one line per scene, and writes `<scene>.json` into
+/// Benches the named Reference scenes, or with none every scene but the
+/// world whose assets are present, prints one line per scene, and writes `<scene>.json` into
 /// `output`. A crowd form other than the default benches `crowd` alone,
 /// written as `crowd-<form>.json`. With `publish`, the results then join
 /// the Bench history, as the `experiment` named; a publish that fails warns
@@ -470,6 +476,7 @@ fn bench(
         ReferenceScene::ALL
             .into_iter()
             .filter(|&scene| scene != ReferenceScene::Helmet || helmet_fetched)
+            .filter(|&scene| scene != ReferenceScene::World)
             .collect()
     } else {
         scene_names
@@ -555,12 +562,15 @@ fn import_baselines() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Prints, one per line, the Reference scenes with no Bench record on a
-/// Series for the source of the remote's `main` on this machine's adapter:
-/// the scenes a sweep benches.
+/// Prints, one per line, the Reference scenes but the world with no Bench
+/// record on a Series for the source of the remote's `main` on this
+/// machine's adapter: the scenes a sweep benches.
 fn unrecorded_scenes() -> anyhow::Result<()> {
     let adapter = pollster::block_on(praxis::gpu::adapter_info())?;
-    let scenes = ReferenceScene::ALL.map(ReferenceScene::name);
+    let scenes: Vec<_> = (ReferenceScene::ALL.into_iter())
+        .filter(|&scene| scene != ReferenceScene::World)
+        .map(ReferenceScene::name)
+        .collect();
     let mut stdout = std::io::stdout();
     for scene in praxis::bench::unrecorded_scenes(
         Path::new("."),

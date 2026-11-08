@@ -13,6 +13,8 @@ const MEBIBYTE: u64 = 1 << 20;
 /// (`src/scenes/town.rs`).
 const TOWN_INSTANCES: u32 = 254_319;
 const TOWN_TRIANGLES: u32 = 9_994_316;
+const WORLD_INSTANCES: u32 = 164_912;
+const WORLD_TRIANGLES: u32 = 1_645_574;
 
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
@@ -309,9 +311,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// On every Reference scene, each frame reads back from the GPU the
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn.
-/// far-coplanar's tiles and town lie partly out of any one view, so both
-/// are drawn with culling off, which their Goldens compare with culling
-/// on: the frame's draw holds every tile and the whole town. After the
+/// far-coplanar's tiles, town and the world's settlement lie partly out of
+/// any one view, so all three are drawn with culling off, which the first
+/// two's Goldens compare with culling on: the frame's draw holds every
+/// tile, the whole town and every Instance within the world's Load radius.
+/// After the
 /// first frame, each frame writes the Instances of what moves alone, town's
 /// 10,000 birds among them, and leaves no Moving Instance out of the
 /// dynamic TLAS; town's birds fill it, each uploading its entry every
@@ -342,7 +346,10 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             continue;
         }
         let switches = praxis::RenderSwitches {
-            culling: !matches!(scene, ReferenceScene::Town | ReferenceScene::FarCoplanar),
+            culling: !matches!(
+                scene,
+                ReferenceScene::Town | ReferenceScene::FarCoplanar | ReferenceScene::World
+            ),
             ..praxis::RenderSwitches::default()
         };
         let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
@@ -365,6 +372,9 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             // Every Instance its generator places, and their triangles; its
             // birds circle.
             ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES, 10_000),
+            // Every Instance of the Chunks within its Load radius of the
+            // camera, as its generator places them, and their triangles.
+            ReferenceScene::World => (WORLD_INSTANCES, WORLD_TRIANGLES, 0),
         };
         // The 144-byte camera and 32-byte light uniforms, the sun and the
         // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance

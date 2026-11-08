@@ -101,7 +101,8 @@ impl Simulation {
             | ReferenceScene::NormalTangent
             | ReferenceScene::FarCoplanar
             | ReferenceScene::Minification
-            | ReferenceScene::Shadows => |_, _| Ok(()),
+            | ReferenceScene::Shadows
+            | ReferenceScene::World => |_, _| Ok(()),
             ReferenceScene::Orrery => spawn_orrery,
             ReferenceScene::TextureWall => spawn_texture_wall,
             ReferenceScene::Crowd => match crowd_form {

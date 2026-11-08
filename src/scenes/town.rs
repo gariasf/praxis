@@ -273,7 +273,7 @@ fn mix(seed: u64) -> u64 {
 }
 
 /// A value in [0, 1) from `parts`, the same for the same parts.
-fn random(parts: [u64; 4]) -> f64 {
+pub(super) fn random(parts: [u64; 4]) -> f64 {
     let hash = parts.into_iter().fold(0, |hash, part| mix(hash ^ part));
     (hash >> 11) as f64 / (1u64 << 53) as f64
 }

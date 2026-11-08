@@ -143,7 +143,9 @@ src/
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's
                                  flocks) and the crowd's Sway system;
-                                 town.rs, the dense scene's generator
+                                 town.rs, the dense scene's generator;
+                                 world.rs, the streamed Game world's
+                                 generator
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)

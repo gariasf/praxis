@@ -1,0 +1,585 @@
+//! `world`, the streamed Reference scene: a Game world of 40 × 40 Chunks of
+//! flat ground, 10.24 km on a side (ADR 0013), with a settlement in each of
+//! its 8 × 8 regions and sparse farms between them. Each settlement clads
+//! its walls in brick Textures of its own, so the scene's library outgrows
+//! the texture pool and freeing and eviction run. Every Instance is placed
+//! from a hash of where it stands, so every cook places the same Game world.
+
+#![cfg_attr(not(feature = "cook"), allow(dead_code))]
+
+use super::town::random;
+use crate::camera::Camera;
+use crate::cooked::CHUNK_EDGE_METRES;
+#[cfg(feature = "cook")]
+use crate::cooked::{CookedLight, CookedPlacement};
+
+/// Chunks along each side, centred on the World's origin.
+pub(super) const CHUNKS_PER_SIDE: i32 = 40;
+const WORLD_HALF_SIZE: f64 = CHUNKS_PER_SIDE as f64 * CHUNK_EDGE_METRES / 2.0;
+const GROUND_TILE_METRES: f64 = 128.0;
+const GROUND_TILES_PER_SIDE: u32 = (2.0 * WORLD_HALF_SIZE / GROUND_TILE_METRES) as u32;
+
+const SETTLEMENTS_PER_SIDE: u32 = 8;
+const REGION_METRES: f64 = 2.0 * WORLD_HALF_SIZE / SETTLEMENTS_PER_SIDE as f64;
+const BLOCKS_PER_SIDE: u32 = 13;
+const LOTS_PER_BLOCK_SIDE: u32 = 4;
+const LOT_PITCH: f64 = 12.0;
+const STREET_WIDTH: f64 = 10.0;
+const BLOCK_PITCH: f64 = LOTS_PER_BLOCK_SIDE as f64 * LOT_PITCH + STREET_WIDTH;
+const SETTLEMENT_HALF_SIZE: f64 = BLOCKS_PER_SIDE as f64 * BLOCK_PITCH / 2.0;
+/// The most a settlement's centre strays from its region's, which keeps
+/// 64 m of open land between neighbouring settlements.
+const SETTLEMENT_STRAY: f64 = REGION_METRES / 2.0 - SETTLEMENT_HALF_SIZE - 32.0;
+
+/// The settlement whose region holds the camera, column then row.
+const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
+
+/// Each settlement's own brick Materials, one Texture each.
+const FACADES_PER_SETTLEMENT: u32 = 24;
+const FACADE_TEXTURE_SIDE: u32 = 2048;
+/// The wall each facade Texture covers before it repeats, in metres.
+const FACADE_METRES: f32 = 4.0;
+const BRICK_TEXELS: [u32; 2] = [64, 24];
+const MORTAR_TEXELS: u32 = 3;
+
+const STOREY_HEIGHT: f32 = 3.2;
+const WINDOW_PITCH: f32 = 1.6;
+const WINDOW_SIZE: glam::Vec3 = glam::Vec3::new(1.2, 1.6, 0.12);
+const WINDOW_SILL_HEIGHT: f32 = 0.9;
+const ROOF_OVERHANG: f32 = 0.3;
+const ROOF_THICKNESS: f32 = 0.3;
+
+/// A chance per ground tile outside the settlements of holding a farm.
+const FARM_CHANCE: f64 = 0.25;
+
+/// A building's shape: its walls' Mesh, its roof's, its footprint across X
+/// and Z, and its storeys.
+struct Building {
+    walls: &'static str,
+    roof: &'static str,
+    width: f32,
+    depth: f32,
+    storeys: u32,
+}
+
+const BUILDINGS: [Building; 8] = [
+    Building::new("cottage", "cottage roof", 7.0, 6.0, 2),
+    Building::new("house", "house roof", 8.0, 8.0, 3),
+    Building::new("terrace", "terrace roof", 10.0, 6.0, 4),
+    Building::new("hall", "hall roof", 10.0, 9.0, 3),
+    Building::new("townhouse", "townhouse roof", 6.0, 9.0, 6),
+    Building::new("tower", "tower roof", 8.0, 8.0, 9),
+    Building::new("shop", "shop roof", 9.0, 7.0, 2),
+    Building::new("block", "block roof", 10.0, 10.0, 8),
+];
+
+/// The building each farm is.
+const FARM: usize = 3;
+
+impl Building {
+    const fn new(
+        walls: &'static str,
+        roof: &'static str,
+        width: f32,
+        depth: f32,
+        storeys: u32,
+    ) -> Self {
+        Self {
+            walls,
+            roof,
+            width,
+            depth,
+            storeys,
+        }
+    }
+
+    fn height(&self) -> f32 {
+        self.storeys as f32 * STOREY_HEIGHT
+    }
+}
+
+/// What a random value decides, so that no two values for one place share
+/// a seed.
+#[derive(Clone, Copy)]
+enum Choice {
+    SettlementX,
+    SettlementZ,
+    Building,
+    Facade,
+    Yaw,
+    Farm,
+    FarmX,
+    FarmZ,
+    Plaster,
+    Brick,
+}
+
+/// The name of facade `facade` of settlement `settlement`, which its
+/// Material and Texture share.
+fn facade_name(settlement: u32, facade: u32) -> String {
+    format!("settlement {settlement} facade {facade}")
+}
+
+/// The centre of the settlement in region `[column, row]`, on the ground.
+fn settlement_centre([column, row]: [u32; 2]) -> glam::DVec3 {
+    let region_centre = |index: u32| -WORLD_HALF_SIZE + (f64::from(index) + 0.5) * REGION_METRES;
+    let stray = |choice: Choice| {
+        let value = random([column.into(), row.into(), choice as u64, 0]);
+        SETTLEMENT_STRAY * (2.0 * value - 1.0)
+    };
+    glam::dvec3(
+        region_centre(column) + stray(Choice::SettlementX),
+        0.0,
+        region_centre(row) + stray(Choice::SettlementZ),
+    )
+}
+
+fn settlement_index([column, row]: [u32; 2]) -> u32 {
+    row * SETTLEMENTS_PER_SIDE + column
+}
+
+/// The camera, fixed over the middle of one settlement and looking along
+/// its streets.
+pub(crate) fn camera_at(_frame: u32) -> Camera {
+    let centre = settlement_centre(CAMERA_SETTLEMENT);
+    Camera::looking_at(
+        centre + glam::dvec3(0.0, 30.0, 120.0),
+        centre + glam::dvec3(0.0, 0.0, -60.0),
+    )
+}
+
+#[cfg(feature = "cook")]
+pub(crate) use generators::{materials, meshes, static_content, textures};
+
+#[cfg(feature = "cook")]
+mod generators {
+    use std::sync::Arc;
+
+    use glam::{Quat, Vec3, vec3};
+
+    use super::*;
+    use crate::assets::MaterialChannel;
+    use crate::cook::{ImageGenerator, LoadedImage};
+    use crate::cooked::CookedMaterial;
+    use crate::scenes::{
+        Geometry, ReferenceScene, ScenePrimitive, ground_plane, ground_tile_centres,
+    };
+
+    /// The Materials the world's Meshes name: a base colour in linear sRGB
+    /// and a roughness.
+    const MATERIALS: [(&str, [f32; 3], f32); 3] = [
+        ("grass", [0.10, 0.26, 0.06], 0.95),
+        ("slate", [0.32, 0.36, 0.41], 0.80),
+        ("glass", [0.04, 0.05, 0.07], 0.15),
+    ];
+
+    /// Wall colours in sRGB, which each facade Texture varies.
+    const PLASTERS: [[u8; 3]; 6] = [
+        [196, 150, 92],
+        [222, 210, 180],
+        [190, 120, 110],
+        [150, 70, 50],
+        [150, 150, 145],
+        [200, 180, 140],
+    ];
+
+    pub(crate) fn materials() -> Vec<(String, CookedMaterial)> {
+        let factors = |base_color: [f32; 3], roughness, albedo| CookedMaterial {
+            base_color: [base_color[0], base_color[1], base_color[2], 1.0],
+            metallic: 0.0,
+            roughness,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [albedo, None, None, None, None],
+        };
+        let named = MATERIALS.iter().map(|&(name, base_color, roughness)| {
+            (name.to_owned(), factors(base_color, roughness, None))
+        });
+        let facades = facade_names().map(|name| {
+            let albedo = ReferenceScene::World.texture_id(MaterialChannel::Albedo, &name);
+            let material = factors([1.0; 3], 0.85, Some(albedo));
+            (name, material)
+        });
+        named.chain(facades).collect()
+    }
+
+    pub(crate) fn textures() -> Vec<(String, MaterialChannel, ImageGenerator)> {
+        facade_names()
+            .enumerate()
+            .map(|(seed, name)| {
+                let generate: ImageGenerator = Arc::new(move || facade_texture(seed as u64));
+                (name, MaterialChannel::Albedo, generate)
+            })
+            .collect()
+    }
+
+    fn facade_names() -> impl Iterator<Item = String> {
+        let settlements = SETTLEMENTS_PER_SIDE * SETTLEMENTS_PER_SIDE;
+        (0..settlements).flat_map(|settlement| {
+            (0..FACADES_PER_SETTLEMENT).map(move |facade| facade_name(settlement, facade))
+        })
+    }
+
+    /// Brick courses in mortar over a plaster colour, each brick a shade of
+    /// its own, all from `seed`, top row first.
+    fn facade_texture(seed: u64) -> LoadedImage {
+        let side = FACADE_TEXTURE_SIDE;
+        let pick = |choice: Choice, part: u64| random([seed, choice as u64, part, 0]);
+        let plaster = PLASTERS[(pick(Choice::Plaster, 0) * PLASTERS.len() as f64) as usize];
+        let plaster = plaster.map(|channel| {
+            let jitter = 24.0 * (pick(Choice::Plaster, 1) - 0.5);
+            (f64::from(channel) + jitter).clamp(0.0, 255.0)
+        });
+        let mortar = [205u8, 200, 190, 255];
+        let [brick_width, brick_height] = BRICK_TEXELS;
+        let mut pixels = Vec::with_capacity((side * side * 4) as usize);
+        for y in 0..side {
+            let course = y / brick_height;
+            let shift = course % 2 * brick_width / 2;
+            for x in 0..side {
+                let along = x + shift;
+                if y % brick_height < MORTAR_TEXELS || along % brick_width < MORTAR_TEXELS {
+                    pixels.extend(mortar);
+                    continue;
+                }
+                let brick = u64::from(along / brick_width);
+                let shade = 0.8 + 0.3 * random([seed, Choice::Brick as u64, course.into(), brick]);
+                let [red, green, blue] = plaster.map(|channel| (channel * shade).min(255.0) as u8);
+                pixels.extend([red, green, blue, 255]);
+            }
+        }
+        LoadedImage {
+            pixels,
+            width: side,
+            height: side,
+        }
+    }
+
+    pub(crate) fn meshes() -> Vec<(&'static str, Vec<ScenePrimitive>)> {
+        let half_tile = (GROUND_TILE_METRES / 2.0) as f32;
+        let mut meshes = vec![
+            (
+                "ground",
+                vec![(ground_plane(half_tile, 1.0), Some("grass"))],
+            ),
+            ("window", vec![(window(), Some("glass"))]),
+        ];
+        for building in &BUILDINGS {
+            meshes.push((building.walls, vec![(walls(building), None)]));
+            meshes.push((building.roof, vec![(roof(building), Some("slate"))]));
+        }
+        meshes
+    }
+
+    /// A building's four walls about its base's centre, their UVs in
+    /// `FACADE_METRES` along the wall and up from the ground.
+    fn walls(building: &Building) -> Geometry {
+        let (half_width, half_depth) = (building.width / 2.0, building.depth / 2.0);
+        let up = Vec3::Y * building.height();
+        let mut geometry = Geometry::default();
+        for (corner, along) in [
+            (vec3(-half_width, 0.0, half_depth), Vec3::X * building.width),
+            (
+                vec3(half_width, 0.0, half_depth),
+                Vec3::NEG_Z * building.depth,
+            ),
+            (
+                vec3(half_width, 0.0, -half_depth),
+                Vec3::NEG_X * building.width,
+            ),
+            (
+                vec3(-half_width, 0.0, -half_depth),
+                Vec3::Z * building.depth,
+            ),
+        ] {
+            let base = geometry.positions.len() as u32;
+            let normal = along.cross(up).normalize();
+            let [width, height] =
+                [along.length(), up.length()].map(|metres| metres / FACADE_METRES);
+            for (offset, uv) in [
+                (Vec3::ZERO, [0.0, 0.0]),
+                (along, [width, 0.0]),
+                (along + up, [width, -height]),
+                (up, [0.0, -height]),
+            ] {
+                geometry.positions.push((corner + offset).into());
+                geometry.normals.push(normal.into());
+                geometry.uvs.push(uv);
+            }
+            geometry
+                .indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+        geometry
+    }
+
+    /// A flat slab over a building's walls, overhanging them.
+    fn roof(building: &Building) -> Geometry {
+        let half = vec3(
+            building.width / 2.0 + ROOF_OVERHANG,
+            0.0,
+            building.depth / 2.0 + ROOF_OVERHANG,
+        );
+        let height = building.height();
+        slab(
+            vec3(-half.x, height, -half.z),
+            vec3(half.x, height + ROOF_THICKNESS, half.z),
+        )
+    }
+
+    /// A window's pane, standing on its bottom edge's middle and facing +Z.
+    fn window() -> Geometry {
+        let half = WINDOW_SIZE / 2.0;
+        slab(
+            vec3(-half.x, 0.0, -half.z),
+            vec3(half.x, WINDOW_SIZE.y, half.z),
+        )
+    }
+
+    /// A box from `min` to `max` without its bottom, its UVs the unit
+    /// square on each face.
+    fn slab(min: Vec3, max: Vec3) -> Geometry {
+        let size = max - min;
+        let (x, y, z) = (Vec3::X * size.x, Vec3::Y * size.y, Vec3::Z * size.z);
+        let mut geometry = Geometry::default();
+        for (corner, first, second) in [
+            (vec3(max.x, min.y, max.z), -z, y),
+            (min, z, y),
+            (vec3(min.x, max.y, max.z), x, -z),
+            (vec3(min.x, min.y, max.z), x, y),
+            (vec3(max.x, min.y, min.z), -x, y),
+        ] {
+            let base = geometry.positions.len() as u32;
+            let normal = first.cross(second).normalize();
+            for (offset, uv) in [
+                (Vec3::ZERO, [0.0, 0.0]),
+                (first, [1.0, 0.0]),
+                (first + second, [1.0, 1.0]),
+                (second, [0.0, 1.0]),
+            ] {
+                geometry.positions.push((corner + offset).into());
+                geometry.normals.push(normal.into());
+                geometry.uvs.push(uv);
+            }
+            geometry
+                .indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+        geometry
+    }
+
+    pub(crate) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+        let scene = ReferenceScene::World;
+        let ground = scene.mesh_id("ground");
+        let mut placements: Vec<_> = ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE)
+            .map(|centre| placement(ground, None, centre, Quat::IDENTITY))
+            .collect();
+        for row in 0..SETTLEMENTS_PER_SIDE {
+            for column in 0..SETTLEMENTS_PER_SIDE {
+                settle([column, row], &mut placements);
+            }
+        }
+        for centre in ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE) {
+            farm(centre, &mut placements);
+        }
+        (placements, Vec::new())
+    }
+
+    /// Places the settlement of `region`: blocks of lots between streets,
+    /// a building on each lot.
+    fn settle(region: [u32; 2], placements: &mut Vec<CookedPlacement>) {
+        let settlement = settlement_index(region);
+        let corner = settlement_centre(region)
+            - glam::dvec3(SETTLEMENT_HALF_SIZE, 0.0, SETTLEMENT_HALF_SIZE);
+        let lots_per_side = BLOCKS_PER_SIDE * LOTS_PER_BLOCK_SIDE;
+        for lot_row in 0..lots_per_side {
+            for lot_column in 0..lots_per_side {
+                let offset = |lot: u32| {
+                    let block = f64::from(lot / LOTS_PER_BLOCK_SIDE);
+                    let within = f64::from(lot % LOTS_PER_BLOCK_SIDE);
+                    block * BLOCK_PITCH + STREET_WIDTH / 2.0 + (within + 0.5) * LOT_PITCH
+                };
+                let centre = corner + glam::dvec3(offset(lot_column), 0.0, offset(lot_row));
+                let pick = |choice: Choice| {
+                    random([
+                        settlement.into(),
+                        lot_column.into(),
+                        lot_row.into(),
+                        choice as u64,
+                    ])
+                };
+                let building = (pick(Choice::Building) * BUILDINGS.len() as f64) as usize;
+                let facade = (pick(Choice::Facade) * f64::from(FACADES_PER_SETTLEMENT)) as u32;
+                let quarter_turns = (pick(Choice::Yaw) * 4.0) as u32;
+                build(
+                    &BUILDINGS[building],
+                    settlement,
+                    facade,
+                    centre,
+                    quarter_turns,
+                    placements,
+                );
+            }
+        }
+    }
+
+    /// Places a farm on the ground tile at `centre`, by `FARM_CHANCE`, unless
+    /// a settlement reaches the tile; it is clad in its region's
+    /// settlement's facades.
+    fn farm(centre: glam::DVec3, placements: &mut Vec<CookedPlacement>) {
+        let region = [centre.x, centre.z]
+            .map(|metres| ((metres + WORLD_HALF_SIZE) / REGION_METRES).floor() as u32);
+        let reach = SETTLEMENT_HALF_SIZE + GROUND_TILE_METRES / 2.0;
+        let from_settlement = (centre - settlement_centre(region)).abs();
+        if from_settlement.x < reach && from_settlement.z < reach {
+            return;
+        }
+        let tile = [centre.x, centre.z].map(|metres| metres.to_bits());
+        let pick = |choice: Choice| random([tile[0], tile[1], choice as u64, 1]);
+        if pick(Choice::Farm) >= FARM_CHANCE {
+            return;
+        }
+        let spread = GROUND_TILE_METRES / 2.0 - 16.0;
+        let position = centre
+            + glam::dvec3(
+                spread * (2.0 * pick(Choice::FarmX) - 1.0),
+                0.0,
+                spread * (2.0 * pick(Choice::FarmZ) - 1.0),
+            );
+        let facade = (pick(Choice::Facade) * f64::from(FACADES_PER_SETTLEMENT)) as u32;
+        let quarter_turns = (pick(Choice::Yaw) * 4.0) as u32;
+        let settlement = settlement_index(region);
+        build(
+            &BUILDINGS[FARM],
+            settlement,
+            facade,
+            position,
+            quarter_turns,
+            placements,
+        );
+    }
+
+    /// Places `building` at `centre`, turned by `quarter_turns`, its walls
+    /// clad in facade `facade` of `settlement`, with its roof and a window
+    /// every `WINDOW_PITCH` along each wall on each storey.
+    fn build(
+        building: &Building,
+        settlement: u32,
+        facade: u32,
+        centre: glam::DVec3,
+        quarter_turns: u32,
+        placements: &mut Vec<CookedPlacement>,
+    ) {
+        let scene = ReferenceScene::World;
+        let rotation = Quat::from_rotation_y(quarter_turns as f32 * std::f32::consts::FRAC_PI_2);
+        let material = scene.material_id(&facade_name(settlement, facade));
+        placements.push(placement(
+            scene.mesh_id(building.walls),
+            Some(material),
+            centre,
+            rotation,
+        ));
+        placements.push(placement(
+            scene.mesh_id(building.roof),
+            None,
+            centre,
+            rotation,
+        ));
+        let window = scene.mesh_id("window");
+        let (half_width, half_depth) = (building.width / 2.0, building.depth / 2.0);
+        for (outward, along, half_length) in [
+            (Vec3::Z * half_depth, Vec3::X, half_width),
+            (Vec3::X * half_width, Vec3::NEG_Z, half_depth),
+            (Vec3::NEG_Z * half_depth, Vec3::NEG_X, half_width),
+            (Vec3::NEG_X * half_width, Vec3::Z, half_depth),
+        ] {
+            let columns = ((2.0 * half_length) / WINDOW_PITCH).floor() as u32;
+            let facing = Quat::from_rotation_arc(Vec3::Z, outward.normalize());
+            for storey in 0..building.storeys {
+                for column in 0..columns {
+                    let across = (column as f32 + 0.5 - columns as f32 / 2.0) * WINDOW_PITCH;
+                    let height = storey as f32 * STOREY_HEIGHT + WINDOW_SILL_HEIGHT;
+                    let local = outward + along * across + Vec3::Y * height;
+                    let translation = centre + (rotation * local).as_dvec3();
+                    placements.push(placement(window, None, translation, rotation * facing));
+                }
+            }
+        }
+    }
+
+    fn placement(
+        mesh: crate::cooked::AssetId,
+        material: Option<crate::cooked::AssetId>,
+        translation: glam::DVec3,
+        rotation: Quat,
+    ) -> CookedPlacement {
+        CookedPlacement {
+            mesh,
+            material,
+            translation,
+            rotation,
+            scale: Vec3::ONE,
+        }
+    }
+}
+
+#[cfg(all(test, feature = "cook"))]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::io::Write;
+
+    use super::*;
+    use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
+    use crate::scenes::ReferenceScene;
+    use crate::streaming::distance_metres;
+
+    /// From a camera anywhere on a 64 m grid, the static Instances of the
+    /// Chunks within the Load radius fit the static TLAS, and those within
+    /// the hold radius, with the 10,000 Moving Instances, fit the Instance
+    /// buffer, at the checked-in Budgets.
+    #[test]
+    fn the_densest_view_fits_the_capacities_the_budgets_give() {
+        let (placements, _) = static_content();
+        let mut per_chunk = BTreeMap::<[i32; 2], u32>::new();
+        for placement in &placements {
+            let translation = placement.translation;
+            let coordinates = [translation.x, translation.z]
+                .map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);
+            *per_chunk.entry(coordinates).or_default() += 1;
+        }
+        let load_radius = ReferenceScene::World.load_radius_metres();
+        let hold_radius = load_radius + CHUNK_EDGE_METRES;
+        let step_metres = 64.0;
+        let steps = (2.0 * WORLD_HALF_SIZE / step_metres) as u32;
+        let (mut most_loaded, mut most_held) = (0, 0);
+        for column in 0..=steps {
+            for row in 0..=steps {
+                let at = |index: u32| -WORLD_HALF_SIZE + f64::from(index) * step_metres;
+                let camera = glam::dvec3(at(column), 0.0, at(row));
+                let within = |radius: f64| -> u32 {
+                    (per_chunk.iter())
+                        .filter(|(coordinates, _)| distance_metres(camera, **coordinates) <= radius)
+                        .map(|(_, instances)| instances)
+                        .sum()
+                };
+                most_loaded = most_loaded.max(within(load_radius));
+                most_held = most_held.max(within(hold_radius));
+            }
+        }
+        let capacities = RenderCapacities::checked_in();
+        writeln!(
+            std::io::stderr(),
+            "{} static Instances, {most_loaded} at most within the Load radius, {most_held} within the hold radius",
+            placements.len()
+        )
+        .ok();
+        assert!(
+            most_loaded <= capacities.static_tlas_instances,
+            "{most_loaded} loaded"
+        );
+        assert!(
+            most_held + DYNAMIC_TLAS_CAPACITY <= capacities.instances,
+            "{most_held} held"
+        );
+    }
+}
