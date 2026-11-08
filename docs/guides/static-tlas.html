@@ -741,7 +741,7 @@ pub fn bound_index(&amp;self) -&gt; usize {
   <div class="part-mark">8 &middot; <code>bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
   <p class="key-idea">The static TLAS's cost is memory, two TLASes counted at full capacity whatever they hold: 18.0% to 20.5% of each scene's GPU memory on the Apple M4 Pro. A rebuild's CPU cost falls on the worker thread, and the main thread pays the entry changes and the submit.</p>
-  <p>Each scene's <code>gpu_memory_bytes</code> from the M4 Pro's Baselines as this page's code leaves them, at 2560&times;1440 with 4x MSAA, beside the two static TLASes' bytes, 75,597,888 each at 2<sup>18</sup> entries, as <code>tlas_bytes</code> gives them on Metal, wgpu-core's buffer of entries included. The RTX 2070 SUPER's and lavapipe's Baselines still count one static TLAS until each adapter is benched again.</p>
+  <p>Each scene's <code>gpu_memory_bytes</code> from the M4 Pro's Baselines as this page's code leaves them, at 2560&times;1440 with 4x MSAA, beside the two static TLASes' bytes, 75,597,888 each at 2<sup>18</sup> entries, as <code>tlas_bytes</code> gives them on Metal, wgpu-core's buffer of entries included. lavapipe's Baselines carry its 62,914,592 bytes each; the RTX 2070 SUPER's still count one static TLAS until that machine benches again.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th class="n"><code>gpu_memory_bytes</code></th><th class="n">Two static TLASes</th><th class="n">Share</th></tr></thead>
