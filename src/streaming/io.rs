@@ -11,7 +11,6 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use glam::DVec3;
 
-use crate::assets::material::StreamedMips;
 use crate::assets::{AssetReader, MaterialPool, MeshPool, MeshUse, PoolLoader};
 use crate::camera::Camera;
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
@@ -607,19 +606,24 @@ impl MipStreaming<'_> {
                 }
             }
             let (levels, decoded) = entry.remove();
-            let refused = match decoded {
+            let read_failed = match decoded {
                 Ok(decoded) => {
                     streamed.bytes_read += decoded.bytes_read;
                     let written_before = load_staging.written_bytes();
-                    let streamed_mips = material_pool.stream_mips(
+                    let priority = &*self.priority;
+                    let eviction_rank = |victim, resident_level| {
+                        priority.eviction_rank(victim, resident_level, levels.start)
+                    };
+                    material_pool.stream_mips(
                         device,
                         load_staging,
                         texture,
                         levels.start,
                         &decoded.levels,
+                        &eviction_rank,
                     );
                     streamed.written_bytes += load_staging.written_bytes() - written_before;
-                    streamed_mips == StreamedMips::Refused
+                    false
                 }
                 Err(error) => {
                     let error = format!("{error:#}");
@@ -627,7 +631,7 @@ impl MipStreaming<'_> {
                     true
                 }
             };
-            self.priority.finished(texture, refused);
+            self.priority.finished(texture, read_failed);
         }
     }
 }

@@ -51,7 +51,7 @@ impl MaterialHandle {
 /// a material stores one Layer per channel. The discriminant is the
 /// Channel's position in `MaterialPool::channels` and part of every
 /// Texture's Asset ID: never renumber.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum MaterialChannel {
     Albedo = 0,
     Normal = 1,
@@ -83,7 +83,7 @@ pub struct MaterialData {
 }
 
 /// What every Texture of one Texture class shares.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct TextureShape {
     pub width: u32,
     pub height: u32,
@@ -102,7 +102,7 @@ impl TextureShape {
     }
 
     /// The first mip of its Resident tail (`cooked::resident_tail_level`).
-    fn resident_tail_level(self) -> u32 {
+    pub(crate) fn resident_tail_level(self) -> u32 {
         resident_tail_level(self.format, self.width, self.height, self.mip_level_count)
     }
 
@@ -263,6 +263,16 @@ struct LoadedTexture {
     users: u32,
 }
 
+/// How mip eviction ranks a Texture whose chain could give way: the finest
+/// mip it needs, `u32::MAX` when nothing drawn samples it, and the last
+/// plan that needed its finest Resident mip. The coarsest need goes first,
+/// then the least recently used (ADR 0017).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct EvictionRank {
+    pub finest_mip_needed: u32,
+    pub last_used_plan: u64,
+}
+
 /// What `MaterialPool::stream_mips` did with a Texture's mips.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum StreamedMips {
@@ -348,6 +358,7 @@ impl ChannelTextures {
         staging.copy_texture(
             tail_array,
             tail.slice,
+            0,
             chain_array,
             chain.slice,
             finer_count,
@@ -903,7 +914,9 @@ impl MaterialPool {
     /// Resident one, are written there, and its Resident mips copied after
     /// them from where it lies. Its Resident tail's slice stays taken, its
     /// earlier chain's is given back, and each loaded Material that samples
-    /// it is written again with its new Layer.
+    /// it is written again with its new Layer. A Channel without room for
+    /// that class first evicts the finest mip of a Texture whose chain lies
+    /// in it, the one `eviction_rank` ranks lowest (ADR 0017).
     pub(crate) fn stream_mips(
         &mut self,
         device: &wgpu::Device,
@@ -911,16 +924,30 @@ impl MaterialPool {
         id: AssetId,
         first_level: u32,
         levels: &[Vec<u8>],
+        eviction_rank: &dyn Fn(AssetId, u32) -> Option<EvictionRank>,
     ) -> StreamedMips {
-        let Some(loaded) = self.loaded_textures.get_mut(&id) else {
+        let Some(loaded) = self.loaded_textures.get(&id) else {
             return StreamedMips::Stale;
         };
         if first_level + levels.len() as u32 != loaded.resident_level {
             return StreamedMips::Stale;
         }
-        let channel = &mut self.channels[loaded.channel as usize];
+        let (texture_channel, target_shape) = (loaded.channel, loaded.shape.mips_from(first_level));
+        if !self.channels[texture_channel as usize]
+            .table
+            .has_room(&[target_shape])
+        {
+            self.evict_for(
+                device,
+                staging,
+                texture_channel,
+                target_shape,
+                eviction_rank,
+            );
+        }
+        let channel = &mut self.channels[texture_channel as usize];
         let classes_before = channel.views.len();
-        let Some(target) = channel.place(device, loaded.shape.mips_from(first_level)) else {
+        let Some(target) = channel.place(device, target_shape) else {
             return StreamedMips::Refused;
         };
         self.bind_group_is_stale |= channel.views.len() != classes_before;
@@ -928,35 +955,176 @@ impl MaterialPool {
         for (level, bytes) in levels.iter().enumerate() {
             staging.write_texture(target_array, level as u32, target.slice, bytes);
         }
+        let loaded = self
+            .loaded_textures
+            .get_mut(&id)
+            .expect("checked loaded above");
         let source = loaded.placement.chain.unwrap_or(loaded.placement.tail);
         let source_array = &channel.textures[source.class as usize];
-        let first_copied_level = levels.len() as u32;
         staging.copy_texture(
             source_array,
             source.slice,
+            0,
             target_array,
             target.slice,
-            first_copied_level,
+            levels.len() as u32,
         );
         if let Some(chain) = loaded.placement.chain.replace(target) {
             channel.table.release(chain);
         }
         loaded.resident_level = first_level;
-        let (texture_channel, layer) = (loaded.channel, target.layer());
+        self.write_layer(staging, id, texture_channel, target.layer());
+        StreamedMips::Moved
+    }
+
+    /// Evicts the finest mip of the Texture eviction can take that
+    /// `eviction_rank` ranks lowest, least recently used breaking ties, then
+    /// Asset ID, among those in `channel` whose chain lies in `shape`'s
+    /// class, giving back a slice of it, if there is one.
+    fn evict_for(
+        &mut self,
+        device: &wgpu::Device,
+        staging: &mut LoadStaging,
+        channel: MaterialChannel,
+        shape: TextureShape,
+        eviction_rank: &dyn Fn(AssetId, u32) -> Option<EvictionRank>,
+    ) {
+        let victim = self
+            .loaded_textures
+            .iter()
+            .filter(|(_, loaded)| {
+                loaded.channel == channel && loaded.shape.mips_from(loaded.resident_level) == shape
+            })
+            .filter_map(|(&id, loaded)| Some((id, self.evictable(id, loaded, eviction_rank)?)))
+            .min_by_key(|&(id, (_, rank))| {
+                (
+                    std::cmp::Reverse(rank.finest_mip_needed),
+                    rank.last_used_plan,
+                    id.0,
+                )
+            });
+        if let Some((id, _)) = victim {
+            self.evict_finest_mip(device, staging, id);
+        }
+    }
+
+    /// The class shape of `loaded`'s chain and its rank, when eviction can
+    /// take its finest mip: `eviction_rank` ranks it, and it needs no mip
+    /// finer than its Resident tail or its Channel has room for the class of
+    /// its mips from the next, so it keeps every mip it needs.
+    fn evictable(
+        &self,
+        id: AssetId,
+        loaded: &LoadedTexture,
+        eviction_rank: &dyn Fn(AssetId, u32) -> Option<EvictionRank>,
+    ) -> Option<(TextureShape, EvictionRank)> {
+        loaded.placement.chain?;
+        let rank = eviction_rank(id, loaded.resident_level)?;
+        let next_level = loaded.resident_level + 1;
+        let keeps_its_need = rank.finest_mip_needed >= loaded.shape.resident_tail_level()
+            || self.channels[loaded.channel as usize]
+                .table
+                .has_room(&[loaded.shape.mips_from(next_level)]);
+        keeps_its_need.then_some((loaded.shape.mips_from(loaded.resident_level), rank))
+    }
+
+    /// The Channel and class shape a move of the Texture `id` to
+    /// `first_level` takes, when its Channel has no room for that class.
+    pub(crate) fn full_class_for_mips(
+        &self,
+        id: AssetId,
+        first_level: u32,
+    ) -> Option<(MaterialChannel, TextureShape)> {
+        let loaded = self.loaded_textures.get(&id)?;
+        let shape = loaded.shape.mips_from(first_level);
+        let channel = &self.channels[loaded.channel as usize];
+        (!channel.table.has_room(&[shape])).then_some((loaded.channel, shape))
+    }
+
+    /// The coarsest need among the Textures eviction can take, by Channel and
+    /// the class shape of their chains.
+    pub(crate) fn coarsest_evictable_needs(
+        &self,
+        eviction_rank: &dyn Fn(AssetId, u32) -> Option<EvictionRank>,
+    ) -> HashMap<(MaterialChannel, TextureShape), u32> {
+        let mut needs = HashMap::new();
+        for (&id, loaded) in &self.loaded_textures {
+            if let Some((shape, rank)) = self.evictable(id, loaded, eviction_rank) {
+                let need = needs.entry((loaded.channel, shape)).or_insert(0);
+                *need = rank.finest_mip_needed.max(*need);
+            }
+        }
+        needs
+    }
+
+    /// Moves the Texture `id`, which has a chain, to a free slice of the class
+    /// of its mips from its next coarser one, copied from its chain, or back
+    /// to its Resident tail when that mip starts it or the Channel has no
+    /// room for that class; its chain's slice is given back.
+    fn evict_finest_mip(&mut self, device: &wgpu::Device, staging: &mut LoadStaging, id: AssetId) {
+        let loaded = self
+            .loaded_textures
+            .get_mut(&id)
+            .expect("an evicted Texture is loaded");
+        let chain = loaded
+            .placement
+            .chain
+            .expect("an evicted Texture has a chain");
+        let next_level = loaded.resident_level + 1;
+        let tail_level = loaded.shape.resident_tail_level();
+        let next_shape = loaded.shape.mips_from(next_level);
+        let channel = &mut self.channels[loaded.channel as usize];
+        let classes_before = channel.views.len();
+        let coarser_chain = if next_level < tail_level && channel.table.has_room(&[next_shape]) {
+            channel.place(device, next_shape)
+        } else {
+            None
+        };
+        self.bind_group_is_stale |= channel.views.len() != classes_before;
+        if let Some(target) = coarser_chain {
+            staging.copy_texture(
+                &channel.textures[chain.class as usize],
+                chain.slice,
+                1,
+                &channel.textures[target.class as usize],
+                target.slice,
+                0,
+            );
+        }
+        channel.table.release(chain);
+        loaded.placement.chain = coarser_chain;
+        loaded.resident_level = if coarser_chain.is_some() {
+            next_level
+        } else {
+            tail_level
+        };
+        let (texture_channel, layer) = (loaded.channel, loaded.placement.layer());
+        tracing::debug!(texture = %id, resident_level = loaded.resident_level, "finest mip evicted");
+        self.write_layer(staging, id, texture_channel, layer);
+    }
+
+    /// Writes `layer` as the `channel` Layer of each loaded Material that
+    /// samples the Texture `id`.
+    fn write_layer(
+        &mut self,
+        staging: &mut LoadStaging,
+        id: AssetId,
+        channel: MaterialChannel,
+        layer: u32,
+    ) {
         for material in self.loaded_materials.values() {
             if !material.textures.contains(&id) {
                 continue;
             }
             let index = material.handle.index;
             let data = &mut self.materials[index as usize];
-            match texture_channel {
+            match channel {
                 MaterialChannel::Emissive => data.extra[0] = layer,
                 channel => data.layers[channel as usize] = layer,
             }
             let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
             staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(data));
         }
-        StreamedMips::Moved
     }
 
     /// Rebuilds the bind group when loads since the last call opened Texture
@@ -1321,6 +1489,183 @@ mod tests {
             "no Material is unused"
         );
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// Reads every Texture as `texture`, its Resident tail alone, as the IO
+    /// pool decodes a Chunk's.
+    struct TailReader {
+        texture: CookedTexture,
+    }
+
+    impl AssetReader for TailReader {
+        fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial> {
+            anyhow::bail!("no Material {id}")
+        }
+        fn texture(&self, _id: AssetId) -> anyhow::Result<CookedTexture> {
+            Ok(self.texture.clone())
+        }
+        fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
+            anyhow::bail!("no Mesh {id}")
+        }
+        fn chunk(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedChunk> {
+            anyhow::bail!("no Chunk {id}")
+        }
+    }
+
+    /// In a Channel of seven Texture classes, the neutral Layer, three of
+    /// 1,024² BC7 Resident tails, one of mip-1 chains and two of mip-0 chains
+    /// fill it. A move to mip 0 then evicts the mip-0 chain of the coarsest
+    /// need, the least recently needed of two, which moves to mip 1; the next,
+    /// with no room for mip 1 left, falls back to its Resident tail; and a
+    /// Texture holding its tail alone gives no room.
+    #[test]
+    fn a_full_channel_evicts_the_lowest_priority_finest_mip_and_keeps_tails() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let level =
+            |level: u32| vec![0; crate::cooked::level_bytes(format, 1024, 1024, level as usize)];
+        let reader = TailReader {
+            texture: CookedTexture {
+                format,
+                width: 1024,
+                height: 1024,
+                first_level: 2,
+                levels: (2..11).map(level).collect(),
+            },
+        };
+        assert_eq!(TextureShape::of(&reader.texture).resident_tail_level(), 2);
+        let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities {
+            texture_classes_per_channel: 7,
+            ..PoolCapacities::checked_in()
+        };
+        let device = &context.device;
+        let memory = gpu_memory(&context);
+        let mut pool = MaterialPool::new(device, &memory, &mut staging, &capacities, false);
+        let [first, lowest, low, requester, next, last] = [10, 11, 12, 13, 14, 15].map(AssetId);
+        for id in [first, lowest, low, requester, next, last] {
+            let channel = MaterialChannel::Albedo;
+            let loaded =
+                pool.load_texture(device, &mut staging, &reader, channel, id, &mut |_| false);
+            assert_ne!(loaded.unwrap(), MaterialPool::DEFAULT_LAYER);
+        }
+        let rank = |finest_mip_needed, last_used_plan| EvictionRank {
+            finest_mip_needed,
+            last_used_plan,
+        };
+        let mut ranks = HashMap::new();
+        let mut stream = |pool: &mut MaterialPool,
+                          id,
+                          first_level: u32,
+                          resident_level: u32,
+                          ranks: &HashMap<AssetId, EvictionRank>| {
+            let levels: Vec<Vec<u8>> = (first_level..resident_level).map(level).collect();
+            let ranked = |id, _| ranks.get(&id).copied();
+            pool.stream_mips(device, &mut staging, id, first_level, &levels, &ranked)
+        };
+        let placement = |pool: &MaterialPool, id| pool.loaded_textures[&id].placement;
+        let resident = |pool: &MaterialPool, id| pool.loaded_textures[&id].resident_level;
+
+        assert_eq!(stream(&mut pool, first, 1, 2, &ranks), StreamedMips::Moved);
+        let free_mip_one = placement(&pool, first).chain;
+        for (id, resident_level) in [(first, 1), (lowest, 2), (low, 2)] {
+            assert_eq!(
+                stream(&mut pool, id, 0, resident_level, &ranks),
+                StreamedMips::Moved
+            );
+        }
+        assert_eq!(pool.channels[0].views.len(), 7);
+        let lowest_chain = placement(&pool, lowest).chain;
+
+        ranks.extend([(first, rank(5, 7)), (lowest, rank(5, 3)), (low, rank(4, 1))]);
+        assert_eq!(
+            stream(&mut pool, requester, 0, 2, &ranks),
+            StreamedMips::Moved
+        );
+        assert_eq!(placement(&pool, requester).chain, lowest_chain);
+        assert_eq!(placement(&pool, lowest).chain, free_mip_one);
+        assert_eq!(resident(&pool, lowest), 1);
+        assert_eq!((resident(&pool, first), resident(&pool, low)), (0, 0));
+
+        let low_placement = placement(&pool, low);
+        ranks = HashMap::from([(low, rank(4, 1))]);
+        assert_eq!(stream(&mut pool, next, 0, 2, &ranks), StreamedMips::Moved);
+        assert_eq!(placement(&pool, next).chain, low_placement.chain);
+        assert_eq!(
+            placement(&pool, low),
+            TexturePlacement {
+                tail: low_placement.tail,
+                chain: None
+            }
+        );
+        assert_eq!(resident(&pool, low), 2);
+
+        assert_eq!(stream(&mut pool, last, 0, 2, &ranks), StreamedMips::Refused);
+        assert_eq!(placement(&pool, low).tail, low_placement.tail);
+        assert_eq!(resident(&pool, last), 2);
+        staging.submit(&context.queue);
+    }
+
+    /// A 2,048² BC7 Texture at mip 0, its tail from mip 3, in a Channel
+    /// holding its capacity of three classes: with no room for mip 1, a need
+    /// of mip 2 keeps its finest mip, as a fall back to its tail would lose
+    /// mip 2, while a need of mip 3 gives it way; and a move into its full
+    /// class finds that class and that need.
+    #[test]
+    fn a_texture_gives_way_only_without_losing_a_mip_it_needs() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let level =
+            |level: u32| vec![0; crate::cooked::level_bytes(format, 2048, 2048, level as usize)];
+        let reader = TailReader {
+            texture: CookedTexture {
+                format,
+                width: 2048,
+                height: 2048,
+                first_level: 3,
+                levels: (3..12).map(level).collect(),
+            },
+        };
+        let shape = TextureShape::of(&reader.texture);
+        assert_eq!(shape.resident_tail_level(), 3);
+        let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities {
+            texture_classes_per_channel: 3,
+            ..PoolCapacities::checked_in()
+        };
+        let device = &context.device;
+        let memory = gpu_memory(&context);
+        let mut pool = MaterialPool::new(device, &memory, &mut staging, &capacities, false);
+        let (id, channel) = (AssetId(10), MaterialChannel::Albedo);
+        pool.load_texture(device, &mut staging, &reader, channel, id, &mut |_| false)
+            .unwrap();
+        let levels: Vec<Vec<u8>> = (0..3).map(level).collect();
+        let none = |_, _| None;
+        let moved = pool.stream_mips(device, &mut staging, id, 0, &levels, &none);
+        assert_eq!(moved, StreamedMips::Moved);
+        staging.submit(&context.queue);
+
+        let needing = |finest_mip_needed| {
+            move |_, _| {
+                Some(EvictionRank {
+                    finest_mip_needed,
+                    last_used_plan: 0,
+                })
+            }
+        };
+        let loaded = &pool.loaded_textures[&id];
+        assert_eq!(pool.evictable(id, loaded, &needing(2)), None);
+        assert!(pool.coarsest_evictable_needs(&needing(2)).is_empty());
+        let class = (channel, shape.mips_from(0));
+        assert_eq!(pool.full_class_for_mips(id, 0), Some(class));
+        assert_eq!(
+            pool.coarsest_evictable_needs(&needing(3)),
+            HashMap::from([(class, 3)])
+        );
     }
 
     /// Budgets for four Materials make an SSBO of four; the next gets no
