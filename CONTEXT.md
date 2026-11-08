@@ -166,6 +166,10 @@ _Avoid_: Streaming radius, active area, grid size
 A Chunk the camera came within the Load radius of before it was loaded.
 _Avoid_: Pop-in, streaming miss
 
+**Late mip**:
+A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
+_Avoid_: Missing mip, texture pop
+
 **View distance**:
 How far from the camera the Game world is drawn: 2 km at target scale (ADR 0013), never less than the Load radius.
 _Avoid_: Draw distance, far plane (depth has none, ADR 0015), LOD distance

@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::Range;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
@@ -10,12 +11,14 @@ use anyhow::Context;
 use bevy_ecs::prelude::*;
 use glam::DVec3;
 
+use crate::assets::material::StreamedMips;
 use crate::assets::{AssetReader, MaterialPool, MeshPool, MeshUse, PoolLoader};
 use crate::camera::Camera;
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
-use crate::render::{Renderer, texture_written_bytes};
+use crate::render::{Renderer, mips_written_bytes, texture_written_bytes};
 use crate::scenes::ReferenceScene;
 use crate::streaming::chunks::load_cooked_chunk;
+use crate::streaming::mips::{MipPriority, MipRequest};
 use crate::streaming::{
     ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks, distance_metres,
 };
@@ -61,23 +64,43 @@ struct DecodedChunk {
     bytes_read: u64,
 }
 
-type Finished = ([i32; 2], anyhow::Result<DecodedChunk>);
+/// Mips of a Texture the IO pool read and decoded.
+struct DecodedMips {
+    levels: Vec<Vec<u8>>,
+    bytes_read: u64,
+}
 
-/// A few std threads that read Chunks and the Assets they name from the
-/// Cooked cache and decode them, off the main thread.
+/// What the IO pool reads: the Chunk with an Asset ID at its coordinates,
+/// with the Assets it names, or a Texture's mips.
+enum IoRequest {
+    Chunk([i32; 2], AssetId),
+    Mips(MipRequest),
+}
+
+enum Finished {
+    Chunk([i32; 2], Box<anyhow::Result<DecodedChunk>>),
+    Mips(MipRequest, anyhow::Result<DecodedMips>),
+}
+
+/// A few std threads that read Chunks and the Assets they name, and
+/// Textures' mips, from the Cooked cache and decode them, off the main
+/// thread.
 struct IoPool {
-    requests: Option<mpsc::Sender<([i32; 2], AssetId)>>,
+    requests: Option<mpsc::Sender<IoRequest>>,
     finished: mpsc::Receiver<Finished>,
     threads: Vec<JoinHandle<()>>,
     in_flight: usize,
     /// Loads the threads finished and the main thread has not taken, by
     /// coordinates.
     ready: BTreeMap<[i32; 2], anyhow::Result<DecodedChunk>>,
+    /// Mips the threads read and the main thread has not applied, by
+    /// Texture, with the mips requested.
+    ready_mips: BTreeMap<AssetId, (Range<u32>, anyhow::Result<DecodedMips>)>,
 }
 
 impl IoPool {
     fn new(cache: Arc<CookedCache>, claimed: Claimed) -> anyhow::Result<Self> {
-        let (request_sender, request_receiver) = mpsc::channel::<([i32; 2], AssetId)>();
+        let (request_sender, request_receiver) = mpsc::channel::<IoRequest>();
         let (finished_sender, finished) = mpsc::channel();
         let request_receiver = Arc::new(Mutex::new(request_receiver));
         let threads = (0..IO_THREADS)
@@ -96,11 +119,18 @@ impl IoPool {
                                 .lock()
                                 .unwrap_or_else(PoisonError::into_inner)
                                 .recv();
-                            let Ok((coordinates, id)) = request else {
-                                return;
+                            let done = match request {
+                                Ok(IoRequest::Chunk(coordinates, id)) => Finished::Chunk(
+                                    coordinates,
+                                    Box::new(decode_chunk(&cache, &claimed, id, coordinates)),
+                                ),
+                                Ok(IoRequest::Mips(request)) => {
+                                    let decoded = decode_mips(&cache, &request);
+                                    Finished::Mips(request, decoded)
+                                }
+                                Err(_) => return,
                             };
-                            let decoded = decode_chunk(&cache, &claimed, id, coordinates);
-                            if finished.send((coordinates, decoded)).is_err() {
+                            if finished.send(done).is_err() {
                                 return;
                             }
                         }
@@ -114,44 +144,57 @@ impl IoPool {
             threads,
             in_flight: 0,
             ready: BTreeMap::new(),
+            ready_mips: BTreeMap::new(),
         })
     }
 
-    fn request(&mut self, coordinates: [i32; 2], id: AssetId) {
+    fn request(&mut self, request: IoRequest) {
         let sent = self
             .requests
             .as_ref()
-            .is_some_and(|requests| requests.send((coordinates, id)).is_ok());
+            .is_some_and(|requests| requests.send(request).is_ok());
         if sent {
             self.in_flight += 1;
         } else {
-            tracing::error!(?coordinates, "Chunk not requested: the IO pool stopped");
+            tracing::error!("nothing requested: the IO pool stopped");
         }
     }
 
-    /// Takes the loads finished so far into `ready`, without waiting.
+    /// Takes the loads finished so far into `ready` and `ready_mips`,
+    /// without waiting.
     fn receive(&mut self) {
-        while let Ok((coordinates, decoded)) = self.finished.try_recv() {
-            self.ready.insert(coordinates, decoded);
-            self.in_flight -= 1;
+        while let Ok(finished) = self.finished.try_recv() {
+            self.take(finished);
         }
     }
 
-    /// Waits for every load in flight, into `ready`.
+    /// Waits for every load in flight, into `ready` and `ready_mips`.
     fn receive_all(&mut self) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.in_flight > 0,
             "the Chunk streamer waits on loads the IO pool does not hold"
         );
         while self.in_flight > 0 {
-            let (coordinates, decoded) = self
+            let finished = self
                 .finished
                 .recv()
                 .context("the IO pool's threads stopped")?;
-            self.ready.insert(coordinates, decoded);
-            self.in_flight -= 1;
+            self.take(finished);
         }
         Ok(())
+    }
+
+    fn take(&mut self, finished: Finished) {
+        match finished {
+            Finished::Chunk(coordinates, decoded) => {
+                self.ready.insert(coordinates, *decoded);
+            }
+            Finished::Mips(request, decoded) => {
+                self.ready_mips
+                    .insert(request.texture, (request.levels, decoded));
+            }
+        }
+        self.in_flight -= 1;
     }
 }
 
@@ -219,7 +262,7 @@ fn decode_chunk(
     }
     for texture_id in textures {
         if claim(texture_id) {
-            let texture = CookedTexture::from_blob(&read(texture_id)?)
+            let texture = CookedTexture::resident_tail_from_blob(&read(texture_id)?)
                 .with_context(|| format!("reading Texture {texture_id}"))?;
             assets.textures.insert(texture_id, texture);
         }
@@ -230,6 +273,17 @@ fn decode_chunk(
         chunk,
         assets,
         bytes_read,
+    })
+}
+
+/// Reads and decodes `request`'s mips from `cache`.
+fn decode_mips(cache: &CookedCache, request: &MipRequest) -> anyhow::Result<DecodedMips> {
+    let blob = cache.read(request.texture)?;
+    let levels = CookedTexture::mips_from_blob(&blob, request.levels.clone())
+        .with_context(|| format!("reading Texture {}'s mips", request.texture))?;
+    Ok(DecodedMips {
+        levels,
+        bytes_read: blob.len() as u64,
     })
 }
 
@@ -303,6 +357,7 @@ pub(crate) struct StreamedFrame {
     /// Bytes the frame's loads wrote into the load staging.
     pub written_bytes: u64,
     pub pool_entries_freed: u32,
+    pub late_mips: u32,
 }
 
 /// A Reference scene's Chunks streamed around the camera: the Chunk
@@ -325,6 +380,7 @@ pub(crate) struct ChunkStreaming {
     /// The bytes a frame's loads may write into the load staging; a Chunk
     /// that alone writes more loads alone.
     load_bytes_per_frame: u64,
+    mips: MipPriority,
 }
 
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
@@ -355,6 +411,7 @@ impl ChunkStreaming {
             error: None,
             cook_chunk: None,
             load_bytes_per_frame,
+            mips: MipPriority::default(),
         })
     }
 
@@ -442,6 +499,7 @@ impl ChunkStreaming {
                 error,
                 cook_chunk,
                 load_bytes_per_frame,
+                mips,
             } = self;
             let mut frame_io = FrameIo {
                 cook_chunk,
@@ -465,13 +523,111 @@ impl ChunkStreaming {
             streamed.chunks_loaded += frame.loaded.len() as u32;
             streamed.chunks_unloaded += frame.unloaded.len() as u32;
             keep_loaded_chunks(world, frame, finished, renderer);
-            if !settle || frame.settled {
+            let mip_streaming = MipStreaming {
+                io,
+                priority: mips,
+                renderer,
+                settle,
+                load_bytes_per_frame: *load_bytes_per_frame,
+            };
+            let mips_settled = mip_streaming.stream(world, &mut streamed);
+            if !settle || (frame.settled && mips_settled) {
                 return Ok(streamed);
             }
             if let Some(error) = error.take() {
                 return Err(error);
             }
             io.receive_all()?;
+        }
+    }
+}
+
+/// One frame's mip streaming (ADR 0017), after its Chunk loads.
+struct MipStreaming<'a> {
+    io: &'a mut IoPool,
+    priority: &'a mut MipPriority,
+    renderer: &'a mut Renderer,
+    settle: bool,
+    load_bytes_per_frame: u64,
+}
+
+impl MipStreaming<'_> {
+    /// Applies the mips the IO pool read, in Asset ID order, up to the
+    /// frame's load bytes, or, while settling, all of them once nothing is
+    /// in flight, as the Chunk streamer's last take found it; then requests
+    /// the mips the loaded Chunks' drawn Placements need from the camera,
+    /// finest-needed first, and counts the late mips. Returns whether no
+    /// request is in flight. Without mip streaming, it does nothing.
+    fn stream(mut self, world: &World, streamed: &mut StreamedFrame) -> bool {
+        if !self.renderer.material_pool.streams_mips() {
+            return true;
+        }
+        if !self.settle {
+            self.io.receive();
+            self.apply(streamed);
+        } else if self.io.in_flight == 0 {
+            self.apply(streamed);
+        }
+        let camera = world.resource::<Camera>().position;
+        let chunks = world
+            .get_resource::<LoadedChunks>()
+            .map_or(&[][..], |chunks| &chunks.0);
+        let Renderer {
+            mesh_pool,
+            material_pool,
+            ..
+        } = &*self.renderer;
+        let (late_mips, requests) =
+            self.priority
+                .plan(camera, chunks, mesh_pool.meshes(), material_pool);
+        streamed.late_mips = late_mips;
+        for request in requests {
+            self.io.request(IoRequest::Mips(request.clone()));
+        }
+        !self.priority.waiting()
+    }
+
+    fn apply(&mut self, streamed: &mut StreamedFrame) {
+        let Renderer {
+            device,
+            material_pool,
+            load_staging,
+            ..
+        } = &mut *self.renderer;
+        while let Some(entry) = self.io.ready_mips.first_entry() {
+            let texture = *entry.key();
+            if let (levels, Ok(_)) = entry.get()
+                && let Some((shape, _)) = material_pool.texture_residency(texture)
+            {
+                let bytes =
+                    mips_written_bytes(shape.format, shape.width, shape.height, levels.clone());
+                let past_cap = streamed.written_bytes + bytes > self.load_bytes_per_frame;
+                if !self.settle && streamed.written_bytes > 0 && past_cap {
+                    return;
+                }
+            }
+            let (levels, decoded) = entry.remove();
+            let refused = match decoded {
+                Ok(decoded) => {
+                    streamed.bytes_read += decoded.bytes_read;
+                    let written_before = load_staging.written_bytes();
+                    let streamed_mips = material_pool.stream_mips(
+                        device,
+                        load_staging,
+                        texture,
+                        levels.start,
+                        &decoded.levels,
+                    );
+                    streamed.written_bytes += load_staging.written_bytes() - written_before;
+                    streamed_mips == StreamedMips::Refused
+                }
+                Err(error) => {
+                    let error = format!("{error:#}");
+                    tracing::error!(%texture, error, "mips not read");
+                    true
+                }
+            };
+            self.priority.finished(texture, refused);
         }
     }
 }
@@ -683,7 +839,7 @@ impl ChunkIo for FrameIo<'_> {
             let error = format!("{error:#}");
             tracing::error!(?coordinates, error, "Chunk not cooked");
         }
-        self.io.request(coordinates, id);
+        self.io.request(IoRequest::Chunk(coordinates, id));
     }
 
     fn take_finished(&mut self) -> Option<FinishedLoad> {

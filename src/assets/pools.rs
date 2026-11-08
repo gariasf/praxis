@@ -465,6 +465,7 @@ impl MeshPool {
                 .iter()
                 .map(|primitive| primitive.texel_density)
                 .collect(),
+            materials: materials.to_vec(),
         });
 
         // A Meshlet's vertices index the vertex Arena, and its triangles

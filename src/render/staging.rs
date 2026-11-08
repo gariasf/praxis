@@ -354,12 +354,29 @@ impl LoadStaging {
     }
 }
 
-/// The bytes `write_texture` writes into the belt for every mip of
-/// `texture`, row padding included.
+/// The bytes `write_texture` writes into the belt for every mip `texture`
+/// holds, row padding included.
 pub fn texture_written_bytes(texture: &CookedTexture) -> u64 {
-    (0..texture.levels.len() as u32)
+    let end = texture.first_level + texture.levels.len() as u32;
+    mips_written_bytes(
+        texture.format,
+        texture.width,
+        texture.height,
+        texture.first_level..end,
+    )
+}
+
+/// The bytes `write_texture` writes into the belt for mips `levels` of a
+/// `width` × `height` Texture in `format`, row padding included.
+pub fn mips_written_bytes(
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    levels: std::ops::Range<u32>,
+) -> u64 {
+    levels
         .map(|level| {
-            let copy = MipCopy::of(texture.format, texture.width, texture.height, level);
+            let copy = MipCopy::of(format, width, height, level);
             (copy.pitch * copy.rows as usize) as u64
         })
         .sum()

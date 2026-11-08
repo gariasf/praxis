@@ -83,11 +83,15 @@ pub struct FrameStats {
     pub chunks_loaded: u32,
     /// Chunks the frame unloaded.
     pub chunks_unloaded: u32,
-    /// Bytes of Blobs the IO pool read for the Chunks the frame loaded.
+    /// Bytes of Blobs the IO pool read for the Chunks the frame loaded and
+    /// the mips it streamed.
     pub bytes_read: u64,
     /// Meshes, Materials and Textures freed to make room for the frame's
     /// loads.
     pub pool_entries_freed: u32,
+    /// Late mips: mips the frame's drawn Chunks need, by their Textures'
+    /// priority, that are not Resident.
+    pub late_mips: u32,
     /// Readbacks of GPU stats the frame skipped, its own or an earlier
     /// frame's, as their ring slot was not ready and the main thread never
     /// waits on the GPU (ADR 0016).

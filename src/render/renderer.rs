@@ -93,7 +93,8 @@ pub struct RenderSwitches {
     pub crowd_form: CrowdForm,
     /// Whether every Texture holds back the mips finer than its Resident
     /// tail, so it samples its tail alone, as one whose finer mips have not
-    /// arrived. Off, as it ships, every mip loads.
+    /// arrived. Off, as it ships, a Texture's finer mips stream in by
+    /// priority (ADR 0017).
     pub residency: bool,
     /// Whether a frame that hands the static TLAS's spare to its worker
     /// waits for it, so which frame binds a build never depends on the
@@ -2985,6 +2986,7 @@ pub(crate) mod tests {
             format,
             width: 512,
             height: 512,
+            first_level: 0,
             levels,
         };
         let material = CookedMaterial {

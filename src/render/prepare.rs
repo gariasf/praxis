@@ -1052,6 +1052,7 @@ mod tests {
                 vertices: 0..3,
                 bounds: [[0.0; 3]; 2],
                 texel_densities: Vec::new(),
+                materials: Vec::new(),
             });
             let mut world = World::new();
             world.insert_resource(Camera::new());
@@ -1478,6 +1479,7 @@ mod tests {
             vertices: 0..0,
             bounds: [[0.0; 3]; 2],
             texel_densities: Vec::new(),
+            materials: Vec::new(),
         });
         let first_mesh = frames.mesh;
         let entity = frames
@@ -1649,6 +1651,7 @@ mod tests {
             vertices: first_vertex..frames.vertices_loaded,
             bounds: [[0.0; 3]; 2],
             texel_densities: Vec::new(),
+            materials: Vec::new(),
         })
     }
 
