@@ -503,9 +503,9 @@ const FAIL_RATIO: f64 = 1.10;
 /// runs, so a CPU time fails only when it also grows by more than this.
 const CPU_NOISE_FLOOR_MICROSECONDS: f64 = 10.0;
 
-/// Likewise for a pass's GPU time: a short pass moves by more than the
-/// ratios between runs on the M4 Pro (measured: `docs/performance.md`,
-/// Measurements behind the code).
+/// Likewise for a GPU time, a pass's or the frame's: a short pass moves by
+/// more than the ratios between runs on the M4 Pro (measured:
+/// `docs/performance.md`, Measurements behind the code).
 const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
 <pre class="code"><code>    if current &lt;= baseline {
         return;
@@ -531,17 +531,17 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
     <tbody>
       <tr><td>each of the eight counters</td><td>fails on any increase</td><td>none</td><td><code>gpu_memory_bytes</code> only</td></tr>
       <tr><td><code>aliasing_rmse</code>, <code>aliasing_p99</code></td><td>the ratios</td><td>none</td><td>none</td></tr>
-      <tr><td><code>cpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>CPU_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and at the p95</td></tr>
+      <tr><td><code>cpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>CPU_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median, p95 and p99, and its maximum against one 60 Hz period</td></tr>
       <tr><td>each timed pass</td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td><code>dynamic_tlas_build</code> only</td></tr>
-      <tr><td><code>gpu_frame_microseconds</code></td><td>not judged</td><td></td><td>at the median</td></tr>
-      <tr><td><code>gate_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median</td></tr>
+      <tr><td><code>gpu_frame_microseconds</code></td><td>the ratios, at the median</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and p99, and its maximum against one 60 Hz period</td></tr>
+      <tr><td><code>gate_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>at the median and p99</td></tr>
       <tr><td><code>shadow_ray_microseconds</code></td><td>the ratios</td><td><code>GPU_PASS_NOISE_FLOOR_MICROSECONDS</code></td><td>none</td></tr>
       <tr><td><code>dynamic_tlas_cpu_microseconds</code></td><td>not judged</td><td></td><td>at the median</td></tr>
       <tr><td>p95s, the lit pass's wait, the gate's passes</td><td>reported only</td><td></td><td>none</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">What <code>compare</code> judges in <code>Local</code> mode, in its order; in <code>Ci</code> mode the first two rows alone. The GPU frame answers to its Budget and each pass to its Baseline, so a frame that grew within every pass's tolerance passes; the CPU frame's p95 answers to the Budget because that Budget bounds the frame's p95 as well as its median.</p>
+  <p class="note">What <code>compare</code> judges in <code>Local</code> mode, in its order; in <code>Ci</code> mode the first two rows alone. The GPU frame answers to its Baseline as well as each pass, so a frame that grew within every pass's tolerance still fails; the CPU frame's p95 answers to the Budget because that Budget bounds the frame's p95 as well as its median.</p>
   <p>Aliasing has no floor: on the M4 Pro two runs of every Reference scene measured equal aliasing counters, so a rise past the ratios is a change of the image. A run that skipped them passes; a run that measured them against a Baseline without them fails both, with a message to re-record the Baseline, since the Baseline cannot say whether the image changed.</p>
   <p>Last, a failed CPU line gains the one-minute load average both runs started under, <code>unknown</code> for a record without Provenance, because CPU times move with the machine's load where GPU times hold: a reader of the line sees at once whether the run or the machine was slower.</p>
   <h3>Publishing</h3>
@@ -649,7 +649,7 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
       <tr><td><code>nearest_rank_percentiles</code></td><td><code>src/bench/mod.rs</code></td><td>the median of 1 to 20 is 10 and the p95 is 19; a single value is its own p95</td></tr>
       <tr><td><code>a_time_warns_above_5_percent_and_fails_above_10</code>, <code>exactly_5_percent_and_improvements_pass</code>, <code>cpu_time_within_the_noise_floor_only_warns</code>, <code>a_pass_time_within_the_noise_floor_only_warns</code></td><td><code>src/bench/mod.rs</code></td><td>the two ratios, exactly 5% passing, improvements passing, and a CPU or pass time past 10% that only warns inside its floor and fails just past it</td></tr>
       <tr><td><code>a_counter_fails_on_any_increase</code>, <code>ci_mode_ignores_times_and_fails_on_counters</code>, <code>a_run_of_another_length_compares_its_counter_frames</code></td><td><code>src/bench/mod.rs</code></td><td>one more allocation fails; <code>Ci</code> mode fails each of seven raised counters on another adapter and ignores doubled times; a shorter run compares its counter frames in <code>Ci</code> mode, is refused in <code>Local</code>, and moved counter frames or another size refuse in both</td></tr>
-      <tr><td><code>over_budget_fails_even_without_regression</code>, <code>a_cpu_frame_p95_over_budget_fails_with_its_median_within</code>, <code>the_gpu_frame_total_fails_over_its_budget_alone</code>, <code>the_gate_fails_over_6_ms_and_both_lines_against_their_baselines</code>, <code>the_dynamic_tlas_fails_over_its_ceilings</code></td><td><code>src/bench/mod.rs</code></td><td>each Budget fails with a Baseline that is itself over it; the CPU p95 fails on its own with the detail <code>p95</code>; the GPU frame answers to its Budget alone; the gate and shadow-ray time to their Baselines; the dynamic TLAS's two ceilings, and none of these in <code>Ci</code> mode</td></tr>
+      <tr><td><code>over_budget_fails_even_without_regression</code>, <code>a_cpu_frame_p95_over_budget_fails_with_its_median_within</code>, <code>the_gpu_frame_fails_against_its_baseline_and_over_its_budget</code>, <code>the_gate_fails_over_6_ms_and_both_lines_against_their_baselines</code>, <code>the_dynamic_tlas_fails_over_its_ceilings</code></td><td><code>src/bench/mod.rs</code></td><td>each Budget fails with a Baseline that is itself over it; the CPU p95 fails on its own with the detail <code>p95</code>; the GPU frame to its Baseline, with every pass under the warn ratio, and to its Budget; the gate and shadow-ray time to their Baselines; the dynamic TLAS's two ceilings, and none of these in <code>Ci</code> mode</td></tr>
       <tr><td><code>less_shadow_ray_time_passes_below_zero</code></td><td><code>src/bench/mod.rs</code></td><td>from a Baseline below zero, less passes and a rise past the floor fails</td></tr>
       <tr><td><code>another_adapter_or_profile_is_refused_locally</code>, <code>another_scenes_baseline_is_refused</code>, <code>a_baseline_of_other_passes_is_refused_with_a_message_to_re_record_it</code>, <code>a_baseline_in_the_old_form_is_refused_with_a_message_to_re_record_it</code></td><td><code>src/bench/mod.rs</code></td><td>what refuses a Baseline: another adapter or backend in <code>Local</code> mode, another profile or scene in both, other timed passes, and a record in the form before GPU time was split by pass, each with its message</td></tr>
       <tr><td><code>the_baseline_compares_clean</code>, <code>a_result_with_provenance_round_trips_and_compares_clean_with_a_baseline_without</code>, <code>provenance_round_trips_with_or_without_a_load_average</code>, <code>aliasing_is_written_only_when_measured</code>, <code>every_committed_baseline_parses</code></td><td><code>src/bench/mod.rs</code></td><td>the record's form: a Baseline against itself finds nothing; Provenance, the load average and the aliasing counters round-trip through JSON and are absent when not measured; every file under <code>bench/baselines</code> parses</td></tr>
@@ -792,7 +792,7 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
   <p><b>Harness version unchecked.</b> A Baseline is refused for its form, its scene, profile, size, counter frames, frame count, adapter, backend and passes, not for its Harness version; a Baseline recorded under an earlier version whose records still parse compares as if it were current.</p>
   <p><b>One frame of aliasing, at the Goldens' size.</b> The counters judge the 60th frame at 640&times;360, not the bench's size or its camera path; aliasing that appears elsewhere along the path, or only at 1440p, is not measured.</p>
   <p><b>Times across backends.</b> <code>report</code> compares times with a Baseline of the same adapter whatever its backend, where <code>compare</code> requires the backend as well.</p>
-  <p><b>The GPU frame and the dynamic TLAS's CPU line answer to no Baseline.</b> Each answers to its Budget alone, so a growth within every pass's tolerance passes, and a growth of the dynamic TLAS's CPU cost short of its ceiling is reported, not judged.</p>
+  <p><b>The dynamic TLAS's CPU line answers to no Baseline.</b> It answers to its Budget alone, so a growth of its cost short of its ceiling is reported, not judged.</p>
   <p><b>The spin wait changes the machine it measures.</b> A busy performance core may take power the GPU would otherwise have; in the <code>town</code> runs behind the choice the GPU frame moved by at most 1.4% across every form of wait, within the ratios but not nothing, so a GPU line compared across the two waits is read with that in mind.</p>
   <p><b>Input latency has no Budget yet.</b> ADR 0013 names one; nothing measures it.</p>
   <p><b>One number per run.</b> The bench records no per-frame series, only the reductions; a frame that was slow once is in the p95 and nowhere else.</p>
