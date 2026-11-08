@@ -210,6 +210,7 @@ impl TextureSource {
             format,
             width,
             height,
+            first_level: 0,
             levels,
         }
         .to_blob(settings.texture_zstd_level)

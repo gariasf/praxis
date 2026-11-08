@@ -274,6 +274,7 @@ impl State {
         self.recorder.counters.bytes_read = streamed.bytes_read;
         self.recorder.counters.uploaded_bytes += streamed.written_bytes;
         self.recorder.counters.pool_entries_freed = streamed.pool_entries_freed;
+        self.recorder.counters.late_mips = streamed.late_mips;
         self.recorder.stage("stream_chunks", started);
 
         let started = Instant::now();
@@ -837,5 +838,184 @@ mod tests {
             "{written_bytes:?}"
         );
         assert_eq!(written_bytes[5], 0);
+    }
+
+    /// A Chunk whose 10 m quad samples a 2,048² Texture with mip 0 red, mip 1
+    /// green and its Resident tail, mips 3 on, yellow: seen from 200 m, only
+    /// the tail loads and draws; 40 m away, mip 1 streams in, the finest the
+    /// quad needs there; 0.2 m away, the next frame still draws mip 1, with
+    /// one mip late, and once Settled draws mip 0, with none late.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn a_textures_finer_mips_stream_in_finest_needed_as_the_camera_nears() {
+        use crate::cooked::{
+            AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedMeshlet,
+            CookedPlacement, CookedPrimitive, CookedTexture, CookedVertex, level_bytes,
+        };
+
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::Shadows;
+        let directory =
+            std::env::temp_dir().join(format!("praxis-mip-streaming-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let (texture_id, material_id, mesh_id) = (AssetId(1), AssetId(2), AssetId(3));
+        let format = wgpu::TextureFormat::Bc5RgUnorm;
+        // Two BC4 blocks whose every texel takes the first endpoint.
+        let block =
+            |[red, green]: [u8; 2]| [red, red, 0, 0, 0, 0, 0, 0, green, green, 0, 0, 0, 0, 0, 0];
+        let colours = [[255, 0], [0, 255], [0, 0]];
+        let texture = CookedTexture {
+            format,
+            width: 2048,
+            height: 2048,
+            first_level: 0,
+            levels: (0..12)
+                .map(|level| {
+                    let colour = colours.get(level).copied().unwrap_or([255, 255]);
+                    block(colour).repeat(level_bytes(format, 2048, 2048, level) / 16)
+                })
+                .collect(),
+        };
+        let exposure = scene.camera_at(0, glam::DVec3::ZERO).exposure();
+        let material = CookedMaterial {
+            base_color: [0.0, 0.0, 0.0, 1.0],
+            metallic: 1.0,
+            roughness: 1.0,
+            emissive: [1.0 / exposure; 3],
+            normal_scale: 1.0,
+            textures: [None, None, None, None, Some(texture_id)],
+        };
+        let half_size = 5.0;
+        let vertices = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+            .map(|[u, v]: [f32; 2]| CookedVertex {
+                position: [
+                    (u - 0.5) * 2.0 * half_size,
+                    (v - 0.5) * 2.0 * half_size,
+                    0.0,
+                ],
+                uv: [u, v],
+                qtangent: [0, 0, 0, i16::MAX],
+            })
+            .to_vec();
+        let mesh = CookedMesh {
+            vertices,
+            indices: vec![0, 1, 2, 0, 2, 3],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 6,
+                material: Some(material_id),
+                texel_density: 1.0 / (2.0 * half_size),
+                meshlets: vec![CookedMeshlet {
+                    vertices: vec![0, 1, 2, 3],
+                    triangles: vec![[0, 1, 2], [0, 2, 3]],
+                }],
+            }],
+            bounds: [[-half_size, -half_size, 0.0], [half_size, half_size, 0.0]],
+        };
+        let chunk = CookedChunk {
+            placements: vec![CookedPlacement {
+                mesh: mesh_id,
+                material: None,
+                translation: glam::DVec3::ZERO,
+                rotation: glam::Quat::IDENTITY,
+                scale: glam::Vec3::ONE,
+            }],
+            lights: Vec::new(),
+            bounds: [glam::dvec3(-5.0, -5.0, 0.0), glam::dvec3(5.0, 5.0, 0.0)],
+        };
+        let blobs = [
+            (texture_id, texture.to_blob(1).expect("a BC5 Blob")),
+            (material_id, material.to_blob()),
+            (mesh_id, mesh.to_blob().expect("a Mesh Blob")),
+            (
+                scene.chunk_id([0, 0]),
+                chunk.to_blob().expect("a Chunk Blob"),
+            ),
+        ];
+        for (id, blob) in blobs {
+            cache.write(id, "key", &blob).expect("Blob written");
+        }
+
+        let (width, height) = (128, 72);
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            width,
+            height,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("shadows loads");
+        state.streaming = ChunkStreaming::new(
+            scene,
+            glam::DVec3::ZERO,
+            scene.load_radius_metres(),
+            state.renderer.capacities().load_bytes_per_frame,
+            Arc::new(cache),
+        )
+        .expect("the IO pool starts");
+        let target = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Mip Streaming Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: crate::capture::TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut draw = |distance: f64, settle: bool| {
+            let mut camera = crate::camera::Camera::looking_at(
+                glam::dvec3(0.0, 0.0, distance),
+                glam::DVec3::ZERO,
+            );
+            camera.ev100 = scene.camera_at(0, glam::DVec3::ZERO).ev100;
+            state.simulation.world.insert_resource(camera);
+            if settle {
+                state
+                    .update_settled(scene.frame_delta())
+                    .expect("the frame settles");
+            } else {
+                state.update(scene.frame_delta());
+            }
+            state.render(&target_view);
+            let pixels =
+                crate::capture::read_back(&context, &target).expect("the frame reads back");
+            let centre = ((height / 2 * width + width / 2) * 4) as usize;
+            let [red, green] = [pixels[centre], pixels[centre + 1]];
+            let residency = state.renderer.material_pool.texture_residency(texture_id);
+            let resident_level = residency.map(|(_, level)| level);
+            (red, green, resident_level, state.frame_stats().late_mips)
+        };
+        let far = draw(200.0, true);
+        let middle = draw(40.0, true);
+        let near = draw(0.2, false);
+        let near_settled = draw(0.2, true);
+        std::fs::remove_dir_all(&directory).ok();
+
+        let yellow = |red: u8, green: u8| red > 128 && green > 128;
+        let green = |red: u8, green: u8| green > 128 && red < green / 4;
+        let red = |red: u8, green: u8| red > 128 && green < red / 4;
+        assert!(
+            yellow(far.0, far.1) && far.2 == Some(3) && far.3 == 0,
+            "200 m: {far:?}"
+        );
+        assert_eq!((middle.2, middle.3), (Some(1), 0), "40 m: {middle:?}");
+        assert!(
+            green(near.0, near.1) && near.2 == Some(1) && near.3 == 1,
+            "0.2 m: {near:?}"
+        );
+        assert!(
+            red(near_settled.0, near_settled.1) && near_settled.2 == Some(0) && near_settled.3 == 0,
+            "0.2 m, Settled: {near_settled:?}"
+        );
     }
 }

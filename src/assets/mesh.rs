@@ -1,3 +1,5 @@
+use crate::assets::MaterialHandle;
+
 /// A Mesh in the Mesh pool, as prepare needs it; the pool's GPU tables hold
 /// what the GPU draws it from.
 pub struct Mesh {
@@ -10,14 +12,10 @@ pub struct Mesh {
     /// its lowest corner then its highest, as the Mesh table holds it.
     pub bounds: [[f32; 3]; 2],
     /// Each Primitive's `CookedPrimitive::texel_density`, in Primitive order.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read by mip priority once Textures stream (ADR 0017)"
-        )
-    )]
     pub texel_densities: Vec<f32>,
+    /// Each Primitive's Material, in Primitive order; `None` for one that
+    /// names none or is not drawn.
+    pub materials: Vec<Option<MaterialHandle>>,
 }
 
 /// A Mesh's index in the Mesh table, which the GPU sees, and the generation

@@ -5,6 +5,7 @@
 
 pub(crate) mod chunks;
 mod io;
+mod mips;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::RangeInclusive;

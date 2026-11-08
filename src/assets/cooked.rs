@@ -6,11 +6,14 @@
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
 use anyhow::Context;
 use sha2::{Digest, Sha256};
+
+use crate::stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES;
 
 pub use super::MaterialChannel;
 
@@ -220,15 +223,41 @@ impl CookedMaterial {
     }
 }
 
-/// A Texture Asset: one BC format per Channel (ADR 0018), with its full mip
-/// chain.
+/// A Texture Asset: one BC format per Channel (ADR 0018), with its mip
+/// chain from `first_level` on.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CookedTexture {
     pub format: wgpu::TextureFormat,
     pub width: u32,
     pub height: u32,
-    /// Each mip level's blocks, mip 0 first, rows unpadded.
+    /// The finest mip `levels` holds: 0 for the whole chain, its Resident
+    /// tail's first for one read tail first.
+    pub first_level: u32,
+    /// Each mip level's blocks from `first_level` to the chain's last, rows
+    /// unpadded.
     pub levels: Vec<Vec<u8>>,
+}
+
+/// The first mip of the Resident tail of a `width` × `height` Texture of
+/// `mip_level_count` mips in `format`: the first of
+/// `RESIDENT_TAIL_LEVEL_BYTES` or less, or 0 when that mip is not whole
+/// blocks, which a Texture of its own cannot start with.
+pub(crate) fn resident_tail_level(
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    mip_level_count: u32,
+) -> u32 {
+    let (block_width, block_height) = format.block_dimensions();
+    (0..mip_level_count)
+        .find(|&level| {
+            level_bytes(format, width, height, level as usize) as u64 <= RESIDENT_TAIL_LEVEL_BYTES
+        })
+        .filter(|&level| {
+            (width >> level).is_multiple_of(block_width)
+                && (height >> level).is_multiple_of(block_height)
+        })
+        .unwrap_or(0)
 }
 
 /// The formats a Texture Blob holds, with their KTX2 names.
@@ -273,6 +302,7 @@ impl CookedTexture {
     /// [ref:ktx2-key-value-alignment].
     #[cfg(feature = "cook")]
     pub fn to_blob(&self, zstd_level: i32) -> anyhow::Result<Vec<u8>> {
+        anyhow::ensure!(self.first_level == 0, "a Texture Blob holds every mip");
         let (_, format) = TEXTURE_FORMATS
             .into_iter()
             .find(|(format, _)| *format == self.format)
@@ -336,6 +366,32 @@ impl CookedTexture {
     /// Parses a Texture Blob back into its levels, refusing one from another
     /// format version, in another format or without its full mip chain.
     pub fn from_blob(blob: &[u8]) -> anyhow::Result<Self> {
+        Self::decode(blob, |_, _, _, _| 0)
+    }
+
+    /// Parses a Texture Blob as `from_blob` does, decoding its Resident tail
+    /// alone.
+    pub fn resident_tail_from_blob(blob: &[u8]) -> anyhow::Result<Self> {
+        Self::decode(blob, resident_tail_level)
+    }
+
+    /// Mips `levels` of a Texture Blob, each mip's blocks, parsed as
+    /// `from_blob` does.
+    pub fn mips_from_blob(blob: &[u8], levels: Range<u32>) -> anyhow::Result<Vec<Vec<u8>>> {
+        let end = levels.end;
+        let mut texture = Self::decode(blob, |_, _, _, _| levels.start)?;
+        texture
+            .levels
+            .truncate((end - texture.first_level) as usize);
+        Ok(texture.levels)
+    }
+
+    /// Parses a Texture Blob, decoding its mips from the one `first_level`
+    /// picks from its format, width, height and mip count.
+    fn decode(
+        blob: &[u8],
+        first_level: impl FnOnce(wgpu::TextureFormat, u32, u32, u32) -> u32,
+    ) -> anyhow::Result<Self> {
         let reader = ktx2::Reader::new(blob).map_err(|error| {
             anyhow::anyhow!("Texture Blob is not KTX2 ({error}): re-cook with `praxis cook`")
         })?;
@@ -378,11 +434,13 @@ impl CookedTexture {
             "Texture Blob has {} mips, expected {mips}",
             header.level_count
         );
+        let first_level = first_level(format, width, height, mips).min(mips);
         let levels = reader
             .levels()
             .enumerate()
+            .skip(first_level as usize)
             .map(|(level, data)| {
-                let expected = level_bytes(format, header.pixel_width, header.pixel_height, level);
+                let expected = level_bytes(format, width, height, level);
                 let texels = zstd::bulk::decompress(data.data, expected)
                     .with_context(|| format!("decompressing mip {level}"))?;
                 anyhow::ensure!(
@@ -395,8 +453,9 @@ impl CookedTexture {
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
             format,
-            width: header.pixel_width,
-            height: header.pixel_height,
+            width,
+            height,
+            first_level,
             levels,
         })
     }
@@ -425,8 +484,8 @@ pub struct CookedPrimitive {
     /// UV units per mesh-space metre: the square root of its triangles'
     /// summed UV area over their summed mesh-space area, zero when either sum
     /// is, as without UVs; the inverse of [ref:unity-6000-uv-distribution-metric]
-    /// as a length. Times a Texture's side and the Instance's scale it is
-    /// texels per metre, which mip priority reads (ADR 0017).
+    /// as a length. Times a Texture's side and over the Instance's scale it
+    /// is texels per metre, which mip priority reads (ADR 0017).
     pub texel_density: f32,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,
@@ -1072,12 +1131,29 @@ mod tests {
             format: wgpu::TextureFormat::Bc4RUnorm,
             width: 8,
             height: 4,
+            first_level: 0,
             levels: (0..4u8)
                 .map(|mip| vec![mip; if mip == 0 { 16 } else { 8 }])
                 .collect(),
         };
         let blob = texture.to_blob(3).unwrap();
         assert_eq!(CookedTexture::from_blob(&blob).unwrap(), texture);
+        assert_eq!(
+            CookedTexture::mips_from_blob(&blob, 1..3).unwrap(),
+            texture.levels[1..3]
+        );
+        // 512 × 512 BC4: mip 0 is 128 KiB, so its Resident tail is mip 1 on.
+        let tailed = CookedTexture {
+            width: 512,
+            height: 512,
+            levels: (0..10)
+                .map(|mip| vec![mip as u8; level_bytes(texture.format, 512, 512, mip)])
+                .collect(),
+            ..texture.clone()
+        };
+        let tail = CookedTexture::resident_tail_from_blob(&tailed.to_blob(3).unwrap()).unwrap();
+        assert_eq!(tail.first_level, 1);
+        assert_eq!(tail.levels, tailed.levels[1..]);
 
         let reader = ktx2::Reader::new(&blob[..]).unwrap();
         let offsets: Vec<u64> = (0..4)

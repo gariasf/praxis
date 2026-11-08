@@ -32,7 +32,7 @@ pub use instance::{InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
 pub(crate) use renderer::{BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES};
 pub use renderer::{CrowdForm, RenderCapacities, RenderSwitches, Renderer};
-pub use staging::{FrameStaging, LoadStaging, texture_written_bytes};
+pub use staging::{FrameStaging, LoadStaging, mips_written_bytes, texture_written_bytes};
 pub use targets::{HDR_FORMAT, MULTISAMPLED_FORMATS};
 pub use uniforms::{CameraUniform, LightData, LightUniform};
 

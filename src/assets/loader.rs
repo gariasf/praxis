@@ -44,6 +44,8 @@ pub trait AssetLoader {
 /// or what the IO pool decoded.
 pub trait AssetReader {
     fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial>;
+    /// The Texture `id` with every mip, or its Resident tail alone where the
+    /// IO pool decoded it for a Chunk.
     fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture>;
     fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh>;
     #[cfg_attr(not(feature = "cook"), allow(dead_code))]
@@ -404,6 +406,7 @@ mod tests {
             format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
             width: 4,
             height: 4,
+            first_level: 0,
             levels: vec![vec![0; 16]; 3],
         };
         for (material_id, texture_id) in [(1, 10), (2, 11)] {

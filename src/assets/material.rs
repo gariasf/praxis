@@ -6,11 +6,10 @@ use anyhow::Context;
 
 use crate::assets::loader::AssetReader;
 use crate::assets::pools::{ENTRIES_FREED_PER_FRAME, Generations, PoolCapacities, Unused};
-use crate::cooked::{AssetId, CookedTexture, level_bytes};
+use crate::cooked::{AssetId, CookedTexture, resident_tail_level};
 use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
 use crate::render::bind_groups::MATERIALS;
-use crate::stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Texture classes each Channel's binding array can hold: the Channels split
@@ -97,26 +96,14 @@ impl TextureShape {
         Self {
             width: texture.width,
             height: texture.height,
-            mip_level_count: texture.levels.len() as u32,
+            mip_level_count: texture.first_level + texture.levels.len() as u32,
             format: texture.format,
         }
     }
 
-    /// The first mip of its Resident tail, the first of
-    /// `RESIDENT_TAIL_LEVEL_BYTES` or less, or 0 when that mip is not whole
-    /// blocks, which a Texture of its own cannot start with.
+    /// The first mip of its Resident tail (`cooked::resident_tail_level`).
     fn resident_tail_level(self) -> u32 {
-        let (block_width, block_height) = self.format.block_dimensions();
-        (0..self.mip_level_count)
-            .find(|&level| {
-                let bytes = level_bytes(self.format, self.width, self.height, level as usize);
-                bytes as u64 <= RESIDENT_TAIL_LEVEL_BYTES
-            })
-            .filter(|&level| {
-                (self.width >> level).is_multiple_of(block_width)
-                    && (self.height >> level).is_multiple_of(block_height)
-            })
-            .unwrap_or(0)
+        resident_tail_level(self.format, self.width, self.height, self.mip_level_count)
     }
 
     /// The shape of its mips from `level` on.
@@ -251,8 +238,8 @@ impl ClassTable {
 }
 
 /// Where a loaded Texture lies in its Channel: its Resident tail's slice,
-/// and its whole chain's when it has one there, whose Layer it is sampled
-/// at.
+/// and its chain's, its mips from its finest Resident one, when it has finer
+/// mips there, whose Layer it is sampled at.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct TexturePlacement {
     tail: ClassAndSlice,
@@ -265,12 +252,27 @@ impl TexturePlacement {
     }
 }
 
-/// A Texture loaded by Asset ID: its Channel, where it lies, and how many
-/// Materials and spawns loaded it, less the freed Materials among them.
+/// A Texture loaded by Asset ID: its Channel, its shape, where it lies, its
+/// finest Resident mip, and how many Materials and spawns loaded it, less
+/// the freed Materials among them.
 struct LoadedTexture {
     channel: MaterialChannel,
+    shape: TextureShape,
     placement: TexturePlacement,
+    resident_level: u32,
     users: u32,
+}
+
+/// What `MaterialPool::stream_mips` did with a Texture's mips.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum StreamedMips {
+    /// The Texture moved to the class of its new finest mip.
+    Moved,
+    /// Its Channel had no room for that class.
+    Refused,
+    /// The Texture is gone, or its finest Resident mip is no longer the one
+    /// they end before.
+    Stale,
 }
 
 /// A Material loaded by Asset ID: its Handle, how many loads returned it,
@@ -308,30 +310,34 @@ impl ChannelTextures {
 
     /// Writes `texture` through `staging`: its Resident tail into a free
     /// slice of the tail's own Texture class, then, unless
-    /// `holds_back_finer_mips`, its finer mips into a free slice of its whole
-    /// chain's class, beside the tail copied over from the tail's slice.
-    /// Returns where it lies, without a chain when the Channel has no room
-    /// for one, or `None` when it has none for its tail.
+    /// `holds_back_finer_mips`, the finer mips it holds into a free slice of
+    /// the class of its mips from its finest, beside the tail copied over
+    /// from the tail's slice. Returns where it lies, without a chain when it
+    /// holds no finer mip or the Channel has no room for one, and its finest
+    /// Resident mip; or `None` when the Channel has no room for its tail.
     fn push(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
         texture: &CookedTexture,
         holds_back_finer_mips: bool,
-    ) -> Option<TexturePlacement> {
+    ) -> Option<(TexturePlacement, u32)> {
         let shape = TextureShape::of(texture);
         let tail_level = shape.resident_tail_level();
-        let (finer_levels, tail_levels) = texture.levels.split_at(tail_level as usize);
+        let finer_count = tail_level
+            .checked_sub(texture.first_level)
+            .expect("a Texture holds its whole Resident tail");
+        let (finer_levels, tail_levels) = texture.levels.split_at(finer_count as usize);
         let tail = self.place(device, shape.mips_from(tail_level))?;
         for (level, bytes) in tail_levels.iter().enumerate() {
             let array = &self.textures[tail.class as usize];
             staging.write_texture(array, level as u32, tail.slice, bytes);
         }
-        let tail_only = TexturePlacement { tail, chain: None };
+        let tail_only = (TexturePlacement { tail, chain: None }, tail_level);
         if finer_levels.is_empty() || holds_back_finer_mips {
             return Some(tail_only);
         }
-        let Some(chain) = self.place(device, shape) else {
+        let Some(chain) = self.place(device, shape.mips_from(texture.first_level)) else {
             return Some(tail_only);
         };
         let chain_array = &self.textures[chain.class as usize];
@@ -339,23 +345,31 @@ impl ChannelTextures {
             staging.write_texture(chain_array, level as u32, chain.slice, bytes);
         }
         let tail_array = &self.textures[tail.class as usize];
-        staging.copy_texture(tail_array, tail.slice, chain_array, chain.slice, tail_level);
-        Some(TexturePlacement {
+        staging.copy_texture(
+            tail_array,
+            tail.slice,
+            chain_array,
+            chain.slice,
+            finer_count,
+        );
+        let placement = TexturePlacement {
             tail,
             chain: Some(chain),
-        })
+        };
+        Some((placement, texture.first_level))
     }
 
     /// Whether `push` would find room for `texture`'s Resident tail and,
-    /// unless `holds_back_finer_mips`, its whole chain.
+    /// unless `holds_back_finer_mips`, the finer mips it holds.
     fn has_room(&self, texture: &CookedTexture, holds_back_finer_mips: bool) -> bool {
         let shape = TextureShape::of(texture);
         let tail_level = shape.resident_tail_level();
         let tail = shape.mips_from(tail_level);
-        if tail_level == 0 || holds_back_finer_mips {
+        if texture.first_level >= tail_level || holds_back_finer_mips {
             self.table.has_room(&[tail])
         } else {
-            self.table.has_room(&[tail, shape])
+            self.table
+                .has_room(&[tail, shape.mips_from(texture.first_level)])
         }
     }
 
@@ -421,6 +435,8 @@ pub struct MaterialPool {
     /// Each Material's data, at its Handle's index; a freed one's stays
     /// until a later Material takes its index.
     materials: Vec<MaterialData>,
+    /// The Asset ID `load` loaded each Material from, at its Handle's index.
+    material_ids: Vec<Option<AssetId>>,
     materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
     /// Each loaded Texture, which its Asset ID names.
@@ -479,6 +495,7 @@ impl MaterialPool {
             format,
             width: 1,
             height: 1,
+            first_level: 0,
             levels: vec![texel],
         }
     }
@@ -534,6 +551,7 @@ impl MaterialPool {
         Self {
             generations: Generations::default(),
             materials: Vec::new(),
+            material_ids: Vec::new(),
             materials_buffer,
             channels,
             loaded_textures: HashMap::new(),
@@ -565,8 +583,10 @@ impl MaterialPool {
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         if index as usize == self.materials.len() {
             self.materials.push(data);
+            self.material_ids.push(None);
         } else {
             self.materials[index as usize] = data;
+            self.material_ids[index as usize] = None;
         }
         tracing::debug!(handle = index, "material registered");
         Some(MaterialHandle { index, generation })
@@ -792,6 +812,7 @@ impl MaterialPool {
             textures,
         };
         self.loaded_materials.insert(id, loaded);
+        self.material_ids[handle.index as usize] = Some(id);
         tracing::debug!(material = %id, ?layers, "Material loaded");
         Ok(handle)
     }
@@ -812,10 +833,11 @@ impl MaterialPool {
 
     /// Loads the Texture `id` from `reader` into `channel` once per Asset ID,
     /// written through `staging`, counting one more user of it, and returns
-    /// its Layer: a free slice of its shape's Texture class, or of its
-    /// Resident tail's when the pool holds back finer mips or the Channel has
-    /// no room for its chain, or Layer 0 when it has none for its tail
-    /// either. A Channel without room frees as `load` does until it has.
+    /// its Layer: a free slice of the class of its mips from the finest
+    /// `reader` gives, or of its Resident tail's when `reader` gives its tail
+    /// alone, the pool holds back finer mips or the Channel has no room for
+    /// its chain, or Layer 0 when it has none for its tail either. A Channel
+    /// without room frees as `load` does until it has.
     pub fn load_texture(
         &mut self,
         device: &wgpu::Device,
@@ -836,7 +858,7 @@ impl MaterialPool {
         {}
         let channel_textures = &mut self.channels[channel as usize];
         let classes_before = channel_textures.views.len();
-        let Some(placement) =
+        let Some((placement, resident_level)) =
             channel_textures.push(device, staging, &texture, holds_back_finer_mips)
         else {
             return Ok(Self::DEFAULT_LAYER);
@@ -844,11 +866,97 @@ impl MaterialPool {
         self.bind_group_is_stale |= channel_textures.views.len() != classes_before;
         let loaded = LoadedTexture {
             channel,
+            shape: TextureShape::of(&texture),
             placement,
+            resident_level,
             users: 1,
         };
         self.loaded_textures.insert(id, loaded);
         Ok(placement.layer())
+    }
+
+    /// Whether Textures stream their mips finer than their Resident tails,
+    /// rather than the residency switch holding them back.
+    pub(crate) fn streams_mips(&self) -> bool {
+        !self.holds_back_finer_mips
+    }
+
+    /// The Textures the Material `handle` loaded with, none when it finds no
+    /// Material `load` loaded.
+    pub(crate) fn textures_of(&self, handle: MaterialHandle) -> &[AssetId] {
+        if !self.generations.live(handle.index, handle.generation) {
+            return &[];
+        }
+        self.material_ids[handle.index as usize]
+            .and_then(|id| self.loaded_materials.get(&id))
+            .map_or(&[], |loaded| &loaded.textures)
+    }
+
+    /// The loaded Texture `id`'s shape and its finest Resident mip.
+    pub(crate) fn texture_residency(&self, id: AssetId) -> Option<(TextureShape, u32)> {
+        let loaded = self.loaded_textures.get(&id)?;
+        Some((loaded.shape, loaded.resident_level))
+    }
+
+    /// Moves the Texture `id` to the class of its mips from `first_level`
+    /// through `staging`: `levels`, its mips from `first_level` to its finest
+    /// Resident one, are written there, and its Resident mips copied after
+    /// them from where it lies. Its Resident tail's slice stays taken, its
+    /// earlier chain's is given back, and each loaded Material that samples
+    /// it is written again with its new Layer.
+    pub(crate) fn stream_mips(
+        &mut self,
+        device: &wgpu::Device,
+        staging: &mut LoadStaging,
+        id: AssetId,
+        first_level: u32,
+        levels: &[Vec<u8>],
+    ) -> StreamedMips {
+        let Some(loaded) = self.loaded_textures.get_mut(&id) else {
+            return StreamedMips::Stale;
+        };
+        if first_level + levels.len() as u32 != loaded.resident_level {
+            return StreamedMips::Stale;
+        }
+        let channel = &mut self.channels[loaded.channel as usize];
+        let classes_before = channel.views.len();
+        let Some(target) = channel.place(device, loaded.shape.mips_from(first_level)) else {
+            return StreamedMips::Refused;
+        };
+        self.bind_group_is_stale |= channel.views.len() != classes_before;
+        let target_array = &channel.textures[target.class as usize];
+        for (level, bytes) in levels.iter().enumerate() {
+            staging.write_texture(target_array, level as u32, target.slice, bytes);
+        }
+        let source = loaded.placement.chain.unwrap_or(loaded.placement.tail);
+        let source_array = &channel.textures[source.class as usize];
+        let first_copied_level = levels.len() as u32;
+        staging.copy_texture(
+            source_array,
+            source.slice,
+            target_array,
+            target.slice,
+            first_copied_level,
+        );
+        if let Some(chain) = loaded.placement.chain.replace(target) {
+            channel.table.release(chain);
+        }
+        loaded.resident_level = first_level;
+        let (texture_channel, layer) = (loaded.channel, target.layer());
+        for material in self.loaded_materials.values() {
+            if !material.textures.contains(&id) {
+                continue;
+            }
+            let index = material.handle.index;
+            let data = &mut self.materials[index as usize];
+            match texture_channel {
+                MaterialChannel::Emissive => data.extra[0] = layer,
+                channel => data.layers[channel as usize] = layer,
+            }
+            let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
+            staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(data));
+        }
+        StreamedMips::Moved
     }
 
     /// Rebuilds the bind group when loads since the last call opened Texture
@@ -1013,6 +1121,7 @@ mod tests {
             format: wgpu::TextureFormat::Bc4RUnorm,
             width: 4,
             height: 4,
+            first_level: 0,
             levels: vec![vec![255; 8]; 3],
         };
         cache
@@ -1148,8 +1257,9 @@ mod tests {
             format,
             width: 512,
             height: 512,
+            first_level: 0,
             levels: (0..10)
-                .map(|level| vec![0; level_bytes(format, 512, 512, level)])
+                .map(|level| vec![0; crate::cooked::level_bytes(format, 512, 512, level)])
                 .collect(),
         };
         for id in [10, 11, 12] {
