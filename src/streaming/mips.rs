@@ -8,6 +8,7 @@ use std::ops::Range;
 
 use glam::DVec3;
 
+use crate::assets::material::EvictionRank;
 use crate::assets::{LoadedMeshes, MaterialPool};
 use crate::camera::FIELD_OF_VIEW;
 use crate::components::Transform;
@@ -64,12 +65,16 @@ pub(crate) struct MipPriority {
     uses: HashMap<AssetId, Vec<TextureUse>>,
     /// The finest mip each Texture needs this frame, kept for its memory.
     needed: HashMap<AssetId, u32>,
+    /// The `plan`s so far.
+    plans: u64,
+    /// The last `plan` that found each Texture needing its finest Resident
+    /// mip or finer.
+    last_used_plan: HashMap<AssetId, u64>,
     requests: Vec<MipRequest>,
     /// The Textures whose mips are requested and not yet applied.
     in_flight: HashSet<AssetId>,
-    /// Textures whose move found no room in their Channel, or whose read
-    /// failed, which are not requested again until the Material pool frees
-    /// an entry.
+    /// Textures whose read failed, which are not requested again until the
+    /// Material pool frees an entry.
     refused: HashSet<AssetId>,
     /// The Material pool's frees the last `plan` saw.
     material_frees: u64,
@@ -79,7 +84,8 @@ impl MipPriority {
     /// The finest mip each Texture `chunks`' drawn Placements sample needs
     /// from `camera`, against what `materials` holds Resident. Returns the
     /// late mips, those needed and not Resident, and the requests for those
-    /// not yet requested, finest-needed first, then by Asset ID.
+    /// not yet requested whose move finds room in its Channel, free or by an
+    /// eviction, finest-needed first, then by Asset ID.
     pub(crate) fn plan(
         &mut self,
         camera: DVec3,
@@ -94,8 +100,11 @@ impl MipPriority {
         let material_frees = materials.generations().frees();
         if std::mem::replace(&mut self.material_frees, material_frees) != material_frees {
             self.refused.clear();
+            self.last_used_plan
+                .retain(|&texture, _| materials.is_texture_loaded(texture));
         }
         self.needed.clear();
+        self.plans += 1;
         for chunk in chunks {
             let uses = self
                 .uses
@@ -111,9 +120,26 @@ impl MipPriority {
                 *needed = (*needed).min(level);
             }
         }
+        for (&texture, &needed) in &self.needed {
+            let resident = materials.texture_residency(texture);
+            if resident.is_some_and(|(_, resident)| needed <= resident) {
+                self.last_used_plan.insert(texture, self.plans);
+            }
+        }
         let mut late_mips = 0;
         self.requests.clear();
-        for (&texture, &needed) in &self.needed {
+        let (needed_by_texture, last_used_plan) = (&self.needed, &self.last_used_plan);
+        let eviction_rank = |texture, resident_level| {
+            rank(
+                needed_by_texture,
+                last_used_plan,
+                texture,
+                resident_level,
+                0,
+            )
+        };
+        let mut evictable_needs = None;
+        for (&texture, &needed) in needed_by_texture {
             let Some((_, resident)) = materials.texture_residency(texture) else {
                 continue;
             };
@@ -121,12 +147,20 @@ impl MipPriority {
                 continue;
             }
             late_mips += resident - needed;
-            if !self.in_flight.contains(&texture) && !self.refused.contains(&texture) {
-                self.requests.push(MipRequest {
-                    texture,
-                    levels: needed..resident,
-                });
+            if self.in_flight.contains(&texture) || self.refused.contains(&texture) {
+                continue;
             }
+            if let Some(class) = materials.full_class_for_mips(texture, needed) {
+                let needs = evictable_needs
+                    .get_or_insert_with(|| materials.coarsest_evictable_needs(&eviction_rank));
+                if needs.get(&class).is_none_or(|&coarsest| coarsest <= needed) {
+                    continue;
+                }
+            }
+            self.requests.push(MipRequest {
+                texture,
+                levels: needed..resident,
+            });
         }
         self.requests
             .sort_unstable_by_key(|request| (request.levels.start, request.texture.0));
@@ -136,18 +170,55 @@ impl MipPriority {
         (late_mips, &self.requests)
     }
 
+    /// How eviction ranks `texture`, whose finest Resident mip is
+    /// `resident_level`, to make room for a move to `first_level`, by the
+    /// last `plan`: `None` when it needs `first_level` or finer, or its
+    /// finest Resident mip within one level, as it loaded at that need and
+    /// so stays until its need coarsens by two (ADR 0017).
+    pub(crate) fn eviction_rank(
+        &self,
+        texture: AssetId,
+        resident_level: u32,
+        first_level: u32,
+    ) -> Option<EvictionRank> {
+        rank(
+            &self.needed,
+            &self.last_used_plan,
+            texture,
+            resident_level,
+            first_level,
+        )
+    }
+
     /// Whether any request is in flight.
     pub(crate) fn waiting(&self) -> bool {
         !self.in_flight.is_empty()
     }
 
-    /// Ends `texture`'s request, `refused` when its move found no room.
-    pub(crate) fn finished(&mut self, texture: AssetId, refused: bool) {
+    /// Ends `texture`'s request, `read_failed` when its mips were not read.
+    pub(crate) fn finished(&mut self, texture: AssetId, read_failed: bool) {
         self.in_flight.remove(&texture);
-        if refused {
+        if read_failed {
             self.refused.insert(texture);
         }
     }
+}
+
+/// `MipPriority::eviction_rank` from its `needed` and `last_used_plan`.
+fn rank(
+    needed: &HashMap<AssetId, u32>,
+    last_used_plan: &HashMap<AssetId, u64>,
+    texture: AssetId,
+    resident_level: u32,
+    first_level: u32,
+) -> Option<EvictionRank> {
+    let finest_mip_needed = needed.get(&texture).copied().unwrap_or(u32::MAX);
+    let evictable =
+        finest_mip_needed > first_level && finest_mip_needed >= resident_level.saturating_add(2);
+    evictable.then(|| EvictionRank {
+        finest_mip_needed,
+        last_used_plan: last_used_plan.get(&texture).copied().unwrap_or(0),
+    })
 }
 
 /// The uses of streamed Textures by `chunk`'s Placements: each Primitive's
@@ -222,5 +293,33 @@ mod tests {
         assert_eq!(finest_mip_needed(texels_per_metre, 0.99), 9);
         assert_eq!(finest_mip_needed(texels_per_metre, 1.01), 10);
         assert_eq!(finest_mip_needed(texels_per_metre, 2.01), 11);
+    }
+
+    /// A finest mip loaded at a need gives way once that need coarsens by
+    /// two levels, not one, and only to a move finer than its need; a
+    /// Texture nothing drawn samples ranks with the coarsest need.
+    #[test]
+    fn a_finest_mip_gives_way_once_its_need_coarsens_by_two() {
+        let mut priority = MipPriority::default();
+        let (seen, unseen) = (AssetId(1), AssetId(2));
+        priority.needed.insert(seen, 3);
+        priority.last_used_plan.insert(seen, 7);
+
+        assert_eq!(priority.eviction_rank(seen, 2, 0), None);
+        assert_eq!(
+            priority.eviction_rank(seen, 1, 0),
+            Some(EvictionRank {
+                finest_mip_needed: 3,
+                last_used_plan: 7
+            })
+        );
+        assert_eq!(priority.eviction_rank(seen, 1, 3), None);
+        assert_eq!(
+            priority.eviction_rank(unseen, 0, 0),
+            Some(EvictionRank {
+                finest_mip_needed: u32::MAX,
+                last_used_plan: 0
+            })
+        );
     }
 }

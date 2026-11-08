@@ -268,13 +268,15 @@ impl LoadStaging {
         );
     }
 
-    /// Records a copy of every mip of array layer `source_slice` of `source`
-    /// into layer `target_slice` of `target`, from its mip
-    /// `first_target_level` on: a Texture's move between Texture classes.
+    /// Records a copy of the mips of array layer `source_slice` of `source`
+    /// from its mip `first_source_level` on into layer `target_slice` of
+    /// `target`, from its mip `first_target_level` on: a Texture's move
+    /// between Texture classes.
     pub fn copy_texture(
         &mut self,
         source: &wgpu::Texture,
         source_slice: u32,
+        first_source_level: u32,
         target: &wgpu::Texture,
         target_slice: u32,
         first_target_level: u32,
@@ -284,7 +286,7 @@ impl LoadStaging {
         let block_bytes = format.block_copy_size(None).expect("a colour format");
         let mut moved_bytes = 0;
         let (_, encoder) = self.pending();
-        for level in 0..source.mip_level_count() {
+        for level in first_source_level..source.mip_level_count() {
             // A mip smaller than a block still copies a whole one.
             let size = wgpu::Extent3d {
                 depth_or_array_layers: 1,
@@ -306,7 +308,7 @@ impl LoadStaging {
                 },
                 wgpu::TexelCopyTextureInfo {
                     texture: target,
-                    mip_level: first_target_level + level,
+                    mip_level: first_target_level + level - first_source_level,
                     origin: wgpu::Origin3d {
                         x: 0,
                         y: 0,
@@ -441,7 +443,8 @@ mod tests {
     /// the belt after a 4-byte buffer write reads back as written: each mip
     /// starts at a multiple of its 16-byte blocks, mip 0's two block rows of
     /// 32 bytes sit 256 bytes apart, and mips smaller than a block copy one
-    /// block.
+    /// block. Copied from its mip 1 on into a 4 × 4 texture, each mip lands
+    /// one level finer.
     #[test]
     fn every_mip_reads_back_as_written() {
         let context = match pollster::block_on(GpuContext::headless()) {
@@ -453,7 +456,7 @@ mod tests {
             }
             Err(error) => panic!("headless GPU context failed: {error:#}"),
         };
-        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+        let texture_descriptor = wgpu::TextureDescriptor {
             label: Some("Staging Test Texture"),
             size: wgpu::Extent3d {
                 width: 8,
@@ -466,7 +469,8 @@ mod tests {
             format: wgpu::TextureFormat::Bc5RgUnorm,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
-        });
+        };
+        let texture = context.device.create_texture(&texture_descriptor);
         // Blocks across and down per mip, of 16 bytes each, every byte
         // distinct.
         let blocks: [(u32, u32); 4] = [(2, 2), (1, 1), (1, 1), (1, 1)];
@@ -492,7 +496,7 @@ mod tests {
         }
         staging.submit(&context.queue);
 
-        for (level, (bytes, (across, down))) in levels.iter().zip(blocks).enumerate() {
+        let read_back = |texture: &wgpu::Texture, level: u32, slice: u32, (across, down)| {
             let pitch = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
             let read_back = context.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Staging Test Read-back"),
@@ -505,9 +509,13 @@ mod tests {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             encoder.copy_texture_to_buffer(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &texture,
-                    mip_level: level as u32,
-                    origin: wgpu::Origin3d { x: 0, y: 0, z: 1 },
+                    texture,
+                    mip_level: level,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: slice,
+                    },
                     aspect: wgpu::TextureAspect::All,
                 },
                 wgpu::TexelCopyBufferInfo {
@@ -526,12 +534,32 @@ mod tests {
             );
             submit_and_map(&context, encoder, &read_back).expect("read-back mapped");
             let mapped = read_back.get_mapped_range(..).expect("read-back range");
-            let rows: Vec<u8> = mapped
+            mapped
                 .chunks(pitch as usize)
                 .flat_map(|row| &row[..across as usize * 16])
                 .copied()
-                .collect();
-            assert_eq!(rows, *bytes, "mip {level}");
+                .collect::<Vec<u8>>()
+        };
+        for (level, (bytes, blocks)) in levels.iter().zip(blocks).enumerate() {
+            let read = read_back(&texture, level as u32, 1, blocks);
+            assert_eq!(read, *bytes, "mip {level}");
+        }
+
+        let coarser = context.device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 3,
+            label: Some("Staging Test Coarser Texture"),
+            ..texture_descriptor
+        });
+        staging.copy_texture(&texture, 1, 1, &coarser, 0, 0);
+        staging.submit(&context.queue);
+        for (level, bytes) in levels[1..].iter().enumerate() {
+            let read = read_back(&coarser, level as u32, 0, (1, 1));
+            assert_eq!(read, *bytes, "mip {level} from mip {}", level + 1);
         }
     }
 }
