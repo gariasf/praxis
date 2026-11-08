@@ -403,7 +403,9 @@ impl ChannelTextures {
             );
             return None;
         };
-        if placement.slice == 0 {
+        // A released slice 0 lies in a class that has its array; only a
+        // class the table just opened, always its newest, lacks one.
+        if placement.class as usize == self.textures.len() {
             let array = self.memory.create_material_texture(
                 device,
                 &wgpu::TextureDescriptor {
@@ -1266,6 +1268,41 @@ mod tests {
         assert_eq!(table.place(other), None);
         assert!(table.place(wall).is_some());
         assert!(table.place(shape(16)).is_none());
+    }
+
+    /// A released slice 0 placed again reuses its class's array, so a class
+    /// opened after it gets an array of its own shape, one array per class.
+    #[test]
+    fn a_released_slice_zero_placed_again_opens_no_array() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let shape = |width| TextureShape {
+            width,
+            height: 4,
+            mip_level_count: 1,
+            format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+        };
+        let (first, second) = (shape(8), shape(4));
+        let mut channel = ChannelTextures::new("test", &gpu_memory(&context), CLASSES_PER_CHANNEL);
+        let placed = channel.place(&context.device, first).unwrap();
+        channel.table.release(placed);
+        assert_eq!(channel.place(&context.device, first), Some(placed));
+        let opened = channel.place(&context.device, second).unwrap();
+
+        assert_eq!(opened.class, 1);
+        assert_eq!((channel.textures.len(), channel.views.len()), (2, 2));
+        let shapes: Vec<TextureShape> = channel
+            .textures
+            .iter()
+            .map(|array| TextureShape {
+                width: array.width(),
+                height: array.height(),
+                mip_level_count: array.mip_level_count(),
+                format: array.format(),
+            })
+            .collect();
+        assert_eq!(shapes, [first, second]);
     }
 
     /// Two Materials sampling one Texture load it once, and a Material
