@@ -123,7 +123,10 @@ pub fn capture(
         0..FRAME_COUNT,
         &[last_frame],
         scene.frame_delta(),
-        switches,
+        RenderSwitches {
+            wait_for_static_tlas: true,
+            ..switches
+        },
         FrameWait::Block,
     )?;
     Ok((pixels.remove(0), frame_stats))
@@ -165,7 +168,10 @@ pub fn capture_frames(
         drawn,
         frames,
         scene.frame_delta(),
-        switches,
+        RenderSwitches {
+            wait_for_static_tlas: true,
+            ..switches
+        },
         FrameWait::Block,
     )?;
     Ok(pixels)

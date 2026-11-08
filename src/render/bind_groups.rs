@@ -97,9 +97,9 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 2 of the shadow mask pass, built once since its TLAS are rebuilt in
-/// place: the static and dynamic TLAS it traces shadow rays against (ADR
-/// 0020). No other pass binds them, but the dynamic TLAS's markers bind the
+/// Group 2 of the shadow mask pass, built once per static TLAS since each
+/// TLAS is rebuilt in place: a static TLAS and the dynamic TLAS it traces
+/// shadow rays against (ADR 0020). No other pass binds them, but the dynamic TLAS's markers bind the
 /// dynamic one: at submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one
 /// BLAS per Instance it holds, for each flush of a group holding it, at
 /// least once per pass that binds one

@@ -41,6 +41,14 @@ pub struct FrameStats {
     /// Static Instances the static TLAS leaves out, as it is full, so they
     /// cast no shadow.
     pub static_instances_left_out: u32,
+    /// The static TLAS's worker's time on the build the frame submitted,
+    /// apart from the frame's own: taking its entry changes, recording and
+    /// finishing; zero when it submitted none.
+    pub static_tlas_build_time: Duration,
+    /// In a frame that binds a newly built static TLAS, the frames since the
+    /// earliest static Instance change it brings: how long a newly loaded
+    /// Chunk's Instances waited to be traced.
+    pub frames_until_traced: Option<u32>,
     /// Moving Instances the dynamic TLAS had no room for, so they cast no
     /// shadow.
     pub moving_instances_left_out: u32,
@@ -168,6 +176,16 @@ impl std::fmt::Display for FrameStats {
                     per_lit_pixel(gpu.reaching_point_lights)
                 )?;
             }
+        }
+        if !self.static_tlas_build_time.is_zero() {
+            write!(
+                formatter,
+                " static_tlas_build_us={:.1}",
+                microseconds(&self.static_tlas_build_time)
+            )?;
+        }
+        if let Some(frames) = self.frames_until_traced {
+            write!(formatter, " frames_until_traced={frames}")?;
         }
         writeln!(
             formatter,

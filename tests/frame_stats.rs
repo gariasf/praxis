@@ -58,8 +58,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     let triangles = 48 * 24 * 2 - 2 * 48;
     // Its BLAS, of the 25 rings of 49 vertices less the two the cook's weld
     // drops (below), at the adapter's compacted fraction of the bytes its
-    // driver gives, rounded to a whole byte; the static TLAS's 2^18
-    // Instances and the dynamic TLAS's 10,000 at theirs.
+    // driver gives, rounded to a whole byte; the two static TLASes' 2^18
+    // Instances each and the dynamic TLAS's 10,000 at theirs.
     let input = context.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("Frame Stats Size Query Input"),
         size: 64,
@@ -94,7 +94,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     let compacted_blas_fraction = praxis::compacted_blas_fraction(&context.adapter_info());
     let acceleration_structure_bytes = (sphere_blas_bytes as f64 * compacted_blas_fraction).round()
         as u64
-        + tlas_bytes(1 << 18)
+        + 2 * tlas_bytes(1 << 18)
         + tlas_bytes(10_000);
     // GPU memory by kind. The geometry Arenas: the Mesh pool's five of
     // 16 MiB. The Resident tails: five 1×1 neutral Textures, one per
@@ -509,4 +509,41 @@ fn camera_motion_writes_no_instances() {
             scene.name()
         );
     }
+}
+
+/// The pbr sweep loads its Chunk in its first frame, whose static Instances
+/// the static TLAS's worker builds into the spare, which a capture waits
+/// for: that frame submits the build and reports the worker's time on it,
+/// and the next binds it, a frame after the Chunk loaded. No other frame
+/// builds or binds one.
+#[test]
+fn a_chunk_loaded_in_the_first_frame_is_traced_from_the_second() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            // Not `eprintln!`, which libtest captures from passing tests.
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+    let (_, frames) = praxis::capture(
+        &context,
+        ReferenceScene::PbrSweep,
+        glam::DVec3::ZERO,
+        160,
+        90,
+        praxis::RenderSwitches::default(),
+    )
+    .expect("capture failed");
+    let built: Vec<usize> = (0..frames.len())
+        .filter(|&frame| !frames[frame].static_tlas_build_time.is_zero())
+        .collect();
+    assert_eq!(built, [0]);
+    let traced: Vec<(usize, u32)> = frames
+        .iter()
+        .enumerate()
+        .filter_map(|(frame, stats)| Some((frame, stats.frames_until_traced?)))
+        .collect();
+    assert_eq!(traced, [(1, 1)]);
 }
