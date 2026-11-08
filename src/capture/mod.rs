@@ -383,7 +383,11 @@ mod tests {
     /// finished, which may fall in a frame or between two. The orrery,
     /// whose Moving Instances build the dynamic TLAS every frame, renders
     /// twice: once with the GPU's work retired by a poll between frames,
-    /// once with it left finished for the frame's own submissions to retire.
+    /// once with it left finished for the next frame to retire, and once left
+    /// finished with each frame but two after the warm-up pausing before its
+    /// last submission, as when the CPU runs other threads mid-frame, so the
+    /// GPU finishes the frame's dynamic TLAS build before that submission
+    /// retires it.
     /// A run whose GPU had not finished a frame when the next began, as when
     /// other work holds the GPU, is not left finished, so it runs again
     /// with the wait doubled.
@@ -395,6 +399,11 @@ mod tests {
         const GPU_FINISH_WAIT: Duration = Duration::from_millis(100);
         // Up to 1.6 s a frame.
         const LEFT_FINISHED_ATTEMPTS: u32 = 5;
+        // Far longer than a hardware GPU takes to build the orrery's dynamic TLAS.
+        const SUBMIT_PAUSE: Duration = Duration::from_millis(20);
+        // Unpaused after paused frames, the next frame's encoders swap roles anew.
+        const UNPAUSED_FRAMES: std::ops::Range<u32> =
+            WARM_UP_FRAMES as u32 + 4..WARM_UP_FRAMES as u32 + 6;
         let context = match pollster::block_on(GpuContext::headless()) {
             Ok(context) => context,
             Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -412,10 +421,10 @@ mod tests {
         }
         let scene = ReferenceScene::Orrery;
         // Each frame's work retired by a poll before the next frame, or, given
-        // a wait, left finished for the next frame's submissions after that
-        // wait; `None` when a frame's submissions did not retire the frame
-        // before it.
-        let allocations = |left_finished_after: Option<Duration>| -> Option<Vec<u64>> {
+        // a wait, left finished for the next frame to retire after that wait;
+        // `None` when the next frame did not retire it; with `pausing`, each
+        // frame but `UNPAUSED_FRAMES` pauses before its last submission.
+        let allocations = |left_finished_after: Option<Duration>, pausing: bool| {
             let mut state = State::new(
                 &context,
                 TARGET_FORMAT,
@@ -450,14 +459,20 @@ mod tests {
                     }
                     Some(finish_wait) => std::thread::sleep(finish_wait),
                 }
+                let pause = if pausing && !UNPAUSED_FRAMES.contains(&frame) {
+                    SUBMIT_PAUSE
+                } else {
+                    Duration::ZERO
+                };
+                state.pause_before_frame_submit(pause);
                 state
                     .simulation
                     .world
                     .insert_resource(scene.camera_at(frame, glam::DVec3::ZERO));
                 state.update(scene.frame_delta());
                 state.render(&view);
-                // The frame before was retired by this one's submissions,
-                // so the GPU had finished it before they ran.
+                // The frame before was retired by this one's poll or
+                // submissions, so the GPU had finished it before they ran.
                 if state.frames_completed() < u64::from(frame) {
                     writeln!(
                         std::io::stderr(),
@@ -471,14 +486,23 @@ mod tests {
             Some(allocations_per_frame)
         };
 
-        let retired = allocations(None).expect("a poll waits for every frame");
-        let left_finished = (0..LEFT_FINISHED_ATTEMPTS)
-            .find_map(|attempt| allocations(Some(GPU_FINISH_WAIT * 2u32.pow(attempt))))
-            .expect("the GPU finishes each frame before the next within the longest wait");
+        let retired = allocations(None, false).expect("a poll waits for every frame");
+        let left_finished_allocations = |pausing| {
+            (0..LEFT_FINISHED_ATTEMPTS)
+                .find_map(|attempt| allocations(Some(GPU_FINISH_WAIT * 2u32.pow(attempt)), pausing))
+                .expect("the GPU finishes each frame before the next within the longest wait")
+        };
+        let left_finished = left_finished_allocations(false);
+        let paused = left_finished_allocations(true);
         assert_eq!(
             retired[WARM_UP_FRAMES..],
             left_finished[WARM_UP_FRAMES..],
             "heap allocations per frame, retired between frames {retired:?}, left finished {left_finished:?}"
+        );
+        assert_eq!(
+            retired[WARM_UP_FRAMES..],
+            paused[WARM_UP_FRAMES..],
+            "heap allocations per frame, retired between frames {retired:?}, left finished with pauses before submitting {paused:?}"
         );
     }
 

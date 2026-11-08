@@ -40,8 +40,8 @@ const COMPLETION_LAG: u64 = FRAMES_IN_FLIGHT as u64 + 1;
 const MAP_LAG: u64 = FRAMES_IN_FLIGHT as u64;
 
 /// A slot's timestamps are copied `COMPLETION_LAG` frames after its frame.
-/// A window polls only through its submissions, so the copy may be seen
-/// complete as late as the submissions `MAP_LAG` frames after it; its map is
+/// A window polls only at a frame's start and through its submissions, so
+/// the copy may be seen complete as late as `MAP_LAG` frames after it; its map is
 /// then requested in the next frame and done by that frame's submissions,
 /// and the slot is read, and reused, in the frame after.
 const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;
