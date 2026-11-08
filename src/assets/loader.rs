@@ -34,6 +34,7 @@ pub trait AssetLoader {
     fn shadow_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
 
     /// Reads the Chunk `id`, loading none of the Assets it names.
+    #[cfg_attr(not(feature = "cook"), allow(dead_code))]
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk>;
 }
 
@@ -43,6 +44,7 @@ pub trait AssetReader {
     fn material(&self, id: AssetId) -> anyhow::Result<CookedMaterial>;
     fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture>;
     fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh>;
+    #[cfg_attr(not(feature = "cook"), allow(dead_code))]
     fn chunk(&self, id: AssetId) -> anyhow::Result<CookedChunk>;
 }
 

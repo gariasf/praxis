@@ -51,6 +51,7 @@ pub struct ChunkPlacement {
 /// Material its Placements name, by Asset ID, once for the Chunk, so each
 /// counts the Chunk as one user; and its Placements and lights, in the
 /// order it holds them, at the Chunk's origin plus their translations.
+#[cfg(feature = "cook")]
 pub(crate) fn load_chunk(
     loader: &mut dyn AssetLoader,
     id: AssetId,

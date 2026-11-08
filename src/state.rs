@@ -55,6 +55,7 @@ pub(crate) struct Simulation {
 impl Simulation {
     /// `scene`'s World at frame 0, as `spawned` leaves it, with every Chunk
     /// of the scene loaded through `loader` and moved by `shift` metres.
+    #[cfg(feature = "cook")]
     pub(crate) fn new(
         scene: ReferenceScene,
         shift: glam::DVec3,

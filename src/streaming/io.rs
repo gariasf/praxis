@@ -344,6 +344,7 @@ impl ChunkStreaming {
 
     /// Runs `cook_chunk` on each Chunk it requests, on the main thread,
     /// before the IO pool reads it: a dev launch's cook on a miss.
+    #[cfg(feature = "cook")]
     pub(crate) fn cook_each_chunk(&mut self, cook_chunk: CookChunk) {
         self.cook_chunk = Some(cook_chunk);
     }

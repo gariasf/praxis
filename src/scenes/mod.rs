@@ -16,6 +16,7 @@ use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement};
 use crate::environment::Environment;
 use crate::render::CrowdForm;
+#[cfg(feature = "cook")]
 use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::PreviousWorldTransform;
@@ -348,6 +349,7 @@ impl ReferenceScene {
     }
 
     /// Loads the scene's Chunks through `loader`, in coordinate order.
+    #[cfg(feature = "cook")]
     pub(crate) fn load_chunks(self, loader: &mut dyn AssetLoader) -> anyhow::Result<LoadedChunks> {
         let chunks = self
             .chunk_coordinates()
