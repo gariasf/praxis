@@ -364,6 +364,7 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
             false,
             true,
             Some(Run {
+                scene: &baseline.scene,
                 adapter: &baseline.adapter,
                 profile: &baseline.profile,
                 quiet,

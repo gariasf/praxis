@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; concept &middot; <code>src/capture/mod.rs</code></div>
   <h1>Waiting on the GPU</h1>
   <p class="definition">With two frames in flight, the main thread, which alone records, submits, polls and presents (ADR 0016), waits for the GPU in three places: for a swapchain texture, in the window; for the oldest frame in flight, in <code>render_frames</code>; and inside a frame wherever a GPU write must finish before the CPU or a later submission reads it. A queue orders when its command buffers start, not when they finish, so each such wait is explicit, and how the thread waits changes what its clock does next.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at bc5f0154 (2026-11-08). A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 88941ee2 (2026-11-08). A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">In the frame</h2>
     <dl>
@@ -247,12 +247,15 @@ pub(crate) enum FrameWait {
     Spin,
 }</code></pre>
   <p class="code-source"><code>src/capture/mod.rs</code>, <code>render_frames</code> and <code>FrameWait</code>. With <code>Block</code>, the poll's timeout is none: on Metal, wgpu-hal's fence wait is a condition variable that the command buffer's completion handler signals, so the thread sleeps until the frame is done and its core is free for other work, or to go idle. With <code>Spin</code>, each poll returns at once with <code>PollError::Timeout</code> until the frame is done, and the loop polls again with <code>spin_loop</code> between: the thread never leaves its core. Neither changes what the GPU does.</p>
-<pre class="code"><code>// A software rasterizer's threads would share the CPU with the spin.
-let wait = match context.adapter.get_info().device_type {
-    wgpu::DeviceType::Cpu =&gt; FrameWait::Block,
-    _ =&gt; FrameWait::Spin,
-};</code></pre>
-  <p class="code-source"><code>src/bench/mod.rs</code>, <code>render_run</code>. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
+<pre class="code"><code>/// How a bench waits for the oldest frame in flight on `context`'s adapter:
+/// a software rasterizer's threads would share the CPU with the spin.
+fn frame_wait(context: &amp;GpuContext) -&gt; FrameWait {
+    match context.adapter.get_info().device_type {
+        wgpu::DeviceType::Cpu =&gt; FrameWait::Block,
+        _ =&gt; FrameWait::Spin,
+    }
+}</code></pre>
+  <p class="code-source"><code>src/bench/mod.rs</code>, <code>frame_wait</code>, which <code>render_run</code> calls. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
   <h3>Inside a frame</h3>
   <p><b>The compaction copies, at load.</b> <code>compact_blases</code> waits twice, on every backend: once for the BLAS builds, so that each BLAS can say its compacted size, and once for the copies into the compacted BLASes, which wgpu-core keeps in its pending writes until something submits:</p>
 <pre class="code"><code>// The copies wait in the queue's pending writes until a submit.
@@ -260,7 +263,7 @@ queue.submit(std::iter::empty());
 if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
     tracing::error!(%error, "waiting for BLAS compaction failed");
 }</code></pre>
-  <p class="code-source"><code>src/assets/pools.rs</code>, the end of <code>compact_blases</code>. The empty submit is what makes the poll useful: a poll waits only for work already submitted, so it sends the pending writes as a submission of their own, and the poll then waits for it. The wait is there because no barrier orders a TLAS build after the copies on Metal, and a static TLAS build that takes the new BLASes can be submitted in the same frame: a worker records it, and a frame that waits for that worker, as a capture's does, submits it right after the upload (<a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>). It runs only in frames that load Meshes: the first, and any frame whose streamed Chunks bring Meshes not loaded yet.</p>
+  <p class="code-source"><code>src/assets/pools.rs</code>, the end of <code>compact_blases</code>. The empty submit is what makes the poll useful: a poll waits only for work already submitted, so it sends the pending writes as a submission of their own, and the poll then waits for it. The wait is there because no barrier orders a TLAS build after the copies on Metal, and a static TLAS build that takes the new BLASes can be submitted in the same frame: a worker records it, and a frame that waits for that worker, as a capture's does, submits it right after the upload (<a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>). It runs only in frames that load Meshes: the first, and any frame whose streamed Chunks bring Meshes not loaded yet, which record the wait as their CPU stage <code>blas_compaction</code>.</p>
   <p><b>A staging slot, when the CPU has lapped the GPU.</b> Each frame writes its uploads into the next staging slot. If that slot is not mapped again yet, the GPU is still copying from it, two frames on, and the thread waits for every submission so far:</p>
 <pre class="code"><code>if !slot.is_mapped.load(Ordering::Acquire) {
     // Every slot is in flight: wait for the GPU to finish this one.
@@ -369,12 +372,12 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame, µs</th><th class="n">GPU frame, µs</th><th>The longer</th></tr></thead>
     <tbody>
-      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,986.8</td><td class="n">19,970.1</td><td>GPU</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">194.0</td><td class="n">2,300.3</td><td>GPU</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,105.6</td><td class="n">3,736.6</td><td>GPU</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">246.0</td><td class="n">6,707.8</td><td>GPU</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">276.8</td><td class="n">3,870.2</td><td>GPU</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">439.6</td><td class="n">2,951.0</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,541.0</td><td class="n">20,008.0</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">202.3</td><td class="n">2,285.9</td><td>GPU</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">821.4</td><td class="n">3,768.1</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">198.5</td><td class="n">6,619.2</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">197.5</td><td class="n">3,900.4</td><td>GPU</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">379.8</td><td class="n">2,918.3</td><td>GPU</td></tr>
       <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,577.8</td><td class="n">9,686.6</td><td>GPU</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">315.5</td><td class="n">1,226.1</td><td>GPU</td></tr>
       <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,434.2</td><td class="n">2,235.6</td><td>GPU</td></tr>
@@ -440,7 +443,7 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
   </dl>
   <h3>History</h3>
   <p class="note">The wait for the compaction copies came from a test that flaked at load, a TLAS built right after a compaction copy missing its BLAS in a few of eighty iterations while other devices loaded the GPU; the eight-device test is its regression test. The crowd's refit, the same pair in every frame, took the event route on the GPU with the CPU wait as its fallback. The bench began spin-waiting when <code>town</code>'s CPU stages read 20 to 40% slower once the GPU became the longer half of its frame, and the measurement found the clock. The late maps and the encoder swap came together, on 2026-11-01, when a frame's heap allocations were made independent of the GPU's timing; the retirement at the frame's start followed on 2026-11-08, when the allocation test still failed now and then on the RTX 2070 SUPER under load and a pause between the build's submit and the passes' reproduced it on the M4 Pro.</p>
-  <footer class="sources">Written from <code>src/capture/mod.rs</code>, <code>src/bench/mod.rs</code>, <code>src/lib.rs</code>, <code>src/render/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, the tests named above, ADR 0016, <code>docs/performance.md</code> and the sources above, all at <code>main</code> bc5f0154 and the change that adds the retirement at the frame's start.</footer>
+  <footer class="sources">Written from <code>src/capture/mod.rs</code>, <code>src/bench/mod.rs</code>, <code>src/lib.rs</code>, <code>src/render/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, the tests named above, ADR 0016, <code>docs/performance.md</code> and the sources above, all at <code>main</code> 88941ee2 as this change leaves it.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="static-tlas.html">Previous: The static TLAS</a><a href="index.html">All field guides</a><a href="prepare.html">Next: Prepare</a></nav>

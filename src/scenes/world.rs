@@ -46,6 +46,8 @@ const CAMERA_HEIGHT_METRES: f64 = 60.0;
 const CAMERA_METRES_PER_FRAME: f64 = 50.0 / 60.0;
 const APPROACH_METRES: f64 = 300.0;
 const GAZE_METRES: f64 = 250.0;
+/// The bench path's frames, 60 s at 60 Hz, holds aside.
+pub(crate) const BENCH_SEGMENT_FRAMES: u32 = 3600;
 /// The bench path's Fast travel: on its frame, over the farmland north of
 /// `CAMERA_SETTLEMENT`, the camera jumps about 5 km to the middle of
 /// another settlement, flying on north through it.
@@ -648,7 +650,9 @@ mod tests {
 
     #[test]
     fn the_bench_path_flies_into_a_settlement_over_farmland_then_fast_travels_into_another() {
-        let [(jump_frame, jump_metres)] = jumps(camera_at, 60 * 60)[..] else {
+        let segment_frames = 60 * 60;
+        assert_eq!(BENCH_SEGMENT_FRAMES, segment_frames);
+        let [(jump_frame, jump_metres)] = jumps(camera_at, segment_frames)[..] else {
             panic!("the bench path jumps other than once");
         };
         // Past twice the 512 m hold radius, so no Chunk stays loaded.

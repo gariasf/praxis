@@ -117,17 +117,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/assets/pools.rs</code></div>
   <h1>A BLAS per Mesh</h1>
   <p class="definition">Each <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together.">Mesh</span> that rays trace gets a <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, which a TLAS's entries place in the world. A ray that enters an entry walks its BLAS down to the triangles it meets.">BLAS</span> when it loads, built on the GPU from where the Mesh already lies in the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>, then compacted into a tighter copy, which the CPU waits for before any <span class="concept" data-term="TLAS" data-tip="Top-level acceleration structure: the GPU's search structure over Instances, each placing a BLAS, a search structure over one Mesh's triangles. A ray walks it down to the triangles it meets.">TLAS</span> is built from it; a Mesh loaded to be refitted keeps its BLAS uncompacted, and one only drawn gets none.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at cc160b54 (2026-11-06). A change to the Mesh pool's BLASes rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> for why a GPU read of what other GPU work writes needs something to order the two. <a href="static-tlas.html">The static TLAS</a> and <a href="dynamic-tlas.html">the dynamic TLAS</a> place these BLASes; <a href="blas-refit.html">the BLAS refit</a> updates the refitted ones.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 88941ee2 (2026-11-08). A change to the Mesh pool's BLASes rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> for why a GPU read of what other GPU work writes needs something to order the two. <a href="static-tlas.html">The static TLAS</a> and <a href="dynamic-tlas.html">the dynamic TLAS</a> place these BLASes; <a href="blas-refit.html">the BLAS refit</a> updates the refitted ones.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd>The build at load, in <code>MeshPool::load_for</code>, for a Mesh whose <code>MeshUse</code> has rays trace it. The compaction in the next frame's <code>Renderer::upload</code>, through <code>MeshPool::compact_blases</code>, before the static TLAS takes the BLASes. Every Mesh loads in <code>State::new</code>, before the first frame, so only the first frame compacts.</dd>
+      <dt>Runs</dt><dd>The build at load, in <code>MeshPool::load_for</code>, for a Mesh whose <code>MeshUse</code> has rays trace it. The compaction in the first <code>Renderer::upload</code> after the load, through <code>MeshPool::compact_blases</code>, before the static TLAS takes the BLASes: the first frame's, for the Meshes a spawn loads in <code>State::new</code>, and for a streamed Chunk's Meshes new to the pool, the upload of the frame that loaded them.</dd>
       <dt>Reads</dt><dd>The Mesh's range of the vertex Arena, of which the build sees each vertex's position alone, and its range of the index Arena, which holds a Mesh's cooked index stream only where rays trace it.</dd>
       <dt>Writes</dt><dd>One <code>wgpu::Blas</code> per traced Mesh, kept at its Handle's index in the Mesh pool and returned by <code>MeshPool::blas</code>; for a refitted Mesh, also a <code>MeshBlas</code>, the BLAS with the build's sizes and ranges, which each refit repeats.</dd>
       <dt>Builds</dt><dd>One <code>build_acceleration_structures</code> call per traced Mesh, recorded into the load encoder after the copies that fill its Arena ranges; one compaction copy per compacted BLAS, which wgpu queues in its pending writes.</dd>
       <dt>Bind groups</dt><dd>None: no pass binds a BLAS. A TLAS entry names one, and a ray reaches it through the TLAS.</dd>
       <dt>Shader</dt><dd>None.</dd>
-      <dt>Counted</dt><dd>In the acceleration structures' kind of <code>gpu_memory_bytes</code>: each BLAS at the size its driver gives for it, and once compacted at the adapter's estimated fraction of that size. The compaction's two CPU waits count in the <code>upload</code> stage of the frame that runs them. No GPU pass time is taken of the builds or the copies.</dd>
+      <dt>Counted</dt><dd>In the acceleration structures' kind of <code>gpu_memory_bytes</code>: each BLAS at the size its driver gives for it, and once compacted at the adapter's estimated fraction of that size. The compaction's two CPU waits count as the CPU stage <code>blas_compaction</code> of the frame that runs them, recorded only in a frame that waits and taken out of its <code>upload</code> stage. No GPU pass time is taken of the builds or the copies.</dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
@@ -321,10 +321,10 @@ pub fn build_blas(&amp;mut self, entry: &amp;wgpu::BlasBuildEntry&lt;'_&gt;) {
 /// after `compact_blas`'s copy on any backend, and Metal has no
 /// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
 /// its compacted BLAS, or the one built where compaction failed, as
-/// logged.
-pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
+/// logged. Returns whether it waited.
+pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) -&gt; bool {
     if self.awaiting_compaction.is_empty() {
-        return;
+        return false;
     }
     for &amp;(handle, _) in &amp;self.awaiting_compaction {
         if let Some(blas) = &amp;self.blases[handle.index as usize] {
@@ -358,6 +358,7 @@ pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
     if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
         tracing::error!(%error, "waiting for BLAS compaction failed");
     }
+    true
 }</code></pre>
   <p class="code-source"><code>MeshPool::compact_blases</code>, <code>src/assets/pools.rs</code>.</p>
   <ol class="keypoints">
@@ -372,9 +373,14 @@ pub fn compact_blases(&amp;mut self, queue: &amp;wgpu::Queue) {
 // draws, and their BLASes are compacted before the static TLAS
 // takes them.
 recorder.counters.uploaded_bytes += self.load_staging.submit(&amp;self.queue);
-self.mesh_pool.compact_blases(&amp;self.queue);</code></pre>
+let compacting = Instant::now();
+let compaction_time = if self.mesh_pool.compact_blases(&amp;self.queue) {
+    recorder.stage(BLAS_COMPACTION, compacting)
+} else {
+    std::time::Duration::ZERO
+};</code></pre>
   <p class="code-source">The start of <code>Renderer::upload</code>, <code>src/render/renderer.rs</code>.</p>
-  <p>The waits run where the BLASes are first needed: at the head of the upload of the first frame after the loads, which submits the load encoder and compacts before the static TLAS's update takes their BLASes. Since every Mesh loads in <code>State::new</code>, that is the first frame, and every later frame finds nothing awaiting compaction and returns at once. Both waits block the main thread, which records and submits the frame, for the whole of the load's GPU work, the Textures' copies included, since a poll waits for every submission. Refitted BLASes take no part: they are never compacted, and how a frame orders their updates before the dynamic TLAS's build is <a href="blas-refit.html">the BLAS refit</a>'s. <a href="static-tlas.html#limits">The static TLAS's Limits</a> count the wait among its own.</p>
+  <p>The waits run where the BLASes are first needed: at the head of the first upload after the loads, which submits the load encoder and compacts before the static TLAS's update takes their BLASes. A spawn's Meshes load in <code>State::new</code>, so theirs is the first frame; a Chunk's load in <code>State::update</code>, before that frame's upload, so a frame whose streamed Chunks bring Meshes new to the pool compacts them in its own upload. Every other frame finds nothing awaiting compaction and returns at once, unmeasured. A frame that waits records the wait as its CPU stage <code>blas_compaction</code>, and the <code>upload</code> stage leaves that time out, so the bench can read the waits apart (<a href="bench.html#measured">The bench</a>). Both waits block the main thread, which records and submits the frame, for the whole of the load's GPU work, the Textures' copies included, since a poll waits for every submission. Refitted BLASes take no part: they are never compacted, and how a frame orders their updates before the dynamic TLAS's build is <a href="blas-refit.html">the BLAS refit</a>'s. <a href="static-tlas.html#limits">The static TLAS's Limits</a> count the wait among its own.</p>
 </section>
 
 <section class="part prose" id="bytes">
@@ -487,7 +493,7 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
 <section class="part prose" id="cost">
   <div class="part-mark">7 &middot; <code>blas_bytes</code> &middot; <code>tlas_bytes</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">A BLAS costs GPU memory in proportion to its triangles, about 95 bytes each as the M4 Pro's driver sizes a large one, and compaction is counted at under half of that on the M4 Pro and on NVIDIA. Its other cost, the CPU waiting for the builds and copies, falls in a load frame, which no Baseline measures.</p>
+  <p class="key-idea">A BLAS costs GPU memory in proportion to its triangles, about 95 bytes each as the M4 Pro's driver sizes a large one, and compaction is counted at under half of that on the M4 Pro and on NVIDIA. Its other cost, the CPU waiting for the builds and copies, falls in a load frame: the bench reads it as <code>blas_compaction_microseconds</code> where a run's measured frames load Meshes, and no Baseline holds it: the world's Chunks place the Meshes its first Chunks loaded, so its measured frames load none new to the pool.</p>
   <p>Sizes the M4 Pro's driver gives through the query, Metal, at the commit above, with the flags the engine uses:</p>
   <div class="table-wrap">
   <table class="facts compact">
@@ -515,7 +521,7 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
   </table>
   </div>
   <p class="note">The measured figures behind each fraction, at the commit above; the fraction is compacted over built.</p>
-  <p>The committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> record the acceleration structures' kind of <code>gpu_memory_bytes</code>: on the M4 Pro, 78,482,422 bytes for <code>minification</code>, both TLAS and one quad's compacted BLAS of 310 bytes, and 78,582,514 for <code>pbr-sweep</code>, the same with the sphere's 100,402. <a href="static-tlas.html#cost">The static TLAS's cost table</a> gives each scene's <code>gpu_memory_bytes</code> with the static TLAS's share of it. No Baseline times the compaction's waits: a bench takes its counters from frame 8 and its timings after 248 warm-up frames, and the waits run in frame 0.</p>
+  <p>The committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span> record the acceleration structures' kind of <code>gpu_memory_bytes</code>: on the M4 Pro, 154,080,310 bytes for <code>minification</code>, the static TLAS and its spare, the dynamic TLAS and one quad's compacted BLAS of 310 bytes, and 154,180,402 for <code>pbr-sweep</code>, the same with the sphere's 100,402. <a href="static-tlas.html#cost">The static TLAS's cost table</a> gives each scene's <code>gpu_memory_bytes</code> with the static TLAS's share of it. No Baseline times the compaction's waits: a bench takes its counters from frame 8 and its timings after 248 warm-up frames, every scene but the world loads its Meshes in frame 0, and the world's measured frames load no Mesh new to the pool.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -533,12 +539,12 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
 <section class="part prose" id="limits">
   <div class="part-mark">9</div>
   <h2>Limits</h2>
-  <p><b>A CPU wait per load.</b> The frame after a load blocks the main thread twice for the load's whole GPU work. Today that is the first frame alone; Meshes streamed during play would stall each frame that loads them, until wgpu orders the copy on every backend.</p>
+  <p><b>A CPU wait per load.</b> The first upload after a load blocks the main thread twice for the load's whole GPU work: the first frame's, for a spawn's Meshes, and that of each frame whose streamed Chunks bring Meshes new to the pool, until wgpu orders the copy on every backend. The world's Chunks share one set of Meshes, which its first Chunks load, so its bench's measured frames bring none.</p>
   <p><b>Compaction estimated, by kind of adapter.</b> A compacted BLAS counts its built size at a fraction measured on the M4 Pro, the RTX 2070 SUPER or lavapipe: an AMD or Intel GPU on Vulkan is counted with lavapipe's, which counts no saving, and any adapter neither NVIDIA nor on Vulkan with the M4 Pro's.</p>
   <p><b>Sizes, not allocations.</b> The count is the size the driver asks for; what its allocator rounds that up to, or the scratch each build takes and returns, is not counted.</p>
   <p><b>Compaction can fail.</b> One that is not ready after its build keeps its built size, counted as built, with a warning.</p>
   <p><b>Opaque only.</b> No triangle has an alpha test, so a cutout Material would cast a solid shadow.</p>
-  <p><b>Freed only by tests, at this page's commit.</b> <code>MeshPool::free</code> drops a Mesh's BLAS and gives back its bytes, and it refuses a refitted Mesh, whose refit scratch holds a region per refitted BLAS in load order. Since 2026-11-08 a load refused for room frees an unused Mesh the same way (<code>MeshPool::free_least_recently_used</code>), and never a refitted one.</p>
+  <p><b>Freed only for room.</b> <code>MeshPool::free</code> drops a Mesh's BLAS and gives back its bytes, and it refuses a refitted Mesh, whose refit scratch holds a region per refitted BLAS in load order. Outside the tests, only a load refused for room frees one: an unused Mesh, the same way (<code>MeshPool::free_least_recently_used</code>), and never a refitted one.</p>
   <p><b>One build per Mesh.</b> Each Mesh's build is its own <code>build_acceleration_structures</code> call on the load encoder; builds are not batched across Meshes.</p>
 </section>
 
@@ -560,8 +566,8 @@ pub fn compacted_blas_fraction(adapter: &amp;wgpu::AdapterInfo) -&gt; f64 {
     <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/xml/vk.xml">Vulkan registry, <code>VK_VENDOR_ID_MESA</code></a> and <a href="https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L886">Mesa 25.2.8, lavapipe's vendor ID</a></dt><dd>the vendor ID the fraction's test gives lavapipe; <code>vulkan-vendor-id-mesa</code>, <code>lavapipe-vendor-id-mesa</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The Mesh pool gained a compacted BLAS per Mesh on 2026-10-20, with the memory estimate, measured then on the M4 Pro and lavapipe and since 2026-10-26 chosen by adapter, with an RTX 2070 SUPER's figures for NVIDIA. The wait for the compaction's copies followed on 2026-10-23, once a test that traced a triangle sometimes missed it under load and the race proved to be the engine's own. The crowd brought the uses: a Mesh drawn alone with no BLAS, and a shadow proxy traced alone, then on 2026-10-26 the refitted Mesh, built to allow updates and never compacted. Since 2026-11-06 each BLAS and TLAS is counted at the size its driver gives through wgpu-hal, and only compaction is estimated. The race behind the wait is on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, the Baselines in <code>bench/baselines/apple-m4-pro</code>, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017 and 0020, and the sources above, all at <code>main</code> cc160b54 as this change leaves them.</footer>
+  <p class="note">The Mesh pool gained a compacted BLAS per Mesh on 2026-10-20, with the memory estimate, measured then on the M4 Pro and lavapipe and since 2026-10-26 chosen by adapter, with an RTX 2070 SUPER's figures for NVIDIA. The wait for the compaction's copies followed on 2026-10-23, once a test that traced a triangle sometimes missed it under load and the race proved to be the engine's own. The crowd brought the uses: a Mesh drawn alone with no BLAS, and a shadow proxy traced alone, then on 2026-10-26 the refitted Mesh, built to allow updates and never compacted. Since 2026-11-06 each BLAS and TLAS is counted at the size its driver gives through wgpu-hal, and only compaction is estimated; since 2026-11-08 the compaction's wait is a CPU stage of its own, timed wherever streamed Chunks bring Meshes after the first frame. The race behind the wait is on <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a>. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, the Baselines in <code>bench/baselines/apple-m4-pro</code>, the wgpu 30.0.1 sources, <code>CONTEXT.md</code>, ADRs 0013, 0016, 0017 and 0020, and the sources above, all at <code>main</code> 88941ee2 as this change leaves them.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="mip-streaming.html">Previous: Mip streaming</a><a href="index.html">All field guides</a><a href="static-tlas.html">Next: The static TLAS</a></nav>

@@ -15,6 +15,7 @@ use anyhow::Context;
 
 use super::provenance::{Checkout, git, source_hash};
 use super::{Configuration, Counters, Measurements, Spread, adapter_key};
+use crate::scenes::ReferenceScene;
 
 pub use import::import_baselines;
 pub use night::{NextRun, next_run, publish_night};
@@ -764,6 +765,7 @@ fn record(
             checkout.dirty,
             mains_source(repository, checkout, main, main_source_hash),
             Some(Run {
+                scene: &measurements.scene,
                 adapter: &measurements.adapter,
                 profile: &measurements.profile,
                 quiet: provenance.quiet,
@@ -850,6 +852,7 @@ fn mains_source(
 
 /// What a run measured on, as far as its tags tell.
 struct Run<'run> {
+    scene: &'run str,
     adapter: &'run str,
     profile: &'run str,
     quiet: bool,
@@ -861,14 +864,15 @@ struct Run<'run> {
 /// Every reason a record is kept off a Series: a dirty tree, a source other
 /// than `main`'s, and for a `run` a profile other than release, a machine
 /// that was not quiet, and a size and frame count other than its Series'
-/// configuration. lavapipe's Series read counters only, which load cannot
-/// change, at the configuration CI benches.
+/// configuration, as its scene runs it. lavapipe's Series read counters
+/// only, which load cannot change, at the configuration CI benches.
 fn tags(dirty: bool, mains_source: bool, run: Option<Run>) -> Vec<String> {
     let mut tags = vec![
         (dirty, "dirty tree".to_owned()),
         (!mains_source, "source not main's".to_owned()),
     ];
     if let Some(Run {
+        scene,
         adapter,
         profile,
         quiet,
@@ -883,6 +887,8 @@ fn tags(dirty: bool, mains_source: bool, run: Option<Run>) -> Vec<String> {
         } else {
             (Configuration::REFERENCE, "the reference configuration")
         };
+        let configuration = (ReferenceScene::from_name(scene))
+            .map_or(configuration, |scene| configuration.for_scene(scene));
         tags.extend([
             (profile != "release", format!("{profile} profile")),
             (!lavapipe && !quiet, "machine not quiet".to_owned()),
@@ -1710,6 +1716,31 @@ mod tests {
         assert_eq!(
             record["tags"],
             serde_json::json!(["2560x1440 over 64 frames, not the reference configuration"])
+        );
+    }
+
+    #[test]
+    fn the_world_runs_the_reference_configuration_over_its_bench_segment() {
+        let run = |scene, measured_frames| Run {
+            scene,
+            adapter: "Apple M4 Pro",
+            profile: "release",
+            quiet: true,
+            width: 2560,
+            height: 1440,
+            measured_frames,
+        };
+        assert_eq!(
+            tags(false, true, Some(run("world", 3352))),
+            [] as [String; 0]
+        );
+        assert_eq!(
+            tags(false, true, Some(run("world", 1800))),
+            ["2560x1440 over 1800 frames, not the reference configuration"]
+        );
+        assert_eq!(
+            tags(false, true, Some(run("town", 1800))),
+            [] as [String; 0]
         );
     }
 
