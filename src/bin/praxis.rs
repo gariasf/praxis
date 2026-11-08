@@ -396,7 +396,7 @@ fn preflight() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Cooks `assets/` and every procedural Reference scene but the world, whose
+/// Cooks `assets/` and every procedural Reference scene but `world`, whose
 /// library of more than 8 GB cooks by name or on a miss, into `cooked/`, or
 /// with `scene`, that scene whole.
 #[cfg(feature = "cook")]
@@ -445,12 +445,12 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
     })
 }
 
-/// Benches the named Reference scenes, or with none every scene but the
-/// world whose assets are present, prints one line per scene, and writes `<scene>.json` into
-/// `output`. A crowd form other than the default benches `crowd` alone,
-/// written as `crowd-<form>.json`. With `publish`, the results then join
-/// the Bench history, as the `experiment` named; a publish that fails warns
-/// and fails no bench.
+/// Benches the named Reference scenes, or with none every scene but `world`
+/// whose assets are present, prints one line per scene, and writes
+/// `<scene>.json` into `output`. A crowd form other than the default
+/// benches `crowd` alone, written as `crowd-<form>.json`. With `publish`,
+/// the results then join the Bench history, as the `experiment` named; a
+/// publish that fails warns and fails no bench.
 fn bench(
     output: &str,
     configuration: Configuration,
@@ -562,7 +562,7 @@ fn import_baselines() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Prints, one per line, the Reference scenes but the world with no Bench
+/// Prints, one per line, the Reference scenes but `world` with no Bench
 /// record on a Series for the source of the remote's `main` on this
 /// machine's adapter: the scenes a sweep benches.
 fn unrecorded_scenes() -> anyhow::Result<()> {

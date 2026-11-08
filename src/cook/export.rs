@@ -987,7 +987,7 @@ mod tests {
         }
     }
 
-    /// Every Reference scene but crowd, the world, whose 1,600 Chunks and
+    /// Every Reference scene but crowd, `world`, whose 1,600 Chunks and
     /// 8 GB of Textures no reference renderer takes whole, and town, which
     /// its own test exports: each Renderable's Mesh and Material, and each
     /// file they name.

@@ -774,10 +774,10 @@ mod tests {
         assert!(references.contains(&(Referrer::Scene(scene), texture)));
     }
 
-    /// `praxis cook world` cooks 1,600 Chunks, and the world's Textures, each
-    /// a full BC7 mip chain of a size its Materials alone sample, take more
-    /// than 8,000,000,000 bytes of GPU memory together: more than the texture
-    /// pool's Budget, so its residency must free and evict.
+    /// `praxis cook world` cooks 1,600 Chunks, and `world`'s Textures, each
+    /// of one size and cooked to the full mip chain one of them cooks to,
+    /// take more than 8,000,000,000 bytes of GPU memory together: more than
+    /// the texture pool's Budget, so its residency must free and evict.
     #[test]
     fn the_world_cooks_1600_chunks_and_over_8_gb_of_unique_textures() {
         let scene = ReferenceScene::World;
@@ -792,7 +792,7 @@ mod tests {
             for other in &samples[index + 1..] {
                 assert_ne!(
                     sample.pixels, other.pixels,
-                    "two of the world's Textures match"
+                    "two of `world`'s Textures match"
                 );
             }
         }
@@ -802,12 +802,14 @@ mod tests {
                 .iter()
                 .all(|sample| (sample.width, sample.height) == (side, side))
         );
-        let chain_bytes: usize = (0..=side.ilog2() as usize)
-            .map(|level| {
-                let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
-                crate::cooked::level_bytes(format, side, side, level)
-            })
-            .sum();
+        let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
+        let blob = textures[0].cook(&CookSettings::default(), threads).unwrap();
+        let cooked = crate::cooked::CookedTexture::from_blob(&blob).unwrap();
+        assert_eq!(
+            (cooked.width, cooked.height, cooked.first_level),
+            (side, side, 0)
+        );
+        let chain_bytes: usize = cooked.levels.iter().map(Vec::len).sum();
         let library_bytes = chain_bytes * textures.len();
         assert!(library_bytes > 8_000_000_000, "{library_bytes} bytes");
     }

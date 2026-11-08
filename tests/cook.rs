@@ -17,7 +17,7 @@ use serde_json::json;
 
 /// The Reference scenes this seam cooks: all but texture-wall, whose 10,000
 /// Textures are 20,000 files, each flushed to the drive as it is written
-/// (84 s cold on the M4 Pro), and the world, whose library takes more than
+/// (84 s cold on the M4 Pro), and `world`, whose library takes more than
 /// 8 GB. texture-wall's Goldens cover its cook, not its PSNR: each of its
 /// Textures is one colour.
 fn scenes() -> Vec<ReferenceScene> {

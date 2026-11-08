@@ -13,23 +13,23 @@ use crate::cooked::CHUNK_EDGE_METRES;
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
 
-/// Chunks along each side, centred on the World's origin.
+/// Chunks along each side, centred on the origin.
 pub(super) const CHUNKS_PER_SIDE: i32 = 40;
-const WORLD_HALF_SIZE: f64 = CHUNKS_PER_SIDE as f64 * CHUNK_EDGE_METRES / 2.0;
+const WORLD_HALF_SIZE_METRES: f64 = CHUNKS_PER_SIDE as f64 * CHUNK_EDGE_METRES / 2.0;
 const GROUND_TILE_METRES: f64 = 128.0;
-const GROUND_TILES_PER_SIDE: u32 = (2.0 * WORLD_HALF_SIZE / GROUND_TILE_METRES) as u32;
+const GROUND_TILES_PER_SIDE: u32 = (2.0 * WORLD_HALF_SIZE_METRES / GROUND_TILE_METRES) as u32;
 
 const SETTLEMENTS_PER_SIDE: u32 = 8;
-const REGION_METRES: f64 = 2.0 * WORLD_HALF_SIZE / SETTLEMENTS_PER_SIDE as f64;
+const REGION_METRES: f64 = 2.0 * WORLD_HALF_SIZE_METRES / SETTLEMENTS_PER_SIDE as f64;
 const BLOCKS_PER_SIDE: u32 = 13;
 const LOTS_PER_BLOCK_SIDE: u32 = 4;
-const LOT_PITCH: f64 = 12.0;
-const STREET_WIDTH: f64 = 10.0;
-const BLOCK_PITCH: f64 = LOTS_PER_BLOCK_SIDE as f64 * LOT_PITCH + STREET_WIDTH;
-const SETTLEMENT_HALF_SIZE: f64 = BLOCKS_PER_SIDE as f64 * BLOCK_PITCH / 2.0;
+const LOT_PITCH_METRES: f64 = 12.0;
+const STREET_WIDTH_METRES: f64 = 10.0;
+const BLOCK_PITCH_METRES: f64 = LOTS_PER_BLOCK_SIDE as f64 * LOT_PITCH_METRES + STREET_WIDTH_METRES;
+const SETTLEMENT_HALF_SIZE_METRES: f64 = BLOCKS_PER_SIDE as f64 * BLOCK_PITCH_METRES / 2.0;
 /// The most a settlement's centre strays from its region's, which keeps
 /// 64 m of open land between neighbouring settlements.
-const SETTLEMENT_STRAY: f64 = REGION_METRES / 2.0 - SETTLEMENT_HALF_SIZE - 32.0;
+const SETTLEMENT_STRAY_METRES: f64 = REGION_METRES / 2.0 - SETTLEMENT_HALF_SIZE_METRES - 32.0;
 
 /// The settlement whose region holds the camera, column then row.
 const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
@@ -42,12 +42,12 @@ const FACADE_METRES: f32 = 4.0;
 const BRICK_TEXELS: [u32; 2] = [64, 24];
 const MORTAR_TEXELS: u32 = 3;
 
-const STOREY_HEIGHT: f32 = 3.2;
-const WINDOW_PITCH: f32 = 1.6;
-const WINDOW_SIZE: glam::Vec3 = glam::Vec3::new(1.2, 1.6, 0.12);
-const WINDOW_SILL_HEIGHT: f32 = 0.9;
-const ROOF_OVERHANG: f32 = 0.3;
-const ROOF_THICKNESS: f32 = 0.3;
+const STOREY_HEIGHT_METRES: f32 = 3.2;
+const WINDOW_PITCH_METRES: f32 = 1.6;
+const WINDOW_SIZE_METRES: glam::Vec3 = glam::Vec3::new(1.2, 1.6, 0.12);
+const WINDOW_SILL_HEIGHT_METRES: f32 = 0.9;
+const ROOF_OVERHANG_METRES: f32 = 0.3;
+const ROOF_THICKNESS_METRES: f32 = 0.3;
 
 /// A chance per ground tile outside the settlements of holding a farm.
 const FARM_CHANCE: f64 = 0.25;
@@ -94,7 +94,7 @@ impl Building {
     }
 
     fn height(&self) -> f32 {
-        self.storeys as f32 * STOREY_HEIGHT
+        self.storeys as f32 * STOREY_HEIGHT_METRES
     }
 }
 
@@ -122,10 +122,11 @@ fn facade_name(settlement: u32, facade: u32) -> String {
 
 /// The centre of the settlement in region `[column, row]`, on the ground.
 fn settlement_centre([column, row]: [u32; 2]) -> glam::DVec3 {
-    let region_centre = |index: u32| -WORLD_HALF_SIZE + (f64::from(index) + 0.5) * REGION_METRES;
+    let region_centre =
+        |index: u32| -WORLD_HALF_SIZE_METRES + (f64::from(index) + 0.5) * REGION_METRES;
     let stray = |choice: Choice| {
         let value = random([column.into(), row.into(), choice as u64, 0]);
-        SETTLEMENT_STRAY * (2.0 * value - 1.0)
+        SETTLEMENT_STRAY_METRES * (2.0 * value - 1.0)
     };
     glam::dvec3(
         region_centre(column) + stray(Choice::SettlementX),
@@ -165,7 +166,7 @@ mod generators {
         Geometry, ReferenceScene, ScenePrimitive, ground_plane, ground_tile_centres,
     };
 
-    /// The Materials the world's Meshes name: a base colour in linear sRGB
+    /// The Materials `world`'s Meshes name: a base colour in linear sRGB
     /// and a roughness.
     const MATERIALS: [(&str, [f32; 3], f32); 3] = [
         ("grass", [0.10, 0.26, 0.06], 0.95),
@@ -256,11 +257,11 @@ mod generators {
     }
 
     pub(crate) fn meshes() -> Vec<(&'static str, Vec<ScenePrimitive>)> {
-        let half_tile = (GROUND_TILE_METRES / 2.0) as f32;
+        let half_tile_metres = (GROUND_TILE_METRES / 2.0) as f32;
         let mut meshes = vec![
             (
                 "ground",
-                vec![(ground_plane(half_tile, 1.0), Some("grass"))],
+                vec![(ground_plane(half_tile_metres, 1.0), Some("grass"))],
             ),
             ("window", vec![(window(), Some("glass"))]),
         ];
@@ -292,23 +293,9 @@ mod generators {
                 Vec3::Z * building.depth,
             ),
         ] {
-            let base = geometry.positions.len() as u32;
-            let normal = along.cross(up).normalize();
             let [width, height] =
                 [along.length(), up.length()].map(|metres| metres / FACADE_METRES);
-            for (offset, uv) in [
-                (Vec3::ZERO, [0.0, 0.0]),
-                (along, [width, 0.0]),
-                (along + up, [width, -height]),
-                (up, [0.0, -height]),
-            ] {
-                geometry.positions.push((corner + offset).into());
-                geometry.normals.push(normal.into());
-                geometry.uvs.push(uv);
-            }
-            geometry
-                .indices
-                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            quad(&mut geometry, corner, along, up, [width, -height]);
         }
         geometry
     }
@@ -316,56 +303,64 @@ mod generators {
     /// A flat slab over a building's walls, overhanging them.
     fn roof(building: &Building) -> Geometry {
         let half = vec3(
-            building.width / 2.0 + ROOF_OVERHANG,
+            building.width / 2.0 + ROOF_OVERHANG_METRES,
             0.0,
-            building.depth / 2.0 + ROOF_OVERHANG,
+            building.depth / 2.0 + ROOF_OVERHANG_METRES,
         );
         let height = building.height();
         slab(
             vec3(-half.x, height, -half.z),
-            vec3(half.x, height + ROOF_THICKNESS, half.z),
+            vec3(half.x, height + ROOF_THICKNESS_METRES, half.z),
         )
     }
 
     /// A window's pane, standing on its bottom edge's middle and facing +Z.
     fn window() -> Geometry {
-        let half = WINDOW_SIZE / 2.0;
+        let half = WINDOW_SIZE_METRES / 2.0;
         slab(
             vec3(-half.x, 0.0, -half.z),
-            vec3(half.x, WINDOW_SIZE.y, half.z),
+            vec3(half.x, WINDOW_SIZE_METRES.y, half.z),
         )
     }
 
-    /// A box from `min` to `max` without its bottom, its UVs the unit
-    /// square on each face.
+    /// A box from `min` to `max` without its bottom, which sits on the
+    /// ground or on walls, its UVs the unit square on each face.
     fn slab(min: Vec3, max: Vec3) -> Geometry {
         let size = max - min;
-        let (x, y, z) = (Vec3::X * size.x, Vec3::Y * size.y, Vec3::Z * size.z);
+        let [width_edge, height_edge, depth_edge] =
+            [Vec3::X * size.x, Vec3::Y * size.y, Vec3::Z * size.z];
         let mut geometry = Geometry::default();
         for (corner, first, second) in [
-            (vec3(max.x, min.y, max.z), -z, y),
-            (min, z, y),
-            (vec3(min.x, max.y, max.z), x, -z),
-            (vec3(min.x, min.y, max.z), x, y),
-            (vec3(max.x, min.y, min.z), -x, y),
+            (vec3(max.x, min.y, max.z), -depth_edge, height_edge),
+            (min, depth_edge, height_edge),
+            (vec3(min.x, max.y, max.z), width_edge, -depth_edge),
+            (vec3(min.x, min.y, max.z), width_edge, height_edge),
+            (vec3(max.x, min.y, min.z), -width_edge, height_edge),
         ] {
-            let base = geometry.positions.len() as u32;
-            let normal = first.cross(second).normalize();
-            for (offset, uv) in [
-                (Vec3::ZERO, [0.0, 0.0]),
-                (first, [1.0, 0.0]),
-                (first + second, [1.0, 1.0]),
-                (second, [0.0, 1.0]),
-            ] {
-                geometry.positions.push((corner + offset).into());
-                geometry.normals.push(normal.into());
-                geometry.uvs.push(uv);
-            }
-            geometry
-                .indices
-                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            quad(&mut geometry, corner, first, second, [1.0, 1.0]);
         }
         geometry
+    }
+
+    /// Appends the quad from `corner` along `first` then `second`, facing
+    /// their cross product, its UVs from 0 to `uv_extent` along each.
+    fn quad(geometry: &mut Geometry, corner: Vec3, first: Vec3, second: Vec3, uv_extent: [f32; 2]) {
+        let base = geometry.positions.len() as u32;
+        let normal = first.cross(second).normalize();
+        let [u_extent, v_extent] = uv_extent;
+        for (offset, uv) in [
+            (Vec3::ZERO, [0.0, 0.0]),
+            (first, [u_extent, 0.0]),
+            (first + second, [u_extent, v_extent]),
+            (second, [0.0, v_extent]),
+        ] {
+            geometry.positions.push((corner + offset).into());
+            geometry.normals.push(normal.into());
+            geometry.uvs.push(uv);
+        }
+        geometry
+            .indices
+            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
 
     pub(crate) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
@@ -376,28 +371,34 @@ mod generators {
             .collect();
         for row in 0..SETTLEMENTS_PER_SIDE {
             for column in 0..SETTLEMENTS_PER_SIDE {
-                settle([column, row], &mut placements);
+                place_settlement([column, row], &mut placements);
             }
         }
         for centre in ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE) {
-            farm(centre, &mut placements);
+            place_farm(centre, &mut placements);
         }
         (placements, Vec::new())
     }
 
     /// Places the settlement of `region`: blocks of lots between streets,
     /// a building on each lot.
-    fn settle(region: [u32; 2], placements: &mut Vec<CookedPlacement>) {
+    fn place_settlement(region: [u32; 2], placements: &mut Vec<CookedPlacement>) {
         let settlement = settlement_index(region);
         let corner = settlement_centre(region)
-            - glam::dvec3(SETTLEMENT_HALF_SIZE, 0.0, SETTLEMENT_HALF_SIZE);
+            - glam::dvec3(
+                SETTLEMENT_HALF_SIZE_METRES,
+                0.0,
+                SETTLEMENT_HALF_SIZE_METRES,
+            );
         let lots_per_side = BLOCKS_PER_SIDE * LOTS_PER_BLOCK_SIDE;
         for lot_row in 0..lots_per_side {
             for lot_column in 0..lots_per_side {
                 let offset = |lot: u32| {
                     let block = f64::from(lot / LOTS_PER_BLOCK_SIDE);
                     let within = f64::from(lot % LOTS_PER_BLOCK_SIDE);
-                    block * BLOCK_PITCH + STREET_WIDTH / 2.0 + (within + 0.5) * LOT_PITCH
+                    block * BLOCK_PITCH_METRES
+                        + STREET_WIDTH_METRES / 2.0
+                        + (within + 0.5) * LOT_PITCH_METRES
                 };
                 let centre = corner + glam::dvec3(offset(lot_column), 0.0, offset(lot_row));
                 let pick = |choice: Choice| {
@@ -409,16 +410,7 @@ mod generators {
                     ])
                 };
                 let building = (pick(Choice::Building) * BUILDINGS.len() as f64) as usize;
-                let facade = (pick(Choice::Facade) * f64::from(FACADES_PER_SETTLEMENT)) as u32;
-                let quarter_turns = (pick(Choice::Yaw) * 4.0) as u32;
-                build(
-                    &BUILDINGS[building],
-                    settlement,
-                    facade,
-                    centre,
-                    quarter_turns,
-                    placements,
-                );
+                place_building(&BUILDINGS[building], settlement, centre, pick, placements);
             }
         }
     }
@@ -426,12 +418,12 @@ mod generators {
     /// Places a farm on the ground tile at `centre`, by `FARM_CHANCE`, unless
     /// a settlement reaches the tile; it is clad in its region's
     /// settlement's facades.
-    fn farm(centre: glam::DVec3, placements: &mut Vec<CookedPlacement>) {
+    fn place_farm(centre: glam::DVec3, placements: &mut Vec<CookedPlacement>) {
         let region = [centre.x, centre.z]
-            .map(|metres| ((metres + WORLD_HALF_SIZE) / REGION_METRES).floor() as u32);
-        let reach = SETTLEMENT_HALF_SIZE + GROUND_TILE_METRES / 2.0;
+            .map(|metres| ((metres + WORLD_HALF_SIZE_METRES) / REGION_METRES).floor() as u32);
+        let reach_metres = SETTLEMENT_HALF_SIZE_METRES + GROUND_TILE_METRES / 2.0;
         let from_settlement = (centre - settlement_centre(region)).abs();
-        if from_settlement.x < reach && from_settlement.z < reach {
+        if from_settlement.x < reach_metres && from_settlement.z < reach_metres {
             return;
         }
         let tile = [centre.x, centre.z].map(|metres| metres.to_bits());
@@ -439,37 +431,30 @@ mod generators {
         if pick(Choice::Farm) >= FARM_CHANCE {
             return;
         }
-        let spread = GROUND_TILE_METRES / 2.0 - 16.0;
+        let spread_metres = GROUND_TILE_METRES / 2.0 - 16.0;
         let position = centre
             + glam::dvec3(
-                spread * (2.0 * pick(Choice::FarmX) - 1.0),
+                spread_metres * (2.0 * pick(Choice::FarmX) - 1.0),
                 0.0,
-                spread * (2.0 * pick(Choice::FarmZ) - 1.0),
+                spread_metres * (2.0 * pick(Choice::FarmZ) - 1.0),
             );
-        let facade = (pick(Choice::Facade) * f64::from(FACADES_PER_SETTLEMENT)) as u32;
-        let quarter_turns = (pick(Choice::Yaw) * 4.0) as u32;
         let settlement = settlement_index(region);
-        build(
-            &BUILDINGS[FARM],
-            settlement,
-            facade,
-            position,
-            quarter_turns,
-            placements,
-        );
+        place_building(&BUILDINGS[FARM], settlement, position, pick, placements);
     }
 
-    /// Places `building` at `centre`, turned by `quarter_turns`, its walls
-    /// clad in facade `facade` of `settlement`, with its roof and a window
-    /// every `WINDOW_PITCH` along each wall on each storey.
-    fn build(
+    /// Places `building` at `centre`, turned by quarter turns `pick` chooses,
+    /// its walls clad in the facade of `settlement` it chooses, with its roof
+    /// and a window every `WINDOW_PITCH_METRES` along each wall on each
+    /// storey.
+    fn place_building(
         building: &Building,
         settlement: u32,
-        facade: u32,
         centre: glam::DVec3,
-        quarter_turns: u32,
+        pick: impl Fn(Choice) -> f64,
         placements: &mut Vec<CookedPlacement>,
     ) {
+        let facade = (pick(Choice::Facade) * f64::from(FACADES_PER_SETTLEMENT)) as u32;
+        let quarter_turns = (pick(Choice::Yaw) * 4.0) as u32;
         let scene = ReferenceScene::World;
         let rotation = Quat::from_rotation_y(quarter_turns as f32 * std::f32::consts::FRAC_PI_2);
         let material = scene.material_id(&facade_name(settlement, facade));
@@ -493,12 +478,12 @@ mod generators {
             (Vec3::NEG_Z * half_depth, Vec3::NEG_X, half_width),
             (Vec3::NEG_X * half_width, Vec3::Z, half_depth),
         ] {
-            let columns = ((2.0 * half_length) / WINDOW_PITCH).floor() as u32;
+            let columns = ((2.0 * half_length) / WINDOW_PITCH_METRES).floor() as u32;
             let facing = Quat::from_rotation_arc(Vec3::Z, outward.normalize());
             for storey in 0..building.storeys {
                 for column in 0..columns {
-                    let across = (column as f32 + 0.5 - columns as f32 / 2.0) * WINDOW_PITCH;
-                    let height = storey as f32 * STOREY_HEIGHT + WINDOW_SILL_HEIGHT;
+                    let across = (column as f32 + 0.5 - columns as f32 / 2.0) * WINDOW_PITCH_METRES;
+                    let height = storey as f32 * STOREY_HEIGHT_METRES + WINDOW_SILL_HEIGHT_METRES;
                     let local = outward + along * across + Vec3::Y * height;
                     let translation = centre + (rotation * local).as_dvec3();
                     placements.push(placement(window, None, translation, rotation * facing));
@@ -547,14 +532,14 @@ mod tests {
                 .map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);
             *per_chunk.entry(coordinates).or_default() += 1;
         }
-        let load_radius = ReferenceScene::World.load_radius_metres();
-        let hold_radius = load_radius + CHUNK_EDGE_METRES;
+        let load_radius_metres = ReferenceScene::World.load_radius_metres();
+        let hold_radius_metres = load_radius_metres + CHUNK_EDGE_METRES;
         let step_metres = 64.0;
-        let steps = (2.0 * WORLD_HALF_SIZE / step_metres) as u32;
+        let steps = (2.0 * WORLD_HALF_SIZE_METRES / step_metres) as u32;
         let (mut most_loaded, mut most_held) = (0, 0);
         for column in 0..=steps {
             for row in 0..=steps {
-                let at = |index: u32| -WORLD_HALF_SIZE + f64::from(index) * step_metres;
+                let at = |index: u32| -WORLD_HALF_SIZE_METRES + f64::from(index) * step_metres;
                 let camera = glam::dvec3(at(column), 0.0, at(row));
                 let within = |radius: f64| -> u32 {
                     (per_chunk.iter())
@@ -562,8 +547,8 @@ mod tests {
                         .map(|(_, instances)| instances)
                         .sum()
                 };
-                most_loaded = most_loaded.max(within(load_radius));
-                most_held = most_held.max(within(hold_radius));
+                most_loaded = most_loaded.max(within(load_radius_metres));
+                most_held = most_held.max(within(hold_radius_metres));
             }
         }
         let capacities = RenderCapacities::checked_in();
