@@ -63,8 +63,9 @@ rounds is stamped quiet but `world`, whose GPU frame p95 over median,
 settlement out over sparse land; its Baseline before read 1.14. The
 Baselines are the second kept round's, all twelve scenes from one run,
 the middle round on `world`'s and `town`'s CPU p99 and `world`'s
-maximum. The llvmpipe Baselines are CI's `bench-results` artifact on
-the exit's PR.
+maximum. The llvmpipe Baselines are CI's `bench-publish` artifact from
+[run 42671609580](https://github.com/gariasf/praxis/actions/runs/42671609580)
+(PR #745), every counter they held before identical.
 
 ### Measurements
 
