@@ -598,7 +598,8 @@ impl Traversal {
                 .map(|stats| u64::from(stats.late_chunks))
                 .sum(),
             late_mips: frames.iter().map(|stats| u64::from(stats.late_mips)).sum(),
-            peak_gpu_memory_bytes: (frames.iter())
+            peak_gpu_memory_bytes: frames
+                .iter()
                 .map(|stats| stats.gpu_memory_bytes)
                 .max()
                 .unwrap_or(0),
