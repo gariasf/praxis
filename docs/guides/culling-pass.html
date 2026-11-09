@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/culling_pass.rs</code></div>
   <h1>The culling pass</h1>
   <p class="definition">A compute pass, run twice a frame, that builds the frame's draw from the <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instances</span>: a <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).">Meshlet</span> record per Meshlet and a packed index per triangle corner of each Instance it draws, in slot order, which the depth and lit passes draw with one indirect call each. Phase one draws the Instances in view that were visible the frame before; phase two, after the depth pyramid, the others in view that the pyramid does not hide, and it records which Instances are visible for the next frame.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="instance-buffer.html">The Instance buffer</a> for the slots the pass reads, <a href="depth-pyramid-pass.html">The depth pyramid pass</a> for what phase two tests against.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04), with its capacities as the Budget split leaves them. A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="instance-buffer.html">The Instance buffer</a> for the slots the pass reads, <a href="depth-pyramid-pass.html">The depth pyramid pass</a> for what phase two tests against.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -185,15 +185,15 @@ if slots &gt; 0 {
     return (record &lt;&lt; MESHLET_VERTEX_BITS) | vertex;
 }</code></pre>
   <p class="code-source"><code>common.wgsl</code>. <code>MESHLET_VERTEX_BITS</code> is the base-2 logarithm of <code>MESHLET_MAX_VERTICES</code>, 64, declared from Rust: 6, which leaves 26 bits for the record. <code>CullingPass::new</code> asserts the record capacity stays below 2<sup>26</sup>.</p>
-  <p>The vertex shader unpacks an index, reads its record, reads the Instance from the record's slot, finds the vertex through the Meshlet's list, pulls it from the vertex Arena and composes its position relative to the camera from the Anchors. Both buffers have fixed capacities, provisional until ADR 0013's split of the 8 GB Budget sizes them:</p>
+  <p>The vertex shader unpacks an index, reads its record, reads the Instance from the record's slot, finds the vertex through the Meshlet's list, pulls it from the vertex Arena and composes its position relative to the camera from the Anchors. Both buffers have fixed capacities, held within the scene and pass buffers' Budget rather than drawn from it, as the Capability floor caps the indices:</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Buffer</th><th class="n">Capacity</th><th class="n">Bytes</th><th>What fixes it</th></tr></thead>
     <tbody>
       <tr><td><code>packed_indices</code></td><td class="n">2<sup>25</sup></td><td class="n">134,217,728</td><td>the most one storage binding holds at the Capability floor, 128 MiB: 11.2 million triangles, all of <code>town</code> with culling off</td></tr>
       <tr><td><code>meshlet_records</code></td><td class="n">2<sup>20</sup></td><td class="n">12,582,912</td><td>three u32s a record: as many Meshlets of 10.7 triangles on average</td></tr>
-      <tr><td><code>instance_offsets</code></td><td class="n">526,337</td><td class="n">4,210,696</td><td>a pair of u32s per slot of <code>INSTANCE_CAPACITY</code>, 2<sup>19</sup>, then per block of 256 slots, then the phase's record range</td></tr>
-      <tr><td><code>instance_visibility</code></td><td class="n">2<sup>19</sup> bits</td><td class="n">65,536</td><td>a bit per slot</td></tr>
+      <tr><td><code>instance_offsets</code></td><td class="n">519,398</td><td class="n">4,155,184</td><td>a pair of u32s per slot of <code>INSTANCE_CAPACITY</code>, 517,376, then per block of 256 slots, then the phase's record range</td></tr>
+      <tr><td><code>instance_visibility</code></td><td class="n">517,376 bits</td><td class="n">64,672</td><td>a bit per slot</td></tr>
     </tbody>
   </table>
   </div>
@@ -238,7 +238,7 @@ if slots &gt; 0 {
     return before;
 }</code></pre>
   <p class="code-source"><code>culling.wgsl</code>.</p>
-  <p><b><code>offset_blocks</code></b> runs one workgroup over the blocks' totals: at the Instance buffer's 2<sup>19</sup> slots, 2,048 blocks, 8 to an invocation, each loop bounded alike in every invocation so the scan's barriers stay in uniform control flow. It turns each block's total into the block's start, from where the phase starts: 0 in phase one, phase one's sums in phase two, which phase one's last invocation leaves in <code>phase_two_offsets</code>. It also sets the draw's instance count to 1, phase two's first index, the phase's range of records and <code>append_triangles</code>'s dispatch.</p>
+  <p><b><code>offset_blocks</code></b> runs one workgroup over the blocks' totals: at the Instance buffer's 517,376 slots, 2,021 blocks, 8 to an invocation, each loop bounded alike in every invocation so the scan's barriers stay in uniform control flow. It turns each block's total into the block's start, from where the phase starts: 0 in phase one, phase one's sums in phase two, which phase one's last invocation leaves in <code>phase_two_offsets</code>. It also sets the draw's instance count to 1, phase two's first index, the phase's range of records and <code>append_triangles</code>'s dispatch.</p>
   <p><b><code>append_records</code></b> runs an invocation per slot. Each drawn Instance whose records and indices fit writes its records from its block's start plus its own offset, raises the draw's index count to its last index with an <code>atomicMax</code>, and counts itself drawn; one that does not fit counts itself overflowed.</p>
   <p><b><code>append_triangles</code></b> runs a workgroup of 32 invocations per record the phase appended, and writes the record's Meshlet's packed indices at the Instance's first index plus the Meshlet's triangles before it in the Mesh, adjacent invocations writing adjacent indices, each triangle's corners as cooked, so the draw rasterises as the cooked index stream does.</p>
   <p>Atomics remain only where order cannot matter: the index count's <code>atomicMax</code>, the counts' <code>atomicAdd</code>s and the visibility words' <code>atomicOr</code>s end at the same value whatever order invocations run in. Appending through a shared atomic count instead would place each Instance by when its workgroup arrived, and on the Apple M4 Pro, which triangles a draw holds before others changes the implicit derivatives some pixels sample their Textures with, so the image would differ from run to run (<a href="metal-quirks.html#order">Metal quirks</a>).</p>
@@ -421,7 +421,7 @@ frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows
   <h2>Limits</h2>
   <p><b>Boxes past a frustum's corner.</b> A box outside two planes near where they meet, but wholly beyond neither, is kept and drawn.</p>
   <p><b>Boxes at the camera.</b> A box with a corner at or behind the camera's plane is never occluded, however much hides it.</p>
-  <p><b>A fixed draw.</b> The draw holds 2<sup>25</sup> indices and 2<sup>20</sup> records whatever the frame needs; past either, the Instances after the last that fits are not drawn that frame, whatever their distance. The capacities are provisional until the GPU memory Budget is split.</p>
+  <p><b>A fixed draw.</b> The draw holds 2<sup>25</sup> indices and 2<sup>20</sup> records whatever the frame needs; past either, the Instances after the last that fits are not drawn that frame, whatever their distance. The capacities are fixed, not drawn from the GPU memory Budgets.</p>
   <p><b>Phase order within the draw.</b> An Instance phase two draws sits after all of phase one's for that frame; one slot order across both phases would need a third index list or gaps of degenerate triangles.</p>
   <p><b>Composed twice.</b> The pass composes each box relative to the camera for its tests, and the vertex shader composes every vertex again; handing the composed transform over would need a per-Instance buffer, another storage binding.</p>
 </section>

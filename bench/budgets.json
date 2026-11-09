@@ -9,10 +9,10 @@
   "gpu_memory_bytes_by_kind": {
     "geometry_arenas": 83886080,
     "texture_pool": 4294967296,
-    "resident_tails": 1073741824,
+    "resident_tails": 268435456,
     "render_targets": 536870912,
     "acceleration_structures": 268435456,
-    "staging": 134217728,
-    "scene_and_pass_buffers": 230547848
+    "staging": 268435456,
+    "scene_and_pass_buffers": 234881024
   }
 }

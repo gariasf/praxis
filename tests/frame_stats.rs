@@ -7,8 +7,6 @@ use praxis::cooked::{
 use praxis::gpu::GpuContext;
 use praxis::{GpuMemoryKind, ReferenceScene};
 
-const MEBIBYTE: u64 = 1 << 20;
-
 /// town's Instances and their triangles, as its generator places them
 /// (`src/scenes/town.rs`).
 const TOWN_INSTANCES: u32 = 254_319;
@@ -68,7 +66,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     let triangles = 48 * 24 * 2 - 2 * 48;
     // Its BLAS, of the 25 rings of 49 vertices less the two the cook's weld
     // drops (below), at the adapter's compacted fraction of the bytes its
-    // driver gives, rounded to a whole byte; the two static TLASes' 2^18
+    // driver gives, rounded to a whole byte; the two static TLASes' 264,720
     // Instances each and the dynamic TLAS's 10,000 at theirs.
     let input = context.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("Frame Stats Size Query Input"),
@@ -104,13 +102,14 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     let compacted_blas_fraction = praxis::compacted_blas_fraction(&context.adapter_info());
     let acceleration_structure_bytes = (sphere_blas_bytes as f64 * compacted_blas_fraction).round()
         as u64
-        + 2 * tlas_bytes(1 << 18)
+        + 2 * tlas_bytes(264_720)
         + tlas_bytes(10_000);
-    // GPU memory by kind. The geometry Arenas: the Mesh pool's five of
-    // 16 MiB. The Resident tails: five 1×1 neutral Textures, one per
-    // Channel (the spheres sample no other), RGBA8 but the normal Channel's
-    // RGBA16F, each a mip of 64 KiB or less; so nothing in the texture pool.
-    let geometry_arenas = 5 * 16 * MEBIBYTE;
+    // GPU memory by kind. The geometry Arenas: the Mesh pool's five, each its
+    // share of the 80 MiB Budget in whole 4-byte words. The Resident tails: five
+    // 1×1 neutral Textures, one per Channel (the spheres sample no other), RGBA8
+    // but the normal Channel's RGBA16F, each a mip of 64 KiB or less; so nothing
+    // in the texture pool.
+    let geometry_arenas = 40_852_520 + 26_591_884 + 503_316 + 7_130_316 + 8_808_036;
     let resident_tails = 4 * 4 + 8;
     // The render targets: the 160×90 Depth32Float texture at 4 samples, its
     // 4x RGBA16F colour, which Apple GPUs keep in tile memory, so it counts
@@ -139,9 +138,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Staging: three slots of the first frame's 1700 uploaded bytes rounded
     // up to 2048. The load's staging is gone.
     let staging = 3 * 2048;
-    // The scene and pass buffers: the Mesh table of 65,536 Meshes of 40
-    // bytes, 256 Materials of 80 bytes, the camera and light uniforms, the
-    // light buffer of 4,096 lights of 48 bytes, 524,288 Instances of 128
+    // The scene and pass buffers: the Mesh table of 18,691 Meshes of 40
+    // bytes, 222 Materials of 80 bytes, the camera and light uniforms, the
+    // light buffer of 4,893 lights of 48 bytes, 517,376 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
     // offsets for each slot and block of 256 slots and of the phase's
     // records, and visibility bit for each slot, the frame's draw of 2^20
@@ -153,15 +152,15 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // pass's lists, 32 × 18 × 32 of 128 u32s, and its 16 bytes of light
     // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
     // 4,096 bends of 20 bytes.
-    let scene_and_pass_buffers = 65_536 * 40
-        + 256 * 80
+    let scene_and_pass_buffers = 18_691 * 40
+        + 222 * 80
         + 144
         + 32
-        + 4096 * 48
-        + 524_288 * 128
+        + 4893 * 48
+        + 517_376 * 128
         + 4
-        + (524_288 + 2048 + 1) * 8
-        + 524_288 / 8
+        + (517_376 + 2021 + 1) * 8
+        + 517_376 / 8
         + (1 << 20) * 12
         + (1 << 25) * 4
         + 72

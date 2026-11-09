@@ -4,7 +4,7 @@ use crate::assets::{MaterialPool, MeshPool, PoolCapacities};
 use crate::bench::Budgets;
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
-use crate::render::bend_pass::{BEND_PASS, BendPass};
+use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::blas_refit::{BLAS_REFIT_PASS, BlasRefit};
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity, SCAN_BLOCK_SIZE};
@@ -174,23 +174,35 @@ impl RenderSwitches {
     }
 }
 
-/// Bytes of the scene and pass buffers' Budget per Instance slot.
-const SCENE_AND_PASS_BYTES_PER_INSTANCE: u64 = 256;
+/// Thousandths of the scene and pass buffers' Budget the Instance slots take.
+const INSTANCE_SLOTS_PER_MILLE: u64 = 300;
 
-/// Bytes of the scene and pass buffers' Budget per light.
-const SCENE_AND_PASS_BYTES_PER_LIGHT: u64 = 32 << 10;
+/// Thousandths of the scene and pass buffers' Budget the lights take.
+const LIGHTS_PER_MILLE: u64 = 1;
 
-/// Bytes of the acceleration structures' Budget per static TLAS entry.
-const ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE: u64 = 1 << 10;
+/// Thousandths of the acceleration structures' Budget the static TLAS's two
+/// TLASes take.
+const STATIC_TLAS_PER_MILLE: u64 = 570;
+
+/// Bytes a scan block of Instance slots takes: each slot's Instance, offsets
+/// and visibility bit, and the block's offsets.
+const INSTANCE_SCAN_BLOCK_BYTES: u64 = SCAN_BLOCK_SIZE as u64
+    * (size_of::<InstanceData>() + size_of::<[u32; 2]>()) as u64
+    + size_of::<[u32; 2]>() as u64
+    + SCAN_BLOCK_SIZE as u64 / u8::BITS as u64;
+
+/// The most bytes a TLAS entry takes as an adapter's driver sizes it: 288.4
+/// on the M4 Pro, 240 on lavapipe and 238.2 on the RTX 2070 SUPER.
+pub(crate) const TLAS_BYTES_PER_INSTANCE: u64 = 289;
 
 /// What the Instance buffer, the light buffer and the static TLAS hold,
 /// derived from the GPU memory Budgets at device creation, which assembles
-/// the shader modules with them: each the largest power of two of entries
-/// its kind's Budget gives at a fixed number of bytes per entry, the Instance
-/// slots in whole scan blocks. The bytes per entry keep the capacities the
-/// checked-in Budgets gave before; the Budget split sets them (ADR 0013).
-/// Beside them, the bytes a frame's streamed loads write into the load
-/// staging (ADR 0017).
+/// the shader modules with them: each its share of its kind's Budget at its
+/// real bytes per entry, the Instance slots in whole scan blocks (ADR 0013).
+/// The rest of the scene and pass buffers' Budget holds the Mesh and Material
+/// tables and the passes' buffers of fixed size, and the rest of the
+/// acceleration structures' the dynamic TLAS and the BLASes. Beside them,
+/// the bytes a frame's streamed loads write into the load staging (ADR 0017).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RenderCapacities {
     /// Slots the Instance buffer holds.
@@ -202,35 +214,49 @@ pub struct RenderCapacities {
     /// warned about. In wgpu a TLAS rebuild's CPU time grows with its
     /// capacity, filled or not.
     pub static_tlas_instances: u32,
-    /// The staging Budget's share per frame: a frame's load staging lives
-    /// until the GPU has run its copies, so the frames in flight and the one
-    /// being written hold at most the Budget between them.
+    /// A frame's share of what the frame staging's slots leave of the
+    /// staging Budget: a frame's load staging lives until the GPU has run its
+    /// copies, so the frames in flight and the one being written hold at
+    /// most that rest between them.
     pub load_bytes_per_frame: u64,
 }
 
 impl RenderCapacities {
     /// The capacities `budgets` give.
     pub fn from_budgets(budgets: &GpuMemoryBudgets) -> Self {
-        let power_of_two = |bytes: u64, bytes_per_entry: u64| {
-            u32::try_from(bytes / bytes_per_entry)
-                .unwrap_or(u32::MAX)
-                .checked_ilog2()
-                .map_or(0, |exponent| 1 << exponent)
+        let share = |budget: u64, per_mille: u64| budget * per_mille / 1000;
+        let entries = |bytes: u64, bytes_per_entry: u64| {
+            u32::try_from(bytes / bytes_per_entry).unwrap_or(u32::MAX)
         };
-        let scan_block_bytes = SCENE_AND_PASS_BYTES_PER_INSTANCE * u64::from(SCAN_BLOCK_SIZE);
+        // Past the blocks' offsets, the count of appended records.
+        let instance_bytes = share(budgets.scene_and_pass_buffers, INSTANCE_SLOTS_PER_MILLE)
+            .saturating_sub(size_of::<[u32; 2]>() as u64);
+        let instances = entries(instance_bytes, INSTANCE_SCAN_BLOCK_BYTES) * SCAN_BLOCK_SIZE;
+        let lights = entries(
+            share(budgets.scene_and_pass_buffers, LIGHTS_PER_MILLE),
+            size_of::<LightData>() as u64,
+        );
+        let frames = FRAMES_IN_FLIGHT as u64 + 1;
+        let frame_staging_bytes = frames * Self::most_uploaded_bytes(instances, lights);
         Self {
-            instances: power_of_two(budgets.scene_and_pass_buffers, scan_block_bytes)
-                * SCAN_BLOCK_SIZE,
-            lights: power_of_two(
-                budgets.scene_and_pass_buffers,
-                SCENE_AND_PASS_BYTES_PER_LIGHT,
+            instances,
+            lights,
+            static_tlas_instances: entries(
+                share(budgets.acceleration_structures, STATIC_TLAS_PER_MILLE),
+                2 * TLAS_BYTES_PER_INSTANCE,
             ),
-            static_tlas_instances: power_of_two(
-                budgets.acceleration_structures,
-                ACCELERATION_STRUCTURE_BYTES_PER_STATIC_TLAS_INSTANCE,
-            ),
-            load_bytes_per_frame: budgets.staging / (FRAMES_IN_FLIGHT as u64 + 1),
+            load_bytes_per_frame: budgets.staging.saturating_sub(frame_staging_bytes) / frames,
         }
+    }
+
+    /// The most one frame uploads: every buffer `upload` writes, in full.
+    fn most_uploaded_bytes(instances: u32, lights: u32) -> u64 {
+        (size_of::<CameraUniform>()
+            + size_of::<LightUniform>()
+            + size_of::<u32>()
+            + BEND_CAPACITY as usize * size_of::<BendData>()) as u64
+            + u64::from(lights) * size_of::<LightData>() as u64
+            + u64::from(instances) * size_of::<InstanceData>() as u64
     }
 
     /// The capacities of `Budgets::checked_in`.
@@ -317,7 +343,7 @@ impl Renderer {
             width,
             height,
             switches,
-            DrawCapacity::PROVISIONAL,
+            DrawCapacity::FIXED,
         )
     }
 
@@ -976,7 +1002,7 @@ pub(crate) mod tests {
     use crate::render::instance::{ANCHOR_CELL_SIZE, anchor_and_offset, padded_columns};
     use crate::render::prepare::{InstanceWrite, MovingInstance};
     use crate::render::shadow_mask_pass::SHADOW_MASK_LIGHTS;
-    use crate::render::{FramePreparer, NO_MATERIAL, NO_MESH};
+    use crate::render::{DYNAMIC_TLAS_CAPACITY, FramePreparer, NO_MATERIAL, NO_MESH};
     use crate::time::FixedTime;
     use crate::transform::propagate_world_transforms;
 
@@ -999,16 +1025,57 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_checked_in_budgets_keep_the_render_capacities_before_them() {
+    fn the_checked_in_budgets_give_these_render_capacities() {
         assert_eq!(
             RenderCapacities::checked_in(),
             RenderCapacities {
-                instances: 524_288,
-                lights: 4096,
-                static_tlas_instances: 262_144,
-                load_bytes_per_frame: 44_739_242,
+                instances: 517_376,
+                lights: 4893,
+                static_tlas_instances: 264_720,
+                load_bytes_per_frame: 22_937_393,
             }
         );
+    }
+
+    /// At the checked-in Budgets, what the Renderer creates of the geometry
+    /// Arenas, the acceleration structures and the scene and pass buffers
+    /// fits their Budgets, its TLASes at no more than
+    /// `TLAS_BYTES_PER_INSTANCE` an entry; and its frame staging's slots at
+    /// their largest, with the load staging of each frame they serve, fit
+    /// the staging Budget.
+    #[test]
+    fn what_the_renderer_creates_fits_the_checked_in_budgets() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let renderer = Renderer::new(
+            &context,
+            TARGET_FORMAT,
+            SIZE,
+            SIZE,
+            RenderSwitches::default(),
+        );
+        let budgets = Budgets::checked_in().gpu_memory_bytes_by_kind;
+        let created = renderer.gpu_memory_bytes_by_kind();
+        for kind in [
+            GpuMemoryKind::GeometryArenas,
+            GpuMemoryKind::AccelerationStructures,
+            GpuMemoryKind::SceneAndPassBuffers,
+        ] {
+            let bytes = created[kind as usize];
+            assert!(bytes <= budgets.of(kind), "{}: {bytes}", kind.name());
+        }
+        let capacities = renderer.capacities();
+        let tlas_entries = 2 * capacities.static_tlas_instances + DYNAMIC_TLAS_CAPACITY;
+        let size_query_inputs = 3 * 64;
+        assert!(
+            created[GpuMemoryKind::AccelerationStructures as usize]
+                <= u64::from(tlas_entries) * TLAS_BYTES_PER_INSTANCE + size_query_inputs
+        );
+        let frames = FRAMES_IN_FLIGHT as u64 + 1;
+        let staging =
+            frames * (renderer.frame_staging.max_slot_size + capacities.load_bytes_per_frame);
+        assert!(staging <= budgets.staging, "{staging}");
     }
 
     #[test]

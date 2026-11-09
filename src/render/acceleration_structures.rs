@@ -12,8 +12,8 @@ use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Moving Instances the dynamic TLAS holds: those in the lowest slots, so
 /// which ones changes only as they spawn and despawn; any past it are left
-/// out, so they cast no shadow, and are counted and warned about. Provisional
-/// until ADR 0013's split of the 8 GB Budget sizes it.
+/// out, so they cast no shadow, and are counted and warned about. Fixed, and
+/// held in the acceleration structures' Budget.
 pub const DYNAMIC_TLAS_CAPACITY: u32 = 10_000;
 
 /// The dynamic TLAS's build's name in frame stats: the GPU time from the end

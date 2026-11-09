@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/froxel_pass.rs</code></div>
   <h1>The Froxel pass</h1>
   <p class="definition">A compute pass that cuts the view into 18,432 <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxels</span>, 32 screen rectangles across, 18 down and 32 slices of depth each, and lists for every Froxel, in light order, the point lights of the light buffer whose range reaches into its bounds, so that the lit pass shades a pixel with its Froxel's point lights alone and a light left out would have added exactly zero.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at f097fd15 (2026-11-06). A change to the pass or the light buffer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="light-units.html">Light units</a> for what a light's intensity holds, <a href="shadow-mask.html">The shadow mask pass</a> for the bits that follow each list, <a href="lit-pass.html">The lit pass</a> for the shading that reads them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at f097fd15 (2026-11-06), with the light buffer's capacity as the Budget split leaves it. A change to the pass or the light buffer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="light-units.html">Light units</a> for what a light's intensity holds, <a href="shadow-mask.html">The shadow mask pass</a> for the bits that follow each list, <a href="lit-pass.html">The lit pass</a> for the shading that reads them.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -149,7 +149,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="part-mark">1 &middot; <code>src/render/uniforms.rs</code> &middot; <code>prepare_lights</code></div>
   <h2>The light buffer</h2>
   <p class="key-idea">Every light the frame draws is a 48-byte entry of one storage buffer of fixed capacity, the directional lights first and the point lights after them, a point light placed by an Anchor and an offset; a separate 32-byte uniform says how many of each it holds.</p>
-  <p>Prepare fills Frame data with every directional light, then every point light, each blended between its two newest <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, up to the light buffer's capacity, 4,096, and the frame's upload writes them through its staging into the light buffer. The buffer is created at that capacity, 196,608 bytes, and never grows. Directional lights take their places first, so a full buffer leaves out point lights, farthest from the camera first, before any sun, and keeps the rest in the order it lists them under capacity; whatever it leaves out, prepare counts as <code>lights_overflowed</code> and warns of once, "Lights past the light buffer's capacity are not drawn", until a frame in which all fit.</p>
+  <p>Prepare fills Frame data with every directional light, then every point light, each blended between its two newest <span class="concept" data-term="Tick" data-tip="One fixed step of the simulation, 1/64 s; rendered frames draw a blend of the two newest Ticks.">Ticks</span>, up to the light buffer's capacity, 4,893 at the checked-in Budgets, and the frame's upload writes them through its staging into the light buffer. The buffer is created at that capacity, 234,864 bytes, and never grows. Directional lights take their places first, so a full buffer leaves out point lights, farthest from the camera first, before any sun, and keeps the rest in the order it lists them under capacity; whatever it leaves out, prepare counts as <code>lights_overflowed</code> and warns of once, "Lights past the light buffer's capacity are not drawn", until a frame in which all fit.</p>
 <pre class="code"><code>let room = capacity - directional_light_count;
 if point_light_count &gt; room {
     point_light_distances.select_nth_unstable_by(room, |left, right| {
@@ -351,7 +351,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
       <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>beside each scene's <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> captured through <code>capture_frames</code> with the lists and with brute force, shadow rays off, matches within the Goldens' tolerance with no pixel allowed past it; <code>town</code> at eight frames along its camera path, <code>world</code> at its three Goldens' frames, the others at the Golden's frame</td></tr>
       <tr><td><code>the_light_count_pass_counts_the_point_lights_each_lit_pixel_lists_and_is_reached_by</code></td><td><code>renderer.rs</code></td><td>the counting pass below: lit pixels, listed and reaching lights against what a quad and lights placed in front of and behind it give; with the switch off, nothing is counted</td></tr>
       <tr><td><code>every_light_is_drawn_directional_lights_first_point_lights_anchored</code></td><td><code>prepare.rs</code></td><td>the light buffer's order and a point light's Anchor and offset far from the origin</td></tr>
-      <tr><td><code>lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once</code></td><td><code>prepare.rs</code></td><td>one directional light and 4,097 point lights: the buffer holds 4,096, the two left out are counted every frame, warned of once, and the count returns to 0 once all fit</td></tr>
+      <tr><td><code>lights_past_the_light_buffers_capacity_are_counted_and_warned_about_once</code></td><td><code>prepare.rs</code></td><td>one directional light and one point light more than the checked-in capacity: the buffer holds its capacity, the two left out are counted every frame, warned of once, and the count returns to 0 once all fit</td></tr>
       <tr><td><code>point_light_attenuation_falls_by_inverse_square_to_zero_at_the_range</code></td><td><code>shader_function_tests.rs</code></td><td>the range window that makes a skipped light exact, against an oracle</td></tr>
     </tbody>
   </table>
@@ -425,7 +425,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
     <tbody>
       <tr><td>Froxel lists</td><td>18,432 &times; (1 + 127) &times; u32</td><td class="n">9,437,184</td></tr>
       <tr><td>light counts</td><td><code>LightCounts</code>, four u32</td><td class="n">16</td></tr>
-      <tr><td>light buffer, the Renderer's</td><td>4,096 &times; <code>LightData</code></td><td class="n">196,608</td></tr>
+      <tr><td>light buffer, the Renderer's</td><td>4,893 &times; <code>LightData</code></td><td class="n">234,864</td></tr>
     </tbody>
   </table>
   </div>
@@ -438,7 +438,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
   <p><b>Exponential slices, not equal ones.</b> Slices equal in normalised depth come out very thin near the camera and very long far away; slices equal in view depth, the reverse. Exponential spacing keeps the Froxels self-similar. Cubical cells would take about fifteen slices to each doubling at this rectangle size, five times as many lists; three keep the lists at 9 MiB.</p>
   <p><b>Sphere against six planes, kept simple.</b> Tighter tests exist: one shrinks the sphere, slice by slice and row by row, to each plane it crosses, and culls better than a test against each cell's box at a similar cost. The simple test is exact on every plane and errs only towards keeping a light, which costs time and never the image, and the light count pass measures how much it keeps.</p>
   <p><b>On the GPU, one writer per list.</b> Building the lists in a compute pass keeps the CPU's frame free of a per-light, per-cell loop; giving each invocation its own list keeps them in light order without atomics, so the lists and brute force sum the same terms in the same order and can be compared pixel for pixel.</p>
-  <p><b>A fixed capacity, counted.</b> Neither the light buffer nor the lists grow at runtime (ADR 0003); a light past either is left out and counted in Frame stats, so a scene that reaches a capacity shows it. The light buffer's capacity derives from the GPU memory Budgets at device creation and the lists' is a constant; both are provisional until ADR 0013's split of the 8 GB Budget sets them.</p>
+  <p><b>A fixed capacity, counted.</b> Neither the light buffer nor the lists grow at runtime (ADR 0003); a light past either is left out and counted in Frame stats, so a scene that reaches a capacity shows it. The light buffer's capacity derives from the GPU memory Budgets at device creation, 0.1% of the scene and pass buffers' at 48 bytes a light, and the lists' is a constant, held within that Budget.</p>
   <p><b>Anchors and reverse Z throughout.</b> A light's position composes relative to the camera from its Anchor, as ADR 0014 requires of every World position; the last slice reaches to infinity because ADR 0015's projection has no far plane.</p>
 </section>
 
@@ -449,7 +449,7 @@ for (var entry = 0u; entry &lt; point_light_count; entry++) {
   <p><b>Point lights only.</b> Directional lights are never culled; every pixel shades all of them. Spot lights do not exist yet; a cone would be listed by its bounding sphere unless the test learns its shape.</p>
   <p><b>One list per Froxel, whatever the surface.</b> A Froxel deep enough to hold a wall and the street behind it lists the lights of both; nothing narrows a list to the depths the frame shows.</p>
   <p><b>Every invocation tests every point light.</b> The work grows with the lights and not with what they reach: 18,432 tests for each, before any is listed.</p>
-  <p><b>Fixed capacities.</b> 4,096 lights and 127 a list, both provisional.</p>
+  <p><b>Fixed capacities.</b> 4,893 lights at the checked-in Budgets and 127 a list.</p>
 </section>
 
 <section class="part prose" id="sources">
