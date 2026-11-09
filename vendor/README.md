@@ -6,7 +6,8 @@ upstream commits listed below, wired in through `[patch.crates-io]` in
 `Cargo.toml`. Until wgpu 31 is published, a fix Praxis needs from wgpu's
 trunk is carried here ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6749721020));
 the wgpu 31 bump deletes each copy whose fixes 31 carries, with its
-`[patch.crates-io]` entry.
+`[patch.crates-io]` entry, and rewrites what names the copy: CLAUDE.md's
+Stack and tree, and ADR 0020's static TLAS clause.
 
 ## wgpu-core 30.0.1
 

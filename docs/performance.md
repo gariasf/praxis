@@ -45,9 +45,11 @@ interleaved quiet rounds `world`'s CPU p99 reads 2,345 to 2,574 µs
 against 6,444 to 6,660 µs on `main`. `town`'s CPU frame falls from
 5.39–5.80 to 1.55–1.56 ms at the median, and both scenes' dynamic TLAS
 CPU lines fall under their 1.1 ms ceiling. When builds happen is
-unchanged; frames until traced read 7 in every round against 6, within
-N = 8. `world`'s GPU frame and gate medians hold, but their p99s rise
-and its GPU maximum reaches 12.0 ms (Also seen).
+unchanged; the most frames a Chunk waited to be traced read 7 in every
+round against 6, within N = 8 (Also seen). `world`'s GPU frame and gate
+medians hold, but their p99s rise and its GPU maximum reaches 12.0 ms,
+within criterion 1's bounds. Criterion 1 as a whole still fails on
+`world`'s CPU maximum, 24.4 to 39.4 ms, which is #743's.
 
 Apple M4 Pro, macOS 27.0.1, Metal, release builds of `main` at
 `addc1305` and of this change on it. `praxis bench <dir> --no-publish
@@ -63,8 +65,9 @@ stats in `bench::run`, and timers in a copy of wgpu-core 30.0.1's
 wgpu-hal's residency call inside it, `into_baked_commands`, which drops
 the command buffer's dependency list, and the hal submit. Each probe ran
 the segment once, quiet, and its frames' stages were read from a run
-without the per-submit print. Medians over the 3,354 measured frames,
-52 of which submit a build.
+without the per-submit print. Medians over each probe run's frames past
+the 248 warm-up frames, 3,354 or 3,355, 52 of which submit a build; the
+reports' 3,352 measured frames end two frames sooner.
 
 ### A build frame, step by step
 
@@ -84,14 +87,14 @@ The main thread's stages, µs:
 | `stream_chunks` | 23.0 | 19.6 | 20.9 | 16.1 |
 | CPU frame | 6,580.9 | 3,929.9 | 1,697.2 | 1,423.5 |
 
-Inside wgpu-core's `Queue::submit`, µs; each row is its own median, so
-the rows do not sum to the total:
+Inside wgpu-core's `Queue::submit`, µs; each row is the median over the
+submits of its own step, so the rows do not sum to the total:
 
 | Step | Build's submit, 30.0.1 | Build's submit, dedup | Frame's submit, 30.0.1 | Frame's submit, dedup |
 |---|---:|---:|---:|---:|
 | Dependencies walked | 138,822 | 18 | 149,073 | 19 |
 | Validation: each dependency's build checked, and for a build the TLAS's list replaced | 635.8 | 1.4 | 243.7 | 0.7 |
-| `set_acceleration_structure_dependencies`, wgpu-core's walk | 261.0 | 2.2 | 265.3 | 0.3 |
+| `set_acceleration_structure_dependencies`, wgpu-core's walk: the call less its residency set | 244.1 | 1.9 | 260.6 | 0.3 |
 | Its Metal residency set, one `addAllocation` per dependency [ref:wgpu-hal-30-metal-residency-per-submit] | 1,271.1 | 22.2 | 1,390.0 | 11.1 |
 | Dropping the command buffer's list | 222.6 | 0.5 | 0.2 | 0.0 |
 | The hal submit | 10.8 | 14.2 | 28.4 | 23.3 |
@@ -151,12 +154,14 @@ work over frames (Battlefield V); a rebuild every frame takes each
 change as it comes, so none of it batches builds, and the spare TLAS
 rebuilt off the frame that Praxis swaps in is Ize, Wald and Parker's
 (`docs/research/acceleration-structures-for-streamed-worlds.md`,
-techniques 1 to 6). The cost here was not the builds' count: in #672's
+techniques 1 to 6 and its published costs). The cost here was not the
+builds' count: in #672's
 three probe runs and this one, with every build's own cost taken out of
 its frame, the p99 still reads 5.88 to 6.09 ms, led by the frame's own
-submit, which no build schedule touches. Merging each pair of builds
-three frames apart, the cheapest change to the schedule, leaves 6.17 to
-6.38 ms. With the dedup a build frame costs about 270 µs more than
+submit, which no build schedule touches. Merging each of the six pairs
+of builds three to five frames apart, the cheapest change to the
+schedule, modelled by taking the second build's `static_tlas_update` out
+of its frame, leaves 6.17 to 6.38 ms. With the dedup a build frame costs about 270 µs more than
 another, so the schedule stays as it is.
 
 ### Also seen
@@ -172,8 +177,16 @@ another, so the schedule stays as it is.
   `town`'s GPU frame by 1.1 ms once its CPU frame outpaced its GPU. This
   note does not verify that cause on `world`, nor why the dynamic TLAS's
   build pass reads 17 µs more.
-- Frames until traced read 7 against 6, with the worker's time per build
-  unchanged; this note does not find why one more frame passes.
+- The most frames a Chunk waited to be traced read 7 against 6 in each
+  round, with the worker's time per build unchanged. It is the tail: in
+  the probe runs, `main`'s builds brought changes traced in 2 to 6
+  frames, the dedup's in 2 to 7, 4 at the median on both, and 1 to 2 of
+  the dedup's 52 at 7; #672's exit read 7 on `main` in one round of
+  three. This note does not find why the tail grows a frame.
+- The Fast travel's hold read 36.9, 16.2 and 45.2 ms over 2 to 3 frames
+  against `main`'s 21.6, 13.6 and 28.6 ms in the same rounds, within
+  criterion 5's 50 ms; `main` read 13.7 to 46.0 ms over the runs that set
+  that figure.
 
 ## M4 exit (2026-11-09, #672)
 
