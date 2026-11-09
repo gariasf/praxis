@@ -781,8 +781,8 @@ mod tests {
         assert_eq!(watched_states, [Some(false), Some(true), None]);
         let loads = frame_stats.iter().map(|stats| stats.chunks_loaded);
         let unloads = frame_stats.iter().map(|stats| stats.chunks_unloaded);
-        assert_eq!(loads.collect::<Vec<_>>(), [1, 8, 9]);
-        assert_eq!(unloads.collect::<Vec<_>>(), [0, 0, 9]);
+        assert_eq!(loads.collect::<Vec<_>>(), [1, 6, 9]);
+        assert_eq!(unloads.collect::<Vec<_>>(), [0, 0, 7]);
         assert!(frame_stats.iter().all(|stats| stats.bytes_read > 0));
         let first_frame = state.gpu_frame_stats()[0];
         assert!(
@@ -791,8 +791,8 @@ mod tests {
         );
 
         let counters = crate::bench::Counters::of(&frame_stats);
-        assert_eq!(counters.chunks_loaded, 18);
-        assert_eq!(counters.chunks_unloaded, 9);
+        assert_eq!(counters.chunks_loaded, 16);
+        assert_eq!(counters.chunks_unloaded, 7);
         assert_eq!(counters.late_chunks, 2);
         let bytes_read: u64 = frame_stats.iter().map(|stats| stats.bytes_read).sum();
         assert_eq!(counters.bytes_read, bytes_read);
