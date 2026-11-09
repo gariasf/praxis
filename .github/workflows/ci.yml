@@ -5,11 +5,27 @@ on:
     branches: [main]
   # On main the run tests the merged commit, which PR checks never saw
   # (branches need not be up to date), and saves the caches PR runs restore.
-  # Docs pushes skip it; PRs never do, as the required checks must report:
-  # a docs-only PR skips the engine jobs instead (see `changes`).
+  # Pushes that change only these paths skip it; PRs never do, as the
+  # required checks must report: such a PR skips the engine jobs instead.
+  # Each entry is one of `changes`' `skipped_paths`, in the same order.
   push:
     branches: [main]
-    paths-ignore: ['docs/**', '*.md']
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'scripts/sweep.sh'
+      - 'scripts/sweep.plist'
+      - 'scripts/sweep-task.xml'
+      - 'scripts/gallery.sh'
+      - 'scripts/verify.sh'
+      - 'scripts/pr-lint.sh'
+      - 'scripts/pr-lint-test.sh'
+      - 'scripts/cycles-reference/*.py'
+      - 'scripts/cycles-reference/DIFFERENCES.md'
+      - 'scripts/cycles-reference/differences/**'
+      - 'bench/cycles/**'
+      - '.github/pull_request_template.md'
+      - 'LICENSE'
 
 # A newer push to a PR cancels the run it supersedes. Each push to main runs
 # in a group of its own, so none is cancelled and every one publishes its
@@ -31,11 +47,13 @@ env:
   LAVAPIPE_VERSION: 25.2.8-0ubuntu0.24.04.4
 
 jobs:
-  # Whether a pull request changes anything but docs: `docs/` and the root's
-  # Markdown, which the build, the Goldens and the bench never read, while
-  # `check` runs the tests that do. A job skipped by `if` reports success, so
-  # the required checks pass on a docs-only PR. The engine jobs run unless
-  # this says `false`, so a push or a failed listing runs them all.
+  # Whether a pull request changes a path outside `skipped_paths`. A path
+  # may skip only if no engine job reads it, or only tests `check` runs:
+  # `check` has no GPU adapter, so a file a GPU test reads, such as
+  # `scripts/cycles-reference/display-ramp.txt`, stays an engine path. A job
+  # skipped by `if` reports success, so the required checks still pass. The
+  # engine jobs run unless this says `false`, so a push or a failed listing
+  # runs them all.
   changes:
     name: Changed files
     if: github.event_name == 'pull_request'
@@ -49,14 +67,32 @@ jobs:
         with:
           fetch-depth: 2
 
-      # Without renames, a file moved out of `docs/` lists both its paths;
-      # unquoted, a non-ASCII docs path still reads as docs.
-      - name: Whether anything but docs changed
+      # Without renames, a file moved out of the skipped paths lists both its
+      # paths; unquoted, a non-ASCII path still matches its pattern.
+      - name: Whether an engine path changed
         id: classify
         run: |
           changed_paths=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)
           echo "$changed_paths"
-          if grep -qvE '^(docs/|[^/]*\.md$)' <<< "$changed_paths"; then
+          skipped_paths=(
+            'docs/.*'
+            '[^/]*\.md'
+            'scripts/sweep\.sh'
+            'scripts/sweep\.plist'
+            'scripts/sweep-task\.xml'
+            'scripts/gallery\.sh'
+            'scripts/verify\.sh'
+            'scripts/pr-lint\.sh'
+            'scripts/pr-lint-test\.sh'
+            'scripts/cycles-reference/[^/]*\.py'
+            'scripts/cycles-reference/DIFFERENCES\.md'
+            'scripts/cycles-reference/differences/.*'
+            'bench/cycles/.*'
+            '\.github/pull_request_template\.md'
+            'LICENSE'
+          )
+          skip_pattern="^($(IFS='|'; echo "${skipped_paths[*]}"))$"
+          if grep -qvE "$skip_pattern" <<< "$changed_paths"; then
             echo engine_changed=true >> "$GITHUB_OUTPUT"
           else
             echo engine_changed=false >> "$GITHUB_OUTPUT"
