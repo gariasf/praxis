@@ -1,0 +1,17 @@
+{
+  "scene": "pbr-sweep",
+  "metric": "cpu_frame_microseconds",
+  "shift": 0.22835195530726257,
+  "suspect": {
+    "commit": "8bc34eb18fcfb79307193551e96619316aef566c",
+    "source_hash": "9278b80493926d0789aa1df2249b2ce7506c9da8"
+  },
+  "predecessor": {
+    "commit": "91fda48bd14bc182fc917b194be3249a364e3e03",
+    "source_hash": "2d5d1c360eb8e1d1314344d75e6c57624a947b09"
+  },
+  "state": "cleared",
+  "good": "91fda48bd14bc182fc917b194be3249a364e3e03",
+  "bad": "8bc34eb18fcfb79307193551e96619316aef566c",
+  "pinned": null
+}
