@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; concept &middot; <code>src/capture/mod.rs</code></div>
   <h1>Waiting on the GPU</h1>
   <p class="definition">With two frames in flight, the main thread, which alone records, submits, polls and presents (ADR 0016), waits for the GPU in three places: for a swapchain texture, in the window; for the oldest frame in flight, in <code>render_frames</code>; and inside a frame wherever a GPU write must finish before the CPU or a later submission reads it. A queue orders when its command buffers start, not when they finish, so each such wait is explicit, and how the thread waits changes what its clock does next.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 88941ee2 (2026-11-08). A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 0d19cffc (2026-11-09), with <code>praxis traverse</code> as this change leaves it. A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">In the frame</h2>
     <dl>
@@ -255,7 +255,7 @@ fn frame_wait(context: &amp;GpuContext) -&gt; FrameWait {
         _ =&gt; FrameWait::Spin,
     }
 }</code></pre>
-  <p class="code-source"><code>src/bench/mod.rs</code>, <code>frame_wait</code>, which <code>render_run</code> calls. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
+  <p class="code-source"><code>src/bench/mod.rs</code>, <code>frame_wait</code>, which <code>render_run</code> and <code>traverse</code> call. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
   <h3>Inside a frame</h3>
   <p><b>The compaction copies, at load.</b> <code>compact_blases</code> waits twice, on every backend: once for the BLAS builds, so that each BLAS can say its compacted size, and once for the copies into the compacted BLASes, which wgpu-core keeps in its pending writes until something submits:</p>
 <pre class="code"><code>// The copies wait in the queue's pending writes until a submit.
