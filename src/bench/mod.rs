@@ -560,7 +560,8 @@ impl FastTravelHold {
 
 /// What `traverse` measured of the world's traversal: the CPU and GPU
 /// frames after the reference warm-up, and over every frame its Late
-/// Chunks, late mips, peak GPU memory and Fast travel's hold.
+/// Chunks, late mips, peak GPU memory, refusals, Chunks not loaded and Fast
+/// travel's hold.
 #[derive(Debug)]
 pub struct Traversal {
     pub frames: usize,
@@ -569,6 +570,13 @@ pub struct Traversal {
     pub late_chunks: u64,
     pub late_mips: u64,
     pub peak_gpu_memory_bytes: u64,
+    pub meshes_refused: u64,
+    pub materials_refused: u64,
+    /// The most Renderables and Placements one frame refused a slot.
+    pub renderables_refused: u64,
+    /// The most lights one frame had no room for.
+    pub lights_refused: u64,
+    pub chunks_not_loaded: u64,
     pub fast_travel_hold: Option<FastTravelHold>,
 }
 
@@ -578,6 +586,8 @@ impl Traversal {
     fn of(frames: &[FrameStats], warm_up_frames: usize) -> Self {
         let microseconds = |time: Duration| time.as_secs_f64() * 1e6;
         let timed = &frames[warm_up_frames.min(frames.len())..];
+        let total = |count: fn(&FrameStats) -> u32| frames.iter().map(count).map(u64::from).sum();
+        let most = |count: fn(&FrameStats) -> u32| frames.iter().map(count).max().unwrap_or(0);
         Self {
             frames: frames.len(),
             cpu_frame_microseconds: spread(
@@ -593,16 +603,18 @@ impl Traversal {
                     .map(|gpu| microseconds(gpu.frame_time))
                     .collect(),
             ),
-            late_chunks: frames
-                .iter()
-                .map(|stats| u64::from(stats.late_chunks))
-                .sum(),
-            late_mips: frames.iter().map(|stats| u64::from(stats.late_mips)).sum(),
+            late_chunks: total(|stats| stats.late_chunks),
+            late_mips: total(|stats| stats.late_mips),
             peak_gpu_memory_bytes: frames
                 .iter()
                 .map(|stats| stats.gpu_memory_bytes)
                 .max()
                 .unwrap_or(0),
+            meshes_refused: total(|stats| stats.meshes_refused),
+            materials_refused: total(|stats| stats.materials_refused),
+            renderables_refused: most(|stats| stats.renderables_refused).into(),
+            lights_refused: most(|stats| stats.lights_overflowed).into(),
+            chunks_not_loaded: total(|stats| stats.chunks_not_loaded),
             fast_travel_hold: FastTravelHold::of(frames),
         }
     }
@@ -2519,6 +2531,12 @@ mod tests {
         frames[1000].cpu_frame_time = Duration::from_micros(5000);
         frames[1001].holding = true;
         frames[1002].fast_travel_hold = Some(Duration::from_millis(80));
+        frames[5].materials_refused = 2;
+        frames[1003].materials_refused = 1;
+        frames[6].meshes_refused = 1;
+        frames[400].renderables_refused = 4;
+        frames[7].chunks_not_loaded = 2;
+        frames[1004].chunks_not_loaded = 1;
         let traversal = Traversal::of(&frames, configuration.warm_up_frames as usize);
         assert_eq!(traversal.frames, 2048);
         assert_eq!(traversal.cpu_frame_microseconds.maximum, Some(5000.0));
@@ -2526,6 +2544,15 @@ mod tests {
         assert_eq!(traversal.gpu_frame_microseconds.maximum, Some(300.0));
         assert_eq!((traversal.late_chunks, traversal.late_mips), (2, 5));
         assert_eq!(traversal.peak_gpu_memory_bytes, 7_000_000_000);
+        assert_eq!(
+            (traversal.materials_refused, traversal.meshes_refused),
+            (3, 1)
+        );
+        assert_eq!(
+            (traversal.renderables_refused, traversal.lights_refused),
+            (4, 2)
+        );
+        assert_eq!(traversal.chunks_not_loaded, 3);
         assert_eq!(
             traversal.fast_travel_hold,
             Some(FastTravelHold {

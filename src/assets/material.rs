@@ -459,9 +459,13 @@ pub struct MaterialPool {
     /// The Materials no load uses any more, which stay loaded until a
     /// refused load frees them.
     unused: Unused<AssetId>,
-    /// Materials and Textures freed to make room since `take_frame_frees`;
-    /// frees to make room stop once it reaches `ENTRIES_FREED_PER_FRAME`.
+    /// Materials and Textures freed to make room since `take_frame_frees`.
     frame_frees: usize,
+    /// Of `frame_frees`, those `free_least_recently_used` made, which stop
+    /// once they reach `ENTRIES_FREED_PER_FRAME`.
+    capped_frees: usize,
+    /// Materials refused since `take_refusals`.
+    refusals: u32,
     colour_sampler: wgpu::Sampler,
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -571,6 +575,8 @@ impl MaterialPool {
             loaded_materials: HashMap::new(),
             unused: Unused::default(),
             frame_frees: 0,
+            capped_frees: 0,
+            refusals: 0,
             colour_sampler,
             data_sampler,
             bind_group_layout,
@@ -605,10 +611,11 @@ impl MaterialPool {
         Some(MaterialHandle { index, generation })
     }
 
-    /// Whether the SSBO is full, logged when it is.
-    fn refused_as_full(&self) -> bool {
+    /// Whether the SSBO is full, logged and counted when it is.
+    fn refused_as_full(&mut self) -> bool {
         let full = self.generations.full(self.material_capacity);
         if full {
+            self.refusals += 1;
             tracing::warn!(
                 capacity = self.material_capacity,
                 "Material refused: the Material SSBO is full"
@@ -651,13 +658,22 @@ impl MaterialPool {
         tracing::debug!(?handle, "Material freed");
     }
 
-    /// Frees the least recently used unused Material as `free` does, and
-    /// tells `reader` which Assets it freed; false when none is unused or the
-    /// frame freed `ENTRIES_FREED_PER_FRAME` entries already.
+    /// Frees the least recently used unused Material as `free_unused` does;
+    /// false also when its frees since `take_frame_frees` reached
+    /// `ENTRIES_FREED_PER_FRAME`.
     pub fn free_least_recently_used(&mut self, reader: &dyn AssetReader) -> bool {
-        if self.frame_frees >= ENTRIES_FREED_PER_FRAME {
+        if self.capped_frees >= ENTRIES_FREED_PER_FRAME {
             return false;
         }
+        let frees_before = self.frame_frees;
+        let freed = self.free_unused(reader);
+        self.capped_frees += self.frame_frees - frees_before;
+        freed
+    }
+
+    /// Frees the least recently used unused Material as `free` does, and
+    /// tells `reader` which Assets it freed; false when none is unused.
+    fn free_unused(&mut self, reader: &dyn AssetReader) -> bool {
         let Some(id) = self.unused.pop_least_recent() else {
             return false;
         };
@@ -707,7 +723,13 @@ impl MaterialPool {
     /// Materials and Textures freed to make room since the last call, which
     /// renews the frame's `ENTRIES_FREED_PER_FRAME`.
     pub fn take_frame_frees(&mut self) -> usize {
+        self.capped_frees = 0;
         std::mem::take(&mut self.frame_frees)
+    }
+
+    /// Materials refused since the last call.
+    pub fn take_refusals(&mut self) -> u32 {
+        std::mem::take(&mut self.refusals)
     }
 
     /// Which Material Handles find a Material, and how many Materials were
@@ -757,10 +779,11 @@ impl MaterialPool {
     /// Loads the Material `id` from `reader`, and each Texture it samples, once
     /// per Asset ID, written through `staging`, and returns its Handle, or
     /// the SSBO's refusal when it is full; a load of a loaded Material counts
-    /// one more user of it. A full SSBO frees unused Materials, least
-    /// recently used first, to make room, and once none is left has
-    /// `make_room` free what keeps Materials in use. A Channel the Material
-    /// lacks samples Layer 0, as does one already full.
+    /// one more user of it. A full SSBO frees the least recently used unused
+    /// Material, past `ENTRIES_FREED_PER_FRAME`, as each such free makes the
+    /// one entry the load needs, and once none is left has `make_room` free
+    /// what keeps Materials in use. A Channel the Material lacks samples
+    /// Layer 0, as does one already full.
     pub fn load_making_room(
         &mut self,
         device: &wgpu::Device,
@@ -776,9 +799,9 @@ impl MaterialPool {
             }
             return Ok(loaded.handle);
         }
-        while self.generations.full(self.material_capacity) && self.free_for_room(reader, make_room)
-        {
-        }
+        while self.generations.full(self.material_capacity)
+            && (self.free_unused(reader) || make_room(self))
+        {}
         if self.refused_as_full() {
             anyhow::bail!("the Material pool refused Material {id}");
         }
@@ -1703,6 +1726,67 @@ mod tests {
             pool.coarsest_evictable_needs(&needing(3)),
             HashMap::from([(class, 3)])
         );
+    }
+
+    /// Reads every Material as one of factors alone.
+    struct FactorsReader;
+
+    impl AssetReader for FactorsReader {
+        fn material(&self, _id: AssetId) -> anyhow::Result<CookedMaterial> {
+            Ok(CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures: [None; 5],
+            })
+        }
+        fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture> {
+            anyhow::bail!("no Texture {id}")
+        }
+        fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
+            anyhow::bail!("no Mesh {id}")
+        }
+        fn chunk(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedChunk> {
+            anyhow::bail!("no Chunk {id}")
+        }
+    }
+
+    /// With a Material table of 65 full of unused Materials, one frame loads
+    /// 65 more, each freeing one, past the 64 entries a frame frees for
+    /// other room, which those frees leave untouched.
+    #[test]
+    fn a_full_material_table_frees_an_unused_material_for_each_load_past_the_frames_frees() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities {
+            materials: 65,
+            ..PoolCapacities::checked_in()
+        };
+        let memory = gpu_memory(&context);
+        let mut pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        let mut load = |pool: &mut MaterialPool, id: u128| {
+            pool.load(&context.device, &mut staging, &FactorsReader, AssetId(id))
+        };
+        for id in 0..65 {
+            load(&mut pool, id).unwrap();
+            pool.remove_user(AssetId(id));
+        }
+
+        let (loaded, log) = logged(|| {
+            (65..130)
+                .map(|id| load(&mut pool, id).is_ok())
+                .collect::<Vec<_>>()
+        });
+        assert!(loaded.iter().all(|&loaded| loaded), "{log}");
+        pool.remove_user(AssetId(65));
+        assert!(pool.free_least_recently_used(&FactorsReader));
+        assert_eq!(pool.take_frame_frees(), 66);
+        assert_eq!(ENTRIES_FREED_PER_FRAME, 64);
     }
 
     /// Budgets for four Materials make an SSBO of four; the next gets no

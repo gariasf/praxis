@@ -276,6 +276,9 @@ impl State {
         self.recorder.counters.bytes_read = streamed.bytes_read;
         self.recorder.counters.uploaded_bytes += streamed.written_bytes;
         self.recorder.counters.pool_entries_freed = streamed.pool_entries_freed;
+        self.recorder.counters.meshes_refused = streamed.meshes_refused;
+        self.recorder.counters.materials_refused = streamed.materials_refused;
+        self.recorder.counters.chunks_not_loaded = streamed.chunks_not_loaded;
         self.recorder.counters.late_mips = streamed.late_mips;
         self.recorder.counters.holding = streamed.holding;
         self.recorder.counters.fast_travel_hold = streamed.fast_travel_hold;

@@ -26,16 +26,21 @@ pub(crate) trait ChunkIo {
 
     /// A load that finished since the last call, if any. A load finishes
     /// once its Chunk's content is applied and the Assets it names are
-    /// Resident: the lead and the Settled report count to that point.
+    /// Resident, the point the lead and the Settled report count to, or once
+    /// it failed.
     fn take_finished(&mut self) -> Option<FinishedLoad>;
 }
 
 /// A Chunk whose load finished, and the Mesh and Material Asset IDs its
-/// Placements name, in Placement order.
+/// Placements name, in Placement order, or none when the load failed.
 pub(crate) struct FinishedLoad {
     pub coordinates: [i32; 2],
-    pub assets: Vec<AssetId>,
+    pub assets: Option<Vec<AssetId>>,
 }
+
+/// The most frames a Chunk whose loads keep failing waits before its next
+/// request; each failure doubles the wait from one frame up to it.
+const LONGEST_RETRY_FRAMES: u64 = 1024;
 
 /// What one frame's update decided. Coordinates are x then z.
 #[derive(Clone, Debug, Default)]
@@ -44,6 +49,9 @@ pub(crate) struct ChunkFrame {
     pub requested: Vec<[i32; 2]>,
     /// Chunks whose loads finished this frame, in the order IO gave them.
     pub loaded: Vec<[i32; 2]>,
+    /// Chunks whose loads failed this frame, in the order IO gave them, each
+    /// requested again on a later frame.
+    pub not_loaded: Vec<[i32; 2]>,
     /// Loaded Chunks outside the Load radius: kept, but neither drawn nor
     /// traced.
     pub held: Vec<[i32; 2]>,
@@ -74,7 +82,10 @@ pub(crate) struct ChunkStreamer {
     /// Each requested Chunk not yet loaded, and the frame it was requested
     /// on.
     in_flight: HashMap<[i32; 2], u64>,
-    /// Chunks counted as Late Chunks whose loads have not finished.
+    /// Each Chunk whose latest load failed: its failures in a row, and the
+    /// frame from which it may be requested again.
+    failed: HashMap<[i32; 2], (u32, u64)>,
+    /// Chunks counted as Late Chunks that have not loaded.
     counted_late: HashSet<[i32; 2]>,
     within_load_radius: HashSet<[i32; 2]>,
     within_load_radius_before: HashSet<[i32; 2]>,
@@ -105,6 +116,7 @@ impl ChunkStreamer {
             loaded: BTreeMap::new(),
             users: HashMap::new(),
             in_flight: HashMap::new(),
+            failed: HashMap::new(),
             counted_late: HashSet::new(),
             within_load_radius: HashSet::new(),
             within_load_radius_before: HashSet::new(),
@@ -130,6 +142,7 @@ impl ChunkStreamer {
         let frame = &mut self.frame;
         frame.requested.clear();
         frame.loaded.clear();
+        frame.not_loaded.clear();
         frame.held.clear();
         frame.unloaded.clear();
         frame.last_users.clear();
@@ -144,16 +157,25 @@ impl ChunkStreamer {
             let Some(requested_on) = self.in_flight.remove(&load.coordinates) else {
                 continue;
             };
+            let Some(assets) = load.assets else {
+                let (failures, retry_on) = self.failed.entry(load.coordinates).or_default();
+                *failures += 1;
+                let wait_frames = 2u64.saturating_pow(*failures - 1);
+                *retry_on = self.frame_number + wait_frames.min(LONGEST_RETRY_FRAMES);
+                frame.not_loaded.push(load.coordinates);
+                continue;
+            };
+            self.failed.remove(&load.coordinates);
             self.counted_late.remove(&load.coordinates);
             self.load_frames = self.frame_number - requested_on;
             if distance_metres(camera, load.coordinates) > hold_radius_metres {
                 continue;
             }
-            for &asset in &load.assets {
+            for &asset in &assets {
                 *self.users.entry(asset).or_default() += 1;
             }
             frame.loaded.push(load.coordinates);
-            self.loaded.insert(load.coordinates, load.assets);
+            self.loaded.insert(load.coordinates, assets);
         }
 
         let users = &mut self.users;
@@ -202,7 +224,11 @@ impl ChunkStreamer {
                     frame.late_chunks += 1;
                 }
             }
-            if !loaded && !self.in_flight.contains_key(&coordinates) {
+            let waits_to_retry = self
+                .failed
+                .get(&coordinates)
+                .is_some_and(|&(_, retry_on)| self.frame_number < retry_on);
+            if !loaded && !self.in_flight.contains_key(&coordinates) && !waits_to_retry {
                 self.requests.push((metres, coordinates));
             }
         }
@@ -315,10 +341,12 @@ mod tests {
     }
 
     /// Loads that finish a set number of frames after their request, all
-    /// in `load_frames` unless `delays` names the Chunk.
+    /// in `load_frames` unless `delays` names the Chunk, and fail as often
+    /// as `failures` says before they load.
     struct ScriptedIo {
         load_frames: u32,
         delays: HashMap<[i32; 2], u32>,
+        failures: HashMap<[i32; 2], u32>,
         frame: u32,
         in_flight: Vec<(u32, [i32; 2])>,
     }
@@ -328,6 +356,7 @@ mod tests {
             Self {
                 load_frames,
                 delays: HashMap::new(),
+                failures: HashMap::new(),
                 frame: 0,
                 in_flight: Vec::new(),
             }
@@ -350,9 +379,16 @@ mod tests {
                 .iter()
                 .position(|&(finishes, _)| finishes <= self.frame)?;
             let (_, coordinates @ [x, z]) = self.in_flight.remove(position);
+            if let Some(failures @ 1..) = self.failures.get_mut(&coordinates) {
+                *failures -= 1;
+                return Some(FinishedLoad {
+                    coordinates,
+                    assets: None,
+                });
+            }
             Some(FinishedLoad {
                 coordinates,
-                assets: vec![mesh(x), material(z)],
+                assets: Some(vec![mesh(x), material(z)]),
             })
         }
     }
@@ -565,6 +601,28 @@ mod tests {
             })
             .collect();
         assert_eq!(late, [0, 0, 1, 0, 0]);
+    }
+
+    #[test]
+    fn a_failed_load_is_requested_again_a_frame_later_then_twice_as_late_each_time_until_it_loads()
+    {
+        let (mut streamer, mut io) = (streamer(), ScriptedIo::new(1));
+        io.failures.insert([1, 1], 3);
+        let frames: Vec<ChunkFrame> = (0..12)
+            .map(|_| step(&mut streamer, &mut io, middle_of([0, 0]), false))
+            .collect();
+
+        let frames_where = |chunks: fn(&ChunkFrame) -> &Vec<[i32; 2]>| -> Vec<usize> {
+            (frames.iter().enumerate())
+                .filter(|(_, frame)| chunks(frame).contains(&[1, 1]))
+                .map(|(index, _)| index)
+                .collect()
+        };
+        assert_eq!(frames_where(|frame| &frame.requested), [0, 2, 5, 10]);
+        assert_eq!(frames_where(|frame| &frame.not_loaded), [1, 3, 6]);
+        assert_eq!(frames_where(|frame| &frame.loaded), [11]);
+        assert!(frames[1..11].iter().all(|frame| !frame.settled));
+        assert!(frames[11].settled);
     }
 
     #[test]

@@ -94,6 +94,12 @@ pub struct FrameStats {
     /// Meshes, Materials and Textures freed to make room for the frame's
     /// loads.
     pub pool_entries_freed: u32,
+    /// Meshes the Mesh pool refused since the frame before.
+    pub meshes_refused: u32,
+    /// Materials the Material pool refused since the frame before.
+    pub materials_refused: u32,
+    /// Chunks whose loads failed this frame, each requested again later.
+    pub chunks_not_loaded: u32,
     /// Late mips: mips the frame's drawn Chunks need, by their Textures'
     /// priority, that are not Resident.
     pub late_mips: u32,

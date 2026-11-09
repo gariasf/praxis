@@ -248,6 +248,10 @@ impl AssetLoader for CookingLoader<'_> {
         self.cook_for_spawn(id)?;
         self.loader.chunk(id)
     }
+
+    fn remove_users(&mut self, meshes: &[AssetId], materials: &[AssetId]) {
+        self.loader.remove_users(meshes, materials);
+    }
 }
 
 #[cfg(test)]

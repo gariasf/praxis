@@ -315,6 +315,19 @@ impl std::fmt::Display for Traversal {
                 Some(self.peak_gpu_memory_bytes as f64),
                 0,
             ),
+            ("Meshes refused", Some(self.meshes_refused as f64), 0),
+            ("Materials refused", Some(self.materials_refused as f64), 0),
+            (
+                "Renderables refused, most in a frame",
+                Some(self.renderables_refused as f64),
+                0,
+            ),
+            (
+                "Lights refused, most in a frame",
+                Some(self.lights_refused as f64),
+                0,
+            ),
+            ("Chunks not loaded", Some(self.chunks_not_loaded as f64), 0),
             (
                 "Fast-travel hold, ms",
                 hold.map(|hold| hold.milliseconds),
