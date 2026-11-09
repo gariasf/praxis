@@ -33,14 +33,18 @@ its commit.
 
 **Verdict.** `world`'s CPU frame fails M4's frame criterion on its bench
 segment in every round: its p99 reads 6.55 to 6.81 ms against 6 ms, and
-its maximum 26.3 to 35.8 ms against 16.7 ms. The maximum is the frame
+its maximum 26.3 to 35.8 ms against 16,667 µs. The maximum is the frame
 that opens Texture classes and the Fast travel's arrival (#743); the p99
-is the frames that submit a static TLAS build (#744). Its GPU frame,
-p99 6.31 to 6.60 ms and maximum 10.7 to 11.5 ms, and ADR 0019's gate,
-p99 2.10 to 2.16 ms, hold. No Budget is newly breached: every line over
-its Budget was over it in the Baselines before. The top three offenders
-are `world`'s CPU maximum (#743), `town`'s GPU frame and gate (#602) and
-`world`'s CPU p99 (#744).
+is the frames that submit a static TLAS build (#744). The arrival frame
+also fails the Fast travel criterion's clause that every frame of the
+hold meets the frame criterion, though the hold itself, 29.0 to 45.1 ms,
+stays within its 50 ms. A newly loaded Chunk was traced within N = 6
+frames in two rounds and within 7 in the third. Its GPU frame, p99 6.31
+to 6.60 ms and maximum 10.7 to 11.5 ms, and ADR 0019's gate, p99 2.10 to
+2.16 ms, hold. No Budget is newly breached: every line over its Budget
+was over it in the Baselines before, though four of them moved further
+over (below). The top three offenders are `world`'s CPU maximum (#743),
+`town`'s GPU frame and gate (#602) and `world`'s CPU p99 (#744).
 
 Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, a release build of
 `99409bc8`: `main` at `dfc827b9` plus the traversal's table of each kind
@@ -51,7 +55,7 @@ frames per scene (`world` 3,352), rays on then off, under `caffeinate
 of every scene, started at 17:02, 17:17 and 17:36 UTC, each once
 preflight read quiet four times in a row: one-minute loads of 1.24, 1.26
 and 1.30 and GPU loads of 2, 3 and 1% in the Provenance. A round at
-17:07 is left out: Docker's virtual machine held 74 to 270% of a core
+17:07 is left out: a virtual machine held 74 to 270% of a core
 and Spotlight's import 65% during it, and three light scenes' CPU
 frames read 11 to 38% over their Baselines. Every scene of the kept
 rounds is stamped quiet but `world`, whose GPU frame p95 over median,
@@ -106,7 +110,7 @@ Baseline before:
 | `shadow_mask_pass` | 2,920.8 | 3,359.0 | 3,406.2 | 4,354.1 | 2,916.5 | 3,349.9 | +4.2 | 1.001 | — |
 | `tonemapping_pass` | 368.2 | 377.0 | 411.4 | 1,237.8 | 368.2 | 377.5 | -0.1 | 1.000 | — |
 
-Over the same frames it loaded 42 Chunks, none late, with 50 late mips;
+Over its 3,352 measured frames it loaded 42 Chunks, none late, with 50 late mips;
 the Fast travel's hold took 43.5 ms over 2 frames, and the most frames a
 loaded Chunk waited to be traced was 6.
 
@@ -114,21 +118,27 @@ loaded Chunk waited to be traced was 6.
 
 - **Frames under streaming**, `world`'s segment: CPU p99 6.55 to 6.81
   ms (109 to 114% of 6 ms) and maximum 26.3 to 35.8 ms (158 to 215% of
-  16.7 ms) in every round; GPU frame p99 6.31 to 6.60 ms, maximum 10.7
+  16,667 µs) in every round; GPU frame p99 6.31 to 6.60 ms, maximum 10.7
   ms in the best round; gate p99 2.10 to 2.16 ms.
 - **Where `world`'s CPU frame goes**, from a per-frame probe of three
   more runs of the segment: frame 1713 opens two Texture classes, 170.7
   MB of `texture_pool` in one frame, inside 29.4 to 30.1 ms of
   `stream_chunks`; the Fast travel's arrival frame reads 17.2 to 35.3
   ms, from another class or from its upload and prepare. The 52 static
-  TLAS builds in the measured frames take 5.4 to 17.6 ms each on their
-  worker, apart from the frame, but the frames that submit them read 0.4
-  to 4.3 ms of `static_tlas_update` and up to 3.6 ms of `submit`; 32 of
+  TLAS builds in each run's measured frames take 5.2 to 18.6 ms each on
+  their worker, apart from the frame as Frame stats count it, so no build
+  falls on the critical path; but the frames that submit them read 0.3
+  to 4.5 ms of `static_tlas_update` and up to 3.6 ms of `submit`; 32 of
   them pass 6 ms, and without them the p99 reads 5.9 to 6.1 ms.
 - **Fast travel**: 29.0, 43.5 and 45.1 ms over 2 to 3 frames, within
-  the 50 ms recorded; its arrival frame is #743's.
+  the 50 ms recorded; but the frames of a 43.5 ms hold over 2 frames
+  cannot all meet 16,667 µs, and the probe's held arrival frame read
+  17.2 and 27.6 ms of CPU: #743.
 - **Frames until traced**: 6, 6 and 7 against N = 6; the third round's
   7 is the first over it in seven runs of the segment.
+- **The full traversal**: CPU frame p99 5,892.0 µs and maximum 44,024.5
+  µs, GPU frame p99 4,937.7 µs and maximum 10,510.5 µs, 0 Late Chunks,
+  the Fast travel's hold 11.2 ms over 1 frame.
 - **`town`**: GPU frame 19.99 to 20.00 ms (167%) with a maximum of 21.4
   to 21.6 ms, gate 8.57 to 8.63 ms (143 to 144%), both #602; CPU frame 5.31 to
   5.36 ms at the median, under 6 ms again, and 5.96 to 6.21 ms at p99,
@@ -139,13 +149,18 @@ loaded Chunk waited to be traced was 6.
 - **GPU memory, 8 GB**: the full traversal peaks at 1,087,759,920 B
   (13.6%), each kind within its Budget, `geometry_arenas` filling its
   fixed Arenas to 8 bytes of it and `scene_and_pass_buffers` at 97%.
+- **Lines already over their Budget that moved further over**, against
+  the Baselines before: `world`'s CPU p99, 6,244.0 to 6,704.6 µs, and
+  its dynamic TLAS line, 1,124.1 to 1,187.5 µs at the median; `town`'s
+  GPU frame p99, 20,718.1 to 20,980.4 µs, and its gate p99, 9,055.8 to
+  9,346.3 µs. Each is one of the tickets above.
 
 ### Top three offenders
 
 Ranked by their share of the Budget each breaches:
 
 1. **`world`'s CPU frame maximum, 26.3 to 35.8 ms** (158 to 215% of
-   16.7 ms): Texture classes created whole inside one frame's
+   16,667 µs): Texture classes created whole inside one frame's
    `stream_chunks`, and the Fast travel's arrival frame. #743
 2. **`town`'s GPU frame, 20.0 ms, and gate, 8.6 ms** (167% and 143 to 144%):
    shadow rays and the triangles drawn, placed at M5's LOD. #602
