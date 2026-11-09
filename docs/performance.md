@@ -29,6 +29,152 @@ its commit.
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 
+## `world`'s CPU p99: each submit walked one dependency per static Instance (2026-11-09, #744)
+
+**Verdict.** On wgpu-core 30.0.1, every submit that builds or binds a
+static TLAS walked one dependency per static Instance, about 139,000 to
+149,000 on `world`'s bench segment, and wgpu-hal added each to a new
+Metal residency set. A static build's submit took 2,481 µs at the
+median and the frame's own submit 1,949 µs, and a frame that submitted
+a build read 6.58 ms of CPU against 3.93 ms for the others. The builds
+were only the sharpest part of the p99: without their cost it still
+read 5.88 ms, led by the frame's own submit. `vendor/wgpu-core` now
+carries upstream's dedup [ref:wgpu-pr-9835], so each walk covers the 18
+or 19 distinct BLASes: both submits read under 50 µs, and over three
+interleaved quiet rounds `world`'s CPU p99 reads 2,345 to 2,574 µs
+against 6,444 to 6,660 µs on `main`. `town`'s CPU frame falls from
+5.39–5.80 to 1.55–1.56 ms at the median, and both scenes' dynamic TLAS
+CPU lines fall under their 1.1 ms ceiling. When builds happen is
+unchanged; frames until traced read 7 in every round against 6, within
+N = 8. `world`'s GPU frame and gate medians hold, but their p99s rise
+and its GPU maximum reaches 12.0 ms (Also seen).
+
+Apple M4 Pro, macOS 27.0.1, Metal, release builds of `main` at
+`addc1305` and of this change on it. `praxis bench <dir> --no-publish
+world town` at 2560×1440 with 4x MSAA, the builds interleaved over three
+rounds, each run, the probes' included, started once preflight read
+quiet four times in a row (one-minute loads 1.17 to 1.49, GPU load 1%),
+under `caffeinate -dims`,
+AC power, no other praxis process. The steps come from a measurement
+patch, not committed, on each build: #672's per-frame dump of Frame
+stats in `bench::run`, and timers in a copy of wgpu-core 30.0.1's
+`Queue::submit`, with and without the dedup, around
+`validate_command_buffer`, `set_acceleration_structure_dependencies` and
+wgpu-hal's residency call inside it, `into_baked_commands`, which drops
+the command buffer's dependency list, and the hal submit. Each probe ran
+the segment once, quiet, and its frames' stages were read from a run
+without the per-submit print. Medians over the 3,354 measured frames,
+52 of which submit a build.
+
+### A build frame, step by step
+
+The main thread's stages, µs:
+
+| Stage | Build frames, 30.0.1 | Other frames, 30.0.1 | Build frames, dedup | Other frames, dedup |
+|---|---:|---:|---:|---:|
+| `static_tlas_update` | 2,587.8 | 8.6 | 93.8 | 8.5 |
+| `submit` | 1,951.0 | 1,978.0 | 47.2 | 43.9 |
+| `dynamic_tlas` | 632.4 | 642.5 | 653.8 | 613.0 |
+| `dynamic_tlas_submit` | 485.3 | 481.3 | 23.9 | 18.8 |
+| `prepare_frame` | 343.5 | 328.5 | 331.1 | 326.4 |
+| `encode` | 263.4 | 206.8 | 270.3 | 190.2 |
+| `propagate_world_transforms` | 119.8 | 112.8 | 117.0 | 114.5 |
+| `record_previous_world_transforms` | 42.0 | 41.0 | 38.4 | 38.3 |
+| `upload` | 37.5 | 31.9 | 47.4 | 30.4 |
+| `stream_chunks` | 23.0 | 19.6 | 20.9 | 16.1 |
+| CPU frame | 6,580.9 | 3,929.9 | 1,697.2 | 1,423.5 |
+
+Inside wgpu-core's `Queue::submit`, µs; each row is its own median, so
+the rows do not sum to the total:
+
+| Step | Build's submit, 30.0.1 | Build's submit, dedup | Frame's submit, 30.0.1 | Frame's submit, dedup |
+|---|---:|---:|---:|---:|
+| Dependencies walked | 138,822 | 18 | 149,073 | 19 |
+| Validation: each dependency's build checked, and for a build the TLAS's list replaced | 635.8 | 1.4 | 243.7 | 0.7 |
+| `set_acceleration_structure_dependencies`, wgpu-core's walk | 261.0 | 2.2 | 265.3 | 0.3 |
+| Its Metal residency set, one `addAllocation` per dependency [ref:wgpu-hal-30-metal-residency-per-submit] | 1,271.1 | 22.2 | 1,390.0 | 11.1 |
+| Dropping the command buffer's list | 222.6 | 0.5 | 0.2 | 0.0 |
+| The hal submit | 10.8 | 14.2 | 28.4 | 23.3 |
+| Total | 2,481.1 | 49.5 | 1,949.4 | 45.8 |
+
+The build's own submit is the whole difference between a build frame
+and another: 2,481 of `static_tlas_update`'s 2,588 µs. The worker's time
+on a build is the same on both, 9.6 and 9.5 ms at the median (4.9 to
+16.8 ms), and the frame's `submit` stage now matches wgpu-core's
+`Queue::submit`.
+
+### Against `main`
+
+From `praxis report` of each round, µs:
+
+| Line | `main`, three rounds | Dedup, three rounds |
+|---|---|---|
+| `world` CPU frame median | 4,062.9 / 4,120.1 / 4,137.3 | 1,550.3 / 1,625.8 / 1,545.1 |
+| `world` CPU frame p99 | 6,659.5 / 6,443.6 / 6,539.6 | 2,344.9 / 2,574.0 / 2,431.2 |
+| `world` CPU frame maximum | 42,534.5 / 34,116.8 / 34,012.2 | 24,383.4 / 39,378.4 / 35,571.0 |
+| `world` dynamic TLAS, CPU median | 1,267.8 / 1,296.7 / 1,319.0 | 764.8 / 809.0 / 763.2 |
+| `world` GPU frame median | 4,845.2 / 4,851.7 / 4,851.6 | 4,838.8 / 4,838.3 / 4,846.7 |
+| `world` GPU frame p99 | 6,175.9 / 6,200.6 / 6,200.7 | 6,954.8 / 6,403.7 / 6,892.0 |
+| `world` GPU frame maximum | 9,715.0 / 10,695.4 / 10,827.7 | 11,954.8 / 11,927.3 / 12,008.5 |
+| `world` gate p99 | 2,001.5 / 1,857.1 / 1,797.0 | 3,161.9 / 2,799.0 / 2,813.7 |
+| `world` frames until traced, most | 6 / 6 / 6 | 7 / 7 / 7 |
+| `town` CPU frame median | 5,796.8 / 5,393.8 / 5,431.1 | 1,561.8 / 1,549.2 / 1,549.8 |
+| `town` CPU frame p99 | 9,596.5 / 5,888.0 / 6,083.3 | 1,968.5 / 2,000.6 / 1,957.8 |
+| `town` dynamic TLAS, CPU median | 1,468.8 / 1,323.3 / 1,338.2 | 811.5 / 799.6 / 802.7 |
+| `town` GPU frame median | 20,063.8 / 20,009.3 / 20,014.0 | 20,001.2 / 19,988.1 / 19,972.0 |
+
+`world`'s middle round in full, the dedup's:
+
+| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 1,625.8 | 2,003.1 | 2,574.0 | 39,378.4 | 4,112.3 | 5,647.5 | -2,486.5 | 0.395 | 6,000.0 |
+| Dynamic TLAS, CPU | 809.0 | 931.3 | 998.0 | 2,327.5 | 1,187.5 | 1,377.2 | -378.5 | 0.681 | 1,100.0 |
+| GPU frame | 4,838.3 | 5,498.5 | 6,403.7 | 11,927.3 | 4,857.5 | 5,591.9 | -19.1 | 0.996 | 12,000.0 |
+| Gate, rays off | 1,288.3 | 1,528.0 | 2,799.0 | 7,409.1 | 1,278.7 | 1,499.7 | +9.6 | 1.008 | 6,000.0 |
+| Shadow-ray time | 2,607.8 | 3,487.5 | 4,520.8 | 9,580.9 | 2,596.5 | 3,286.7 | +11.3 | 1.004 | — |
+
+`praxis compare` adds two warnings beside the Budget failures `main` has
+too (`town`'s GPU frame and gate, #602; `world`'s CPU maximum, #743):
+`world`'s `dynamic_tlas_build` pass at 106.4 to 106.9 µs against its
+Baseline's 90.2 (`main` 88.5 to 89.3) and `phase_two_depth_pass` 6 to 8%
+over its Baseline. No counter rises; two fall, in the counter frames:
+`heap_allocations` from 10,510 to 10,473 a frame and
+`tlas_build_allocations` from 10,082 to 10,071. Every Reference scene's
+gallery image is identical to `main`'s, no channel of any pixel
+differing.
+
+### Why the submit, not fewer builds
+
+Published practice rebuilds the whole TLAS every frame, on an async
+queue where there is one (Epic, Frostbite, Ubisoft), and spreads BLAS
+work over frames (Battlefield V); a rebuild every frame takes each
+change as it comes, so none of it batches builds, and the spare TLAS
+rebuilt off the frame that Praxis swaps in is Ize, Wald and Parker's
+(`docs/research/acceleration-structures-for-streamed-worlds.md`,
+techniques 1 to 6). The cost here was not the builds' count: in #672's
+three probe runs and this one, with every build's own cost taken out of
+its frame, the p99 still reads 5.88 to 6.09 ms, led by the frame's own
+submit, which no build schedule touches. Merging each pair of builds
+three frames apart, the cheapest change to the schedule, leaves 6.17 to
+6.38 ms. With the dedup a build frame costs about 270 µs more than
+another, so the schedule stays as it is.
+
+### Also seen
+
+- `world`'s GPU frame p99 rises to 6.40–6.95 ms from 6.18–6.20, its
+  maximum to 11.9–12.0 ms from 9.7–10.8, and its gate p99 to 2.80–3.16
+  ms from 1.80–2.00, with every median unchanged; all within M4's
+  criterion 1. The slow GPU frames no longer follow builds: in the
+  probe runs, 19 of `main`'s 25 GPU frames over 6.5 ms fell within
+  three frames after a build's submit, and 5 of the dedup's 33. The main
+  thread now finishes a frame in about 1.4 ms against the GPU's 4.85, so
+  every frame queues behind the one before, which #378 found grows
+  `town`'s GPU frame by 1.1 ms once its CPU frame outpaced its GPU. This
+  note does not verify that cause on `world`, nor why the dynamic TLAS's
+  build pass reads 17 µs more.
+- Frames until traced read 7 against 6, with the worker's time per build
+  unchanged; this note does not find why one more frame passes.
+
 ## M4 exit (2026-11-09, #672)
 
 **Verdict.** `world`'s CPU frame fails M4's frame criterion on its bench

@@ -92,7 +92,11 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **Structure:** Single crate: a library plus a thin binary.
 
 Pinned in `Cargo.toml`. Version bumps and new dependencies are owner
-decisions: propose them in the ticket, justify them in the PR.
+decisions: propose them in the ticket, justify them in the PR. One
+standing exception: until wgpu 31 ships, a fix Praxis needs from wgpu's
+trunk is carried on a vendored 30.0.1 crate under `vendor/`, behind
+`[patch.crates-io]`, without a further decision; `vendor/README.md` names
+each upstream commit applied.
 
 ## Project shape (feature-based)
 
@@ -264,6 +268,9 @@ scripts/sweep.sh               # the nightly sweep: re-benches a slower
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets
+vendor/                        # crates.io crates carrying upstream fixes
+                                 until their release (README.md): wgpu-core
+                                 30.0.1 with the TLAS dependency dedup
 ```
 
 Rendering **pulls** from `World` (Design Principle #3 in `ROADMAP.md`):
