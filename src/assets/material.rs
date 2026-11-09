@@ -459,10 +459,11 @@ pub struct MaterialPool {
     /// The Materials no load uses any more, which stay loaded until a
     /// refused load frees them.
     unused: Unused<AssetId>,
-    /// Materials and Textures freed to make room since `take_frame_frees`;
-    /// frees for a Texture's room stop once it reaches
-    /// `ENTRIES_FREED_PER_FRAME`.
+    /// Materials and Textures freed to make room since `take_frame_frees`.
     frame_frees: usize,
+    /// Of `frame_frees`, those `free_least_recently_used` made, which stop
+    /// once they reach `ENTRIES_FREED_PER_FRAME`.
+    capped_frees: usize,
     /// Materials refused since `take_refusals`.
     refusals: u32,
     colour_sampler: wgpu::Sampler,
@@ -574,6 +575,7 @@ impl MaterialPool {
             loaded_materials: HashMap::new(),
             unused: Unused::default(),
             frame_frees: 0,
+            capped_frees: 0,
             refusals: 0,
             colour_sampler,
             data_sampler,
@@ -657,10 +659,16 @@ impl MaterialPool {
     }
 
     /// Frees the least recently used unused Material as `free_unused` does;
-    /// false also when the frame freed `ENTRIES_FREED_PER_FRAME` entries
-    /// already.
+    /// false also when its frees since `take_frame_frees` reached
+    /// `ENTRIES_FREED_PER_FRAME`.
     pub fn free_least_recently_used(&mut self, reader: &dyn AssetReader) -> bool {
-        self.frame_frees < ENTRIES_FREED_PER_FRAME && self.free_unused(reader)
+        if self.capped_frees >= ENTRIES_FREED_PER_FRAME {
+            return false;
+        }
+        let frees_before = self.frame_frees;
+        let freed = self.free_unused(reader);
+        self.capped_frees += self.frame_frees - frees_before;
+        freed
     }
 
     /// Frees the least recently used unused Material as `free` does, and
@@ -715,6 +723,7 @@ impl MaterialPool {
     /// Materials and Textures freed to make room since the last call, which
     /// renews the frame's `ENTRIES_FREED_PER_FRAME`.
     pub fn take_frame_frees(&mut self) -> usize {
+        self.capped_frees = 0;
         std::mem::take(&mut self.frame_frees)
     }
 
@@ -1746,7 +1755,7 @@ mod tests {
 
     /// With a Material table of 65 full of unused Materials, one frame loads
     /// 65 more, each freeing one, past the 64 entries a frame frees for
-    /// other room.
+    /// other room, which those frees leave untouched.
     #[test]
     fn a_full_material_table_frees_an_unused_material_for_each_load_past_the_frames_frees() {
         let Some(context) = gpu_context() else {
@@ -1774,7 +1783,9 @@ mod tests {
                 .collect::<Vec<_>>()
         });
         assert!(loaded.iter().all(|&loaded| loaded), "{log}");
-        assert_eq!(pool.take_frame_frees(), 65);
+        pool.remove_user(AssetId(65));
+        assert!(pool.free_least_recently_used(&FactorsReader));
+        assert_eq!(pool.take_frame_frees(), 66);
         assert_eq!(ENTRIES_FREED_PER_FRAME, 64);
     }
 
