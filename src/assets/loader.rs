@@ -38,6 +38,10 @@ pub trait AssetLoader {
     /// Reads the Chunk `id`, loading none of the Assets it names.
     #[cfg_attr(not(feature = "cook"), allow(dead_code))]
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk>;
+
+    /// Counts one user fewer of each of `meshes`, loaded by `mesh`, and of
+    /// `materials`: what a load that failed after loading them gives back.
+    fn remove_users(&mut self, meshes: &[AssetId], materials: &[AssetId]);
 }
 
 /// Where the Pools read decoded Assets from, by Asset ID: the Cooked cache,
@@ -128,6 +132,15 @@ impl AssetLoader for PoolLoader<'_> {
     fn chunk(&mut self, id: AssetId) -> anyhow::Result<CookedChunk> {
         self.reader.chunk(id)
     }
+
+    fn remove_users(&mut self, meshes: &[AssetId], materials: &[AssetId]) {
+        for &mesh in meshes {
+            self.mesh_pool.remove_user(mesh, MeshUse::DrawnAndTraced);
+        }
+        for &material in materials {
+            self.material_pool.remove_user(material);
+        }
+    }
 }
 
 impl PoolLoader<'_> {
@@ -168,24 +181,33 @@ impl PoolLoader<'_> {
         }
     }
 
-    /// The Materials `mesh`'s Primitives name, Mesh `id`'s.
+    /// The Materials `mesh`'s Primitives name, Mesh `id`'s; one that fails
+    /// gives back the users of those loaded before it.
     fn materials(
         &mut self,
         id: AssetId,
         mesh: &CookedMesh,
     ) -> anyhow::Result<Vec<Option<MaterialHandle>>> {
-        mesh.primitives
-            .iter()
-            .map(|primitive| {
-                primitive
-                    .material
-                    .map(|material| {
-                        self.material(material)
-                            .with_context(|| format!("loading a Material of Mesh {id}"))
-                    })
-                    .transpose()
-            })
-            .collect()
+        let mut handles = Vec::with_capacity(mesh.primitives.len());
+        for primitive in &mesh.primitives {
+            let Some(material) = primitive.material else {
+                handles.push(None);
+                continue;
+            };
+            match self.material(material) {
+                Ok(handle) => handles.push(Some(handle)),
+                Err(error) => {
+                    let loaded = mesh.primitives.iter().zip(&handles);
+                    for material in
+                        loaded.filter_map(|(primitive, handle)| handle.and(primitive.material))
+                    {
+                        self.material_pool.remove_user(material);
+                    }
+                    return Err(error.context(format!("loading a Material of Mesh {id}")));
+                }
+            }
+        }
+        Ok(handles)
     }
 }
 
@@ -293,9 +315,11 @@ mod tests {
                 .map(|handle| handle.index)
                 .collect::<Vec<_>>()
         });
+        let users_of_material_2 = loader.material_pool.users(AssetId(2));
         let Err(missing) = loader.mesh(AssetId(5)) else {
             panic!("Mesh 5 loaded without its second Primitive's Material");
         };
+        assert_eq!(loader.material_pool.users(AssetId(2)), users_of_material_2);
 
         assert!(!log.contains("WARN"), "{log}");
         // Mesh 3 and its shadow proxy hold one entry each however often

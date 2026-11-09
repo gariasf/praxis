@@ -644,10 +644,12 @@ mod generators {
 
 #[cfg(all(test, feature = "cook"))]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::io::Write;
 
     use super::*;
+    use crate::assets::PoolCapacities;
+    use crate::cooked::AssetId;
     use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
     use crate::scenes::ReferenceScene;
     use crate::streaming::distance_metres;
@@ -728,40 +730,53 @@ mod tests {
     /// From a camera anywhere on a 64 m grid, the static Instances of the
     /// Chunks within the Load radius fit the static TLAS, and those within
     /// the hold radius, with the 10,000 Moving Instances, fit the Instance
-    /// buffer, at the checked-in Budgets.
+    /// buffer; and the Materials those Chunks name, with those the world's
+    /// Meshes name, fit the Material table, at the checked-in Budgets.
     #[test]
     fn the_densest_view_fits_the_capacities_the_budgets_give() {
         let (placements, _) = static_content();
-        let mut per_chunk = BTreeMap::<[i32; 2], u32>::new();
+        let mut per_chunk = BTreeMap::<[i32; 2], (u32, BTreeSet<AssetId>)>::new();
         for placement in &placements {
             let translation = placement.translation;
             let coordinates = [translation.x, translation.z]
                 .map(|metres| (metres / CHUNK_EDGE_METRES).floor() as i32);
-            *per_chunk.entry(coordinates).or_default() += 1;
+            let (instances, materials) = per_chunk.entry(coordinates).or_default();
+            *instances += 1;
+            materials.extend(placement.material);
         }
+        let mesh_materials: BTreeSet<&str> = (meshes().iter())
+            .flat_map(|(_, primitives)| primitives.iter().filter_map(|(_, material)| *material))
+            .collect();
         let load_radius_metres = ReferenceScene::World.load_radius_metres();
         let hold_radius_metres = load_radius_metres + CHUNK_EDGE_METRES;
         let step_metres = 64.0;
         let steps = (2.0 * WORLD_HALF_SIZE_METRES / step_metres) as u32;
-        let (mut most_loaded, mut most_held) = (0, 0);
+        let (mut most_loaded, mut most_held, mut most_materials) = (0, 0, 0);
         for column in 0..=steps {
             for row in 0..=steps {
                 let at = |index: u32| -WORLD_HALF_SIZE_METRES + f64::from(index) * step_metres;
                 let camera = glam::dvec3(at(column), 0.0, at(row));
-                let within = |radius: f64| -> u32 {
+                let within = |radius: f64| {
                     (per_chunk.iter())
-                        .filter(|(coordinates, _)| distance_metres(camera, **coordinates) <= radius)
-                        .map(|(_, instances)| instances)
-                        .sum()
+                        .filter(move |(coordinates, _)| {
+                            distance_metres(camera, **coordinates) <= radius
+                        })
+                        .map(|(_, chunk)| chunk)
                 };
-                most_loaded = most_loaded.max(within(load_radius_metres));
-                most_held = most_held.max(within(hold_radius_metres));
+                let instances_within =
+                    |radius: f64| -> u32 { within(radius).map(|(instances, _)| instances).sum() };
+                most_loaded = most_loaded.max(instances_within(load_radius_metres));
+                most_held = most_held.max(instances_within(hold_radius_metres));
+                let materials_held: BTreeSet<&AssetId> = within(hold_radius_metres)
+                    .flat_map(|(_, materials)| materials)
+                    .collect();
+                most_materials = most_materials.max(materials_held.len() + mesh_materials.len());
             }
         }
         let capacities = RenderCapacities::checked_in();
         writeln!(
             std::io::stderr(),
-            "{} static Instances, {most_loaded} at most within the Load radius, {most_held} within the hold radius",
+            "{} static Instances, {most_loaded} at most within the Load radius, {most_held} within the hold radius; {most_materials} Materials",
             placements.len()
         )
         .ok();
@@ -772,6 +787,11 @@ mod tests {
         assert!(
             most_held + DYNAMIC_TLAS_CAPACITY <= capacities.instances,
             "{most_held} held"
+        );
+        let material_capacity = PoolCapacities::checked_in().materials as usize;
+        assert!(
+            most_materials <= material_capacity,
+            "{most_materials} Materials"
         );
     }
 }

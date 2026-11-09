@@ -357,6 +357,9 @@ pub(crate) struct StreamedFrame {
     /// Bytes the frame's loads wrote into the load staging.
     pub written_bytes: u64,
     pub pool_entries_freed: u32,
+    pub meshes_refused: u32,
+    pub materials_refused: u32,
+    pub chunks_not_loaded: u32,
     pub late_mips: u32,
     /// Whether the camera still waits for a Chunk within the Load radius
     /// since it last arrived.
@@ -492,8 +495,9 @@ impl ChunkStreaming {
     /// arrived, in coordinate order and past the frame's load bytes, so
     /// their order never depends on the IO pool's timing; a load that fails
     /// then fails the frame. Ends the frame's frees to make room, which it
-    /// reports, and clears the camera's `teleported`, timing the hold of the
-    /// Fast travel it marks.
+    /// reports with the pools' refusals since the frame before, and clears
+    /// the camera's `teleported`, timing the hold of the Fast travel it
+    /// marks.
     pub(crate) fn update(
         &mut self,
         world: &mut World,
@@ -509,6 +513,8 @@ impl ChunkStreaming {
             renderer.mesh_pool.take_frame_frees() + renderer.material_pool.take_frame_frees();
         let mut streamed = streamed?;
         streamed.pool_entries_freed = frees as u32;
+        streamed.meshes_refused = renderer.mesh_pool.take_refusals();
+        streamed.materials_refused = renderer.material_pool.take_refusals();
         if !streamed.holding {
             streamed.fast_travel_hold = self.fast_travel_started.take().map(|jump| jump.elapsed());
         }
@@ -561,6 +567,7 @@ impl ChunkStreaming {
             streamed.holding = frame.holding;
             streamed.late_chunks += frame.late_chunks;
             streamed.chunks_loaded += frame.loaded.len() as u32;
+            streamed.chunks_not_loaded += frame.not_loaded.len() as u32;
             streamed.chunks_unloaded += frame.unloaded.len() as u32;
             keep_loaded_chunks(world, frame, finished, renderer);
             let mip_streaming = MipStreaming {
@@ -895,43 +902,43 @@ impl ChunkIo for FrameIo<'_> {
         if self.settle && self.io.in_flight > 0 {
             return None;
         }
-        loop {
-            let coordinates = self.next_ready()?;
-            let decoded = self.io.ready.remove(&coordinates)?;
-            let loaded = match decoded {
-                Ok(decoded) => match self.fits(&decoded.chunk) {
-                    Ok(true) => self.load(decoded),
-                    Ok(false) => {
-                        self.io.ready.insert(coordinates, Ok(decoded));
-                        return None;
-                    }
-                    Err(error) => Err(error),
-                },
+        let coordinates = self.next_ready()?;
+        let decoded = self.io.ready.remove(&coordinates)?;
+        let loaded = match decoded {
+            Ok(decoded) => match self.fits(&decoded.chunk) {
+                Ok(true) => self.load(decoded),
+                Ok(false) => {
+                    self.io.ready.insert(coordinates, Ok(decoded));
+                    return None;
+                }
                 Err(error) => Err(error),
-            };
-            match loaded {
-                Ok(chunk) => {
-                    let assets = chunk
-                        .meshes
-                        .iter()
-                        .chain(&chunk.materials)
-                        .copied()
-                        .collect();
-                    self.finished.insert(coordinates, chunk);
-                    return Some(FinishedLoad {
-                        coordinates,
-                        assets,
-                    });
-                }
-                Err(error) => {
-                    let error = error.context(format!("loading the Chunk at {coordinates:?}"));
-                    tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
-                    if self.settle {
-                        self.error.get_or_insert(error);
-                    }
-                }
+            },
+            Err(error) => Err(error),
+        };
+        let assets = match loaded {
+            Ok(chunk) => {
+                let assets = chunk
+                    .meshes
+                    .iter()
+                    .chain(&chunk.materials)
+                    .copied()
+                    .collect();
+                self.finished.insert(coordinates, chunk);
+                Some(assets)
             }
-        }
+            Err(error) => {
+                let error = error.context(format!("loading the Chunk at {coordinates:?}"));
+                tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
+                if self.settle {
+                    self.error.get_or_insert(error);
+                }
+                None
+            }
+        };
+        Some(FinishedLoad {
+            coordinates,
+            assets,
+        })
     }
 }
 

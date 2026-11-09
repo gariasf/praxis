@@ -383,6 +383,8 @@ impl AssetLoader for AssetRecorder<'_> {
         let chunk = self.chunks.get(&id).map(|chunk| (*chunk).clone());
         chunk.with_context(|| format!("Chunk {id} holds none of the scene's static content"))
     }
+
+    fn remove_users(&mut self, _meshes: &[AssetId], _materials: &[AssetId]) {}
 }
 
 /// Where a Mesh's triangles are.

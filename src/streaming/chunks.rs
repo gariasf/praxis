@@ -62,7 +62,7 @@ pub(crate) fn load_chunk(
 }
 
 /// Loads `chunk`, the Chunk `id` at `coordinates`, as `load_chunk` does once
-/// it has read it.
+/// it has read it. A load that fails gives back the users it counted.
 pub(crate) fn load_cooked_chunk(
     loader: &mut dyn AssetLoader,
     id: AssetId,
@@ -70,39 +70,16 @@ pub(crate) fn load_cooked_chunk(
     chunk: &CookedChunk,
 ) -> anyhow::Result<LoadedChunk> {
     let origin = chunk_origin(coordinates);
-    let mut meshes = HashMap::new();
-    let mut materials = HashMap::new();
     let mut mesh_ids = Vec::new();
     let mut material_ids = Vec::new();
-    let mut placements = Vec::with_capacity(chunk.placements.len());
-    for placement in &chunk.placements {
-        let mesh = match meshes.entry(placement.mesh) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                mesh_ids.push(placement.mesh);
-                *entry.insert(loader.mesh(placement.mesh)?)
-            }
-        };
-        let material = match placement.material {
-            None => None,
-            Some(material) => Some(match materials.entry(material) {
-                Entry::Occupied(entry) => *entry.get(),
-                Entry::Vacant(entry) => {
-                    material_ids.push(material);
-                    *entry.insert(loader.material(material)?)
-                }
-            }),
-        };
-        placements.push(ChunkPlacement {
-            transform: Transform {
-                translation: origin + placement.translation,
-                rotation: placement.rotation,
-                scale: placement.scale,
-            },
-            mesh,
-            material,
-        });
-    }
+    let placements = load_placements(loader, chunk, origin, &mut mesh_ids, &mut material_ids);
+    let placements = match placements {
+        Ok(placements) => placements,
+        Err(error) => {
+            loader.remove_users(&mesh_ids, &material_ids);
+            return Err(error);
+        }
+    };
     let lights = chunk
         .lights
         .iter()
@@ -124,6 +101,51 @@ pub(crate) fn load_cooked_chunk(
         materials: material_ids,
         held: false,
     })
+}
+
+/// `chunk`'s Placements at `origin`, each Mesh and Material they name loaded
+/// once, its Asset ID pushed onto `mesh_ids` or `material_ids` once loaded.
+fn load_placements(
+    loader: &mut dyn AssetLoader,
+    chunk: &CookedChunk,
+    origin: glam::DVec3,
+    mesh_ids: &mut Vec<AssetId>,
+    material_ids: &mut Vec<AssetId>,
+) -> anyhow::Result<Vec<ChunkPlacement>> {
+    let mut meshes = HashMap::new();
+    let mut materials = HashMap::new();
+    let mut placements = Vec::with_capacity(chunk.placements.len());
+    for placement in &chunk.placements {
+        let mesh = match meshes.entry(placement.mesh) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let handle = loader.mesh(placement.mesh)?;
+                mesh_ids.push(placement.mesh);
+                *entry.insert(handle)
+            }
+        };
+        let material = match placement.material {
+            None => None,
+            Some(material) => Some(match materials.entry(material) {
+                Entry::Occupied(entry) => *entry.get(),
+                Entry::Vacant(entry) => {
+                    let handle = loader.material(material)?;
+                    material_ids.push(material);
+                    *entry.insert(handle)
+                }
+            }),
+        };
+        placements.push(ChunkPlacement {
+            transform: Transform {
+                translation: origin + placement.translation,
+                rotation: placement.rotation,
+                scale: placement.scale,
+            },
+            mesh,
+            material,
+        });
+    }
+    Ok(placements)
 }
 
 #[cfg(all(test, feature = "cook"))]
@@ -270,6 +292,77 @@ mod tests {
         world.resource_mut::<LoadedChunks>().0.push(second);
         assert_eq!(prepare(&mut world), (vec![(3, 259.0)], 4, 1));
         assert_eq!(prepare(&mut world), (vec![], 4, 1));
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// With room for two Materials, a Chunk naming Mesh 1, then Materials 2,
+    /// 3 and 4 is refused at Material 4 and gives back its users of Mesh 1
+    /// and Materials 2 and 3, Material 2 keeping the user loaded before it.
+    #[test]
+    fn a_load_refused_partway_gives_back_the_users_it_counted() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-chunk-refused-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        let placement = |material: u128| CookedPlacement {
+            mesh: AssetId(1),
+            material: Some(AssetId(material)),
+            translation: glam::DVec3::ZERO,
+            rotation: glam::Quat::IDENTITY,
+            scale: glam::Vec3::ONE,
+        };
+        let refused = CookedChunk {
+            placements: [2, 3, 4].map(placement).into(),
+            lights: Vec::new(),
+            bounds: [glam::DVec3::ZERO, glam::DVec3::ONE],
+        };
+        cache
+            .write(
+                AssetId(1),
+                "key",
+                &mesh(3, vec![0, 1, 2]).to_blob().unwrap(),
+            )
+            .unwrap();
+        for id in [2, 3, 4] {
+            cache
+                .write(AssetId(id), "key", &material.to_blob())
+                .unwrap();
+        }
+        let mut staging = LoadStaging::new(context.device.clone());
+        let memory = gpu_memory(&context);
+        let capacities = PoolCapacities {
+            materials: 2,
+            ..PoolCapacities::checked_in()
+        };
+        let mut mesh_pool = MeshPool::new(&context.device, &memory, &capacities);
+        let mut material_pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        let mut loader = PoolLoader {
+            device: &context.device,
+            staging: &mut staging,
+            reader: &cache,
+            mesh_pool: &mut mesh_pool,
+            material_pool: &mut material_pool,
+        };
+        loader.material(AssetId(2)).unwrap();
+
+        let (loaded, log) =
+            logged(|| load_cooked_chunk(&mut loader, AssetId(10), [0, 0], &refused));
+        assert!(loaded.is_err(), "a Chunk past the Material table loaded");
+        assert!(log.contains("Material refused"), "not logged: {log:?}");
+        assert_eq!(mesh_pool.users(AssetId(1), MeshUse::DrawnAndTraced), 0);
+        assert_eq!(material_pool.users(AssetId(2)), 1);
+        assert_eq!(material_pool.users(AssetId(3)), 0);
         std::fs::remove_dir_all(&directory).ok();
     }
 }

@@ -26,7 +26,8 @@ pub(crate) const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 19_267_584;
 /// Unused entries each pool frees in one frame to make room for refused
 /// loads, so a load that fits nowhere cannot empty a pool in one frame; the
 /// Textures freed with a Material count, and may take the Material pool past
-/// it.
+/// it, as does a full Material table, which frees one unused Material for
+/// each Material it loads.
 pub(crate) const ENTRIES_FREED_PER_FRAME: usize = 64;
 
 /// What each pool holds, derived from the GPU memory Budgets at device
@@ -150,6 +151,8 @@ pub struct MeshPool {
     /// Meshes freed to make room since `take_frame_frees`, up to
     /// `ENTRIES_FREED_PER_FRAME`.
     frame_frees: usize,
+    /// Meshes `load_asset` refused since `take_refusals`.
+    refusals: u32,
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
@@ -189,6 +192,7 @@ impl MeshPool {
             unused: Unused::default(),
             freed: Vec::new(),
             frame_frees: 0,
+            refusals: 0,
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
             refitted_blases: Vec::new(),
@@ -353,6 +357,7 @@ impl MeshPool {
                 Err(refusal) => {
                     if !self.free_least_recently_used(released_materials) {
                         refusal.log();
+                        self.refusals += 1;
                         released_materials.extend(material_ids);
                         return None;
                     }
@@ -403,6 +408,11 @@ impl MeshPool {
     /// frame's `ENTRIES_FREED_PER_FRAME`.
     pub fn take_frame_frees(&mut self) -> usize {
         std::mem::take(&mut self.frame_frees)
+    }
+
+    /// Meshes `load_asset` refused since the last call.
+    pub fn take_refusals(&mut self) -> u32 {
+        std::mem::take(&mut self.refusals)
     }
 
     /// Writes `mesh` through `staging` into one range of each Arena, and its
