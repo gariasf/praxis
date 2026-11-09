@@ -4,6 +4,7 @@
 use std::fmt::Write;
 
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+use crate::stats::GpuMemoryKind;
 
 use super::{
     Budgets, COUNTER_COUNT, Measurements, Spread, Traversal, compared_counters,
@@ -291,8 +292,8 @@ fn ratio(current: f64, baseline: f64) -> String {
     }
 }
 
-/// The Traversal as a markdown table, for the PR or milestone it is
-/// pasted on.
+/// The Traversal as markdown tables, each kind of GPU memory's peak beside
+/// its checked-in Budget, for the PR or milestone they are pasted on.
 impl std::fmt::Display for Traversal {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(
@@ -342,6 +343,24 @@ impl std::fmt::Display for Traversal {
         for (name, value, decimals) in rows {
             let value = value.map_or("—".to_owned(), |value| grouped(value, decimals));
             writeln!(formatter, "| {name} | {value} |")?;
+        }
+        writeln!(
+            formatter,
+            "\n| GPU memory kind | Peak, bytes | Budget, bytes |\n|---|---:|---:|"
+        )?;
+        let budgets = Budgets::checked_in().gpu_memory_bytes_by_kind;
+        for (kind, peak) in GpuMemoryKind::ALL
+            .into_iter()
+            .zip(self.peak_gpu_memory_bytes_by_kind)
+        {
+            let budget = budgets.of(kind);
+            writeln!(
+                formatter,
+                "| {} | {} | {} |",
+                kind.name(),
+                grouped(peak as f64, 0),
+                grouped(budget as f64, 0)
+            )?;
         }
         Ok(())
     }

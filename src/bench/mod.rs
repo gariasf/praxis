@@ -560,8 +560,8 @@ impl FastTravelHold {
 
 /// What `traverse` measured of the world's traversal: the CPU and GPU
 /// frames after the reference warm-up, and over every frame its Late
-/// Chunks, late mips, peak GPU memory, refusals, Chunks not loaded and Fast
-/// travel's hold.
+/// Chunks, late mips, peak GPU memory in all and of each kind, refusals,
+/// Chunks not loaded and Fast travel's hold.
 #[derive(Debug)]
 pub struct Traversal {
     pub frames: usize,
@@ -570,6 +570,9 @@ pub struct Traversal {
     pub late_chunks: u64,
     pub late_mips: u64,
     pub peak_gpu_memory_bytes: u64,
+    /// Each kind's peak, in `GpuMemoryKind::ALL`'s order, whatever frame
+    /// it fell on.
+    pub peak_gpu_memory_bytes_by_kind: [u64; GpuMemoryKind::COUNT],
     pub meshes_refused: u64,
     pub materials_refused: u64,
     /// The most Renderables and Placements one frame refused a slot.
@@ -610,6 +613,13 @@ impl Traversal {
                 .map(|stats| stats.gpu_memory_bytes)
                 .max()
                 .unwrap_or(0),
+            peak_gpu_memory_bytes_by_kind: GpuMemoryKind::ALL.map(|kind| {
+                frames
+                    .iter()
+                    .map(|stats| stats.gpu_memory_bytes_by_kind[kind as usize])
+                    .max()
+                    .unwrap_or(0)
+            }),
             meshes_refused: total(|stats| stats.meshes_refused),
             materials_refused: total(|stats| stats.materials_refused),
             renderables_refused: most(|stats| stats.renderables_refused).into(),
@@ -2529,6 +2539,8 @@ mod tests {
         frames[3].gpu_memory_bytes = 7_000_000_000;
         frames[1000].gpu_memory_bytes = 6_000_000_000;
         frames[1000].cpu_frame_time = Duration::from_micros(5000);
+        frames[3].gpu_memory_bytes_by_kind[GpuMemoryKind::TexturePool as usize] = 40;
+        frames[1000].gpu_memory_bytes_by_kind[GpuMemoryKind::Staging as usize] = 60;
         frames[1001].holding = true;
         frames[1002].fast_travel_hold = Some(Duration::from_millis(80));
         frames[5].materials_refused = 2;
@@ -2544,6 +2556,10 @@ mod tests {
         assert_eq!(traversal.gpu_frame_microseconds.maximum, Some(300.0));
         assert_eq!((traversal.late_chunks, traversal.late_mips), (2, 5));
         assert_eq!(traversal.peak_gpu_memory_bytes, 7_000_000_000);
+        assert_eq!(
+            traversal.peak_gpu_memory_bytes_by_kind,
+            [9, 40, 9, 9, 9, 60, 9]
+        );
         assert_eq!(
             (traversal.materials_refused, traversal.meshes_refused),
             (3, 1)
