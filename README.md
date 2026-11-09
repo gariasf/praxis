@@ -55,7 +55,7 @@ desktop only: Windows, Linux, macOS
 | M1 | Frame foundations: f64 positions, reverse-Z, threading, fixed step | done |
 | M2 | Cooked assets | done |
 | M3 | Main pass: culling, MSAA, lighting, ray-traced shadows, HDR | done |
-| M4 | Streamed world: Chunk streaming and texture residency | |
+| M4 | Streamed world: Chunk streaming and texture residency | done |
 | M5 | Far field: LOD, HLOD and the 2 km view | |
 | M6 | Global illumination: ray-traced probes | |
 | M7 | World content | |

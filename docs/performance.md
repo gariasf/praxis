@@ -29,6 +29,140 @@ its commit.
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 
+## M4 exit (2026-11-09, #672)
+
+**Verdict.** `world`'s CPU frame fails M4's frame criterion on its bench
+segment in every round: its p99 reads 6.55 to 6.81 ms against 6 ms, and
+its maximum 26.3 to 35.8 ms against 16.7 ms. The maximum is the frame
+that opens Texture classes and the Fast travel's arrival (#743); the p99
+is the frames that submit a static TLAS build (#744). Its GPU frame,
+p99 6.31 to 6.60 ms and maximum 10.7 to 11.5 ms, and ADR 0019's gate,
+p99 2.10 to 2.16 ms, hold. No Budget is newly breached: every line over
+its Budget was over it in the Baselines before. The top three offenders
+are `world`'s CPU maximum (#743), `town`'s GPU frame and gate (#602) and
+`world`'s CPU p99 (#744).
+
+Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal, a release build of
+`99409bc8`: `main` at `dfc827b9` plus the traversal's table of each kind
+of GPU memory and ADR text, the engine unchanged. `praxis bench <dir>
+--no-publish` at 2560×1440 with 4x MSAA, 248 warm-up and 1,800 measured
+frames per scene (`world` 3,352), rays on then off, under `caffeinate
+-dims`, AC power, battery charged, no other praxis process. Three rounds
+of every scene, started at 17:02, 17:17 and 17:36 UTC, each once
+preflight read quiet four times in a row: one-minute loads of 1.24, 1.26
+and 1.30 and GPU loads of 2, 3 and 1% in the Provenance. A round at
+17:07 is left out: Docker's virtual machine held 74 to 270% of a core
+and Spotlight's import 65% during it, and three light scenes' CPU
+frames read 11 to 38% over their Baselines. Every scene of the kept
+rounds is stamped quiet but `world`, whose GPU frame p95 over median,
+1.15 to 1.18, passes the rule's 1.06 because its path flies from a
+settlement out over sparse land; its Baseline before read 1.14. The
+Baselines are the second kept round's, all twelve scenes from one run,
+the middle round on `world`'s and `town`'s CPU p99 and `world`'s
+maximum. The llvmpipe Baselines are CI's `bench-results` artifact on
+the exit's PR.
+
+### Measurements
+
+The three kept rounds, against the Baselines recorded before this exit:
+
+| Scene | CPU median µs | CPU p99 µs | GPU frame median µs | GPU frame p99 µs | Gate median µs | Shadow-ray time median µs | Dynamic TLAS CPU median µs | CPU / GPU Baseline before, µs |
+|---|---|---|---|---|---|---|---|---|
+| crowd | 779.4 / 785.5 / 789.8 | 986.5 / 1,005.0 / 982.8 | 3,763.6 / 3,765.0 / 3,762.8 | 4,133.4 / 4,133.4 / 4,055.7 | 1,303.5 / 1,292.2 / 1,291.1 | 2,139.3 / 2,143.5 / 2,143.2 | 323.4 / 325.8 / 327.0 | 821.4 / 3,768.1 |
+| far-coplanar | 241.7 / 237.3 / 244.8 | 333.8 / 305.1 / 373.8 | 2,636.5 / 2,612.1 / 2,619.9 | 2,716.2 / 2,648.8 / 2,678.3 | 728.2 / 727.9 / 728.3 | 1,584.2 / 1,560.4 / 1,568.1 | 0.1 / 0.1 / 0.1 | 243.5 / 2,614.0 |
+| helmet | 192.0 / 189.2 / 198.1 | 416.8 / 372.1 / 485.3 | 6,608.2 / 6,687.3 / 6,687.8 | 7,358.0 / 7,515.5 / 7,499.1 | 1,224.5 / 1,224.9 / 1,222.5 | 5,059.4 / 5,138.2 / 5,141.0 | 0.1 / 0.1 / 0.1 | 198.5 / 6,619.2 |
+| minification | 207.6 / 201.1 / 206.7 | 313.3 / 299.2 / 316.6 | 2,992.8 / 2,992.8 / 2,994.3 | 3,105.2 / 3,025.2 / 3,025.5 | 846.6 / 845.8 / 847.8 | 1,822.4 / 1,823.4 / 1,822.8 | 0.1 / 0.1 / 0.1 | 207.7 / 2,995.0 |
+| normal-tangent | 194.5 / 188.3 / 195.2 | 255.6 / 262.5 / 290.5 | 3,676.1 / 3,675.5 / 3,700.1 | 4,085.8 / 4,124.2 / 4,155.2 | 825.9 / 825.2 / 823.3 | 2,525.9 / 2,526.2 / 2,553.6 | 0.1 / 0.1 / 0.1 | 192.2 / 3,689.7 |
+| orrery | 379.3 / 371.3 / 385.8 | 488.9 / 453.8 / 583.4 | 2,918.5 / 2,920.5 / 2,920.5 | 3,092.7 / 3,109.5 / 3,081.9 | 641.5 / 640.2 / 639.4 | 1,952.5 / 1,955.9 / 1,957.1 | 187.2 / 187.5 / 193.6 | 379.8 / 2,918.3 |
+| pbr-sweep | 193.8 / 187.8 / 193.6 | 318.5 / 281.8 / 312.8 | 3,860.1 / 3,864.1 / 3,887.4 | 3,979.3 / 4,063.6 / 4,011.0 | 781.8 / 781.7 / 782.2 | 2,750.0 / 2,758.9 / 2,778.8 | 0.1 / 0.1 / 0.1 | 197.5 / 3,900.4 |
+| shadows | 211.0 / 199.9 / 210.1 | 330.8 / 301.2 / 388.8 | 4,116.9 / 4,139.2 / 4,138.7 | 4,625.1 / 4,662.1 / 4,615.7 | 869.2 / 866.1 / 868.9 | 2,924.2 / 2,948.8 / 2,945.6 | 0.1 / 0.1 / 0.1 | 210.9 / 4,139.7 |
+| texture-wall | 199.4 / 195.8 / 199.2 | 317.0 / 249.0 / 309.6 | 2,304.4 / 2,284.5 / 2,302.3 | 2,323.5 / 2,302.2 / 2,323.8 | 609.4 / 610.2 / 609.0 | 1,371.0 / 1,350.2 / 1,368.5 | 0.1 / 0.1 / 0.1 | 202.3 / 2,285.9 |
+| town | 5,324.7 / 5,310.4 / 5,359.9 | 5,957.5 / 6,194.4 / 6,209.8 | 20,002.3 / 20,000.0 / 19,989.3 | 20,906.6 / 20,980.4 / 20,964.9 | 8,627.0 / 8,573.1 / 8,583.4 | 10,822.2 / 10,916.5 / 10,892.8 | 1,180.9 / 1,186.2 / 1,196.1 | 5,541.0 / 20,008.0 |
+| uv-grid | 201.0 / 196.8 / 197.1 | 360.3 / 245.5 / 285.4 | 2,927.0 / 2,920.1 / 2,938.2 | 3,012.4 / 2,941.8 / 2,956.1 | 765.7 / 773.8 / 770.3 | 1,839.8 / 1,821.1 / 1,842.7 | 0.1 / 0.1 / 0.1 | 198.9 / 2,929.0 |
+| world | 4,114.5 / 4,112.3 / 4,132.3 | 6,548.7 / 6,704.6 / 6,810.4 | 4,894.0 / 4,857.5 / 4,874.0 | 6,603.6 / 6,456.0 / 6,306.5 | 1,277.7 / 1,278.7 / 1,282.5 | 2,598.8 / 2,596.5 / 2,579.5 | 1,192.3 / 1,187.5 / 1,205.8 | 3,914.3 / 4,849.5 |
+
+`world`'s second kept round in full, its Baseline now, against the
+Baseline before:
+
+**world** on Apple M4 Pro, release, 2560x1440, 3352 measured frames; counters of frames 8..72
+
+| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 4,112.3 | 5,647.5 | 6,704.6 | 34,113.5 | 3,914.3 | 5,189.9 | +198.0 | 1.051 | 6,000.0 |
+| Dynamic TLAS, CPU | 1,187.5 | 1,377.2 | 1,427.0 | 2,016.8 | 1,124.1 | 1,263.0 | +63.4 | 1.056 | 1,100.0 |
+| GPU frame | 4,857.5 | 5,591.9 | 6,456.0 | 11,458.3 | 4,849.5 | 5,546.5 | +7.9 | 1.002 | 12,000.0 |
+| Gate, rays off | 1,278.7 | 1,499.7 | 2,102.5 | 7,775.5 | 1,290.7 | 1,627.2 | -12.0 | 0.991 | 6,000.0 |
+| Shadow-ray time | 2,596.5 | 3,286.7 | 4,063.4 | 8,968.8 | 2,435.1 | 3,211.4 | +161.5 | 1.066 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 194.0 | 243.2 | 255.3 | 2,729.5 | 194.1 | 242.9 | -0.1 | 1.000 | — |
+| `culling_phase_two` | 150.4 | 174.9 | 184.5 | 911.1 | 148.3 | 174.8 | +2.1 | 1.014 | — |
+| `depth_prepass` | 241.1 | 299.3 | 310.9 | 509.9 | 241.3 | 299.8 | -0.2 | 0.999 | — |
+| `depth_pyramid_pass` | 210.1 | 215.8 | 222.1 | 361.7 | 208.5 | 214.7 | +1.5 | 1.007 | — |
+| `dynamic_tlas_build` | 90.2 | 170.0 | 904.9 | 5,789.2 | 90.1 | 181.0 | +0.1 | 1.001 | 1,000.0 |
+| `froxel_pass` | 10.0 | 62.2 | 76.9 | 135.2 | 10.0 | 60.6 | +0.0 | 1.004 | — |
+| `lit_pass` | 576.3 | 807.9 | 882.3 | 1,883.6 | 579.8 | 795.5 | -3.5 | 0.994 | — |
+| `phase_two_depth_pass` | 70.2 | 103.4 | 115.0 | 592.4 | 70.0 | 104.0 | +0.3 | 1.004 | — |
+| `shadow_mask_pass` | 2,920.8 | 3,359.0 | 3,406.2 | 4,354.1 | 2,916.5 | 3,349.9 | +4.2 | 1.001 | — |
+| `tonemapping_pass` | 368.2 | 377.0 | 411.4 | 1,237.8 | 368.2 | 377.5 | -0.1 | 1.000 | — |
+
+Over the same frames it loaded 42 Chunks, none late, with 50 late mips;
+the Fast travel's hold took 43.5 ms over 2 frames, and the most frames a
+loaded Chunk waited to be traced was 6.
+
+### Against the Budgets and M4's criteria
+
+- **Frames under streaming**, `world`'s segment: CPU p99 6.55 to 6.81
+  ms (109 to 114% of 6 ms) and maximum 26.3 to 35.8 ms (158 to 215% of
+  16.7 ms) in every round; GPU frame p99 6.31 to 6.60 ms, maximum 10.7
+  ms in the best round; gate p99 2.10 to 2.16 ms.
+- **Where `world`'s CPU frame goes**, from a per-frame probe of three
+  more runs of the segment: frame 1713 opens two Texture classes, 170.7
+  MB of `texture_pool` in one frame, inside 29.4 to 30.1 ms of
+  `stream_chunks`; the Fast travel's arrival frame reads 17.2 to 35.3
+  ms, from another class or from its upload and prepare. The 52 static
+  TLAS builds in the measured frames take 5.4 to 17.6 ms each on their
+  worker, apart from the frame, but the frames that submit them read 0.4
+  to 4.3 ms of `static_tlas_update` and up to 3.6 ms of `submit`; 32 of
+  them pass 6 ms, and without them the p99 reads 5.9 to 6.1 ms.
+- **Fast travel**: 29.0, 43.5 and 45.1 ms over 2 to 3 frames, within
+  the 50 ms recorded; its arrival frame is #743's.
+- **Frames until traced**: 6, 6 and 7 against N = 6; the third round's
+  7 is the first over it in seven runs of the segment.
+- **`town`**: GPU frame 19.99 to 20.00 ms (167%) with a maximum of 21.4
+  to 21.6 ms, gate 8.57 to 8.63 ms (143 to 144%), both #602; CPU frame 5.31 to
+  5.36 ms at the median, under 6 ms again, and 5.96 to 6.21 ms at p99,
+  over in two rounds; its dynamic TLAS line 1.18 to 1.20 ms, over 1.1
+  ms, #603.
+- **`world`'s dynamic TLAS**, 1.19 to 1.21 ms, over the same 1.1 ms
+  ceiling, from #603's wgpu-core bookkeeping.
+- **GPU memory, 8 GB**: the full traversal peaks at 1,087,759,920 B
+  (13.6%), each kind within its Budget, `geometry_arenas` filling its
+  fixed Arenas to 8 bytes of it and `scene_and_pass_buffers` at 97%.
+
+### Top three offenders
+
+Ranked by their share of the Budget each breaches:
+
+1. **`world`'s CPU frame maximum, 26.3 to 35.8 ms** (158 to 215% of
+   16.7 ms): Texture classes created whole inside one frame's
+   `stream_chunks`, and the Fast travel's arrival frame. #743
+2. **`town`'s GPU frame, 20.0 ms, and gate, 8.6 ms** (167% and 143 to 144%):
+   shadow rays and the triangles drawn, placed at M5's LOD. #602
+3. **`world`'s CPU frame p99, 6.55 to 6.81 ms** (109 to 114%): each
+   static TLAS build's submit, on the main thread, 52 in the segment.
+   #744
+
+### Also seen
+
+- texture-wall, M3.5's first offender (#183), now reads a GPU frame of
+  2.28 to 2.30 ms, a gate of 0.61 ms and a CPU frame of 0.20 ms, since
+  its Textures sit in texture arrays per Texture class.
+- The crowd's bend pass reads 32.6 to 33.8 µs against its Baseline's
+  29.7, and the helmet's lit pass 816 µs in two rounds against 744 to
+  747; `world`'s Froxel pass read 28.3 µs in one round against 10.0 in
+  the other two.
+
 ## M3.5 exit (2026-11-05, #528)
 
 **Verdict.** Every scene's GPU frame and gate hold within 3.5% of the
