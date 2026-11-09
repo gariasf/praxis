@@ -591,3 +591,50 @@ fn measured_figures_are_found_in_shipping_comments() {
     );
     assert_eq!(measured_figures("tests/bench.rs", source), [] as [usize; 0]);
 }
+
+#[test]
+fn pull_requests_skip_the_engine_jobs_for_the_paths_main_pushes_ignore() {
+    let workflow =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"))
+            .expect("read the CI workflow");
+    let ignored: Vec<String> = quoted_list(&workflow, "paths-ignore:")
+        .into_iter()
+        .map(glob_as_regex)
+        .collect();
+    assert!(
+        !ignored.is_empty(),
+        "the push trigger lists no paths-ignore"
+    );
+    assert_eq!(quoted_list(&workflow, "skipped_paths=("), ignored);
+}
+
+fn quoted_list<'a>(source: &'a str, opening: &str) -> Vec<&'a str> {
+    source
+        .lines()
+        .skip_while(|line| line.trim() != opening)
+        .skip(1)
+        .map_while(|line| {
+            let item = line.trim().trim_start_matches("- ");
+            item.strip_prefix('\'')?.strip_suffix('\'')
+        })
+        .collect()
+}
+
+/// The extended regular expression for the paths a GitHub filter pattern
+/// matches, given a pattern whose only special characters are `*` and `**`.
+fn glob_as_regex(glob: &str) -> String {
+    glob.split("**")
+        .map(|part| part.replace('.', "\\.").replace('*', "[^/]*"))
+        .collect::<Vec<_>>()
+        .join(".*")
+}
+
+#[test]
+fn a_filter_pattern_becomes_the_regex_of_the_paths_it_matches() {
+    assert_eq!(glob_as_regex("docs/**"), "docs/.*");
+    assert_eq!(glob_as_regex("*.md"), "[^/]*\\.md");
+    assert_eq!(
+        glob_as_regex("scripts/cycles-reference/*.py"),
+        "scripts/cycles-reference/[^/]*\\.py"
+    );
+}
