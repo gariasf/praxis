@@ -42,6 +42,10 @@ pub(crate) struct FinishedLoad {
 /// request; each failure doubles the wait from one frame up to it.
 const LONGEST_RETRY_FRAMES: u64 = 1024;
 
+/// The fewest frames before the camera would come within the Load radius
+/// of a Chunk that the streamer requests it, whatever its loads have taken.
+const LEAST_LEAD_FRAMES: u64 = 16;
+
 /// What one frame's update decided. Coordinates are x then z.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ChunkFrame {
@@ -91,9 +95,11 @@ pub(crate) struct ChunkStreamer {
     within_load_radius_before: HashSet<[i32; 2]>,
     camera_before: Option<DVec3>,
     frame_number: u64,
-    /// Frames from request to load of the latest load. A load finishes on
-    /// the frame after IO completes it, so the next may take one frame more.
-    load_frames: u64,
+    /// Frames before the camera, closing on a Chunk at its last frame's
+    /// rate, would come within its Load radius that the streamer requests
+    /// it: one more than the slowest load so far, since a load finishes on
+    /// the frame after IO completes it, and at least `LEAST_LEAD_FRAMES`.
+    lead_frames: u64,
     requests: Vec<(f64, [i32; 2])>,
     frame: ChunkFrame,
 }
@@ -122,7 +128,7 @@ impl ChunkStreamer {
             within_load_radius_before: HashSet::new(),
             camera_before: None,
             frame_number: 0,
-            load_frames: 0,
+            lead_frames: LEAST_LEAD_FRAMES,
             requests: Vec::new(),
             frame: ChunkFrame::default(),
         }
@@ -167,7 +173,7 @@ impl ChunkStreamer {
             };
             self.failed.remove(&load.coordinates);
             self.counted_late.remove(&load.coordinates);
-            self.load_frames = self.frame_number - requested_on;
+            self.lead_frames = self.lead_frames.max(self.frame_number - requested_on + 1);
             if distance_metres(camera, load.coordinates) > hold_radius_metres {
                 continue;
             }
@@ -197,8 +203,9 @@ impl ChunkStreamer {
             false
         });
 
-        let lead_metres = metres_per_frame * (self.load_frames + 1) as f64;
-        let request_radius_metres = (load_radius_metres + lead_metres).min(hold_radius_metres);
+        let lead_frames = self.lead_frames as f64;
+        let widest_request_radius_metres =
+            (load_radius_metres + metres_per_frame * lead_frames).min(hold_radius_metres);
         std::mem::swap(
             &mut self.within_load_radius,
             &mut self.within_load_radius_before,
@@ -206,12 +213,17 @@ impl ChunkStreamer {
         self.within_load_radius.clear();
         let mut every_chunk_within_load_radius_loaded = true;
         frame.settled = true;
-        for coordinates in chunks_within(camera, request_radius_metres, &self.bounds) {
+        for coordinates in chunks_within(camera, widest_request_radius_metres, &self.bounds) {
             if !self.chunks.contains(&coordinates) {
                 continue;
             }
             let metres = distance_metres(camera, coordinates);
-            if metres > request_radius_metres {
+            let closing_metres = match self.camera_before {
+                Some(before) if !arrived => distance_metres(before, coordinates) - metres,
+                _ => 0.0,
+            };
+            let lead_metres = closing_metres.max(0.0) * lead_frames;
+            if metres > (load_radius_metres + lead_metres).min(hold_radius_metres) {
                 continue;
             }
             let loaded = self.loaded.contains_key(&coordinates);
@@ -484,22 +496,22 @@ mod tests {
     }
 
     #[test]
-    fn chunks_ahead_are_requested_a_load_time_early_at_50_metres_a_second() {
+    fn chunks_ahead_are_requested_the_least_lead_early_at_50_metres_a_second() {
         let (mut streamer, mut io) = (streamer(), ScriptedIo::new(6));
         let frames: Vec<ChunkFrame> = (0..170)
             .map(|frame| step(&mut streamer, &mut io, flying_east(frame), false))
             .collect();
 
-        // The column at x = 512 m comes within 256 m and 7 frames at 50/60 m
-        // (the load's 6 and one more) on frame 10 + 147, and within 256 m on
+        // The column at x = 512 m comes within 256 m and 16 frames at 50/60 m
+        // on frame 10 + 138, though its load takes 6, and within 256 m on
         // frame 10 + 154.
         let requested_at = |chunk: [i32; 2]| {
             frames
                 .iter()
                 .position(|frame| frame.requested.contains(&chunk))
         };
-        assert_eq!(requested_at([2, 0]), Some(157));
-        assert!(frames[163].loaded.contains(&[2, 0]));
+        assert_eq!(requested_at([2, 0]), Some(148));
+        assert!(frames[154].loaded.contains(&[2, 0]));
         assert_eq!(late_chunks_flying_east(ScriptedIo::new(6)), 0);
     }
 
@@ -509,6 +521,35 @@ mod tests {
         io.delays.insert([5, 0], 600);
         io.delays.insert([10, 0], 600);
         assert_eq!(late_chunks_flying_east(io), 2);
+    }
+
+    #[test]
+    fn chunks_the_camera_passes_beside_outside_the_load_radius_are_not_requested() {
+        let (mut streamer, mut io) = (streamer(), ScriptedIo::new(1));
+        // Row 2 starts at z = 512 m, 266 m from the camera's line.
+        let requested: Vec<[i32; 2]> = (0..3600)
+            .flat_map(|frame| {
+                let camera = flying_east(frame) + DVec3::Z * 118.0;
+                step(&mut streamer, &mut io, camera, false).requested
+            })
+            .collect();
+        assert!(requested.iter().any(|&[_, z]| z == 1));
+        assert!(requested.iter().all(|&[_, z]| z < 2));
+    }
+
+    #[test]
+    fn a_load_slower_than_every_load_before_it_lands_before_its_chunk_arrives() {
+        let mut io = ScriptedIo::new(1);
+        io.delays.insert([5, 0], 16);
+        assert_eq!(late_chunks_flying_east(io), 0);
+    }
+
+    #[test]
+    fn the_lead_keeps_the_slowest_load_after_faster_loads() {
+        let mut io = ScriptedIo::new(1);
+        io.delays.insert([5, 0], 60);
+        io.delays.insert([10, 0], 60);
+        assert_eq!(late_chunks_flying_east(io), 1);
     }
 
     #[test]
@@ -545,10 +586,11 @@ mod tests {
             .collect();
 
         // The first frame's Chunks load on frame 6. Flying east, [2, 0] is
-        // requested on frame 157 and [2, -1] and [2, 1], 128 m off the
-        // camera's line, on frame 197, once within 256 m and 7 frames at
-        // 50/60 m of it; each loads 6 frames later.
-        let expected: Vec<u32> = (0..6).chain(157..163).chain(197..203).collect();
+        // requested on frame 148 and [2, -1] and [2, 1], 128 m off the
+        // camera's line, on frame 189, once each one's distance, falling at
+        // its last frame's rate, would reach 256 m within 16 frames; each
+        // loads 6 frames later.
+        let expected: Vec<u32> = (0..6).chain(148..154).chain(189..195).collect();
         assert_eq!(unsettled, expected);
     }
 
