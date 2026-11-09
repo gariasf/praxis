@@ -177,6 +177,11 @@ Ranked by their share of the Budget each breaches:
   29.7, and the helmet's lit pass 816 µs in two rounds against 744 to
   747; `world`'s Froxel pass read 28.3 µs in one round against 10.0 in
   the other two.
+- The Chunk streamer's lead has not ratcheted: over a traversal with a
+  probe on each load, 274 loads took 1 to 6 frames, so the lead stayed at
+  its floor of 16 frames, and the traversal's peak GPU memory, 1,087,759,920
+  B, sits inside the 1,020,650,736 to 1,177,238,832 B `main` read before
+  the lead's change.
 
 ## M3.5 exit (2026-11-05, #528)
 
