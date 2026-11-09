@@ -191,8 +191,9 @@ const INSTANCE_SCAN_BLOCK_BYTES: u64 = SCAN_BLOCK_SIZE as u64
     + size_of::<[u32; 2]>() as u64
     + SCAN_BLOCK_SIZE as u64 / u8::BITS as u64;
 
-/// The most bytes a TLAS entry takes as an adapter's driver sizes it: 288.4
-/// on the M4 Pro, 240 on lavapipe and 238.2 on the RTX 2070 SUPER.
+/// The most bytes a TLAS entry costs, its driver's bytes and wgpu-core's
+/// Instance record: 288.4 on the M4 Pro, 240 on lavapipe and 238.2 on the
+/// RTX 2070 SUPER.
 pub(crate) const TLAS_BYTES_PER_INSTANCE: u64 = 289;
 
 /// What the Instance buffer, the light buffer and the static TLAS hold,
