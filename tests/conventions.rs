@@ -597,15 +597,18 @@ fn pull_requests_skip_the_engine_jobs_for_the_paths_main_pushes_ignore() {
     let workflow =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"))
             .expect("read the CI workflow");
-    let ignored: Vec<String> = quoted_list(&workflow, "paths-ignore:")
+    let ignored_as_regexes: Vec<String> = quoted_list(&workflow, "paths-ignore:")
         .into_iter()
         .map(glob_as_regex)
         .collect();
     assert!(
-        !ignored.is_empty(),
+        !ignored_as_regexes.is_empty(),
         "the push trigger lists no paths-ignore"
     );
-    assert_eq!(quoted_list(&workflow, "skipped_paths=("), ignored);
+    assert_eq!(
+        quoted_list(&workflow, "skipped_paths=("),
+        ignored_as_regexes
+    );
 }
 
 fn quoted_list<'a>(source: &'a str, opening: &str) -> Vec<&'a str> {
@@ -621,12 +624,21 @@ fn quoted_list<'a>(source: &'a str, opening: &str) -> Vec<&'a str> {
 }
 
 /// The extended regular expression for the paths a GitHub filter pattern
-/// matches, given a pattern whose only special characters are `*` and `**`.
+/// matches, given a pattern whose only special characters are `*` and a
+/// trailing `**`.
 fn glob_as_regex(glob: &str) -> String {
-    glob.split("**")
-        .map(|part| part.replace('.', "\\.").replace('*', "[^/]*"))
-        .collect::<Vec<_>>()
-        .join(".*")
+    let (head, tail) = match glob.strip_suffix("**") {
+        Some(head) => (head, ".*"),
+        None => (glob, ""),
+    };
+    assert!(
+        !head.contains("**")
+            && head
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._/*-".contains(&byte)),
+        "`{glob}` uses a filter pattern feature the classifier does not mirror"
+    );
+    format!("{}{tail}", head.replace('.', "\\.").replace('*', "[^/]*"))
 }
 
 #[test]
@@ -637,4 +649,16 @@ fn a_filter_pattern_becomes_the_regex_of_the_paths_it_matches() {
         glob_as_regex("scripts/cycles-reference/*.py"),
         "scripts/cycles-reference/[^/]*\\.py"
     );
+}
+
+#[test]
+#[should_panic(expected = "does not mirror")]
+fn a_filter_pattern_with_another_special_character_is_refused() {
+    glob_as_regex("scripts/sweep?.sh");
+}
+
+#[test]
+#[should_panic(expected = "does not mirror")]
+fn a_filter_pattern_with_an_inner_double_star_is_refused() {
+    glob_as_regex("scripts/**/sweep.sh");
 }
