@@ -204,9 +204,12 @@ jobs:
       - name: Cook
         run: cargo run -- cook
 
-      # Its frames must be the Goldens test's WORLD_FRAMES.
+      # Its runs must be the Goldens test's: the Golden's frame alone, then
+      # the later WORLD_FRAMES together, since requests depend on the route.
       - name: Cook what world's Goldens load
-        run: cargo run -- capture world target/world.png --frame 59,300,599
+        run: |
+          cargo run -- capture world target/world.png
+          cargo run -- capture world target/world-later.png --frame 300,599
 
       - name: Remove sources
         run: rm -r assets
