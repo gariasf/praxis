@@ -130,7 +130,7 @@ impl ApplicationHandler for App {
 }
 
 struct App {
-    /// The Reference scene the window opens on.
+    /// The Reference scene that the window opens on.
     scene: ReferenceScene,
     shell: Option<WindowShell>,
     /// Why the window could not start, returned once the event loop exits.

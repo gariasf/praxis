@@ -232,3 +232,4 @@
   log "done in $((SECONDS - benching_start_seconds))s of benching and ${preparation_seconds}s of preparing"
   exit 0
 }
+
