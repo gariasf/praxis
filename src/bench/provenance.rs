@@ -24,7 +24,14 @@ pub const HARNESS_VERSION: u32 = 11;
 /// The top-level paths whose changes can change a measurement, which the
 /// source hash covers. Every other tracked top-level path is in the tests'
 /// `UNMEASURED_PATHS`.
-const MEASURED_PATHS: [&str; 5] = ["src", "assets", "Cargo.toml", "Cargo.lock", ".cargo"];
+const MEASURED_PATHS: [&str; 6] = [
+    "src",
+    "assets",
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "vendor",
+];
 
 /// A scene's GPU frame p95 over its median at or above which its run was
 /// not quiet, whatever preflight saw at its start.

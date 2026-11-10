@@ -3350,7 +3350,7 @@ checked = 2026-10-28
 url = "https://github.com/gfx-rs/wgpu/pull/9835"
 section = "gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS (merged into trunk 2026-07-17, after v30.0.0; not in v30.0.1)"
 quote = '''A built TLAS recorded one dependency entry per instance, making Queue::submit's acceleration-structure validation and residency tracking O(instance count). Collapse to unique BLASes via a FastHashSet<TrackerIndex> so it is O(unique BLASes) instead.'''
-checked = 2026-10-28
+checked = 2026-11-09
 
 ["lauritzen-2010-edge-detection"]
 url = "https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf"

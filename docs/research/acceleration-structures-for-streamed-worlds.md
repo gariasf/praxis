@@ -131,7 +131,7 @@ Static Instances per Load radius at `town`'s density (16,008 per 256 m Chunk), c
 - How a static rebuild overlaps Praxis's own depth passes, rather than the probe's synthetic ray pass.
 - Ray cost of querying several static TLASes (option C), and of a merged per-Chunk BLAS (row 13).
 - Metal's ordering of a pass that reads a TLAS and a later rebuild of it in place, beyond wgpu's empty barrier.
-- Whether wgpu 31's deduplicated dependencies (#603's upgrade) change the submit figures here.
+- Whether wgpu 31's deduplicated dependencies (#603's upgrade) change the submit figures here. Answered 2026-11-09 on `world`, not on this note's probe (#744, `docs/performance.md`): with gfx-rs/wgpu#9835 carried in `vendor/wgpu-core`, wgpu-core's `Queue::submit` of a static build read 0.05 ms at the median against 2.5 ms on wgpu-core 30.0.1.
 - The hardware behind Epic's, Battlefield V's and Microsoft's timings; none states it.
 - A shipped engine that double-buffers its TLAS; only CPU research was found.
 - The fast-build flag's effect on the M4 Pro.
