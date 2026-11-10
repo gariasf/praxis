@@ -28,7 +28,7 @@ its commit.
 | The dielectric and metal mix, gathered by lobe (`src/render/shaders/shading.wgsl`) | Mixed as glTF's Appendix B writes it, the lit pass took up to 25 µs (5%) longer at 1440p | M4 Pro, Metal | 877ea946 (2026-10-22, #246) | `praxis bench` sessions, the Appendix B form against the gathered one |
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
-| `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved rounds against `main`, not quiet, the hold's slowest frame read 11.6 to 20.3 ms against 14.4 to 46.6 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
+| `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 
 ## `world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once (2026-11-09, #743)
 
@@ -79,60 +79,66 @@ The nine Chunks' reads came back in one frame and wrote 2.2 MB between
 them, so the load bytes held none back. Capped at 131,072 Instances, they
 load over the hold's frames: the upload stays within the slots' 32 MiB,
 and no frame of the segment passed 12.6 ms in the probe's run; over the
-rounds below, the hold's slowest frame read 11.6 to 20.3 ms.
+quiet rounds below, the hold's slowest frame read 15.7 to 17.2 ms.
 
-### Three interleaved rounds against `main`
+### Three interleaved quiet rounds against `main`
 
 Release builds of `main` at `9bcee573` and of this change on it, each
 with the per-frame probe, `praxis bench <dir> --no-publish world` then
 `praxis traverse`, interleaved over three rounds under `caffeinate -dims`
-on AC power. The machine was in use: each run started at a one-minute
-load of 1.78 to 2.71 and a GPU load of 0 to 30%, so the rounds are not
-quiet and the times are indicative. The bench rows are `praxis report`'s,
-the traversal's its own table's, and the probe's from its per-frame CSV.
+on AC power, 2026-11-10. Each run started after four quiet preflight reads
+in a row, at a one-minute load of 1.14 to 1.40 and a GPU load of 0 to 2%,
+with no busy process at either end. Their records still stamp
+`quiet: false`: `world`'s GPU frame spread, 1.13 to 1.18, is over
+`QUIET_P95_OVER_MEDIAN` on any machine (#729). The bench rows are
+`praxis report`'s, the traversal's its own table's, and the probe's from
+its per-frame CSV.
 
 | `praxis report`, `world` | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| CPU frame, `main`, round 1 | 1,602.9 | 2,151.3 | 3,800.5 | 46,570.9 | 4,112.3 | 5,647.5 | -2,509.4 | 0.390 | 6,000.0 |
-| CPU frame, This change, round 1 | 1,553.9 | 1,935.3 | 3,199.9 | 20,327.4 | 4,112.3 | 5,647.5 | -2,558.5 | 0.378 | 6,000.0 |
-| CPU frame, `main`, round 2 | 1,454.7 | 1,847.5 | 2,217.0 | 26,548.1 | 4,112.3 | 5,647.5 | -2,657.6 | 0.354 | 6,000.0 |
-| CPU frame, This change, round 2 | 1,525.1 | 1,922.7 | 2,935.8 | 11,627.4 | 4,112.3 | 5,647.5 | -2,587.2 | 0.371 | 6,000.0 |
-| CPU frame, `main`, round 3 | 1,472.7 | 1,871.8 | 2,310.3 | 26,660.9 | 4,112.3 | 5,647.5 | -2,639.7 | 0.358 | 6,000.0 |
-| CPU frame, This change, round 3 | 1,824.2 | 2,297.5 | 3,404.0 | 19,559.1 | 4,112.3 | 5,647.5 | -2,288.1 | 0.444 | 6,000.0 |
+| CPU frame, `main`, round 1 | 1,460.6 | 1,808.5 | 2,271.7 | 34,246.9 | 4,112.3 | 5,647.5 | -2,651.8 | 0.355 | 6,000.0 |
+| CPU frame, This change, round 1 | 1,477.7 | 1,827.0 | 2,330.9 | 17,238.3 | 4,112.3 | 5,647.5 | -2,634.7 | 0.359 | 6,000.0 |
+| CPU frame, `main`, round 2 | 1,452.4 | 1,824.9 | 2,357.5 | 40,291.8 | 4,112.3 | 5,647.5 | -2,659.9 | 0.353 | 6,000.0 |
+| CPU frame, This change, round 2 | 1,480.2 | 1,837.7 | 2,230.1 | 16,282.8 | 4,112.3 | 5,647.5 | -2,632.1 | 0.360 | 6,000.0 |
+| CPU frame, `main`, round 3 | 1,450.9 | 1,835.6 | 2,334.1 | 37,857.7 | 4,112.3 | 5,647.5 | -2,661.4 | 0.353 | 6,000.0 |
+| CPU frame, This change, round 3 | 1,463.3 | 1,857.0 | 2,216.7 | 15,667.0 | 4,112.3 | 5,647.5 | -2,649.0 | 0.356 | 6,000.0 |
 
 | `praxis report`, `world` | Late Chunks | Fast-travel hold, ms | Fast-travel hold, frames |
 |---|---:|---:|---:|
-| `main`, round 1 | 0 | 73.7 | 4 |
-| This change, round 1 | 0 | 41.0 | 5 |
-| `main`, round 2 | 0 | 37.7 | 4 |
-| This change, round 2 | 0 | 34.5 | 6 |
-| `main`, round 3 | 0 | 27.2 | 3 |
-| This change, round 3 | 0 | 38.0 | 5 |
+| `main`, round 1 | 0 | 46.4 | 3 |
+| This change, round 1 | 0 | 30.8 | 3 |
+| `main`, round 2 | 0 | 50.9 | 2 |
+| This change, round 2 | 0 | 29.7 | 3 |
+| `main`, round 3 | 0 | 15.8 | 2 |
+| This change, round 3 | 0 | 29.5 | 3 |
 
 | Per-frame probe, `world` | Hold frames | Slowest hold frame, µs | `texture_pool` peak, bytes |
 |---|---:|---:|---:|
-| `main`, round 1 | 4 | 46,570.9 | 363,331,584 |
-| This change, round 1 | 5 | 20,327.4 | 33,292,288 |
-| `main`, round 2 | 4 | 20,936.5 | 203,948,032 |
-| This change, round 2 | 6 | 11,627.4 | 33,292,288 |
-| `main`, round 3 | 3 | 14,360.2 | 203,948,032 |
-| This change, round 3 | 5 | 12,937.3 | 33,292,288 |
+| `main`, round 1 | 3 | 34,246.9 | 363,331,584 |
+| This change, round 1 | 3 | 17,238.3 | 33,292,288 |
+| `main`, round 2 | 2 | 40,291.8 | 363,331,584 |
+| This change, round 2 | 3 | 16,282.8 | 33,292,288 |
+| `main`, round 3 | 2 | 3,384.7 | 203,948,032 |
+| This change, round 3 | 3 | 15,667.0 | 33,292,288 |
 
 | `praxis traverse` | CPU frame maximum, µs | Peak GPU memory, bytes | Late Chunks | Fast-travel hold, ms | Fast-travel hold, frames |
 |---|---:|---:|---:|---:|---:|
-| `main`, round 1 | 41,592.7 | 1,087,759,920 | 0 | 37.3 | 3 |
-| This change, round 1 | 31,926.5 | 1,003,873,440 | 0 | 14.4 | 2 |
-| `main`, round 2 | 42,777.8 | 1,356,196,656 | 0 | 36.9 | 3 |
-| This change, round 2 | 61,737.9 | 1,003,873,440 | 0 | 13.9 | 2 |
-| `main`, round 3 | 66,705.3 | 1,177,238,832 | 0 | 11.1 | 1 |
-| This change, round 3 | 29,369.8 | 1,003,873,440 | 0 | 13.6 | 2 |
+| `main`, round 1 | 42,505.7 | 1,177,238,832 | 0 | 11.4 | 1 |
+| This change, round 1 | 24,826.7 | 1,003,873,440 | 0 | 9.2 | 1 |
+| `main`, round 2 | 37,753.0 | 1,177,238,832 | 0 | 12.1 | 1 |
+| This change, round 2 | 27,258.0 | 1,003,873,440 | 0 | 17.3 | 2 |
+| `main`, round 3 | 31,035.0 | 1,020,650,736 | 0 | 12.2 | 1 |
+| This change, round 3 | 29,030.3 | 1,003,873,440 | 0 | 10.6 | 1 |
 
-Round 2 holds every frame within 16,667 µs. Round 3's maximum is one
-frame's `dynamic_tlas` stage, 13.2 ms against its 0.8 ms median, outside
-the hold and outside the streamer; its hold's frames read at most 12.9 ms.
-Round 1's arrival frame read 14.0 ms of `stream_chunks` against 4.9 and
-5.6 ms in the other rounds. The traversal's maximum is not split by frame
-here, as the probe covers the bench alone.
+Rounds 2 and 3 hold every frame within 16,667 µs; round 1's slowest,
+17,238.3 µs, is over it by 3%. In every round the slowest frame is the
+hold's first loading frame, 9.8 to 11.5 ms of it `stream_chunks` and
+2.4 ms `prepare_frame`. The frame after the hold read 3.5 to 4.7 ms,
+against `main`'s 15.8 to 37.9 ms. `main`'s slowest frames read 30.3 to
+36.7 ms of `stream_chunks` (rounds 1 and 2) and 17.8 ms of `upload`
+(round 3). The
+traversal's maximum is not split by frame here, as the probe covers the
+bench alone.
 
 ## `world`'s CPU p99: each submit walked one dependency per static Instance (2026-11-09, #744)
 
