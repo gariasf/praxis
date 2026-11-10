@@ -218,6 +218,7 @@
     "started_unix_seconds": 1794250375
   },
   "renderables_refused": 0,
+  "rerecorded_baseline": true,
   "scene": "pbr-sweep",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {

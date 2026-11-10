@@ -58,8 +58,8 @@
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
     "maximum": 1886.784,
-    "median": 1218.4959999999999,
-    "p95": 1481.2160000000001,
+    "median": 1218.496,
+    "p95": 1481.216,
     "p99": 1521.664
   },
   "gate_pass_microseconds": {
@@ -94,7 +94,7 @@
       "p99": 12.608
     },
     "lit_pass": {
-      "maximum": 1122.3039999999999,
+      "maximum": 1122.304,
       "median": 437.76,
       "p95": 520.192,
       "p99": 536.576
@@ -178,8 +178,8 @@
       "p99": 9.728000000000002
     },
     "shadow_mask_pass": {
-      "maximum": 1257.0240000000001,
-      "median": 1015.4560000000001,
+      "maximum": 1257.024,
+      "median": 1015.456,
       "p95": 1196.0320000000002,
       "p99": 1236.736
     },
@@ -224,6 +224,7 @@
     "started_unix_seconds": 1794253644
   },
   "renderables_refused": 0,
+  "rerecorded_baseline": true,
   "scene": "world",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
