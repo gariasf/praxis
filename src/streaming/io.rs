@@ -293,6 +293,9 @@ pub(crate) struct DecodedReader<'a> {
     decoded: RefCell<&'a mut DecodedAssets>,
     cache: &'a CookedCache,
     claimed: &'a Mutex<HashSet<AssetId>>,
+    /// Whether a Texture read from the Cooked cache is its Resident tail
+    /// alone, as the IO pool decodes it, rather than its whole chain.
+    reads_resident_tails: bool,
 }
 
 impl DecodedReader<'_> {
@@ -327,7 +330,14 @@ impl AssetReader for DecodedReader<'_> {
 
     fn texture(&self, id: AssetId) -> anyhow::Result<CookedTexture> {
         let decoded = self.decoded.borrow_mut().textures.remove(&id);
-        self.claimed(id, decoded, || self.cache.texture(id))
+        self.claimed(id, decoded, || {
+            if self.reads_resident_tails {
+                CookedTexture::resident_tail_from_blob(&self.cache.read(id)?)
+                    .with_context(|| format!("reading Texture {id}"))
+            } else {
+                self.cache.texture(id)
+            }
+        })
     }
 
     fn mesh(&self, id: AssetId) -> anyhow::Result<CookedMesh> {
@@ -388,10 +398,18 @@ pub(crate) struct ChunkStreaming {
     /// The bytes a frame's loads may write into the load staging; a Chunk
     /// that alone writes more loads alone.
     load_bytes_per_frame: u64,
+    /// The Instances a frame's Chunk loads may place; a Chunk that alone
+    /// places more loads alone.
+    instances_placed_per_frame: usize,
     mips: MipPriority,
     /// When the Fast travel whose hold has not ended jumped.
     fast_travel_started: Option<Instant>,
 }
+
+/// The Instances a frame's streamed Chunk loads place, as prepare and the
+/// static TLAS take each one on the main thread in the frame it loads; sized
+/// in `docs/performance.md`, "Measurements behind the code".
+const INSTANCES_PLACED_PER_FRAME: usize = 131_072;
 
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
 /// stale.
@@ -421,6 +439,7 @@ impl ChunkStreaming {
             error: None,
             cook_chunk: None,
             load_bytes_per_frame,
+            instances_placed_per_frame: INSTANCES_PLACED_PER_FRAME,
             mips: MipPriority::default(),
             fast_travel_started: None,
         })
@@ -466,6 +485,12 @@ impl ChunkStreaming {
         self.load_bytes_per_frame = bytes;
     }
 
+    /// Places at most `most_instances` a frame through Chunk loads instead.
+    #[cfg(test)]
+    pub(crate) fn set_instances_placed_per_frame(&mut self, most_instances: usize) {
+        self.instances_placed_per_frame = most_instances;
+    }
+
     /// Waits until the IO pool has read every Chunk requested so far.
     #[cfg(test)]
     pub(crate) fn wait_for_reads(&mut self) -> anyhow::Result<()> {
@@ -479,6 +504,7 @@ impl ChunkStreaming {
             decoded: RefCell::new(&mut self.decoded),
             cache: &self.cache,
             claimed: &self.claimed,
+            reads_resident_tails: false,
         }
     }
 
@@ -530,6 +556,7 @@ impl ChunkStreaming {
     ) -> anyhow::Result<StreamedFrame> {
         let camera = world.resource::<Camera>().position - self.shift;
         let mut streamed = StreamedFrame::default();
+        let mut placed_instances = 0;
         loop {
             let Self {
                 streamer,
@@ -543,6 +570,7 @@ impl ChunkStreaming {
                 error,
                 cook_chunk,
                 load_bytes_per_frame,
+                instances_placed_per_frame,
                 mips,
                 fast_travel_started: _,
             } = self;
@@ -559,7 +587,9 @@ impl ChunkStreaming {
                 renderer,
                 settle,
                 load_bytes_per_frame: *load_bytes_per_frame,
+                instances_placed_per_frame: *instances_placed_per_frame,
                 written_bytes: &mut streamed.written_bytes,
+                placed_instances: &mut placed_instances,
                 bytes_read: &mut streamed.bytes_read,
                 error,
             };
@@ -752,8 +782,11 @@ struct FrameIo<'a> {
     renderer: &'a mut Renderer,
     settle: bool,
     load_bytes_per_frame: u64,
+    instances_placed_per_frame: usize,
     /// The bytes the frame's loads wrote into the load staging so far.
     written_bytes: &'a mut u64,
+    /// The Instances the frame's loads placed so far.
+    placed_instances: &'a mut usize,
     bytes_read: &'a mut u64,
     error: &'a mut Option<anyhow::Error>,
 }
@@ -771,11 +804,19 @@ impl FrameIo<'_> {
         })
     }
 
-    /// Whether loading `chunk` keeps the frame's load bytes within the cap:
-    /// always while settling and while the frame's loads have written
-    /// nothing.
+    /// Whether loading `chunk` keeps the frame's placed Instances and load
+    /// bytes within their caps: always while settling; past the Instances'
+    /// cap only while the frame's loads have placed none, and past the
+    /// bytes' only while they have written none.
     fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
-        if self.settle || *self.written_bytes == 0 {
+        if self.settle {
+            return Ok(true);
+        }
+        let instances = *self.placed_instances + chunk.placements.len();
+        if *self.placed_instances > 0 && instances > self.instances_placed_per_frame {
+            return Ok(false);
+        }
+        if *self.written_bytes == 0 {
             return Ok(true);
         }
         let bytes = self.most_written_bytes(chunk)?;
@@ -795,6 +836,7 @@ impl FrameIo<'_> {
             decoded: RefCell::new(&mut *self.decoded),
             cache: self.cache,
             claimed: self.claimed,
+            reads_resident_tails: true,
         };
         let mut seen = HashSet::new();
         let mut bytes = 0;
@@ -841,6 +883,7 @@ impl FrameIo<'_> {
     /// Loads `decoded` into the pools, counting what it read and wrote.
     fn load(&mut self, decoded: DecodedChunk) -> anyhow::Result<LoadedChunk> {
         *self.bytes_read += decoded.bytes_read;
+        *self.placed_instances += decoded.chunk.placements.len();
         #[cfg(debug_assertions)]
         let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
         let written_before = self.renderer.load_staging.written_bytes();
@@ -860,6 +903,7 @@ impl FrameIo<'_> {
             decoded: RefCell::new(&mut *self.decoded),
             cache: self.cache,
             claimed: self.claimed,
+            reads_resident_tails: true,
         };
         let Renderer {
             device,
@@ -970,6 +1014,7 @@ mod tests {
             decoded: RefCell::new(&mut decoded),
             cache: &cache,
             claimed: &claimed,
+            reads_resident_tails: false,
         };
 
         reader.forget(&[AssetId(1)]);
@@ -977,6 +1022,44 @@ mod tests {
         reader.material(AssetId(1)).unwrap();
         assert!(claimed.lock().unwrap().contains(&AssetId(1)));
         assert!(decoded.read_from_cache.is_empty());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// A Chunk load that reads on the main thread a Texture that a load in
+    /// flight claimed reads its Resident tail alone, as the IO pool would
+    /// have: a 1,024² BC7 Texture's tail starts at mip 2, 256², 64 KiB.
+    #[test]
+    fn a_chunk_loads_read_of_a_texture_claimed_in_flight_takes_its_resident_tail() {
+        use crate::cooked::level_bytes;
+
+        let directory = std::env::temp_dir().join(format!("praxis-io-tail-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let texture = CookedTexture {
+            format,
+            width: 1024,
+            height: 1024,
+            first_level: 0,
+            levels: (0..11)
+                .map(|level| vec![level as u8; level_bytes(format, 1024, 1024, level)])
+                .collect(),
+        };
+        cache
+            .write(AssetId(1), "key", &texture.to_blob(1).unwrap())
+            .unwrap();
+        let claimed = Mutex::new(HashSet::from([AssetId(1)]));
+        let mut decoded = DecodedAssets::default();
+        let reader = DecodedReader {
+            decoded: RefCell::new(&mut decoded),
+            cache: &cache,
+            claimed: &claimed,
+            reads_resident_tails: true,
+        };
+
+        let read = reader.texture(AssetId(1)).unwrap();
+        assert_eq!(read.first_level, 2);
+        assert_eq!(read.levels, texture.levels[2..]);
+        assert!(decoded.read_from_cache.contains(&AssetId(1)));
         std::fs::remove_dir_all(&directory).ok();
     }
 }

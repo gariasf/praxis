@@ -855,6 +855,52 @@ mod tests {
         assert_eq!(written_bytes[5], 0);
     }
 
+    /// With a frame's Chunk loads capped at one Instance, each of
+    /// `texture_wall`'s four Chunks places more alone, so each loads in a
+    /// frame of its own, nearest first, rather than all four at once.
+    #[test]
+    fn streamed_loads_past_the_frames_instances_wait_in_priority_order() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            64,
+            36,
+            ReferenceScene::TextureWall,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("texture_wall loads");
+        state.streaming.set_instances_placed_per_frame(1);
+        let position = glam::dvec3(10.0, 5.0, 30.0);
+        state
+            .simulation
+            .world
+            .insert_resource(crate::camera::Camera::looking_at(
+                position,
+                position - glam::DVec3::Z,
+            ));
+
+        let mut chunks_loaded = Vec::new();
+        for frame in 0..6 {
+            let streamed = state
+                .streaming
+                .update(&mut state.simulation.world, &mut state.renderer, false)
+                .expect("the Chunks stream");
+            chunks_loaded.push(streamed.chunks_loaded);
+            if frame == 0 {
+                state.streaming.wait_for_reads().expect("the Chunks read");
+            }
+        }
+
+        let loaded = state.simulation.world.resource::<LoadedChunks>();
+        let arrivals: Vec<[i32; 2]> = loaded.0.iter().map(|chunk| chunk.coordinates).collect();
+        assert_eq!(arrivals, [[0, 0], [-1, 0], [0, -1], [-1, -1]]);
+        assert_eq!(chunks_loaded, [0, 1, 1, 1, 1, 0]);
+    }
+
     /// A Chunk whose 10 m quad samples a 2,048² Texture with mip 0 red, mip 1
     /// green and its Resident tail, mips 3 on, yellow: seen from 200 m, only
     /// the tail loads and draws; 40 m away, mip 1 streams in, the finest the
