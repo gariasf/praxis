@@ -237,7 +237,7 @@ Every Bench record kept, from sessions, CI and the machines' own runs, including
 _Avoid_: Metrics database, telemetry
 
 **Series**:
-The Bench records of one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.
+The Bench records of one Reference scene on one adapter and backend, taken on `main`'s source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, each against the frames around it since 2026-11-11, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.
 _Avoid_: Trend, timeline
 
 **Harness version**:

@@ -749,10 +749,15 @@ pub fn run(
         .aliasing
         .then(|| measure_aliasing(context, scene, switches))
         .transpose()?;
+    let gpu_frame_microseconds: Vec<f64> = frames[configuration.warm_up_frames as usize..]
+        .iter()
+        .filter_map(|stats| stats.gpu)
+        .map(|gpu| gpu.frame_time.as_secs_f64() * 1e6)
+        .collect();
     let provenance = start.provenance(
         &adapter,
         scene_content_hash,
-        measurements.gpu_frame_microseconds,
+        &gpu_frame_microseconds,
         started,
         provenance::busy_during_scene(busy_at_start, crate::preflight::busy_processes()),
     );
@@ -1609,8 +1614,8 @@ mod tests {
     }
 
     /// The Provenance of a run of `checkout` on an otherwise idle machine
-    /// whose GPU frames spread `p95_over_median`, quiet below
-    /// `QUIET_P95_OVER_MEDIAN`.
+    /// whose GPU frames spread `p95_over_median`, about their neighbours
+    /// as about the run's median, quiet below `QUIET_P95_OVER_MEDIAN`.
     pub(super) fn provenance(checkout: Checkout, p95_over_median: f64) -> Provenance {
         Provenance {
             checkout,
@@ -1623,6 +1628,7 @@ mod tests {
             other_processes: Some(Vec::new()),
             busy_processes: Some(Vec::new()),
             gpu_frame_p95_over_median: Some(p95_over_median),
+            gpu_frame_p95_over_neighbours: Some(p95_over_median),
             quiet: p95_over_median < provenance::QUIET_P95_OVER_MEDIAN,
             started_unix_seconds: 1_793_448_000,
         }

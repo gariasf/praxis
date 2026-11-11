@@ -525,11 +525,23 @@ pub const HARNESS_VERSION: u32 = 11;
 /// The top-level paths whose changes can change a measurement, which the
 /// source hash covers. Every other tracked top-level path is in the tests'
 /// `UNMEASURED_PATHS`.
-const MEASURED_PATHS: [&amp;str; 5] = ["src", "assets", "Cargo.toml", "Cargo.lock", ".cargo"];
+const MEASURED_PATHS: [&amp;str; 6] = [
+    "src",
+    "assets",
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "vendor",
+];
 
-/// A scene's GPU frame p95 over its median at or above which its run was
-/// not quiet, whatever preflight saw at its start.
-pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
+/// The p95, over a scene's GPU frames, of each over the median of the
+/// `NEIGHBOUR_FRAMES` around it, at or above which its run was not quiet,
+/// whatever preflight saw at its start; the import judges a Baseline that
+/// recorded no such ratio by its GPU frame p95 over its run's median.
+pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
+
+/// How many frames a GPU frame is judged among, itself in the middle.
+pub(super) const NEIGHBOUR_FRAMES: usize = 31;</code></pre>
   <h3>The source hash</h3>
   <p>The <code>Checkout</code> holds the commit, the branch, whether a measured path differed from the commit, untracked files included, and the source hash. <code>source_hash</code> asks git for the tree entries of the measured paths at a revision and has <code>git mktree</code> hash them as one tree, so a commit that changes none of those paths has the hash of the commit before it, and a docs-only commit measures as its parent. A dirty checkout hashes its working tree instead: the measured paths are staged as <code>git add --all</code> would stage them, through a temporary index under <code>GIT_INDEX_FILE</code>, so the checkout's own index stays as it is.</p>
   <div class="code-source"><code>source_hash</code>, <code>src/bench/provenance.rs</code></div>
@@ -553,13 +565,33 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
 }</code></pre>
   <h3>Quiet</h3>
   <p>A run was quiet when preflight would have warned of nothing at its start, the scene's GPU frames held steady and no process outside praxis held half a core or more at the scene's start or end. Each reading that could not be taken is a preflight note, not a warning, so it passes; the spread of the GPU frames must have been read.</p>
+  <p>Since 2026-11-11, after the commit above, steady is judged frame by frame. Each measured frame's GPU time is divided by the median of the <code>NEIGHBOUR_FRAMES</code>, 31, centred on it, fewer at either end of the run, and the p95 of those ratios must stay under <code>QUIET_P95_OVER_MEDIAN</code>. What a camera path shows changes a frame's cost over seconds, which moves a frame and the frames around it together and leaves their ratio at 1; a machine that shares its GPU slows single frames, which the median of their neighbours does not follow. Over ten runs of <code>world</code> that preflight found quiet on the M4 Pro, its GPU frame p95 was 1.13 to 1.18 times its run's median; against its neighbours nine read 1.03 to 1.06 and one 1.12, so about one quiet run of the world in ten is still marked otherwise. The other eleven scenes read 1.002 to 1.012 against their neighbours and 1.003 to 1.040 against their run's median, so their stamps are as they were. With an antivirus scan holding a core the <code>world</code> reads 1.07, and 1.24 when a second renderer starts mid-run. A slowdown of 16 frames or more moves a frame and the median of its neighbours together, so this test passes it: only preflight's readings at the start and the busy processes at the scene's end can catch one. The record keeps both ratios: <code>gpu_frame_p95_over_neighbours</code>, which the stamp judges, and <code>gpu_frame_p95_over_median</code>, the run's own, by which the Bench history keeps the quieter of two records.</p>
+  <div class="code-source"><code>p95_over_neighbours</code>, <code>src/bench/provenance.rs</code></div>
+<pre class="code"><code>fn p95_over_neighbours(gpu_frame_microseconds: &amp;[f64]) -&gt; Option&lt;f64&gt; {
+    let frames_each_side = NEIGHBOUR_FRAMES / 2;
+    let ratios: Option&lt;Vec&lt;f64&gt;&gt; = gpu_frame_microseconds
+        .iter()
+        .enumerate()
+        .map(|(frame, microseconds)| {
+            let first = frame.saturating_sub(frames_each_side);
+            let end = gpu_frame_microseconds
+                .len()
+                .min(frame + frames_each_side + 1);
+            let median = percentile(gpu_frame_microseconds[first..end].to_vec(), 0.5);
+            (median &gt; 0.0).then(|| microseconds / median)
+        })
+        .collect();
+    ratios
+        .filter(|ratios| !ratios.is_empty())
+        .map(|ratios| percentile(ratios, 0.95))
+}</code></pre>
   <div class="code-source"><code>is_quiet</code>, <code>src/bench/provenance.rs</code></div>
 <pre class="code"><code>    gpu_load_percent.is_none_or(|percent| percent &lt;= BUSY_GPU_PERCENT)
         &amp;&amp; one_minute_load_average.is_none_or(|load| load &lt;= BUSY_LOAD_AVERAGE)
         &amp;&amp; other_processes.is_none_or(&lt;[String]&gt;::is_empty)
         &amp;&amp; busy_processes.is_none_or(&lt;[String]&gt;::is_empty)
         &amp;&amp; machine_warnings.is_empty()
-        &amp;&amp; gpu_frame_p95_over_median.is_some_and(|ratio| ratio &lt; QUIET_P95_OVER_MEDIAN)</code></pre>
+        &amp;&amp; gpu_frame_p95_over_neighbours.is_some_and(|ratio| ratio &lt; QUIET_P95_OVER_MEDIAN)</code></pre>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Disqualifies a run</th><th class="n">Threshold</th><th>Where</th></tr></thead>
@@ -570,7 +602,7 @@ pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;</code></pre>
       <tr><td>a process outside praxis at the scene's start or end</td><td class="n">at or over 50% of a core</td><td><code>BUSY_PROCESS_PERCENT</code>, <code>busy_processes</code></td></tr>
       <tr><td>a Mac on battery, read from <code>pmset -g batt</code></td><td class="n">warned</td><td><code>machine_warnings</code>, the power check</td></tr>
       <tr><td>a full-screen application or presentation settings on Windows</td><td class="n">warned</td><td><code>machine_warnings</code>, the display check</td></tr>
-      <tr><td>the scene's GPU frame p95 over its median</td><td class="n">at or above 1.06</td><td><code>QUIET_P95_OVER_MEDIAN</code></td></tr>
+      <tr><td>the p95 of the scene's GPU frames, each over the median of the 31 around it</td><td class="n">at or above 1.06</td><td><code>QUIET_P95_OVER_MEDIAN</code>, <code>NEIGHBOUR_FRAMES</code></td></tr>
     </tbody>
   </table>
   </div>
@@ -717,7 +749,7 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
   <p>Aliasing has no floor: on the M4 Pro two runs of every Reference scene measured equal aliasing counters, so a rise past the ratios is a change of the image. A run that skipped them passes; a run that measured them against a Baseline without them fails both, with a message to re-record the Baseline, since the Baseline cannot say whether the image changed.</p>
   <p>Last, a failed CPU line gains the one-minute load average both runs started under, <code>unknown</code> for a record without Provenance, because CPU times move with the machine's load where GPU times hold: a reader of the line sees at once whether the run or the machine was slower.</p>
   <h3>Publishing</h3>
-  <p>After the scenes are written, <code>praxis bench</code> publishes them as Bench records on the <code>bench-history</code> branch, unless given <code>--no-publish</code>; with <code>--experiment</code> they publish under that name, on no <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main&#39;s source by a quiet machine (lavapipe&#39;s, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench&#39;s start, the scene&#39;s GPU frames held steady, and, since 2026-11-08, no process outside praxis held half a core or more at the scene&#39;s start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>. A publish that fails warns, names the <code>praxis publish</code> command that retries it, and fails no bench; the verify command and CI's pull-request runs never publish. The history observes and never gates: <a href="bench-history.html">The Bench history</a> says what a record becomes there.</p>
+  <p>After the scenes are written, <code>praxis bench</code> publishes them as Bench records on the <code>bench-history</code> branch, unless given <code>--no-publish</code>; with <code>--experiment</code> they publish under that name, on no <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main&#39;s source by a quiet machine (lavapipe&#39;s, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench&#39;s start, the scene&#39;s GPU frames held steady, each against the frames around it since 2026-11-11, and, since 2026-11-08, no process outside praxis held half a core or more at the scene&#39;s start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>. A publish that fails warns, names the <code>praxis publish</code> command that retries it, and fails no bench; the verify command and CI's pull-request runs never publish. The history observes and never gates: <a href="bench-history.html">The Bench history</a> says what a record becomes there.</p>
 </section>
 
 <section class="part prose" id="report">
@@ -803,7 +835,7 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
     </tbody>
   </table>
   </div>
-  <p class="note">Read from the committed files at the commit above; a test parses every one of them. The M4 Pro's hold the streaming counters, and lavapipe's <code>world</code>; they are zero but in the world's, whose counter frames load one Chunk on both adapters and whose M4 Pro measured frames load 42. The other Baselines read them as none. The RTX 2070 SUPER has no Baseline of <code>world</code>, and the M4 Pro's is marked not quiet: its GPU frame's p95 is about 1.14 times its median, past the 1.06 a quiet run stays under. The lavapipe key is <code>llvmpipe (LLVM 20.1.2, 256 bits)</code> through <code>adapter_key</code>.</p>
+  <p class="note">Read from the committed files at the commit above; a test parses every one of them. The M4 Pro's hold the streaming counters, and lavapipe's <code>world</code>; they are zero but in the world's, whose counter frames load one Chunk on both adapters and whose M4 Pro measured frames load 42. The other Baselines read them as none. The M4 Pro's and the RTX 2070 SUPER's Baselines of <code>world</code> are marked not quiet, as the stamp judged them when they were recorded: their GPU frame p95 is 1.15 to 1.16 times the run's median, past the 1.06 a quiet run then stayed under. The lavapipe key is <code>llvmpipe (LLVM 20.1.2, 256 bits)</code> through <code>adapter_key</code>.</p>
   <h3>Re-recording</h3>
   <p>The bench writes <code>&lt;scene&gt;.json</code> into whatever directory it is given, so <code>praxis bench bench/baselines/&lt;adapter key&gt; &lt;scene&gt;</code> writes the new Baseline in place; <code>praxis compare</code> prints that command when it finds no Baseline for a scene, naming <code>--crowd-form</code> for a crowd form's result. A lavapipe Baseline is copied from CI's <code>bench-results</code> artifact instead, since a session's lavapipe is not CI's. Baselines are recorded while no other session loads the machine, by hand and by choice: the Bench history keeps every run, and a re-recorded Baseline's record is marked as one (ADR 0024). A Baseline moves when a change moves what it measures and the change is accepted; a Budget moves down freely and up only through an ADR or a map comment (ADR 0013).</p>
 </section>
@@ -837,6 +869,7 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
       <tr><td><code>every_tracked_top_level_path_is_measured_or_unmeasured_but_not_both</code>, <code>the_harness_version_is_read_from_this_file_as_a_commit_holds_it</code></td><td><code>src/bench/provenance.rs</code></td><td>every top-level path git tracks is classified exactly once; a commit's Harness version is read from its copy of the file</td></tr>
       <tr><td><code>only_a_measured_path_moves_the_source_hash</code>, <code>two_clean_checkouts_of_a_commit_share_its_source_hash</code>, <code>a_dirty_or_untracked_measured_path_moves_the_source_hash_and_another_path_does_not</code></td><td><code>src/bench/provenance.rs</code></td><td>in temporary repositories: a docs commit keeps the hash and a source commit moves it; a clone shares it; a dirty or untracked measured file moves it and an unmeasured one does not, from a subdirectory too, leaving the checkout's index untouched</td></tr>
       <tr><td><code>a_run_is_quiet_only_when_preflight_would_warn_of_nothing_and_its_frames_hold_steady</code>, <code>a_process_busy_at_a_scenes_end_marks_that_scene_alone_not_quiet_and_is_named</code></td><td><code>src/bench/provenance.rs</code></td><td>each disqualifier of the table above, and that unknown readings pass; of three scenes, the one with a busy process at its end alone is not quiet, and names it tagged <code>end:</code></td></tr>
+      <tr><td><code>a_run_whose_gpu_frames_drift_is_quiet_and_one_whose_frames_spike_is_not</code></td><td><code>src/bench/provenance.rs</code></td><td>1,000 frames each 2 µs slower than the last read 1.18 against their median and exactly 1 against their neighbours, and are quiet; one frame in ten half as slow again reads 1.5 and is not; frames that took no time read neither ratio and are not</td></tr>
       <tr><td><code>a_run_renders_against_its_baseline_and_the_budgets</code>, <code>a_shorter_run_compares_its_counter_frames_and_no_times</code>, <code>a_run_without_a_baseline_shows_only_its_own_figures_and_the_budgets</code>, <code>aliasing_shows_beside_the_counters</code>, <code>a_baseline_of_another_size_is_refused</code>, <code>a_streamed_run_shows_what_it_streamed_and_compares_its_counter_frames</code></td><td><code>src/bench/report.rs</code></td><td>the whole markdown of one report, character for character; dashes where times compare with none; the aliasing rows after the counters, dashes without a Baseline's; the refusal; a run that loaded Chunks, against a Baseline that loaded them too, names its counter frames in its first line, compares their counters, and shows its BLAS compaction row and the streamed table, ending in its longest compaction wait, or none where it waited on none; a run that streamed nothing lacks the table</td></tr>
     </tbody>
   </table>
