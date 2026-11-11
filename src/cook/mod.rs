@@ -594,6 +594,10 @@ fn material_textures<'a>(material: &gltf::Material<'a>) -> [Option<gltf::Texture
 /// embedded image say, re-cooks neither.
 fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> anyhow::Result<()> {
     let gltf::Gltf { document, blob } = gltf::Gltf::from_slice(source)?;
+    let extensions = document.extensions_used().collect::<Vec<_>>().join(", ");
+    if !extensions.is_empty() {
+        tracing::warn!(path = %path.display(), %extensions, "glTF extensions are not cooked; what they add is dropped");
+    }
     let buffers =
         gltf::import_buffers(&document, path.parent(), blob).context("reading its buffers")?;
     let asset_source = AssetSource::File(guid);
@@ -874,5 +878,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A glTF source that uses extensions logs one warning naming its path
+    /// and each extension; a source that uses none logs nothing.
+    #[test]
+    fn a_source_using_gltf_extensions_warns_naming_each() {
+        let read_logged = |source: &str| {
+            crate::assets::pools::tests::logged(|| {
+                let mut sources = Sources::default();
+                read_gltf(
+                    1,
+                    Path::new("lacquered.gltf"),
+                    source.as_bytes(),
+                    &mut sources,
+                )
+            })
+        };
+
+        let (result, log) = read_logged(
+            r#"{"asset":{"version":"2.0"},"extensionsUsed":["KHR_materials_clearcoat","KHR_texture_transform"]}"#,
+        );
+        result.unwrap();
+        let warnings: Vec<&str> = log.lines().filter(|line| line.contains("WARN")).collect();
+        assert_eq!(warnings.len(), 1, "{log:?}");
+        for named in [
+            "lacquered.gltf",
+            "KHR_materials_clearcoat",
+            "KHR_texture_transform",
+        ] {
+            assert!(warnings[0].contains(named), "{named} not named: {log:?}");
+        }
+
+        let (result, log) = read_logged(r#"{"asset":{"version":"2.0"}}"#);
+        result.unwrap();
+        assert_eq!(log, "");
     }
 }
