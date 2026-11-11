@@ -12,7 +12,8 @@ const SLOT_COUNT: usize = FRAMES_IN_FLIGHT + 1;
 
 /// Staging memory for the per-frame uploads, reused every frame, where
 /// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
-/// slots grow on demand, never past the most one frame uploads. Each frame
+/// slots grow on demand, or to their largest at once through
+/// `grow_to_largest`, never past the most one frame uploads. Each frame
 /// fills the next slot in turn, copies it into its targets, and requests the
 /// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
 /// before. The fixed turn keeps the frame's heap allocations the same on
@@ -49,6 +50,14 @@ impl FrameStaging {
             slot_size: 0,
             max_slot_size,
             next_slot: 0,
+        }
+    }
+
+    /// Grows the slots to `max_slot_size` now, so no later frame creates
+    /// them.
+    pub fn grow_to_largest(&mut self, device: &wgpu::Device) {
+        if self.slot_size < self.max_slot_size {
+            self.resize(device, self.max_slot_size);
         }
     }
 
@@ -436,8 +445,58 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::assets::pools::tests::gpu_context;
     use crate::capture::submit_and_map;
     use crate::gpu::GpuContext;
+    use crate::stats::gpu_memory::tests::gpu_memory;
+
+    /// Frame staging grown to its largest holds `SLOT_COUNT` slots of
+    /// `max_slot_size` bytes, and a frame then uploading that most creates
+    /// no buffer.
+    #[test]
+    fn staging_grown_to_its_largest_creates_no_buffer_in_a_frame() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let max_slot_size = 1 << 20;
+        let memory = gpu_memory(&context);
+        let mut staging = FrameStaging::new(&memory, max_slot_size);
+        staging.grow_to_largest(&context.device);
+        let staging_bytes = || memory.bytes_by_kind()[GpuMemoryKind::Staging as usize];
+        assert_eq!(staging_bytes(), SLOT_COUNT as u64 * max_slot_size);
+        let slots: Vec<wgpu::Buffer> = staging
+            .slots
+            .iter()
+            .map(|slot| (*slot.buffer).clone())
+            .collect();
+
+        let target = context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Frame Staging Test Target"),
+            size: max_slot_size,
+            usage: wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bytes = vec![7; max_slot_size as usize / 2];
+        let mut encoder = context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let uploads = [
+            (&target, 0, &bytes[..]),
+            (&target, max_slot_size / 2, &bytes[..]),
+        ];
+        let uploaded = staging.write(&context.device, &mut encoder, uploads.into_iter());
+        context.queue.submit(std::iter::once(encoder.finish()));
+
+        assert_eq!(uploaded, max_slot_size);
+        assert_eq!(staging_bytes(), SLOT_COUNT as u64 * max_slot_size);
+        assert!(
+            staging
+                .slots
+                .iter()
+                .zip(&slots)
+                .all(|(slot, before)| *slot.buffer == *before)
+        );
+    }
 
     /// Every mip of slice 1 of an 8 × 8 BC5 texture array written through
     /// the belt after a 4-byte buffer write reads back as written: each mip
