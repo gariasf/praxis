@@ -575,6 +575,12 @@ quote = '''5. If the `MemoryLocation` is `CpuToGpu`, and the allocation in (4) d
 That fallback is not currently modeled in the `wgpu-hal` OOM check logic, so it's possible that we reject an allocation that would actually succeed in gpu-allocator.'''
 checked = 2026-11-07
 
+["tracing-issue-3611"]
+url = "https://github.com/tokio-rs/tracing/issues/3611"
+section = "tokio-rs/tracing issue 3611, has_just_one callsite short-path caches Interest::Never when a subscriber-less thread first registers the callsite (open)"
+quote = '''When exactly one `Dispatch` is registered process-wide, `callsite::rebuild_callsite_interest` takes the `has_just_one` short path. The `Rebuilder::JustOne` arm evaluates interest via **`dispatcher::get_default(f)`** — the *thread-local default of whichever thread first registers the callsite* — instead of evaluating the one registered `Dispatch`.'''
+checked = 2026-11-11
+
 ["smaa-subpixel-grid"]
 url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7"
 section = "Jimenez et al. 2012, SMAA, §4.3 Subpixel rendering, Figure 10, p. 7"
