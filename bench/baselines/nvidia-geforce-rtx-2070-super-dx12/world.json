@@ -170,7 +170,7 @@
   "uploaded_bytes": 1920224,
   "gpu_memory_bytes": 1234602948,
   "arena_bytes_in_use": 14704,
-  "heap_allocations": 10517,
+  "heap_allocations": 10480,
   "renderables_refused": 0,
   "lights_overflowed": 0,
   "static_instances_left_out": 0,
@@ -184,7 +184,7 @@
   "bytes_read": 27994714,
   "pool_entries_freed": 0,
   "late_mips": 65,
-  "tlas_build_allocations": 10086,
+  "tlas_build_allocations": 10075,
   "counter_frames": {
     "frames": {
       "start": 8,
@@ -197,7 +197,7 @@
     "uploaded_bytes": 1920224,
     "gpu_memory_bytes": 1038864948,
     "arena_bytes_in_use": 14704,
-    "heap_allocations": 10517,
+    "heap_allocations": 10480,
     "renderables_refused": 0,
     "lights_overflowed": 0,
     "static_instances_left_out": 0,
@@ -211,7 +211,7 @@
     "bytes_read": 228269,
     "pool_entries_freed": 0,
     "late_mips": 0,
-    "tlas_build_allocations": 10086
+    "tlas_build_allocations": 10075
   },
   "fast_travel_hold": {
     "milliseconds": 35.5431,
