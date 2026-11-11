@@ -1873,10 +1873,10 @@ pub(crate) mod tests {
                 Ok(())
             }
         }
-        // Never the only dispatcher registered (tokio-rs/tracing#3611 [ref:tracing-issue-3611]).
-        static SECOND_DISPATCHER: LazyLock<tracing::Dispatch> =
+        // No capture is the only dispatcher (tokio-rs/tracing#3611 [ref:tracing-issue-3611]).
+        static STANDING_DISPATCHER: LazyLock<tracing::Dispatch> =
             LazyLock::new(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()));
-        LazyLock::force(&SECOND_DISPATCHER);
+        LazyLock::force(&STANDING_DISPATCHER);
         let log = Log::default();
         let subscriber = tracing_subscriber::fmt()
             .with_writer({
