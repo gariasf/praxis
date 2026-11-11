@@ -54,7 +54,7 @@ impl FrameStaging {
     }
 
     /// Grows the slots to `max_slot_size` now, so no later frame creates
-    /// them: creating mapped slots takes milliseconds per 16 MiB.
+    /// them.
     pub fn grow_to_largest(&mut self, device: &wgpu::Device) {
         if self.slot_size < self.max_slot_size {
             self.resize(device, self.max_slot_size);

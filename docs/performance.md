@@ -29,6 +29,48 @@ its commit.
 | `BUSY_LOAD_AVERAGE` (`src/preflight/mod.rs`) | At one-minute load averages of 3.7 to 19.3, the light scenes' failing CPU frame lines read 1.10 to 2.25 times their Baselines while their GPU frames held within 2% | M4 Pro, Metal | 8bc34eb1, the M3.5 audit's frozen commit (2026-11-02) | Lane 3's bench rounds of every Reference scene; `docs/audit/m3.5/performance.md`, L3-L01 |
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
+| `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
+
+## The traversal's CPU maximum: the frame staging grew on the frame (2026-11-11, #755)
+
+**Summary.** The traversal's three slowest CPU frames grew the frame staging
+mid-run, creating three mapped slots at 16 MiB, 32 MiB and the
+66,541,092-byte bound on the frame (#753). The world's State now creates
+them at the bound before its first frame, so no frame of `praxis traverse`
+or of `world`'s bench creates staging: each run logs one resize, in
+`state_init`. The traversal's CPU maximum fell from 24.2 to 48.2 ms to
+10.3 to 13.0 ms. The slowest frame is the one that grew the slots to the
+bound on `main`, now a Chunk-load frame whose `upload` is 1.1 to 1.2 ms.
+
+Apple M4 Pro, Metal, release builds of `27d88d5c` (`main`) and of the
+change, interleaved, each run after four quiet preflight reads in a row
+(one-minute load 1.02 to 1.48, GPU load 0 to 2%, no busy process).
+
+| `praxis traverse`, rounds 1 / 2 / 3 | `main` | This change |
+|---|---|---|
+| CPU frame maximum, µs | 29,855.5 / 24,163.3 / 48,234.0 | 12,960.9 / 12,717.8 / 10,327.2 |
+| CPU frame p99, µs | 2,129.9 / 2,041.7 / 2,192.6 | 2,107.9 / 2,065.0 / 2,063.8 |
+| GPU frame maximum, µs | 9,406.5 / 9,503.5 / 10,972.7 | 10,939.6 / 9,596.0 / 9,302.6 |
+| Peak GPU memory, bytes | 1,003,873,440 in each | 1,003,873,440 in each |
+| Late Chunks | 0 | 0 |
+| Frame staging resizes logged | 5 in each | 1 in each, in `state_init` |
+
+The peak is unchanged because every traversal reached the bound before.
+`world`'s bench created four States and logged four resizes, each in `state_init`.
+
+Three more runs of the change with #753's per-frame probe name the slowest
+frames:
+
+| Frame | CPU, ms | `prepare_frame` | `static_tlas_update` | `stream_chunks` | `upload` | Chunks loaded | Instances written | On `main` |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 15664 to 15665 | 11.48 to 12.27 | 3.87 to 4.63 | 2.64 to 3.83 | 1.85 to 1.94 | 1.14 to 1.18 | 4 | 291,025 | the resize to the bound |
+| 13492 to 13493 | 8.47 to 8.86 | 2.75 to 2.83 | 1.96 to 2.22 | 1.39 to 1.44 | 0.96 to 1.17 | 2 | 246,705 | the resize to 32 MiB |
+| The third slowest | 7.69 to 8.39 | | | | | 0 to 3 | 10,000 to 316,506 | Chunk loads, or no load |
+
+The two frames that grew the staging on `main` carried more Chunk-load work
+than the 7.3 to 8.0 ms frames #753 listed after them: frame 15664 writes
+291,025 Instances from four Chunks. `INSTANCES_PLACED_PER_FRAME` counts a
+Chunk's Placements, not the Instances they write.
 
 ## `world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once (2026-11-09, #743)
 
