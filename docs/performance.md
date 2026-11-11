@@ -41,13 +41,15 @@ best round, and ADR 0019's gate p99 2.80 to 3.05 ms. Two criteria moved
 by the owner's
 [decision](https://github.com/gariasf/praxis/issues/672#issuecomment-6798647738).
 Criterion 7's N moves from 8 to 10: every ordinary load is traced within 7
-frames, but the first static TLAS build after the Fast travel carries the
-whole arrival and reads 8 to 10. Criterion 5's clause, that every frame of
+frames, but the changes of the first frame after the hold wait 9 to 10,
+queued behind the arrival's own static TLAS build. Criterion 5's clause, that every frame of
 the hold meets criterion 1, is accepted as failing in some runs: the
 arrival frame reads 10.0 to 18.0 ms in three probe runs, most of it in
 `stream_chunks` (#773).
 The hold itself, 26.1 to 33.6 ms, stays within its 50 ms. No Budget is
-newly breached, and no line already over its Budget moved further over.
+newly breached. Of `town`'s lines already over theirs, the GPU frame and
+gate p99 fell, and the GPU frame maximum and gate median rose by under
+1.1%.
 The top three offenders are `town`'s GPU frame and gate (#602), the Fast
 travel's arrival frame (#773) and the traversal's slowest Chunk-load frame
 (#761).
@@ -65,13 +67,19 @@ scene quiet but `world`, whose GPU frame p95 reads 1.135 to 1.138 times
 its median. That is the path's nature, #729. Round 2 also stamps
 normal-tangent and uv-grid not quiet, at 1.15 and 1.18.
 
-The Baselines are round 1's, all twelve scenes from one run. It is the
-round where every scene but `world` stamps quiet, and the middle round on
-`world`'s CPU p99 and maximum. Against the Baselines before, the only
-counters that moved are `heap_allocations` and `tlas_build_allocations`,
-each lower (`town` and `world` 10,510 to 10,473 and 10,082 to 10,071). In
-`world`'s measured frames, `frames_until_traced` moves from 6 to 9 and
-`late_mips` from 50 to 65.
+The Baselines are round 1's, all twelve scenes from one run. It is one
+of the two rounds where every scene but `world` stamps quiet, and the
+middle round on `world`'s CPU p99 and maximum. Against the Baselines
+before, the only counter-frame counters that moved are `heap_allocations`
+and `tlas_build_allocations`, each lower (`town` and `world` 10,510 to
+10,473 and 10,082 to 10,071). `world`'s measured frames moved more:
+- `frames_until_traced` from 6 to 9 and `late_mips` from 50 to 65;
+- `gpu_memory_bytes` from 1,322,637,104 to 970,313,888, as `texture_pool`
+  fell from 363,331,584 to 16,515,072 since #743;
+- `resident_tails` from 22,114,248 to 16,607,544 and `bytes_read` from
+  25,073,563 to 27,994,879;
+- `instances_drawn` from 10,957 to 10,961 and `triangles_drawn` from
+  135,064 to 135,198.
 
 ### Measurements
 
@@ -133,9 +141,10 @@ with 65 late mips. The Fast travel's hold took 33.1 ms over 4 frames,
 - **Where `world`'s slowest frames go.** Three more runs of the segment
   with a per-frame probe locate them. The arrival frame of the Fast travel
   reads 16.3, 10.0 and 18.0 ms of CPU, of which `stream_chunks` is 10.2,
-  4.3 and 12.1 ms, `prepare_frame` 2.3 to 2.4 ms and `static_tlas_update`
-  1.5 to 1.7 ms. The next slowest frames are Chunk loads at 7.9 to 10.3
-  ms. `texture_pool` holds at 16,515,072 B through the hold, so no Texture
+  4.3 and 12.1 ms, `prepare_frame` 2.4 ms and `static_tlas_update` 1.5 to
+  1.7 ms. Outside the hold, the slowest frames are Chunk loads at 7.9 to
+  10.3 ms. The probe did not cover bench round 3, so its 19.2 ms maximum
+  is not placed. `texture_pool` holds at 16,515,072 B through the hold, so no Texture
   class is created there. #773 takes the arrival frame.
 - **Fast travel**: 33.1, 28.4 and 33.6 ms over 3 to 4 frames, within the
   50 ms recorded. In the probe, the arrival frame passes 16,667 µs in one
@@ -143,9 +152,17 @@ with 65 late mips. The Fast travel's hold took 33.1 ms over 4 frames,
   accepted that clause as failing (#773).
 - **Frames until traced**: 9, 9 and 8 in the rounds, and 9, 10 and 9 in
   the probe runs. In each probe run, 57 of 58 builds bring their changes
-  in 2 to 7 frames, 4 at the median. The one build over 7 is the first
-  bound after the Fast travel, at frames 1812 to 1814, which carries every
-  Chunk of the arrival. N moves to 10.
+  in 2 to 7 frames, 4 at the median. The one over 7 is the third bound
+  after the jump:
+  - a build of 5.9 to 6.0 ms brings the hold's first changes in 2 to 3
+    frames;
+  - the arrival frame's own build, 18.7 to 19.6 ms on its worker, brings
+    them in 7;
+  - the changes of the first frame after the hold wait for that build,
+    then for their own, 17.3 to 19.3 ms. They are traced in 9 to 10
+    frames, at frames 1812 to 1814.
+
+  N moves to 10.
 - **The full traversal**: CPU frame p99 2,035.6 µs and maximum 11,386.9
   µs, GPU frame p99 4,853.7 µs and maximum 12,230.7 µs, 0 Late Chunks,
   230 late mips, the Fast travel's hold 11.9 ms over 3 frames.
@@ -158,8 +175,9 @@ with 65 late mips. The Fast travel's hold took 33.1 ms over 4 frames,
   against 1.19 ms, under its 1.1 ms ceiling since #744.
 - **`world`'s dynamic TLAS** reads 0.66 to 0.68 ms on the CPU, under the
   same ceiling. Its GPU build pass reads 114.2 µs at the median against
-  90.2 µs before; #744 measured 106 µs after its change and did not find
-  why it grew.
+  90.2 µs before, which `praxis compare` fails against that Baseline
+  (+26.6%), within its 1,000 µs Budget. #744 measured 106 µs after its
+  change and did not find why it grew.
 - **Lines already over their Budget**: `town`'s GPU frame p99, 20,980.4 to
   20,871.9 µs, and its gate p99, 9,346.3 to 9,043.0 µs. Both fell.
 
@@ -191,22 +209,25 @@ Ranked by their share of the bound each breaches:
 
 1. **`town`'s GPU frame, 20.0 ms, and gate, 8.6 ms** (167% and 143%):
    shadow rays and the triangles drawn, placed at M5's LOD. #602
-2. **The Fast travel's arrival frame, 10.0 to 18.0 ms** (up to 108% of
-   16,667 µs), 4.3 to 12.1 ms of it in `stream_chunks`. The first static
-   TLAS build after it also waits 8 to 10 frames. #773
+2. **The Fast travel's arrival frame, 10.0 to 18.0 ms** in the probe (up
+   to 108% of 16,667 µs), 4.3 to 12.1 ms of it in `stream_chunks`. Its
+   long static TLAS build also holds the next loads to 9 to 10 frames.
+   #773
 3. **The traversal's slowest Chunk-load frames**, 11.4 ms at most, within
-   16,667 µs. The frame that writes the most Instances spends them in
-   `prepare_frame` and `static_tlas_update`. #761
+   16,667 µs. In #755's probe of the traversal, the frame that writes the
+   most Instances spent its time in `prepare_frame` and
+   `static_tlas_update`. #761
 
 ### Also seen
 
 - `world`'s GPU p99 reads 7.43 to 7.71 ms against 6.46 ms in its
   Baseline before, and its gate p99 2.80 to 3.05 ms against 2.10. #744
-  saw the same rise once the main thread outpaced the GPU, so that every
-  frame queues behind the one before.
+  measured a smaller rise, to 6.40 to 6.95 ms, once the main thread
+  outpaced the GPU, so that every frame queues behind the one before. It
+  did not verify that cause on `world`, and neither does this run.
 - minification's and uv-grid's culling phase one read 28.2 to 28.3 µs
   against their Baselines' 24.0 in round 1. `praxis compare` warns on it,
-  and their GPU frames hold within 0.5%.
+  and their GPU frames hold within 0.7%.
 - The light scenes' CPU medians read 182 to 209 µs against 188 to 237 µs
   before.
 
