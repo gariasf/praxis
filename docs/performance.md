@@ -40,13 +40,15 @@ frame's loads freed 96 pool entries to make room and prepare answers any
 free by writing every Instance again. `INSTANCES_PLACED_PER_FRAME` keeps
 counting Placements: a frame's loads never wrote more than 100,036
 Instances, under its 131,072, and what the rewrite writes grows with what
-is loaded, not with what the frame loads. Its cost has its own ticket.
+is loaded, not with what the frame loads. The rewrite's cost is #776's.
 
 Apple M4 Pro, Metal, a release build of `06d5e20a` with #753's per-frame
 probe and a count of prepare's Chunk writes by source, one `praxis
-traverse` run. The counts do not depend on load: the Instances each frame
-writes match #755's three quiet runs on 28,866 to 28,911 of their 28,925
-frames, and the others are one load landing a frame apart.
+traverse` run. The counts do not depend on load: frame for frame, the
+Instances written match #755's three quiet runs on 28,866 to 28,911 of
+their 28,925 frames. The others are the same loads landing a frame or two
+apart, and loads whose frees fall on two adjacent frames in one run and on
+one frame in another.
 
 ### Frame 15664, by source
 
@@ -59,7 +61,7 @@ frames, and the others are one load landing a frame apart.
 | Slots of the free ranges, written again with no Mesh | 50,251 |
 | **The frame** | **291,025** |
 
-The last three rows are the rewrite. `Preparer::prepare` sets
+The last three rows are the rewrite. `FramePreparer::prepare` sets
 `rewrite_every_instance` whenever the Mesh and Material pools' frees have
 moved since the last frame, since an Instance may then name an index whose
 Mesh is gone. A free made to fit a load takes only an entry no loaded Chunk
@@ -78,10 +80,11 @@ Placements name, so none of the 252,490 Instances changed.
 | The rewrite after a pool's frees | 33 | 8,579,585 | 301,146 |
 
 The 33 frames whose loads freed pool entries, 2 to 128 of them, are the 33
-that wrote 200,000 Instances or more; #755's quiet runs had 35 to 37 of
-each, the same frames. Each rewrites 204,839 to 301,146 Instances beside at
-most 33,227 of its own. A frame without frees wrote at most 140,756 from
-Chunks.
+that wrote 200,000 Instances or more. In each of #755's quiet runs the two
+sets are again one, of 35 to 37 frames: frees that fall on two adjacent
+frames rewrite twice. Each of the 33 rewrites 204,839 to 301,146 Instances
+beside at most 33,227 of its own. A frame without frees wrote at most
+140,756 from Chunks.
 
 ### Without the rewrite
 
@@ -94,7 +97,7 @@ the runs and 2.48 to 4.15 after them. So no run's maximum is quoted (in the
 prototype's third, a frame with no load read 111.7 ms, 105.6 of them in
 `encode`), only the frames whose loads freed pool entries, whose medians one
 disturbed frame does not move. Frame 15664 read 11.5 to 12.3 ms in #755's
-quiet runs, as in rounds 2 and 3 here.
+quiet runs, against 12.10 and 12.93 ms in rounds 2 and 3 here.
 
 | Rounds 1 / 2 / 3 | Every Instance written again, as `main` does | Chunks' ranges and free ranges left |
 |---|---|---|
