@@ -31,6 +31,185 @@ its commit.
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
 
+## M4 exit, the bench rerun (2026-11-11, #672)
+
+**Verdict.** With #743, #744 and #755 fixed, `world`'s frames meet M4's
+frame criterion on the bench segment. CPU p99 reads 2.30 to 2.37 ms
+against 6 ms. The CPU maximum reads 11.2 ms in the best round, against
+16,667 µs. GPU p99 reads 7.43 to 7.71 ms, the GPU maximum 11.8 ms in the
+best round, and ADR 0019's gate p99 2.80 to 3.05 ms. Two criteria moved
+by the owner's
+[decision](https://github.com/gariasf/praxis/issues/672#issuecomment-6798647738).
+Criterion 7's N moves from 8 to 10: every ordinary load is traced within 7
+frames, but the first static TLAS build after the Fast travel carries the
+whole arrival and reads 8 to 10. Criterion 5's clause, that every frame of
+the hold meets criterion 1, is accepted as failing in some runs: the
+arrival frame reads 10.0 to 18.0 ms in three probe runs, most of it in
+`stream_chunks` (#773).
+The hold itself, 26.1 to 33.6 ms, stays within its 50 ms. No Budget is
+newly breached, and no line already over its Budget moved further over.
+The top three offenders are `town`'s GPU frame and gate (#602), the Fast
+travel's arrival frame (#773) and the traversal's slowest Chunk-load frame
+(#761).
+
+Apple M4 Pro, macOS 27.2.1, wgpu 30.0.1 on Metal, a release build of
+`d454229c`. The engine is identical at `79d80cd8`, as the commits between
+change only tests, docs and the sweep script. `praxis bench <dir>
+--no-publish` ran at 2560×1440 with 4x MSAA, 248 warm-up and 1,800
+measured frames per scene (`world` 3,352), rays on then off, under
+`caffeinate -dims`, on AC power, with no other praxis process. Three
+rounds of every scene started at 13:46, 13:50 and 13:56 UTC. Each started
+once preflight had read quiet four times in a row: one-minute loads of
+1.31, 1.41 and 1.45, and a GPU load of 1%. Rounds 1 and 3 stamp every
+scene quiet but `world`, whose GPU frame p95 reads 1.135 to 1.138 times
+its median. That is the path's nature, #729. Round 2 also stamps
+normal-tangent and uv-grid not quiet, at 1.15 and 1.18.
+
+The Baselines are round 1's, all twelve scenes from one run. It is the
+round where every scene but `world` stamps quiet, and the middle round on
+`world`'s CPU p99 and maximum. Against the Baselines before, the only
+counters that moved are `heap_allocations` and `tlas_build_allocations`,
+each lower (`town` and `world` 10,510 to 10,473 and 10,082 to 10,071). In
+`world`'s measured frames, `frames_until_traced` moves from 6 to 9 and
+`late_mips` from 50 to 65.
+
+### Measurements
+
+The three rounds, against the Baselines recorded at the exit's first pass:
+
+| Scene | CPU median µs | CPU p99 µs | GPU frame median µs | GPU frame p99 µs | Gate median µs | Shadow-ray time median µs | Dynamic TLAS CPU median µs | CPU / GPU Baseline before, µs |
+|---|---|---|---|---|---|---|---|---|
+| crowd | 682.2 / 723.6 / 686.2 | 895.0 / 860.7 / 868.3 | 3,765.9 / 3,769.5 / 3,767.2 | 4,003.3 / 4,039.1 / 3,934.3 | 1,287.8 / 1,294.4 / 1,290.3 | 2,152.0 / 2,148.2 / 2,150.3 | 239.9 / 259.0 / 237.8 | 785.5 / 3,765.0 |
+| far-coplanar | 209.0 / 208.2 / 208.9 | 301.6 / 290.0 / 317.2 | 2,612.3 / 2,617.0 / 2,616.1 | 2,638.3 / 2,677.3 / 2,640.7 | 726.9 / 728.3 / 725.8 | 1,561.4 / 1,565.0 / 1,566.7 | 0.1 / 0.1 / 0.1 | 237.3 / 2,612.1 |
+| helmet | 183.7 / 190.8 / 188.7 | 375.5 / 386.0 / 380.5 | 6,611.0 / 6,682.0 / 6,612.2 | 6,917.3 / 6,977.8 / 6,915.2 | 1,224.9 / 1,224.5 / 1,226.8 | 5,061.7 / 5,133.0 / 5,060.6 | 0.1 / 0.1 / 0.1 | 189.2 / 6,687.3 |
+| minification | 194.8 / 196.0 / 198.4 | 314.7 / 355.6 / 297.8 | 3,013.4 / 3,003.4 / 2,996.8 | 3,035.0 / 3,252.4 / 3,082.7 | 845.5 / 847.8 / 845.3 | 1,843.9 / 1,832.5 / 1,827.6 | 0.1 / 0.1 / 0.1 | 201.1 / 2,992.8 |
+| normal-tangent | 183.8 / 182.4 / 186.1 | 281.8 / 288.5 / 294.5 | 3,691.8 / 3,712.6 / 3,694.4 | 3,963.5 / 4,301.0 / 3,976.1 | 824.8 / 828.2 / 823.5 | 2,542.9 / 2,555.9 / 2,546.7 | 0.1 / 0.1 / 0.1 | 188.3 / 3,675.5 |
+| orrery | 380.9 / 365.3 / 368.2 | 482.1 / 471.5 / 472.6 | 2,922.2 / 2,918.0 / 2,924.7 | 3,089.6 / 3,086.3 / 3,093.1 | 639.7 / 640.3 / 643.4 | 1,958.7 / 1,951.5 / 1,957.1 | 199.1 / 185.7 / 187.0 | 371.3 / 2,920.5 |
+| pbr-sweep | 182.5 / 188.2 / 185.0 | 299.9 / 359.2 / 303.8 | 3,887.6 / 3,893.8 / 3,886.7 | 4,029.0 / 4,023.9 / 4,021.0 | 778.7 / 782.3 / 782.0 | 2,782.2 / 2,780.7 / 2,778.1 | 0.1 / 0.1 / 0.1 | 187.8 / 3,864.1 |
+| shadows | 195.5 / 199.5 / 200.0 | 371.5 / 370.3 / 361.7 | 4,112.7 / 4,141.0 / 4,139.4 | 4,405.8 / 4,422.8 / 4,417.2 | 867.9 / 867.8 / 867.7 | 2,920.8 / 2,948.8 / 2,947.7 | 0.1 / 0.1 / 0.1 | 199.9 / 4,139.2 |
+| texture-wall | 186.2 / 191.8 / 181.9 | 248.8 / 267.4 / 233.5 | 2,286.1 / 2,287.0 / 2,285.3 | 2,343.9 / 2,306.6 / 2,304.0 | 613.5 / 611.8 / 611.0 | 1,348.5 / 1,351.0 / 1,350.2 | 0.1 / 0.1 / 0.1 | 195.8 / 2,284.5 |
+| town | 1,437.9 / 1,502.7 / 1,466.4 | 1,870.2 / 1,885.8 / 1,884.8 | 19,990.3 / 20,007.2 / 19,992.4 | 20,871.9 / 20,465.6 / 20,434.0 | 8,579.6 / 8,574.2 / 8,580.1 | 10,909.8 / 10,924.4 / 10,909.3 | 672.5 / 700.3 / 681.8 | 5,310.4 / 20,000.0 |
+| uv-grid | 193.6 / 188.2 / 184.7 | 346.5 / 261.2 / 277.2 | 2,936.5 / 2,940.3 / 2,920.5 | 3,018.6 / 3,495.7 / 3,088.2 | 768.5 / 767.6 / 771.1 | 1,844.1 / 1,847.5 / 1,824.8 | 0.1 / 0.1 / 0.1 | 196.8 / 2,920.1 |
+| world | 1,492.4 / 1,476.1 / 1,487.5 | 2,310.8 / 2,368.9 / 2,302.9 | 4,863.7 / 4,847.4 / 4,857.6 | 7,475.7 / 7,430.5 / 7,708.3 | 1,294.5 / 1,293.3 / 1,293.4 | 2,669.7 / 2,678.5 / 2,691.5 | 680.0 / 662.1 / 673.1 | 4,112.3 / 4,857.5 |
+
+`world`'s first round in full, its Baseline now, against the Baseline
+before:
+
+**world** on Apple M4 Pro, release, 2560x1440, 3352 measured frames; counters of frames 8..72
+
+| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 1,492.4 | 1,915.2 | 2,310.8 | 16,391.8 | 4,112.3 | 5,647.5 | -2,619.9 | 0.363 | 6,000.0 |
+| Dynamic TLAS, CPU | 680.0 | 848.2 | 875.0 | 2,084.4 | 1,187.5 | 1,377.2 | -507.5 | 0.573 | 1,100.0 |
+| GPU frame | 4,863.7 | 5,520.5 | 7,475.7 | 11,841.5 | 4,857.5 | 5,591.9 | +6.2 | 1.001 | 12,000.0 |
+| Gate, rays off | 1,294.5 | 1,537.0 | 2,797.1 | 7,459.2 | 1,278.7 | 1,499.7 | +15.8 | 1.012 | 6,000.0 |
+| Shadow-ray time | 2,669.7 | 3,526.4 | 5,268.8 | 9,526.1 | 2,596.5 | 3,286.7 | +73.1 | 1.028 | — |
+| `bend_pass` | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `blas_refit` | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | +0.0 | — | — |
+| `culling_phase_one` | 192.8 | 240.2 | 257.2 | 2,689.1 | 194.0 | 243.2 | -1.2 | 0.994 | — |
+| `culling_phase_two` | 150.9 | 174.8 | 187.1 | 456.5 | 150.4 | 174.9 | +0.5 | 1.003 | — |
+| `depth_prepass` | 241.9 | 300.9 | 311.2 | 559.6 | 241.1 | 299.3 | +0.8 | 1.003 | — |
+| `depth_pyramid_pass` | 210.1 | 216.1 | 221.2 | 515.2 | 210.1 | 215.8 | +0.0 | 1.000 | — |
+| `dynamic_tlas_build` | 114.2 | 183.0 | 471.8 | 1,106.1 | 90.2 | 170.0 | +24.0 | 1.266 | 1,000.0 |
+| `froxel_pass` | 9.6 | 10.1 | 10.4 | 74.8 | 10.0 | 62.2 | -0.5 | 0.954 | — |
+| `lit_pass` | 560.5 | 652.5 | 1,066.9 | 4,473.6 | 576.3 | 807.9 | -15.8 | 0.973 | — |
+| `phase_two_depth_pass` | 74.8 | 107.5 | 130.1 | 445.8 | 70.2 | 103.4 | +4.5 | 1.065 | — |
+| `shadow_mask_pass` | 2,918.0 | 3,363.2 | 3,700.5 | 6,045.2 | 2,920.8 | 3,359.0 | -2.8 | 0.999 | — |
+| `tonemapping_pass` | 367.0 | 377.3 | 434.2 | 2,665.7 | 368.2 | 377.0 | -1.2 | 0.997 | — |
+
+The Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to 16,667.0 µs.
+
+Over its 3,352 measured frames, each round loaded 42 Chunks, none late,
+with 65 late mips. The Fast travel's hold took 33.1 ms over 4 frames,
+28.4 ms over 4 and 33.6 ms over 3.
+
+### Against the Budgets and M4's criteria
+
+- **Frames under streaming**, `world`'s segment. CPU p99 reads 2.30 to
+  2.37 ms (38 to 39% of 6 ms). The CPU maximum reads 16.4, 11.2 and 19.2
+  ms; the best round's, 11.2 ms, is 67% of 16,667 µs. GPU p99 reads 7.43
+  to 7.71 ms, and the GPU maximum 11.8 to 12.0 ms. Gate p99 reads 2.80 to
+  3.05 ms.
+- **Where `world`'s slowest frames go.** Three more runs of the segment
+  with a per-frame probe locate them. The arrival frame of the Fast travel
+  reads 16.3, 10.0 and 18.0 ms of CPU, of which `stream_chunks` is 10.2,
+  4.3 and 12.1 ms, `prepare_frame` 2.3 to 2.4 ms and `static_tlas_update`
+  1.5 to 1.7 ms. The next slowest frames are Chunk loads at 7.9 to 10.3
+  ms. `texture_pool` holds at 16,515,072 B through the hold, so no Texture
+  class is created there. #773 takes the arrival frame.
+- **Fast travel**: 33.1, 28.4 and 33.6 ms over 3 to 4 frames, within the
+  50 ms recorded. In the probe, the arrival frame passes 16,667 µs in one
+  run of three and comes within 0.4 ms of it in another. The owner
+  accepted that clause as failing (#773).
+- **Frames until traced**: 9, 9 and 8 in the rounds, and 9, 10 and 9 in
+  the probe runs. In each probe run, 57 of 58 builds bring their changes
+  in 2 to 7 frames, 4 at the median. The one build over 7 is the first
+  bound after the Fast travel, at frames 1812 to 1814, which carries every
+  Chunk of the arrival. N moves to 10.
+- **The full traversal**: CPU frame p99 2,035.6 µs and maximum 11,386.9
+  µs, GPU frame p99 4,853.7 µs and maximum 12,230.7 µs, 0 Late Chunks,
+  230 late mips, the Fast travel's hold 11.9 ms over 3 frames.
+- **GPU memory, 8 GB**: the full traversal peaks at 1,003,873,440 B
+  (12.5%), each kind within its Budget. Meshes, Materials, Renderables
+  and lights refused: 0, and no Chunk not loaded.
+- **`town`**: GPU frame 19.99 to 20.01 ms (167%) and gate 8.57 to 8.58
+  ms (143%), both #602. Its CPU frame reads 1.44 to 1.50 ms at the median
+  against 5.31 ms before, and its dynamic TLAS line 0.67 to 0.70 ms
+  against 1.19 ms, under its 1.1 ms ceiling since #744.
+- **`world`'s dynamic TLAS** reads 0.66 to 0.68 ms on the CPU, under the
+  same ceiling. Its GPU build pass reads 114.2 µs at the median against
+  90.2 µs before; #744 measured 106 µs after its change and did not find
+  why it grew.
+- **Lines already over their Budget**: `town`'s GPU frame p99, 20,980.4 to
+  20,871.9 µs, and its gate p99, 9,346.3 to 9,043.0 µs. Both fell.
+
+| Traversal | Value |
+|---|---:|
+| CPU frame p99, µs | 2,035.6 |
+| CPU frame maximum, µs | 11,386.9 |
+| GPU frame p99, µs | 4,853.7 |
+| GPU frame maximum, µs | 12,230.7 |
+| Late Chunks | 0 |
+| Late mips | 230 |
+| Peak GPU memory, bytes | 1,003,873,440 |
+| Fast-travel hold, ms | 11.9 |
+| Fast-travel hold, frames | 3 |
+
+| GPU memory kind | Peak, bytes | Budget, bytes |
+|---|---:|---:|
+| geometry_arenas | 83,886,072 | 83,886,080 |
+| texture_pool | 33,292,288 | 4,294,967,296 |
+| resident_tails | 33,389,880 | 268,435,456 |
+| render_targets | 270,335,860 | 536,870,912 |
+| acceleration_structures | 155,577,592 | 268,435,456 |
+| staging | 199,623,276 | 268,435,456 |
+| scene_and_pass_buffers | 227,768,472 | 234,881,024 |
+
+### Top three offenders
+
+Ranked by their share of the bound each breaches:
+
+1. **`town`'s GPU frame, 20.0 ms, and gate, 8.6 ms** (167% and 143%):
+   shadow rays and the triangles drawn, placed at M5's LOD. #602
+2. **The Fast travel's arrival frame, 10.0 to 18.0 ms** (up to 108% of
+   16,667 µs), 4.3 to 12.1 ms of it in `stream_chunks`. The first static
+   TLAS build after it also waits 8 to 10 frames. #773
+3. **The traversal's slowest Chunk-load frames**, 11.4 ms at most, within
+   16,667 µs. The frame that writes the most Instances spends them in
+   `prepare_frame` and `static_tlas_update`. #761
+
+### Also seen
+
+- `world`'s GPU p99 reads 7.43 to 7.71 ms against 6.46 ms in its
+  Baseline before, and its gate p99 2.80 to 3.05 ms against 2.10. #744
+  saw the same rise once the main thread outpaced the GPU, so that every
+  frame queues behind the one before.
+- minification's and uv-grid's culling phase one read 28.2 to 28.3 µs
+  against their Baselines' 24.0 in round 1. `praxis compare` warns on it,
+  and their GPU frames hold within 0.5%.
+- The light scenes' CPU medians read 182 to 209 µs against 188 to 237 µs
+  before.
+
 ## The traversal's slowest frames write every Chunk's Instances again after a pool frees (2026-11-11, #761)
 
 **Summary.** The traversal's slowest CPU frame writes 291,025 Instances, of
@@ -3289,7 +3468,6 @@ are also seen.
   the previous frame's passes and reads 0 on the orrery and the crowd;
   this adapter reads 52 and 161 µs there, and 246 µs on `town`, under
   the 1 ms ceiling.
-
 
 ## `town`'s Baselines, ADR 0019's gate and the dynamic TLAS (2026-10-26, #207)
 
