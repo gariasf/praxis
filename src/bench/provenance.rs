@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 
-use super::Spread;
+use super::percentile;
 use crate::preflight::{
     BUSY_GPU_PERCENT, BUSY_LOAD_AVERAGE, gpu_load_percent, machine_warnings,
     one_minute_load_average, other_praxis_processes,
@@ -33,9 +33,15 @@ const MEASURED_PATHS: [&str; 6] = [
     "vendor",
 ];
 
-/// A scene's GPU frame p95 over its median at or above which its run was
-/// not quiet, whatever preflight saw at its start.
+/// The p95, over a scene's GPU frames, of each over the median of the
+/// `NEIGHBOUR_FRAMES` around it, at or above which its run was not quiet,
+/// whatever preflight saw at its start; and the GPU frame p95 over the
+/// run's median that the import judges a Baseline from before results
+/// carried the first by.
 pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
+
+/// How many frames a GPU frame is judged among, itself in the middle.
+pub(super) const NEIGHBOUR_FRAMES: usize = 31;
 
 /// Where and when a bench result was measured.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -64,6 +70,11 @@ pub struct Provenance {
     /// The scene's GPU frame p95 over its median; none when the median is
     /// zero.
     pub gpu_frame_p95_over_median: Option<f64>,
+    /// The p95, over the scene's GPU frames, of each over the median of the
+    /// `NEIGHBOUR_FRAMES` around it; none when such a median is zero, and
+    /// in records from before results carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_frame_p95_over_neighbours: Option<f64>,
     /// Whether the machine was quiet, from the fields above.
     pub quiet: bool,
     /// When the scene's bench started, in seconds since the Unix epoch.
@@ -107,19 +118,20 @@ impl BenchStart {
     }
 
     /// The Provenance of a scene's run that started at `started` and
-    /// loaded `scene_content_hash`, on `adapter`, whose GPU frame spread
-    /// `gpu_frame`, and that `busy_processes` shared the CPU with.
+    /// loaded `scene_content_hash`, on `adapter`, whose measured frames
+    /// took `gpu_frame_microseconds` each on the GPU, and that
+    /// `busy_processes` shared the CPU with.
     pub(crate) fn provenance(
         &self,
         adapter: &wgpu::AdapterInfo,
         scene_content_hash: String,
-        gpu_frame: Spread,
+        gpu_frame_microseconds: &[f64],
         started: SystemTime,
         busy_processes: Option<Vec<String>>,
     ) -> Option<Provenance> {
         let checkout = self.checkout.clone()?;
-        let gpu_frame_p95_over_median =
-            (gpu_frame.median > 0.0).then(|| gpu_frame.p95 / gpu_frame.median);
+        let gpu_frame_p95_over_median = p95_over_median(gpu_frame_microseconds);
+        let gpu_frame_p95_over_neighbours = p95_over_neighbours(gpu_frame_microseconds);
         Some(Provenance {
             checkout,
             driver: adapter.driver.clone(),
@@ -135,15 +147,46 @@ impl BenchStart {
                 self.other_processes.as_deref(),
                 busy_processes.as_deref(),
                 &self.machine_warnings,
-                gpu_frame_p95_over_median,
+                gpu_frame_p95_over_neighbours,
             ),
             busy_processes,
             gpu_frame_p95_over_median,
+            gpu_frame_p95_over_neighbours,
             started_unix_seconds: started
                 .duration_since(UNIX_EPOCH)
                 .map_or(0, |since_epoch| since_epoch.as_secs()),
         })
     }
+}
+
+/// The p95 of `times` over their median; none when it is zero or there
+/// are no times.
+fn p95_over_median(times: &[f64]) -> Option<f64> {
+    if times.is_empty() {
+        return None;
+    }
+    let median = percentile(times.to_vec(), 0.5);
+    (median > 0.0).then(|| percentile(times.to_vec(), 0.95) / median)
+}
+
+/// The p95, over `times`, of each over the median of the `NEIGHBOUR_FRAMES`
+/// centred on it, fewer at either end of `times`; none when such a median
+/// is zero or there are no times.
+fn p95_over_neighbours(times: &[f64]) -> Option<f64> {
+    let reach = NEIGHBOUR_FRAMES / 2;
+    let ratios: Option<Vec<f64>> = times
+        .iter()
+        .enumerate()
+        .map(|(frame, time)| {
+            let neighbours =
+                &times[frame.saturating_sub(reach)..times.len().min(frame + reach + 1)];
+            let median = percentile(neighbours.to_vec(), 0.5);
+            (median > 0.0).then(|| time / median)
+        })
+        .collect();
+    ratios
+        .filter(|ratios| !ratios.is_empty())
+        .map(|ratios| percentile(ratios, 0.95))
 }
 
 /// The busy processes of a scene from the listings at its start and end,
@@ -172,22 +215,22 @@ pub(crate) fn busy_during_scene(
 /// or CPU load, other praxis processes, nor the power or display at its
 /// start, no process outside praxis held `BUSY_PROCESS_PERCENT` of a core at
 /// the scene's start or end, and its GPU frames spread less than
-/// `QUIET_P95_OVER_MEDIAN`. A load or listing that could not be read is a
-/// preflight note, not a warning, so it passes.
+/// `QUIET_P95_OVER_MEDIAN` about their neighbours. A load or listing that
+/// could not be read is a preflight note, not a warning, so it passes.
 fn is_quiet(
     gpu_load_percent: Option<u32>,
     one_minute_load_average: Option<f64>,
     other_processes: Option<&[String]>,
     busy_processes: Option<&[String]>,
     machine_warnings: &[String],
-    gpu_frame_p95_over_median: Option<f64>,
+    gpu_frame_p95_over_neighbours: Option<f64>,
 ) -> bool {
     gpu_load_percent.is_none_or(|percent| percent <= BUSY_GPU_PERCENT)
         && one_minute_load_average.is_none_or(|load| load <= BUSY_LOAD_AVERAGE)
         && other_processes.is_none_or(<[String]>::is_empty)
         && busy_processes.is_none_or(<[String]>::is_empty)
         && machine_warnings.is_empty()
-        && gpu_frame_p95_over_median.is_some_and(|ratio| ratio < QUIET_P95_OVER_MEDIAN)
+        && gpu_frame_p95_over_neighbours.is_some_and(|ratio| ratio < QUIET_P95_OVER_MEDIAN)
 }
 
 /// The source a checkout holds.
@@ -569,9 +612,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn a_process_busy_at_a_scenes_end_marks_that_scene_alone_not_quiet_and_is_named() {
-        let start = BenchStart {
+    fn idle_start() -> BenchStart {
+        BenchStart {
             checkout: Some(Checkout {
                 source_hash: "4b825dc6".to_owned(),
                 commit: "bea8706b".to_owned(),
@@ -582,20 +624,58 @@ mod tests {
             one_minute_load_average: Some(1.0),
             other_processes: Some(Vec::new()),
             machine_warnings: Vec::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn a_run_whose_gpu_frames_drift_is_quiet_and_one_whose_frames_spike_is_not() {
         let adapter = wgpu::AdapterInfo::new(wgpu::DeviceType::IntegratedGpu, wgpu::Backend::Metal);
-        let steady = Spread {
-            median: 100.0,
-            p95: 101.0,
-            p99: None,
-            maximum: None,
+        let provenance = |gpu_frame_microseconds: &[f64]| {
+            idle_start()
+                .provenance(
+                    &adapter,
+                    "e3b0c442".to_owned(),
+                    gpu_frame_microseconds,
+                    UNIX_EPOCH,
+                    Some(Vec::new()),
+                )
+                .expect("a checkout")
         };
+        // Each frame 2 µs slower than the one before, as a camera path's
+        // view changes: every frame is the median of the 31 around it, but
+        // for the 15 at each end.
+        let drifting: Vec<f64> = (0..1000)
+            .map(|frame| 4000.0 + 2.0 * f64::from(frame))
+            .collect();
+        let drifting = provenance(&drifting);
+        assert_eq!(drifting.gpu_frame_p95_over_median, Some(5898.0 / 4998.0));
+        assert_eq!(drifting.gpu_frame_p95_over_neighbours, Some(1.0));
+        assert!(drifting.quiet);
+        // One frame in ten half as slow again, as on a machine that shares
+        // its GPU.
+        let spiking: Vec<f64> = (0..1000)
+            .map(|frame| if frame % 10 == 0 { 6000.0 } else { 4000.0 })
+            .collect();
+        let spiking = provenance(&spiking);
+        assert_eq!(spiking.gpu_frame_p95_over_neighbours, Some(1.5));
+        assert!(!spiking.quiet);
+        let unmeasured = provenance(&[0.0; 40]);
+        assert_eq!(unmeasured.gpu_frame_p95_over_median, None);
+        assert_eq!(unmeasured.gpu_frame_p95_over_neighbours, None);
+        assert!(!unmeasured.quiet);
+    }
+
+    #[test]
+    fn a_process_busy_at_a_scenes_end_marks_that_scene_alone_not_quiet_and_is_named() {
+        let start = idle_start();
+        let adapter = wgpu::AdapterInfo::new(wgpu::DeviceType::IntegratedGpu, wgpu::Backend::Metal);
+        let steady = [100.0; 40];
         let scene = |at_start: Option<Vec<String>>, at_end: Option<Vec<String>>| {
             start
                 .provenance(
                     &adapter,
                     "e3b0c442".to_owned(),
-                    steady,
+                    &steady,
                     UNIX_EPOCH,
                     busy_during_scene(at_start, at_end),
                 )
