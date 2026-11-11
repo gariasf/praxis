@@ -594,9 +594,9 @@ fn material_textures<'a>(material: &gltf::Material<'a>) -> [Option<gltf::Texture
 /// embedded image say, re-cooks neither.
 fn read_gltf(guid: u128, path: &Path, source: &[u8], sources: &mut Sources) -> anyhow::Result<()> {
     let gltf::Gltf { document, blob } = gltf::Gltf::from_slice(source)?;
-    let extensions: Vec<&str> = document.extensions_used().collect();
+    let extensions = document.extensions_used().collect::<Vec<_>>().join(", ");
     if !extensions.is_empty() {
-        tracing::warn!(path = %path.display(), ?extensions, "the cook reads no glTF extension; what these add is dropped");
+        tracing::warn!(path = %path.display(), %extensions, "glTF extensions are not cooked; what they add is dropped");
     }
     let buffers =
         gltf::import_buffers(&document, path.parent(), blob).context("reading its buffers")?;
@@ -880,11 +880,11 @@ mod tests {
         }
     }
 
-    /// A glTF source that uses extensions logs one warning naming it and
-    /// each of them; a source that uses none logs nothing.
+    /// A glTF source that uses extensions logs one warning naming its path
+    /// and each extension; a source that uses none logs nothing.
     #[test]
     fn a_source_using_gltf_extensions_warns_naming_each() {
-        let read = |source: &str| {
+        let read_logged = |source: &str| {
             crate::assets::pools::tests::logged(|| {
                 let mut sources = Sources::default();
                 read_gltf(
@@ -896,7 +896,7 @@ mod tests {
             })
         };
 
-        let (result, log) = read(
+        let (result, log) = read_logged(
             r#"{"asset":{"version":"2.0"},"extensionsUsed":["KHR_materials_clearcoat","KHR_texture_transform"]}"#,
         );
         result.unwrap();
@@ -910,7 +910,7 @@ mod tests {
             assert!(warnings[0].contains(named), "{named} not named: {log:?}");
         }
 
-        let (result, log) = read(r#"{"asset":{"version":"2.0"}}"#);
+        let (result, log) = read_logged(r#"{"asset":{"version":"2.0"}}"#);
         result.unwrap();
         assert_eq!(log, "");
     }
