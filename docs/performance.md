@@ -31,6 +31,105 @@ its commit.
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
 
+## The traversal's slowest frames write every Chunk's Instances again after a pool frees (2026-11-11, #761)
+
+**Summary.** The traversal's slowest CPU frame writes 291,025 Instances, of
+which its four Chunk loads place 28,535. Another 252,490 are every loaded
+Chunk's Placements and every free range's slots written again, because the
+frame's loads freed 96 pool entries to make room and prepare answers any
+free by writing every Instance again. `INSTANCES_PLACED_PER_FRAME` keeps
+counting Placements: a frame's loads never wrote more than 100,036
+Instances, under its 131,072, and what the rewrite writes grows with what
+is loaded, not with what the frame loads. The rewrite's cost is #776's.
+
+Apple M4 Pro, Metal, a release build of `06d5e20a` with #753's per-frame
+probe and a count of prepare's Chunk writes by source, one `praxis
+traverse` run. The counts do not depend on load: frame for frame, the
+Instances written match #755's three quiet runs on 28,866 to 28,911 of
+their 28,925 frames. The others are the same loads landing a frame or two
+apart, and loads whose frees fall on two adjacent frames in one run and on
+one frame in another.
+
+### Frame 15664, by source
+
+| Source | Instances written |
+|---|---:|
+| Moving Instances, the flocks, which every frame writes | 10,000 |
+| Placements of the four Chunks the frame loads, each loaded held, so with no Mesh | 28,535 |
+| Placements of the eight drawn Chunks loaded before it, written again | 145,874 |
+| Placements of the three held Chunks loaded before it, written again with no Mesh | 56,365 |
+| Slots of the free ranges, written again with no Mesh | 50,251 |
+| **The frame** | **291,025** |
+
+The last three rows are the rewrite. `FramePreparer::prepare` sets
+`rewrite_every_instance` whenever the Mesh and Material pools' frees have
+moved since the last frame, since an Instance may then name an index whose
+Mesh is gone. A free made to fit a load takes only an entry no loaded Chunk
+uses, as each Chunk counts as a user of the Meshes and Materials its
+Placements name, so none of the 252,490 Instances changed.
+
+### Over the run
+
+| Chunk writes of the 28,677 timed frames | Frames | Instances | Most in a frame |
+|---|---:|---:|---:|
+| Loads, as Chunks held ahead of the camera | 169 | 2,670,289 | 100,036 |
+| Loads, drawn at once | 2 | 21,177 | 20,965 |
+| Held Chunks crossing into the Load radius, written with their Meshes | 150 | 2,670,289 | 114,670 |
+| Drawn Chunks crossing out of it, written with no Mesh | 152 | 2,652,058 | 111,607 |
+| Ranges of unloaded Chunks, written with no Mesh | 187 | 2,677,988 | 103,140 |
+| The rewrite after a pool's frees | 33 | 8,579,585 | 301,146 |
+
+The 33 frames whose loads freed pool entries, 2 to 128 of them, are the 33
+that wrote 200,000 Instances or more. In each of #755's quiet runs the two
+sets are again one, of 35 to 37 frames: frees that fall on two adjacent
+frames rewrite twice. Each of the 33 rewrites 204,839 to 301,146 Instances
+beside at most 33,227 of its own. A frame without frees wrote at most
+140,756 from Chunks.
+
+### Without the rewrite
+
+Three more runs of the probe, each interleaved with a run of a prototype in
+it that leaves the Chunks' ranges and the free ranges unwritten after a
+free. None of the six was quiet: the owner was at the machine, the gate of
+four quiet preflight reads in a row stayed shut through the five minutes
+given it before each run, and the one-minute load read 1.45 to 2.80 before
+the runs and 2.48 to 4.15 after them. So no run's maximum is quoted (in the
+prototype's third, a frame with no load read 111.7 ms, 105.6 of them in
+`encode`), only the frames whose loads freed pool entries, whose medians one
+disturbed frame does not move. Frame 15664 read 11.5 to 12.3 ms in #755's
+quiet runs, against 12.10 and 12.93 ms in rounds 2 and 3 here.
+
+| Rounds 1 / 2 / 3 | Every Instance written again, as `main` does | Chunks' ranges and free ranges left |
+|---|---|---|
+| Frames whose loads freed pool entries | 36 / 34 / 33 | 36 / 38 / 38 |
+| Their CPU frame, median, ms | 6.01 / 5.91 / 6.00 | 2.10 / 2.14 / 2.30 |
+| Their CPU frame, slowest, ms | 16.13 / 12.10 / 12.93 | 4.59 / 4.07 / 4.87 |
+| Their `prepare_frame`, median, ms | 1.55 / 1.56 / 1.59 | 0.35 in each |
+| Their `static_tlas_update`, median, ms | 1.56 / 1.50 / 1.64 | 0.01 in each |
+| Their `upload`, median, ms | 0.78 / 0.74 / 0.81 | 0.15 / 0.15 / 0.16 |
+| The frame of four loads and 96 frees, Instances written | 291,025 in each | 38,535 in each |
+| Its CPU frame, ms | 16.13 / 12.10 / 12.93 | 3.94 / 4.07 / 4.10 |
+| Instances written over the run | 306,738,966 / 306,314,665 / 306,031,386 | 297,461,801 / 297,461,801 / 297,471,801 |
+
+Where no outside disturbance set it, the prototype's slowest frame read
+7.11 and 8.16 ms and wrote no Chunk's Instances: a `dynamic_tlas` of 6.0 to
+7.3 ms on a frame with no load, and frame 11984, whose two loads spend 4.4
+to 4.7 ms in `stream_chunks`. Both are among the slowest frames of #755's
+quiet runs, at 7.1 to 8.4 ms. The 56 frames that write 60,000 Instances or
+more with no free, held Chunks crossing into the Load radius among them,
+read 3.87 to 4.16 ms at the median.
+
+### The cap stays on Placements
+
+- A frame's loads write one Instance per Placement, so the cap already
+  counts what they write, and it held: 100,036 at most.
+- The rewrite is not the loads' work. It follows what is loaded and what
+  was unloaded (up to 230,774 Placements and 269,155 free slots here), so
+  a load held back for it would meet the same rewrite a frame later.
+- The largest writes left are held Chunks crossing into the Load radius,
+  up to 114,670 Instances in a frame with no load in it, which a cap on
+  loads cannot reach either. Those frames stay within the Budgets.
+
 ## The traversal's CPU maximum: the frame staging grew on the frame (2026-11-11, #755)
 
 **Summary.** The traversal's three slowest CPU frames grew the frame staging
@@ -69,8 +168,8 @@ frames:
 
 The two frames that grew the staging on `main` carried more Chunk-load work
 than the 7.3 to 8.0 ms frames #753 listed after them: frame 15664 writes
-291,025 Instances from four Chunks. `INSTANCES_PLACED_PER_FRAME` counts a
-Chunk's Placements, not the Instances they write.
+291,025 Instances from four Chunks. Its four loads place 28,535 of them;
+the section above accounts for the rest.
 
 ## `world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once (2026-11-09, #743)
 
