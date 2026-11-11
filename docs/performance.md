@@ -51,8 +51,8 @@ newly breached. Of `town`'s lines already over theirs, the GPU frame and
 gate p99 fell, and the GPU frame maximum and gate median rose by under
 1.1%.
 The top three offenders are `town`'s GPU frame and gate (#602), the Fast
-travel's arrival frame (#773) and the traversal's slowest Chunk-load frame
-(#761).
+travel's arrival frame (#773) and the traversal's slowest frames, which
+write every loaded Chunk's Instances again after a pool frees (#776).
 
 Apple M4 Pro, macOS 27.2.1, wgpu 30.0.1 on Metal, a release build of
 `d454229c`. The engine is identical at `79d80cd8`, as the commits between
@@ -213,10 +213,10 @@ Ranked by their share of the bound each breaches:
    to 108% of 16,667 µs), 4.3 to 12.1 ms of it in `stream_chunks`. Its
    long static TLAS build also holds the next loads to 9 to 10 frames.
    #773
-3. **The traversal's slowest Chunk-load frames**, 11.4 ms at most, within
-   16,667 µs. In #755's probe of the traversal, the frame that writes the
-   most Instances spent its time in `prepare_frame` and
-   `static_tlas_update`. #761
+3. **The traversal's slowest frames**, 11.4 ms at most, within 16,667 µs.
+   #761 found that after a Mesh or Material pool frees an entry, prepare
+   writes every loaded Chunk's Instances again: 252,490 of frame 15664's
+   291,025, against 28,535 from its loads. #776
 
 ### Also seen
 
