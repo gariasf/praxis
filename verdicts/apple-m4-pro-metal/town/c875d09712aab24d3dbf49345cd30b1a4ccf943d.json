@@ -11,7 +11,25 @@
     "source_hash": "9278b80493926d0789aa1df2249b2ce7506c9da8"
   },
   "state": "held",
-  "good": "ce265e4c6dad72b40792c7355cfed5405293a0f4",
+  "good": "16102241fb880c828cc990c3fa62692a14ece14b",
   "bad": "512b2616e5eea73b1060f3d639aa01ff138df51e",
-  "pinned": null
+  "pinned": {
+    "commit": "512b2616e5eea73b1060f3d639aa01ff138df51e",
+    "source_hash": "a3c9cf760ad009b7f9fe065d1f3d34fa0896d26c",
+    "covered_by_baseline": false,
+    "measured": {
+      "good": "8bc34eb18fcfb79307193551e96619316aef566c",
+      "bad": "ec4dfd7cefec2f38075df1f74bd23d913e9dab7b",
+      "medians": {
+        "cpu_frame_microseconds": {
+          "good_median": 3996.9789999999994,
+          "bad_median": 4654.978999999999
+        },
+        "gpu_frame_microseconds": {
+          "good_median": 19943.896,
+          "bad_median": 19935.292
+        }
+      }
+    }
+  }
 }
