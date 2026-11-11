@@ -195,7 +195,7 @@
     "triangles_drawn": 141194,
     "instances_overflowed": 0,
     "uploaded_bytes": 1920224,
-    "gpu_memory_bytes": 939904968,
+    "gpu_memory_bytes": 1038864948,
     "arena_bytes_in_use": 14704,
     "heap_allocations": 10522,
     "renderables_refused": 0,

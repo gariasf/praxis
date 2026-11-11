@@ -625,6 +625,12 @@ impl Renderer {
         self.capacities
     }
 
+    /// Grows its frame staging to the most a frame uploads, so no frame
+    /// creates staging.
+    pub fn grow_frame_staging_to_largest(&mut self) {
+        self.frame_staging.grow_to_largest(&self.device);
+    }
+
     /// Hands `frame`'s static Instance changes to the static TLAS, which
     /// binds, submits and starts its builds on its own, and records the
     /// copies of `frame`'s uniforms, the camera's with the static TLAS's
