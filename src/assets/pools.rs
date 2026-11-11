@@ -1173,7 +1173,7 @@ impl Arena {
 #[cfg(test)]
 pub(crate) mod tests {
     use std::io::Write;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, LazyLock, Mutex};
 
     use super::*;
     use crate::capture::submit_and_map;
@@ -1846,6 +1846,20 @@ pub(crate) mod tests {
             .expect("the last vertex fits");
     }
 
+    #[test]
+    fn logged_reads_an_event_a_thread_without_a_subscriber_reached_first() {
+        fn warn() {
+            tracing::warn!("reached from two threads");
+        }
+        let ((), log) = logged(|| {
+            std::thread::spawn(warn)
+                .join()
+                .expect("the other thread warns");
+            warn();
+        });
+        assert!(log.contains("reached from two threads"), "{log:?}");
+    }
+
     /// What `run` returns, and the text of the events it logged.
     pub(crate) fn logged<T>(run: impl FnOnce() -> T) -> (T, String) {
         #[derive(Clone, Default)]
@@ -1859,6 +1873,10 @@ pub(crate) mod tests {
                 Ok(())
             }
         }
+        // No capture is the only dispatcher (tokio-rs/tracing#3611 [ref:tracing-issue-3611]).
+        static STANDING_DISPATCHER: LazyLock<tracing::Dispatch> =
+            LazyLock::new(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default()));
+        LazyLock::force(&STANDING_DISPATCHER);
         let log = Log::default();
         let subscriber = tracing_subscriber::fmt()
             .with_writer({
