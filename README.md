@@ -25,8 +25,8 @@ This branch holds data only and is never merged.
 A machine is quiet when preflight warned of no GPU load over 10%, one-minute
 load average over 2, other praxis process, battery power or busy display at
 the run's start, no process outside praxis held 50% of a core or more at the
-scene's start or end, and the run's GPU frame p95 over its median stayed
-under 1.06.
+scene's start or end, and the run's GPU frames, each over the median of
+the 31 around it, stayed under 1.06 at their p95.
 
 lavapipe's records hold CPU, GPU and pass times like any other, but lavapipe
 renders on a shared runner's CPU, so the page draws only its counters and its
@@ -73,8 +73,9 @@ were: new fields or changed counters alone measured nothing again. Two
 Baselines of one source meet the rules above with the later first: it stays
 unless the earlier goes on a Series and it does not, or the earlier's GPU frame
 spread is lower and neither is lavapipe's. A Baseline counts as quiet unless the
-GPU frame spread it recorded reached 1.06: one that recorded none counts as
-quiet unchecked. Each import rewrites the records an earlier one wrote, with
+GPU frame spread it recorded reached 1.06, each frame's over the 31 around it
+where it recorded that, else the run's p95 over its median: one that recorded
+none counts as quiet unchecked. Each import rewrites the records an earlier one wrote, with
 the tags the rules of its day give them. A record holds what the bench
 measured then, so a metric added later is absent from it: its Series row
 holds null for a time, Aliasing figure or scene content hash it lacks, and
