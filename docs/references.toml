@@ -6012,3 +6012,71 @@ url = "https://github.com/rust-lang/hashbrown/blob/v0.16.1/src/raw/mod.rs#L2798-
 section = "hashbrown 0.16.1, raw/mod.rs, reserve_rehash_inner: with no growth room left, a table at most half full rehashes in place, else it reallocates; its default hasher is foldhash's RandomState (hasher.rs L4)"
 quote = '''if new_items <= full_capacity / 2 { // Rehash in-place without re-allocating if we have plenty of spare // capacity that is locked up due to DELETED entries. [...] } else { // Otherwise, conservatively resize to at least the next size up'''
 checked = 2026-11-08
+
+["peters-blue-noise-void-and-cluster"]
+url = "https://momentsingraphics.de/BlueNoise.html"
+section = "Peters, Free blue noise textures (2016-12-22, updated 2017-01-31), The void and cluster method"
+quote = '''After some literature research I decided to go with Robert Ulichney's void and cluster method [Ulichney93]. [...] As far as I can tell, I have implemented this method exactly as described in the paper.'''
+checked = 2026-11-11
+
+["majercik-2019-ddgi-ray-directions"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=9"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §4.2, p. 9; Table 1 caption, p. 19"
+quote = '''At each of the m active probes, we uniformly sample n spherical directions according to a stochastically-rotated Fibonacci spiral pattern, similar to [McGuire et al. 2017b]. [...] For reference, we used 32×8×32 probes with 64 rays/probe for our largest scenes.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-cost"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §3 and §7"
+quote = '''The formulation is fully vectorizable. All phases ϕⱼₖ = k·rⱼ assemble as a single N × M matrix of point–mode products, evaluated as one matrix multiply, and both energy and forces follow in O(NM). We optimize with L-BFGS [Liu and Nocedal 1989] [...] Starting from random initial configurations, the optimizer typically reaches S(k) < 10⁻¹⁰ on all constrained modes within tens of iterations. The implementation uses PyTorch Lightning for automatic differentiation and GPU compilation, requiring no custom kernels. [...] the cost is O(N²) in the point count. This is what confines single-domain optimization to the thousands-to-tens-of-thousands range [...] reducing the per-iteration cost to O(N log N) and reaching a billion points in 2D. Adopting that formulation would remove the scaling limitation from our construction directly, and we regard it as the natural next implementation step [...] the sharp cutoff makes point-set quality mildly sensitive to N'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-grid-texture"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §5.3 and Fig. 10"
+quote = '''GPUs in particular operate on pixel grids, making it useful to enforce that each pixel contains exactly one sample. The blue-noise set can then be stored directly as a texture of per-pixel sub-pixel offsets and used to break up aliasing patterns at fixed cost [...] The optimizer avoids jamming but leaves slight axial spikes near the cutoff from the imposed periodicity; at their strongest they reach about one third of the corresponding pure-grid peak.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-grid-error"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, Fig. 11 and Fig. A.20 (Gaussian-filtered row)"
+quote = '''(b) Regular grid: perfect low frequencies, coherent moiré that neither filtering nor accumulation removes. (c) Jittered grid: white noise on the grid, lattice-mode energy 1.
+RMSE, Fig. 11: regular grid: 0.033; jittered grid: 0.033; L² blue noise: 0.031; L² grid-capped blue noise: 0.030; greedy box-filter blue noise: 0.028; greedy box-filter grid-capped: 0.032
+MSE, Fig. A.20, Gaussian filtered: regular grid: 0.00156; jittered grid: 0.00100; L² blue noise: 0.00099; L² grid-capped: 0.00092; greedy box-filter: 0.00087; greedy box-filter grid-capped: 0.00083'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-progressive"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §5.2"
+quote = '''We construct a single precomputed point set that is blue-noise at every density simultaneously, with the local density selected at sample time by a per-point threshold against the importance field. [...] the joint optimization has the lower mean S(k) at every prefix from n = 8 to n = N, typically by a factor of two. [...] Obvious candidates include spatiotemporal sampling [Wolfe et al. 2025] (prefixes over time rather than density) and multi-class blue noise [Salaün et al. 2022; Wei 2010] (joint losses over class unions). [...] the total must be chosen before optimization and the sequence cannot be extended afterwards.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-filter-matched"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, Fig. A.18"
+quote = '''The last column instead takes the M modes of largest |H(k)|² in descending order. It measures 0.0262, better than either norm by 1.87× at identical cost; its residual is confined to the diagonal sidelobes, the cells carrying least filter energy.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-sphere"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §5.4"
+quote = '''Figure A.21 shows a 136-point set optimized to suppress all modes up to ℓ = 15 [...] The result is statistically isotropic, without the polar axis and winding direction that betray structured distributions such as Fibonacci lattices [Hannay and Nye 2004].'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-tiles"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §6 and §6.2"
+quote = '''Under a uniform χ, sparse regions are over-constrained and crystallize while dense regions remain close to white noise (fig. A.22). The fix is to let the frequency cutoff vary spatially. [...] Blue-noise statistics remain consistent across boundaries without any global optimization step. Beyond the cube example, this construction supports Wang tiling and other schemes that target very large point sets through a precomputed set of interlocking patches, at the cost of quasi-periodicity beyond a single tile.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-licence"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, first page"
+quote = '''This work is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.'''
+checked = 2026-11-11
+
+["moran-2026-stealthy-prior-work"]
+url = "https://doi.org/10.1145/3842562"
+section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §4.1 and Fig. 5"
+quote = '''The kernel width σ trades suppression against disorder, but the transition is smooth at every setting, and there is no σ that gives both a deep floor and a sharp edge. [...] (a) Stealthy blue noise averages 1.5 × 10⁻²² inside the ring, about twenty decades below the plotted floor. (b) Step blue noise with matched cutoff νc = 0.83 averages 8.3 × 10⁻².'''
+checked = 2026-11-11
