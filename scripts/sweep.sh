@@ -63,10 +63,10 @@
 
   # Runs start until this many seconds of benching, and of waiting for the
   # GPU and CPU between benches, have passed, the rest left to the next
-  # night: a full pass of the Reference scenes and a bisect's re-benches on
-  # the slower machine, the M4 Pro, whose sweep of 27d88d5c on 2026-11-11
-  # benched all 11 scenes in 299 s, waits included, after 8 re-benches of
-  # town in 495 s, 794 s in all.
+  # night: a full pass and a Suspect's re-bench and bisect on the M4 Pro,
+  # with about 100 s to spare. Its sweep of 27d88d5c on 2026-11-11 benched
+  # the 11 Reference scenes but world in 299 s, after re-benching and
+  # bisecting town over 8 runs in 495 s, waits included, 794 s in all.
   cap_seconds="${PRAXIS_SWEEP_CAP_SECONDS:-900}"
   # Preparing, which is building, cooking, and waiting for the machine to
   # settle after them, counts against this allowance instead: nights that
