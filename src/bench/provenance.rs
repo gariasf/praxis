@@ -35,9 +35,8 @@ const MEASURED_PATHS: [&str; 6] = [
 
 /// The p95, over a scene's GPU frames, of each over the median of the
 /// `NEIGHBOUR_FRAMES` around it, at or above which its run was not quiet,
-/// whatever preflight saw at its start; and the GPU frame p95 over the
-/// run's median that the import judges a Baseline from before results
-/// carried the first by.
+/// whatever preflight saw at its start; the import judges a Baseline that
+/// recorded no such ratio by its GPU frame p95 over its run's median.
 pub(super) const QUIET_P95_OVER_MEDIAN: f64 = 1.06;
 
 /// How many frames a GPU frame is judged among, itself in the middle.
@@ -159,29 +158,31 @@ impl BenchStart {
     }
 }
 
-/// The p95 of `times` over their median; none when it is zero or there
-/// are no times.
-fn p95_over_median(times: &[f64]) -> Option<f64> {
-    if times.is_empty() {
+/// The p95 of the frames' times over their median; none when it is zero
+/// or there are no frames.
+fn p95_over_median(gpu_frame_microseconds: &[f64]) -> Option<f64> {
+    if gpu_frame_microseconds.is_empty() {
         return None;
     }
-    let median = percentile(times.to_vec(), 0.5);
-    (median > 0.0).then(|| percentile(times.to_vec(), 0.95) / median)
+    let median = percentile(gpu_frame_microseconds.to_vec(), 0.5);
+    (median > 0.0).then(|| percentile(gpu_frame_microseconds.to_vec(), 0.95) / median)
 }
 
-/// The p95, over `times`, of each over the median of the `NEIGHBOUR_FRAMES`
-/// centred on it, fewer at either end of `times`; none when such a median
-/// is zero or there are no times.
-fn p95_over_neighbours(times: &[f64]) -> Option<f64> {
-    let reach = NEIGHBOUR_FRAMES / 2;
-    let ratios: Option<Vec<f64>> = times
+/// The p95, over the frames, of each one's time over the median of the
+/// `NEIGHBOUR_FRAMES` centred on it, fewer at either end of the run; none
+/// when such a median is zero or there are no frames.
+fn p95_over_neighbours(gpu_frame_microseconds: &[f64]) -> Option<f64> {
+    let frames_each_side = NEIGHBOUR_FRAMES / 2;
+    let ratios: Option<Vec<f64>> = gpu_frame_microseconds
         .iter()
         .enumerate()
-        .map(|(frame, time)| {
-            let neighbours =
-                &times[frame.saturating_sub(reach)..times.len().min(frame + reach + 1)];
-            let median = percentile(neighbours.to_vec(), 0.5);
-            (median > 0.0).then(|| time / median)
+        .map(|(frame, microseconds)| {
+            let first = frame.saturating_sub(frames_each_side);
+            let end = gpu_frame_microseconds
+                .len()
+                .min(frame + frames_each_side + 1);
+            let median = percentile(gpu_frame_microseconds[first..end].to_vec(), 0.5);
+            (median > 0.0).then(|| microseconds / median)
         })
         .collect();
     ratios

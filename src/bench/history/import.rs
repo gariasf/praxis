@@ -310,6 +310,14 @@ struct Baseline {
     measured_frames: u32,
     /// Absent before the bench timed the whole frame.
     gpu_frame_microseconds: Option<Spread>,
+    provenance: Option<BaselineProvenance>,
+}
+
+/// What the import reads of a Baseline's own provenance.
+#[derive(serde::Deserialize)]
+struct BaselineProvenance {
+    /// Absent before results carried it.
+    gpu_frame_p95_over_neighbours: Option<f64>,
 }
 
 /// An imported record's provenance: the Baseline and the commit it came
@@ -322,12 +330,16 @@ struct ImportedProvenance<'baseline> {
     source_hash: &'baseline str,
     harness_version: u32,
     gpu_frame_p95_over_median: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gpu_frame_p95_over_neighbours: Option<f64>,
 }
 
 /// The Baseline `json` that `commit` committed at `path`, as a Bench
 /// record of that commit's source: the file as it was, with the backend it
 /// ran on and an imported provenance. Baselines were recorded on a quiet
-/// machine, so only their own GPU frame spread can tag one as not quiet.
+/// machine, so only their own GPU frame spread can tag one as not quiet:
+/// against each frame's neighbours where the Baseline recorded that, else
+/// against the run's median.
 fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<BenchRecord> {
     let baseline: Baseline = serde_json::from_str(json)?;
     let serde_json::Value::Object(mut file) = serde_json::from_str(json)? else {
@@ -343,6 +355,10 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
         .gpu_frame_microseconds
         .filter(|spread| spread.median > 0.0)
         .map(|spread| spread.p95 / spread.median);
+    let p95_over_neighbours = baseline
+        .provenance
+        .as_ref()
+        .and_then(|provenance| provenance.gpu_frame_p95_over_neighbours);
     file.insert(
         "provenance".to_owned(),
         serde_json::to_value(ImportedProvenance {
@@ -352,9 +368,12 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
             source_hash: &commit.source_hash,
             harness_version: commit.harness_version,
             gpu_frame_p95_over_median: p95_over_median,
+            gpu_frame_p95_over_neighbours: p95_over_neighbours,
         })?,
     );
-    let quiet = p95_over_median.is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
+    let quiet = p95_over_neighbours
+        .or(p95_over_median)
+        .is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
     BenchRecord::new(
         file,
         &baseline.scene,
@@ -664,6 +683,42 @@ mod tests {
         let record = imported(&commit(1), "bench/baselines/llvmpipe/town.json", &lavapipe).unwrap();
         assert_eq!(record.p95_over_median, Some(1.1));
         assert!(record.tags.is_empty(), "{:?}", record.tags);
+    }
+
+    #[test]
+    fn a_baseline_that_recorded_its_frames_against_their_neighbours_is_judged_by_that() {
+        let drifting = |provenance: &str| {
+            FIRST_BASELINE.replace(
+                "\"draw_calls\"",
+                &format!(
+                    "\"gpu_frame_microseconds\": {{ \"median\": 100.0, \"p95\": 114.0 }},\n  \
+                     {provenance}\"draw_calls\""
+                ),
+            )
+        };
+        let tags = |baseline: &str| {
+            imported(
+                &commit(1),
+                "bench/baselines/apple-m4-pro/pbr-sweep.json",
+                baseline,
+            )
+            .unwrap()
+            .tags
+        };
+        let none: [&str; 0] = [];
+        assert_eq!(
+            tags(&drifting(
+                "\"provenance\": { \"gpu_frame_p95_over_neighbours\": 1.04 },\n  "
+            )),
+            none
+        );
+        assert_eq!(
+            tags(&drifting(
+                "\"provenance\": { \"gpu_frame_p95_over_neighbours\": 1.07 },\n  "
+            )),
+            ["machine not quiet"]
+        );
+        assert_eq!(tags(&drifting("")), ["machine not quiet"]);
     }
 
     #[test]

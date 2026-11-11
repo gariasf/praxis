@@ -132,8 +132,8 @@ on AC power, 2026-11-10. Each run started after four quiet preflight reads
 in a row, at a one-minute load of 1.14 to 1.40 and a GPU load of 0 to 2%,
 with no busy process at either end. Their records stamp
 `quiet: false`: `world`'s GPU frame p95, 1.13 to 1.18 times its median, was
-over `QUIET_P95_OVER_MEDIAN` on any machine, as the stamp judged it until
-2026-11-11 (#729). The bench rows are
+over `QUIET_P95_OVER_MEDIAN` however quiet the machine, as the stamp judged
+it until 2026-11-11 (#729). The bench rows are
 `praxis report`'s, the traversal's its own table's, and the probe's from
 its per-frame CSV.
 

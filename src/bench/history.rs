@@ -118,7 +118,8 @@ were: new fields or changed counters alone measured nothing again. Two
 Baselines of one source meet the rules above with the later first: it stays
 unless the earlier goes on a Series and it does not, or the earlier's GPU frame
 spread is lower and neither is lavapipe's. A Baseline counts as quiet unless the
-GPU frame p95 it recorded reached 1.06 times its median: one that recorded
+GPU frame spread it recorded reached 1.06, each frame's over the 31 around it
+where it recorded that, else the run's p95 over its median: one that recorded
 none counts as quiet unchecked. Each import rewrites the records an earlier one wrote, with
 the tags the rules of its day give them. A record holds what the bench
 measured then, so a metric added later is absent from it: its Series row
