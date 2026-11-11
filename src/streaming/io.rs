@@ -494,6 +494,9 @@ impl ChunkStreaming {
     /// Waits until the IO pool has read every Chunk requested so far.
     #[cfg(test)]
     pub(crate) fn wait_for_reads(&mut self) -> anyhow::Result<()> {
+        if self.io.in_flight == 0 {
+            return Ok(());
+        }
         self.io.receive_all()
     }
 
@@ -990,6 +993,17 @@ impl ChunkIo for FrameIo<'_> {
 mod tests {
     use super::*;
     use crate::cooked::CookedMaterial;
+
+    /// Waiting for reads returns at once when the IO pool holds none, as when
+    /// it received every read requested before the wait.
+    #[test]
+    fn waiting_for_reads_with_none_in_flight_returns() {
+        let cache = Arc::new(CookedCache::new(std::env::temp_dir()));
+        let mut streaming =
+            ChunkStreaming::new(ReferenceScene::TextureWall, DVec3::ZERO, 1.0, 1, cache).unwrap();
+
+        streaming.wait_for_reads().unwrap();
+    }
 
     /// An Asset the pools freed leaves the claimed set, so a later read of it
     /// on the main thread claims it afresh instead of waiting for a decoded
