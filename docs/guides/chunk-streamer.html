@@ -236,7 +236,7 @@ let mut claim = |asset: AssetId| {
             .insert(asset)
 };</code></pre>
   <p class="code-source"><code>decode_chunk</code>, <code>src/streaming/io.rs</code>.</p>
-  <p>The decoded Assets reach the main thread with their Chunk, and join one shared table there as soon as their Chunk's read comes back, before any Chunk loads. The main thread loads each finished Chunk into the pools through <code>DecodedReader</code>, which hands the pools a decoded Asset when the table holds it, and otherwise reads it from the Cooked cache on the main thread. A Chunk that needs an Asset another Chunk's read in flight claimed waits for it instead (<a href="#engine">below</a>), so that is the case of an Asset whose read failed, once no Chunk read is in flight. A Texture read there for a Chunk is decoded to its Resident tail alone, as the IO pool decodes it, so its finer mips come through mip streaming like any other Texture's; the spawn's reader decodes whole chains. That Chunk's decoded copy is then dropped when it comes. Every Asset the pools read, the spawn's included, joins the claimed set. One the pools free leaves it as it is freed, through <code>DecodedReader::forget</code>, before anything reads it again, so the next Chunk to name it has it read on the IO pool once more.</p>
+  <p>The decoded Assets reach the main thread with their Chunk, and join one shared table there as soon as their Chunk's read comes back, before any Chunk loads. The main thread loads each finished Chunk into the pools through <code>DecodedReader</code>, which hands the pools a decoded Asset when the table holds it, and otherwise reads it from the Cooked cache on the main thread. A Chunk that needs an Asset another Chunk's read in flight claimed waits for it instead (<a href="#engine">below</a>), so that is the case of an Asset a failed read or a refused load left claimed. A Texture read there for a Chunk is decoded to its Resident tail alone, as the IO pool decodes it, so its finer mips come through mip streaming like any other Texture's; the spawn's reader decodes whole chains. That Chunk's decoded copy is then dropped when it comes. Every Asset the pools read, the spawn's included, joins the claimed set. One the pools free leaves it as it is freed, through <code>DecodedReader::forget</code>, before anything reads it again, so the next Chunk to name it has it read on the IO pool once more.</p>
   <p>A Texture's finer mips are read later, when a Placement needs them: <a href="mip-streaming.html#requests">mip streaming</a> requests them on the same channel, and the threads read and decode just those levels. The threads touch no GPU object. The main thread writes what they decoded through the load's staging, as every load does (ADR 0017), and only it submits (ADR 0016).</p>
 </section>
 
@@ -253,15 +253,25 @@ let mut claim = |asset: AssetId| {
         return None;
     }</code></pre>
   <p class="code-source"><code>FrameIo::take_finished</code>, <code>src/streaming/io.rs</code>. Finished reads wait in a map ordered by coordinates.</p>
-  <p>Each call takes the ready read nearest the camera, by the same distance the streamer measures, the lowest coordinates first among equals; a Settled wait takes the lowest coordinates. Before it loads, the Chunk must fit:</p>
-<pre class="code"><code>fn fits(&amp;mut self, decoded: &amp;DecodedChunk) -&gt; anyhow::Result&lt;bool&gt; {
+  <p>Each call takes the ready read nearest the camera, by the same distance the streamer measures, the lowest coordinates first among equals; a Settled wait takes the lowest coordinates. A Chunk that waits on a read is set aside for the frame, and the next nearest is taken:</p>
+<pre class="code"><code>let (coordinates, decoded) = loop {
+    let coordinates = self.next_ready()?;
+    let decoded = self.io.ready.remove(&amp;coordinates)?;
+    match &amp;decoded {
+        Ok(chunk) if !self.settle &amp;&amp; self.waits_on_a_read(chunk) =&gt; {
+            self.io.ready.insert(coordinates, decoded);
+            self.waiting.insert(coordinates);
+        }
+        _ =&gt; break (coordinates, decoded),
+    }
+};</code></pre>
+  <p class="code-source"><code>FrameIo::take_finished</code>. <code>next_ready</code> passes over the coordinates in <code>waiting</code>.</p>
+  <p>A Chunk waits when it needs an Asset that is neither in the pools nor decoded, and that a Chunk read still in flight, requested before the Chunk's own read came back, claimed and so may be decoding. A read requested later found the Asset claimed and skipped it, so the wait ends when those reads have all come back. <code>DecodedAssets::lacks</code> walks the Meshes and Materials its Placements name, which <code>decode_chunk</code> lists once each, through the Meshes' Materials to their Textures, as the load will; an Asset no load claimed counts as available, since no read will bring it. Without the wait, the Chunk that loaded first after the world's Fast travel read 16 to 42 such Assets on the main thread in six quiet runs, 2.8 to 7.9 ms of its frame, while their decoded copies were a frame away.</p>
+  <p>Before it loads, the Chunk must fit:</p>
+<pre class="code"><code>fn fits(&amp;mut self, chunk: &amp;CookedChunk) -&gt; anyhow::Result&lt;bool&gt; {
     if self.settle {
         return Ok(true);
     }
-    if self.io.chunks_in_flight &gt; 0 &amp;&amp; self.waits_on_a_read(decoded) {
-        return Ok(false);
-    }
-    let chunk = &amp;decoded.chunk;
     let instances = *self.placed_instances + chunk.placements.len();
     if *self.placed_instances &gt; 0 &amp;&amp; instances &gt; self.instances_placed_per_frame {
         return Ok(false);
@@ -273,7 +283,6 @@ let mut claim = |asset: AssetId| {
     Ok(*self.written_bytes + bytes &lt;= self.load_bytes_per_frame)
 }</code></pre>
   <p class="code-source"><code>FrameIo::fits</code>. A Chunk that does not fit goes back to the ready map, and the frame loads nothing more.</p>
-  <p>A Chunk waits first for the reads in flight when it needs an Asset that is neither in the pools nor decoded and that one of them claimed, and so may be decoding. <code>DecodedAssets::lacks</code> walks the Meshes and Materials its Placements name, which <code>decode_chunk</code> lists once each, through the Meshes' Materials to their Textures, as the load will; an Asset no load claimed counts as available, since no read will bring it. Without the wait, the Chunk that loaded first after the world's Fast travel read 16 to 42 such Assets on the main thread in six quiet runs, 2.8 to 7.9 ms of its frame, while their decoded copies were a frame away.</p>
   <p>Each Placement becomes an Instance, which prepare writes and the static TLAS takes as an entry change, both on the main thread, in the frame its Chunk loads. So the frame's Chunk loads place at most <code>INSTANCES_PLACED_PER_FRAME</code>, 131,072, Instances, counted from each Chunk's Placements; like the bytes, a Chunk that alone places more loads alone.</p>
   <p><code>most_written_bytes</code> walks the Chunk's Placements as the load will: each Mesh the Mesh pool lacks, its Primitives' Materials and the Placements' own that the Material pool lacks, and their Textures it has not placed, each counted once at the bytes the pools write for it: <code>MeshPool::written_bytes</code> for a Mesh drawn and traced, <code>MaterialPool::WRITTEN_BYTES</code> for a Material, and <code>texture_written_bytes</code>, every mip the Texture holds, its Resident tail alone for one the IO pool decoded, with its rows padded to 256 bytes, for a Texture. An Asset the IO pool did not decode is read from the Cooked cache and left among the decoded ones, so the load reads it once. The sum is exact for a Chunk's Assets, and an upper bound where the Material pool holds back a Texture's finer mips or has no room for them; a debug build asserts that no load writes more. The cap is <code>RenderCapacities::load_bytes_per_frame</code>, what the frame staging's slots at their largest leave of the staging Budget, over the frames in flight and the one being written: 22,937,393 bytes from the checked-in Budgets.</p>
 <pre class="code"><code>let frame = streamer.update(camera, teleported, &amp;mut frame_io);
@@ -359,6 +368,7 @@ if !streamed.holding {
       <tr><td><code>a_chunk_loads_is_drawn_held_and_unloaded_as_the_camera_flies_past</code></td><td>on a headless adapter, <code>far_coplanar</code> with a Load radius of 0 m and Settled frames: over a Chunk, it alone loads and the GPU draws Instances; 300 m on, it is held and the 6 Chunks the jump closed on load, not the 2 beside it that it left; 772 m further, it and those 6 unload and 9 load; 2 Late Chunks, as the camera lands twice on a Chunk not loaded; the bench's <code>Counters</code> sum 16 loads, 7 unloads and every byte read</td></tr>
       <tr><td><code>an_asset_the_pools_freed_is_claimed_afresh_by_its_next_read</code></td><td>a freed Material leaves the claimed set, and its next read from the Cooked cache claims it again without waiting for a decoded copy</td></tr>
       <tr><td><code>a_chunk_lacks_an_asset_neither_available_nor_decoded</code></td><td>a Chunk naming a decoded Mesh whose decoded Material names an undecoded Texture lacks it, and not once it is decoded; a Placement's Material neither available nor decoded is lacked, a decoded one not; an available Material's Textures are not walked</td></tr>
+      <tr><td><code>a_chunk_waits_only_on_the_reads_in_flight_when_its_own_came_back</code></td><td>two Chunk reads requested, the second back first: it has the first to wait on, still after a third is requested; once the first is back, the third alone is none of the second's, though it is the first's</td></tr>
       <tr><td><code>a_chunk_loads_read_of_a_texture_claimed_in_flight_takes_its_resident_tail</code></td><td>a 1,024&sup2; BC7 Texture claimed by a load in flight, read on the main thread for a Chunk: mips 2 on, its Resident tail, and its decoded copy marked to be dropped</td></tr>
     </tbody>
   </table>
@@ -417,8 +427,8 @@ if !streamed.holding {
   <p><b>Settled waits are uncapped.</b> A Settled frame, a capture's or one of the bench's up to the end of its counter frames, loads every Chunk it waited for in one frame, whatever their bytes.</p>
   <p><b>Waiting reads count against no one.</b> A Chunk that waits is sized again each frame, and one the camera has left still takes its turn before it is dropped.</p>
   <p><b>Freed only for room, a few a frame.</b> An entry left with no user is freed only when a load is refused, and each pool frees at most <code>ENTRIES_FREED_PER_FRAME</code> a frame for Arena and Texture room; a full Material table frees one unused Material for each Material it loads, past that, as each free makes the one entry the load needs. A load still refused fails its Chunk, which is asked for again later.</p>
-  <p><b>Main-thread reads after a failed read.</b> An Asset a failed read claimed stays claimed undecoded, so a Chunk that needs it waits while any Chunk read is in flight, then reads and decodes it on the main thread, a Texture to its Resident tail, and <code>bytes_read</code> does not count it.</p>
-  <p><b>A wait on every read.</b> A Chunk that waits on a read waits until no Chunk read in flight claimed what it lacks, and is examined again each frame: it may wait a frame for the read that claimed its Asset to come back, and its turn falls to the Chunks behind it in the ready map.</p>
+  <p><b>Main-thread reads after a failed read or a refusal.</b> An Asset claimed by a read that failed, or taken by a load the pools refused, stays claimed undecoded. A Chunk that needs it waits for the reads in flight when its own came back, then reads and decodes it on the main thread, a Texture to its Resident tail, and <code>bytes_read</code> does not count it.</p>
+  <p><b>A wait on reads that did not claim.</b> A Chunk waits on every Chunk read requested before its own came back, not only the one that claimed what it lacks, since claims are not traced to their reads; it is examined again each frame until they come back.</p>
   <p><b>A longer hold.</b> A Fast travel whose Chunks place more than the cap holds a frame more for each 131,072 Instances; the world's bench held for 5 or 6 frames against 3 or 4 uncapped.</p>
   <p><b>The slowest load stays.</b> The lead never shrinks, so one stalled load widens every request radius for the rest of the run, up to the hold radius, where requests lose the margin that stops thrashing. A load slower than the floor and every load before it still makes its Chunk late, as does a camera that turns toward a Chunk near the Load radius or speeds up during a load.</p>
   <p><b>No cancelled reads.</b> A request whose Chunk the camera leaves stays in flight until it finishes and is dropped.</p>
