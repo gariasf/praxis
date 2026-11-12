@@ -52,6 +52,38 @@ impl DecodedAssets {
         let textures = other.textures.into_iter().filter(|(id, _)| wanted(id));
         self.textures.extend(textures);
     }
+
+    /// Whether loading Placements that name `meshes` and `materials` needs an
+    /// Asset, through the Meshes' Materials to their Textures, that is
+    /// neither `available` nor decoded here.
+    fn lacks(
+        &self,
+        meshes: &[AssetId],
+        materials: &[AssetId],
+        available: impl Fn(AssetId) -> bool,
+    ) -> bool {
+        let mut materials = materials.to_vec();
+        for &id in meshes.iter().filter(|&&id| !available(id)) {
+            let Some(mesh) = self.meshes.get(&id) else {
+                return true;
+            };
+            materials.extend(
+                mesh.primitives
+                    .iter()
+                    .filter_map(|primitive| primitive.material),
+            );
+        }
+        let mut textures = Vec::new();
+        for id in materials.into_iter().filter(|&id| !available(id)) {
+            let Some(material) = self.materials.get(&id) else {
+                return true;
+            };
+            textures.extend(material.textures.iter().flatten());
+        }
+        textures
+            .into_iter()
+            .any(|id| !available(id) && !self.textures.contains_key(&id))
+    }
 }
 
 /// A Chunk the IO pool read and decoded, with the Assets it names, through
@@ -60,6 +92,10 @@ struct DecodedChunk {
     id: AssetId,
     coordinates: [i32; 2],
     chunk: CookedChunk,
+    /// The Meshes its Placements name, each once.
+    meshes: Vec<AssetId>,
+    /// The Materials its Placements name, each once.
+    materials: Vec<AssetId>,
     assets: DecodedAssets,
     bytes_read: u64,
 }
@@ -91,6 +127,8 @@ struct IoPool {
     finished: mpsc::Receiver<Finished>,
     threads: Vec<JoinHandle<()>>,
     in_flight: usize,
+    /// The Chunk reads among those in flight.
+    chunks_in_flight: usize,
     /// Loads the threads finished and the main thread has not taken, by
     /// coordinates.
     ready: BTreeMap<[i32; 2], anyhow::Result<DecodedChunk>>,
@@ -144,18 +182,23 @@ impl IoPool {
             finished,
             threads,
             in_flight: 0,
+            chunks_in_flight: 0,
             ready: BTreeMap::new(),
             ready_mips: BTreeMap::new(),
         })
     }
 
     fn request(&mut self, request: IoRequest) {
+        let chunk = matches!(request, IoRequest::Chunk(..));
         let refused = match &self.requests {
             Some(requests) => requests.send(request).err().map(|error| error.0),
             None => Some(request),
         };
         match refused {
-            None => self.in_flight += 1,
+            None => {
+                self.in_flight += 1;
+                self.chunks_in_flight += usize::from(chunk);
+            }
             Some(request) => tracing::error!(?request, "not requested: the IO pool stopped"),
         }
     }
@@ -188,6 +231,7 @@ impl IoPool {
         match finished {
             Finished::Chunk(coordinates, decoded) => {
                 self.ready.insert(coordinates, *decoded);
+                self.chunks_in_flight -= 1;
             }
             Finished::Mips(request, decoded) => {
                 let key = (request.levels.start, request.texture);
@@ -233,13 +277,13 @@ fn decode_chunk(
     let chunk =
         CookedChunk::from_blob(&read(id)?).with_context(|| format!("reading Chunk {id}"))?;
     let mut assets = DecodedAssets::default();
-    let mut materials: Vec<AssetId> = chunk
-        .placements
-        .iter()
-        .filter_map(|placement| placement.material)
-        .collect();
+    let (mut meshes, mut placement_materials) = (BTreeSet::new(), BTreeSet::new());
     for placement in &chunk.placements {
-        let mesh_id = placement.mesh;
+        meshes.insert(placement.mesh);
+        placement_materials.extend(placement.material);
+    }
+    let mut materials: Vec<AssetId> = placement_materials.iter().copied().collect();
+    for &mesh_id in &meshes {
         if claim(mesh_id) {
             let mesh = CookedMesh::from_blob(&read(mesh_id)?)
                 .with_context(|| format!("reading Mesh {mesh_id}"))?;
@@ -271,6 +315,8 @@ fn decode_chunk(
         id,
         coordinates,
         chunk,
+        meshes: meshes.into_iter().collect(),
+        materials: placement_materials.into_iter().collect(),
         assets,
         bytes_read,
     })
@@ -807,14 +853,19 @@ impl FrameIo<'_> {
         })
     }
 
-    /// Whether loading `chunk` keeps the frame's placed Instances and load
-    /// bytes within their caps: always while settling; past the Instances'
-    /// cap only while the frame's loads have placed none, and past the
-    /// bytes' only while they have written none.
-    fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
+    /// Whether to load `decoded` this frame: always while settling; else
+    /// not while it waits on a Chunk read in flight; and only
+    /// within the frame's placed Instances and load bytes caps, past the
+    /// Instances' only while the frame's loads have placed none, and past
+    /// the bytes' only while they have written none.
+    fn fits(&mut self, decoded: &DecodedChunk) -> anyhow::Result<bool> {
         if self.settle {
             return Ok(true);
         }
+        if self.io.chunks_in_flight > 0 && self.waits_on_a_read(decoded) {
+            return Ok(false);
+        }
+        let chunk = &decoded.chunk;
         let instances = *self.placed_instances + chunk.placements.len();
         if *self.placed_instances > 0 && instances > self.instances_placed_per_frame {
             return Ok(false);
@@ -824,6 +875,25 @@ impl FrameIo<'_> {
         }
         let bytes = self.most_written_bytes(chunk)?;
         Ok(*self.written_bytes + bytes <= self.load_bytes_per_frame)
+    }
+
+    /// Whether loading `decoded` needs an Asset the pools lack that a read
+    /// in flight claimed, and so may be decoding.
+    fn waits_on_a_read(&self, decoded: &DecodedChunk) -> bool {
+        let Renderer {
+            mesh_pool,
+            material_pool,
+            ..
+        } = &*self.renderer;
+        let claimed = self.claimed.lock().unwrap_or_else(PoisonError::into_inner);
+        let available = |id| {
+            !claimed.contains(&id)
+                || mesh_pool.is_loaded(id, MeshUse::DrawnAndTraced)
+                || material_pool.is_loaded(id)
+                || material_pool.is_texture_loaded(id)
+        };
+        self.decoded
+            .lacks(&decoded.meshes, &decoded.materials, available)
     }
 
     /// The most bytes loading `chunk` writes into the load staging: those of
@@ -952,7 +1022,7 @@ impl ChunkIo for FrameIo<'_> {
         let coordinates = self.next_ready()?;
         let decoded = self.io.ready.remove(&coordinates)?;
         let loaded = match decoded {
-            Ok(decoded) => match self.fits(&decoded.chunk) {
+            Ok(decoded) => match self.fits(&decoded) {
                 Ok(true) => self.load(decoded),
                 Ok(false) => {
                     self.io.ready.insert(coordinates, Ok(decoded));
@@ -1075,5 +1145,58 @@ mod tests {
         assert_eq!(read.levels, texture.levels[2..]);
         assert!(decoded.read_from_cache.contains(&AssetId(1)));
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// A Chunk lacks an Asset when one it names, through its Meshes'
+    /// Materials to their Textures, is neither available nor decoded.
+    #[test]
+    fn a_chunk_lacks_an_asset_neither_available_nor_decoded() {
+        let (mesh, material, texture, available_mesh) =
+            (AssetId(1), AssetId(2), AssetId(3), AssetId(4));
+        let mut decoded = DecodedAssets::default();
+        decoded.meshes.insert(
+            mesh,
+            CookedMesh {
+                vertices: Vec::new(),
+                indices: Vec::new(),
+                primitives: vec![crate::cooked::CookedPrimitive {
+                    first_index: 0,
+                    index_count: 0,
+                    material: Some(material),
+                    texel_density: 0.0,
+                    meshlets: Vec::new(),
+                }],
+                bounds: [[0.0; 3]; 2],
+            },
+        );
+        let mut decoded_material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        decoded_material.textures[0] = Some(texture);
+        decoded.materials.insert(material, decoded_material);
+        let available = |id| id == available_mesh;
+
+        assert!(decoded.lacks(&[mesh, available_mesh], &[], available));
+        decoded.textures.insert(
+            texture,
+            CookedTexture {
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                width: 1,
+                height: 1,
+                first_level: 0,
+                levels: vec![vec![0; 4]],
+            },
+        );
+        assert!(!decoded.lacks(&[mesh, available_mesh], &[], available));
+        assert!(decoded.lacks(&[mesh], &[AssetId(5)], available));
+        assert!(!decoded.lacks(&[mesh], &[material], available));
+        let available = |id| id == material;
+        decoded.textures.clear();
+        assert!(!decoded.lacks(&[], &[material], available));
     }
 }
