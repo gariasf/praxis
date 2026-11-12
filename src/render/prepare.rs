@@ -710,7 +710,7 @@ impl FramePreparer {
                 return;
             }
             // Each Renderable visited is new, changed, blended, retried or lost
-            // a component, or every Instance is written again.
+            // a component, or every Renderable is written again.
             drawn.push(DrawnRenderable {
                 instance_index: frame.instances.len(),
                 entity,
