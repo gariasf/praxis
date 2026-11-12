@@ -31,6 +31,83 @@ its commit.
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
 
+## The Fast travel's arrival frame: Assets read on the main thread while their reads were in flight (2026-11-12, #773)
+
+**Decision.** The arrival's work is not spread further: the Instances cap
+stays at 131,072. Most of the arrival frame's `stream_chunks`, and all its
+spread from run to run, was the first Chunk to load reading 16 to 42 Assets
+on the main thread whose decoded copies were still on the IO pool. A Chunk
+that needs an Asset claimed by a Chunk read still in flight now waits for
+it, set aside while other ready Chunks load. On three quiet runs, the
+`world` bench's CPU maximum reads 8.5 to 8.9 ms against `main`'s 12.6 to
+16.8 ms, every frame of the hold under 16,667 µs, and the hold 23.9 to
+26.4 ms against 25.9 to 30.2 ms.
+
+Apple M4 Pro, Metal, release builds of `main` at `4e3a8793` and of the
+branch, `praxis bench <dir> world --no-publish`, each run behind the quiet
+gate (charger, 1-min load under 1.5, four reads of GPU load at 5% or under).
+
+### The arrival frame by step
+
+A probe timed each step of `stream_chunks` and each Chunk load, with the
+Assets each load read on the main thread. Six runs of `main` (three before
+the A/B, three in it) and three of the branch's first form, which stopped
+the frame's loads at a waiting Chunk rather than set it aside; on the
+arrival no other Chunk was ready, so its steps stand. Every run loads four
+Chunks on the arrival frame, which first varying run to run, for 116,272
+Placements, 4,872,958 bytes read and 2,170,752 bytes written, all by the
+first.
+
+| Step | `main`, ms | Branch, ms |
+|---|---:|---:|
+| `stream_chunks` | 6.69–11.93 | 3.88–4.29 |
+| Sizing, `most_written_bytes` of the three later Chunks | 0.78–0.97 | 0.86–0.94 |
+| The first Chunk's load | 3.71–8.68 | 0.76–1.05 |
+| of which main-thread reads | 2.84–7.87 (16 to 42 Assets) | 0 |
+| Each later Chunk's load | 0.28–0.50 | 0.29–0.46 |
+| Mip planning, `texture_uses` per new Chunk | 1.17–1.30 | 1.27–1.28 |
+
+The frame after loads four more Chunks, 112,072 Placements and 119,498
+bytes read, in 2.86 to 3.52 ms of `stream_chunks`, and the next the last,
+23,868 Placements, in 0.5 to 0.7 ms. On `main`, which Assets the first load
+found undecoded depended on which of the six reads in flight had finished:
+one run on battery, not quiet, arrived a frame later and read none, at
+4.2 ms. On the branch the arrival waits a frame or two for those reads, so
+without the probe the hold takes 4 or 5 frames against 3, and is shorter:
+a frame it waits costs about 2 ms, the reads it saves 3 to 8.
+
+### Without the probe
+
+`main` and the branch's first form ran interleaved, `main` first in each
+round; the branch as merged ran three rounds after them, under the same
+gate.
+
+| Round | `main` CPU max, µs | Branch CPU max, µs | `main` hold, ms (frames) | Branch hold, ms (frames) |
+|---|---:|---:|---:|---:|
+| 1 | 16,650.2 | 8,520.9 | 29.9 (3) | 26.4 (5) |
+| 2 | 16,767.3 | 8,869.4 | 30.2 (3) | 23.9 (4) |
+| 3 | 12,623.0 | 8,608.3 | 25.9 (3) | 24.1 (4) |
+
+Each maximum is the arrival frame's, or on the branch the first frame that
+loads after it. The branch's first form read 8,605.4, 8,748.4 and 8,961.2 µs
+with holds of 23.6 to 24.2 ms. Counters match in every run: 42 Chunks
+loaded, 41 unloaded, 27,994,879 bytes read, 2,000,224 bytes uploaded,
+10,473 heap allocations, no Late Chunk. The drawn medians read the
+Baseline's 10,961 Instances on the branch, and 10,961 or 10,975 on `main`
+from run to run. `frames_until_traced` reads 7 to 9 on the branch and 8 to 9
+on `main`.
+
+### Why not spread the rest
+
+What remains on the arrival frame is 0.9 ms of sizing, about 0.3 ms a
+Chunk of loading and 1.3 ms of mip planning, and with prepare and the
+static TLAS's entry changes it reads 8.5 to 9.0 ms of CPU. #743 measured a
+cap of 65,536 Instances at most 0.7 ms under 131,072 on the hold's slowest
+frame, the hold 5 frames either way. Prepare on a load frame read 1.2 to
+1.4 ms in one build and 2.3 ms in another of the same source, on either
+variant, so its share moves with code layout and a single build's A/B can
+read it as the change's.
+
 ## The traversal's slowest frames, after a pool's free writes only what can name the freed entry (2026-11-12, #776)
 
 **Summary.** The traversal's CPU frame maximum falls from 11.3 to 14.4 ms
