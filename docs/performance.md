@@ -31,6 +31,32 @@ its commit.
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
 
+## The traversal's slowest frames, after a pool's free writes only what can name the freed entry (2026-11-12, #776)
+
+**Summary.** The traversal's CPU frame maximum falls from 11.3 to 14.4 ms
+on `main` to 6.5 to 8.0 ms, in three interleaved quiet rounds. After a Mesh
+or Material pool frees an entry, prepare now writes again every Renderable
+and only the drawn Chunks one of whose Placements names an entry no longer
+in its pool, instead of every Instance. Frees made to fit a load take only
+entries no loaded Chunk uses, so on the traversal those frames write no
+loaded Chunk's range again. The Fast travel's hold stays within its 50 ms.
+
+Apple M4 Pro, Metal, release builds of `main` at `3c908961` and of the
+branch, `praxis traverse`, each run behind the quiet gate (charger, 1-min
+load under 1.5, four reads of GPU load at 5% or under), the order of the two
+alternating by round.
+
+| Round | `main` CPU max, µs | Branch CPU max, µs | `main` hold, ms | Branch hold, ms |
+|---|---:|---:|---:|---:|
+| 1 | 14,371.7 | 6,519.9 | 13.4 | 13.3 |
+| 2 | 12,393.7 | 7,533.3 | 17.1 | 16.3 |
+| 3 | 11,320.3 | 7,992.1 | 16.0 | 17.5 |
+
+CPU p99 reads 2,073 to 2,219 µs on `main` and 2,041 to 2,160 µs on the
+branch. Every run reports no Late Chunk. A free frame now checks the
+Handles of every drawn Chunk's Placements, a lookup or two each, in place of
+writing them.
+
 ## M4 exit, the bench rerun (2026-11-11, #672)
 
 **Verdict.** With #743, #744 and #755 fixed, `world`'s frames meet M4's

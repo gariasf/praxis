@@ -492,8 +492,9 @@ impl FramePreparer {
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
     /// Instance, every one when either pool freed an entry since, as do the
-    /// Placements of every Chunk then, and a slot freed since writes an
-    /// Instance with no Mesh. It
+    /// Placements of each drawn Chunk one of whose Placements names an entry
+    /// no longer in its pool then, and a slot freed since writes an Instance
+    /// with no Mesh. It
     /// ends the World's change window (`World::clear_trackers`), so it is the
     /// frame's last World read, once per frame.
     pub fn prepare(
@@ -580,9 +581,8 @@ impl FramePreparer {
         *warned_of_overflowed_lights = *lights_overflowed > 0;
 
         let frees = meshes.frees() + material_generations.frees();
-        if std::mem::replace(pool_frees, frees) != frees {
-            *rewrite_every_instance = true;
-        }
+        let pools_freed = std::mem::replace(pool_frees, frees) != frees;
+        let rewrite_renderables = *rewrite_every_instance || pools_freed;
         frame.instances.clear();
         frame.instance_writes.clear();
         frame.moving_instances.clear();
@@ -604,10 +604,21 @@ impl FramePreparer {
         {
             frame.write_instance(slot, no_mesh_instance(), false);
         }
-        if chunks_changed || *rewrite_every_instance || !instance_slots.refused_chunks.is_empty() {
+        if chunks_changed
+            || *rewrite_every_instance
+            || pools_freed
+            || !instance_slots.refused_chunks.is_empty()
+        {
             for chunk in chunks {
                 let slots = match instance_slots.by_chunk.get_mut(&chunk.id) {
-                    Some(slots) if !*rewrite_every_instance && slots.held == chunk.held => continue,
+                    Some(slots)
+                        if !*rewrite_every_instance
+                            && slots.held == chunk.held
+                            && !(pools_freed
+                                && draws_a_freed_entry(chunk, meshes, material_generations)) =>
+                    {
+                        continue;
+                    }
                     Some(slots) => {
                         slots.held = chunk.held;
                         slots.range.clone()
@@ -691,7 +702,7 @@ impl FramePreparer {
             if !has_mesh {
                 // Its slot draws nothing until its Mesh does; an Instance with
                 // no Mesh written there before stays.
-                if *rewrite_every_instance || !skipped_before.contains(&entity) {
+                if rewrite_renderables || !skipped_before.contains(&entity) {
                     frame.write_instance(slot, no_mesh_instance(), false);
                 }
                 skipped.insert(entity);
@@ -699,14 +710,14 @@ impl FramePreparer {
                 return;
             }
             // Each Renderable visited is new, changed, blended, retried or lost
-            // a component, or every Instance is written again.
+            // a component, or every Renderable is written again.
             drawn.push(DrawnRenderable {
                 instance_index: frame.instances.len(),
                 entity,
             });
             frame.write_instance(slot, no_mesh_instance(), previous.is_some());
         };
-        if *rewrite_every_instance {
+        if rewrite_renderables {
             renderables.iter().for_each(&mut visit);
         } else {
             // An unchanged Renderable keeps its Instance, unless the last
@@ -814,6 +825,22 @@ impl FramePreparer {
     pub fn rewrite_all_instances(&mut self) {
         self.rewrite_every_instance = true;
     }
+}
+
+/// Whether `chunk` is drawn and a Placement of it names a Mesh or Material
+/// no longer in its pool.
+fn draws_a_freed_entry(
+    chunk: &LoadedChunk,
+    meshes: &LoadedMeshes,
+    material_generations: &Generations,
+) -> bool {
+    !chunk.held
+        && chunk.placements.iter().any(|placement| {
+            meshes.get(placement.mesh).is_none()
+                || placement.material.is_some_and(|material| {
+                    !material_generations.live(material.index, material.generation)
+                })
+        })
 }
 
 /// Writes the Instances of `chunk`'s Placements into `slots`, in its order.
@@ -1639,6 +1666,72 @@ mod tests {
             .spawn((Transform::IDENTITY, MeshRef(replacement)));
         assert_eq!(written(&mut frames).0, [(2, true)]);
         assert_eq!(frames.preparer.frame().instance_slot_count, 3);
+    }
+
+    /// After a pool frees an entry, only the Chunks whose Placements name a
+    /// freed entry and the Renderables write their Instances again, a freed
+    /// one's with no Mesh even once another entry takes its index; held
+    /// Chunks, free ranges and free slots keep theirs.
+    #[test]
+    fn after_a_pool_frees_only_chunks_naming_a_freed_entry_and_renderables_are_written() {
+        let mut frames = Frames::new();
+        let first_mesh = frames.mesh;
+        let second_mesh = load(&mut frames, 3);
+        let unused_mesh = load(&mut frames, 3);
+        let chunk = |id: u128, mesh: MeshHandle, material_index: u32, held: bool| LoadedChunk {
+            id: AssetId(id),
+            coordinates: [id as i32, 0],
+            placements: (0..2)
+                .map(|x| ChunkPlacement {
+                    transform: Transform::from_translation(glam::dvec3(x.into(), 0.0, 0.0)),
+                    mesh,
+                    material: Some(MaterialHandle {
+                        index: material_index,
+                        generation: 0,
+                    }),
+                })
+                .collect(),
+            lights: Vec::new(),
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held,
+        };
+        frames.world.insert_resource(LoadedChunks(vec![
+            chunk(1, first_mesh, 0, false),
+            chunk(2, second_mesh, 1, false),
+            chunk(3, second_mesh, 1, true),
+            chunk(4, first_mesh, 0, false),
+        ]));
+        frames.spawn(0.0);
+        let leaving = frames.spawn(1.0);
+        assert_eq!(frames.prepare(), (0..10).collect::<Vec<u32>>());
+        frames.world.resource_mut::<LoadedChunks>().0.pop();
+        frames.world.despawn(leaving);
+        assert_eq!(frames.prepare(), [6, 7, 9]);
+        assert!(frames.prepare().is_empty());
+        let drawn = |frames: &Frames| -> Vec<bool> {
+            let instances = &frames.preparer.frame().instances;
+            instances
+                .iter()
+                .map(|instance| instance.mesh != NO_MESH)
+                .collect()
+        };
+
+        assert!(frames.meshes.remove(unused_mesh));
+        assert_eq!(frames.prepare(), [8]);
+        assert!(frames.prepare().is_empty());
+
+        assert!(frames.meshes.remove(second_mesh));
+        assert_eq!(load(&mut frames, 3).index, second_mesh.index);
+        let (written, log) = logged(|| frames.prepare());
+        assert_eq!(written, [2, 3, 8]);
+        assert_eq!(drawn(&frames), [false, false, true]);
+        assert!(log.contains("Placement"), "not logged: {log:?}");
+        assert!(frames.prepare().is_empty());
+
+        assert!(frames.material_generations.free(0, 0));
+        assert_eq!(frames.prepare(), [0, 1, 2, 3, 8]);
+        assert_eq!(drawn(&frames), [false; 5]);
     }
 
     /// Loads into `frames` a Mesh of `vertex_count` vertices, after the last
