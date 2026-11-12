@@ -168,8 +168,8 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
     <li><svg width="12" height="12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" fill="var(--ink-soft)"></rect></svg>A Baseline record, imported from <code>main</code>'s history. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="var(--ink-soft)"></circle></svg>A record benched since. <svg width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--ink-soft)" stroke-width="2"></circle></svg>A tagged record, kept off the Series (a busy machine, another configuration), shown with the Tagged records switch. <svg width="12" height="12" aria-hidden="true"><path d="M1,9L11,9L6,1Z" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"></path></svg>A tagged record off the chart's scale. <svg width="12" height="12" aria-hidden="true"><path d="M6,0.5L11.5,6L6,11.5L0.5,6Z" fill="var(--ink-soft)"></path></svg>An Experiment's record, benched from a branch with <code>praxis bench --experiment &lt;name&gt;</code>, drawn beside the Series record of its merge base's source and compared with it.</li>
     <li><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="7" class="suspect" stroke="var(--worse)"></circle><circle cx="9" cy="9" r="3.5" fill="var(--ink-soft)"></circle></svg>A suspect: a CPU or GPU frame median outside the median of up to 8 records before it on its line, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame. <span class="up">Red</span> when slower, <span class="down">green</span> when faster. Only a step's first record is marked, and an imported Baseline starts a new line, so its step is none. lavapipe's times are not judged.</li>
     <li><svg width="22" height="12" aria-hidden="true"><rect width="22" height="12" class="harness-band"></rect></svg>Shaded bands are Harness versions. A metric's definition can change from one to the next, so lines break between bands and no change is measured across them. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="content-break"></line></svg>A scene whose content changed breaks its line the same way.</li>
-    <li>Timing changes are coloured by <code>praxis compare</code>'s warn and fail ratios and noise floors: <span class="warn">amber</span> past +5%, <span class="up">red</span> past +10% when also past the noise floor (10 µs on the CPU, 20 µs on the GPU), <span class="down">green</span> past −5%; the rest stay grey as noise. Counter changes are exact, so every one is marked. Changes across a Harness version or scene content break stay grey.</li>
-    <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440 at the newest Harness version, on the median as <code>praxis compare</code> judges them. Other machines are comparison adapters: their figures are not Budgets. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
+    <li>Timing changes are coloured by <code>praxis compare</code>'s warn and fail ratios and noise floors: <span class="warn">amber</span> past +5%, <span class="up">red</span> past +10% when also past the noise floor (10 µs on the CPU, 20 µs on the GPU), <span class="down">green</span> past −5%; the rest stay grey as noise. A counter frames' counter change is exact, so every one is marked. A measured frames' one is marked between two records that measured as many frames, unless either's measured frames streamed (loaded or unloaded a Chunk, or read a byte): those counts differ from run to run, so their changes stay grey and count as no counter that moved. Changes across a Harness version or scene content break stay grey.</li>
+    <li><svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="budget"></line></svg>Budgets are ADR 0013's, judged on the M4 Pro at 2560×1440 at the newest Harness version, at the statistics <code>praxis compare</code> judges: the CPU frame at its median, p95 and p99; the GPU frame and the gate at their median and p99; the longest CPU frame and GPU frame against one 60 Hz period; the dynamic TLAS's CPU time and its GPU build at their medians; GPU memory in total, at its median over the measured frames. A record made before the bench kept a statistic is judged on those it holds, and a verdict that is over names its statistic. GPU memory by kind is left to <code>praxis compare</code>, as a Series row does not hold it. Other machines are comparison adapters: their figures are not Budgets. <svg width="22" height="12" aria-hidden="true"><line x1="0" y1="6" x2="22" y2="6" class="tagged-line" stroke="var(--ink-soft)"></line></svg>A dashed line is a machine with tagged records only.</li>
   </ul>
 </details>
 
@@ -197,7 +197,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <div class="panel chart" id="passes-chart"></div>
 
   <h3 class="view" id="counters">Counters and memory</h3>
-  <p class="note">What the machine above counted. Measured frames are the 1,800 frames a reference run times, the load ADR 0013's Budgets judge. Counter frames are frames 8 to 71, early in the warm-up, which every configuration renders, lavapipe's included. Aliasing is measured on its own captures. Counters do not depend on load, so every machine's are exact.</p>
+  <p class="note">What the machine above counted. Measured frames are the frames a run times, the load ADR 0013's Budgets judge: 1,800 of every scene but the world, which measures 3,352, its bench segment less the warm-up. Counter frames are frames 8 to 71, early in the warm-up, which every configuration renders; lavapipe measures those alone, so it has one column. Aliasing is measured on its own captures. Counters do not depend on load, so every machine's are exact, but for measured frames that streamed: their counts move with when each read lands.</p>
   <div class="grid">
     <div class="panel table-wrap" id="counter-table"></div>
     <div class="panel chart" id="memory-chart"></div>
@@ -259,9 +259,15 @@ const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seco
 // How many of a Series' latest counter changes show before the rest fold.
 const SHOWN_COUNTER_CHANGES = 6;
 // Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
-const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed"];
-// `Configuration::REFERENCE`'s measured frames: only rows of that length show their measured counters, so no two counted different frames.
-const REFERENCE_MEASURED_FRAMES = 1800;
+const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed", "late_chunks", "chunks_loaded", "chunks_unloaded", "bytes_read", "pool_entries_freed", "late_mips", "tlas_build_allocations"];
+// `COUNTER_FRAMES`' length (src/bench/mod.rs): a row that measured no more frames than these holds the same counters twice.
+const COUNTER_FRAME_COUNT = 64;
+const BUDGET_STATISTICS = {
+  cpu_frame_microseconds: ["median", "p95", "p99", "maximum"],
+  gpu_frame_microseconds: ["median", "p99", "maximum"],
+  gate_microseconds: ["median", "p99"],
+  dynamic_tlas_cpu_microseconds: ["median"],
+};
 const METRIC_LABELS = {
   cpu_frame_microseconds: "CPU frame",
   gpu_frame_microseconds: "GPU frame",
@@ -271,17 +277,24 @@ const METRIC_LABELS = {
   dynamic_tlas_gpu_microseconds: "Dynamic TLAS, GPU",
   arena_bytes_in_use: "Arena in use",
   bends_left_out: "Bends left out",
+  bytes_read: "Bytes read",
+  chunks_loaded: "Chunks loaded",
+  chunks_unloaded: "Chunks unloaded",
   draw_calls: "Draw calls",
   froxel_lights_overflowed: "Froxel lights overflowed",
   gpu_memory_bytes: "GPU memory",
   heap_allocations: "Heap allocations",
   instances_drawn: "Instances drawn",
   instances_overflowed: "Instances overflowed",
+  late_chunks: "Late Chunks",
+  late_mips: "Late mips",
   lights_overflowed: "Lights overflowed",
   moving_instances_left_out: "Moving Instances left out of the dynamic TLAS",
+  pool_entries_freed: "Pool entries freed",
   renderables_refused: "Renderables refused",
   shadow_mask_lights_overflowed: "Shadow mask lights overflowed",
   static_instances_left_out: "Static Instances left out of the static TLAS",
+  tlas_build_allocations: "TLAS build allocations",
   triangles_drawn: "Triangles drawn",
   uploaded_bytes: "Uploaded",
   binary_bytes: "Release binary",
@@ -478,7 +491,7 @@ async function loadCommits() {
 /* Formatting */
 
 function isTiming(metric) { return metric.endsWith("_microseconds") || metric.startsWith("pass:"); }
-function isBytes(metric) { return metric.endsWith("_bytes") || metric.endsWith("_bytes_in_use"); }
+function isBytes(metric) { return metric.endsWith("_bytes") || metric.endsWith("_bytes_in_use") || metric.endsWith("bytes_read"); }
 function byteUnit(bytes) { return bytes >= 1e9 ? [1e9, "GB"] : bytes >= 1e6 ? [1e6, "MB"] : bytes >= 1e3 ? [1e3, "kB"] : [1, "B"]; }
 function formatValue(metric, value) {
   if (value === null || value === undefined) return "—";
@@ -594,20 +607,38 @@ function judgesBudgets(machine, row) {
   return machine === BUDGET_MACHINE && row.harness_version === state.newestHarnessVersion;
 }
 
-/** Each Budget `praxis compare` checks, against the row's median; a metric the row does not hold is left out. */
+/** Each Budget `praxis compare` checks of what a row holds, at the statistic it checks; one the row does not hold is left out. */
 function budgetVerdicts(row) {
-  const values = {
-    cpu_frame_microseconds: row.cpu_frame_microseconds?.median,
-    gpu_frame_microseconds: row.gpu_frame_microseconds?.median,
-    gate_microseconds: row.gate_microseconds?.median,
-    dynamic_tlas_cpu_microseconds: row.dynamic_tlas_cpu_microseconds?.median,
-    dynamic_tlas_gpu_microseconds: row.gpu_pass_median_microseconds?.dynamic_tlas_build,
-    // `praxis compare` judges a reference run's measured frames.
-    gpu_memory_bytes: row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes,
-  };
-  return Object.entries(values)
-    .filter(([metric, value]) => value !== null && value !== undefined && state.budgets[metric] !== undefined)
-    .map(([metric, value]) => ({ metric, value, budget: state.budgets[metric], over: value > state.budgets[metric] }));
+  const judged = [];
+  for (const [metric, statistics] of Object.entries(BUDGET_STATISTICS)) {
+    for (const statistic of statistics) {
+      judged.push([metric, statistic, row[metric]?.[statistic], state.budgets[statistic === "maximum" ? "maximum_frame_microseconds" : metric]]);
+    }
+  }
+  judged.push(["dynamic_tlas_gpu_microseconds", "median", row.gpu_pass_median_microseconds?.dynamic_tlas_build, state.budgets.dynamic_tlas_gpu_microseconds]);
+  judged.push(["gpu_memory_bytes", "median", row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes, state.budgets.gpu_memory_bytes]);
+  return judged
+    .filter(([, , value, budget]) => value !== null && value !== undefined && budget !== undefined)
+    .map(([metric, statistic, value, budget]) => ({ metric, statistic, value, budget, over: value > budget }));
+}
+
+/** Whether the frames `counters` count loaded or unloaded a Chunk or read a byte; `Counters::streamed`'s twin. */
+function streamed(counters) {
+  return (counters?.chunks_loaded ?? 0) + (counters?.chunks_unloaded ?? 0) + (counters?.bytes_read ?? 0) > 0;
+}
+
+function measuredCountersOf(row) { return row.measured_frames > COUNTER_FRAME_COUNT ? row.measured_counters ?? {} : {}; }
+
+function measuredChangeExact(row, previous) { return !streamed(row.measured_counters) && !streamed(previous?.measured_counters); }
+
+function metricChanges(row, previous) {
+  const previousMetrics = new Map(previous ? metricsOf(previous) : []);
+  const sameLength = previous?.measured_frames === row.measured_frames;
+  const measuredExact = measuredChangeExact(row, previous);
+  return metricsOf(row).map(([metric, value]) => {
+    const measured = metric.startsWith("measured:");
+    return { metric, value, before: measured && !sameLength ? null : previousMetrics.get(metric) ?? null, exact: !measured || measuredExact };
+  });
 }
 
 function median(values) {
@@ -624,9 +655,11 @@ function standingOf(points, valueOf) {
   const measured = points.filter((point) => valueOf(point.row) !== null);
   const latest = measured.at(-1);
   if (!latest) return null;
-  const earlier = measured.slice(0, -1).filter((point) => point.segment === latest.segment).map((point) => valueOf(point.row));
+  const earlierPoints = measured.slice(0, -1).filter((point) => point.segment === latest.segment);
+  const earlier = earlierPoints.map((point) => valueOf(point.row));
   return {
     latest,
+    previousPoint: earlierPoints.at(-1) ?? null,
     value: valueOf(latest.row),
     previous: earlier.length > 0 ? earlier.at(-1) : null,
     recent: earlier.length > 0 ? median(earlier.slice(-RECENT_RECORDS)) : null,
@@ -950,33 +983,34 @@ function sparklineSvg(points, valueOf) {
     + `<circle cx="${xOf(last)}" cy="${frame.y(valueOf(last.row))}" r="2.5" fill="${machineColour(state.machine)}"></circle></svg>`;
 }
 
-/** Each counter's latest on the measured frames, where rows are at the reference length, and on the counter frames. */
+/** Each counter's latest on the measured frames, where the latest row measured more than the counter frames, and on the counter frames. */
 function counterTable(points) {
   const container = document.getElementById("counter-table");
+  const latest = points.at(-1);
   const metrics = [...new Set(points.flatMap((point) => metricsOf(point.row).map(([metric]) => metric)))].filter((metric) => !isTiming(metric));
   const names = [...new Set(metrics.map((metric) => metric.replace(/^measured:/, "")))];
   if (names.length === 0) {
     container.innerHTML = `<p class="empty">${state.showTagged ? "No record of this scene on this machine counts anything." : "No Series record counts anything here; tagged records may."}</p>`;
     return;
   }
-  const latest = points.at(-1);
-  const anyMeasured = metrics.some((metric) => metric.startsWith("measured:"));
-  const measuredValue = (name) => (row) => row.measured_frames === REFERENCE_MEASURED_FRAMES ? row.measured_counters?.[name] ?? null : null;
+  const showsMeasured = latest.row.measured_frames > COUNTER_FRAME_COUNT;
+  const measuredValue = (name) => (row) => row.measured_frames === latest.row.measured_frames ? measuredCountersOf(row)[name] ?? null : null;
   const countedValue = (name) => (row) => row[name] ?? null;
   const moved = (standing) => Boolean(standing && standing.previous !== null && standing.value !== standing.previous);
+  const exact = (standing) => !standing?.previousPoint || measuredChangeExact(standing.latest.row, standing.previousPoint.row);
   const rows = names.map((name) => {
-    const measured = anyMeasured ? standingOf(points, measuredValue(name)) : null;
+    const measured = showsMeasured ? standingOf(points, measuredValue(name)) : null;
     const counted = standingOf(points, countedValue(name));
-    return { name, measured, counted, moved: moved(measured) || moved(counted) };
+    return { name, measured, counted, moved: (moved(measured) && exact(measured)) || moved(counted) };
   }).sort((first, second) => second.moved - first.moved || labelOf(first.name).localeCompare(labelOf(second.name)));
   // A value's change from the previous record follows it, only when it moved. A metric that is no
   // counter, such as aliasing, measures its own captures, so its value spans both frame columns.
-  const cell = (name, standing) => `<td>${formatValue(name, standing?.value)}${moved(standing) ? ` ${changeHtml(name, standing.value, standing.previous)}` : ""}</td>`;
-  container.innerHTML = `<table><thead><tr><th class="text">Counter</th>${anyMeasured ? "<th>Measured<br>frames</th>" : ""}<th>Counter<br>frames</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ name, measured, counted }) => `<tr>
+  const cell = (name, standing, comparable = true) => `<td>${formatValue(name, standing?.value)}${moved(standing) ? ` ${changeHtml(name, standing.value, standing.previous, comparable)}` : ""}</td>`;
+  container.innerHTML = `<table><thead><tr><th class="text">Counter</th>${showsMeasured ? "<th>Measured<br>frames</th>" : ""}<th>Counter<br>frames</th><th class="text">Trend</th></tr></thead><tbody>${rows.map(({ name, measured, counted }) => `<tr>
     <td class="text">${escapeHtml(labelOf(name))}</td>
-    ${!COUNTERS.includes(name) ? cell(name, counted).replace("<td>", `<td colspan="${anyMeasured ? 2 : 1}" style="text-align: center">`) : `${anyMeasured ? cell(name, measured) : ""}${cell(name, counted)}`}
+    ${!COUNTERS.includes(name) ? cell(name, counted).replace("<td>", `<td colspan="${showsMeasured ? 2 : 1}" style="text-align: center">`) : `${showsMeasured ? cell(name, measured, exact(measured)) : ""}${cell(name, counted)}`}
     <td class="text">${sparklineSvg(points, measured ? measuredValue(name) : countedValue(name))}</td></tr>`).join("")}</tbody></table>
-    <p class="empty">A change from the previous record follows its value. ${anyMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`
+    <p class="empty">A change from the previous record follows its value. ${rows.some(({ measured }) => !exact(measured)) ? "The measured frames streamed, so their counters differ from run to run and their changes are not marked. " : ""}${showsMeasured ? "Trend: the measured frames where counted, else the counter frames. " : ""}Latest: ${dateOf(latest.row.committed_unix_seconds)} · ${changeName(latest.row)}</p>`
     + counterChangesHtml(points);
 }
 
@@ -1062,9 +1096,7 @@ function metricsOf(row) {
   const metrics = [];
   for (const timing of TIMINGS) if (timing in row) metrics.push([timing, row[timing]?.median ?? null]);
   for (const [pass, value] of Object.entries(row.gpu_pass_median_microseconds ?? {})) metrics.push([`pass:${pass}`, value]);
-  if (row.measured_frames === REFERENCE_MEASURED_FRAMES) {
-    for (const [counter, value] of Object.entries(row.measured_counters ?? {})) metrics.push([`measured:${counter}`, value]);
-  }
+  for (const [counter, value] of Object.entries(measuredCountersOf(row))) metrics.push([`measured:${counter}`, value]);
   for (const [field, value] of Object.entries(row)) {
     if (!NON_METRIC_FIELDS.has(field) && !TIMINGS.includes(field) && typeof value === "number") metrics.push([field, value]);
   }
@@ -1080,22 +1112,19 @@ function movement(metric, value, before) {
 
 function deltaTable(point) {
   const comparable = !point.breakLabel;
-  const previous = point.previous?.row ?? null;
-  const previousMetrics = new Map(previous ? metricsOf(previous) : []);
-  const rows = metricsOf(point.row)
-    .map(([metric, value]) => ({ metric, value, before: previousMetrics.get(metric) ?? null }))
+  const rows = metricChanges(point.row, point.previous?.row ?? null)
     .filter(({ value, before }) => value !== null || before !== null)
-    .map((entry) => ({ ...entry, moved: movement(entry.metric, entry.value, entry.before) }))
+    .map((entry) => ({ ...entry, moved: entry.exact ? movement(entry.metric, entry.value, entry.before) : 0 }))
     .sort((first, second) => second.moved - first.moved);
-  const rowHtml = ({ metric, value, before }) => `<tr><td class="text">${escapeHtml(countedLabelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before, comparable)}</td></tr>`;
+  const rowHtml = ({ metric, value, before, exact }) => `<tr><td class="text">${escapeHtml(countedLabelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before, comparable && exact)}</td></tr>`;
   const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>${point.experiment ? "Base" : "Previous"}</th><th>Change</th></tr></thead>`;
-  // A timing moved when `praxis compare` would flag it; a counter moved when it changed at all. Across a
-  // break nothing is judged, so every row shows.
+  // A timing moved when `praxis compare` would flag it; a counter moved when it changed at all, unless it
+  // counts measured frames that streamed. Across a break nothing is judged, so every row shows.
   const passedNoise = (row) => !comparable || (row.moved > 0 && (!isTiming(row.metric) || timingVerdict(row.metric, row.value, row.before) !== "flat"));
   const movedRows = rows.filter(passedNoise);
   const otherRows = rows.filter((row) => !passedNoise(row));
-  return `<div class="table-wrap"><table>${headerHtml}<tbody>${movedRows.map(rowHtml).join("") || `<tr><td class="text" colspan="4">No timing moved as far as <code>praxis compare</code> warns, and no counter changed.</td></tr>`}</tbody></table></div>`
-    + (otherRows.length > 0 ? `<details><summary>${otherRows.length} more: timings within compare's ratios, unchanged counters, unmeasured</summary><div class="table-wrap"><table>${headerHtml}<tbody>${otherRows.map(rowHtml).join("")}</tbody></table></div></details>` : "");
+  return `<div class="table-wrap"><table>${headerHtml}<tbody>${movedRows.map(rowHtml).join("") || `<tr><td class="text" colspan="4">No timing moved as far as <code>praxis compare</code> warns, and no exact counter changed.</td></tr>`}</tbody></table></div>`
+    + (otherRows.length > 0 ? `<details><summary>${otherRows.length} more: timings within compare's ratios, unchanged counters${rows.some((row) => !row.exact) ? ", measured counters of frames that streamed" : ""}, unmeasured</summary><div class="table-wrap"><table>${headerHtml}<tbody>${otherRows.map(rowHtml).join("")}</tbody></table></div></details>` : "");
 }
 
 async function select(point, scroll) {
@@ -1146,16 +1175,18 @@ async function select(point, scroll) {
 
 /* Views */
 
-/** A row's Budgets as one cell, "✗ 2 over" or "✓ 6 under", each Budget's figure on hover. */
+/** A row's Budgets as one cell, "✗ 2 over: CPU frame p99, maximum" or "✓ 12 under", each Budget's figure on hover. */
 function budgetCell(row) {
   if (!judgesBudgets(state.machine, row)) {
     return `<span class="flat" title="Harness ${escapeHtml(row.harness_version ?? "unknown")}: Budgets are judged at Harness ${escapeHtml(state.newestHarnessVersion)}">—</span>`;
   }
   const verdicts = budgetVerdicts(row);
-  const detail = verdicts.map(({ metric, value, budget, over }) => `${labelOf(metric)}: ${formatValue(metric, value)}, ${over ? "over" : "under"} ${formatBudget(metric, budget)}`).join("\n");
-  const overCount = verdicts.filter((verdict) => verdict.over).length;
-  return overCount > 0
-    ? `<span class="over" title="${escapeHtml(detail)}">✗ ${overCount} over: ${escapeHtml(verdicts.filter((verdict) => verdict.over).map((verdict) => labelOf(verdict.metric)).join(" · "))}</span>`
+  const detail = verdicts.map(({ metric, statistic, value, budget, over }) => `${labelOf(metric)} ${statistic}: ${formatValue(metric, value)}, ${over ? "over" : "under"} ${formatBudget(metric, budget)}`).join("\n");
+  const overVerdicts = verdicts.filter((verdict) => verdict.over);
+  const overStatistics = new Map();
+  for (const { metric, statistic } of overVerdicts) overStatistics.set(metric, [...(overStatistics.get(metric) ?? []), statistic]);
+  return overVerdicts.length > 0
+    ? `<span class="over" title="${escapeHtml(detail)}">✗ ${overVerdicts.length} over: ${escapeHtml([...overStatistics].map(([metric, statistics]) => `${labelOf(metric)} ${statistics.join(", ")}`).join(" · "))}</span>`
     : `<span class="under" title="${escapeHtml(detail)}">✓ ${verdicts.length} under</span>`;
 }
 
@@ -1199,7 +1230,7 @@ function renderStanding() {
       return `<tr class="pick${scene === state.scene ? " current" : ""}" tabindex="0" data-scene="${escapeHtml(scene)}">
         <td class="text scene">${escapeHtml(scene)}</td>
         ${cells("gpu_frame_microseconds", gpu)}${cells("cpu_frame_microseconds", cpu)}
-        ${showsBudgets ? `<td class="text">${budgetCell(latest)}</td>` : ""}
+        ${showsBudgets ? `<td class="text" style="white-space: normal">${budgetCell(latest)}</td>` : ""}
         <td class="text">${shortDate(latest.committed_unix_seconds)} · ${changeReference(latest)}</td></tr>`;
     }).join("")}</tbody></table>`;
   attachRowPicks(container);
@@ -1270,8 +1301,7 @@ function renderExperiment() {
   };
   const countersChanged = (point) => {
     if (!point.previous || point.breakLabel) return "—";
-    const before = new Map(metricsOf(point.previous.row));
-    return metricsOf(point.row).filter(([metric, value]) => !isTiming(metric) && before.has(metric) && before.get(metric) !== value).length;
+    return metricChanges(point.row, point.previous.row).filter(({ metric, value, before, exact }) => !isTiming(metric) && exact && before !== null && before !== value).length;
   };
   container.innerHTML = `<table><thead><tr><th class="text">Machine</th><th class="text">Commit</th><th class="text">Base</th><th>GPU frame</th><th>vs base</th><th>CPU frame</th><th>vs base</th><th>Counters changed</th><th class="text">Tags</th></tr></thead><tbody>${points.map((point, index) => `<tr class="pick${point.path === state.selected?.path ? " current" : ""}" tabindex="0" data-index="${index}">
     <td class="text">${escapeHtml(machineName(point.machine))}</td>

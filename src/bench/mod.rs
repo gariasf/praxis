@@ -1484,6 +1484,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_bench_page_lists_every_counter_and_the_counter_frames_length() {
+        let page = include_str!("../../docs/bench/index.html");
+        let listed = page
+            .lines()
+            .find_map(|line| line.strip_prefix("const COUNTERS = "))
+            .expect("the page declares COUNTERS on one line");
+        let listed: Vec<&str> = serde_json::from_str(listed.trim_end_matches(';'))
+            .expect("COUNTERS is an array of names");
+        assert_eq!(listed, Counters::NAMES);
+        let counter_frame_count = format!("const COUNTER_FRAME_COUNT = {};", COUNTER_FRAMES.len());
+        assert!(page.contains(&counter_frame_count), "{counter_frame_count}");
+    }
+
     const COUNTERS: Counters = Counters {
         draw_calls: 10,
         instances_drawn: 10,
