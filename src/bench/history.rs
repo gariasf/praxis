@@ -52,8 +52,8 @@ This branch holds data only and is never merged.
 - `records/<adapter>-<backend>/<scene>/<source hash>.json`: the records on a
   Series, clean and release-profile runs of `main`'s source in their Series'
   configuration: 2560x1440 over 1800 frames on a quiet machine,
-  `world` over its bench segment's 3352 frames, or on lavapipe CI's
-  640x360 over 64 frames, quiet or not.
+  `world` over the 3352 frames its bench segment measures, or on lavapipe
+  CI's 640x360 over 64 frames, quiet or not.
 - `tagged/<adapter>-<backend>/<scene>/<source hash>.json`: every other record,
   its `tags` saying why it is kept off the Series.
 - `records/<adapter>-<backend>/release-build/<source hash>.json`: the release
@@ -1690,7 +1690,7 @@ mod tests {
             configuration(Configuration::REFERENCE),
             configuration(Configuration::CI_COUNTERS),
             format!(
-                "`world` over its bench segment's {} frames",
+                "`world` over the {} frames its bench segment measures",
                 Configuration::REFERENCE
                     .for_scene(ReferenceScene::World)
                     .measured_frames
