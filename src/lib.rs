@@ -46,7 +46,6 @@ pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction,
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
-pub use threading::init_compute_pool;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {

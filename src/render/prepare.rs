@@ -16,7 +16,7 @@ use crate::render::{
     NO_MESH, RenderCapacities,
 };
 use crate::streaming::{LoadedChunk, LoadedChunks};
-use crate::threading::init_compute_pool;
+use crate::threading::compute_pool;
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -186,6 +186,7 @@ fn fill_instances(
     drawn: &[DrawnRenderable],
     renderables: &Query<'_, '_, RenderableData>,
     blend_weight: f32,
+    compute_pool: &bevy_tasks::TaskPool,
 ) {
     let fill = |instances: &mut [InstanceData], first_index: usize, drawn: &[DrawnRenderable]| {
         for &DrawnRenderable {
@@ -210,7 +211,7 @@ fn fill_instances(
         fill(instances, 0, drawn);
         return;
     }
-    init_compute_pool().scope(|scope| {
+    compute_pool.scope(|scope| {
         let mut rest = instances;
         let mut first_index = 0;
         for group in drawn.chunks(drawn.len().div_ceil(task_count)) {
@@ -417,6 +418,10 @@ pub struct FramePreparer {
     /// Set while bends are left out of the bend pass, which was warned about
     /// when it was set.
     warned_of_bends_left_out: bool,
+    /// This preparer's own (ADR 0016): a shared pool's queue would carry
+    /// earlier States' tasks into which frames allocate
+    /// [ref:concurrent-queue-2.5.0-push-allocates-block].
+    compute_pool: bevy_tasks::TaskPool,
     frame: FrameData,
 }
 
@@ -447,6 +452,7 @@ impl FramePreparer {
             bend_query: world.query(),
             bends_left_out: 0,
             warned_of_bends_left_out: false,
+            compute_pool: compute_pool(),
             frame: FrameData::default(),
         }
     }
@@ -525,6 +531,7 @@ impl FramePreparer {
             bend_query,
             bends_left_out,
             warned_of_bends_left_out,
+            compute_pool,
             frame,
         } = self;
         let camera = world.resource::<Camera>();
@@ -736,7 +743,13 @@ impl FramePreparer {
                 }
             }
         }
-        fill_instances(&mut frame.instances, drawn, &renderables, blend_weight);
+        fill_instances(
+            &mut frame.instances,
+            drawn,
+            &renderables,
+            blend_weight,
+            compute_pool,
+        );
         // A slot freed this frame, or every free slot when every Instance is
         // written again, takes an Instance with no Mesh, so the GPU no longer
         // draws it; Renderables may take it from the next frame.
@@ -2123,5 +2136,39 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Three compute pool tasks a frame: past the first frame, which the
+    /// pool's threads may still be starting in, each frame's allocations are
+    /// those of the same frame of a preparer made after another's ran.
+    #[test]
+    fn a_frames_allocations_do_not_depend_on_the_preparers_before_it() {
+        let allocations_per_frame = || {
+            let mut frames = Frames::new();
+            let renderables: Vec<Entity> = (0..3 * INSTANCES_PER_TASK)
+                .map(|index| frames.spawn(index as f64))
+                .collect();
+            let mut recorder = crate::stats::FrameRecorder::new();
+            let mut allocations_per_frame = Vec::new();
+            for _ in 0..7 {
+                for &entity in &renderables {
+                    let mut transform = frames.world.get_mut::<Transform>(entity).unwrap();
+                    transform.translation.y += 1.0;
+                }
+                frames.propagation.run(&mut frames.world);
+                recorder.begin();
+                frames.preparer.prepare(
+                    &mut frames.world,
+                    &frames.meshes,
+                    &frames.material_generations,
+                    1.0,
+                );
+                recorder.end();
+                allocations_per_frame.push(recorder.counters.heap_allocations);
+            }
+            allocations_per_frame
+        };
+        allocations_per_frame();
+        assert_eq!(allocations_per_frame()[1..], allocations_per_frame()[1..]);
     }
 }
