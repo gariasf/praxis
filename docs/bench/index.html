@@ -193,7 +193,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   </div>
 
   <h3 class="view" id="tail">Tail</h3>
-  <p class="note">How far the slowest measured frames ran from the median on the machine above: each frame time's median, p95, p99 and maximum, and its hitches, the measured frames over twice the median.</p>
+  <p class="note">How far the slowest measured frames ran from the median on the machine above: each frame time's median, p95, p99 and maximum, and its Hitches, the measured frames over twice the median.</p>
   <div class="panel chart" id="cpu-tail-chart"></div>
   <div class="panel chart" id="gpu-tail-chart"></div>
   <div class="panel chart" id="cpu-hitches-chart"></div>
@@ -204,7 +204,7 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <div class="panel chart" id="passes-chart"></div>
 
   <h3 class="view" id="cpu-times">Systems and stages</h3>
-  <p class="note">Each ECS system's and renderer stage's CPU time on the machine above, one line per median. A frame's time is the sum of its runs, so a system or stage that few frames run has a median of 0; each point's tooltip adds the p95.</p>
+  <p class="note">Each ECS system's and renderer stage's CPU time on the machine above, one line per median. A frame's time is the sum of its runs, so a system or stage that few frames run has a median of 0; each point's tooltip adds the p95 and maximum, and lists the largest maximums first.</p>
   <div class="panel chart" id="cpu-times-chart"></div>
 
   <h3 class="view" id="counters">Counters and memory</h3>
@@ -268,7 +268,7 @@ const SPREAD_STATISTICS = ["median", "p95", "p99", "maximum"];
 const HIT_RADIUS_PIXELS = 24;
 const TIMINGS = ["cpu_frame_microseconds", "gpu_frame_microseconds", "gate_microseconds", "shadow_ray_microseconds", "dynamic_tlas_cpu_microseconds"];
 // Series row fields that are neither a timing nor a counter.
-const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "cpu_time_microseconds", "cpu_frame_hitches", "gpu_frame_hitches", "measured_frames", "measured_counters", "tags", "suspects"]);
+const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seconds", "harness_version", "source", "scene_content_hash", "gpu_pass_median_microseconds", "cpu_time_microseconds", "measured_frames", "measured_counters", "tags", "suspects"]);
 // How many of a Series' latest counter changes show before the rest fold.
 const SHOWN_COUNTER_CHANGES = 6;
 // Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
@@ -284,6 +284,8 @@ const BUDGET_STATISTICS = {
 const METRIC_LABELS = {
   cpu_frame_microseconds: "CPU frame",
   gpu_frame_microseconds: "GPU frame",
+  cpu_frame_hitches: "CPU frame Hitches",
+  gpu_frame_hitches: "GPU frame Hitches",
   gate_microseconds: "Gate, rays off",
   shadow_ray_microseconds: "Shadow rays",
   dynamic_tlas_cpu_microseconds: "Dynamic TLAS, CPU",
@@ -541,7 +543,7 @@ function passLabel(pass) {
 }
 function labelOf(metric) {
   if (metric.startsWith("pass:")) return passLabel(metric.slice(5));
-  if (metric.startsWith("cpu:")) return `${passLabel(metric.slice(4))}, CPU`;
+  if (metric.startsWith("cpu:")) return `${passLabel(metric.slice(4))}, system or stage`;
   if (metric.startsWith("measured:")) return `${labelOf(metric.slice(9))}, measured frames`;
   return METRIC_LABELS[metric] ?? passLabel(metric);
 }
@@ -592,6 +594,8 @@ function changeReference(row) {
  */
 function timingVerdict(metric, value, before) {
   const noiseFloor = CPU_TIMINGS.has(metric) || metric.startsWith("cpu:") ? CPU_NOISE_FLOOR_MICROSECONDS : GPU_NOISE_FLOOR_MICROSECONDS;
+  // `praxis compare` judges no system or stage, most of which cost less than the floor.
+  if (metric.startsWith("cpu:") && Math.abs(value - before) <= noiseFloor) return "flat";
   if (value > before) {
     const ratio = before > 0 ? value / before : Infinity;
     return ratio > FAIL_RATIO && value - before > noiseFloor ? "fail" : ratio > WARN_RATIO ? "warn" : "flat";
@@ -654,7 +658,7 @@ function metricChanges(row, previous) {
   const measuredExact = measuredChangeExact(row, previous);
   return metricsOf(row).map(([metric, value]) => {
     const measured = metric.startsWith("measured:");
-    return { metric, value, before: measured && !sameLength ? null : previousMetrics.get(metric) ?? null, exact: !measured || measuredExact };
+    return { metric, value, before: measured && !sameLength ? null : previousMetrics.get(metric) ?? null, exact: !metric.endsWith("_hitches") && (!measured || measuredExact) };
   });
 }
 
@@ -937,10 +941,10 @@ function drawLineChart(container, { title, subtitle = "", metric, lines, valueOf
 
 /**
  * One line per part over the machine's Series records. `partsOf` a row gives each part by name: a value, or a
- * spread whose median is drawn and whose p95 the tooltip adds. The parts in `order` are named, or the
- * `NAMED_PART_COUNT` largest without one.
+ * spread whose median is drawn and whose p95 and maximum the tooltip adds. The `partNames` a row holds are
+ * named, or without them the `NAMED_PART_COUNT` largest.
  */
-function drawPartsChart(container, points, { title, noun, metric, partsOf, partLabel = passLabel, frameMetric = null, order = null }) {
+function drawPartsChart(container, points, { title, noun, metric, partsOf, partLabel = passLabel, frameMetric = null, partNames = null }) {
   const valueOf = (part) => part?.median ?? part ?? null;
   const rows = points.filter((point) => Object.keys(partsOf(point.row)).length > 0);
   if (rows.length === 0) {
@@ -952,7 +956,7 @@ function drawPartsChart(container, points, { title, noun, metric, partsOf, partL
     for (const [part, value] of Object.entries(partsOf(point.row))) totals.set(part, (totals.get(part) ?? 0) + (valueOf(value) ?? 0));
   }
   const ranked = [...totals.entries()].filter(([, total]) => total > 0).sort((first, second) => second[1] - first[1]).map(([part]) => part);
-  const namedParts = order ?? ranked.slice(0, NAMED_PART_COUNT);
+  const namedParts = partNames?.filter((part) => totals.has(part)) ?? ranked.slice(0, NAMED_PART_COUNT);
   const colourOf = (part) => `var(--series-${namedParts.indexOf(part) + 1})`;
   const valueAt = (point, part) => valueOf(partsOf(point.row)[part]);
   const frame = frameOf(container, [0, ...rows.flatMap((point) => namedParts.map((part) => valueAt(point, part)))], null, 260);
@@ -975,16 +979,15 @@ function drawPartsChart(container, points, { title, noun, metric, partsOf, partL
     return { x, y: frame.margin.top, point, column: true };
   });
   const svg = commitAxisSvg(frame, axis, contentBreaksOf(rows, axis.xOf, axis.stepPixels)) + yAxisSvg(frame, metric) + paths + markers;
-  const subtitle = ranked.length > namedParts.length ? `The ${NAMED_PART_COUNT} largest of ${ranked.length} ${noun}; each point's tooltip lists its ${TOOLTIP_PART_COUNT} largest and its record every one.` : "";
+  const subtitle = ranked.length > namedParts.length ? `The ${NAMED_PART_COUNT} largest of ${ranked.length} ${noun}; a point's tooltip lists its ${TOOLTIP_PART_COUNT} largest and its record every one.` : "";
   container.innerHTML = chartHtml(title, subtitle, legendOf(namedParts.map((part) => [colourOf(part), partLabel(part)])), frame, svg);
   container.hitPoints = hitPoints;
   container.tooltipOf = (hit) => {
-    const parts = Object.entries(partsOf(hit.point.row)).filter(([, part]) => valueOf(part) > 0 || part?.p95 > 0)
-      .sort((first, second) => valueOf(second[1]) - valueOf(first[1])).slice(0, TOOLTIP_PART_COUNT);
-    const rows = parts.map(([part, value]) => [
-      namedParts.includes(part) ? colourOf(part) : null, partLabel(part),
-      formatValue(metric, valueOf(value)) + (value?.p95 === undefined ? "" : ` · p95 ${formatValue(metric, value.p95)}`),
-    ]);
+    const largestOf = (part) => part?.maximum ?? part?.p95 ?? valueOf(part);
+    const parts = Object.entries(partsOf(hit.point.row)).filter(([, part]) => largestOf(part) > 0)
+      .sort((first, second) => largestOf(second[1]) - largestOf(first[1])).slice(0, TOOLTIP_PART_COUNT);
+    const tailOf = (part) => ["p95", "maximum"].filter((statistic) => part?.[statistic] !== undefined).map((statistic) => ` · ${statistic} ${formatValue(metric, part[statistic])}`).join("");
+    const rows = parts.map(([part, value]) => [namedParts.includes(part) ? colourOf(part) : null, partLabel(part), formatValue(metric, valueOf(value)) + tailOf(value)]);
     if (frameMetric) rows.push([null, labelOf(frameMetric), formatValue(frameMetric, hit.point.row[frameMetric]?.median)]);
     return pointTooltip(hit.point, rows);
   };
@@ -1143,13 +1146,13 @@ function deltaTable(point) {
     .sort((first, second) => second.moved - first.moved);
   const rowHtml = ({ metric, value, before, exact }) => `<tr><td class="text">${escapeHtml(countedLabelOf(metric))}</td><td>${formatValue(metric, value)}</td><td>${formatValue(metric, before)}</td><td>${changeHtml(metric, value, before, comparable && exact)}</td></tr>`;
   const headerHtml = `<thead><tr><th class="text">Metric</th><th>This record</th><th>${point.experiment ? "Base" : "Previous"}</th><th>Change</th></tr></thead>`;
-  // A timing moved when `praxis compare` would flag it; a counter moved when it changed at all, unless it
+  // A timing moved when `praxis compare` would flag it; a counter moved when it changed at all, unless it counts Hitches or
   // counts measured frames that streamed. Across a break nothing is judged, so every row shows.
   const passedNoise = (row) => !comparable || (row.moved > 0 && (!isTiming(row.metric) || timingVerdict(row.metric, row.value, row.before) !== "flat"));
   const movedRows = rows.filter(passedNoise);
   const otherRows = rows.filter((row) => !passedNoise(row));
   return `<div class="table-wrap"><table>${headerHtml}<tbody>${movedRows.map(rowHtml).join("") || `<tr><td class="text" colspan="4">No timing moved as far as <code>praxis compare</code> warns, and no exact counter changed.</td></tr>`}</tbody></table></div>`
-    + (otherRows.length > 0 ? `<details><summary>${otherRows.length} more: timings within compare's ratios, unchanged counters${rows.some((row) => !row.exact) ? ", measured counters of frames that streamed" : ""}, unmeasured</summary><div class="table-wrap"><table>${headerHtml}<tbody>${otherRows.map(rowHtml).join("")}</tbody></table></div></details>` : "");
+    + (otherRows.length > 0 ? `<details><summary>${otherRows.length} more: timings within compare's ratios, unchanged counters${rows.some((row) => !row.exact && row.metric.startsWith("measured:")) ? ", measured counters of frames that streamed" : ""}${rows.some((row) => row.metric.endsWith("_hitches")) ? ", Hitch counts" : ""}, unmeasured</summary><div class="table-wrap"><table>${headerHtml}<tbody>${otherRows.map(rowHtml).join("")}</tbody></table></div></details>` : "");
 }
 
 async function select(point, scroll) {
@@ -1380,16 +1383,16 @@ function renderScene() {
     const partsCharts = [
       ["passes-chart", { title: "GPU passes", noun: "passes", metric: "pass:", partsOf: (row) => row.gpu_pass_median_microseconds, frameMetric: "gpu_frame_microseconds" }],
       ["cpu-times-chart", { title: "CPU systems and stages", noun: "systems and stages", metric: "cpu:", partsOf: (row) => row.cpu_time_microseconds ?? {}, frameMetric: "cpu_frame_microseconds" }],
-      ["cpu-tail-chart", { title: "CPU frame tail", noun: "CPU frame", metric: "cpu_frame_microseconds", partsOf: (row) => row.cpu_frame_microseconds ?? {}, partLabel: (statistic) => statistic, order: SPREAD_STATISTICS }],
-      ["gpu-tail-chart", { title: "GPU frame tail", noun: "GPU frame", metric: "gpu_frame_microseconds", partsOf: (row) => row.gpu_frame_microseconds ?? {}, partLabel: (statistic) => statistic, order: SPREAD_STATISTICS }],
+      ["cpu-tail-chart", { title: "CPU frame tail", noun: "CPU frame", metric: "cpu_frame_microseconds", partsOf: (row) => row.cpu_frame_microseconds ?? {}, partLabel: (statistic) => statistic, partNames: SPREAD_STATISTICS }],
+      ["gpu-tail-chart", { title: "GPU frame tail", noun: "GPU frame", metric: "gpu_frame_microseconds", partsOf: (row) => row.gpu_frame_microseconds ?? {}, partLabel: (statistic) => statistic, partNames: SPREAD_STATISTICS }],
     ];
     for (const [id, chart] of partsCharts) drawPartsChart(document.getElementById(id), machineLine.series, { ...chart, title: `${chart.title} · ${name}` });
-    for (const [id, title, metric] of [["cpu-hitches-chart", "CPU frame hitches", "cpu_frame_hitches"], ["gpu-hitches-chart", "GPU frame hitches", "gpu_frame_hitches"]]) {
+    for (const [id, title, metric] of [["cpu-hitches-chart", "CPU frame Hitches", "cpu_frame_hitches"], ["gpu-hitches-chart", "GPU frame Hitches", "gpu_frame_hitches"]]) {
       drawLineChart(document.getElementById(id), { title: `${title} · ${name}`, metric, lines: [machineLine], valueOf: (row) => row[metric] ?? null, height: 190 });
     }
   } else {
     const message = "lavapipe renders on the CPU, so its timings measure no GPU. Its counters below are exact.";
-    for (const [id, title] of [["cpu-chart", "CPU frame"], ["gpu-chart", "GPU frame"], ["cpu-tail-chart", "CPU frame tail"], ["gpu-tail-chart", "GPU frame tail"], ["cpu-hitches-chart", "CPU frame hitches"], ["gpu-hitches-chart", "GPU frame hitches"], ["passes-chart", "GPU passes"], ["cpu-times-chart", "CPU systems and stages"]]) emptyChart(document.getElementById(id), `${title} · ${name}`, message);
+    for (const [id, title] of [["cpu-chart", "CPU frame"], ["gpu-chart", "GPU frame"], ["cpu-tail-chart", "CPU frame tail"], ["gpu-tail-chart", "GPU frame tail"], ["cpu-hitches-chart", "CPU frame Hitches"], ["gpu-hitches-chart", "GPU frame Hitches"], ["passes-chart", "GPU passes"], ["cpu-times-chart", "CPU systems and stages"]]) emptyChart(document.getElementById(id), `${title} · ${name}`, message);
   }
   drawLineChart(document.getElementById("across-cpu-chart"), { title: `CPU frame · ${state.scene} · every machine`, metric: "cpu_frame_microseconds", lines: timedLines, valueOf: medianOf("cpu_frame_microseconds") });
   drawLineChart(document.getElementById("across-gpu-chart"), { title: `GPU frame · ${state.scene} · every machine`, metric: "gpu_frame_microseconds", lines: timedLines, valueOf: medianOf("gpu_frame_microseconds") });

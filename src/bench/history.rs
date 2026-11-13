@@ -499,7 +499,6 @@ struct SeriesRow<'record> {
     gate_microseconds: Option<Spread>,
     shadow_ray_microseconds: Option<Spread>,
     gpu_pass_median_microseconds: BTreeMap<&'record str, f64>,
-    /// Each system's and stage's median and p95.
     cpu_time_microseconds: BTreeMap<&'record str, Spread>,
     cpu_frame_hitches: Option<u64>,
     gpu_frame_hitches: Option<u64>,
@@ -1207,14 +1206,7 @@ impl<'record> SeriesRow<'record> {
                 .map(|(pass, spread)| (pass.as_str(), spread.median))
                 .collect(),
             cpu_time_microseconds: (record.cpu_time_microseconds.iter())
-                .map(|(name, &spread)| {
-                    let median_and_p95 = Spread {
-                        p99: None,
-                        maximum: None,
-                        ..spread
-                    };
-                    (name.as_str(), median_and_p95)
-                })
+                .map(|(name, &spread)| (name.as_str(), spread))
                 .collect(),
             cpu_frame_hitches: record.cpu_frame_hitches,
             gpu_frame_hitches: record.gpu_frame_hitches,
@@ -1402,13 +1394,13 @@ mod tests {
         let fixture = Fixture::new("rebuild");
         let mut results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
         results[0].counters.triangles_drawn *= 27;
-        let prepare = Spread {
+        let prepare_frame = Spread {
             median: 50.0,
             p95: 80.0,
             p99: Some(90.0),
             maximum: Some(400.0),
         };
-        results[0].cpu_time_microseconds = [("prepare_frame".to_owned(), prepare)].into();
+        results[0].cpu_time_microseconds = [("prepare_frame".to_owned(), prepare_frame)].into();
         results[0].cpu_frame_hitches = Some(4);
         results[0].gpu_frame_hitches = Some(0);
         publish(&fixture.checkout, &results, None).unwrap();
@@ -1432,9 +1424,10 @@ mod tests {
         assert_eq!(rows[0]["measured_frames"], 1800);
         assert_eq!(rows[0]["measured_counters"]["triangles_drawn"], 22_080 * 27);
         assert_eq!(rows[0]["triangles_drawn"], 22_080);
-        // And each system's and stage's median and p95, and the hitches.
         let cpu_time = &rows[0]["cpu_time_microseconds"]["prepare_frame"];
-        assert_eq!(cpu_time, &serde_json::json!({"median": 50.0, "p95": 80.0}));
+        let spread =
+            serde_json::json!({"median": 50.0, "p95": 80.0, "p99": 90.0, "maximum": 400.0});
+        assert_eq!(cpu_time, &spread);
         assert_eq!(rows[0]["cpu_frame_hitches"], 4);
         assert_eq!(rows[0]["gpu_frame_hitches"], 0);
     }

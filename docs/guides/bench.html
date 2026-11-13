@@ -455,26 +455,25 @@ const SETTLED_FRAMES: std::ops::RangeTo&lt;u32&gt; = ..COUNTER_FRAMES.end;</code
         }</code></pre>
   <p>The refusals, the streaming counters and the TLAS build's allocations are absent from a record written before results carried them, and read there as none. Beside the counters, <code>gpu_memory_bytes_by_kind</code> holds the median of each <code>GpuMemoryKind</code> over the measured frames: the geometry Arenas, the texture pool, the Resident tails, the render targets, the acceleration structures, staging, and the scene and pass buffers, whose sum is <code>gpu_memory_bytes</code>.</p>
   <h3>Systems, stages and Hitches</h3>
-  <p><code>cpu_time_microseconds</code> splits the CPU frame by what spent it: a <code>Spread</code> for each ECS system and renderer stage that <a href="frame-stats.html">Frame stats</a> timed in a measured frame, under the name it has there. One that ran more than once in a frame counts once, at the sum of its runs, and a frame that ran none of it counts as no time. A stage that only some frames run, a Chunk's load or a BLAS compaction, so has a median of 0 and shows in its p95, p99 or maximum. A name that the warm-up alone ran is not in the map.</p>
+  <p><code>cpu_time_microseconds</code> splits the CPU frame by what spent it: a <code>Spread</code> for each ECS system and renderer stage that <a href="frame-stats.html">Frame stats</a> timed in a measured frame, under the name it has there. One that ran more than once in a frame counts once, at the sum of its runs, and a frame that ran none of it counts as no time. A stage that only some frames run, as <code>blas_compaction</code> is, so has a median of 0 and shows in its p95, p99 or maximum; a Chunk's load, which <code>stream_chunks</code> times in a stage every frame runs, shows in that stage's p99 and maximum. A name that the warm-up alone ran is not in the map.</p>
   <div class="code-source"><code>measure</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>        cpu_time_microseconds: {
-            let mut times = BTreeMap::&lt;&amp;str, Vec&lt;f64&gt;&gt;::new();
+            let mut microseconds_by_name = BTreeMap::&lt;&amp;str, Vec&lt;f64&gt;&gt;::new();
             for (frame, stats) in measured.iter().enumerate() {
                 for (name, time) in &amp;stats.cpu_times {
-                    let frames = times
+                    let frame_microseconds = microseconds_by_name
                         .entry(name)
                         .or_insert_with(|| vec![0.0; measured.len()]);
-                    frames[frame] += microseconds(*time);
+                    frame_microseconds[frame] += microseconds(*time);
                 }
             }
-            (times.into_iter())
-                .map(|(name, frames)| (name.to_owned(), spread(frames)))
+            (microseconds_by_name.into_iter())
+                .map(|(name, frame_microseconds)| (name.to_owned(), spread(frame_microseconds)))
                 .collect()
         },</code></pre>
-  <p>A Hitch is a measured frame that took over twice the run's median: <code>cpu_frame_hitches</code> counts the CPU frames that did, <code>gpu_frame_hitches</code> the GPU frames. The p99 and maximum say how slow the slowest frames were, and the count says how many were slow. <code>praxis compare</code> judges neither count, nor any system's or stage's time, and all three are absent from a record written before results carried them.</p>
+  <p>A Hitch is a measured frame that took over twice the run's median: <code>cpu_frame_hitches</code> counts the CPU frames that did, <code>gpu_frame_hitches</code> the GPU frames. The p99 and maximum say how slow the slowest frames were, and the count says how many were slow. <code>praxis compare</code> judges neither count, nor any time in <code>cpu_time_microseconds</code>, and all three are absent from a record written before results carried them.</p>
   <div class="code-source"><code>src/bench/mod.rs</code></div>
-<pre class="code"><code>/// How many of `times` are over twice their median.
-fn hitches(times: &amp;[f64]) -&gt; u64 {
+<pre class="code"><code>fn hitches(times: &amp;[f64]) -&gt; u64 {
     let median = percentile(times.to_vec(), 0.5);
     times.iter().filter(|&amp;&amp;time| time &gt; 2.0 * median).count() as u64
 }</code></pre>

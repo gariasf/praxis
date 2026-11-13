@@ -630,7 +630,6 @@ struct SeriesRow&lt;'record&gt; {
     gate_microseconds: Option&lt;Spread&gt;,
     shadow_ray_microseconds: Option&lt;Spread&gt;,
     gpu_pass_median_microseconds: BTreeMap&lt;&amp;'record str, f64&gt;,
-    /// Each system's and stage's median and p95.
     cpu_time_microseconds: BTreeMap&lt;&amp;'record str, Spread&gt;,
     cpu_frame_hitches: Option&lt;u64&gt;,
     gpu_frame_hitches: Option&lt;u64&gt;,
@@ -648,7 +647,7 @@ struct SeriesRow&lt;'record&gt; {
     /// shift from the median of the records before it, as a share of that.
     suspects: BTreeMap&lt;&amp;'static str, f64&gt;,
 }</code></pre>
-  <p>A row carries both kinds of counter: the counter frames' at the top level, under their names, which every configuration counts on Settled frames and so compare across machines and runs, and the measured frames' under <code>measured_counters</code>, which compare only between rows of one <code>measured_frames</code>, and not from run to run where the measured frames stream, as the world's do. A pass's row holds its median only, and a system's or stage's its median and p95; a Hitch count is null from a record that counted none. The rows are sorted by commit time, then commit, and judged for Suspects one timing at a time:</p>
+  <p>A row carries both kinds of counter: the counter frames' at the top level, under their names, which every configuration counts on Settled frames and so compare across machines and runs, and the measured frames' under <code>measured_counters</code>, which compare only between rows of one <code>measured_frames</code>, and not from run to run where the measured frames stream, as the world's do. A pass's row holds its median only, and a system's or stage's its whole <code>Spread</code>, as one that few frames run has a median and p95 of 0 and shows only in its maximum; a Hitch count is null from a record made before the bench counted them. The rows are sorted by commit time, then commit, and judged for Suspects one timing at a time:</p>
   <div class="code-source"><code>src/bench/history.rs</code></div>
 <pre class="code"><code>        let mut rows: Vec&lt;SeriesRow&gt; = records.iter().map(SeriesRow::of).collect();
         // A Series is one adapter's, and lavapipe's times mean nothing, so
@@ -1206,7 +1205,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
       <tr><td>Scene: Frame</td><td>the CPU and GPU frame medians on the picked machine, one line per segment, the Budget drawn on the M4 Pro, tagged and Experiment points when picked, and the Experiment table</td></tr>
       <tr><td>Scene: Tail</td><td>the CPU frame's and the GPU frame's median, p95, p99 and maximum, one line each, and each one's Hitches</td></tr>
       <tr><td>Scene: Passes</td><td>the 6 largest GPU passes by their summed medians, one line each; a point's tooltip lists its 12 largest and its record every one</td></tr>
-      <tr><td>Scene: Systems and stages</td><td>the 6 largest ECS systems and renderer stages by their summed CPU medians, one line each; a point's tooltip lists its 12 largest with their p95s and its record every one</td></tr>
+      <tr><td>Scene: Systems and stages</td><td>the 6 largest ECS systems and renderer stages by their summed CPU medians, one line each; a point's tooltip lists the 12 with the largest maximums, each with its median, p95 and maximum, and its record every one</td></tr>
       <tr><td>Scene: Counters and memory</td><td>each of the 22 counters' latest on the counter frames, and on the measured frames where the latest row measured more than the counter frames, with its change where it moved, a sparkline, the records whose counter frames' counters changed from the record before them, and the GPU memory chart</td></tr>
       <tr><td>Scene: Record</td><td>the picked point: its change's name and PR, machine, commit and date, kind (Series, Baseline, tagged, Experiment), Harness version, Suspect marks, its previous record or base, every metric's change from it, and the raw record file</td></tr>
       <tr><td>Across machines</td><td>each scene's latest frame medians on every machine with a GPU, with the Harness version that measured them, and the two frame charts with every such machine's line</td></tr>
@@ -1226,7 +1225,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
       <tr><td><code>publishing_the_same_results_twice_leaves_one_record_and_one_commit</code></td><td><code>history.rs</code></td><td>the branch holds the README, the record at its key and the Series file; a second publish drops the record and pushes nothing; the checkout's worktrees are as they were</td></tr>
-      <tr><td><code>a_publish_rebuilds_every_series_so_rows_take_the_current_form</code></td><td><code>history.rs</code></td><td>a Series file an older bench wrote is rewritten by the next publish of another scene; a row holds both kinds of counter, a system's or stage's median and p95 without its p99 and maximum, and both Hitch counts</td></tr>
+      <tr><td><code>a_publish_rebuilds_every_series_so_rows_take_the_current_form</code></td><td><code>history.rs</code></td><td>a Series file an older bench wrote is rewritten by the next publish of another scene; a row holds both kinds of counter, a system's or stage's <code>Spread</code> and both Hitch counts</td></tr>
       <tr><td><code>a_quieter_record_replaces_a_noisier_one_and_a_noisier_one_is_dropped</code></td><td><code>history.rs</code></td><td>the lower p95 over median stays under a key</td></tr>
       <tr><td><code>a_dirty_or_branch_record_lands_in_tagged_with_its_reasons_and_on_no_series</code></td><td><code>history.rs</code></td><td>a dirty tree, and a branch commit that was not quiet, land in <code>tagged/</code> with those tags and no Series file</td></tr>
       <tr><td><code>two_publishes_from_different_adapters_racing_to_push_both_land</code></td><td><code>history.rs</code></td><td>two threads behind a barrier publish three scenes each; every Series exists and each publish is its own commit</td></tr>

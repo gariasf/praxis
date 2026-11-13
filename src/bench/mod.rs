@@ -199,7 +199,6 @@ pub struct Measurements {
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
     /// The measured frames whose CPU frame took over twice their median.
-    /// Absent from Baselines recorded before results carried it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_frame_hitches: Option<u64>,
     /// The dynamic TLAS's build on the CPU: its recording and its submit
@@ -210,7 +209,6 @@ pub struct Measurements {
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
     /// The measured frames whose GPU frame took over twice their median.
-    /// Absent from Baselines recorded before results carried it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu_frame_hitches: Option<u64>,
     /// ADR 0019's gate, with shadow rays off: from the start of culling
@@ -235,8 +233,7 @@ pub struct Measurements {
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     /// Each ECS system's and renderer stage's CPU time (Frame stats), by
     /// name: a frame's is the sum of its runs, none in a frame that ran
-    /// none, so one that few frames run has a median of 0. Absent from
-    /// Baselines recorded before results carried them.
+    /// none, so one that few frames run has a median of 0.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub cpu_time_microseconds: BTreeMap<String, Spread>,
     /// Of the measured frames' `gpu_memory_bytes`, each kind's median, by
@@ -957,17 +954,17 @@ fn measure(
         gate_pass_microseconds,
         gpu_pass_microseconds,
         cpu_time_microseconds: {
-            let mut times = BTreeMap::<&str, Vec<f64>>::new();
+            let mut microseconds_by_name = BTreeMap::<&str, Vec<f64>>::new();
             for (frame, stats) in measured.iter().enumerate() {
                 for (name, time) in &stats.cpu_times {
-                    let frames = times
+                    let frame_microseconds = microseconds_by_name
                         .entry(name)
                         .or_insert_with(|| vec![0.0; measured.len()]);
-                    frames[frame] += microseconds(*time);
+                    frame_microseconds[frame] += microseconds(*time);
                 }
             }
-            (times.into_iter())
-                .map(|(name, frames)| (name.to_owned(), spread(frames)))
+            (microseconds_by_name.into_iter())
+                .map(|(name, frame_microseconds)| (name.to_owned(), spread(frame_microseconds)))
                 .collect()
         },
         gpu_memory_bytes_by_kind: GpuMemoryKind::ALL
@@ -1456,7 +1453,6 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
     values[rank.clamp(1, values.len()) - 1]
 }
 
-/// How many of `times` are over twice their median.
 fn hitches(times: &[f64]) -> u64 {
     let median = percentile(times.to_vec(), 0.5);
     times.iter().filter(|&&time| time > 2.0 * median).count() as u64
