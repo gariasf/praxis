@@ -165,8 +165,8 @@ fn instance(
     }
 }
 
-/// The fewest Instances a compute pool task fills, so a task's work
-/// outweighs waking a thread for it.
+/// The fill spawns a compute pool task per this many drawn Instances, and
+/// fills fewer than two tasks' worth on the main thread.
 const INSTANCES_PER_TASK: usize = 1024;
 
 /// The Instances a fill task takes at a time, so a task whose thread woke
