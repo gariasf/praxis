@@ -449,6 +449,9 @@ mod tests {
             shadow_ray_microseconds: spread(-3.2, 40.5),
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            cpu_time_microseconds: BTreeMap::new(),
+            cpu_frame_hitches: None,
+            gpu_frame_hitches: None,
             gpu_memory_bytes_by_kind: BTreeMap::new(),
             gpu_pass_microseconds: passes
                 .into_iter()

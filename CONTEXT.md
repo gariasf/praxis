@@ -232,6 +232,10 @@ _Avoid_: Image threshold, reference error
 One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.
 _Avoid_: Benchmark result, sample, data point
 
+**Hitch**:
+A measured frame of a bench run whose CPU frame, or whose GPU frame, took over twice the run's median of it. A Bench record counts each kind; neither count is judged.
+_Avoid_: Stutter, spike, slow frame
+
 **Bench history**:
 Every Bench record kept, from sessions, CI and the machines' own runs, including those kept off a Series.
 _Avoid_: Metrics database, telemetry

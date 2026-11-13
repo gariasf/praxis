@@ -198,6 +198,9 @@ pub struct Measurements {
     pub height: u32,
     pub measured_frames: u32,
     pub cpu_frame_microseconds: Spread,
+    /// The measured frames whose CPU frame took over twice their median.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_frame_hitches: Option<u64>,
     /// The dynamic TLAS's build on the CPU: its recording and its submit
     /// (ADR 0020), and with the crowd's refit or rebuild form the BLAS
     /// updates' recording and their submission's.
@@ -205,6 +208,9 @@ pub struct Measurements {
     /// Each frame's dynamic TLAS build, plus the span from the start of its
     /// first pass to the end of its last.
     pub gpu_frame_microseconds: Spread,
+    /// The measured frames whose GPU frame took over twice their median.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_frame_hitches: Option<u64>,
     /// ADR 0019's gate, with shadow rays off: from the start of culling
     /// phase one to the latest end of the passes up to the lit pass.
     pub gate_microseconds: Spread,
@@ -225,6 +231,11 @@ pub struct Measurements {
     pub gate_pass_microseconds: BTreeMap<String, Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
+    /// Each ECS system's and renderer stage's CPU time (Frame stats), by
+    /// name: a frame's is the sum of its runs, none in a frame that ran
+    /// none, so one that few frames run has a median of 0.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub cpu_time_microseconds: BTreeMap<String, Spread>,
     /// Of the measured frames' `gpu_memory_bytes`, each kind's median, by
     /// its name. Absent from Baselines recorded before results carried it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -887,6 +898,12 @@ fn measure(
         })
         .collect();
     let gate_pass_microseconds = pass_spreads(measured_without_rays, &gate_passes);
+    let cpu_frame_times: Vec<f64> = (measured.iter())
+        .map(|stats| microseconds(stats.cpu_frame_time))
+        .collect();
+    let gpu_frame_times: Vec<f64> = (measured_gpu.iter())
+        .map(|gpu| microseconds(gpu.frame_time))
+        .collect();
     Ok(Measurements {
         scene: scene.name().to_owned(),
         adapter,
@@ -900,12 +917,8 @@ fn measure(
         width: configuration.width,
         height: configuration.height,
         measured_frames: configuration.measured_frames,
-        cpu_frame_microseconds: spread(
-            measured
-                .iter()
-                .map(|stats| microseconds(stats.cpu_frame_time))
-                .collect(),
-        ),
+        cpu_frame_hitches: Some(hitches(&cpu_frame_times)),
+        cpu_frame_microseconds: spread(cpu_frame_times),
         dynamic_tlas_cpu_microseconds: spread(
             measured
                 .iter()
@@ -918,12 +931,8 @@ fn measure(
                 })
                 .collect(),
         ),
-        gpu_frame_microseconds: spread(
-            measured_gpu
-                .iter()
-                .map(|gpu| microseconds(gpu.frame_time))
-                .collect(),
-        ),
+        gpu_frame_hitches: Some(hitches(&gpu_frame_times)),
+        gpu_frame_microseconds: spread(gpu_frame_times),
         gate_microseconds: spread(
             measured_without_rays
                 .iter()
@@ -944,6 +953,20 @@ fn measure(
         )),
         gate_pass_microseconds,
         gpu_pass_microseconds,
+        cpu_time_microseconds: {
+            let mut microseconds_by_name = BTreeMap::<&str, Vec<f64>>::new();
+            for (frame, stats) in measured.iter().enumerate() {
+                for (name, time) in &stats.cpu_times {
+                    let frame_microseconds = microseconds_by_name
+                        .entry(name)
+                        .or_insert_with(|| vec![0.0; measured.len()]);
+                    frame_microseconds[frame] += microseconds(*time);
+                }
+            }
+            (microseconds_by_name.into_iter())
+                .map(|(name, frame_microseconds)| (name.to_owned(), spread(frame_microseconds)))
+                .collect()
+        },
         gpu_memory_bytes_by_kind: GpuMemoryKind::ALL
             .iter()
             .map(|&kind| {
@@ -1430,6 +1453,11 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
     values[rank.clamp(1, values.len()) - 1]
 }
 
+fn hitches(times: &[f64]) -> u64 {
+    let median = percentile(times.to_vec(), 0.5);
+    times.iter().filter(|&&time| time > 2.0 * median).count() as u64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1598,6 +1626,9 @@ mod tests {
             },
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            cpu_time_microseconds: BTreeMap::new(),
+            cpu_frame_hitches: None,
+            gpu_frame_hitches: None,
             gpu_memory_bytes_by_kind: BTreeMap::new(),
             gpu_pass_microseconds: [("culling_pass", 100.0), ("main_pass", 2000.0)]
                 .into_iter()
@@ -2509,6 +2540,65 @@ mod tests {
         let measured = (still.fast_travel_hold, still.frames_until_traced);
         assert_eq!(measured, (None, None));
         assert_eq!(still.blas_compaction_microseconds, None);
+    }
+
+    #[test]
+    fn each_system_and_stage_is_timed_per_measured_frame_over_all_its_runs() {
+        let configuration = Configuration::REFERENCE;
+        let warm_up_frames = configuration.warm_up_frames as usize;
+        let mut frames = frames(configuration);
+        let ran = |stats: &mut FrameStats, name: &str, microseconds| {
+            let time = Duration::from_micros(microseconds);
+            stats.cpu_times.push((name.to_owned(), time));
+        };
+        ran(&mut frames[0], "load_scene", 5000);
+        for stats in &mut frames[warm_up_frames..] {
+            ran(stats, "spin", 30);
+            ran(stats, "spin", 40);
+        }
+        for stats in &mut frames[warm_up_frames..warm_up_frames + 100] {
+            ran(stats, "stream_chunks", 400);
+        }
+        let measurements = measure(
+            ReferenceScene::World,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &frames,
+            &frames_without_rays(configuration),
+        )
+        .expect("every frame read back its GPU stats");
+        let times = measurements.cpu_time_microseconds;
+        let median_and_p95 = |name: &str| times.get(name).map(|time| (time.median, time.p95));
+        assert_eq!(median_and_p95("prepare_frame"), Some((50.0, 50.0)));
+        assert_eq!(median_and_p95("spin"), Some((70.0, 70.0)));
+        assert_eq!(median_and_p95("stream_chunks"), Some((0.0, 400.0)));
+        assert_eq!(median_and_p95("load_scene"), None);
+    }
+
+    #[test]
+    fn a_measured_frame_over_twice_the_median_is_a_hitch() {
+        let configuration = Configuration::REFERENCE;
+        let warm_up_frames = configuration.warm_up_frames as usize;
+        let mut frames = frames(configuration);
+        for (frame, microseconds) in [(0, 201), (9, 5000), (500, 201), (1000, 200)] {
+            frames[warm_up_frames + frame].cpu_frame_time = Duration::from_micros(microseconds);
+        }
+        for frame in [3, 700] {
+            let gpu = frames[warm_up_frames + frame].gpu.as_mut();
+            gpu.expect("every frame has GPU stats").frame_time = Duration::from_micros(601);
+        }
+        let measurements = measure(
+            ReferenceScene::World,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &frames,
+            &frames_without_rays(configuration),
+        )
+        .expect("every frame read back its GPU stats");
+        assert_eq!(measurements.cpu_frame_hitches, Some(3));
+        assert_eq!(measurements.gpu_frame_hitches, Some(2));
     }
 
     /// The runs with and without shadow rays hold for different frames
