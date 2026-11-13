@@ -90,5 +90,6 @@
 {"commit":"4e3a879371a849b65bb162742a368f7514d1aec9","source_hash":"ac270525a567d07a3b53471a42dd7046861251c8","committed_unix_seconds":1794483779,"binary_bytes":23632816,"build_seconds":50},
 {"commit":"7d7b215d187e2231c37fd90cf9406921164b2a83","source_hash":"c378f6a6a26d5e4fe3264a52b8d5f3a4634eb64c","committed_unix_seconds":1794497116,"binary_bytes":23632648,"build_seconds":37},
 {"commit":"7fd617a6129c1591ac341bda683f5d401fca4dcc","source_hash":"2504eb12ea518cc82285596e9be4239a9bb90f90","committed_unix_seconds":1794510425,"binary_bytes":23592976,"build_seconds":139},
-{"commit":"0d46de5a4a2336bc2f43ed21a82f50c75e79894d","source_hash":"24adaa54b4c7752aae17ce4d7b83793982bffa2e","committed_unix_seconds":1794519072,"binary_bytes":23669872,"build_seconds":48}
+{"commit":"0d46de5a4a2336bc2f43ed21a82f50c75e79894d","source_hash":"24adaa54b4c7752aae17ce4d7b83793982bffa2e","committed_unix_seconds":1794519072,"binary_bytes":23669872,"build_seconds":48},
+{"commit":"36fc10603ebe499b9ff4d06cb7dc60f13855cd1f","source_hash":"6172e28c040c81380ef95bb77daddc422d51d99b","committed_unix_seconds":1794553687,"binary_bytes":23676760,"build_seconds":49}
 ]
