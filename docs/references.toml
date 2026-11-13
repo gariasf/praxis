@@ -6131,7 +6131,7 @@ checked = 2026-11-13
 
 ["rust-1.96-queue-rwlock-allocation-free"]
 url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/rwlock/queue.rs#L25-L29"
-section = "Rust 1.96.0 standard library, sys/sync/rwlock/queue.rs, module documentation; rwlock/mod.rs takes this queue RwLock on unix targets without futexes, macOS among them"
+section = "Rust 1.96.0 standard library, sys/sync/rwlock/queue.rs, module documentation; rwlock/mod.rs (L17-L26) takes this queue RwLock on unix targets without futexes, macOS among them"
 quote = '''The resulting [`RwLock`] is:
 //!
 //! * adaptive, since it spins before doing any heavyweight parking operations
@@ -6141,7 +6141,7 @@ checked = 2026-11-13
 
 ["openmp-5.2-schedule-dynamic"]
 url = "https://www.openmp.org/wp-content/uploads/OpenMP-API-Specification-5-2.pdf#page=272"
-section = "OpenMP Architecture Review Board, OpenMP Application Programming Interface 5.2 (November 2021), §11.5.3, schedule Clause, Semantics, p. 251: the static kind without a chunk size is the fill's fixed share per task, the dynamic kind its batches"
+section = "OpenMP Architecture Review Board, OpenMP Application Programming Interface 5.2 (November 2021), §11.5.3, schedule Clause, Semantics, p. 252: the static kind without a chunk size is the fill's fixed share per task while tasks do not outnumber the pool's threads, the dynamic kind its batches"
 quote = '''If the kind argument is static, iterations are divided into chunks of size chunk_size, and the chunks are assigned to the threads in the team in a round-robin fashion in the order of the thread number. [...] If chunk_size is not specified, the logical iteration space is divided into chunks that are approximately equal in size, and at most one chunk is distributed to each thread.
 If the kind argument is dynamic, each thread executes a chunk, then requests another chunk, until no chunks remain to be assigned. Each chunk contains chunk_size iterations, except for the chunk that contains the sequentially last iteration, which may have fewer iterations.'''
 checked = 2026-11-13
