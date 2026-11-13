@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; after the frame &middot; <code>src/bench/history.rs</code> &middot; <code>docs/bench/index.html</code></div>
   <h1>The Bench history</h1>
   <p class="definition">Every bench run kept as a <span class="concept" data-term="Bench record" data-tip="One bench run's measurements of one Reference scene, with where and when it ran: the source it measured, the adapter, backend and driver, the harness version, and whether the machine was quiet. A Baseline is a Bench record chosen to judge changes against. CI also publishes a release build's record beside lavapipe's: the binary's size and the build's wall time.">Bench record</span> on the orphan <code>bench-history</code> branch, a JSON file at a path that is its key, the source hash of the paths that can change a measurement, the adapter, the backend and the scene; the clean, release-profile, quiet runs of <code>main</code>'s source form each machine's <span class="concept" data-term="Series" data-tip="The Bench records of one Reference scene on one adapter and backend, taken on main's source by a quiet machine (lavapipe's, which read no GPU time, from any machine), in source order. Quiet means preflight warned of nothing at the bench's start, the scene's GPU frames held steady, each against the frames around it since 2026-11-11, and, since 2026-11-08, no process outside praxis held half a core or more at the scene's start or end. Each record holds every metric its bench measured. A chart draws one metric of it, and its Suspects are judged one timing at a time.">Series</span>, which every publish rebuilds and marks its <span class="concept" data-term="Suspect" data-tip="A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.">Suspects</span> on, a page draws, and a nightly sweep re-benches, bisects and files as <span class="concept" data-term="Regression" data-tip="A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one needs-triage issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.">Regressions</span>.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7d7b215d (2026-11-12). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 0d46de5a (2026-11-12). A change to what a Bench record holds, to where one lands, to how a Series is judged or to what the sweep does rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bench.html">The bench</a> for what a run measures and how the Baselines gate, <a href="frame-stats.html">Frame stats</a> for the metrics a record holds.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -256,6 +256,10 @@ struct StoredRecord {
     shadow_ray_microseconds: Option&lt;Spread&gt;,
     #[serde(default)]
     gpu_pass_microseconds: BTreeMap&lt;String, Spread&gt;,
+    #[serde(default)]
+    cpu_time_microseconds: BTreeMap&lt;String, Spread&gt;,
+    cpu_frame_hitches: Option&lt;u64&gt;,
+    gpu_frame_hitches: Option&lt;u64&gt;,
     counter_frames: Option&lt;StoredCounterFrames&gt;,
     aliasing_rmse: Option&lt;u64&gt;,
     aliasing_p99: Option&lt;u64&gt;,
@@ -292,6 +296,8 @@ struct StoredProvenance {
       <tr><td><code>cpu_frame_microseconds</code>, <code>gpu_frame_microseconds</code>, <code>gate_microseconds</code>, <code>shadow_ray_microseconds</code>, <code>dynamic_tlas_cpu_microseconds</code></td><td>each a <code>Spread</code>: the median, p95, p99 and maximum over the measured frames, the last two absent from a record made before the bench kept them</td></tr>
       <tr><td><code>lit_pass_wait_microseconds</code>, <code>gate_pass_microseconds</code></td><td>the lit pass's wait, and a <code>Spread</code> per pass the gate spans, from the run without shadow rays; absent from a record made before the bench kept them</td></tr>
       <tr><td><code>gpu_pass_microseconds</code></td><td>a <code>Spread</code> per GPU pass, by the pass's name</td></tr>
+      <tr><td><code>cpu_time_microseconds</code></td><td>a <code>Spread</code> per ECS system and renderer stage, by its name, of its CPU time in each measured frame; absent from a record made before the bench kept them</td></tr>
+      <tr><td><code>cpu_frame_hitches</code>, <code>gpu_frame_hitches</code></td><td>the measured frames whose CPU frame, or GPU frame, took over twice the run's median; absent from a record made before the bench counted them</td></tr>
       <tr><td><code>gpu_memory_bytes_by_kind</code></td><td>each kind's median of <code>gpu_memory_bytes</code> over the measured frames, by the kind's name; absent from a result recorded before it</td></tr>
       <tr><td><code>draw_calls</code>, <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>instances_overflowed</code>, <code>uploaded_bytes</code>, <code>gpu_memory_bytes</code>, <code>arena_bytes_in_use</code>, <code>heap_allocations</code>, and the fourteen after them, from <code>renderables_refused</code> to <code>tlas_build_allocations</code></td><td>the 22 counters of <code>Counters::NAMES</code> over the measured frames, at the top level; a record holds only those its bench counted</td></tr>
       <tr><td><code>counter_frames</code></td><td>the same counters over frames 8 to 71, the 64 frames of <code>COUNTER_FRAMES</code>, which every configuration renders, and renders Settled, with the range itself under <code>frames</code></td></tr>
@@ -624,6 +630,10 @@ struct SeriesRow&lt;'record&gt; {
     gate_microseconds: Option&lt;Spread&gt;,
     shadow_ray_microseconds: Option&lt;Spread&gt;,
     gpu_pass_median_microseconds: BTreeMap&lt;&amp;'record str, f64&gt;,
+    /// Each system's and stage's median and p95.
+    cpu_time_microseconds: BTreeMap&lt;&amp;'record str, Spread&gt;,
+    cpu_frame_hitches: Option&lt;u64&gt;,
+    gpu_frame_hitches: Option&lt;u64&gt;,
     /// The counter frames' counters.
     #[serde(flatten)]
     counters: BTreeMap&lt;&amp;'record str, u64&gt;,
@@ -638,7 +648,7 @@ struct SeriesRow&lt;'record&gt; {
     /// shift from the median of the records before it, as a share of that.
     suspects: BTreeMap&lt;&amp;'static str, f64&gt;,
 }</code></pre>
-  <p>A row carries both kinds of counter: the counter frames' at the top level, under their names, which every configuration counts on Settled frames and so compare across machines and runs, and the measured frames' under <code>measured_counters</code>, which compare only between rows of one <code>measured_frames</code>, and not from run to run where the measured frames stream, as the world's do. A pass's row holds its median only. The rows are sorted by commit time, then commit, and judged for Suspects one timing at a time:</p>
+  <p>A row carries both kinds of counter: the counter frames' at the top level, under their names, which every configuration counts on Settled frames and so compare across machines and runs, and the measured frames' under <code>measured_counters</code>, which compare only between rows of one <code>measured_frames</code>, and not from run to run where the measured frames stream, as the world's do. A pass's row holds its median only, and a system's or stage's its median and p95; a Hitch count is null from a record that counted none. The rows are sorted by commit time, then commit, and judged for Suspects one timing at a time:</p>
   <div class="code-source"><code>src/bench/history.rs</code></div>
 <pre class="code"><code>        let mut rows: Vec&lt;SeriesRow&gt; = records.iter().map(SeriesRow::of).collect();
         // A Series is one adapter's, and lavapipe's times mean nothing, so
@@ -1194,7 +1204,9 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <tbody>
       <tr><td>Where main stands</td><td>each scene's latest Series record on the picked machine: its GPU and CPU frame medians, against the previous record and the median of the last 8, its Budgets as one cell on the M4 Pro, and its latest commit; a machine that times nothing stands by three counters instead</td></tr>
       <tr><td>Scene: Frame</td><td>the CPU and GPU frame medians on the picked machine, one line per segment, the Budget drawn on the M4 Pro, tagged and Experiment points when picked, and the Experiment table</td></tr>
-      <tr><td>Scene: Passes</td><td>the 6 largest GPU passes by their summed medians, one line each; the rest in each point's tooltip and record</td></tr>
+      <tr><td>Scene: Tail</td><td>the CPU frame's and the GPU frame's median, p95, p99 and maximum, one line each, and each one's Hitches</td></tr>
+      <tr><td>Scene: Passes</td><td>the 6 largest GPU passes by their summed medians, one line each; a point's tooltip lists its 12 largest and its record every one</td></tr>
+      <tr><td>Scene: Systems and stages</td><td>the 6 largest ECS systems and renderer stages by their summed CPU medians, one line each; a point's tooltip lists its 12 largest with their p95s and its record every one</td></tr>
       <tr><td>Scene: Counters and memory</td><td>each of the 22 counters' latest on the counter frames, and on the measured frames where the latest row measured more than the counter frames, with its change where it moved, a sparkline, the records whose counter frames' counters changed from the record before them, and the GPU memory chart</td></tr>
       <tr><td>Scene: Record</td><td>the picked point: its change's name and PR, machine, commit and date, kind (Series, Baseline, tagged, Experiment), Harness version, Suspect marks, its previous record or base, every metric's change from it, and the raw record file</td></tr>
       <tr><td>Across machines</td><td>each scene's latest frame medians on every machine with a GPU, with the Harness version that measured them, and the two frame charts with every such machine's line</td></tr>
@@ -1214,7 +1226,7 @@ pub(super) fn filing(verdict: &amp;Verdict, verdicts: &amp;[Verdict]) -&gt; Fili
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
       <tr><td><code>publishing_the_same_results_twice_leaves_one_record_and_one_commit</code></td><td><code>history.rs</code></td><td>the branch holds the README, the record at its key and the Series file; a second publish drops the record and pushes nothing; the checkout's worktrees are as they were</td></tr>
-      <tr><td><code>a_publish_rebuilds_every_series_so_rows_take_the_current_form</code></td><td><code>history.rs</code></td><td>a Series file an older bench wrote is rewritten by the next publish of another scene; a row holds both kinds of counter</td></tr>
+      <tr><td><code>a_publish_rebuilds_every_series_so_rows_take_the_current_form</code></td><td><code>history.rs</code></td><td>a Series file an older bench wrote is rewritten by the next publish of another scene; a row holds both kinds of counter, a system's or stage's median and p95 without its p99 and maximum, and both Hitch counts</td></tr>
       <tr><td><code>a_quieter_record_replaces_a_noisier_one_and_a_noisier_one_is_dropped</code></td><td><code>history.rs</code></td><td>the lower p95 over median stays under a key</td></tr>
       <tr><td><code>a_dirty_or_branch_record_lands_in_tagged_with_its_reasons_and_on_no_series</code></td><td><code>history.rs</code></td><td>a dirty tree, and a branch commit that was not quiet, land in <code>tagged/</code> with those tags and no Series file</td></tr>
       <tr><td><code>two_publishes_from_different_adapters_racing_to_push_both_land</code></td><td><code>history.rs</code></td><td>two threads behind a barrier publish three scenes each; every Series exists and each publish is its own commit</td></tr>
