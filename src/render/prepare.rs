@@ -418,9 +418,8 @@ pub struct FramePreparer {
     /// Set while bends are left out of the bend pass, which was warned about
     /// when it was set.
     warned_of_bends_left_out: bool,
-    /// This preparer's own (ADR 0016): a shared pool's queue would carry
-    /// earlier States' tasks into which frames allocate
-    /// [ref:concurrent-queue-2.5.0-push-allocates-block].
+    /// Never shared between States (ADR 0016): its queue's place decides
+    /// which frames allocate [ref:concurrent-queue-2.5.0-push-allocates-block].
     compute_pool: bevy_tasks::TaskPool,
     frame: FrameData,
 }
@@ -2143,7 +2142,7 @@ mod tests {
     /// those of the same frame of a preparer made after another's ran.
     #[test]
     fn a_frames_allocations_do_not_depend_on_the_preparers_before_it() {
-        let allocations_per_frame = || {
+        let allocations_of_a_new_preparer = || {
             let mut frames = Frames::new();
             let renderables: Vec<Entity> = (0..3 * INSTANCES_PER_TASK)
                 .map(|index| frames.spawn(index as f64))
@@ -2168,7 +2167,10 @@ mod tests {
             }
             allocations_per_frame
         };
-        allocations_per_frame();
-        assert_eq!(allocations_per_frame()[1..], allocations_per_frame()[1..]);
+        allocations_of_a_new_preparer();
+        assert_eq!(
+            allocations_of_a_new_preparer()[1..],
+            allocations_of_a_new_preparer()[1..]
+        );
     }
 }
