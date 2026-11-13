@@ -6138,3 +6138,16 @@ quote = '''The resulting [`RwLock`] is:
 //! * allocation-free, modulo the per-thread [`Thread`] handle, which is allocated anyways when
 //! using threads created by `std`'''
 checked = 2026-11-13
+
+["openmp-5.2-schedule-dynamic"]
+url = "https://www.openmp.org/wp-content/uploads/OpenMP-API-Specification-5-2.pdf#page=272"
+section = "OpenMP Architecture Review Board, OpenMP Application Programming Interface 5.2 (November 2021), §11.5.3, schedule Clause, Semantics, p. 251: the static kind without a chunk size is the fill's fixed share per task, the dynamic kind its batches"
+quote = '''If the kind argument is static, iterations are divided into chunks of size chunk_size, and the chunks are assigned to the threads in the team in a round-robin fashion in the order of the thread number. [...] If chunk_size is not specified, the logical iteration space is divided into chunks that are approximately equal in size, and at most one chunk is distributed to each thread.
+If the kind argument is dynamic, each thread executes a chunk, then requests another chunk, until no chunks remain to be assigned. Each chunk contains chunk_size iterations, except for the chunk that contains the sequentially last iteration, which may have fewer iterations.'''
+checked = 2026-11-13
+
+["onetbb-2023.2-grainsize"]
+url = "https://github.com/uxlfoundation/oneTBB/blob/v2023.2.0/doc/main/tbb_userguide/Controlling_Chunking_os.rst#L81-L93"
+section = "oneTBB 2023.2.0, Developer Guide, Controlling Chunking: a chunk's size trades scheduling overhead against parallelism"
+quote = '''Case A shows how too small a grainsize leads to a relatively high proportion of overhead. Case B shows how a large grainsize reduces this proportion, at the cost of reducing potential parallelism. [...] A rule of thumb is that grainsize iterations of operator() should take at least 100,000 clock cycles to execute.'''
+checked = 2026-11-13

@@ -169,9 +169,12 @@ fn instance(
 /// fills fewer than two tasks' worth on the main thread.
 const INSTANCES_PER_TASK: usize = 1024;
 
-/// The Instances a fill task takes at a time, so a task whose thread woke
-/// late takes fewer: the pool's threads wake one after another
-/// [ref:async-executor-1.14.0-woken-ticker-notifies-next].
+/// The Instances a fill task takes at a time, OpenMP's dynamic schedule
+/// [ref:openmp-5.2-schedule-dynamic], so a task whose thread woke late takes
+/// fewer: the pool's threads wake one after another
+/// [ref:async-executor-1.14.0-woken-ticker-notifies-next]. A smaller batch
+/// takes the lock more often, a larger one lengthens the tail
+/// [ref:onetbb-2023.2-grainsize].
 const INSTANCES_PER_BATCH: usize = 128;
 
 /// A drawn Renderable, and its Instance's index in `FrameData::instances`.
@@ -218,7 +221,7 @@ fn fill_instances(
         fill(instances, 0, drawn);
         return;
     }
-    // std's Mutex allocates on its first lock on Apple targets, its RwLock does
+    // std's Mutex allocates on its first lock without futexes, as on macOS; its RwLock does
     // not [ref:rust-1.96-mutex-boxes-on-first-lock] [ref:rust-1.96-queue-rwlock-allocation-free].
     let batches = std::sync::RwLock::new(Batches {
         instances,
