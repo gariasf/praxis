@@ -20,7 +20,7 @@ use crate::scenes::{
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
 use crate::streaming::{ChunkStreaming, LoadedChunks};
-use crate::threading::{init_compute_pool, single_threaded_schedule};
+use crate::threading::single_threaded_schedule;
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
     propagate_world_transforms, record_previous_curvatures, record_previous_world_transforms,
@@ -161,7 +161,6 @@ impl State {
         switches: RenderSwitches,
     ) -> anyhow::Result<State> {
         let _span = tracing::info_span!("state_init").entered();
-        init_compute_pool();
         if let Some(reason) = switches.crowd_form.unavailable_on(context.backend()) {
             anyhow::bail!("{:?} is unavailable: {reason}", switches.crowd_form);
         }

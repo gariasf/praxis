@@ -1913,6 +1913,26 @@ section = "bevy_tasks 0.18.1, lib.rs: the threaded TaskPool and Scope with multi
 quote = '''cfg::multi_threaded! { if { mod task_pool; [...] pub use task_pool::{Scope, TaskPool, TaskPoolBuilder}; [...] } else { mod single_threaded_task_pool; pub use single_threaded_task_pool::{Scope, TaskPool, TaskPoolBuilder, ThreadExecutor};'''
 checked = 2026-10-27
 
+["async-executor-1.14.0-global-queue"]
+url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L357-L364"
+section = "async-executor 1.14.0, lib.rs, Executor::schedule, which every spawned task's Runnable goes through; State::new (L675-L677) makes the queue ConcurrentQueue::unbounded(); bevy_tasks 0.18.1's Scope::spawn (task_pool.rs L646-L650) spawns on the pool's Executor, a wrapper of this one (executor.rs L19)"
+quote = '''move |runnable| {
+            let result = state.queue.push(runnable);
+            debug_assert!(result.is_ok()); // Since we use unbounded queue, push will never fail.
+            state.notify();
+        }'''
+checked = 2026-11-13
+
+["concurrent-queue-2.5.0-push-allocates-block"]
+url = "https://github.com/smol-rs/concurrent-queue/blob/v2.5.0/src/unbounded.rs#L192-L196"
+section = "concurrent-queue 2.5.0, unbounded.rs, Unbounded::push; BLOCK_CAP is LAP - 1 with LAP 32 (L22-L25)"
+quote = '''// If we're going to have to install the next block, allocate it in advance in order to
+            // make the wait for other threads as short as possible.
+            if offset + 1 == BLOCK_CAP && next_block.is_none() {
+                next_block = Some(Box::new(Block::<T>::new()));
+            }'''
+checked = 2026-11-13
+
 ["wgpu-core-30-map-after-last-submission"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L163-L164"
 section = "wgpu-core 30.0.1, device/life.rs, LifetimeTracker docs, Host mapping buffers; LifetimeTracker::map (L236-L250) queues the buffer on the newest active submission that uses it"
