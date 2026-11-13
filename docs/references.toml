@@ -6106,3 +6106,35 @@ url = "https://doi.org/10.1145/3842562"
 section = "Moran, Donnelly and Wolfe, Stealthy Blue Noise, ACM TOG 45(6), article 258, 2026, §4.1 and Fig. 5"
 quote = '''The kernel width σ trades suppression against disorder, but the transition is smooth at every setting, and there is no σ that gives both a deep floor and a sharp edge. [...] (a) Stealthy blue noise averages 1.5 × 10⁻²² inside the ring, about twenty decades below the plotted floor. (b) Step blue noise with matched cutoff νc = 0.83 averages 8.3 × 10⁻².'''
 checked = 2026-11-11
+
+["async-executor-1.14.0-woken-ticker-notifies-next"]
+url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L919-L927"
+section = "async-executor 1.14.0, lib.rs, Ticker::runnable_with, run by each pool thread for its next task; State::notify (L703-L718) wakes a sleeper only when no notified one is still waking, so the pool's threads wake one after another"
+quote = '''Some(r) => {
+                        // Wake up.
+                        self.wake();
+
+                        // Notify another ticker now to pick up where this ticker left off, just in
+                        // case running the task takes a long time.
+                        self.state.notify();'''
+checked = 2026-11-13
+
+["rust-1.96-mutex-boxes-on-first-lock"]
+url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/mutex/pthread.rs#L19-L28"
+section = "Rust 1.96.0 standard library, sys/sync/mutex/pthread.rs, Mutex::get, which lock calls; mutex/mod.rs (L20-L26) takes this pthread Mutex on unix targets without futexes, macOS among them"
+quote = '''fn get(&self) -> Pin<&pal::Mutex> {
+        // If the initialization race is lost, the new mutex is destroyed.
+        // This is sound however, as it cannot have been locked.
+        self.pal.get_or_init(|| {
+            let mut pal = Box::pin(pal::Mutex::new());'''
+checked = 2026-11-13
+
+["rust-1.96-queue-rwlock-allocation-free"]
+url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/rwlock/queue.rs#L25-L29"
+section = "Rust 1.96.0 standard library, sys/sync/rwlock/queue.rs, module documentation; rwlock/mod.rs takes this queue RwLock on unix targets without futexes, macOS among them"
+quote = '''The resulting [`RwLock`] is:
+//!
+//! * adaptive, since it spins before doing any heavyweight parking operations
+//! * allocation-free, modulo the per-thread [`Thread`] handle, which is allocated anyways when
+//! using threads created by `std`'''
+checked = 2026-11-13

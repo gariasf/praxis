@@ -606,25 +606,37 @@ type ChangedRenderableQuery = RenderableQuery&lt;
 }</code></pre>
   <p class="code-source"><code>FramePreparer::prepare</code>. <code>visit</code> takes the Renderable's slot and its place among the frame's Instances; <code>retried</code> are the Renderables the last prepare skipped or refused; <code>rewrite_renderables</code> is set after <code>rewrite_all_instances</code> and in the first prepare after either pool frees an entry.</p>
   <p>Inside <code>visit</code>, a Renderable is skipped when its Mesh Handle finds no Mesh in <code>LoadedMeshes</code>, when its Material Handle finds no Material, or when it has no Material Handle and a Primitive of its Mesh names no Material. A Handle finds nothing once its entry is freed, even after a later Mesh or Material takes its index, since that index's generation moved on. A skipped Renderable still takes its slot, which is written an Instance with no Mesh once, in the first frame it is skipped; it is visited again in every frame, changed or not, and draws there as soon as its Mesh loads. Once either pool frees an entry, an unchanged Instance may name an index a later entry took, so the next prepare visits every Renderable, as it does after <code>rewrite_all_instances</code>, and writes again only the Chunks that name a freed entry (section 4). A drawn Renderable takes its place among the frame's Instances, an Instance with no Mesh for now, and joins the <code>drawn</code> list as a <code>DrawnRenderable</code>: that place and its entity.</p>
-  <p>Once every Renderable is visited, <code>fill_instances</code> writes each listed Instance: the Renderable's World transform blended by the frame's blend weight, in f64, and split into an Anchor and an offset, its rotation and scale and their inverse transpose padded per column for WGSL. Each Instance depends on its Renderable alone, so the list splits into a task per 1,024 Instances on the compute pool, whose workers and the main thread, which joins the scope, run them. The pool is the preparer's own, created with it: a worker per core but the main thread's. The tasks follow the frame's count, not the machine's threads, since each spawn is an allocation the frame's counter sees. The list is in place order, so each task's part lands in one run of the Instances, which <code>split_at_mut</code> hands it alone, and the result is the same however the tasks are scheduled.</p>
+  <p>Once every Renderable is visited, <code>fill_instances</code> writes each listed Instance: the Renderable's World transform blended by the frame's blend weight, in f64, and split into an Anchor and an offset, its rotation and scale and their inverse transpose padded per column for WGSL. Each Instance depends on its Renderable alone, so the list splits into a task per 1,024 Instances on the compute pool, whose workers and the main thread, which joins the scope, run them. A task does not own a fixed part: each takes the next 128 Instances left until none are, since the pool wakes its sleeping workers one at a time, each woken worker waking the next once it finds a task, and the last of them wakes about 100 µs into the fill on <code>town</code>; a thread that woke late takes fewer. The pool is the preparer's own, created with it: a worker per core but the main thread's. The tasks follow the frame's count, not the machine's threads, since each spawn is an allocation the frame's counter sees. The list is in place order, so each batch lands in one run of the Instances, which <code>split_at_mut</code> hands it alone, and the result is the same however the tasks are scheduled.</p>
 <pre class="code"><code>let task_count = drawn.len() / INSTANCES_PER_TASK;
 if task_count &lt; 2 {
     fill(instances, 0, drawn);
     return;
 }
+// std's Mutex allocates on its first lock on Apple targets, its RwLock does
+// not [ref:rust-1.96-mutex-boxes-on-first-lock] [ref:rust-1.96-queue-rwlock-allocation-free].
+let batches = std::sync::RwLock::new(Batches {
+    instances,
+    first_index: 0,
+    drawn,
+});
 compute_pool.scope(|scope| {
-    let mut rest = instances;
-    let mut first_index = 0;
-    for group in drawn.chunks(drawn.len().div_ceil(task_count)) {
-        let end = group
-            .last()
-            .map_or(first_index, |last| last.instance_index + 1);
-        let (head, tail) = std::mem::take(&amp;mut rest).split_at_mut(end - first_index);
-        scope.spawn(async move { fill(head, first_index, group) });
-        (rest, first_index) = (tail, end);
+    for _ in 0..task_count {
+        let (batches, fill) = (&amp;batches, &amp;fill);
+        scope.spawn(async move {
+            loop {
+                let batch = batches
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .next();
+                let Some((instances, first_index, drawn)) = batch else {
+                    break;
+                };
+                fill(instances, first_index, drawn);
+            }
+        });
     }
 });</code></pre>
-  <p class="code-source"><code>fill_instances</code>, <code>src/render/prepare.rs</code>. <code>fill</code> looks each entity up in the Renderables' query, warning about and skipping one it does not find, and writes its Instance at its place less <code>first_index</code>. <code>INSTANCES_PER_TASK</code> is 1,024, so a frame with fewer than 2,048 drawn Renderables fills them on the main thread and spawns no task.</p>
+  <p class="code-source"><code>fill_instances</code>, <code>src/render/prepare.rs</code>. <code>fill</code> looks each entity up in the Renderables' query, warning about and skipping one it does not find, and writes its Instance at its place less <code>first_index</code>. <code>INSTANCES_PER_TASK</code> is 1,024, so a frame with fewer than 2,048 drawn Renderables fills them on the main thread and spawns no task. <code>Batches</code> hands out the next <code>INSTANCES_PER_BATCH</code>, 128, of <code>drawn</code> and their run of the Instances; it sits behind an <code>RwLock</code>, which allocates nothing, so the fill adds no allocation to the frame.</p>
 <pre class="code"><code>*rewrite_every_instance = false;
 // Ends the window in which prepare sees changes and removals, and
 // drains the removals, which otherwise pile up.
@@ -882,6 +894,8 @@ bends.truncate(capacity);</code></pre>
     <dt><a href="https://github.com/smol-rs/concurrent-queue/blob/v2.5.0/src/unbounded.rs#L192-L196">concurrent-queue 2.5.0, unbounded.rs, <code>push</code></a></dt><dd>the push that fills a block's last place allocates the next block on its own thread, once every 31 places: why the compute pool is the preparer's own; <code>concurrent-queue-2.5.0-push-allocates-block</code></dd>
     <dt><a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/query/struct.Changed.html">bevy_ecs 0.18.1, <code>Changed</code></a> and <a href="https://docs.rs/bevy_ecs/0.18.1/bevy_ecs/world/struct.World.html">World</a></dt><dd>components carry change ticks; <code>Changed</code> admits a component added or mutably dereferenced since the last run it is given, which outside a system is the World's last change tick, and is not an archetype filter; <code>World::removed</code> lists the entities that lost a component since <code>World::clear_trackers</code>, which a standalone bevy_ecs must call itself</dd>
     <dt><a href="https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/storage/table/mod.rs">bevy_ecs 0.18.1, storage/table/mod.rs</a></dt><dd>rows appended at a table's end and a removed row filled by the table's last entity: why the World's order moves, and why the Moving Instances' cap keeps slots and the bends sort by Arena offset</dd>
+    <dt><a href="https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L919-L927">async-executor 1.14.0, lib.rs, <code>Ticker::runnable_with</code></a></dt><dd>a woken pool thread wakes the next only once it finds a task, and a sleeper is woken only when none is still waking: why the fill's tasks take batches; <code>async-executor-1.14.0-woken-ticker-notifies-next</code></dd>
+    <dt><a href="https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/mutex/pthread.rs#L19-L28">Rust 1.96.0, mutex/pthread.rs</a> and <a href="https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/rwlock/queue.rs#L25-L29">rwlock/queue.rs</a></dt><dd>on macOS std's Mutex boxes its lock on the first lock, its RwLock allocates nothing: why the batches sit behind an RwLock; <code>rust-1.96-mutex-boxes-on-first-lock</code>, <code>rust-1.96-queue-rwlock-allocation-free</code></dd>
   </dl>
   <h3>History</h3>
   <p class="note">Prepare began as the frame's one pull from the World, with the slot table and change detection that made camera motion free. The Instance buffer then stopped growing and gained refusal; freed slots took an Instance with no Mesh and waited a frame, and the draws left Frame data once the GPU built its own. The lights moved into a light buffer with anchored point lights, the Environment replaced constants in the shaders, the blend between Ticks arrived with the fixed schedule, then the Moving Instance list and its cap with the dynamic TLAS, and the bends with the crowd; change detection moved from per-item tests into query filters. Once Handles carried generations and the pools could free entries, prepare came to read the Meshes and the Materials' generations as plain data rather than the pools. Then the Chunks' static content stopped being entities: each loaded Chunk took a range of slots and its point lights joined the frame's; once Chunks streamed, a held Chunk wrote Instances with no Mesh and an unloaded one gave its range back. Filling the Instances then left the visit, so the compute pool could split it. A pool's free then stopped writing every Instance again: it writes every Renderable and only the Chunks that name a freed entry. Last, the compute pool became the preparer's own. <a href="instance-buffer.html">The Instance buffer</a> describes the slots prepare writes; <a href="culling-pass.html">The culling pass</a> and <a href="dynamic-tlas.html">The dynamic TLAS</a> describe what reads the slots and the list. This page describes the mechanism as it is.</p>

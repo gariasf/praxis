@@ -169,6 +169,11 @@ fn instance(
 /// outweighs waking a thread for it.
 const INSTANCES_PER_TASK: usize = 1024;
 
+/// The Instances a fill task takes at a time, so a task whose thread woke
+/// late takes fewer: the pool's threads wake one after another
+/// [ref:async-executor-1.14.0-woken-ticker-notifies-next].
+const INSTANCES_PER_BATCH: usize = 128;
+
 /// A drawn Renderable, and its Instance's index in `FrameData::instances`.
 #[derive(Clone, Copy)]
 struct DrawnRenderable {
@@ -180,7 +185,9 @@ struct DrawnRenderable {
 /// its World transform blended `blend_weight` of the way from the previous
 /// Tick's, one compute pool task per `INSTANCES_PER_TASK` Instances once
 /// there are two (ADR 0016): the tasks spawned, which allocate, depend on the
-/// frame, never on the machine's thread count. `drawn` is in index order.
+/// frame, never on the machine's thread count. Each task takes
+/// `INSTANCES_PER_BATCH` at a time until none are left, as the pool's threads
+/// wake one after another. `drawn` is in index order.
 fn fill_instances(
     instances: &mut [InstanceData],
     drawn: &[DrawnRenderable],
@@ -211,18 +218,58 @@ fn fill_instances(
         fill(instances, 0, drawn);
         return;
     }
+    // std's Mutex allocates on its first lock on Apple targets, its RwLock does
+    // not [ref:rust-1.96-mutex-boxes-on-first-lock] [ref:rust-1.96-queue-rwlock-allocation-free].
+    let batches = std::sync::RwLock::new(Batches {
+        instances,
+        first_index: 0,
+        drawn,
+    });
     compute_pool.scope(|scope| {
-        let mut rest = instances;
-        let mut first_index = 0;
-        for group in drawn.chunks(drawn.len().div_ceil(task_count)) {
-            let end = group
-                .last()
-                .map_or(first_index, |last| last.instance_index + 1);
-            let (head, tail) = std::mem::take(&mut rest).split_at_mut(end - first_index);
-            scope.spawn(async move { fill(head, first_index, group) });
-            (rest, first_index) = (tail, end);
+        for _ in 0..task_count {
+            let (batches, fill) = (&batches, &fill);
+            scope.spawn(async move {
+                loop {
+                    let batch = batches
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .next();
+                    let Some((instances, first_index, drawn)) = batch else {
+                        break;
+                    };
+                    fill(instances, first_index, drawn);
+                }
+            });
         }
     });
+}
+
+/// What a fill has yet to hand out: `drawn`, in index order, whose Instances
+/// are `instances` from `first_index` on.
+struct Batches<'frame> {
+    instances: &'frame mut [InstanceData],
+    first_index: usize,
+    drawn: &'frame [DrawnRenderable],
+}
+
+impl<'frame> Iterator for Batches<'frame> {
+    type Item = (&'frame mut [InstanceData], usize, &'frame [DrawnRenderable]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.drawn.is_empty() {
+            return None;
+        }
+        let (group, rest) = self
+            .drawn
+            .split_at(INSTANCES_PER_BATCH.min(self.drawn.len()));
+        let first_index = self.first_index;
+        let end = group
+            .last()
+            .map_or(first_index, |last| last.instance_index + 1);
+        let (head, tail) = std::mem::take(&mut self.instances).split_at_mut(end - first_index);
+        (self.instances, self.first_index, self.drawn) = (tail, end, rest);
+        Some((head, first_index, group))
+    }
 }
 
 /// Each Renderable's slot in the Instance buffer, kept until it stops being a
