@@ -2137,19 +2137,21 @@ mod tests {
         }
     }
 
-    /// Three compute pool tasks a frame: past the first frame, which the
-    /// pool's threads may still be starting in, each frame's allocations are
-    /// those of the same frame of a preparer made after another's ran.
+    /// Three compute pool tasks a frame. A frame allocates two fewer when
+    /// the workers finish its tasks before the main thread waits for them,
+    /// and the pool's threads may still be starting in the first, so each
+    /// preparer's highest count after its first frame is compared: it is the
+    /// same for a preparer made after others' frames ran.
     #[test]
     fn a_frames_allocations_do_not_depend_on_the_preparers_before_it() {
-        let allocations_of_a_new_preparer = || {
+        let highest_after_the_first_frame = || {
             let mut frames = Frames::new();
             let renderables: Vec<Entity> = (0..3 * INSTANCES_PER_TASK)
                 .map(|index| frames.spawn(index as f64))
                 .collect();
             let mut recorder = crate::stats::FrameRecorder::new();
-            let mut allocations_per_frame = Vec::new();
-            for _ in 0..7 {
+            let mut highest = 0;
+            for frame in 0..7 {
                 for &entity in &renderables {
                     let mut transform = frames.world.get_mut::<Transform>(entity).unwrap();
                     transform.translation.y += 1.0;
@@ -2163,14 +2165,13 @@ mod tests {
                     1.0,
                 );
                 recorder.end();
-                allocations_per_frame.push(recorder.counters.heap_allocations);
+                if frame > 0 {
+                    highest = highest.max(recorder.counters.heap_allocations);
+                }
             }
-            allocations_per_frame
+            highest
         };
-        allocations_of_a_new_preparer();
-        assert_eq!(
-            allocations_of_a_new_preparer()[1..],
-            allocations_of_a_new_preparer()[1..]
-        );
+        let highest: [u64; 3] = std::array::from_fn(|_| highest_after_the_first_frame());
+        assert_eq!(highest, [highest[0]; 3]);
     }
 }
