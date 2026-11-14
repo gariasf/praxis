@@ -82,7 +82,7 @@ fn distance_to_triangle(point: Vec3, [first, second, third]: [Vec3; 3]) -> f32 {
     to_edge.fold(f32::INFINITY, f32::min)
 }
 
-fn within_another(surfaces: &[Placed], candidates: usize, reach_metres: f32) -> Vec<bool> {
+fn within_another(surfaces: &[Placed], candidate_count: usize, reach_metres: f32) -> Vec<bool> {
     let cell =
         |point: Vec3| [point.x, point.z].map(|metres| (metres / GRID_CELL_METRES).floor() as i32);
     let mut grid: HashMap<[i32; 2], Vec<usize>> = HashMap::new();
@@ -110,7 +110,7 @@ fn within_another(surfaces: &[Placed], candidates: usize, reach_metres: f32) -> 
                 distances.any(|distance| distance <= reach_metres)
             })
     };
-    (0..candidates)
+    (0..candidate_count)
         .map(|index| {
             let candidate = &surfaces[index];
             grid.get(&cell(candidate.lowest)).is_some_and(|nearby| {
@@ -179,11 +179,11 @@ pub(super) fn cook<'sources>(
         primitives_of(placement.mesh)
             .with_context(|| format!("Mesh {} is not among the cook's sources", placement.mesh))
     };
-    let (ground_tiles, parts): (Vec<_>, Vec<_>) =
+    let (ground_tiles, parts): (Vec<CookedPlacement>, Vec<CookedPlacement>) =
         (chunk.placements.iter()).partition(|placement| placement.mesh == ground);
 
     let mut surfaces = Vec::new();
-    for placement in parts.iter().chain(&ground_tiles) {
+    for placement in &parts {
         surfaces.push(placed(placement, -pivot, primitives(placement)?));
     }
     let lowest = surfaces
@@ -194,19 +194,21 @@ pub(super) fn cook<'sources>(
     });
     let mut reach_of_mesh = HashMap::new();
     for (origin, neighbour) in neighbours {
-        for placement in &neighbour.placements {
+        let neighbouring = neighbour.placements.iter();
+        for placement in neighbouring.filter(|placement| placement.mesh != ground) {
             let source = primitives(placement)?;
-            let mesh_reach = *reach_of_mesh.entry(placement.mesh).or_insert_with(|| {
+            let mesh_reach_metres = *reach_of_mesh.entry(placement.mesh).or_insert_with(|| {
                 let positions = source.iter().flat_map(|(geometry, _)| &geometry.positions);
                 let reaches = positions.map(|position| Vec3::from(*position).length());
                 reaches.fold(0.0, f32::max)
             });
-            let reach = mesh_reach * placement.scale.abs().max_element() + pixel_metres;
+            let reach_metres =
+                mesh_reach_metres * placement.scale.abs().max_element() + pixel_metres;
             let centre = (*origin - pivot + placement.translation).as_vec3();
-            let reaches_the_chunk = centre.x + reach >= lowest.x
-                && centre.x - reach <= highest.x
-                && centre.z + reach >= lowest.z
-                && centre.z - reach <= highest.z;
+            let reaches_the_chunk = centre.x + reach_metres >= lowest.x
+                && centre.x - reach_metres <= highest.x
+                && centre.z + reach_metres >= lowest.z
+                && centre.z - reach_metres <= highest.z;
             if reaches_the_chunk {
                 surfaces.push(placed(placement, *origin - pivot, source));
             }
@@ -236,7 +238,7 @@ pub(super) fn cook<'sources>(
     let mut ground_material = None;
     for placement in &ground_tiles {
         let [(geometry, material)] = primitives(placement)? else {
-            anyhow::bail!("the ground's Mesh {ground} has more than one Primitive");
+            anyhow::bail!("the ground's Mesh {ground} does not have one Primitive");
         };
         anyhow::ensure!(
             placement.material.is_none(),
@@ -265,6 +267,15 @@ pub(super) fn cook<'sources>(
         ..faceted(&positions, &finest)
     };
     let mut proxy = mesh::lod_0(&[(shell, None), (ground_geometry.clone(), ground_material)])?;
+    let positions_metres = proxy
+        .vertices
+        .iter()
+        .map(|vertex| Vec3::from(vertex.position));
+    let farthest_metres = positions_metres.map(Vec3::length).fold(0.0, f32::max);
+    anyhow::ensure!(
+        farthest_metres <= CHUNK_EDGE_METRES as f32,
+        "a vertex of the Far proxy lies {farthest_metres:.1} m from its pivot, past a Chunk's edge"
+    );
     let mut finer_indices = finest.len();
     for doublings in 1..MESH_MAX_LODS as i32 {
         let (coarser, error_metres) =
@@ -351,11 +362,12 @@ mod tests {
 
     #[test]
     fn a_placement_within_a_pixel_of_anothers_surface_is_left_out_and_no_other_is() {
-        let (wall, pane, ground) = (AssetId(1), AssetId(2), AssetId(3));
+        let (wall, pane, ground, plate) = (AssetId(1), AssetId(2), AssetId(3), AssetId(4));
         let sources = [
             (wall, vec![(upright_quad(4.0, 3.0, 0.0), None)]),
             (pane, vec![(upright_quad(1.0, 1.0, 0.06), None)]),
             (ground, vec![(ground_plane(128.0, 1.0), None)]),
+            (plate, vec![(ground_plane(0.5, 1.0), None)]),
         ];
         let primitives_of = |mesh: AssetId| {
             let source = sources.iter().find(|(id, _)| *id == mesh);
@@ -375,6 +387,7 @@ mod tests {
                     ..at(wall, dvec3(60.0, 0.0, 60.0))
                 },
                 at(pane, dvec3(60.5, 1.0, 59.94)),
+                at(plate, dvec3(20.0, 0.05, 20.0)),
             ],
             lights: Vec::new(),
             bounds: [DVec3::ZERO, DVec3::splat(256.0)],
@@ -401,6 +414,8 @@ mod tests {
             quad([101.3, 1.0], [102.3, 2.0], 100.06),
             turned_wall,
             quad([60.0, 1.0], [61.0, 2.0], 60.0),
+            [(19.5, 19.5), (19.5, 20.5), (20.5, 19.5), (20.5, 20.5)]
+                .map(|(x, z)| millimetres(Vec3::new(x - 128.0, 0.05, z - 128.0))),
         ]
         .into_iter()
         .flatten()
@@ -424,7 +439,12 @@ mod tests {
         let [shell, ground] = &proxy.primitives[..] else {
             panic!("{} Primitives", proxy.primitives.len());
         };
+        assert!((pixel_metres(256.0) - PIXEL_METRES).abs() < 1e-4);
         assert!((1..=5832).contains(&(shell.index_count / 3)));
+        let flat_roofed = &proxy.coarser_lods[0];
+        assert!(flat_roofed.error_metres <= 2.0 * PIXEL_METRES);
+        assert!(flat_roofed.primitives[0].index_count * 100 <= shell.index_count * 85);
+        assert_eq!(flat_roofed.primitives[1].index_count / 3, 8);
         assert_eq!(ground.material, Some(scene.material_id("grass")));
         assert_eq!(ground.index_count / 3, 8);
         let ground_corners: BTreeSet<_> = corners(&proxy, 1).into_iter().map(millimetres).collect();
@@ -460,11 +480,14 @@ mod tests {
             source_corners.iter().copied().map(millimetres).collect();
         let shell_triangles = shell_corners.as_chunks::<3>().0;
         for corner in source_corners.iter().step_by(7) {
-            let nearest = shell_triangles
+            let nearest_metres = shell_triangles
                 .iter()
                 .map(|&triangle| distance_to_triangle(*corner, triangle))
                 .fold(f32::INFINITY, f32::min);
-            assert!(nearest <= PIXEL_METRES, "{corner}: {nearest} m");
+            assert!(
+                nearest_metres <= PIXEL_METRES,
+                "{corner}: {nearest_metres} m"
+            );
         }
         for corner in &shell_corners {
             assert!(

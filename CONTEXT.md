@@ -182,7 +182,7 @@ A Chunk the camera came within the Load radius of before it was loaded.
 _Avoid_: Pop-in, streaming miss
 
 **Far proxy**:
-A Mesh cooked per Chunk, drawn in place of the Chunk's Placements while the Chunk is outside the Load radius and within the View distance: the Chunk's static Placements merged, with a Material baked for it and the Chunk's ground tiles (ADR 0026). LOD stays a Mesh's, a Far proxy's included.
+A Mesh cooked per Chunk, drawn in place of the Chunk's Placements while the Chunk is outside the Load radius and within the View distance: the Chunk's static Placements merged, with a Material baked for it and the Chunk's ground tiles (ADR 0026). LOD stays a Mesh's, a Far proxy's included: its LOD 0 is the merge as cooked, within a pixel of the Placements at the Load radius.
 _Avoid_: HLOD (the technique's name, for research notes), impostor, group proxy, Shadow proxy (traced, never drawn)
 
 **Far field**:

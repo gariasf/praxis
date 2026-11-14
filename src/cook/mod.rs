@@ -147,7 +147,7 @@ struct Sources {
     /// Each Chunk generated so far a Placement of which names a Mesh this
     /// cook did not read, so its Blob, if any, stays as it is.
     kept_chunks: Vec<AssetId>,
-    chunk_digests: HashMap<AssetId, ChunkDigest>,
+    chunk_summaries: HashMap<AssetId, ChunkSummary>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
     /// as the source, or an image it names, is absent.
@@ -157,7 +157,7 @@ struct Sources {
     kept_textures: Vec<AssetId>,
 }
 
-struct ChunkDigest {
+struct ChunkSummary {
     cook_key: String,
     kept: bool,
     meshes: Vec<AssetId>,
@@ -166,17 +166,15 @@ struct ChunkDigest {
 struct GeneratedFarProxy {
     id: AssetId,
     cook_key: String,
-    /// Whether its Chunk or a neighbour is kept, so its Blob, if any, stays
-    /// as it is.
     kept: bool,
     references: Vec<(Referrer, AssetId)>,
 }
 
-fn neighbourhood([x, z]: [i32; 2]) -> impl Iterator<Item = [i32; 2]> {
-    let steps = [0, -1, 1];
-    steps
-        .into_iter()
-        .flat_map(move |across| steps.map(|along| [x + across, z + along]))
+fn neighbours([x, z]: [i32; 2]) -> impl Iterator<Item = [i32; 2]> {
+    let steps = [-1, 0, 1];
+    let around =
+        (steps.into_iter()).flat_map(move |across| steps.map(|along| [x + across, z + along]));
+    around.filter(move |near| *near != [x, z])
 }
 
 /// A Chunk as a cook generates it.
@@ -243,12 +241,12 @@ impl Sources {
             .collect();
         meshes.sort_unstable();
         meshes.dedup();
-        let digest = ChunkDigest {
+        let summary = ChunkSummary {
             cook_key: cook_key.clone(),
             kept,
             meshes,
         };
-        self.chunk_digests.insert(id, digest);
+        self.chunk_summaries.insert(id, summary);
         Ok(GeneratedChunk {
             id,
             referrer,
@@ -275,20 +273,20 @@ impl Sources {
         let ground = scene.far_field_ground();
         hasher.update(ground.map_or(0, |ground| ground.0).to_be_bytes());
         let (mut kept, mut meshes) = (false, Vec::new());
-        for near in neighbourhood(coordinates) {
+        for near in [coordinates].into_iter().chain(neighbours(coordinates)) {
             if !self.chunks.contains(&(scene, near)) {
                 hasher.update([0]);
                 continue;
             }
             let chunk = scene.chunk_id(near);
-            if !self.chunk_digests.contains_key(&chunk) {
+            if !self.chunk_summaries.contains_key(&chunk) {
                 self.chunk(scene, near)?;
             }
-            let digest = &self.chunk_digests[&chunk];
+            let summary = &self.chunk_summaries[&chunk];
             hasher.update([1]);
-            hasher.update(&digest.cook_key);
-            kept |= digest.kept;
-            meshes.extend(&digest.meshes);
+            hasher.update(&summary.cook_key);
+            kept |= summary.kept;
+            meshes.extend(&summary.meshes);
         }
         meshes.sort_unstable();
         meshes.dedup();
@@ -321,19 +319,15 @@ impl Sources {
         let ground = scene
             .far_field_ground()
             .with_context(|| format!("{} has no Far field", scene.name()))?;
-        anyhow::ensure!(
-            self.chunks.contains(&(scene, coordinates)),
-            "{referrer} is not among the cook's Chunks"
-        );
+        let chunk = self.chunk(scene, coordinates)?.chunk;
         let mut near_chunks = Vec::new();
-        for near in neighbourhood(coordinates) {
+        for near in neighbours(coordinates) {
             if self.chunks.contains(&(scene, near)) {
                 let from_origin = chunk_origin(near) - chunk_origin(coordinates);
                 near_chunks.push((from_origin, self.chunk(scene, near)?.chunk));
             }
         }
-        let (_, chunk) = &near_chunks[0];
-        let neighbours: Vec<_> = (near_chunks[1..].iter())
+        let neighbouring: Vec<_> = (near_chunks.iter())
             .map(|(from_origin, neighbour)| (*from_origin, neighbour))
             .collect();
         let primitives_of = |mesh: AssetId| {
@@ -341,7 +335,7 @@ impl Sources {
             source.map(|(.., primitives)| &primitives[..])
         };
         let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
-        far_proxy::cook(chunk, &neighbours, &primitives_of, ground, pixel_metres)
+        far_proxy::cook(&chunk, &neighbouring, &primitives_of, ground, pixel_metres)
             .and_then(|mesh| mesh.to_blob())
             .with_context(|| format!("cooking the Far proxy of {referrer}"))
     }

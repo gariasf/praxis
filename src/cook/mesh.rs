@@ -89,8 +89,8 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
     hex(&hasher.finalize())
 }
 
-/// The farthest a cooked vertex may lie from its Mesh's pivot: ADR 0014's
-/// bound, within which f32 rotation keeps its precision bar.
+/// The farthest a vertex `cook` takes may lie from its Mesh's pivot: ADR
+/// 0014's bound, within which f32 rotation keeps its precision bar.
 const MAX_PIVOT_DISTANCE_METRES: f32 = 128.0;
 
 /// How far a Thin Primitive's radius may lie from the one declared, as a
