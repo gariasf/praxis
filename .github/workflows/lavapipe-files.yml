@@ -1,9 +1,8 @@
 name: lavapipe files
 
-# Records the lavapipe Goldens and Baselines that CI would fail a branch on,
-# as artifacts `scripts/lavapipe-files.sh` copies over the checkout: each
-# file sits at its path in the repository. It judges nothing, so no job here
-# takes the name of one of CI's, whose result it would replace on the commit.
+# No job here may take the name of one of CI's: its result would replace
+# CI's on the commit. `scripts/lavapipe-files.sh` copies each artifact over
+# the checkout, so a file sits in it at its path in the repository.
 on:
   workflow_dispatch:
 
@@ -47,8 +46,17 @@ jobs:
         run: |
           cargo test --test goldens reference_scenes_match_their_goldens
           mkdir -p target/lavapipe-files
-          git ls-files --modified --others --exclude-standard -z tests/goldens |
-            xargs -0 -r cp --parents -t target/lavapipe-files
+          git ls-files --modified --others --exclude-standard tests/goldens |
+            while read -r golden; do
+              if git show "HEAD:$golden" > target/committed-golden.png 2>/dev/null; then
+                difference=$(RUST_LOG=error target/debug/praxis difference \
+                  target/committed-golden.png "$golden" target/golden-difference.png || true)
+                if [[ $difference == "0 pixels differ"* ]]; then
+                  continue
+                fi
+              fi
+              cp --parents "$golden" target/lavapipe-files
+            done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

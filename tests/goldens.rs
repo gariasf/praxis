@@ -17,7 +17,7 @@
 //! regressions, not errors already present when it was recorded.
 //!
 //! `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` rewrites the current
-//! key's Goldens that the comparison would fail and prints them. Without the
+//! key's Goldens and prints the scenes whose image changed. Without the
 //! variable the test only compares; on a mismatch it writes a difference
 //! image and the capture under `target/tmp/golden-differences/<key>/`, and a
 //! scene with no Golden yet writes its capture there. With
@@ -466,8 +466,8 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
     );
 }
 
-/// Writes each scene's captures as its Goldens and prints the Goldens it
-/// wrote: those the comparison would fail, or that were absent.
+/// Writes each scene's captures as its Goldens and prints the Goldens whose
+/// pixels changed, or that were absent.
 fn update_goldens(directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
@@ -476,12 +476,8 @@ fn update_goldens(directory: &Path) {
         for (&frame, actual) in frames.iter().zip(&captures) {
             let label = golden_label(scene, frame);
             let path = directory.join(format!("{label}.png"));
-            let unchanged = image::open(&path).is_ok_and(|golden| {
-                let golden = golden.into_rgba8();
-                golden.dimensions() == actual.dimensions()
-                    && praxis::compare_images(golden.as_raw(), actual.as_raw()).differing_pixels
-                        == 0
-            });
+            let unchanged = image::open(&path)
+                .is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
             if unchanged {
                 continue;
             }

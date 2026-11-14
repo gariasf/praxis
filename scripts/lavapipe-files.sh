@@ -38,10 +38,15 @@ if [ $# -eq 0 ]; then
     echo "the dispatched run did not appear within a minute" >&2
     exit 1
   fi
-  gh run watch "$run_id" --exit-status --interval 30
 else
   run_id=$1
 fi
+recorded_commit=$(gh run view "$run_id" --json headSha --jq .headSha)
+if [ "$recorded_commit" != "$(git rev-parse HEAD)" ]; then
+  echo "run $run_id recorded $recorded_commit, not the commit checked out" >&2
+  exit 1
+fi
+gh run watch "$run_id" --exit-status --interval 30
 
 artifacts=$(gh api "repos/{owner}/{repo}/actions/runs/$run_id/artifacts" \
   --jq '.artifacts[].name | select(startswith("lavapipe-"))')
