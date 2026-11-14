@@ -9,7 +9,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 newest_recording() {
   local commit=$1
-  gh run list --workflow ci.yml --event workflow_dispatch --commit "$commit" --limit 1 \
+  gh run list --workflow lavapipe-files.yml --commit "$commit" --limit 1 \
     --json databaseId --jq '.[0].databaseId // empty'
 }
 
@@ -27,7 +27,7 @@ if [ $# -eq 0 ]; then
     exit 1
   fi
   earlier_recording=$(newest_recording "$head_commit")
-  gh workflow run ci.yml --ref "$branch"
+  gh workflow run lavapipe-files.yml --ref "$branch"
   run_id=$earlier_recording
   for attempt in {1..30}; do
     run_id=$(newest_recording "$head_commit")

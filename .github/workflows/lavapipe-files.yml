@@ -1,0 +1,103 @@
+name: lavapipe files
+
+# Records the lavapipe Goldens and Baselines that CI would fail a branch on,
+# as artifacts `scripts/lavapipe-files.sh` copies over the checkout: each
+# file sits at its path in the repository. It judges nothing, so no job here
+# takes the name of one of CI's, whose result it would replace on the commit.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The job ids are CI's, so rust-cache restores the caches CI saves on main.
+  software-goldens:
+    name: Record Goldens (software Vulkan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Install lavapipe
+        run: |
+          lavapipe_version=$(sed -n 's/^  LAVAPIPE_VERSION: //p' .github/workflows/ci.yml)
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            mesa-vulkan-drivers=$lavapipe_version
+
+      - name: Cook
+        run: cargo run -- cook
+
+      - name: Record the Goldens CI would fail
+        env:
+          PRAXIS_UPDATE_GOLDENS: "1"
+          PRAXIS_REQUIRE_GOLDENS: "1"
+        run: |
+          cargo test --test goldens reference_scenes_match_their_goldens
+          mkdir -p target/lavapipe-files
+          git ls-files --modified --others --exclude-standard -z tests/goldens |
+            xargs -0 -r cp --parents -t target/lavapipe-files
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lavapipe-goldens
+          path: target/lavapipe-files
+          if-no-files-found: ignore
+
+  software-bench:
+    name: Record Baselines (software Vulkan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Install lavapipe
+        run: |
+          lavapipe_version=$(sed -n 's/^  LAVAPIPE_VERSION: //p' .github/workflows/ci.yml)
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            mesa-vulkan-drivers=$lavapipe_version
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Bench
+        run: target/release/praxis bench target/bench --ci-counters --no-publish
+
+      # `adapter_key` must stay `praxis::bench::baseline_directory`'s name
+      # for an adapter on Vulkan.
+      - name: Record the Baselines CI would fail
+        run: |
+          for result in target/bench/*.json; do
+            scene_directory=$(mktemp -d)
+            cp "$result" "$scene_directory"
+            if ! target/release/praxis compare "$scene_directory" --ci; then
+              adapter_key=$(jq -r .adapter "$result" | tr '[:upper:]' '[:lower:]' |
+                sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
+              baseline_directory=target/lavapipe-files/bench/baselines/$adapter_key
+              mkdir -p "$baseline_directory"
+              cp "$result" "$baseline_directory"
+            fi
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lavapipe-baselines
+          path: target/lavapipe-files
+          if-no-files-found: ignore
