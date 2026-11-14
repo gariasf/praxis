@@ -261,7 +261,7 @@ What the sweep found of one slower Suspect, kept on `bench-history`: held when a
 _Avoid_: Confirmation, bisect result; the code's other `Verdict`s are compare's (warn or fail of one metric) and preflight's (ok, note, warn or fail of one check); the shadow mask's verdict (`directional_verdicts`, `sample_verdicts`) is a light's hidden bit at a sample, the Shadow mask entry's word, not this one
 
 **Night**:
-One run of the nightly sweep on one machine: the re-bench and bisect of at most one Suspect, each run in a directory of its own under the Night's, then `main`'s scenes that lack a record on a Series there.
+One run of the sweep on one machine, nightly on the M4 Pro and once the PC is idle on the RTX 2070 SUPER: the re-bench and bisect of at most one Suspect, each run in a directory of its own under the Night's, then `main`'s scenes that lack a record on a Series there.
 _Avoid_: sweep run, job
 
 **Regression**:
