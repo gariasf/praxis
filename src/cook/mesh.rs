@@ -2,15 +2,16 @@
 //! normal, regenerates MikkTSpace tangents, re-splits the vertices whose
 //! tangents differ, packs them as 28-byte vertices with a QTangent, orders
 //! them for vertex cache, overdraw and vertex fetch, and cuts each
-//! Primitive's triangles, in that order, into Meshlets.
+//! Primitive's triangles, in that order, into Meshlets; then simplifies the
+//! Mesh into the rest of its LOD chain, each LOD ordered and cut alike.
 
 use glam::{Mat3, Quat, Vec2, Vec3};
 use sha2::{Digest, Sha256};
 
 use crate::cooked::{
-    AssetId, AssetKind, AssetName, AssetSource, CookedMesh, CookedMeshlet, CookedPrimitive,
-    CookedVertex, MESH_FORMAT_VERSION, MESH_MAGIC, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES,
-    QTANGENT_SMALLEST_W, hex,
+    AssetId, AssetKind, AssetName, AssetSource, CookedLod, CookedMesh, CookedMeshlet,
+    CookedPrimitive, CookedVertex, MESH_FORMAT_VERSION, MESH_MAGIC, MESH_MAX_LODS,
+    MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W, hex,
 };
 use crate::scenes::Geometry;
 
@@ -22,13 +23,25 @@ pub(crate) type SourcePrimitive = (Geometry, Option<AssetId>);
 /// (`docs/research/asset-compression-and-cooked-data.md`, item 6).
 const OVERDRAW_THRESHOLD: f32 = 1.05;
 
+/// The share of the previous LOD's indices past which a LOD is dropped and
+/// its chain ends.
+const LOD_KEPT_INDICES_CEILING: f32 = 0.85;
+
+/// The simplifier's weight of each component of a vertex's normal, as in
+/// its README's example [ref:meshoptimizer-0.25-attribute-weights].
+const LOD_NORMAL_WEIGHT: f32 = 0.5;
+
+/// The simplifier's weight of each component of a vertex's UV, once that is
+/// in metres of Texture over the Mesh's extent.
+const LOD_UV_WEIGHT: f32 = 1.0;
+
 /// Every encoder version and setting a Mesh Blob depends on, for its Cook key.
 /// The meshoptimizer version is the one `meshopt` 0.6.2 vendors, whose vertex
 /// encoder writes codec 0 by default [ref:meshoptimizer-0.25-vertex-codec]:
 /// update them and the `bevy_mikktspace` version with their dependencies.
 pub(super) fn encoder_settings() -> String {
     format!(
-        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, zstd {} level {}",
+        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, at most {MESH_MAX_LODS} LODs each simplified to half the one before with normals weighted {LOD_NORMAL_WEIGHT} and UVs {LOD_UV_WEIGHT} and kept up to {LOD_KEPT_INDICES_CEILING} of it, zstd {} level {}",
         zstd::zstd_safe::version_number(),
         CookedMesh::ZSTD_LEVEL
     )
@@ -89,6 +102,7 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         vertices: Vec::new(),
         indices: Vec::new(),
         primitives: Vec::new(),
+        coarser_lods: Vec::new(),
         bounds: [[0.0; 3]; 2],
     };
     let mut triangle_counts = Vec::new();
@@ -129,7 +143,128 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         corners.clone().fold(Vec3::INFINITY, Vec3::min).into(),
         corners.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
     ];
+    mesh.coarser_lods = coarser_lods(&mesh)?;
     Ok(mesh)
+}
+
+/// `mesh`'s LODs past LOD 0: each simplified from the one before to half its
+/// triangles, the whole Mesh in one call so that a border between Primitives
+/// collapses on both sides alike, until `MESH_MAX_LODS` or a LOD that keeps
+/// more than `LOD_KEPT_INDICES_CEILING` of the one before, or nothing. A
+/// LOD's error is the sum of the simplifier's errors down to it
+/// [ref:meshoptimizer-0.25-lod-chain], each relative to the Mesh's extent
+/// and so times `simplify_scale` in metres
+/// [ref:meshoptimizer-0.25-simplify-scale].
+fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
+    let positions = meshopt::VertexDataAdapter::new(
+        bytemuck::cast_slice(&mesh.vertices),
+        size_of::<CookedVertex>(),
+        0,
+    )
+    .expect("a whole number of vertices, position first");
+    let extent_metres = meshopt::simplify_scale(&positions);
+    // No two Primitives share a vertex, so each vertex names its Primitive.
+    let mut primitive_of_vertex = vec![0; mesh.vertices.len()];
+    for (primitive_index, primitive) in mesh.primitives.iter().enumerate() {
+        for &vertex in
+            &mesh.indices[primitive.first_index as usize..][..primitive.index_count as usize]
+        {
+            primitive_of_vertex[vertex as usize] = primitive_index;
+        }
+    }
+    let attributes: Vec<[f32; 5]> = mesh
+        .vertices
+        .iter()
+        .zip(&primitive_of_vertex)
+        .map(|(vertex, &primitive_index)| {
+            let normal = Quat::from_array(vertex.qtangent.map(f32::from)).normalize() * Vec3::Z;
+            let uv_units_across_extent =
+                mesh.primitives[primitive_index].texel_density * extent_metres;
+            let [u, v] = vertex.uv.map(|coordinate| {
+                if uv_units_across_extent > 0.0 {
+                    coordinate / uv_units_across_extent
+                } else {
+                    0.0
+                }
+            });
+            [normal.x, normal.y, normal.z, u, v]
+        })
+        .collect();
+    let weights = [
+        LOD_NORMAL_WEIGHT,
+        LOD_NORMAL_WEIGHT,
+        LOD_NORMAL_WEIGHT,
+        LOD_UV_WEIGHT,
+        LOD_UV_WEIGHT,
+    ];
+    let unlocked = vec![false; mesh.vertices.len()];
+    let mut lods = Vec::new();
+    let mut finer = mesh.indices.clone();
+    let mut error_metres = 0.0;
+    while lods.len() + 1 < MESH_MAX_LODS && !finer.is_empty() {
+        let mut relative_error = 0.0;
+        let simplified = meshopt::simplify_with_attributes_and_locks(
+            &finer,
+            &positions,
+            attributes.as_flattened(),
+            &weights,
+            size_of::<[f32; 5]>(),
+            &unlocked,
+            finer.len() / 6 * 3,
+            // No error limit [ref:meshoptimizer-0.25-simplify-error].
+            f32::MAX,
+            meshopt::SimplifyOptions::None,
+            Some(&mut relative_error),
+        );
+        if simplified.is_empty()
+            || simplified.len() as f32 > finer.len() as f32 * LOD_KEPT_INDICES_CEILING
+        {
+            break;
+        }
+        error_metres += relative_error * extent_metres;
+        let mut lod = CookedLod {
+            error_metres,
+            indices: Vec::new(),
+            primitives: Vec::new(),
+        };
+        for (primitive_index, primitive) in mesh.primitives.iter().enumerate() {
+            // The simplifier keeps a triangle on its Primitive's vertices
+            // [ref:meshoptimizer-0.25-simplify-materials].
+            let mut indices: Vec<u32> = simplified
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .filter(|triangle| primitive_of_vertex[triangle[0] as usize] == primitive_index)
+                .flatten()
+                .copied()
+                .collect();
+            anyhow::ensure!(
+                indices
+                    .iter()
+                    .all(|&vertex| primitive_of_vertex[vertex as usize] == primitive_index),
+                "the simplifier gave a triangle vertices of two Primitives"
+            );
+            if !indices.is_empty() {
+                indices = meshopt::optimize_vertex_cache(&indices, mesh.vertices.len());
+                meshopt::optimize_overdraw_in_place(&mut indices, &positions, OVERDRAW_THRESHOLD);
+            }
+            let triangles = indices.as_chunks::<3>().0;
+            lod.primitives.push(CookedPrimitive {
+                first_index: lod.indices.len() as u32,
+                index_count: indices.len() as u32,
+                material: primitive.material,
+                texel_density: primitive.texel_density,
+                meshlets: CookedMeshlet::split(
+                    triangles,
+                    meshlet_triangle_counts(triangles, mesh.vertices.len()),
+                )?,
+            });
+            lod.indices.extend(indices);
+        }
+        lods.push(lod);
+        finer = simplified;
+    }
+    Ok(lods)
 }
 
 /// `geometry`'s UV units per metre, as `CookedPrimitive::texel_density`
@@ -595,20 +730,27 @@ pub(crate) mod tests {
             .unwrap();
     }
 
-    /// `mesh` with every triangle, of the index stream and of each Meshlet,
-    /// at its lowest rotation.
-    fn with_lowest_rotations(mut mesh: CookedMesh) -> CookedMesh {
-        mesh.indices
-            .as_chunks_mut::<3>()
-            .0
+    /// `mesh` with every triangle, of each LOD's index stream and of each
+    /// Meshlet, at its lowest rotation.
+    pub(crate) fn with_lowest_rotations(mut mesh: CookedMesh) -> CookedMesh {
+        let coarser = mesh
+            .coarser_lods
             .iter_mut()
-            .for_each(rotate_to_lowest);
-        for meshlet in mesh
-            .primitives
-            .iter_mut()
-            .flat_map(|primitive| &mut primitive.meshlets)
+            .map(|lod| (&mut lod.indices, &mut lod.primitives));
+        for (indices, primitives) in
+            std::iter::once((&mut mesh.indices, &mut mesh.primitives)).chain(coarser)
         {
-            meshlet.triangles.iter_mut().for_each(rotate_to_lowest);
+            indices
+                .as_chunks_mut::<3>()
+                .0
+                .iter_mut()
+                .for_each(rotate_to_lowest);
+            for meshlet in primitives
+                .iter_mut()
+                .flat_map(|primitive| &mut primitive.meshlets)
+            {
+                meshlet.triangles.iter_mut().for_each(rotate_to_lowest);
+            }
         }
         mesh
     }
@@ -731,6 +873,175 @@ pub(crate) mod tests {
             );
         }
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// The scenes' sphere, of 2,208 triangles that collapse, with
+    /// `tetrahedra` tetrahedra of 1 m edges beside it whose faces share no
+    /// vertex: each face has its own normal, so every corner is three
+    /// vertices and none of their four triangles collapses.
+    fn sphere_beside_faceted_tetrahedra(tetrahedra: u32) -> Geometry {
+        let corners = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.0, 0.866],
+            [0.5, 0.816, 0.289],
+        ]
+        .map(Vec3::from);
+        let mut geometry = crate::scenes::uv_sphere(1.0, 48, 24);
+        for tetrahedron in 0..tetrahedra {
+            let cell = [tetrahedron % 20, tetrahedron / 20 % 20, tetrahedron / 400];
+            let origin = Vec3::from(cell.map(|step| 2.0 + 1.5 * step as f32));
+            for face in [[0, 1, 2], [0, 3, 1], [1, 3, 2], [2, 3, 0]] {
+                let [first, second, third] = face.map(|corner| corners[corner]);
+                let normal = (second - first).cross(third - first).normalize();
+                for corner in [first, second, third] {
+                    geometry.indices.push(geometry.positions.len() as u32);
+                    geometry.positions.push((origin + corner).into());
+                    geometry.normals.push(normal.into());
+                    geometry.uvs.push([corner.x, corner.z]);
+                }
+            }
+        }
+        geometry
+    }
+
+    /// A sphere of 65,024 triangles halves seven times and could halve
+    /// again; one ten times its size strays ten times as far. Where four
+    /// triangles in five cannot collapse, the LOD that keeps them and little
+    /// else, some 80% of LOD 0, ends the chain as its LOD 1; where nine in
+    /// ten cannot, that LOD, of some 90%, is dropped.
+    #[test]
+    fn a_lod_chain_halves_until_its_stop_rule_within_eight_lods_and_its_errors_never_decrease() {
+        let chain = |radius: f32| {
+            let mesh = cook(&[(crate::scenes::uv_sphere(radius, 256, 128), None)]).unwrap();
+            let lods: Vec<(usize, f32)> = mesh
+                .lods()
+                .map(|(error_metres, indices, _)| (indices.len() / 3, error_metres))
+                .collect();
+            lods
+        };
+        let lods = chain(1.0);
+        assert_eq!(lods.len(), 8, "{lods:?}");
+        assert_eq!(lods[0], (65_024, 0.0));
+        for pair in lods.windows(2) {
+            let [(finer_triangles, finer_error), (triangles, error)] = [pair[0], pair[1]];
+            // A collapse takes two triangles, so a LOD may pass its target by one.
+            assert!(
+                (finer_triangles / 2 - 1..=finer_triangles * 85 / 100).contains(&triangles),
+                "{lods:?}"
+            );
+            assert!(error > 0.0 && error >= finer_error, "{lods:?}");
+        }
+        // The coarsest LOD, of some 500 triangles, strays less than the
+        // sphere's radius and more than a hundredth of it.
+        assert!((0.01..1.0).contains(&lods[7].1), "{lods:?}");
+        let larger = chain(10.0);
+        assert_eq!(larger.len(), lods.len());
+        for ((_, error), (_, larger_error)) in lods.iter().zip(larger) {
+            assert!(
+                (larger_error - error * 10.0).abs() <= *error,
+                "{error} m at 1 m, {larger_error} m at 10 m"
+            );
+        }
+
+        let triangles = |tetrahedra: u32| -> Vec<usize> {
+            cook(&[(sphere_beside_faceted_tetrahedra(tetrahedra), None)])
+                .unwrap()
+                .lods()
+                .map(|(_, indices, _)| indices.len() / 3)
+                .collect()
+        };
+        let four_in_five = triangles(2_208);
+        assert_eq!((four_in_five.len(), four_in_five[0]), (2, 11_040));
+        assert!(
+            (8_832..8_832 + 552).contains(&four_in_five[1]),
+            "{four_in_five:?}"
+        );
+        assert_eq!(triangles(4_968), [22_080]);
+    }
+
+    /// A sphere whose northern and southern halves are two Primitives, which
+    /// share no vertex: along the equator each has its own. Its positions
+    /// are snapped to a grid, a negative zero to zero, so that those the
+    /// sphere's sines leave a rounding error apart, at its poles and where
+    /// its UVs wrap, are equal.
+    fn sphere_of_two_primitives() -> Vec<SourcePrimitive> {
+        let mut sphere = crate::scenes::uv_sphere(1.0, 64, 32);
+        for position in &mut sphere.positions {
+            *position = position.map(|coordinate| (coordinate * 4096.0).round() / 4096.0 + 0.0);
+        }
+        [true, false]
+            .map(|northern| {
+                let mut half = sphere.clone();
+                half.indices = sphere
+                    .indices
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .filter(|triangle| {
+                        let height: f32 = triangle
+                            .iter()
+                            .map(|&vertex| sphere.positions[vertex as usize][1])
+                            .sum();
+                        (height > 0.0) == northern
+                    })
+                    .flatten()
+                    .copied()
+                    .collect();
+                (weld(&half), None)
+            })
+            .into()
+    }
+
+    /// A closed surface stays closed: in every LOD each triangle edge,
+    /// between positions, is matched by one running the other way, so the
+    /// equator's two Primitives collapsed the same edges; the equator did
+    /// lose vertices, and each Primitive kept to its own half.
+    #[test]
+    fn no_lod_has_a_crack_along_a_border_between_primitives() {
+        let mesh = cook(&sphere_of_two_primitives()).unwrap();
+        assert!(mesh.coarser_lods.len() >= 4);
+        let position = |vertex: u32| mesh.vertices[vertex as usize].position.map(f32::to_bits);
+        let mut equator_vertices = Vec::new();
+        for (lod, (_, indices, primitives)) in mesh.lods().enumerate() {
+            let mut unmatched: std::collections::HashMap<[[u32; 3]; 2], i32> = Default::default();
+            for triangle in indices.as_chunks::<3>().0 {
+                for corner in 0..3 {
+                    let (from, to) = (
+                        position(triangle[corner]),
+                        position(triangle[(corner + 1) % 3]),
+                    );
+                    *unmatched.entry([from.min(to), from.max(to)]).or_default() +=
+                        if from < to { 1 } else { -1 };
+                }
+            }
+            let open_edges = unmatched.values().filter(|&&count| count != 0).count();
+            assert_eq!(open_edges, 0, "LOD {lod}");
+            for (primitive, northern) in primitives.iter().zip([true, false]) {
+                let run =
+                    &indices[primitive.first_index as usize..][..primitive.index_count as usize];
+                assert!(!run.is_empty());
+                let side = if northern { 1.0 } else { -1.0 };
+                assert!(
+                    run.iter()
+                        .all(|&vertex| mesh.vertices[vertex as usize].position[1] * side >= 0.0),
+                    "LOD {lod}"
+                );
+            }
+            let mut on_equator: Vec<_> = indices
+                .iter()
+                .filter(|&&vertex| mesh.vertices[vertex as usize].position[1].abs() < 1e-6)
+                .map(|&vertex| position(vertex))
+                .collect();
+            on_equator.sort_unstable();
+            on_equator.dedup();
+            equator_vertices.push(on_equator.len());
+        }
+        assert_eq!(equator_vertices[0], 64);
+        assert!(
+            equator_vertices.last().unwrap() * 4 <= 64,
+            "{equator_vertices:?}"
+        );
     }
 
     /// `docs/research/asset-compression-and-cooked-data.md` (item 6) counted

@@ -174,6 +174,7 @@ pub(crate) mod tests {
                 texel_density: 0.0,
                 meshlets: CookedMeshlet::split(&triangles, counts).expect("within the limits"),
             }],
+            coarser_lods: Vec::new(),
             bounds: [[-0.25, 0.0, -0.25], [0.25, 2.0, 0.25]],
         }
     }

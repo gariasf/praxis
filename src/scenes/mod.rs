@@ -1366,7 +1366,7 @@ fn scene_sphere(radius: f32) -> Geometry {
 /// towards +X, `v` from the north pole to the south pole, as a glTF texture
 /// maps top row first.
 #[cfg(feature = "cook")]
-fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Geometry {
+pub(crate) fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments: u32) -> Geometry {
     let mut geometry = Geometry::default();
     for latitude in 0..=latitude_segments {
         let v = latitude as f32 / latitude_segments as f32;

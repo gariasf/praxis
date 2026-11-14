@@ -15,8 +15,19 @@ An ordered list of Primitives that are rendered together.
 _Avoid_: Model, geometry
 
 **Primitive**:
-One contiguous range of a Mesh's vertices and indices.
+One contiguous range of a Mesh's vertices and, in each LOD, of its indices.
 _Avoid_: Submesh, surface
+
+**LOD**:
+One of a Mesh's cooked simplifications; LOD 0 is the source.
+_Avoid_: Level, detail level
+
+**LOD chain**:
+A Mesh's LODs in order, each coarser than the one before.
+
+**LOD error**:
+How far a LOD strays from LOD 0, in metres.
+_Avoid_: LOD distance
 
 **Material**:
 The appearance of a Primitive: PBR factors plus one Layer per Channel.

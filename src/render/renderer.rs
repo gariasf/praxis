@@ -2806,6 +2806,7 @@ pub(crate) mod tests {
             vertices: (0..63).map(vertex).collect(),
             indices,
             primitives: primitives.clone(),
+            coarser_lods: Vec::new(),
             bounds: TRIANGLE_BOUNDS,
         };
         let freed = |slot: u32| slot == 100;
@@ -2988,6 +2989,7 @@ pub(crate) mod tests {
             vertices,
             indices: (0..3 * centres.len() as u32).collect(),
             primitives,
+            coarser_lods: Vec::new(),
             bounds: TRIANGLE_BOUNDS,
         };
         renderer
@@ -3019,6 +3021,7 @@ pub(crate) mod tests {
                     triangles: vec![[0, 1, 2], [0, 2, 3]],
                 }],
             }],
+            coarser_lods: Vec::new(),
             bounds: [[-0.5, -0.5, 0.0], [0.5, 0.5, 0.0]],
         };
         renderer
@@ -3052,6 +3055,7 @@ pub(crate) mod tests {
                     triangles: vec![[0, 1, 2], [0, 2, 3]],
                 }],
             }],
+            coarser_lods: Vec::new(),
             bounds: [[-0.5, -0.5, 0.5], [0.5, 0.5, 0.5]],
         };
         renderer

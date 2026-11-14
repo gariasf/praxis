@@ -1265,6 +1265,7 @@ mod tests {
                     texel_density: 0.0,
                     meshlets: Vec::new(),
                 }],
+                coarser_lods: Vec::new(),
                 bounds: [[0.0; 3]; 2],
             },
         );
