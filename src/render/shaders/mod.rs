@@ -7,7 +7,9 @@
 //! its kernel alone.
 
 use crate::assets::material::SLICES_PER_CLASS;
-use crate::cooked::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W};
+use crate::cooked::{
+    MESH_MAX_LODS, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W,
+};
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 #[cfg(any(test, target_vendor = "apple"))]
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
@@ -250,6 +252,7 @@ impl ShaderModule {
             "const ANCHOR_CELL_SIZE: f32 = {:?};\n\
              const MESHLET_VERTEX_BITS: u32 = {}u;\n\
              const MESHLET_MAX_TRIANGLES: u32 = {MESHLET_MAX_TRIANGLES}u;\n\
+             const MESH_MAX_LODS: u32 = {MESH_MAX_LODS}u;\n\
              const NO_MESH: u32 = {NO_MESH}u;\n\
              const NO_MATERIAL: u32 = {NO_MATERIAL}u;\n\
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\

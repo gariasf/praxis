@@ -1,5 +1,5 @@
 //! The culling pass: the compute passes that build the frame's draw from the
-//! Instances, a Meshlet record per Meshlet of each Instance and a packed
+//! Instances, a Meshlet record per Meshlet of each Instance's LOD 0 and a packed
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019). It runs in two
@@ -287,7 +287,7 @@ impl CullingPass {
     }
 
     /// Records `phase` of the pass into `encoder`: phase one clears the
-    /// frame's draw first. It appends the Meshlets of the Instances the phase
+    /// frame's draw first. It appends LOD 0's Meshlets of the Instances the phase
     /// draws among `frame`'s slots in use, with `bind_groups` set, in two
     /// compute passes, each timed into its `timestamp_writes`: the pass over
     /// the slots, then the one over the Meshlet records. Where they need

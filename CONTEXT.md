@@ -11,7 +11,7 @@ An entity that has a Transform and a Mesh Handle, and optionally a Material Hand
 _Avoid_: Drawable, object, model
 
 **Mesh**:
-An ordered list of Primitives that are rendered together.
+An ordered list of Primitives that are rendered together. Every LOD of its LOD chain is Resident with it; rays trace its LOD 0.
 _Avoid_: Model, geometry
 
 **Primitive**:
@@ -68,7 +68,7 @@ A typed index into a Pool and the generation of that index it was handed out in,
 _Avoid_: Pointer, resource ID
 
 **Arena**:
-A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.
+A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, LOD 0's indices, and every LOD's Meshlets with their vertices and triangles.
 _Avoid_: Mega-buffer, heap
 
 **Resident**:
@@ -140,7 +140,7 @@ Two normals per sample of the depth target, its triangle's own and the one inter
 _Avoid_: G-buffer, normal buffer
 
 **Meshlet**:
-A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).
+A small group of one Primitive's triangles in one LOD, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).
 _Avoid_: Cluster, chunk
 
 **Temporal class**:

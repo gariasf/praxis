@@ -1,5 +1,5 @@
-// The culling pass's entry points, after the shared parts: they append the
-// Meshlets of the Instances they draw to the frame's draw in slot order,
+// The culling pass's entry points, after the shared parts: they append LOD
+// 0's Meshlets of the Instances they draw to the frame's draw in slot order,
 // which the main pass draws with one indirect call per phase and depth
 // pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase
 // one draws the Instances visible the frame before; phase two, after the
@@ -260,9 +260,9 @@ fn offset_slots(
         }
         // A shadow proxy's Mesh has no Meshlets: rays trace it, no pass
         // draws it.
-        drawn = drawn && mesh.meshlet_count != 0u;
+        drawn = drawn && mesh.meshlet_counts[0] != 0u;
         if drawn {
-            counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+            counts = vec2<u32>(mesh.meshlet_counts[0], 3u * mesh.triangle_counts[0]);
         }
     }
     if PHASE_TWO {
@@ -348,7 +348,7 @@ fn slot_offsets(slot: u32) -> vec2<u32> {
 // neither it nor any Instance after it is drawn, so the draw ends at the
 // last Instance that fits, and every index before is written.
 fn fits(first: vec2<u32>, mesh: MeshData) -> bool {
-    let counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+    let counts = vec2<u32>(mesh.meshlet_counts[0], 3u * mesh.triangle_counts[0]);
     let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
     return all(first <= capacity) && all(counts <= capacity - first);
 }
@@ -368,7 +368,7 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let mesh = meshes[instance.mesh];
     let first = slot_offsets(slot);
     if fits(first, mesh) {
-        let indices_end = first.y + 3u * mesh.triangle_count;
+        let indices_end = first.y + 3u * mesh.triangle_counts[0];
         atomicMax(&frame_draw.draw.index_count, indices_end);
         atomicAdd(&frame_draw.instances_drawn, 1u);
         if PHASE_TWO {
@@ -379,9 +379,9 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
         atomicAdd(&frame_draw.instances_overflowed, 1u);
     }
     let overridden = instance.material_id != NO_MATERIAL;
-    let records = min(mesh.meshlet_count, arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
+    let records = min(mesh.meshlet_counts[0], arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
     for (var meshlet_in_mesh = 0u; meshlet_in_mesh < records; meshlet_in_mesh++) {
-        let meshlet_index = mesh.first_meshlet + meshlet_in_mesh;
+        let meshlet_index = mesh.first_meshlets[0] + meshlet_in_mesh;
         let material_id = select(meshlets[meshlet_index].material_id, instance.material_id, overridden);
         meshlet_records[first.x + meshlet_in_mesh] = MeshletRecord(slot, meshlet_index, material_id);
     }
@@ -415,9 +415,9 @@ fn append_triangles(
     if !fits(first, mesh) {
         return;
     }
-    // The Mesh's triangles in cooked order, each with its corners as cooked,
+    // LOD 0's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangle);
+    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangles[0]);
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);

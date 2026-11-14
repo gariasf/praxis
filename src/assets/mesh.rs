@@ -1,4 +1,5 @@
 use crate::assets::MaterialHandle;
+use crate::cooked::MESH_MAX_LODS;
 
 /// A Mesh in the Mesh pool, as prepare needs it; the pool's GPU tables hold
 /// what the GPU draws it from.
@@ -31,16 +32,20 @@ pub struct MeshHandle {
     pub generation: u32,
 }
 
-/// A Mesh as the Mesh table holds it, at its Handle's index: its Meshlets,
-/// whose triangles follow one another in the Meshlet triangle Arena, and the
-/// box that holds its vertices.
+/// A Mesh as the Mesh table holds it, at its Handle's index: each LOD of its
+/// chain at the LOD's index, LOD 0 first, as its Meshlets, whose triangles
+/// follow one another in the Meshlet triangle Arena, with its LOD error; and
+/// the box that holds its vertices.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshData {
-    pub first_meshlet: u32,
-    pub meshlet_count: u32,
-    pub first_triangle: u32,
-    pub triangle_count: u32,
+    /// The LODs it is drawn from: none for a Mesh no pass draws.
+    pub lod_count: u32,
+    pub first_meshlets: [u32; MESH_MAX_LODS],
+    pub meshlet_counts: [u32; MESH_MAX_LODS],
+    pub first_triangles: [u32; MESH_MAX_LODS],
+    pub triangle_counts: [u32; MESH_MAX_LODS],
+    pub lod_errors_metres: [f32; MESH_MAX_LODS],
     /// The box's lowest corner, then its highest, in mesh space.
     pub bounds_min: [f32; 3],
     pub bounds_max: [f32; 3],
