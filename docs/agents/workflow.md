@@ -16,7 +16,7 @@ The owner decides what is worked on. Agents implement, commit, open PRs and merg
 ## Tickets
 
 - A ticket is a **tracer bullet**: a thin slice that is demoable or verifiable on its own and fits one fresh session.
-- Size ceiling: 800 changed lines of code, which CI's PR form check counts: every changed line outside `docs/`, the root's `.md` files, Goldens, the lockfile, `bench/baselines/`, `bench/cycles/` and `vendor/`. A ticket is written at about 400, where three PRs in four have landed. A ticket that cannot fit splits along a seam. A wide mechanical change goes expand–contract: add the new form, migrate callers in batches, delete the old form.
+- Size ceiling: 800 changed lines of code, which CI's PR form check counts: every changed line outside `docs/`, the root's `.md` files, Goldens, the lockfile, `bench/baselines/`, `bench/cycles/` and `vendor/`. A ticket is written at about 400, where three PRs in four have landed ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6879277308)). A ticket that cannot fit splits along a seam. A wide mechanical change goes expand–contract: add the new form, migrate callers in batches, delete the old form.
 - Acceptance criteria are the **ceiling**. Anything a reviewer wants beyond them becomes a note under *Not yet specified*, with the trigger that would revive it.
 - Every ticket carries a verification seam agreed before coding (`/tdd`) and, for render or hot-path changes, the metric it must not regress.
 - One ticket per session. Start from the ticket body, its linked ADRs, and `CONTEXT.md`; chat history is not a source.
