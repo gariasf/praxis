@@ -289,9 +289,9 @@ pub(crate) enum StreamedMips {
 /// the Far proxies', or the one every other Material shares (ADR 0017).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaterialUse {
-    Ordinary,
+    Ordinary = 0,
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
-    FarProxy,
+    FarProxy = 1,
 }
 
 /// A Material loaded by Asset ID: its Handle, how many loads returned it,
@@ -461,9 +461,10 @@ pub struct MaterialPool {
     material_ids: Vec<Option<AssetId>>,
     /// The count each Material takes an entry of, at its Handle's index.
     material_uses: Vec<MaterialUse>,
-    /// The entries each count holds and how many are taken, by `MaterialUse`.
+    /// The entries each count holds, indexed by `MaterialUse`.
     count_capacities: [u32; 2],
-    count_entries: [u32; 2],
+    /// The entries of each count that hold a Material, indexed alike.
+    entries_taken: [u32; 2],
     materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
     /// Each loaded Texture, which its Asset ID names.
@@ -585,7 +586,7 @@ impl MaterialPool {
             material_ids: Vec::new(),
             material_uses: Vec::new(),
             count_capacities: [capacities.materials, capacities.far_proxy_materials],
-            count_entries: [0; 2],
+            entries_taken: [0; 2],
             materials_buffer,
             channels,
             loaded_textures: HashMap::new(),
@@ -626,7 +627,7 @@ impl MaterialPool {
             return None;
         }
         let (index, generation) = self.generations.take();
-        self.count_entries[material_use as usize] += 1;
+        self.entries_taken[material_use as usize] += 1;
         let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         if index as usize == self.materials.len() {
@@ -644,7 +645,7 @@ impl MaterialPool {
 
     /// Whether every entry of `material_use`'s count is taken.
     fn full(&self, material_use: MaterialUse) -> bool {
-        self.count_entries[material_use as usize] >= self.count_capacities[material_use as usize]
+        self.entries_taken[material_use as usize] >= self.count_capacities[material_use as usize]
     }
 
     /// Whether `material_use`'s count is full, logged and counted when it is.
@@ -666,7 +667,7 @@ impl MaterialPool {
     fn free_entry(&mut self, handle: MaterialHandle) -> bool {
         let freed = self.generations.free(handle.index, handle.generation);
         if freed {
-            self.count_entries[self.material_uses[handle.index as usize] as usize] -= 1;
+            self.entries_taken[self.material_uses[handle.index as usize] as usize] -= 1;
         }
         freed
     }
@@ -1943,6 +1944,7 @@ mod tests {
         let (other, _) = logged(|| load(&mut pool, 1222, MaterialUse::Ordinary));
         assert!(other.is_err(), "it took a Far proxy's Material's entry");
         assert!(pool.is_loaded(AssetId(0)));
+        assert_eq!(pool.take_refusals(), 2);
     }
 
     /// A full count frees the least recently used unused Material of its

@@ -23,7 +23,9 @@ const GEOMETRY_BYTES_PER_MESH: u64 = 4488;
 /// past its Resident tail.
 pub(crate) const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 19_267_584;
 
-/// The most Far proxies Resident at once, each with one baked Material.
+/// The Material table's entries for Far proxies' Materials, one a Far
+/// proxy: the Chunks within the View distance and a Chunk's edge past it,
+/// as the far field's decision counted them (ADR 0017).
 const FAR_PROXY_MATERIALS: u32 = 285;
 
 /// Unused entries each pool frees in one frame to make room for refused
