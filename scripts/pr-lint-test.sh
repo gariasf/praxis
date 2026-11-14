@@ -40,15 +40,19 @@ None.
 EOF
 }
 
-# The PR's changed paths, one per line, for the next cases.
+# The PR's number, title, changed paths, one per line, and the lines changed
+# in each of them, for the next cases.
+number=316
+title='Add the check'
 changed_paths='docs/agents/workflow.md'
+changed_lines=1
 
 # Runs the lint on a body and commit messages, each given as a string.
 run_lint() {
   local body="$1"
   shift
   printf '%s' "$body" >"$work/body.md"
-  printf '%s\n' "$changed_paths" >"$work/paths"
+  awk -v lines="$changed_lines" '{ print lines "\t" $0 }' <<<"$changed_paths" >"$work/lines"
   local commits=()
   local index=0
   local message
@@ -57,7 +61,8 @@ run_lint() {
     printf '%s' "$message" >"$work/commit-$index"
     commits+=("$work/commit-$index")
   done
-  output=$("$lint" "$work/body.md" "$work/paths" ${commits[@]+"${commits[@]}"} 2>&1)
+  output=$("$lint" "$number" "$title" "$work/body.md" "$work/lines" \
+    ${commits[@]+"${commits[@]}"} 2>&1)
   status=$?
 }
 
@@ -161,6 +166,20 @@ expect_fail "a Generated with Claude line" 'Generated with Claude' "$body" \
   $'Add the check\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)'
 expect_fail "a 73-character subject" 'subject is 73 characters' "$body" "x$subject_72"
 
+squash='squash commit (title, number, body)'
+expect_fail "a Generated with Claude line in the PR body" "$squash: \"Generated with Claude\" line" \
+  "$body"$'\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)'
+expect_fail "an AI co-author in the PR body" "$squash: AI co-author" \
+  "$body"$'\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
+title=${subject_72:0:65}
+expect_pass "a 65-character title, 72 with its number" "$body"
+number=1000
+expect_fail "a 65-character title with a four-digit number" "$squash: subject is 73 characters" "$body"
+number=316
+title="x$title"
+expect_fail "a 66-character title" "$squash: subject is 73 characters" "$body"
+title='Add the check'
+
 raw=https://raw.githubusercontent.com/gariasf/praxis/010f64c0e7dd10ba7790c98060ffdad8a6ccf9d0/pr-369
 gallery_table="| Scene | Before | After | Difference |
 |---|---|---|---|
@@ -179,6 +198,19 @@ expect_pass "a rendering PR with images named by their links" "$(images_body "$g
 expect_pass "a rendering PR with titled image links" \
   "$(images_body "${gallery_table//.png)/.png \"town\")}")"
 expect_fail "a rendering PR without images" 'missing: before after difference' "$body"
+identical="22 of 22 gallery images identical to the base's"
+expect_pass "a rendering PR whose gallery images are identical" "$(images_body "$identical")"
+expect_fail "a rendering PR whose count leaves images out" 'missing: before after difference' \
+  "$(images_body "${identical/22 of/21 of}")"
+expect_fail "the count outside the Images section" 'missing: before after difference' \
+  "$body"$'\n\n'"$identical"
+changed_paths=$'src/render/main_pass.rs\ntests/goldens/metal/town.png'
+expect_fail "a rendering PR that moves a Golden, with the count alone" 'links all three' \
+  "$(images_body "$identical")"
+expect_pass "a rendering PR that moves a Golden, with images" "$(images_body "$gallery_table")"
+changed_paths='src/render/shaders/lit.wgsl'
+expect_fail "a shader PR with the count alone" 'links all three' "$(images_body "$identical")"
+changed_paths=$'src/render/main_pass.rs\nREADME.md'
 expect_fail "a rendering PR without a difference image" 'missing: difference' \
   "$(images_body "${gallery_table/-difference.png/.png}")"
 expect_fail "images outside the Images section" 'missing: before after difference' \
@@ -192,19 +224,34 @@ for changed_paths in src/render/shaders/lit.wgsl src/cook/texture.rs src/cook/me
 done
 changed_paths='src/cook/fetch.rs'
 expect_pass "a cooker change outside textures and meshes" "$body"
+
+changed_paths=$'src/state.rs\ntests/cook.rs'
+changed_lines=400
+expect_pass "800 changed lines of code" "$body"
+changed_lines=401
+expect_fail "802 changed lines of code" '802 changed lines of code, over 800' "$body"
+changed_paths="docs/guides/town.html
+README.md
+tests/goldens/metal/town.png
+Cargo.lock
+bench/baselines/apple-m4-pro/town.json
+bench/cycles/town.json
+vendor/wgpu-core/src/lib.rs"
+expect_pass "changed lines the ceiling does not count" "$body"
 changed_paths='docs/agents/workflow.md'
+changed_lines=1
 
 cases=$((cases + 1))
 printf '%s' "$body" >"$work/body.md"
-if "$lint" "$work/body.md" "$work/paths" "$work/absent" >/dev/null 2>&1; then
+if "$lint" "$number" "$title" "$work/body.md" "$work/lines" "$work/absent" >/dev/null 2>&1; then
   failures=$((failures + 1))
   printf 'FAIL  a missing commit file: expected a failure\n'
 fi
 
 cases=$((cases + 1))
-if "$lint" "$work/body.md" "$work/absent" >/dev/null 2>&1; then
+if "$lint" "$number" "$title" "$work/body.md" "$work/absent" >/dev/null 2>&1; then
   failures=$((failures + 1))
-  printf 'FAIL  a missing changed-paths file: expected a failure\n'
+  printf 'FAIL  a missing changed-lines file: expected a failure\n'
 fi
 
 if [ "$failures" -eq 0 ]; then

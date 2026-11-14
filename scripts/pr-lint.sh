@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# Checks a PR's body and commit messages against docs/agents/workflow.md (PRs,
-# Review) and the sections of .github/pull_request_template.md, and that a PR
-# touching rendering paths links before, after and difference images.
-# Usage: pr-lint.sh <body-file> <changed-paths-file> [<commit-message-file>...]
-# The changed-paths file lists the PR's paths, one per line.
+# Checks a PR's title, body, size and commit messages against
+# docs/agents/workflow.md (Tickets, PRs, Review) and the sections of
+# .github/pull_request_template.md, and that a PR touching rendering paths
+# links before, after and difference images or counts its identical ones.
+# Usage: pr-lint.sh <number> <title> <body-file> <changed-lines-file>
+#        [<commit-message-file>...]
+# The changed-lines file holds a line per path of the PR: its changed lines,
+# a tab, the path.
 # Prints one line per miss, naming the rule it breaks; exits non-zero on any.
 set -uo pipefail
 
+number="$1"
+title="$2"
+shift 2
 template="$(dirname "$0")/../.github/pull_request_template.md"
 misses=0
 
@@ -65,30 +71,69 @@ if ! awk '
   miss 'body: Verification lacks a "Sources checked" line listing each reference and its verdict, or None (workflow.md, Review)'
 fi
 
+# Whether the Images section links an image of the kind: a link to an image
+# whose text or file name names it.
+links_image() {
+  KIND="$1" perl -ne '
+    while (/(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) {
+      my ($embedded, $text, $url) = ($1, $2, $3);
+      next unless $embedded || $url =~ /\.(png|jpe?g|gif|webp)(\?\S*)?$/i;
+      my $name = $text . " " . ($url =~ s{.*/}{}r);
+      $found = 1 if $name =~ /(?<![[:alpha:]])$ENV{KIND}(?![[:alpha:]])/i;
+    }
+    END { exit !$found }' <<<"$images"
+}
+
 # A PR touching the renderer, the cooker's textures or meshes, or ADR 0019 or
-# 0020 links scripts/gallery.sh's before, after and difference images: links
-# to an image whose text or file name names its kind.
+# 0020 links scripts/gallery.sh's before, after and difference images. One that
+# moves no Golden and changes no .wgsl file may count its identical images
+# instead: no image differs when the two counts are equal.
 if [ ! -r "${2:-}" ]; then
-  miss 'paths: no changed-paths file to check'
-elif grep -Eq '^(src/render/|src/cook/(texture|mesh)(\.rs$|/)|docs/adr/00(19|20)-)' "$2"; then
-  images=$(section '## Images')
-  unlinked=()
-  for kind in before after difference; do
-    if ! KIND="$kind" perl -ne '
-      while (/(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) {
-        my ($embedded, $text, $url) = ($1, $2, $3);
-        next unless $embedded || $url =~ /\.(png|jpe?g|gif|webp)(\?\S*)?$/i;
-        my $name = $text . " " . ($url =~ s{.*/}{}r);
-        $found = 1 if $name =~ /(?<![[:alpha:]])$ENV{KIND}(?![[:alpha:]])/i;
-      }
-      END { exit !$found }' <<<"$images"; then
-      unlinked+=("$kind")
+  miss 'paths: no changed-lines file to check'
+else
+  paths=$(cut -f 2- "$2")
+  if grep -Eq '^(src/render/|src/cook/(texture|mesh)(\.rs$|/)|docs/adr/00(19|20)-)' <<<"$paths"; then
+    images=$(section '## Images')
+    unlinked=()
+    for kind in before after difference; do
+      links_image "$kind" || unlinked+=("$kind")
+    done
+    if [ ${#unlinked[@]} -gt 0 ]; then
+      linking="body: a rendering PR's Images links scripts/gallery.sh's before, after and difference images, each named by its kind in its link text or file name (missing: ${unlinked[*]})"
+      if grep -Eq '^tests/goldens/|\.wgsl$' <<<"$paths"; then
+        miss "$linking; a PR that moves a Golden or changes a .wgsl file links all three (workflow.md, PRs)"
+      elif ! perl -ne '$counted = 1 if /(?<![0-9])([0-9]+) of \1(?![0-9]) gallery images identical/; END { exit !$counted }' <<<"$images"; then
+        miss "$linking, or gives the gallery's count on one line when no image differs, as \"22 of 22 gallery images identical to the base's\" (workflow.md, PRs)"
+      fi
     fi
-  done
-  if [ ${#unlinked[@]} -gt 0 ]; then
-    miss "body: a rendering PR's Images links scripts/gallery.sh's before, after and difference images, each named by its kind in its link text or file name (missing: ${unlinked[*]}) (workflow.md, PRs)"
+  fi
+  code_line_limit=800
+  code_lines=$(awk -F '\t' -v uncounted='^(docs/|[^/]+[.]md$|tests/goldens/|Cargo[.]lock$|bench/(baselines|cycles)/|vendor/)' \
+    '$2 !~ uncounted { lines += $1 } END { print lines + 0 }' "$2")
+  if [ "$code_lines" -gt "$code_line_limit" ]; then
+    miss "size: $code_lines changed lines of code, over $code_line_limit; a ticket that cannot fit splits along a seam (workflow.md, Tickets)"
   fi
 fi
+
+check_message() {
+  local name="$1" message="$2"
+  local subject length
+  subject=$(head -n 1 <<<"$message")
+  length=$(perl -CA -e 'print length $ARGV[0]' "$subject")
+  if [ "$length" -gt 72 ]; then
+    miss "$name: subject is $length characters, over 72 (workflow.md, PRs)"
+  fi
+  if grep -Eiq '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gemini|cursor|codex|devin)' <<<"$message"; then
+    miss "$name: AI co-author trailer; commits name no AI co-author (workflow.md, PRs)"
+  fi
+  # A line that opens with the phrase, after any emoji, not prose naming it.
+  if grep -Eiq '^[^[:alnum:]]*generated with \[?claude' <<<"$message"; then
+    miss "$name: \"Generated with Claude\" line; commits carry no AI attribution (workflow.md, PRs)"
+  fi
+}
+
+# The squash merge commits the title, with the number appended, over the body.
+check_message 'squash commit (title, number, body)' "$title (#$number)"$'\n\n'"$(tr -d '\r' <"$1")"
 
 for file in "${@:3}"; do
   name=$(basename "$file")
@@ -96,19 +141,7 @@ for file in "${@:3}"; do
     miss "commit $name: no message to check"
     continue
   fi
-  message=$(tr -d '\r' <"$file")
-  subject=$(head -n 1 <<<"$message")
-  length=$(perl -CA -e 'print length $ARGV[0]' "$subject")
-  if [ "$length" -gt 72 ]; then
-    miss "commit $name: subject is $length characters, over 72 (workflow.md, PRs)"
-  fi
-  if grep -Eiq '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gemini|cursor|codex|devin)' <<<"$message"; then
-    miss "commit $name: AI co-author trailer; commits name no AI co-author (workflow.md, PRs)"
-  fi
-  # A line that opens with the phrase, after any emoji, not prose naming it.
-  if grep -Eiq '^[^[:alnum:]]*generated with \[?claude' <<<"$message"; then
-    miss "commit $name: \"Generated with Claude\" line; commits carry no AI attribution (workflow.md, PRs)"
-  fi
+  check_message "commit $name" "$(tr -d '\r' <"$file")"
 done
 
 [ "$misses" -eq 0 ]

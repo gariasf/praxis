@@ -1,7 +1,7 @@
 name: PR form
 
-# Checks the PR's body and commits against docs/agents/workflow.md. Editing
-# the body reruns this check alone, not CI.
+# Checks the PR's title, body, size and commits against docs/agents/workflow.md.
+# Editing the title or body reruns this check alone, not CI.
 on:
   pull_request:
     branches: [main]
@@ -35,12 +35,14 @@ jobs:
       - name: Test the lint
         run: scripts/pr-lint-test.sh
 
-      # The body, commit messages and changed paths reach the script through an
-      # environment variable and files, never expanded into the script itself,
-      # so no text in them runs. A renamed file lists both its paths.
+      # The title, body, commit messages and changed paths reach the script
+      # through environment variables and files, never expanded into the script
+      # itself, so no text in them runs. A renamed file lists both its paths,
+      # its changed lines beside the new one.
       - name: Lint the body, commits and rendering images
         env:
           GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ github.event.pull_request.title }}
           BODY: ${{ github.event.pull_request.body }}
           REPOSITORY: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
@@ -53,6 +55,7 @@ jobs:
               base64 -d <<<"$message" >"$RUNNER_TEMP/commits/$sha"
             done
           gh api --paginate "repos/$REPOSITORY/pulls/$NUMBER/files" \
-            --jq '.[] | .filename, (.previous_filename // empty)' >"$RUNNER_TEMP/paths"
-          scripts/pr-lint.sh "$RUNNER_TEMP/body.md" "$RUNNER_TEMP/paths" \
+            --jq '.[] | "\(.changes)\t\(.filename)", (.previous_filename // empty | "0\t\(.)")' \
+            >"$RUNNER_TEMP/lines"
+          scripts/pr-lint.sh "$NUMBER" "$TITLE" "$RUNNER_TEMP/body.md" "$RUNNER_TEMP/lines" \
             "$RUNNER_TEMP"/commits/*

@@ -245,7 +245,8 @@ bench/                         # budgets.json (ADR 0013) and baselines/
                                  exported scene's Cycles Baseline, which
                                  scripts/gallery.sh with PRAXIS_BLENDER
                                  judges a run against
-scripts/pr-lint.sh             # CI's PR form check: body, commits and a
+scripts/pr-lint.sh             # CI's PR form check: title and body as the
+                                 squash commit, size, commits and a
                                  rendering PR's gallery images against
                                  docs/agents/workflow.md, tested by
                                  scripts/pr-lint-test.sh
