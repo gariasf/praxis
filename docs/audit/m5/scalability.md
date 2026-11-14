@@ -11,7 +11,11 @@ yet. Every number is read from a file or derived in the cell that states it.
 It charts nothing; the decision tickets on M5's map use it. The flat cull's
 figures (S09, the ADR 0019 row that repeats it, must-change item 5 and
 not-verified item 6) were corrected on 2026-11-14 from the stage split in
-`docs/performance.md`, the culling pass, each stage on its own.
+`docs/performance.md`, the culling pass, each stage on its own. The
+heightfield rows (H01 to H08) were added on 2026-11-14 for the strategy
+review's Finding S1-01 (`docs/audit/strategy/2026-11.md`), their `path:line`
+at `main` `99b4141be6459ea12978feb18cba0581adb777f9`. One adversarial
+verifier reopened those rows, and what it found is in them.
 
 ## Summary
 
@@ -31,6 +35,22 @@ list is a per-frame cap on load count or main-thread load time (the arrival),
 far geometry beyond one proxy per Chunk kept out of the static TLAS (N = 10),
 the Material table's 222 entries (F1's proxies), and, only if HLOD is not
 built, the Instance slots and the flat per-slot cull.
+
+A heightfield, sized for the milestone that brings terrain (rows H01 to H08:
+a regular grid a Chunk at 1 m posts, 131,072 triangles and one BLAS each,
+every time derived and none measured), changes no M5 criterion and leaves
+M5's shapes standing: one Far proxy per Chunk, LOD 0 in every BLAS, the
+static TLAS's entries, three fewer a Chunk, and N = 10. Five things M5 fixes
+must change when terrain is charted. "Nothing drawn past 2 km but flat
+ground": relief 100 m high stands 87 pixels tall at 2 km. The shadows of that
+relief, which the static TLAS does not hold. The load frame: the main thread
+waits for each new BLAS's build, about 1.8 to 2.3 ms a Chunk by a one-off
+probe's rate, so the four Chunks of a Fast travel's first frame take it to
+16.3 to 18.7 ms. The Far proxy's 5,832-triangle cap and its 8-triangle
+ground. And the memory: the 24 heightfields in use need the geometry Arenas'
+shares re-cut and 1.85 times their Budget with chains and proxies counted,
+and 1.5 times what the acceleration structures' Budget has free. At 2 m posts
+the load frame and both Budgets hold, and the Arenas' shares still change.
 
 ## Scale assumptions
 
@@ -209,6 +229,98 @@ The arrival's static TLAS build gains 0.010 to 0.016 ms (S03); the GPU side of
 the arrival frame, `world`'s 12.1 ms maximum (Baseline) plus the far field's
 draws, is Not verified, 5.
 
+## A heightfield under M5's decisions
+
+Terrain is a later milestone and M5's ground stays flat. These rows size a
+heightfield over the 10.24 km world against what M5 fixes, so that terrain's
+charting knows which of M5's decisions it reopens. They choose no terrain
+technique: the form sized is the plainest, a regular grid a Chunk as one Mesh
+with one BLAS, cooked, loaded and held as any Mesh is at `99b4141b`. Nothing
+here was run; every time is derived from the measurements named.
+
+- **Resolution.** 1 m between posts, with 2 m and 0.5 m beside it. A Chunk is
+  256 m (`src/assets/cooked.rs:58`): at s metres, 2 × (256 / s)² triangles
+  and (256 / s + 1)² vertices, a Chunk's edge posts repeated in its
+  neighbours.
+- **Arena bytes**, as `MeshPool::written_bytes` counts them
+  (`src/assets/pools.rs:292-312`): 28 a vertex (`src/assets/cooked.rs:475`),
+  12 a traced triangle's indices, 4 a Meshlet triangle, 16 a Meshlet
+  (`src/assets/mesh.rs:51`) and 40 a Mesh (`:34`), with Meshlet vertices and
+  Meshlets at the helmet's ratios, 17,768 Meshlet vertices
+  (`docs/audit/m3.5/scalability.md:381`) and 278 Meshlets over 23,358
+  triangles. A G1 chain at most doubles the three Meshlet Arenas' bytes and
+  adds no vertex or index.
+- **BLAS bytes.** 94.0 a triangle built and 45.5 compacted on the M4 Pro
+  (`src/render/acceleration_structures.rs:49`), measured over 2,117,632
+  triangles, a 2 by 2 km heightfield in 64 BLASes (32,768 triangles each) and
+  four rocks (`docs/research/global-illumination-and-lighting.md:88`, `:97`);
+  70.7 and 29.2 on the RTX 2070 SUPER (`:41`). The ledger charges wgpu-hal's
+  size query times 45.5 / 94.0 (`src/assets/pools.rs:587-588`, `:852-857`),
+  which may differ (Not verified, 13).
+- **BLAS build.** That heightfield's 2,097,152 triangles took 29 to 36 ms of
+  GPU, 13.8 to 17.2 ns a triangle, and one BLAS of 5,120 triangles 0.6 to
+  0.75 ms (same note, `:98`), which leaves 0.53 to 0.66 ms for a frame's
+  builds whatever they hold; ten and a hundred such BLASes, 1.2 to 1.55 and
+  7.8 to 9.3 ms, fit the same line (1.24 to 1.54, 7.6 to 9.5). Scaled to one
+  BLAS a Chunk (Not verified, 9).
+- **In use and Resident.** A Chunk counts as a user of its Meshes until it
+  unloads past the hold radius (`src/streaming/io.rs:811-818`), so 20 to 24
+  heightfields are in use once the camera has moved (Scale assumptions). A
+  Mesh left without users stays Resident, its BLAS with it, until a refused
+  load frees it, least recently used first (`src/assets/pools.rs:314-327`,
+  `:341-342`, `:389-403`): the Arenas must hold the 24 in use, and fill with unused ones
+  beyond them.
+- **The arrival.** A Fast travel's arrival loads nine Chunks over three
+  frames, four on the first, whose CPU reads 8.5 to 9.0 ms, in a hold of 23.9
+  to 26.4 ms (`docs/performance.md:56-59`, `:70-72`, `:85-90`, `:101-104`).
+- **A pixel** spans 0.575 mrad (survey 3, Where Praxis stands): 0.1473 m at
+  the Load radius, 1.15 m at 2,000 m.
+- **Relief.** A grid of spacing g lies within g² / 4R of relief whose radius
+  of curvature is R both ways, the sagitta of a triangle's long edge, g√2; a
+  simplifier on real relief keeps fewer triangles on flats and more on breaks
+  (Not verified, 10).
+
+A Chunk's heightfield:
+
+| posts | triangles | vertices | Arena bytes, LOD 0 | BLAS bytes, M4 Pro, built / compacted | BLAS bytes, RTX 2070 SUPER, built / compacted | BLAS build alone in a frame, M4 Pro |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2 m | 32,768 | 16,641 | 1,096,220 | 3,080,192 / 1,490,944 | 2,316,698 / 956,826 | 0.98 to 1.22 ms |
+| 1 m | 131,072 | 66,049 | 4,370,340 | 12,320,768 / 5,963,776 | 9,266,790 / 3,827,302 | 2.34 to 2.91 ms |
+| 0.5 m | 524,288 | 263,169 | 17,452,484 | 49,283,072 / 23,855,104 | 37,067,162 / 15,309,210 | 7.78 to 9.66 ms |
+
+At 1 m: 66,049 × 28 + 131,072 × (12 + 4) + 99,704 × 4 + 1,560 × 16 + 40 =
+4,370,340 bytes, 33.3 a triangle, and 5,318,364 with a chain. Its build:
+0.53 + 131,072 × 13.8 ns = 2.34 to 0.66 + 131,072 × 17.2 ns = 2.91 ms.
+
+| id | what M5 fixes | where | the heightfield at 1 m posts | arithmetic | verdict |
+|---|---|---|---|---|---|
+| H01 | The geometry Arenas hold the densest 2 km view: its Far proxies' 630,396 LOD 0 triangles, 1.26 M with chains, of the Meshlet triangle Arena's 2,202,009 (the M5 spec's bake decision, item 1) | `src/assets/pools.rs:16`, `:61-70`; `bench/budgets.json:10`; S13, S14 | 131,072 triangles a Chunk, 3,145,728 over the 24 in use | At today's shares the Meshlet triangle Arena is short first: 3,145,728 / 2,202,009 = 1.43 times at LOD 0, and 2 × (3,145,728 + 630,396) = 7,552,248, 3.43 times, with the proxies and every chain. The Budget cannot grow by that at these shares: 3.43 × 40,852,520 = 140,111,888 bytes of vertex Arena pass the 134,217,728-byte binding (S14). In bytes, 24 heightfields with chains are 24 × 5,318,364 = 127,640,736, 1.52 times the 83,886,080-byte Budget, and 155,000,430 with the proxies' 630,396 triangles at the helmet's 43.4 bytes with a chain, 27,359,694, 1.85 times. At 2 m: 2 × (786,432 + 630,396) = 2,833,656, 1.29 times the Meshlet triangle Arena, in 24 × 1,333,196 + 27,359,694 = 59,356,398 bytes, 0.71 of the Budget | the fit test survives as the judge; **must change**: the Arenas' shares (`ARENA_PER_MILLE`) at either resolution, and at 1 m the geometry Budget, about 1.85 times, out of the 2,044,088,320 bytes no Budget holds (S06) |
+| H02 | Every BLAS holds its Mesh's LOD 0, within the acceleration structures' Budget (the M5 map's BLAS decision) | `bench/budgets.json:14`; `acceleration_structures` in `world.json` under `bench/baselines/apple-m4-pro/` and `nvidia-geforce-rtx-2070-super/`; `src/assets/pools.rs:573-640` | 5,963,776 bytes a Chunk compacted, 12,320,768 until its load frame's compaction | `world`'s peak is 155,577,592 of 268,435,456, so 112,857,864 are free. The 24 in use: 143,130,624, 1.27 times that; with the proxies' 630,396 × 45.5 = 28,683,018, 171,813,642, 1.52 times, and more for each unused heightfield the Arenas still hold. At 2 m: 35,782,656 + 28,683,018 = 64,465,674, 0.57, and the 48,392,190 left hold 32 unused heightfields, 56 in all. On the RTX 2070 SUPER at 1 m, 24 × 3,827,302 + 630,396 × 29.2 = 110,262,811 of the 139,898,996 its Baseline leaves, 0.79 | LOD 0 in every BLAS survives; at 1 m on the M4 Pro the Budget **must change**; survives at 2 m while the Arenas hold 56 heightfields or fewer |
+| H03 | The static TLAS's 264,720 entries, 11,114 free after 219 Far proxies, and the 517,376 Instance slots (S01, S02); the coarsest LOD under a pixel, picked per Instance (the M5 map's LOD decision) | `src/render/renderer.rs:1039-1041`; `src/scenes/world.rs:25`, `:489-493` | One Instance a Chunk in place of its four 128 m ground tiles | 3 entries fewer a Chunk, 24 to 36 fewer in the near field; a Far proxy stays one entry. Selection picks one LOD for a Chunk-wide Instance, and the Chunk the camera stands in draws LOD 0 whole, 131,072 triangles; 12 Chunks at LOD 0 are 1,572,864, 0.31 of ADR 0013's 5 M visible triangles. Cut into patches of p metres for a LOD each, (256 / p)² a Chunk: 12 Chunks at 32 m take 768 entries, at 16 m 3,072, at 8 m 12,288, past the 11,114; 24 Chunks at 16 m take 6,144 of the 113,125 free slots | both survive, as one Mesh a Chunk and down to 16 m patches |
+| H04 | N = 10: a newly loaded Chunk is in the static TLAS within 10 frames (M5 criterion 6) | `src/render/renderer.rs:656-660`; `src/assets/pools.rs:686-716`; S03 | No entry added (H03) | The static TLAS's build follows its entries, 44 to 74 ns each, and none is added. A Chunk's BLAS is built and compacted in its load's own frame, before the static TLAS takes it, so its build lengthens that frame (H05), not the wait N counts. A build moved off the load frame would add its frames to N, which has none to spare | survives, at the zero margin M4 measured, while the BLAS is built in the load's frame |
+| H05 | No frame past 16,667 µs and a Fast travel's hold within 50 ms (M5 criteria 1 and 4), under the per-frame load caps, M5's load-count cap among them | `src/render/renderer.rs:660`, `:1042`; `src/assets/pools.rs:695`; `src/streaming/io.rs:891-904` | A new BLAS with every Chunk, where `world`'s Meshes are a library its first Chunks load once | `upload` waits on the main thread for the GPU to finish what is submitted, the frame's new BLASes included: at least 0.53 to 0.66 ms and 1.81 to 2.25 ms a Chunk. The arrival's first frame loads four Chunks, which the bytes cap still admits (2,170,752 + 4 × 4,370,340 = 19,652,112 of 22,937,393): 7.8 to 9.7 ms on its 8.5 to 9.0 ms, 16.3 to 18.7 ms. The hold's nine Chunks in three frames add 17.9 to 22.2 ms: 41.8 to 48.6 ms. At 2 m the first frame reads 10.8 to 11.9 ms and the hold 29.6 to 33.4 ms | **must change** at 1 m: the arrival's first frame passes 16,667 µs except at the low end of both ranges, by a wait that is a floor; the hold survives with 1.4 ms at the slow end; both survive at 2 m. A lower cap moves waits into the hold, and a build off the load frame spends H04's margin |
+| H06 | A Far proxy is one merged Mesh under a cap of 5,832 triangles, its Chunk's ground tiles a second Primitive of 8 triangles with the ground's own Material (the M5 spec's bake decision, items 1 and 6) | the decision; `src/scenes/world.rs:25`; `src/scenes/mod.rs:1429-1447` | Its Chunk's relief, to a pixel at the Load radius, 0.1473 m | As a grid of spacing g = √(4 × 0.1473 × R), 2 × (256 / g)² triangles: 2,225 at R = 100 m (g = 7.68 m), 4,450 at R = 50 m (5.43 m), 11,125 at R = 20 m (3.43 m). The cap is the densest Chunk's walls and roofs alone, so the relief comes on top of it. Over 285 Resident proxies, 4,450 each are 1,268,250 LOD 0 triangles; with the proxies' 630,396, 1,898,646, 0.86 of the Meshlet triangle Arena before any Chunk or chain. Traced, the BLAS bytes H02 leaves at 2 m hold at most 48,392,190 / 45.5 / 285 = 3,731 triangles a proxy (g = 5.93 m, within a pixel for R of 59.6 m or more); at 1 m none are left. The ground's own Material costs no texel only while it tiles | one Far proxy per Chunk survives; its cap and its 8-triangle ground **must change** |
+| H07 | Past the View distance only flat ground is drawn (the M5 map's far-field decision) | the decision; the M5 spec, story 21 | Relief past 2 km | Relief h metres high at d metres stands h / (0.000575 × d) pixels tall: 100 m at 2 km, 87; 100 m at 5 km, 35; 300 m at 10.24 km, 51; 300 m across the world's diagonal, 14.48 km, 36. A flat plane meets the far field's edge with a step wherever the relief there is more than a pixel, 1.15 m, from it. The whole world as one Mesh is 204,800 triangles at 32 m posts, 0.093 of the Meshlet triangle Arena, within a pixel at 2 km for R of 32² / (4 × 1.15) = 222 m or more, and 819,200 at 16 m, 0.37, for R of 56 m or more; Far Cry 5 keeps its terrain's 2 km root tiles resident (survey 3, row 7) | **must change**: the relief is drawn past 2 km; "nothing past the View distance" holds for what stands on it |
+| H08 | Far proxies cast and receive the sun's shadows from static TLAS entries out to 2 km, with no far TLAS (the M5 map's BLAS decision) | `src/scenes/mod.rs:547`; the decision | Relief past 2 km casts shadows the static TLAS does not hold | `world`'s sun, along (0.5, −1.0, −0.3), stands atan(1 / √(0.5² + 0.3²)) = 59.75° up, so relief h high just past the edge leaves h / tan 59.75° = 0.58 h of the far field unshadowed: 58 m for 100 m, 51 pixels at 2 km. A building past the edge does the same today, over 0.58 of its height. The near field is reached when the sun stands lower than atan(h / d): at 2 km, 353 m of relief at 10°, 175 m at 5°, 70 m at 2°; M6's Reference scene is to have a moving sun (`docs/audit/strategy/2026-11.md:94`). H07's 32 m Mesh would be one entry and 204,800 × 45.5 = 9,318,400 bytes, its box over every Instance (survey 4, rows 11 and 13) | **must change**: relief drawn past 2 km (H07) is traced, or its shadows are missing, which reopens the far TLAS |
+
+Must change when terrain is charted, ranked by what it blocks; none changes
+an M5 criterion or an M5 ticket, since M5's ground is flat:
+
+1. **Something of the relief is drawn past the View distance** (H07). Blocks
+   any view of relief: a hill 100 m high stands 87 pixels tall at the far
+   field's edge.
+2. **The load frame's wait for a Chunk's BLAS** (H05;
+   `src/render/renderer.rs:660`). Blocks the every-frame clause on the
+   arrival at 1 m posts; its two ways out cost the hold or N = 10 (H04).
+3. **The Far proxy's cap and its ground Primitive** (H06). Block the far
+   field's relief between the Load radius and 2 km.
+4. **The geometry Arenas' shares, and at 1 m their Budget and the
+   acceleration structures'** (H01, H02; ADR 0013:3). A Budget moves up
+   through an ADR or a map comment.
+5. **Relief past 2 km in a TLAS** (H08). Blocks the shadows of whatever H07
+   draws: over 0.58 of its height at `world`'s sun, into the near field under
+   about 10°.
+
 ## Must change, ranked by what it blocks
 
 1. **A per-frame bound on load count or main-thread load time in
@@ -263,3 +375,23 @@ draws, is Not verified, 5.
 8. **Triangles in view with LOD at 2 km** (S07, S08). Settles it: G1's chains
    cooked for the world's Meshes and `triangles_drawn` on M5's Reference
    scene.
+9. **What one Chunk's BLAS costs the load frame** (H05). 0.53 to 0.66 ms a
+   frame and 13.8 to 17.2 ns a triangle are fitted to a one-off probe that is
+   not in the repo, whose largest BLAS held 32,768 triangles; the wait also
+   covers whatever else is submitted, compaction's copy and its second wait
+   (`src/assets/pools.rs:719`), and the Blob's read and decode is not in it.
+   Settles it: the `blas_compaction` stage on a scene that loads a Mesh of
+   131,072 triangles.
+10. **The triangles a heightfield keeps at a given error** (H06, H07).
+    g² / 4R is a uniform grid's bound on relief of one curvature. Settles it:
+    G1's chain and a Far proxy cooked from a measured heightfield.
+11. **What a Chunk-wide BLAS under every Instance of its Chunk costs a ray.**
+    Its box overlaps theirs (survey 4, row 13). Settles it: shadow-ray time
+    on a streamed scene with and without the heightfield.
+12. **A grid's Meshlets.** The Meshlet and Meshlet vertex Arenas' bytes use
+    the helmet's ratios; a grid cut in index order may differ, in the two
+    smallest shares of H01.
+13. **A heightfield BLAS's bytes in the ledger** (H02). 94.0 and 45.5 a
+    triangle are the probe's allocated sizes; the ledger charges wgpu-hal's
+    size query. Settles it: `blas_bytes` for 131,072 triangles on each
+    adapter.
