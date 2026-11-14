@@ -19,6 +19,7 @@ fn every_citation_has_an_entry_and_every_entry_a_citation() {
     collect_files(root, root, &mut files);
     let mut problems = mismatches(&entries(&registry), &files);
     problems.extend(unarchived_live_sources(&registry));
+    problems.extend(unclosed_quotes(&registry));
     assert!(
         problems.is_empty(),
         "{} registry mismatches:\n{}",
@@ -47,6 +48,15 @@ fn a_dangling_key_and_an_unused_entry_are_found() {
             "docs/b.md:2: `missing` is cited but has no entry",
             "docs/references.toml: `unused` is cited nowhere",
         ]
+    );
+}
+
+#[test]
+fn an_unclosed_quote_is_found() {
+    let registry = "# '''\n[\"closed\"]\nquote = '''one\ntwo'''\n\n[\"open\"]\nquote = '''one\nchecked = 2026-10-27\n\n[\"after\"]\nquote = '''one'''\n";
+    assert_eq!(
+        unclosed_quotes(registry),
+        ["docs/references.toml: `open` leaves a `'''` quote unclosed"]
     );
 }
 
@@ -87,6 +97,26 @@ fn entries(registry: &str) -> Vec<String> {
         .lines()
         .filter_map(|line| line.trim().strip_prefix("[\"")?.strip_suffix("\"]"))
         .map(str::to_owned)
+        .collect()
+}
+
+fn unclosed_quotes(registry: &str) -> Vec<String> {
+    let mut delimiter_counts: Vec<(&str, usize)> = Vec::new();
+    for line in registry.lines() {
+        if let Some(key) = line
+            .trim()
+            .strip_prefix("[\"")
+            .and_then(|rest| rest.strip_suffix("\"]"))
+        {
+            delimiter_counts.push((key, 0));
+        } else if let Some((_, count)) = delimiter_counts.last_mut() {
+            *count += line.matches("'''").count();
+        }
+    }
+    delimiter_counts
+        .into_iter()
+        .filter(|(_, count)| count % 2 == 1)
+        .map(|(key, _)| format!("{REGISTRY}: `{key}` leaves a `'''` quote unclosed"))
         .collect()
 }
 

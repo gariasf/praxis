@@ -16,10 +16,11 @@
 # Code, ADRs and notes cite an entry by its key in square brackets after
 # `ref:`, beside their prose citation. `cargo test --test references` fails on
 # a cited key with no entry, an entry cited nowhere, a malformed citation
-# or key, and a url on a live database's host (its `LIVE_HOSTS`, whose
-# figures move) that is not a web.archive.org snapshot. Review's Sources
-# axis re-checks only the entries a diff adds or changes, and the citations
-# that point at them (`docs/agents/workflow.md`, Review).
+# or key, an entry whose `'''` string is left open, and a url on a live
+# database's host (its `LIVE_HOSTS`, whose figures move) that is not a
+# web.archive.org snapshot. Review's Sources axis re-checks only the entries
+# a diff adds or changes, and the citations that point at them
+# (`docs/agents/workflow.md`, Review).
 
 ["higham-3.1"]
 url = "https://doi.org/10.1137/1.9780898718027"
@@ -2439,11 +2440,9 @@ quote = '''"Color attachment with `TRANSIENT_ATTACHMENT` usage can only be used 
 "Depth attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
 `LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
 [...]
-[...]
 "Stencil attachment with `TRANSIENT_ATTACHMENT` usage can only be used with \
-`LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"
-[...]
-checked = 2026-10-27
+`LoadOp::Clear` or `LoadOp::DontCare` (if it is available) and  `StoreOp::Discard`. Operations `{0:?}` were provided"'''
+checked = 2026-11-14
 
 ["wgpu-core-29-write-staging"]
 url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-core/src/device/queue.rs#L545"
