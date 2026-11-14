@@ -3942,10 +3942,10 @@ checked = 2026-10-30
 
 ["haar-aaltonen-benchmark"]
 url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=54"
-section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, Two-Phase Occlusion Culling, p. 51, Benchmark, p. 53, and Benchmark Results, p. 54"
-quote = '''Depth pyramid generated from HTILE min/max buffer [...] O(1) occlusion test (gather4)'''
+section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, RedLynx Topics, p. 39, Two-Phase Occlusion Culling, p. 51, Benchmark, p. 53, and Benchmark Results, p. 54"
+quote = '''RedLynx Topics • Virtual Texturing in GPU-Driven Rendering • Virtual Deferred Texturing • MSAA Trick • Two-Phase Occlusion Culling [...] Depth pyramid generated from HTILE min/max buffer [...] O(1) occlusion test (gather4) [...] Benchmark • “Torture” unit test scene – 250,000 separate moving objects – 1 GB of mesh data (10k+ meshes) – 8k2 texture cache atlas • DirectX 11 code path'''
 cost = '''Benchmark Results Xbox One, 1080p GPU time: 1st phase: 2nd phase Object culling + LOD: 0.28 ms: 0.26 ms Cluster culling: 0.09 ms: 0.04 ms Draw (G-buffer): 1.60 ms: < 0.01 ms Pyramid generation: 0.06 ms Total: 2.3 ms'''
-checked = 2026-10-30
+checked = 2026-11-14
 
 ["wihlidal-2016-depth-tile-reduction"]
 url = "https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=66"
@@ -4014,8 +4014,8 @@ checked = 2026-10-30
 ["amd-rra-instance-overlap"]
 url = "https://gpuopen.com/learn/improving-rt-perf-with-rra/"
 section = "AMD GPUOpen, Improving raytracing performance with the Radeon Raytracing Analyzer (RRA), Split terrain into chunks; Avoid instance overlap"
-quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. A common example of that issue is to make a game’s terrain one big BLAS, with a bounding box overlapping everything in the scene. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap.'''
-checked = 2026-10-30
+quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. A common example of that issue is to make a game’s terrain one big BLAS, with a bounding box overlapping everything in the scene. [...] notice how the castle and the two nearest houses are much darker (indicating lower traversal cost) when the terrain is split up into chunks. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap. [...] By changing the angel BLAS to contain only one angel and instancing it twice, the angel’s bounding volumes no longer intersect with the wall’s. [...] splitting a BLAS into multiple BLASes often results in overlapping instances'''
+checked = 2026-11-14
 
 ["boksansky-2019-distance-light-culling"]
 url = "https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.9.pdf#page=203"
@@ -4577,8 +4577,8 @@ checked = 2026-11-05
 ["microsoft-2026-clas-ptlas-preview"]
 url = "https://devblogs.microsoft.com/directx/clas-ptlas-preview/"
 section = "Microsoft DirectX Developer Blog, DXR Clustered Geometry and Partitioned TLAS preview (Agility SDK 1.722-preview), 28 October 2026, motivation; Partitioned TLAS; Availability and prerequisites; samples"
-quote = '''One benefit of more efficient builds is it can become practical to raytrace the same full-detail geometry used for rasterization, rather than simplified proxies, so ray-traced shadows and reflections match the visible scene. [...] These features don’t require new hardware capabilities beyond existing raytracing support. [...] Supported hardware: All RTX GPUs [...] Supported hardware: AMD Radeon™ RX 9000 series GPUs [...] UPDATE_INSTANCE changes only the referenced BLAS address and hit-group-table contribution, for example when swapping LODs. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms.  PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
-checked = 2026-11-05
+quote = '''One benefit of more efficient builds is it can become practical to raytrace the same full-detail geometry used for rasterization, rather than simplified proxies, so ray-traced shadows and reflections match the visible scene. [...] These features don’t require new hardware capabilities beyond existing raytracing support. [...] Supported hardware: All RTX GPUs [...] Supported hardware: AMD Radeon™ RX 9000 series GPUs [...] Supported hardware: Intel® Arc™ B-Series Graphics Intel® Core™ Ultra processor family (200V series, Series 3) [...] Qualcomm is working closely with Microsoft to enable these features on Snapdragon X2 platforms, with driver support targeted for availability in Q1/Q2 2027. [...] UPDATE_INSTANCE changes only the referenced BLAS address and hit-group-table contribution, for example when swapping LODs. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms.  PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
+checked = 2026-11-14
 cost = '''In the pair of images below running on an AMD RX 9070 [...] Per-frame GPU AS preparation/build: 788 ms: 3.11 ms: ~254x less time; Per-frame GPU raytracing: 72.6 ms: 9.27 ms: ~7.8x less time [...] DO NOT ASSUME GAMES WILL SEE THIS MAGNITUDE OF WINS, THIS IS JUST A TEST PLAYGROUND'''
 
 ["microsoft-2026-ptlas-preview-domino"]
@@ -4637,7 +4637,7 @@ checked = 2026-11-05
 url = "https://web.archive.org/web/20261015100109/https://dev.epicgames.com/documentation/en-us/unreal-engine/lumen-technical-details-in-unreal-engine"
 section = "Unreal Engine 5.8 documentation, Lumen Technical Details, Far Field; Hardware Ray Tracing (Fallback Mesh)"
 quote = '''Lumen Hardware Ray Tracing implements Far Field traces, which extend Lumen Global Illumination and Reflections to one kilometer distance from the camera by default. [...] Far Field requires the use of HLOD1 to be built. When Far Field is enabled, it is traced beginning at the Max Trace Distance (default is 200m) and continues to r.LumenScene.FarField.MaxtraceDistance (default is 1 kilometer). [...] the near-field (objects from the camera to the Max Trace Distance) may be culled before the far-field traversal point, which will leave a gap in coverage. [...] Screen Traces are used to cover the mismatch between the full triangle meshes rendered by Nanite and the Fallback Mesh being ray-traced by Lumen. However, there are some cases where the mismatch is too large to be hidden. In these cases, raising the Fallback Relative Error can reduce incorrect self-intersection artifacts.'''
-checked = 2026-11-05
+checked = 2026-11-14
 
 ["ue-5.8-rt-perf-tlas-instances-overlap"]
 url = "https://web.archive.org/web/20260913071353/https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
@@ -4936,9 +4936,9 @@ checked = 2026-11-05
 
 ["wgpu-pr-10187"]
 url = "https://github.com/gfx-rs/wgpu/pull/10187"
-section = "gfx-rs/wgpu pull request 10187, Add raw_handle method on vulkan::AccelerationStructure (merged into trunk 2026-08-30, after v30.0.1)"
+section = "gfx-rs/wgpu pull request 10187, Add raw_handle method on vulkan::AccelerationStructure (merged into trunk 2026-08-30, after v30.0.1; not in v30.0.2 of 2026-11-12)"
 quote = '''I'm trying to get NVIDIA's RTX Mega Geometry (`VK_NV_cluster_acceleration_structure`) working on wgpu. [...] What I can't do is build the TLAS over those cluster BLASes. [...] `wgpu_hal::vulkan::AccelerationStructure` keeps its handle private and exposes no way to get it.'''
-checked = 2026-11-05
+checked = 2026-11-14
 
 ["wgpu-types-30-tlas-binding-array"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/features.rs#L1450-L1462"
@@ -4992,7 +4992,7 @@ checked = 2026-11-05
 url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=38"
 section = "Fahner, Streaming the World of Horizon Zero Dawn, Guerrilla Games publication (2023-03-21), slide TileBased Streaming Strategy, PDF p. 38"
 quote = '''TileBased Streaming Strategy • Loads/unloads tiles around player • Four tile resolutions: – 9 High, full resolution tiles – 9 Medium, medium res geometry and physics mesh – 9 Low, low res baked geometry – 12 Very low, always loaded'''
-checked = 2026-11-05
+checked = 2026-11-14
 
 ["fahner-2023-hzd-area-hulls"]
 url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=40"
@@ -5549,10 +5549,10 @@ checked = 2026-11-06
 
 ["decoret-2003-billboard-clouds"]
 url = "https://inria.hal.science/inria-00510175/document#page=2"
-section = "Décoret, Durand, Sillion and Dorsey, Billboard Clouds for Extreme Model Simplification, SIGGRAPH 2003 (ACM TOG 22(3), doi:10.1145/882262.882326), HAL inria-00510175, Abstract (PDF p. 2); Section 6 and Table 1 (PDF p. 7); Figure 10 caption (PDF p. 8)"
+section = "Décoret, Durand, Sillion and Dorsey, Billboard Clouds for Extreme Model Simplification, SIGGRAPH 2003 (ACM TOG 22(3), doi:10.1145/882262.882326), HAL inria-00510175, Abstract (PDF p. 2); Figure 10 caption (PDF p. 6); Section 6 (PDF p. 7); Table 1 (PDF p. 8)"
 quote = '''3D models are simplified onto a set of planes with texture and transparency maps. [...] This method does not require connectivity information, but instead avoids cracks by projecting primitives onto multiple planes when needed. For extreme simplification, our approach combines the strengths of mesh decimation and image-based impostors. [...] In particular, billboard clouds are usually limited by fill rates and the cost of context switching.'''
 cost = '''Table 1: Rendering time (in ms) for different number of billboards in the cloud. Bounding box of screen projection is about 128 [...] 31: 0.068; 60: 0.072; 416: 0.220; 552: 0.208 (Table 1 states no hardware; the caption of Figure 10, for the simplification timings, reads "Timings measured on a 2 GHz Pentium IV processor with NVidia GeForce 4 Ti4600 with 128MB.")'''
-checked = 2026-11-06
+checked = 2026-11-14
 
 ["fatahalian-2010-small-triangle-overshade"]
 url = "https://graphics.stanford.edu/papers/fragmerging/shade_sig10.pdf#page=1"
@@ -5563,9 +5563,9 @@ checked = 2026-11-06
 ["frostbite-2019-strand-pixel-width"]
 url = "https://advances.realtimerendering.com/s2019/hair_presentation_final.pdf#page=28"
 section = "Tafuri, Strand-based Hair Rendering in Frostbite, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 28-30 and 34, speaker notes"
-quote = '''Since the strands are very thin, they will usually have a width that is less than that of a screen pixel. We therefore need to take the pixel size into account when tessellating, and increase the width appropriately, or we will risk getting missing or broken up hair strands. [...] this will have another not so nice side effect which can cause the hair to look too thick [...] Just enabling MSAA does unfortunately not solve all problems. While it does improve on aliasing issues [...] It will suffer an even bigger performance hit due to overdraw'''
+quote = '''Since the strands are very thin, they will usually have a width that is less than that of a screen pixel. We therefore need to take the pixel size into account when tessellating, and increase the width appropriately, or we will risk getting missing or broken up hair strands. [...] this will have another not so nice side effect which can cause the hair to look too thick [...] Just enabling MSAA does unfortunately not solve all problems. While it does improve on aliasing issues [...] It will suffer an even bigger performance hit due to overdraw [...] So before talking about performance I need to again point out that this is still very much work in progress. [...] we have always rendered and simulated all the strands in our test models, which is probably not something someone would do in a game. [...] here are some numbers showing what the performance is currently like on a regular PS4 at 900p resolution, without MSAA, with the hair covering a big chunk of the screen.'''
 cost = '''Regular PS4, 900P, no MSAA, all strands rendered [...] Long hair 10 000 [strands] 240 000 [points] 4.7ms [physics] 4.5ms [render] Short hair 15 000 75 000 0.4ms 1.9ms'''
-checked = 2026-11-06
+checked = 2026-11-14
 
 ["garland-1997-qem"]
 url = "https://www.cs.cmu.edu/~garland/Papers/quadrics.pdf#page=1"
@@ -5834,10 +5834,12 @@ checked = 2026-11-06
 
 ["tressfx-4.1-strand-expand"]
 url = "https://github.com/GPUOpen-Effects/TressFX/blob/v4.1.0/src/Shaders/TressFXStrands.hlsl#L100-L101"
-section = "AMD TressFX v4.1.0 (MIT), src/Shaders/TressFXStrands.hlsl, GetExpandedTressFXVert, lines 100-101; ComputeCoverage in TressFXRendering.hlsl lines 104-115"
+section = "AMD TressFX v4.1.0 (MIT), src/Shaders/TressFXStrands.hlsl, GetExpandedTressFXVert, lines 100-101 and 118; ComputeCoverage in TressFXRendering.hlsl lines 104-115"
 quote = '''// We always to to expand for faster hair AA, we may want to gauge making this adjustable
-    float expandPixels = 0.71;'''
-checked = 2026-11-06
+    float expandPixels = 0.71;
+[...]
+    Output.Position = ((vertexId & 0x01) ? hairEdgePositions[0] : hairEdgePositions[1]) + fDirIndex * float4(proj_right * expandPixels / winSize.y, 0.0f, 0.0f) * ((vertexId & 0x01) ? hairEdgePositions[0].w : hairEdgePositions[1].w);'''
+checked = 2026-11-14
 
 ["ue-5.6-auto-lod-groups"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/static-mesh-automatic-lod-generation-in-unreal-engine?application_version=5.6"
