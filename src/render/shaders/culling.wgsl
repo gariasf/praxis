@@ -1,5 +1,5 @@
-// The culling pass's entry points, after the shared parts: they append the
-// Meshlets of the Instances they draw to the frame's draw in slot order,
+// The culling pass's entry points, after the shared parts: they append LOD
+// 0's Meshlets of the Instances they draw to the frame's draw in slot order,
 // which the main pass draws with one indirect call per phase and depth
 // pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase
 // one draws the Instances visible the frame before; phase two, after the
@@ -415,7 +415,7 @@ fn append_triangles(
     if !fits(first, mesh) {
         return;
     }
-    // The Mesh's triangles in cooked order, each with its corners as cooked,
+    // LOD 0's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
     let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangles[0]);
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {

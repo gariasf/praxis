@@ -4,7 +4,7 @@ use crate::{
     assets::material::CLASSES_PER_CHANNEL,
     assets::{MaterialChannel, MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     bench::Budgets,
-    cooked::{AssetId, CookedMesh, CookedPrimitive, CookedVertex},
+    cooked::{AssetId, CookedMesh, CookedPrimitive, CookedVertex, MESH_MAX_LODS},
     render::{LoadStaging, NO_MATERIAL, blas_bytes},
     stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES,
     stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
@@ -439,10 +439,14 @@ impl MeshPool {
         materials: &[Option<MaterialHandle>],
         mesh_use: MeshUse,
     ) -> Result<MeshHandle, MeshRefusal> {
-        assert_eq!(
-            materials.len(),
-            mesh.primitives.len(),
-            "a Material, or none, per Primitive"
+        assert!(
+            mesh.lods()
+                .all(|(_, _, primitives)| primitives.len() == materials.len()),
+            "a Material, or none, per Primitive of each LOD"
+        );
+        assert!(
+            mesh.coarser_lods.len() < MESH_MAX_LODS,
+            "a LOD chain of at most {MESH_MAX_LODS} LODs"
         );
         let meshlets = || {
             drawn_lods(mesh, mesh_use)
@@ -1500,11 +1504,13 @@ pub(crate) mod tests {
         assert_eq!(entry.triangle_counts[0], 2);
     }
 
-    /// A Mesh of two LODs, loaded after another Mesh, reaches the tables
-    /// with each LOD's Meshlets, whose corners pull that LOD's triangles,
-    /// each LOD's ranges and LOD error in its entry, and LOD 0's indices
-    /// alone in the index Arena; freed, it gives every range back. Loaded to
-    /// be traced alone, it keeps no LOD.
+    /// A Mesh of two Primitives and two LODs, the coarser keeping no triangle
+    /// of the second Primitive, loaded after another Mesh, reaches the tables
+    /// with each LOD's Meshlets, whose corners pull that LOD's triangles and
+    /// which keep their Primitives' Material IDs, each LOD's ranges and LOD
+    /// error in its entry, and LOD 0's indices alone in the index Arena;
+    /// freed, it gives every range back. Loaded to be traced alone, it keeps
+    /// no LOD.
     #[test]
     fn a_mesh_loads_every_lods_meshlets_and_frees_them_with_it() {
         let Some(context) = gpu_context() else {
@@ -1520,45 +1526,69 @@ pub(crate) mod tests {
             .expect("a triangle fits");
         let arena_bytes_in_use = pool.arena_bytes_in_use();
         let index_arena_bytes_in_use = pool.index_arena.bytes_in_use;
+        let primitive = |first_index: u32, triangles: &[[u32; 3]]| CookedPrimitive {
+            first_index,
+            index_count: 3 * triangles.len() as u32,
+            material: None,
+            texel_density: 0.0,
+            meshlets: CookedMeshlet::split(
+                triangles,
+                (!triangles.is_empty()).then_some(triangles.len()),
+            )
+            .expect("one Meshlet, or none"),
+        };
         let lod_indices = [vec![0, 1, 2, 2, 1, 3], vec![0, 1, 3]];
-        let mut quad = mesh(4, lod_indices[0].clone());
-        // Each vertex's x is its index, so a pulled vertex names itself.
-        for (index, vertex) in quad.vertices.iter_mut().enumerate() {
-            vertex.position[0] = index as f32;
-        }
-        quad.coarser_lods = vec![CookedLod {
-            error_metres: 0.5,
-            primitives: mesh(4, lod_indices[1].clone()).primitives,
-            indices: lod_indices[1].clone(),
-        }];
+        let two_lods = CookedMesh {
+            // Each vertex's x is its index, so a pulled vertex names itself.
+            vertices: (0..4)
+                .map(|index| CookedVertex {
+                    position: [index as f32, 0.0, 0.0],
+                    ..CookedVertex::default()
+                })
+                .collect(),
+            indices: lod_indices[0].clone(),
+            primitives: vec![primitive(0, &[[0, 1, 2]]), primitive(3, &[[2, 1, 3]])],
+            coarser_lods: vec![CookedLod {
+                error_metres: 0.5,
+                indices: lod_indices[1].clone(),
+                primitives: vec![primitive(0, &[[0, 1, 3]]), primitive(3, &[])],
+            }],
+            bounds: [[0.0; 3]; 2],
+        };
         assert_eq!(
-            MeshPool::written_bytes(&quad, MeshUse::DrawnAndTraced),
+            MeshPool::written_bytes(&two_lods, MeshUse::DrawnAndTraced),
             (4 * size_of::<CookedVertex>()
                 + 6 * 4
-                + 2 * size_of::<MeshletData>()
-                + (4 + 3) * 4
-                + (2 + 1) * 4
+                + 3 * size_of::<MeshletData>()
+                + 3 * 3 * 4
+                + 3 * 4
                 + size_of::<MeshData>()) as u64
         );
+        let material = MaterialHandle {
+            index: 5,
+            generation: 0,
+        };
+        let materials = [Some(material), None];
         let handle = pool
             .load_asset(
                 &mut staging,
                 AssetId(1),
-                &quad,
-                &[None],
+                &two_lods,
+                &materials,
                 MeshUse::DrawnAndTraced,
                 &mut Vec::new(),
             )
-            .expect("a quad fits");
+            .expect("two triangles fit");
         staging.submit(&context.queue);
         assert_eq!(
             pool.index_arena.bytes_in_use - index_arena_bytes_in_use,
             6 * 4
         );
 
-        let mesh_data = read_storage::<MeshData>(&context, &pool.mesh_table, 2)[1];
+        let mesh_data =
+            read_storage::<MeshData>(&context, &pool.mesh_table, 2)[handle.index as usize];
         assert_eq!(mesh_data.lod_count, 2);
-        assert_eq!(mesh_data.meshlet_counts, [1, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(mesh_data.meshlet_counts, [2, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(mesh_data.triangle_counts, [2, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(mesh_data.lod_errors_metres[..2], [0.0, 0.5]);
         let meshlets: Vec<MeshletData> = read_storage(&context, &pool.meshlet_arena.buffer, 64);
@@ -1566,17 +1596,26 @@ pub(crate) mod tests {
             read_storage(&context, &pool.meshlet_vertex_arena.buffer, 64);
         let triangles: Vec<u32> = read_storage(&context, &pool.meshlet_triangle_arena.buffer, 64);
         let vertices: Vec<CookedVertex> = read_storage(&context, &pool.vertex_arena.buffer, 64);
-        for (lod, indices) in lod_indices.iter().enumerate() {
-            let meshlet = meshlets[mesh_data.first_meshlets[lod] as usize];
-            assert_eq!(meshlet.first_triangle, mesh_data.first_triangles[lod]);
-            assert_eq!(meshlet.triangle_count, mesh_data.triangle_counts[lod]);
+        let lod_material_ids = [vec![material.index(), NO_MATERIAL], vec![material.index()]];
+        for (lod, (indices, material_ids)) in lod_indices.iter().zip(&lod_material_ids).enumerate()
+        {
+            let first_meshlet = mesh_data.first_meshlets[lod] as usize;
+            let lod_meshlets = &meshlets[first_meshlet..][..mesh_data.meshlet_counts[lod] as usize];
+            assert_eq!(
+                lod_meshlets[0].first_triangle,
+                mesh_data.first_triangles[lod]
+            );
             let mut pulled = Vec::new();
-            for triangle in 0..meshlet.triangle_count {
-                let corners = triangles[(meshlet.first_triangle + triangle) as usize].to_le_bytes();
-                for &corner in &corners[..3] {
-                    let vertex =
-                        meshlet_vertices[(meshlet.first_vertex + u32::from(corner)) as usize];
-                    pulled.push(vertices[vertex as usize].position[0] as u32);
+            for (meshlet, &material_id) in lod_meshlets.iter().zip(material_ids) {
+                assert_eq!(meshlet.material_id, material_id, "LOD {lod}");
+                for triangle in 0..meshlet.triangle_count {
+                    let corners =
+                        triangles[(meshlet.first_triangle + triangle) as usize].to_le_bytes();
+                    for &corner in &corners[..3] {
+                        let vertex =
+                            meshlet_vertices[(meshlet.first_vertex + u32::from(corner)) as usize];
+                        pulled.push(vertices[vertex as usize].position[0] as u32);
+                    }
                 }
             }
             assert_eq!(&pulled, indices, "LOD {lod}");
@@ -1587,8 +1626,8 @@ pub(crate) mod tests {
 
         let meshlet_bytes_in_use = pool.meshlet_arena.bytes_in_use;
         let traced = pool
-            .load_for(&mut staging, &quad, &[None], MeshUse::Traced)
-            .expect("a quad fits");
+            .load_for(&mut staging, &two_lods, &materials, MeshUse::Traced)
+            .expect("two triangles fit");
         staging.submit(&context.queue);
         assert_eq!(pool.meshlet_arena.bytes_in_use, meshlet_bytes_in_use);
         let traced_data =
