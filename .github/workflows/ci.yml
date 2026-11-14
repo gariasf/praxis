@@ -20,12 +20,16 @@ on:
       - 'scripts/verify.sh'
       - 'scripts/pr-lint.sh'
       - 'scripts/pr-lint-test.sh'
+      - 'scripts/lavapipe-files.sh'
       - 'scripts/cycles-reference/*.py'
       - 'scripts/cycles-reference/DIFFERENCES.md'
       - 'scripts/cycles-reference/differences/**'
       - 'bench/cycles/**'
       - '.github/pull_request_template.md'
       - 'LICENSE'
+  # A dispatched run judges nothing: it records the lavapipe Goldens and
+  # Baselines a PR's run would fail on, for `scripts/lavapipe-files.sh`.
+  workflow_dispatch:
 
 # A newer push to a PR cancels the run it supersedes. Each push to main runs
 # in a group of its own, so none is cancelled and every one publishes its
@@ -84,6 +88,7 @@ jobs:
             'scripts/verify\.sh'
             'scripts/pr-lint\.sh'
             'scripts/pr-lint-test\.sh'
+            'scripts/lavapipe-files\.sh'
             'scripts/cycles-reference/[^/]*\.py'
             'scripts/cycles-reference/DIFFERENCES\.md'
             'scripts/cycles-reference/differences/.*'
@@ -100,6 +105,7 @@ jobs:
 
   check:
     name: Check, Clippy & Format
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       # The field guides' test asks git whether each page's commit is on main.
@@ -129,7 +135,7 @@ jobs:
   windows-check:
     name: Check & Clippy (Windows)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
+    if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -182,6 +188,7 @@ jobs:
         run: cargo run -- cook
 
       - name: Test
+        if: github.event_name != 'workflow_dispatch'
         env:
           PRAXIS_REQUIRE_GOLDENS: "1"
         run: cargo test
@@ -194,13 +201,35 @@ jobs:
           path: target/tmp/golden-differences
           if-no-files-found: ignore
 
+      # `scripts/lavapipe-files.sh` copies the artifact over the checkout, so
+      # each file sits at its path in the repository.
+      - name: Record the Goldens that changed
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          PRAXIS_UPDATE_GOLDENS: "1"
+          PRAXIS_REQUIRE_GOLDENS: "1"
+        run: |
+          cargo test --test goldens reference_scenes_match_their_goldens
+          mkdir -p target/lavapipe-files
+          git ls-files --modified --others --exclude-standard -z tests/goldens |
+            xargs -0 -r cp --parents -t target/lavapipe-files
+
+      - name: Upload the Goldens that changed
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lavapipe-goldens
+          path: target/lavapipe-files
+          if-no-files-found: ignore
+
   shipping-goldens:
     # The runtime opens no source path (ADR 0018): a build without `cook`
     # links no source decoder, and renders every CI Golden from a cooked
     # `cooked/` with `assets/` absent.
     name: Goldens from a shipping build (software Vulkan)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
+    if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -293,16 +322,33 @@ jobs:
         run: target/release/praxis bench target/bench --ci-counters --no-publish
 
       - name: Compare
+        if: github.event_name != 'workflow_dispatch'
         run: target/release/praxis compare target/bench --ci
 
-      # A new or changed Baseline is this artifact's file, copied into its
-      # adapter's directory.
-      - name: Upload bench results
-        if: failure()
+      # `adapter_key` must stay `praxis::bench::baseline_directory`'s name
+      # for an adapter on Vulkan.
+      - name: Record the Baselines that fail
+        if: ${{ !cancelled() && steps.bench.outcome == 'success' && (failure() || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        run: |
+          for result in target/bench/*.json; do
+            scene_directory=$(mktemp -d)
+            cp "$result" "$scene_directory"
+            if ! target/release/praxis compare "$scene_directory" --ci; then
+              adapter_key=$(jq -r .adapter "$result" | tr '[:upper:]' '[:lower:]' |
+                sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
+              baseline_directory=target/lavapipe-files/bench/baselines/$adapter_key
+              mkdir -p "$baseline_directory"
+              cp "$result" "$baseline_directory"
+            fi
+          done
+
+      - name: Upload the Baselines that fail
+        if: ${{ !cancelled() && steps.bench.outcome == 'success' && (failure() || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: bench-results
-          path: target/bench
+          name: lavapipe-baselines
+          path: target/lavapipe-files
           if-no-files-found: ignore
 
       # What publish-bench publishes: the results, the binary that measured

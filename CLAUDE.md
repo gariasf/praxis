@@ -276,6 +276,9 @@ scripts/sweep.sh               # the nightly sweep: re-benches a slower
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets
+scripts/lavapipe-files.sh      # has CI record a pushed branch's lavapipe
+                                 Goldens and Baselines, or takes a run's,
+                                 and copies the changed ones into the tree
 vendor/                        # crates.io crates carrying upstream fixes
                                  until their release (README.md): wgpu-core
                                  30.0.1 with the TLAS dependency dedup
