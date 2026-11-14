@@ -27,6 +27,7 @@ pub mod gpu;
 mod helmet;
 mod input;
 pub mod preflight;
+pub mod prototype;
 mod render;
 mod scenes;
 mod state;
@@ -96,6 +97,9 @@ impl ApplicationHandler for App {
             } => {
                 let mut input = shell.state.simulation.world.resource_mut::<Input>();
                 if key_state.is_pressed() {
+                    if !repeat {
+                        prototype::key(code);
+                    }
                     input.pressed.insert(code);
                     if !repeat {
                         input.just_pressed.insert(code);

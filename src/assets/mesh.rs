@@ -39,6 +39,13 @@ pub struct MeshData {
     /// The box's lowest corner, then its highest, in mesh space.
     pub bounds_min: [f32; 3],
     pub bounds_max: [f32; 3],
+    /// PROTOTYPE (ticket 800): its LOD chain, LOD 0 first: each LOD's first
+    /// Meshlet, Meshlet count, first triangle and triangle count, and its
+    /// LOD error in metres.
+    pub lod_count: u32,
+    pub _padding: u32,
+    pub lods: [[u32; 4]; 8],
+    pub lod_errors: [f32; 8],
 }
 
 /// A Meshlet as the Meshlet Arena holds it: its vertices in the Meshlet

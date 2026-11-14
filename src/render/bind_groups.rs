@@ -300,6 +300,17 @@ pub const MAIN_PASS_INPUTS: BindGroupDefinition = BindGroupDefinition {
             false,
             wgpu::ShaderStages::FRAGMENT,
         ),
+        // PROTOTYPE (ticket 800): the tonemapping pass's Peters mask.
+        Binding {
+            writer: Writer::Cpu,
+            ..loaded_texture(
+                "dither_mask",
+                "texture_2d<f32>",
+                wgpu::TextureSampleType::Float { filterable: false },
+                false,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
     ],
 };
 

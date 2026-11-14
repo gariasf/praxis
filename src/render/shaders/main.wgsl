@@ -11,6 +11,8 @@ struct VertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) @interpolate(flat) material_id: u32,
     @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
+    // PROTOTYPE (ticket 800): its Meshlet record's fade word.
+    @location(5) @interpolate(flat) fade: u32,
 }
 
 @vertex
@@ -28,6 +30,7 @@ struct DepthNormalsOutput {
     @location(0) camera_relative_position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) @interpolate(flat) material_id: u32,
+    @location(3) @interpolate(flat) fade: u32,
 }
 
 @vertex
@@ -37,7 +40,8 @@ fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOut
         out.clip_position,
         out.camera_relative_position,
         out.normal,
-        out.material_id
+        out.material_id,
+        out.fade
     );
 }
 
@@ -49,6 +53,142 @@ fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOut
 // the triangle's.
 @fragment
 fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
+    return surface_normals(in);
+}
+
+// PROTOTYPE (ticket 800): the samples a fading Instance keeps, set per
+// pipeline; every sample unless a run asks for fewer.
+override PROTOTYPE_KEPT_SAMPLES: u32 = 15u;
+
+// PROTOTYPE: a mask the compiler cannot fold away, since it reads the flat
+// Material ID: the kept samples at every even Material the table holds and
+// the others at every odd one, so a pixel shows two surfaces.
+fn prototype_sample_mask(material_id: u32) -> u32 {
+    let complement = ALL_SAMPLES & ~PROTOTYPE_KEPT_SAMPLES;
+    let kept = select(PROTOTYPE_KEPT_SAMPLES, complement, complement != 0u && (material_id & 1u) == 1u);
+    return select(kept, 0u, material_id == NO_MATERIAL - 1u);
+}
+
+// PROTOTYPE: whether the per-pixel dither drops a fragment: never with every
+// sample kept, else at every other pixel, a checkerboard that odd Materials
+// fill the other way.
+fn prototype_discards(material_id: u32, clip_position: vec4<f32>) -> bool {
+    let pixel = vec2<u32>(clip_position.xy);
+    let dithered_out = PROTOTYPE_KEPT_SAMPLES != ALL_SAMPLES && ((pixel.x + pixel.y + material_id) & 1u) == 1u;
+    return dithered_out || material_id == NO_MATERIAL - 1u;
+}
+
+struct PrototypeDepthFlatOutput {
+    @builtin(position) @invariant clip_position: vec4<f32>,
+    @location(0) @interpolate(flat) material_id: u32,
+    @location(1) @interpolate(flat) fade: u32,
+}
+
+@vertex
+fn vs_depth_flat(@builtin(vertex_index) packed_index: u32) -> PrototypeDepthFlatOutput {
+    let out = vertex_output(packed_index);
+    return PrototypeDepthFlatOutput(out.clip_position, out.material_id, out.fade);
+}
+
+// PROTOTYPE (part 2): the samples a fragment of a Meshlet record keeps, from
+// its fade word: all of them unless its Instance draws two LODs; else the
+// first LOD keeps a count of the pixel's four samples that follows its
+// share, and the second the others, so the two fill the pixel between them
+// in the depth passes and the lit pass alike. The count is the share's
+// nearest (t3-fixed), the share dithered by the Peters mask at the pixel
+// (t3-pixel), or all or none by that mask (t2).
+fn kept_samples(fade: u32, clip_position: vec4<f32>) -> u32 {
+    let mode = camera.prototype_control & 15u;
+    let share = f32((fade >> 8u) & 255u) / 255.0;
+    let pixel = vec2<u32>(clip_position.xy);
+    let stored = textureLoad(dither_mask, pixel % vec2<u32>(DITHER_MASK_SIDE), 0).r;
+    let threshold = (stored * 255.0 + 0.5) / 256.0;
+    var count = u32(share * 4.0 + 0.5);
+    if mode == PROTOTYPE_T3_PIXEL {
+        count = u32(share * 4.0 + threshold);
+    }
+    if mode == PROTOTYPE_T2 {
+        count = select(0u, 4u, share > threshold);
+    }
+    // Samples 0, then 3, 1 and 2: opposite corners of the pattern first.
+    let first_kept = (0xfb910u >> (4u * min(count, 4u))) & 15u;
+    let kept = select(first_kept, ALL_SAMPLES & ~first_kept, (fade & 2u) != 0u);
+    // Never foldable: the Material ID is read as in part 1.
+    return select(ALL_SAMPLES, kept, (fade & 1u) != 0u);
+}
+
+@fragment
+fn fs_surface_normals_fade(in: DepthNormalsOutput) -> PrototypeMaskedNormals {
+    return PrototypeMaskedNormals(surface_normals(in), kept_samples(in.fade, in.clip_position));
+}
+
+@fragment
+fn fs_depth_fade(in: PrototypeDepthFlatOutput) -> @builtin(sample_mask) u32 {
+    return kept_samples(in.fade, in.clip_position);
+}
+
+@fragment
+fn fs_main_fade(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> PrototypeMaskedColour {
+    let kept = kept_samples(in.fade, in.clip_position);
+    let colour = lit_colour(in, covered_samples & kept);
+    let lod = (in.fade >> 16u) & 15u;
+    let tinted = ((camera.prototype_control >> 17u) & 1u) == 1u && lod != 0u;
+    let grey = max(colour.r, max(colour.g, colour.b));
+    let palette = vec3<f32>(vec3<u32>(lod, lod >> 1u, lod >> 2u) & vec3<u32>(1u));
+    return PrototypeMaskedColour(vec4<f32>(select(colour.rgb, palette * grey, tinted), colour.a), kept);
+}
+
+struct PrototypeMaskedNormals {
+    @location(0) normals: vec4<f32>,
+    @builtin(sample_mask) kept_samples: u32,
+}
+
+@fragment
+fn fs_surface_normals_mask(in: DepthNormalsOutput) -> PrototypeMaskedNormals {
+    return PrototypeMaskedNormals(surface_normals(in), prototype_sample_mask(in.material_id));
+}
+
+@fragment
+fn fs_surface_normals_discard(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
+    let normals = surface_normals(in);
+    if prototype_discards(in.material_id, in.clip_position) {
+        discard;
+    }
+    return normals;
+}
+
+@fragment
+fn fs_depth_mask(in: PrototypeDepthFlatOutput) -> @builtin(sample_mask) u32 {
+    return prototype_sample_mask(in.material_id);
+}
+
+@fragment
+fn fs_depth_discard(in: PrototypeDepthFlatOutput) {
+    if prototype_discards(in.material_id, in.clip_position) {
+        discard;
+    }
+}
+
+struct PrototypeMaskedColour {
+    @location(0) colour: vec4<f32>,
+    @builtin(sample_mask) kept_samples: u32,
+}
+
+@fragment
+fn fs_main_mask(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> PrototypeMaskedColour {
+    return PrototypeMaskedColour(lit_colour(in, covered_samples), prototype_sample_mask(in.material_id));
+}
+
+@fragment
+fn fs_main_discard(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
+    let colour = lit_colour(in, covered_samples);
+    if prototype_discards(in.material_id, in.clip_position) {
+        discard;
+    }
+    return colour;
+}
+
+fn surface_normals(in: DepthNormalsOutput) -> vec4<f32> {
     let crossed = cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position));
     let crossed_length_squared = dot(crossed, crossed);
     let toward_camera = -normalize(in.camera_relative_position);
@@ -111,6 +251,7 @@ fn vertex_output(packed_index: u32) -> VertexOutput {
     );
     out.camera_relative_position = position;
     out.material_id = record.material_id;
+    out.fade = record.fade;
     return out;
 }
 
@@ -169,6 +310,10 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
 // the emissive.
 @fragment
 fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
+    return lit_colour(in, covered_samples);
+}
+
+fn lit_colour(in: VertexOutput, covered_samples: u32) -> vec4<f32> {
     let material = materials[in.material_id];
     let albedo_class_and_slice = layer_class_and_slice(material.layers.x);
     let normal_class_and_slice = layer_class_and_slice(material.layers.y);

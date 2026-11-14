@@ -114,6 +114,11 @@ impl TonemappingPass {
         }
     }
 
+    /// PROTOTYPE (ticket 800): the Peters mask, for the main pass's fades.
+    pub fn dither_mask(&self) -> &wgpu::TextureView {
+        &self.dither_mask
+    }
+
     /// Builds the bind group that reads `render_targets` again, as `new`
     /// builds it: after every resize, which creates them again.
     pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {

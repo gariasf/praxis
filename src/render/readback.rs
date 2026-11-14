@@ -61,7 +61,11 @@ const SHADOW_MASK_OVERFLOW_OFFSET: u64 = LIGHT_COUNTS_OFFSET + size_of::<LightCo
 
 /// Where a slot holds the frame's timestamps, after its counts.
 const TIMESTAMP_OFFSET: u64 =
-    (SHADOW_MASK_OVERFLOW_OFFSET + size_of::<u32>() as u64).next_multiple_of(8);
+    (PROTOTYPE_LISTS_OFFSET + 2 * size_of::<u32>() as u64).next_multiple_of(8);
+
+/// PROTOTYPE (ticket 800): where a slot holds how many second surfaces and
+/// shadow edges the frame listed.
+const PROTOTYPE_LISTS_OFFSET: u64 = SHADOW_MASK_OVERFLOW_OFFSET + size_of::<u32>() as u64;
 
 /// How far a slot's copy and map have come, as wgpu's callbacks report it.
 const COPY_PENDING: u8 = 0;
@@ -286,9 +290,19 @@ impl GpuStatsReadback {
         frame_draw: &wgpu::Buffer,
         light_counts: &wgpu::Buffer,
         shadow_mask_lights_overflowed: &wgpu::Buffer,
+        prototype_lists: [&wgpu::Buffer; 2],
     ) {
         let slot = &self.slots[slot_index(self.frame)];
         if matches!(slot.state, SlotState::Recorded { frame } if frame == self.frame) {
+            for (list, offset) in prototype_lists.into_iter().zip([0, 4]) {
+                encoder.copy_buffer_to_buffer(
+                    list,
+                    0,
+                    &slot.buffer,
+                    PROTOTYPE_LISTS_OFFSET + offset,
+                    4,
+                );
+            }
             let size = size_of::<FrameDraw>() as u64;
             encoder.copy_buffer_to_buffer(frame_draw, 0, &slot.buffer, 0, size);
             for (counts, offset, size) in [
@@ -455,6 +469,21 @@ impl GpuStatsReadback {
                             );
                         }
                         self.warned_of_shadow_mask_overflow = shadow_mask_overflowed;
+                        let listed: [u32; 2] = bytemuck::pod_read_unaligned(
+                            &view[PROTOTYPE_LISTS_OFFSET as usize..][..8],
+                        );
+                        if std::env::var("PRAXIS_PROTOTYPE_LISTS")
+                            .ok()
+                            .and_then(|every| every.parse::<u64>().ok())
+                            .is_some_and(|every| frame % every == every - 1)
+                        {
+                            tracing::info!(
+                                frame,
+                                second_surfaces = listed[0],
+                                shadow_edges = listed[1],
+                                "PROTOTYPE lists"
+                            );
+                        }
                         let ticks: [u64; QUERIES_PER_FRAME] = bytemuck::pod_read_unaligned(
                             &view[TIMESTAMP_OFFSET as usize..][..TIMESTAMP_BYTES as usize],
                         );

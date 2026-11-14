@@ -166,7 +166,9 @@ impl RenderTargets {
             buffer(
                 label,
                 (u64::from(width) * u64::from(height) + 1) * size_of::<u32>() as u64,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
             )
         };
         let pyramid_size = wgpu::Extent3d {

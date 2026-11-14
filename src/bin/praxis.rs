@@ -102,6 +102,12 @@ enum Command {
 }
 
 fn run_command(arguments: &[String]) -> anyhow::Result<()> {
+    #[cfg(feature = "cook")]
+    if let [command, rest @ ..] = arguments
+        && command == "prototype-series"
+    {
+        return praxis::prototype::series(rest);
+    }
     match parse_command(arguments)? {
         Command::Window(scene) => praxis::run(scene),
         Command::Capabilities => print_capabilities(),

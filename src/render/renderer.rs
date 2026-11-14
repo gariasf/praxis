@@ -392,6 +392,14 @@ impl Renderer {
             switches,
             &render_targets,
         );
+        let tonemapping_pass = TonemappingPass::new(
+            &device,
+            &memory,
+            target_format,
+            &render_targets,
+            &mut load_staging,
+            &capacities,
+        );
         let main_pass = MainPass::new(
             &device,
             &[
@@ -403,6 +411,7 @@ impl Renderer {
             culling_pass.packed_indices(),
             culling_pass.frame_draw(),
             &render_targets,
+            tonemapping_pass.dither_mask(),
             switches,
             &capacities,
         );
@@ -543,14 +552,6 @@ impl Renderer {
             &capacities,
         );
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets, &capacities);
-        let tonemapping_pass = TonemappingPass::new(
-            &device,
-            &memory,
-            target_format,
-            &render_targets,
-            &mut load_staging,
-            &capacities,
-        );
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
 
         Self {
@@ -696,6 +697,9 @@ impl Renderer {
             dynamic_tlas_entries: frame.moving_instances.len() as u32,
             dynamic_tlas_bounds_min,
             dynamic_tlas_bounds_max,
+            prototype_control: crate::prototype::uniform_words().0,
+            prototype_threshold_pixels: crate::prototype::uniform_words().1,
+            prototype_band: crate::prototype::uniform_words().2,
             ..frame.camera
         };
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
@@ -911,6 +915,10 @@ impl Renderer {
             self.culling_pass.frame_draw(),
             self.froxel_pass.light_counts(),
             self.shadow_mask_pass.shadow_mask_lights_overflowed(),
+            [
+                self.render_targets.second_surfaces(),
+                self.render_targets.shadow_edges(),
+            ],
         );
 
         let command_buffer = encoder.finish();

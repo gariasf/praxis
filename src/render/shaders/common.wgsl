@@ -17,10 +17,33 @@ struct CameraUniform {
     anchor: vec3<i32>,
     exposure: f32,
     offset: vec3<f32>,
+    // PROTOTYPE (ticket 800): the mode in bits 0 to 3, a forced LOD in 4 to
+    // 7 (15 for none), a forced share in 8 to 15 where bit 16 is set, the
+    // LOD tint in bit 17.
+    prototype_control: u32,
     tlas_anchor: vec3<i32>,
     dynamic_tlas_entries: u32,
     dynamic_tlas_bounds_min: vec3<f32>,
+    prototype_threshold_pixels: f32,
     dynamic_tlas_bounds_max: vec3<f32>,
+    prototype_band: f32,
+}
+
+// PROTOTYPE: the modes, and a LOD that is none.
+const PROTOTYPE_OFF: u32 = 0u;
+const PROTOTYPE_T1: u32 = 1u;
+const PROTOTYPE_T3_FIXED: u32 = 2u;
+const PROTOTYPE_T3_PIXEL: u32 = 3u;
+const PROTOTYPE_T2: u32 = 4u;
+const NO_LOD: u32 = 15u;
+const MAX_LODS: u32 = 8u;
+
+// PROTOTYPE: a Meshlet record's fade word: bit 0 set where its Instance
+// draws two LODs, bit 1 where this record's is the second, which keeps the
+// samples the first leaves; the first's share in bits 8 to 15; its LOD in
+// bits 16 to 19.
+fn fade_word(fading: bool, second: bool, first_share: u32, lod: u32) -> u32 {
+    return u32(fading) | (u32(second) << 1u) | (first_share << 8u) | (lod << 16u);
 }
 
 // ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from
@@ -189,6 +212,13 @@ struct MeshData {
     triangle_count: u32,
     bounds_min: array<f32, 3>,
     bounds_max: array<f32, 3>,
+    // PROTOTYPE: its LOD chain: each LOD's first Meshlet, Meshlet count,
+    // first triangle and triangle count, LOD 0's as above, and its LOD
+    // error in metres.
+    lod_count: u32,
+    padding: u32,
+    lods: array<vec4<u32>, 8>,
+    lod_errors: array<f32, 8>,
 }
 
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
@@ -208,7 +238,13 @@ struct MeshletRecord {
     instance_slot: u32,
     meshlet: u32,
     material_id: u32,
+    // PROTOTYPE: `fade_word`, and where its packed indices start in the
+    // frame's draw, NOT_APPENDED where its Instance does not fit.
+    fade: u32,
+    first_index: u32,
 }
+
+const NOT_APPENDED: u32 = 0xffffffffu;
 
 // An index of the frame's draw, unpacked: the Meshlet record it is drawn
 // for, and its vertex within that record's Meshlet (ADR 0019).

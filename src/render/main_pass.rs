@@ -33,6 +33,8 @@ pub struct MainPass {
     lit_pipeline: wgpu::RenderPipeline,
     inputs_layout: wgpu::BindGroupLayout,
     meshlet_records_buffer: wgpu::Buffer,
+    /// PROTOTYPE (ticket 800): the Peters mask the fades read.
+    dither_mask: wgpu::TextureView,
     /// The frame's draw's packed indices, its index buffer.
     packed_indices_buffer: wgpu::Buffer,
     /// The frame's draw's indirect arguments, a draw per phase.
@@ -63,6 +65,7 @@ impl MainPass {
         packed_indices: &wgpu::Buffer,
         frame_draw: &wgpu::Buffer,
         render_targets: &RenderTargets,
+        dither_mask: &wgpu::TextureView,
         switches: RenderSwitches,
         capacities: &RenderCapacities,
     ) -> MainPass {
@@ -73,6 +76,7 @@ impl MainPass {
             &inputs_layout,
             &meshlet_records_buffer,
             render_targets,
+            dither_mask,
         );
         let shader = device.create_shader_module(shaders::MAIN.descriptor(capacities));
         let mut layouts = bind_group_layouts.to_vec();
@@ -103,6 +107,37 @@ impl MainPass {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
+        // PROTOTYPE (ticket 800): PRAXIS_PROTOTYPE_CARRIER is `mask` or
+        // `discard`, PRAXIS_PROTOTYPE_KEPT_SAMPLES the samples a mask keeps.
+        // With PRAXIS_PROTOTYPE_LOD set, part 2's `fade` unless a carrier is named.
+        let carrier = std::env::var("PRAXIS_PROTOTYPE_CARRIER")
+            .ok()
+            .or_else(|| crate::prototype::enabled().then(|| "fade".to_owned()))
+            .filter(|carrier| carrier != "none");
+        let kept_samples: u32 = std::env::var("PRAXIS_PROTOTYPE_KEPT_SAMPLES")
+            .ok()
+            .and_then(|kept| kept.parse().ok())
+            .unwrap_or(0b1111);
+        tracing::info!(?carrier, kept_samples, "PROTOTYPE fade carrier");
+        let entry = |name: &str| -> &'static str {
+            match carrier.as_deref() {
+                Some(carrier) => format!("{name}_{carrier}").leak(),
+                None => name.to_owned().leak(),
+            }
+        };
+        let prototype_constants = [("PROTOTYPE_KEPT_SAMPLES", f64::from(kept_samples))];
+        let prototype_options = wgpu::PipelineCompilationOptions {
+            constants: if carrier.is_some() {
+                &prototype_constants
+            } else {
+                &[]
+            },
+            ..wgpu::PipelineCompilationOptions::default()
+        };
+        let mut lit_constants = switches.constants().to_vec();
+        if carrier.is_some() {
+            lit_constants.extend(prototype_constants);
+        }
         let depth_pipeline = |label, vertex_entry_point, fragment| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
@@ -129,13 +164,24 @@ impl MainPass {
                 "vs_depth_normals",
                 Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some("fs_surface_normals"),
+                    entry_point: Some(entry("fs_surface_normals")),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: targets::SURFACE_NORMALS_FORMAT,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    compilation_options: prototype_options.clone(),
+                }),
+            )
+        } else if carrier.is_some() {
+            depth_pipeline(
+                "Depth Pre-pass Pipeline",
+                "vs_depth_flat",
+                Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(entry("fs_depth")),
+                    targets: &[],
+                    compilation_options: prototype_options.clone(),
                 }),
             )
         } else {
@@ -145,16 +191,20 @@ impl MainPass {
         // depth draw names it too, and writes nothing to it.
         let lit_pass_depth_pipeline = depth_pipeline(
             "Lit Pass Depth Pipeline",
-            "vs_depth_prepass",
+            if carrier.is_some() {
+                "vs_depth_flat"
+            } else {
+                "vs_depth_prepass"
+            },
             Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_depth"),
+                entry_point: Some(entry("fs_depth")),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: targets::HDR_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::empty(),
                 })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: prototype_options.clone(),
             }),
         );
         let lit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -168,14 +218,14 @@ impl MainPass {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some(entry("fs_main")),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: targets::HDR_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &switches.constants(),
+                    constants: &lit_constants,
                     ..wgpu::PipelineCompilationOptions::default()
                 },
             }),
@@ -191,6 +241,7 @@ impl MainPass {
             lit_pipeline,
             inputs_layout,
             meshlet_records_buffer,
+            dither_mask: dither_mask.clone(),
             packed_indices_buffer: packed_indices.clone(),
             frame_draw_buffer: frame_draw.clone(),
             inputs,
@@ -207,6 +258,7 @@ impl MainPass {
             &self.inputs_layout,
             &self.meshlet_records_buffer,
             render_targets,
+            &self.dither_mask,
         );
     }
 
@@ -217,6 +269,7 @@ impl MainPass {
         layout: &wgpu::BindGroupLayout,
         meshlet_records: &wgpu::Buffer,
         render_targets: &RenderTargets,
+        dither_mask: &wgpu::TextureView,
     ) -> wgpu::BindGroup {
         MAIN_PASS_INPUTS.bind_group(
             device,
@@ -230,6 +283,10 @@ impl MainPass {
                 (
                     "shadow_mask_samples",
                     wgpu::BindingResource::TextureView(render_targets.shadow_mask_samples()),
+                ),
+                (
+                    "dither_mask",
+                    wgpu::BindingResource::TextureView(dither_mask),
                 ),
             ],
         )

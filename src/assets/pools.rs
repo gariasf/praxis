@@ -442,11 +442,9 @@ impl MeshPool {
         } else {
             &[]
         };
-        let meshlets = || {
-            drawn_primitives
-                .iter()
-                .flat_map(|primitive| &primitive.meshlets)
-        };
+        // PROTOTYPE (ticket 800): the LOD chain, LOD 0 as cooked.
+        let chain = prototype_lod_chain(mesh, drawn_primitives);
+        let meshlets = || chain.iter().flat_map(|(_, lod)| lod.iter().flatten());
         let meshlet_count = meshlets().count();
         let meshlet_vertex_count = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
         let triangle_count = meshlets().map(|meshlet| meshlet.triangles.len()).sum();
@@ -500,34 +498,55 @@ impl MeshPool {
         let mut meshlet_table = Vec::with_capacity(meshlet_count);
         let mut vertex_indices = Vec::with_capacity(meshlet_vertex_count);
         let mut triangles = Vec::with_capacity(triangle_count);
-        for (primitive, material) in drawn_primitives.iter().zip(materials) {
-            for meshlet in &primitive.meshlets {
-                meshlet_table.push(MeshletData {
-                    first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
-                    first_triangle: meshlet_triangles.offset + triangles.len() as u32,
-                    triangle_count: meshlet.triangles.len() as u32,
-                    material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
-                });
-                vertex_indices.extend(
-                    meshlet
-                        .vertices
-                        .iter()
-                        .map(|vertex| vertices.offset + vertex),
-                );
-                triangles.extend(
-                    meshlet.triangles.iter().map(|&[first, second, third]| {
-                        u32::from_le_bytes([first, second, third, 0])
-                    }),
-                );
+        let mut lods = [[0u32; 4]; 8];
+        let mut lod_errors = [0.0f32; 8];
+        for (lod, (error, primitives)) in chain.iter().enumerate() {
+            let (first_meshlet, first_triangle) = (meshlet_table.len(), triangles.len());
+            for (primitive_meshlets, material) in primitives.iter().zip(materials) {
+                for meshlet in primitive_meshlets {
+                    meshlet_table.push(MeshletData {
+                        first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
+                        first_triangle: meshlet_triangles.offset + triangles.len() as u32,
+                        triangle_count: meshlet.triangles.len() as u32,
+                        material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
+                    });
+                    vertex_indices.extend(
+                        meshlet
+                            .vertices
+                            .iter()
+                            .map(|vertex| vertices.offset + vertex),
+                    );
+                    triangles.extend(meshlet.triangles.iter().map(
+                        |&[first, second, third]| u32::from_le_bytes([first, second, third, 0]),
+                    ));
+                }
             }
+            lods[lod] = [
+                meshlet_range.offset + first_meshlet as u32,
+                (meshlet_table.len() - first_meshlet) as u32,
+                meshlet_triangles.offset + first_triangle as u32,
+                (triangles.len() - first_triangle) as u32,
+            ];
+            lod_errors[lod] = *error;
+        }
+        if chain.len() > 1 {
+            tracing::info!(
+                triangles = ?lods[..chain.len()].iter().map(|lod| lod[3]).collect::<Vec<_>>(),
+                errors_metres = ?&lod_errors[..chain.len()],
+                "PROTOTYPE LOD chain"
+            );
         }
         let mesh_data = MeshData {
-            first_meshlet: meshlet_range.offset,
-            meshlet_count: meshlet_count as u32,
-            first_triangle: meshlet_triangles.offset,
-            triangle_count: triangle_count as u32,
+            first_meshlet: lods[0][0],
+            meshlet_count: lods[0][1],
+            first_triangle: lods[0][2],
+            triangle_count: lods[0][3],
             bounds_min: mesh.bounds[0],
             bounds_max: mesh.bounds[1],
+            lod_count: chain.len() as u32,
+            _padding: 0,
+            lods,
+            lod_errors,
         };
         self.vertex_arena.write(
             staging,
@@ -1889,4 +1908,104 @@ pub(crate) mod tests {
         let text = String::from_utf8_lossy(&log.0.lock().unwrap()).into_owned();
         (result, text)
     }
+}
+
+/// PROTOTYPE (ticket 800), throwaway: `mesh`'s LOD chain as the levels
+/// decision shapes it, built at load rather than cooked: each LOD's error in
+/// metres and its Meshlets by Primitive, LOD 0 the cooked Meshlets of
+/// `drawn_primitives`. Each further LOD is simplified from the one before on
+/// the same vertices, the whole Mesh in one call, weighing normals and UVs,
+/// toward half its triangles; the chain stops at 8 LODs or where a LOD keeps
+/// more than 85% of the indices before it. Only LOD 0 unless the prototype
+/// is on.
+fn prototype_lod_chain(
+    mesh: &CookedMesh,
+    drawn_primitives: &[crate::assets::cooked::CookedPrimitive],
+) -> Vec<(f32, Vec<Vec<crate::assets::cooked::CookedMeshlet>>)> {
+    use crate::assets::cooked::{CookedMeshlet, CookedVertex};
+    let mut chain = vec![(
+        0.0,
+        drawn_primitives
+            .iter()
+            .map(|primitive| primitive.meshlets.clone())
+            .collect::<Vec<_>>(),
+    )];
+    if !crate::prototype::enabled() || drawn_primitives.is_empty() {
+        return chain;
+    }
+    let positions = meshopt::VertexDataAdapter::new(
+        bytemuck::cast_slice(&mesh.vertices),
+        size_of::<CookedVertex>(),
+        0,
+    )
+    .expect("a whole number of vertices, position first");
+    // The normal is the QTangent's rotation of the z axis.
+    let attributes: Vec<f32> = mesh
+        .vertices
+        .iter()
+        .flat_map(|vertex| {
+            let [x, y, z, w] = vertex.qtangent.map(|component| f32::from(component) / 32767.0);
+            [
+                2.0 * (x * z + w * y),
+                2.0 * (y * z - w * x),
+                1.0 - 2.0 * (x * x + y * y),
+                vertex.uv[0],
+                vertex.uv[1],
+            ]
+        })
+        .collect();
+    let attribute_weights = [0.5, 0.5, 0.5, 0.1, 0.1];
+    let locks = vec![false; mesh.vertices.len()];
+    let scale = meshopt::simplify_scale(&positions);
+    // Each Primitive's vertices are a run of the Mesh's.
+    let vertex_ends: Vec<u32> = mesh
+        .primitives
+        .iter()
+        .map(|primitive| {
+            let indices = &mesh.indices[primitive.first_index as usize..]
+                [..primitive.index_count as usize];
+            indices.iter().copied().max().map_or(0, |highest| highest + 1)
+        })
+        .collect();
+    let mut previous = mesh.indices.clone();
+    let mut accumulated_error = 0.0;
+    while chain.len() < 8 {
+        let target = (previous.len() / 2).next_multiple_of(3);
+        let mut relative_error = 0.0;
+        let simplified = meshopt::simplify_with_attributes_and_locks(
+            &previous,
+            &positions,
+            &attributes,
+            &attribute_weights,
+            size_of::<[f32; 5]>(),
+            &locks,
+            target,
+            f32::MAX,
+            meshopt::SimplifyOptions::None,
+            Some(&mut relative_error),
+        );
+        if simplified.is_empty() || simplified.len() * 100 > previous.len() * 85 {
+            break;
+        }
+        accumulated_error += relative_error * scale;
+        let mut by_primitive = vec![Vec::<[u32; 3]>::new(); mesh.primitives.len()];
+        for triangle in simplified.as_chunks::<3>().0 {
+            let primitive = vertex_ends
+                .iter()
+                .position(|&end| triangle[0] < end)
+                .unwrap_or(mesh.primitives.len() - 1);
+            by_primitive[primitive].push(*triangle);
+        }
+        let lod = by_primitive
+            .iter()
+            .map(|triangles| {
+                let counts =
+                    crate::cook::mesh::meshlet_triangle_counts(triangles, mesh.vertices.len());
+                CookedMeshlet::split(triangles, counts).expect("the cut keeps to the limits")
+            })
+            .collect();
+        chain.push((accumulated_error, lod));
+        previous = simplified;
+    }
+    chain
 }

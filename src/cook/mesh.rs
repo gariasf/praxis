@@ -199,7 +199,7 @@ fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
 /// repeated corner twice [ref:meshoptimizer-0.25-scan-meshlets]. Kept in
 /// order, the indices stay as the vertex cache and overdraw passes left
 /// them, and so does every image.
-fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
+pub(crate) fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
     let mut in_run = vec![false; vertex_count];
     let mut run_vertices = Vec::new();
     let mut counts: Vec<usize> = Vec::new();

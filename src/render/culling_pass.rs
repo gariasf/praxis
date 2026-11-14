@@ -193,14 +193,14 @@ impl CullingPass {
         );
         let instance_offsets = buffer(
             "Instance Offset Buffer",
-            u64::from(capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 1)
+            u64::from(2 * capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 1)
                 * size_of::<[u32; 2]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         // A record is three u32s: Instance slot, Meshlet and Material ID.
         let meshlet_records = buffer(
             "Meshlet Record Buffer",
-            u64::from(draw_capacity.meshlet_records) * size_of::<[u32; 3]>() as u64,
+            u64::from(draw_capacity.meshlet_records) * size_of::<[u32; 5]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         let packed_indices = buffer(

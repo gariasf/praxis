@@ -40,7 +40,8 @@ pub struct CameraUniform {
     /// What the lit pass scales luminance by (`Camera::exposure`).
     pub exposure: f32,
     pub offset: [f32; 3],
-    pub _pad_offset: u32,
+    /// PROTOTYPE (ticket 800): `prototype::uniform_words`.
+    pub prototype_control: u32,
     /// The Anchor whose corner is the origin of the bound static TLAS's
     /// frame (ADR 0020), where shadow rays start: the Renderer sets it from
     /// the static TLAS (`StaticTlas::anchor`).
@@ -51,7 +52,7 @@ pub struct CameraUniform {
     /// TLAS's entries, its lowest corner then its highest: shadow rays that
     /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
     pub dynamic_tlas_bounds_min: [f32; 3],
-    pub _pad_dynamic_tlas_bounds_min: u32,
+    pub prototype_threshold_pixels: f32,
     pub dynamic_tlas_bounds_max: [f32; 3],
-    pub _pad_dynamic_tlas_bounds_max: u32,
+    pub prototype_band: f32,
 }

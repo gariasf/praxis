@@ -57,6 +57,104 @@ struct FrameDraw {
 // frame_draw's binding, so that frame_draw can hold its dispatch.
 const APPENDED_RECORDS = INSTANCE_CAPACITY + INSTANCE_CAPACITY / SCAN_BLOCK_SIZE;
 
+// PROTOTYPE (ticket 800): where instance_offsets holds, after those, each
+// slot's LOD selection, which offset_slots writes and append_records reads,
+// so both draw the same LODs.
+const LOD_SELECTIONS = APPENDED_RECORDS + 1u;
+
+// PROTOTYPE: the LODs an Instance draws: one, or while it fades two, the
+// first keeping `first_share` of 255 of each pixel's samples.
+struct LodSelection {
+    first: u32,
+    second: u32,
+    first_share: u32,
+}
+
+fn pack_selection(selection: LodSelection) -> u32 {
+    return selection.first | (selection.second << 4u) | (selection.first_share << 8u);
+}
+
+fn unpack_selection(packed: u32) -> LodSelection {
+    return LodSelection(packed & 15u, (packed >> 4u) & 15u, (packed >> 8u) & 255u);
+}
+
+// PROTOTYPE: the selection for an Instance of `mesh`, from the camera alone:
+// the coarsest LOD whose error, at the distance to the Instance's bounding
+// sphere, projects under the threshold; in a fade mode, with the LOD before
+// it while that projection is within the band below the threshold.
+fn select_lods(instance: InstanceData, mesh: MeshData) -> LodSelection {
+    let mode = camera.prototype_control & 15u;
+    let forced_lod = (camera.prototype_control >> 4u) & 15u;
+    let last_lod = max(mesh.lod_count, 1u) - 1u;
+    if forced_lod != NO_LOD {
+        let lod = min(forced_lod, last_lod);
+        let share_forced = ((camera.prototype_control >> 16u) & 1u) == 1u;
+        if share_forced && lod < last_lod {
+            return LodSelection(lod, lod + 1u, (camera.prototype_control >> 8u) & 255u);
+        }
+        return LodSelection(lod, NO_LOD, 255u);
+    }
+    if mode == PROTOTYPE_OFF {
+        return LodSelection(0u, NO_LOD, 255u);
+    }
+    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
+    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
+    let centre = camera_relative_position(
+        instance.anchor,
+        instance.offset,
+        camera.anchor,
+        camera.offset,
+        instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+    );
+    let scale = max(
+        max(length(instance.rotation_scale[0]), length(instance.rotation_scale[1])),
+        length(instance.rotation_scale[2])
+    );
+    let radius = 0.5 * length(bounds_max - bounds_min) * scale;
+    let distance = max(length(centre) - radius, 0.001);
+    // The projection's vertical scale: a metre at a metre's distance spans
+    // this many half heights of the target.
+    let projection_scale = length(vec3<f32>(camera.view_proj[0][1], camera.view_proj[1][1], camera.view_proj[2][1]));
+    let target_height = 2.0 * f32(textureDimensions(depth_pyramid, 0).y);
+    // A metre of LOD error in thresholds.
+    let thresholds_per_metre = scale * projection_scale * 0.5 * target_height
+        / (distance * camera.prototype_threshold_pixels);
+    var coarsest = 0u;
+    for (var lod = 1u; lod < MAX_LODS; lod++) {
+        if lod <= last_lod && meshes[instance.mesh].lod_errors[lod] * thresholds_per_metre < 1.0 {
+            coarsest = lod;
+        }
+    }
+    if mode == PROTOTYPE_T1 || coarsest == 0u {
+        return LodSelection(coarsest, NO_LOD, 255u);
+    }
+    // A forced share with no forced LOD: every Instance past LOD 0 mid-fade.
+    if ((camera.prototype_control >> 16u) & 1u) == 1u {
+        return LodSelection(coarsest - 1u, coarsest, (camera.prototype_control >> 8u) & 255u);
+    }
+    let projected = meshes[instance.mesh].lod_errors[coarsest] * thresholds_per_metre;
+    let coarsest_share = saturate((1.0 - projected) / (1.0 - 1.0 / camera.prototype_band));
+    let first_share = u32(round((1.0 - coarsest_share) * 255.0));
+    if first_share == 0u {
+        return LodSelection(coarsest, NO_LOD, 255u);
+    }
+    if first_share == 255u {
+        return LodSelection(coarsest - 1u, NO_LOD, 255u);
+    }
+    return LodSelection(coarsest - 1u, coarsest, first_share);
+}
+
+// PROTOTYPE: the Meshlet records and packed indices a selection draws.
+fn selection_counts(mesh: u32, selection: LodSelection) -> vec2<u32> {
+    let first = meshes[mesh].lods[selection.first];
+    var counts = vec2<u32>(first.y, 3u * first.w);
+    if selection.second != NO_LOD {
+        let second = meshes[mesh].lods[selection.second];
+        counts += vec2<u32>(second.y, 3u * second.w);
+    }
+    return counts;
+}
+
 var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
 
 // Phase two's visibility bits for its block of slots, gathered before they
@@ -245,6 +343,7 @@ fn offset_slots(
     var visible = false;
     var drawn = false;
     var counts = vec2<u32>(0u);
+    var selection = 0u;
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
@@ -262,7 +361,9 @@ fn offset_slots(
         // draws it.
         drawn = drawn && mesh.meshlet_count != 0u;
         if drawn {
-            counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+            let lods = select_lods(instance, mesh);
+            selection = pack_selection(lods);
+            counts = selection_counts(instance.mesh, lods);
         }
     }
     if PHASE_TWO {
@@ -277,6 +378,9 @@ fn offset_slots(
     }
     if slot < instance_slot_count {
         instance_offsets[slot] = select(NOT_DRAWN, offset, drawn);
+        if drawn {
+            instance_offsets[LOD_SELECTIONS + slot] = vec2<u32>(selection, 0u);
+        }
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
         instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
@@ -347,8 +451,7 @@ fn slot_offsets(slot: u32) -> vec2<u32> {
 // in their buffers. Where an Instance's would pass either buffer's end,
 // neither it nor any Instance after it is drawn, so the draw ends at the
 // last Instance that fits, and every index before is written.
-fn fits(first: vec2<u32>, mesh: MeshData) -> bool {
-    let counts = vec2<u32>(mesh.meshlet_count, 3u * mesh.triangle_count);
+fn fits(first: vec2<u32>, counts: vec2<u32>) -> bool {
     let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
     return all(first <= capacity) && all(counts <= capacity - first);
 }
@@ -367,8 +470,11 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let instance = instances[slot];
     let mesh = meshes[instance.mesh];
     let first = slot_offsets(slot);
-    if fits(first, mesh) {
-        let indices_end = first.y + 3u * mesh.triangle_count;
+    let selection = unpack_selection(instance_offsets[LOD_SELECTIONS + slot].x);
+    let counts = selection_counts(instance.mesh, selection);
+    let fitting = fits(first, counts);
+    if fitting {
+        let indices_end = first.y + counts.y;
         atomicMax(&frame_draw.draw.index_count, indices_end);
         atomicAdd(&frame_draw.instances_drawn, 1u);
         if PHASE_TWO {
@@ -379,11 +485,24 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
         atomicAdd(&frame_draw.instances_overflowed, 1u);
     }
     let overridden = instance.material_id != NO_MATERIAL;
-    let records = min(mesh.meshlet_count, arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
-    for (var meshlet_in_mesh = 0u; meshlet_in_mesh < records; meshlet_in_mesh++) {
-        let meshlet_index = mesh.first_meshlet + meshlet_in_mesh;
-        let material_id = select(meshlets[meshlet_index].material_id, instance.material_id, overridden);
-        meshlet_records[first.x + meshlet_in_mesh] = MeshletRecord(slot, meshlet_index, material_id);
+    let records = min(counts.x, arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
+    let fading = selection.second != NO_LOD;
+    let first_range = meshes[instance.mesh].lods[selection.first];
+    let second_range = meshes[instance.mesh].lods[select(selection.first, selection.second, fading)];
+    for (var record = 0u; record < records; record++) {
+        let in_second = record >= first_range.y;
+        let range = select(first_range, second_range, in_second);
+        let meshlet_index = range.x + record - select(0u, first_range.y, in_second);
+        let meshlet = meshlets[meshlet_index];
+        let material_id = select(meshlet.material_id, instance.material_id, overridden);
+        let triangles_before = meshlet.first_triangle - range.z + select(0u, first_range.w, in_second);
+        meshlet_records[first.x + record] = MeshletRecord(
+            slot,
+            meshlet_index,
+            material_id,
+            fade_word(fading, in_second, selection.first_share, select(selection.first, selection.second, in_second)),
+            select(NOT_APPENDED, first.y + 3u * triangles_before, fitting)
+        );
     }
 }
 
@@ -410,14 +529,12 @@ fn append_triangles(
     }
     let record = meshlet_records[record_index];
     let meshlet = meshlets[record.meshlet];
-    let mesh = meshes[instances[record.instance_slot].mesh];
-    let first = slot_offsets(record.instance_slot);
-    if !fits(first, mesh) {
+    if record.first_index == NOT_APPENDED {
         return;
     }
     // The Mesh's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangle);
+    let first_index = record.first_index;
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);
