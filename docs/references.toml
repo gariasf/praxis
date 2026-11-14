@@ -6151,3 +6151,390 @@ url = "https://github.com/uxlfoundation/oneTBB/blob/v2023.2.0/doc/main/tbb_userg
 section = "oneTBB 2023.2.0, Developer Guide, Controlling Chunking: a chunk's size trades scheduling overhead against parallelism"
 quote = '''Case A shows how too small a grainsize leads to a relatively high proportion of overhead. Case B shows how a large grainsize reduces this proportion, at the cost of reducing potential parallelism. [...] A rule of thumb is that grainsize iterations of operator() should take at least 100,000 clock cycles to execute.'''
 checked = 2026-11-13
+
+["knodt-2023-joint-uv-texture-baking"]
+url = "https://gaoxifeng.github.io/papers/2023/TOG_High_Quality_Texture_Baking.pdf#page=2"
+section = "Knodt, Pan, Wu and Gao, Joint UV Optimization and Texture Baking, ACM Transactions on Graphics 2023 (author-hosted copy), §2 Related Work, Texture Baking, p. 2; timing comparison text, p. 12; cost from Table 2, p. 13 (ms per iteration, iterations until convergence, 512 x 512 texture); hardware from §5 Experiments, p. 7"
+quote = '''Given the high-poly and the low-poly model with its UV layout, this approach first casts a ray for each surface texel of the low-poly along its normal direction, then computes the interpolated attributes at the intersection point between the ray and the high-poly, and directly assigns the attribute to the texture of the low-poly. [...] Raycasting approaches are two orders of magnitude faster than any of the approaches listed though and are the most efficient.'''
+cost = '''OursUV,SH (512) 607 4504 [...] a single NVIDIA Titan XP GPU with 12 GB of RAM'''
+checked = 2026-11-14
+
+["blender-5.2-selected-to-active"]
+url = "https://docs.blender.org/manual/en/5.2/render/cycles/baking.html"
+section = "Blender 5.2 Manual, Render, Cycles, Render Baking, Selected to Active"
+quote = '''The rays are cast from the low-poly object inwards towards the high-poly object. [...] A cage is a ballooned-out version of the low-poly mesh created either automatically [...] When not using a cage the rays will conform to the mesh normals. This produces glitches on the edges,'''
+checked = 2026-11-14
+
+["ue-5.8-proxylod-ray-correspondence"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODMaterialTransferUtilities.h#L30-L32"
+section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODMaterialTransferUtilities.h, CreateCorrespondence (L30-L32) and MapFlattenMaterials' UnresolvedSrcColor parameter (L102-L103) (repository needs an Epic-linked GitHub account)"
+quote = '''This is done by firing rays from locations on the reduced mesh polys that correspond to [...] texel centers in a texture atlas grid space and recording the poly and uv-coordinate location [...] hit in the SrcMesh along with additional information. [...] Base color to be used when the src geometry can't be identified (e.g. regions where [...] gap filling has closed doors and windows)'''
+checked = 2026-11-14
+
+["ue-5.8-proxylod-hit-selection"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODMaterialTransferUtilities.cpp#L242-L291"
+section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODMaterialTransferUtilities.cpp, CreateCorrespondence, L242, L288 and L291 (repository needs an Epic-linked GitHub account)"
+quote = '''// We have to shoot rays in forward & back-facing normal direction to look for the closest source triangle. [...] if (bForwardCodirectional && bReverseCodirectional) // Both hits were "valid" [...] // pick the closest'''
+checked = 2026-11-14
+
+["ue-5.8-proxylod-supersampling"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODPlugin.cpp#L990-L1055"
+section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODPlugin.cpp, the super-sampled UV grid (L990) and the ray's termination distance (L1055) (repository needs an Epic-linked GitHub account)"
+quote = '''const int32 SuperSampleNum = 16; [...] double RequestedMaxRay = (bOverrideRayDist) ? InProxySettings.MaxRayCastDist : 6. * VoxelSize;'''
+checked = 2026-11-14
+
+["blender-5.2.3-bake-jitter"]
+url = "https://github.com/blender/blender/blob/v5.2.3/intern/cycles/kernel/integrator/init_from_bake.h#L19-L29"
+section = "Blender v5.2.3, Cycles kernel, intern/cycles/kernel/integrator/init_from_bake.h, comment above bake_jitter_barycentric, L19-L29 (SPDX-License-Identifier: Apache-2.0)"
+quote = '''/* In order to perform anti-aliasing during baking, we jitter the input barycentric coordinates [...] * (which are for the center of the texel) within the texel. [...] * However, the baking code currently doesn't support going to neighboring triangle, so if the [...] * For triangles that are smaller than a texel, this might take too many attempts, so eventually [...] * we just give up and don't jitter in that case.'''
+checked = 2026-11-14
+
+["cignoni-1999-resampling-detail-textures"]
+url = "https://web.archive.org/web/20231202143542/https://irinsubria.uninsubria.it/bitstream/11383/10484/1/preserving2.pdf#page=4"
+section = "Cignoni, Montani, Rocchini, Scopigno and Tarini, Preserving attribute values on simplified meshes by resampling detail textures, The Visual Computer 15 (1999) pp. 519-539, §3.1 Sampling texture patches, pp. 522-523 (PDF pp. 4-5)"
+quote = '''For each elementary surface sample p S we detect the corresponding point p M ∈ M by computing the point at a minimal euclidean distance from p S (Fig. 2). [...] In some cases choosing the nearest face may produce aliasing. An example can be the case of a simplified mesh that contains subareas with a very thin solid section [...] Again, in this case we are trying to produce an impostor rather than a good simplified model, and therefore a standard projective technique is more adequate.'''
+checked = 2026-11-14
+
+["cignoni-1999-oversampling"]
+url = "https://web.archive.org/web/20231202143542/https://irinsubria.uninsubria.it/bitstream/11383/10484/1/preserving2.pdf#page=8"
+section = "Cignoni, Montani, Rocchini, Scopigno and Tarini, Preserving attribute values on simplified meshes by resampling detail textures, The Visual Computer 15 (1999), §3.3 Improving texture quality, p. 526 (PDF p. 8); cost from Table 3, p. 529 (PDF p. 11): seconds without I/O for the fandisk mesh at sampling steps of 0.2%, 0.5%, 1% and 2% of the bounding box diagonal; hardware from §6, p. 536 (PDF p. 18)"
+quote = '''Our tool adopts oversampling to improve texture quality, and the oversampling rate is a user-selected parameter. Multiple samples are distributed regularly in the small sampling area associated with each point p and evaluated. The average of these samples is stored in the texture'''
+cost = '''Sampling – no multisampling 14.718 2.769 0.977 0.452 [...] Sampling – multisampling 3 × 3 128.441 22.520 7.279 3.205 [...] The times are associated with the SGI O2, R5000 180 MHz'''
+checked = 2026-11-14
+
+["cohen-1998-appearance-preserving"]
+url = "https://userpages.cs.umbc.edu/olano/papers/aps/APS.pdf#page=1"
+section = "Cohen, Olano and Manocha, Appearance-Preserving Simplification, SIGGRAPH 1998, Abstract and §1.1, p. 1; §4.2 Creating Texture and Normal Maps, p. 4"
+quote = '''We convert the input surface to a representation that decouples the sampling of these three attributes, storing the colors and normals in texture and normal maps, respectively. [...] The color and normal attributes are filtered by the run-time system at the pixel level, using standard mip-mapping techniques [1]. [...] To create a map, scan convert each triangle of M0, replacing each of its vertex coordinates, Vj, with F(Vj), the texture coordinates of the vertex.'''
+checked = 2026-11-14
+
+["ue-5.8-approximate-photo-set-sample"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/GeometryCore/Public/Image/SpatialPhotoSet.h#L100-L105"
+section = "Unreal Engine 5.8.4, GeometryCore, Image/SpatialPhotoSet.h, TSpatialPhotoSet::ComputeSample, doc comment L100-L105 and the TODO at L222 (the sampler behind the Approximated Mesh HLOD layer's bake; repository needs an Epic-linked GitHub account)"
+quote = '''This is effectively a reprojection process, that tries to find the "best" [...] pixel value in the photo set that projects onto the given Position/Normal. [...] A position may be visible from multiple photos, in this case the dot-product [...] between the view vector and normal is used to decide which photo pixel to use. [...] // TODO This bilinear sampling causes artefacts when it blends pixels from different depths (hence unrelated'''
+checked = 2026-11-14
+
+["ue-5.8-approximate-bake-settings"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L222-L228"
+section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, Material Baking Settings, L222-L228 (repository needs an Epic-linked GitHub account)"
+quote = '''/** If Value is > 1, Multisample output baked textures by this amount in each direction (eg 4 == 16x supersampling) */ [...] int32 MultiSamplingAA = 0; [...] /** If Value is zero, use MaterialSettings resolution, otherwise override the render capture resolution */ [...] int32 RenderCaptureResolution = 2048;'''
+checked = 2026-11-14
+
+["ue-5.8-material-proxy-texture-sizing"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Classes/Engine/MaterialMerging.h#L21"
+section = "Unreal Engine 5.8.4, Engine/Classes/Engine/MaterialMerging.h, ETextureSizingType, L21 (repository needs an Epic-linked GitHub account)"
+quote = '''TextureSizingType_AutomaticFromMeshDrawDistance UMETA(DisplayName = "Automatic - From Mesh Draw Distance", ToolTip = "When working with World Partition HLODs, the draw distance is automatically deduced from the runtime grid loading range."),'''
+checked = 2026-11-14
+
+["simplygon-10.4-mapping-image"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/processorsettings/mappingimagesettings.html"
+section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Mapping image settings, introduction"
+quote = '''A Mapping image is basically a texture on the reduced geometry where each pixel contains information of which triangle and barycentric coordinate on the original geometry that the pixel corresponds to.'''
+checked = 2026-11-14
+
+["simplygon-10.4-caster-layers"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/materialcasting/materialcasters/materialcasters.html"
+section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Material casters, introduction and the Color caster's row"
+quote = '''The material casting is a post-process of all mapping image generating processing objects, where the caller application can use the mapping image data to "cast" material and texture data from the original onto the processed geometry. [...] General color casting (diffuse/basecolor/roughness etc.). If using the remesher, the color values will be accumulated through mapping image layers using the defined opacity channel.'''
+checked = 2026-11-14
+
+["ue-5.8-merge-unique-uv-bake"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Developer/MeshMergeUtilities/Private/MeshMergeUtilities.cpp#L2847-L2848"
+section = "Unreal Engine 5.8.4, MeshMergeUtilities.cpp, material merging of merged meshes, L2847-L2848 and L3117-L3118 (repository needs an Epic-linked GitHub account)"
+quote = '''// If we are generating a single LOD and want to merge materials we can utilize texture space better by generating unique UVs [...] // for the merged mesh and baking out materials using those UVs [...] // If we're working with a new set of UVs, we can bake all materials directly to the same bake output [...] // as our remapped UVs for each mesh don't overlap.'''
+checked = 2026-11-14
+
+["unity-hlodsystem-04be7e8-simple-batcher"]
+url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Documentation~/Batcher.md#L15-L19"
+section = "Unity Technologies, HLODSystem (com.unity.hlod) at commit 04be7e8, Documentation~/Batcher.md, SimpleBatcher, L15-L19"
+quote = '''we need to combine the textures referenced by different [...] materials into textures referenced by the new material, and [...] accordingly perform UV-remapping when building the merged mesh.'''
+checked = 2026-11-14
+
+["simplygon-10.4-aggregation-tiled"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/processors/aggregation.html"
+section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Aggregation processor, introduction"
+quote = '''The output geometry and each individual texture chart is identical to the inputs, but the charts have been combined and repositioned into a new, unified texture atlas. In relation to the usual Simplygon parameterizer, which generates new, unique UVs for every point on the mesh, the aggregator is a good solution for combining multiple instances of the same object, or when dealing with tiled textures. [...] One good example when to use the scene aggregator is when you want to combine objects to define a building, where each window is an instance of each other.'''
+checked = 2026-11-14
+
+["chen-2023-robust-low-poly"]
+url = "https://zhenchen-jay.github.io/uploads/RobustLowPoly.pdf#page=2"
+section = "Chen, Pan, Wu, Vouga and Gao, Robust Low-Poly Meshing for General 3D Models, ACM Transactions on Graphics 42(4) (SIGGRAPH 2023), author-hosted copy, §1 Introduction, p. 2; hardware p. 11 and Timings p. 12 of the author-hosted PDF"
+quote = '''These additional properties are essential for artists to conveniently perform UV-generation and texture baking on the bare low-poly mesh.'''
+cost = '''We take about 7 minutes on average to finish the remeshing of the entire tested dataset while the others take less than 2 minutes, except for Gao et al. [2022] (over 10 minutes) [...] a workstation with a 32-cores Intel processor clocked at 3.7Ghz and 256Gb of memory'''
+checked = 2026-11-14
+
+["sander-2001-tmpm-packing-efficiency"]
+url = "https://hhoppe.com/tmpm.pdf#page=7"
+section = "Sander, Snyder, Gortler, Hoppe, Texture Mapping Progressive Meshes, SIGGRAPH 2001, §4.6 Pack chart polygons (p. 5), Table 1 (p. 6, four models, one per column), §5 Results (p. 7)"
+quote = '''We simplify the problem by conservatively approximating each chart polygon with the least-area rectangle that encloses it. [...] Packing efficiency is the sum of chart areas in 2D divided by the rectangular texture domain area. It is less than unity due to two factors: the enclosure of chart polygons into rectangles, and the wasted space between the packed rectangles. [...] rectangle-packing effic. 0.87 0.89 0.91 0.82 [...] packing efficiency 0.67 0.63 0.70 0.62'''
+checked = 2026-11-14
+
+["liu-2019-bounded-packing-efficiency"]
+url = "https://ustc-gcl-f.github.io/projects/AAAtlas/index.html"
+section = "Liu, Fu, Ye, Chai, Liu, Atlas Refinement with Bounded Packing Efficiency, ACM TOG 38(4) (SIGGRAPH 2019), doi:10.1145/3306346.3323001, abstract as on the authors' project page (the paper PDF itself was not opened)"
+quote = '''Central to this method is the use of the axis-aligned structure that converts the general polygon packing problem to a rectangle packing problem, which is easier to achieve high packing efficiency. [...] For all models, our method is able to produce packed atlases with bounded packing efficiency; for example, when the packing efficiency bound is set to 80%, we elongate the boundary length by an average of 78.7% and increase the distortion by an average of 0.0533%.'''
+checked = 2026-11-14
+
+["xatlas-f700c77-planar-charts"]
+url = "https://github.com/jpcy/xatlas/blob/f700c7790aaa030e794b52ba7791a05c085faf0c/source/xatlas/xatlas.cpp#L5174"
+section = "xatlas at commit f700c77, source/xatlas/xatlas.cpp, struct PlanarCharts, comments at L5174 and L5248"
+quote = '''// Precompute regions of coplanar incident faces. [...] // Create charts from suitable planar regions.'''
+checked = 2026-11-14
+
+["jylanki-2010-maxrects"]
+url = "https://github.com/juj/RectangleBinPack/blob/83e7e1132d93777e3732dfaae26b0f3703be2036/RectangleBinPack.pdf"
+section = "Jylänki, A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing, self-published technical report, 2010-02-27, §5 Conclusions and Future Work, pp. 32-33; in the author's repository at commit 83e7e11, whose Readme.txt says 'All the code is released to Public Domain.'"
+quote = '''clear that the MAXRECTS algorithms perform the best of all. [...] The GUILLOTINE variants are [...] faster than the MAXRECTS algorithms, but also perform slightly worse. The SHELF algorithms should only be favored if implementation simplicity is a concern.'''
+checked = 2026-11-14
+
+["levy-2002-lscm-tetris-packing"]
+url = "https://www.cs.jhu.edu/~misha/Fall09/Levy02.pdf#page=7"
+section = "Lévy, Petitjean, Ray, Maillot, Least Squares Conformal Maps for Automatic Texture Atlas Generation, SIGGRAPH 2002, §4 Packing and Table 2 (p. 7), hardware from §5 Results (p. 8); copy on a Johns Hopkins course page"
+quote = '''For this reason, we propose a different algorithm, that packs the charts directly rather than their bounding rectangles. [...] As in classical approaches, in order to avoid unwanted blends caused by mip-mapping, an additional margin is added to the horizons. [...] packing ratio (rectangles) 0.48 0.51 0.43 0.37 [...] packing ratio (our algo.) 0.55 0.55 0.6 0.58'''
+cost = '''The algorithm performs well, and takes less than one second to process all the data sets we have tested. [...] obtained on a 1.3 GHz Pentium III (note that the timings for the packing algorithm are not included, since they are negligible)'''
+checked = 2026-11-14
+
+["carr-2002-mip-mappable-atlas"]
+url = "https://userpages.cs.umbc.edu/olano/s2004c01/ch10.pdf#page=13"
+section = "Carr and Hart, Meshed Atlases for Real-Time Procedural Solid Texturing, ACM TOG 21(2), April 2002, doi:10.1145/508357.508360, §3.3 Coverage (PDF p. 10), §5 A Multiresolution Mesh Atlas (p. 13), §6.1 Global Statistics (p. 20); copy on a UMBC course page"
+quote = '''The coverage of atlases of packed complex polygons was quite low, covering less than half of the available texture samples in our tests. [...] This section describes an alternative clustering method that yields rectangular chart images that pack efficiently and according to a property that preserves spatial coherence across all levels of the MIP map. [...] Because the chart images are rectangular, the coverage for the multiresolution atlas is 100% which means all of the available texture samples are used. The progressive mesh atlas [Sander et al. 2001] can also be MIP mapped, but its coverage was at most about 70%.'''
+checked = 2026-11-14
+
+["xatlas-f700c77-pack-options"]
+url = "https://github.com/jpcy/xatlas/blob/f700c7790aaa030e794b52ba7791a05c085faf0c/source/xatlas/xatlas.h#L197-L232"
+section = "xatlas at commit f700c77, source/xatlas/xatlas.h, struct PackOptions (L197-L232); licence: LICENSE, 'MIT License / Copyright (c) 2018-2020 Jonathan Young'"
+quote = '''// Number of pixels to pad charts with.
+	uint32_t padding = 0; [...] // Leave space around charts for texels that would be sampled by bilinear filtering.
+	bool bilinear = true;
+
+	// Align charts to 4x4 blocks. Also improves packing speed, since there are fewer possible chart locations to consider.
+	bool blockAlign = false;
+
+	// Slower, but gives the best result. If false, use random chart placement.
+	bool bruteForce = false;'''
+checked = 2026-11-14
+
+["sander-2001-tmpm-gutter-pull-push"]
+url = "https://hhoppe.com/tmpm.pdf#page=6"
+section = "Sander, Snyder, Gortler, Hoppe, Texture Mapping Progressive Meshes, SIGGRAPH 2001, §4.7 Sample texture images (p. 6), §5 Results (p. 7)"
+quote = '''In general, schemes that pack multiple charts into a single texture image may give rise to mip-mapping artifacts, since coarser [...] levels will average together spatially disjoint charts. [...] To mitigate this, we apply a pull-push algorithm [7] to fill-in these unsampled regions with reasonable values. [...] A 1-texel gutter is required between texture charts in the texture domain. The overhead of these gutters depends on the resolution assigned to the texture.'''
+checked = 2026-11-14
+
+["nvidia-2004-atlas-lower-mip-bleed"]
+url = "https://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf#page=13"
+section = "NVIDIA, Improve Batching Using Texture Atlases, SDK White Paper, July 2004, Applying Texture Filtering To Atlases, PDF pp. 13-14 (printed pp. 12-13), Figure 8"
+quote = '''While bilinear filtering of the highest resolution mip-level is thus safe, anisotropic filtering of the same mip-level does potentially access unrelated neighboring texels. Worse, bilinear and anisotropic filtering of all lower mip-maps also access unrelated neighboring texels, as Figure 8 demonstrates. [...] These solutions have not yet been implemented, so the following discussion is only theory. [...] The first solution is to write a pixel-shader to clamp atlas coordinates to corresponding sub-textures taking into account which mip-level the texture operation is about to access. [...] The second solution is to pad textures and their mip-chains with border texels. For example, surround the 1x1 mip-map with identical texels so that it consumes a total of 3x3 texels space. These border texels of lower mip-maps, however, need to map up to the higher mip-levels. In the above example, the padded 3x3 mip-map is the lowest mip-level. The one above it would be of dimension 6x6 for a 2x2 block of data. This scheme quickly wastes texture-memory.'''
+checked = 2026-11-14
+
+["nvidia-2004-atlas-power-of-two-lines"]
+url = "https://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf#page=5"
+section = "NVIDIA, Improve Batching Using Texture Atlases, SDK White Paper WP-01387-001-v01, July 2004, Using Mip-Maps with Atlases, PDF p. 5 (printed p. 4), Figure 2"
+quote = '''Finally, even generating mip-map chains of atlases on the fly with a two-by-two [...] filter does not pollute mip-maps with neighboring texels [...] contains only power-of-two textures that do not unnecessarily cross power-of-two lines. For example, a 32x32 atlas containing one 16x16 texture and twelve 8x8 textures must ensure that the 16x16 texture is in one of the four corners of the atlas'''
+checked = 2026-11-14
+
+["vanwaveren-2012-svt-border-per-mip"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=9"
+section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §3.2 Texture Filtering, pp. 9-10; cost from §4.1 Storage & Compression, p. 18"
+quote = '''In order to properly support hardware bi-linear filtering, each physical texture page must have a border of texels around it. [...] For instance, if texture pages have a 4-texel border then the first mip level of the physical texture is populated with pages that are half the size with a 2-texel border [...] The 4-texel border maps well to the 4x4 block size of a hardware supported compression format (DXT, S3TC, ETC, etc.)'''
+cost = '''With a 4-texel inset border for texture filtering and a physical page size of 128 x 128 texels this leaves only 120 x 120 texels worth of payload per page. As such, the border required for proper texture filtering winds up costing approximately 12% in additional texels.'''
+checked = 2026-11-14
+
+["ray-2010-invisible-seams-mip-levels"]
+url = "https://diglib.eg.org/bitstreams/7890a42e-dcd2-4396-8065-5ae568cca077/download#page=6"
+section = "Ray, Nivoliers, Lefebvre, Lévy, Invisible Seams, Computer Graphics Forum 29(4) (EGSR 2010), doi:10.1111/j.1467-8659.2010.01746.x, §4.4 MIP-mapping support (PDF pp. 6-7)"
+quote = '''We are nevertheless able to define a texture atlas providing continuous interpolation across several MIP–map levels – typically the three or four finest levels, depending on the initial texture resolution (see Figure 11). [...] Coarser levels are of course MIP-mapped but perfect continuity is no longer guaranteed. It is important to realize though that coarse levels correspond to far away viewpoints: The object is small on screen and MIP-map levels are strongly filtered – color differences across charts are difficult to perceive.'''
+checked = 2026-11-14
+
+["ue-5.8-material-proxy-defaults"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/MaterialMerging.cpp#L15-L21"
+section = "Unreal Engine 5.8.4, Engine/Private/MaterialMerging.cpp, FMaterialProxySettings constructor defaults (L15-L21) (repository needs an Epic-linked GitHub account)"
+quote = '''FMaterialProxySettings::FMaterialProxySettings()
+	: TextureSizingType(TextureSizingType_UseSingleTextureSize)
+	, TextureSize(1024, 1024)
+	, TargetTexelDensityPerMeter(5.0f)
+	, MeshMaxScreenSizePercent(0.5f)
+	, MeshMinDrawDistance(10000.0f)
+	, GutterSpace(4.0f)'''
+checked = 2026-11-14
+
+["simplygon-10.4-gutter-space"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.199.0/api/reference/processingandmaterialcasting/settingsobject/mappingimageoutputmaterialsettings.html"
+section = "Simplygon SDK 10.4.199.0, API reference, MappingImageOutputMaterialSettings, GutterSpace"
+quote = '''The minimum number of pixels between charts of the output mapping image. [...] Type: unsigned int Default: 4'''
+checked = 2026-11-14
+
+["simplygon-10.4-dilation"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.199.0/api/reference/processingandmaterialcasting/settingsobject/colorcastersettings.html"
+section = "Simplygon SDK 10.4.199.0, API reference, ColorCasterSettings, Dilation and FillMode (inherited from MaterialCasterSettings)"
+quote = '''The Dilation value. Where applicable, such as colors and normals, the caster will fill empty pixels surrounding filled pixels with values mixed from the filled ones. This setting sets how many pixels to fill outside the original filled pixels. [...] Type: unsigned int Default: 10 [...] The fill mode determines what to do with the pixels that remain unfilled after both the casting and dilation has been performed.'''
+checked = 2026-11-14
+
+["andersson-2007-colour-map-detail-maps"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/chapter5-andersson-terrain-rendering-in-frostbite.pdf#page=1"
+section = "Andersson (EA DICE), Terrain Rendering in Frostbite Using Procedural Shader Splatting, Advanced Real-Time Rendering in 3D Graphics and Games, SIGGRAPH 2007 course notes, ch. 5, §5.1 Introduction"
+quote = '''One of the more common approaches for terrain texturing is to combine low-resolution unique color maps (Figure 1) for low-frequency details with multiple tiled detail maps for high-frequency details that are blended in at certain distance to the camera.'''
+checked = 2026-11-14
+
+["widmark-2012-bf3-terrain-virtual-texture"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc12-terrain-in-battlefield3.pdf#page=31"
+section = "Mattias Widmark (EA DICE), Terrain in Battlefield 3: A Modern, Complete and Scalable System, GDC 2012, slides GPU optimization: Procedural virtual texturing (PDF p. 31), Virtual texture key values (p. 32) and Virtual texture issues (p. 38)"
+quote = '''Shader splatting not scalable in view distance [...] By splatting into a texture [...] 32 samples per meter [...] 256x256 tiles with integrated two pixel border [...] Have to limit detail view distance'''
+cost = '''Rendering full screen using the texture cost 2.5-3ms (PS3)'''
+checked = 2026-11-14
+
+["ue-5.8-landscape-hlod-bake"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Landscape/Private/LandscapeHLODBuilder.cpp#L243-L297"
+section = "Unreal Engine 5.8.4, Landscape/Private/LandscapeHLODBuilder.cpp: BakeLandscapeMaterial (L243-L294), the note above ULandscapeHLODBuilder::Build (L296-L297) and its Material block (L379-L394) (repository needs an Epic-linked GitHub account)"
+quote = '''LandscapeFlattenMaterial.SetPropertySize(EFlattenMaterialProperties::Diffuse, InTextureSize); [...] // Use clamp texture addressing to avoid artifacts between tiles [...] // * Currently, for each referenced landscape proxy, we generate individual HLOD meshes & textures. This should output a single mesh for all proxies [...] if (LandscapeProxy->HLODMaterialOverride)
+			{
+				LandscapeMaterial = LandscapeProxy->HLODMaterialOverride.Get();
+			}
+			else
+			{
+				int32 TextureSize = ComputeRequiredTextureSize(LandscapeProxy, static_cast<float>(InHLODBuildContext.MinVisibleDistance), MeshDescription);
+				LandscapeMaterial = BakeLandscapeMaterial(InHLODBuildContext, *MeshDescription, LandscapeProxy, TextureSize);'''
+checked = 2026-11-14
+
+["moore-2018-fc5-baked-albedo"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=80"
+section = "Jeremy Moore (Ubisoft), Terrain Rendering in Far Cry 5, GDC 2018, speaker notes, PDF pp. 14, 17 and 80"
+quote = '''In Far Cry the highest resolution for our terrain tiles is 64 meters square. [...] Baked albedo map (BC1, 132x132) [...] Far shading can be handled directly and cheaply using the albedo/normal of the quad tree payload. For near shading we need to use the splat map.'''
+checked = 2026-11-14
+
+["werle-2017-wildlands-vista-texture"]
+url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=34"
+section = "Werlé and Martinez (Ubisoft), Ghost Recon Wildlands: Terrain Tools and Technology, GDC 2017, speaker notes, PDF pp. 33-34; copy hosted at 666uille.files.wordpress.com"
+quote = '''The result of the material distribution is then saved into 2 textures We call the first one the « splatting ». It contains a material index for each entry of the heightmap [...] The second one is called the « Vista » texture and looks likes a google map screencapture. It will be used as an albedo map when rendering the distant patches.'''
+checked = 2026-11-14
+
+["unity-hlodsystem-04be7e8-terrain-hlod"]
+url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Documentation~/TerrainHLOD.md?plain=1#L3"
+section = "Unity Technologies, HLODSystem (com.unity.hlod) at commit 04be7e8, Documentation~/TerrainHLOD.md, intro (L3) and Material (L31-L45); Unity Companion License"
+quote = '''TerrainHLOD takes a Terrain as input and converts it to a HLOD Mesh. [...] Note
+that we bake the Splat System into single textures for our
+TerrainHLODMesh material. [...] **Size:** Specifies the size at which the texture will be baked.
+
+**Texture properties:** We'll bake 3 textures for the material:
+Albedo, Normal, and Mask.'''
+checked = 2026-11-14
+
+["rossignac-1993-vertex-clustering"]
+url = "https://faculty.cc.gatech.edu/~jarek/papers/VertexClustering.pdf#page=2"
+section = "Rossignac and Borrel, Multi-resolution 3D approximations for rendering complex scenes, IBM Research Report RC 17697 (1992), published in Geometric Modeling in Computer Graphics, Springer 1993, pp. 455-465; author-hosted scan with no text layer, read as page images: §1 Introduction (PDF p. 2), §3.1 Grading and §3.3 Clustering (PDF p. 3)"
+quote = '''an elongated solid may be approximated by a curve segment. However, the error introduced by the simplification is bounded (in the Hausdorf distance sense) by a user-controlled accuracy factor [...] We favor (1) vertices that have a higher probability of lying on the object's silhouettes from an arbitrary viewing direction and (2) vertices that bound large faces that should not be affected by the removal of small details. [...] A box, or other bound, containing the object is uniformly subdivided into cells. Vertices falling within one cell form a cluster and will be replaced by a unique vertex.'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-sloppy-output"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L2172-L2260"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, fillCellRemap (L2172-L2187), filterTriangles (L2217-L2260) and meshopt_simplifySloppy's result (L2695, L2706-L2707)"
+quote = '''float error = quadricError(cell_quadrics[cell], vertex_positions[i]); if (cell_remap[cell] == ~0u || cell_errors[cell] > error) { cell_remap[cell] = unsigned(i); cell_errors[cell] = error; } [...] if (c0 != c1 && c0 != c2 && c1 != c2) [...] // vertex collapses often result in duplicate triangles; we need a table to filter them out [...] *out_result_error = sqrtf(result_error);'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-sloppy-grid"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L2580-L2666"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, computeVertexIds (L2022-L2040) and meshopt_simplifySloppy's grid search (L2589-L2590, L2607-L2609, L2625-L2626)"
+quote = '''vertex_ids[i] = (xi << 20) | (yi << 10) | zi; [...] // we expect to get ~2 triangles/vertex in the output size_t target_cell_count = target_index_count / 6; [...] // invariant: # of triangles in min_grid <= target_count int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : (target_error < 1.f ? target_error : 1.f))); int max_grid = 1025; [...] if (min_triangles >= target_index_count / 3 || max_grid - min_grid <= 1) break;'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-sloppy-declaration"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L497-L511"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, meshopt_simplifySloppy, lines 497-511"
+quote = '''Experimental: Mesh simplifier (sloppy) [...] The algorithm doesn't preserve mesh topology but can stop short of the target goal based on target error. [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; vertices that can't be moved should set 1 consistently for all indices with the same position [...] MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const unsigned char* vertex_lock, size_t target_index_count, float target_error, float* result_error);'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-gltfpack-simplify"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/gltf/mesh.cpp#L890-L956"
+section = "meshoptimizer 0.25, gltf/mesh.cpp (gltfpack), simplifyMesh, lines 911-950"
+quote = '''float target_error_aggressive = 1e-1f; [...] if (lock_borders) options |= meshopt_SimplifyLockBorder; else options |= meshopt_SimplifyPrune; [...] // if the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier; this is only used when aggressive simplification is enabled as it breaks attribute discontinuities [...] indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-edge-collapse-topology"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L1281-L1343"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, buildPositionRemap (L209-L210), pickEdgeCollapses (L1293-L1296) and meshopt_simplifyEdge (L2437)"
+quote = '''// build forward remap: for each vertex, which other (canonical) vertex does it map to? // we use position equivalence for this, and remap vertices to other existing vertices [...] for (int e = 0; e < 3; ++e) { unsigned int i0 = indices[i + e]; unsigned int i1 = indices[i + next[e]]; [...] // no edges can be collapsed any more due to topology restrictions'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-vertex-kinds"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L292-L300"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, enum VertexKind (L292-L300) and classifyVertices (L436-L467)"
+quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edges
+	Kind_Seam,     // on an attribute seam with exactly two attribute seam edges
+	Kind_Complex,  // none of the above; these vertices can move as long as all wedges move to the target vertex
+	Kind_Locked,   // none of the above; these vertices can't move [...] // seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap [...] // more than one vertex maps to this one; we don't have classification available
+				result[i] = Kind_Locked;'''
+checked = 2026-11-14
+
+["meshopt-0.6.2-simplify-options"]
+url = "https://docs.rs/crate/meshopt/0.6.2/source/src/simplify.rs"
+section = "`meshopt` crate 0.6.2, src/simplify.rs, SimplifyOptions (L5-L28), simplify_with_locks' lock type (L112), simplify_sloppy's doc comment (L282) and simplify_sloppy_with_locks (L361)"
+quote = '''const LockBorder = 1; [...] const Sparse = 2; [...] const ErrorAbsolute = 4; [...] const Prune = 8; [...] const Regularize = 16; [...] const Permissive = 32; [...] vertex_lock: &[bool], [...] /// The algorithm doesn't preserve mesh topology but is always able to reach target triangle count. [...] pub fn simplify_sloppy_with_locks('''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-prune-criterion"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L1869-L1959"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, measureComponents (L1869-L1922), pruneComponents (L1924-L1959) and their use in meshopt_simplifyEdge (L2475-L2476, L2482-L2489)"
+quote = '''// compute approximate sphere center for each component as an average [...] // compute squared radius for each component [...] if (component_errors[c] > error_cutoff) [...] if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error) result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror); [...] // we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit [...] float component_cutoff = component_nexterror * 1.5f < error_limit ? component_nexterror * 1.5f : error_limit;'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-simplify-prune-function"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L550"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which binds meshopt_simplifyPrune only in `meshopt::ffi`), README, Simplification: Advanced simplification, line 550"
+quote = '''In addition to the `meshopt_SimplifyPrune` flag, you can explicitly prune isolated components by calling the `meshopt_simplifyPrune` function. This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup. Similar to other simplification functions, the `target_error` argument controls the cutoff of component radius and is specified in relative units (e.g., `1e-2f` will remove components under 1%). If an absolute cutoff is desired, divide the parameter by the factor returned by `meshopt_simplifyScale`.'''
+checked = 2026-11-14
+
+["ue-5.8-approximate-tiny-parts"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L89-L95"
+section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, lines 89-95 (repository needs an Epic-linked GitHub account)"
+quote = '''/** If enabled, tiny parts will be excluded from the mesh merging, which can improve performance */ [...] bool bIgnoreTinyParts = true; /** Multiplier on Approximation Accuracy used to define tiny-part threshold, using maximum bounding-box dimension */ [...] float TinyPartSizeMultiplier = 0.05f;'''
+checked = 2026-11-14
+
+["simplygon-10.4-part-remover"]
+url = "https://documentation.simplygon.com/SimplygonSDK_10.4.117.0/api/tools/partremover.html"
+section = "Simplygon SDK 10.4.117.0 documentation, API, Tools, Part remover"
+quote = '''The part remover is used to remove objects smaller than a set threshold from the scene. [...] EPartRemoverThresholdType::OnScreenSize - All objects that are smaller than 1 pixel, when the scene is viewed at the selected OnScreenSize, will be removed. [...] Objects with a bounding box diagonal smaller than the set threshold will be deleted.'''
+checked = 2026-11-14
+
+["unity-hlodsystem-04be7e8-min-object-size"]
+url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Editor/CreateUtils/GetMeshRenderer.cs#L73-L82"
+section = "Unity Technologies, HLODSystem (com.unity.hlod) at commit 04be7e8, Editor/CreateUtils/GetMeshRenderer.cs, MeshRendererCalculator.Calculate, lines 77-79"
+quote = '''float max = Mathf.Max(mr.bounds.size.x, mr.bounds.size.y, mr.bounds.size.z); if (max < minObjectSize) continue;'''
+checked = 2026-11-14
+
+["ue-5.8-hlod-simplify-screen-size"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/WorldPartitionHLODUtilities/Source/Private/WorldPartition/HLOD/Builders/HLODBuilderMeshSimplify.cpp#L81-L104"
+section = "Unreal Engine 5.8.4, WorldPartitionHLODUtilities, HLODBuilderMeshSimplify.cpp, UHLODBuilderMeshSimplify::Build (the Simplified Mesh HLOD layer), lines 81-104 (repository needs an Epic-linked GitHub account)"
+quote = '''static const float ScreenX = 1920; static const float ScreenY = 1080; static const float HalfFOVRad = FMath::DegreesToRadians(45.0f); [...] float ScreenSizePercent = ComputeBoundsScreenSize(FVector::ZeroVector, static_cast<float>(GetComponentsBounds().SphereRadius), FVector(0.0f, 0.0f, InHLODBuildContext.MinVisibleDistance), ProjectionMatrix); UseSettings.ScreenSize = FMath::RoundToInt(ScreenSizePercent * ScreenX);'''
+checked = 2026-11-14
+
+["ue-5.8-approximate-simplify-policy"]
+url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L128-L142"
+section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, lines 128-142 (repository needs an Epic-linked GitHub account)"
+quote = '''EMeshApproximationSimplificationPolicy SimplifyMethod = EMeshApproximationSimplificationPolicy::GeometricTolerance; /** Target triangle count for Mesh Simplification, for SimplifyMethods that use a Count*/ [...] int32 TargetTriCount = 2000; [...] float TrianglesPerM = 2.0f; /** Allowable Geometric Deviation in Meters when SimplifyMethod incorporates a Geometric Tolerance */ [...] float GeometricDeviation = 0.1f;'''
+checked = 2026-11-14
+
+["chen-2023-pixel-criterion"]
+url = "https://robust-low-poly-meshing.github.io/paper/Robust_Self_Collision_Free_Remeshing.pdf"
+section = "Chen, Pan, Wu, Vouga and Gao, Robust Low-Poly Meshing for General 3D Models, ACM TOG 42(4) (SIGGRAPH 2023), doi 10.1145/3592396, problem statement and Overview (PDF pp. 4-5); cost from the experiment setup (p. 11) and Timings (p. 12)"
+quote = '''is indistinguishable from [...] when rendered from a faraway view (a view where the diagonal length of the bounding box of [...] is less than [...] pixels); [...] visual preservation in our second property is measured by Silhouette difference and the normal difference between [...] and finally remove all invisible disconnected components from the extracted iso-surface'''
+cost = '''run our experiments on a workstation with a 32-cores Intel processor clocked at 3.7Ghz and 256Gb of memory, and we use TBB for parallelization. [...] We take about 7 minutes on average to finish the remeshing of the entire tested dataset while the others take less than 2 minutes'''
+checked = 2026-11-14
+
+["gao-2022-silhouette-metric"]
+url = "https://lowpoly-modeling.github.io/paper.pdf"
+section = "Gao, Wu and Pan, Low-poly Mesh Generation for Building Models, SIGGRAPH 2022 Conference Proceedings (doi 10.1145/3528233.3530716), Selecting the Next-Best Primitive with eq. 2 (PDF p. 5), Computing Visual Metrics (p. 6), Experiment (p. 7); cost from Experiment (p. 7) and Discussion and Limitations (p. 8)"
+quote = '''which renders the mesh [...] into a stencil buffer, binary masking the occluded pixels and discarding the normal information. [...] is binary, so computing [...] amounts to performing a pixel-wise XOR operator. [...] We render each mesh to a 128×128 framebuffer [...] conventionally used metrics, e.g. Hausdorff distance, may not fit well for the rendering applications, since they are designed to measure the geometry preservation, instead of visual preservation'''
+cost = '''We run all our experiments on a workstation with a 32-cores Intel processor clocked at 3.5 Ghz and 64 Gb of memory. [...] ours requires 6 minutes. Over the 100 models, it takes our method from a second to tens of minutes to process a model. [...] For the dataset, our algorithm terminates within 3 mins for 85% of the models and the average computational cost is 45 secs.'''
+checked = 2026-11-14
+
+["gao-2022-low-poly-building"]
+url = "https://lowpoly-modeling.github.io/paper.pdf#page=1"
+section = "Gao, Wu and Pan, Low-poly Mesh Generation for Building Models, SIGGRAPH 2022 Conference Proceedings, project-page copy, Abstract, p. 1; hardware from Experiment, p. 7; cost from Discussion and Limitations, p. 8"
+quote = '''a watertight, self-collision-free visual hull is generated via Boolean intersecting 3D extrusions of input’s silhouettes [...] Executable program for this paper is at lowpoly-modeling.github.io.'''
+cost = '''For the dataset, our algorithm terminates within 3 mins for 85% of the models and the average computational cost is 45 secs. [...] a workstation with a 32-cores Intel processor clocked at 3.5 Ghz and 64 Gb of memory'''
+checked = 2026-11-14
+
+["meshoptimizer-0.25-licence"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/LICENSE.md"
+section = "meshoptimizer 0.25, LICENSE.md, lines 1-3"
+quote = '''MIT License [...] Copyright (c) 2016-2025 Arseny Kapoulkine'''
+checked = 2026-11-14
