@@ -4,6 +4,7 @@
 
 mod chunk;
 mod export;
+mod far_proxy;
 mod fetch;
 mod launch;
 pub(crate) mod mesh;
@@ -25,7 +26,8 @@ pub use texture::{ImageGenerator, LoadedImage, TextureSource};
 use crate::ReferenceScene;
 use crate::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedChunk, CookedMaterial,
-    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MaterialChannel, TEXTURE_FORMAT_VERSION, hex,
+    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MESH_FORMAT_VERSION, MESH_MAGIC, MaterialChannel,
+    TEXTURE_FORMAT_VERSION, chunk_origin, hex,
 };
 use crate::render::CrowdForm;
 use crate::state::Simulation;
@@ -145,6 +147,7 @@ struct Sources {
     /// Each Chunk generated so far a Placement of which names a Mesh this
     /// cook did not read, so its Blob, if any, stays as it is.
     kept_chunks: Vec<AssetId>,
+    chunk_digests: HashMap<AssetId, ChunkDigest>,
     absent: Vec<String>,
     /// The GUID of each source some or all of whose Blobs stay as they are,
     /// as the source, or an image it names, is absent.
@@ -152,6 +155,28 @@ struct Sources {
     /// Each Texture a read source's Materials sample whose image this cook
     /// did not read, so its Blob, if any, stays as it is.
     kept_textures: Vec<AssetId>,
+}
+
+struct ChunkDigest {
+    cook_key: String,
+    kept: bool,
+    meshes: Vec<AssetId>,
+}
+
+struct GeneratedFarProxy {
+    id: AssetId,
+    cook_key: String,
+    /// Whether its Chunk or a neighbour is kept, so its Blob, if any, stays
+    /// as it is.
+    kept: bool,
+    references: Vec<(Referrer, AssetId)>,
+}
+
+fn neighbourhood([x, z]: [i32; 2]) -> impl Iterator<Item = [i32; 2]> {
+    let steps = [0, -1, 1];
+    steps
+        .into_iter()
+        .flat_map(move |across| steps.map(|along| [x + across, z + along]))
 }
 
 /// A Chunk as a cook generates it.
@@ -212,13 +237,113 @@ impl Sources {
             tracing::warn!(chunk = %referrer, mesh = %placement.mesh, "a Placement's Mesh is not among the sources this cook reads; the Chunk's Blob, if any, stays as it is");
         }
         let kept = unread.is_some();
+        let (id, cook_key) = (scene.chunk_id(coordinates), chunk::cook_key(&chunk));
+        let mut meshes: Vec<_> = (chunk.placements.iter())
+            .map(|placement| placement.mesh)
+            .collect();
+        meshes.sort_unstable();
+        meshes.dedup();
+        let digest = ChunkDigest {
+            cook_key: cook_key.clone(),
+            kept,
+            meshes,
+        };
+        self.chunk_digests.insert(id, digest);
         Ok(GeneratedChunk {
-            id: scene.chunk_id(coordinates),
+            id,
             referrer,
-            cook_key: chunk::cook_key(&chunk),
+            cook_key,
             chunk,
             kept,
         })
+    }
+
+    /// The Cook key covers the Chunk's and its neighbours' Cook keys and
+    /// their Meshes', which hold everything `far_proxy_blob` reads.
+    fn far_proxy(
+        &mut self,
+        scene: ReferenceScene,
+        coordinates: [i32; 2],
+    ) -> anyhow::Result<GeneratedFarProxy> {
+        let id = scene.far_proxy_id(coordinates);
+        let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
+        let mut hasher = Sha256::new();
+        hasher.update(MESH_MAGIC);
+        hasher.update(MESH_FORMAT_VERSION.to_le_bytes());
+        hasher.update(mesh::encoder_settings());
+        hasher.update(far_proxy::settings(pixel_metres));
+        let ground = scene.far_field_ground();
+        hasher.update(ground.map_or(0, |ground| ground.0).to_be_bytes());
+        let (mut kept, mut meshes) = (false, Vec::new());
+        for near in neighbourhood(coordinates) {
+            if !self.chunks.contains(&(scene, near)) {
+                hasher.update([0]);
+                continue;
+            }
+            let chunk = scene.chunk_id(near);
+            if !self.chunk_digests.contains_key(&chunk) {
+                self.chunk(scene, near)?;
+            }
+            let digest = &self.chunk_digests[&chunk];
+            hasher.update([1]);
+            hasher.update(&digest.cook_key);
+            kept |= digest.kept;
+            meshes.extend(&digest.meshes);
+        }
+        meshes.sort_unstable();
+        meshes.dedup();
+        let mut references = Vec::new();
+        for (mesh, _, cook_key, primitives) in &self.meshes {
+            if !meshes.contains(mesh) {
+                continue;
+            }
+            hasher.update(mesh.0.to_be_bytes());
+            hasher.update(cook_key);
+            if Some(*mesh) == ground {
+                let materials = primitives.iter().filter_map(|(_, material)| *material);
+                references.extend(materials.map(|material| (Referrer::Mesh(id), material)));
+            }
+        }
+        Ok(GeneratedFarProxy {
+            id,
+            cook_key: hex(&hasher.finalize()),
+            kept,
+            references,
+        })
+    }
+
+    fn far_proxy_blob(
+        &mut self,
+        scene: ReferenceScene,
+        coordinates: [i32; 2],
+    ) -> anyhow::Result<Vec<u8>> {
+        let referrer = Referrer::Chunk(scene, coordinates);
+        let ground = scene
+            .far_field_ground()
+            .with_context(|| format!("{} has no Far field", scene.name()))?;
+        anyhow::ensure!(
+            self.chunks.contains(&(scene, coordinates)),
+            "{referrer} is not among the cook's Chunks"
+        );
+        let mut near_chunks = Vec::new();
+        for near in neighbourhood(coordinates) {
+            if self.chunks.contains(&(scene, near)) {
+                let from_origin = chunk_origin(near) - chunk_origin(coordinates);
+                near_chunks.push((from_origin, self.chunk(scene, near)?.chunk));
+            }
+        }
+        let (_, chunk) = &near_chunks[0];
+        let neighbours: Vec<_> = (near_chunks[1..].iter())
+            .map(|(from_origin, neighbour)| (*from_origin, neighbour))
+            .collect();
+        let primitives_of = |mesh: AssetId| {
+            let source = self.meshes.iter().find(|(id, ..)| *id == mesh);
+            source.map(|(.., primitives)| &primitives[..])
+        };
+        let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
+        far_proxy::cook(chunk, &neighbours, &primitives_of, ground, pixel_metres)
+            .and_then(|mesh| mesh.to_blob())
+            .with_context(|| format!("cooking the Far proxy of {referrer}"))
     }
 
     /// Whether the Blob `reference` names may be one a cook kept as it is:
@@ -337,6 +462,22 @@ fn cook_sources(
         }
     }
     sources.kept_chunks.extend(kept_chunks);
+    for (scene, coordinates) in sources.chunks.clone() {
+        if scene.far_field_ground().is_none() {
+            continue;
+        }
+        let proxy = sources.far_proxy(scene, coordinates)?;
+        if proxy.kept {
+            continue;
+        }
+        if is_fresh(cache, proxy.id, &proxy.cook_key) {
+            report.unchanged.push(proxy.id);
+        } else {
+            let blob = sources.far_proxy_blob(scene, coordinates)?;
+            cache.write(proxy.id, &proxy.cook_key, &blob)?;
+            report.cooked.push(proxy.id);
+        }
+    }
     let mut stale = Vec::new();
     for texture in &sources.textures {
         let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);

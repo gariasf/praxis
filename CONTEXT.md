@@ -182,8 +182,16 @@ A Chunk the camera came within the Load radius of before it was loaded.
 _Avoid_: Pop-in, streaming miss
 
 **Far proxy**:
-What is drawn in place of a Chunk that is not loaded, out to the View distance: one merged Mesh with a Material baked for it.
-_Avoid_: HLOD, impostor, Shadow proxy (traced, never drawn)
+A Mesh cooked per Chunk, drawn in place of the Chunk's Placements while the Chunk is outside the Load radius and within the View distance: the Chunk's static Placements merged, with a Material baked for it and the Chunk's ground tiles (ADR 0026). LOD stays a Mesh's, a Far proxy's included.
+_Avoid_: HLOD (the technique's name, for research notes), impostor, group proxy, Shadow proxy (traced, never drawn)
+
+**Far field**:
+The band between the Load radius and the View distance, where Far proxies are drawn.
+_Avoid_: Distant terrain, background, horizon
+
+**Late Far proxy**:
+A Far proxy that is not Resident while its Chunk is in the Far field.
+_Avoid_: Missing proxy, far pop-in
 
 **Late mip**:
 A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.

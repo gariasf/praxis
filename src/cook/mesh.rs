@@ -5,7 +5,7 @@
 //! Primitive's triangles, in that order, into Meshlets; then simplifies the
 //! Mesh into the rest of its LOD chain, each LOD ordered and cut alike.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Context as _;
 use glam::{Mat3, Quat, Vec2, Vec3};
@@ -28,7 +28,7 @@ const OVERDRAW_THRESHOLD: f32 = 1.05;
 
 /// The share of the previous LOD's indices past which a LOD is dropped and
 /// its chain ends.
-const LOD_KEPT_INDICES_CEILING: f32 = 0.85;
+pub(super) const LOD_KEPT_INDICES_CEILING: f32 = 0.85;
 
 /// The simplifier's weight of each component of a vertex's normal, as in
 /// its README's example [ref:meshoptimizer-0.25-attribute-weights].
@@ -158,6 +158,12 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         farthest_metres <= MAX_PIVOT_DISTANCE_METRES,
         "a vertex lies {farthest_metres:.1} m from the Mesh's pivot, past ADR 0014's {MAX_PIVOT_DISTANCE_METRES} m"
     );
+    let mut mesh = lod_0(primitives)?;
+    mesh.coarser_lods = coarser_lods(&mesh)?;
+    Ok(mesh)
+}
+
+pub(super) fn lod_0(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh> {
     let mut mesh = CookedMesh {
         vertices: Vec::new(),
         indices: Vec::new(),
@@ -208,8 +214,62 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         corners.clone().fold(Vec3::INFINITY, Vec3::min).into(),
         corners.fold(Vec3::NEG_INFINITY, Vec3::max).into(),
     ];
-    mesh.coarser_lods = coarser_lods(&mesh)?;
     Ok(mesh)
+}
+
+/// `geometries` are the Mesh's Primitives in order. A vertex an earlier LOD
+/// holds in the same Primitive is shared, never one of another Primitive.
+pub(super) fn push_lod(
+    mesh: &mut CookedMesh,
+    error_metres: f32,
+    geometries: &[&Geometry],
+) -> anyhow::Result<()> {
+    let mut lod = CookedLod {
+        error_metres,
+        indices: Vec::new(),
+        primitives: Vec::new(),
+    };
+    for (primitive_index, geometry) in geometries.iter().enumerate() {
+        let held = mesh.lods().flat_map(|(_, indices, primitives)| {
+            let primitive = &primitives[primitive_index];
+            &indices[primitive.first_index as usize..][..primitive.index_count as usize]
+        });
+        let mut index_of_vertex: HashMap<[u8; size_of::<CookedVertex>()], u32> = held
+            .map(|&index| (bytemuck::cast(mesh.vertices[index as usize]), index))
+            .collect();
+        let (vertices, indices) = cook_primitive(geometry);
+        let mesh_indices: Vec<u32> = vertices
+            .iter()
+            .map(|vertex| {
+                *index_of_vertex
+                    .entry(bytemuck::cast(*vertex))
+                    .or_insert_with(|| {
+                        mesh.vertices.push(*vertex);
+                        mesh.vertices.len() as u32 - 1
+                    })
+            })
+            .collect();
+        let indices: Vec<u32> = indices
+            .iter()
+            .map(|&index| mesh_indices[index as usize])
+            .collect();
+        let triangles = indices.as_chunks::<3>().0;
+        let finest = &mesh.primitives[primitive_index];
+        lod.primitives.push(CookedPrimitive {
+            first_index: lod.indices.len() as u32,
+            index_count: indices.len() as u32,
+            material: finest.material,
+            texel_density: finest.texel_density,
+            thin_radius_metres: finest.thin_radius_metres,
+            meshlets: CookedMeshlet::split(
+                triangles,
+                meshlet_triangle_counts(triangles, mesh.vertices.len()),
+            )?,
+        });
+        lod.indices.extend(indices);
+    }
+    mesh.coarser_lods.push(lod);
+    Ok(())
 }
 
 /// `mesh`'s LODs past LOD 0: each simplified from the one before to half its
@@ -358,6 +418,9 @@ fn texel_density(geometry: &Geometry) -> f32 {
 /// One Primitive's vertices and indices, welded, re-split and ordered for
 /// vertex cache and overdraw.
 fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
+    if geometry.indices.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
     let welded = weld(geometry);
     let tangents = corner_tangents(
         &welded.positions,
