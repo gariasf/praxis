@@ -480,6 +480,12 @@ pub(crate) struct ChunkStreaming {
 /// in `docs/performance.md`, "Measurements behind the code".
 const INSTANCES_PLACED_PER_FRAME: usize = 131_072;
 
+/// The Chunks a frame loads, as each load's sizing and pool writes, and the
+/// wait for the BLAS of a Mesh it brings to build and compact, take the main
+/// thread whatever it places or writes; sized in `docs/performance.md`,
+/// "Measurements behind the code".
+const LOADS_PER_FRAME: usize = 3;
+
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
 /// stale.
 type CookChunk = Box<dyn FnMut(AssetId) -> anyhow::Result<()>>;
@@ -587,15 +593,15 @@ impl ChunkStreaming {
 
     /// Runs the Chunk streamer for the World's camera: loads the Chunks whose
     /// reads finished into `renderer`'s pools, nearest the camera first, up
-    /// to the frame's load bytes, and keeps the World's `LoadedChunks` to
-    /// what the streamer holds. With `settle`, waits until the frame is
-    /// Settled, loading the Chunks of each wait together once all have
-    /// arrived, in coordinate order and past the frame's load bytes, so
-    /// their order never depends on the IO pool's timing; a load that fails
-    /// then fails the frame. Ends the frame's frees to make room, which it
-    /// reports with the pools' refusals since the frame before, and clears
-    /// the camera's `teleported`, timing the hold of the Fast travel it
-    /// marks.
+    /// to the frame's caps on loads, placed Instances and load bytes, and
+    /// keeps the World's `LoadedChunks` to what the streamer holds. With
+    /// `settle`, waits until the frame is Settled, loading the Chunks of
+    /// each wait together once all have arrived, in coordinate order and
+    /// past the frame's caps, so their order never depends on the IO pool's
+    /// timing; a load that fails then fails the frame. Ends the frame's
+    /// frees to make room, which it reports with the pools' refusals since
+    /// the frame before, and clears the camera's `teleported`, timing the
+    /// hold of the Fast travel it marks.
     pub(crate) fn update(
         &mut self,
         world: &mut World,
@@ -656,10 +662,12 @@ impl ChunkStreaming {
                 claimed,
                 decoded,
                 finished,
-                renderer,
+                pools: renderer,
                 settle,
                 load_bytes_per_frame: *load_bytes_per_frame,
                 instances_placed_per_frame: *instances_placed_per_frame,
+                loads_per_frame: LOADS_PER_FRAME,
+                loads: 0,
                 written_bytes: &mut streamed.written_bytes,
                 placed_instances: &mut placed_instances,
                 bytes_read: &mut streamed.bytes_read,
@@ -840,8 +848,8 @@ fn remove_users(renderer: &mut Renderer, chunk: &LoadedChunk) {
 }
 
 /// The IO the Chunk streamer reaches in one frame: requests go to the IO
-/// pool, and its finished reads are loaded into the pools.
-struct FrameIo<'a> {
+/// pool, and its finished reads are loaded into `Pools`, the Renderer's.
+struct FrameIo<'a, Pools> {
     cook_chunk: &'a mut Option<CookChunk>,
     io: &'a mut IoPool,
     scene: ReferenceScene,
@@ -852,10 +860,13 @@ struct FrameIo<'a> {
     claimed: &'a Mutex<HashSet<AssetId>>,
     decoded: &'a mut DecodedAssets,
     finished: &'a mut BTreeMap<[i32; 2], LoadedChunk>,
-    renderer: &'a mut Renderer,
+    pools: &'a mut Pools,
     settle: bool,
     load_bytes_per_frame: u64,
     instances_placed_per_frame: usize,
+    loads_per_frame: usize,
+    /// The loads the frame made so far, those that failed among them.
+    loads: usize,
     /// The bytes the frame's loads wrote into the load staging so far.
     written_bytes: &'a mut u64,
     /// The Instances the frame's loads placed so far.
@@ -866,7 +877,19 @@ struct FrameIo<'a> {
     waiting: HashSet<[i32; 2]>,
 }
 
-impl FrameIo<'_> {
+/// What a frame's Chunk loads ask of the pools they load into.
+trait LoadsIntoPools {
+    fn waits_on_a_read(&self, decoded: &DecodedChunk) -> bool;
+    fn most_written_bytes(&mut self, chunk: &CookedChunk) -> anyhow::Result<u64>;
+    /// The bytes written into the load staging so far.
+    fn load_staging_written_bytes(&self) -> u64;
+    fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk>;
+}
+
+impl<Pools> FrameIo<'_, Pools>
+where
+    Self: LoadsIntoPools,
+{
     /// The ready load to take next: the Chunk nearest the camera, lowest
     /// coordinates first, or the lowest coordinates while settling.
     fn next_ready(&self) -> Option<[i32; 2]> {
@@ -884,13 +907,16 @@ impl FrameIo<'_> {
         })
     }
 
-    /// Whether loading `chunk` keeps the frame's placed Instances and load
-    /// bytes within their caps: always while settling; past the Instances'
-    /// cap only while the frame's loads have placed none, and past the
-    /// bytes' only while they have written none.
+    /// Whether loading `chunk` keeps the frame's loads, placed Instances and
+    /// load bytes within their caps: always while settling; past the
+    /// Instances' cap only while the frame's loads have placed none, and
+    /// past the bytes' only while they have written none.
     fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
         if self.settle {
             return Ok(true);
+        }
+        if self.loads >= self.loads_per_frame {
+            return Ok(false);
         }
         let instances = *self.placed_instances + chunk.placements.len();
         if *self.placed_instances > 0 && instances > self.instances_placed_per_frame {
@@ -903,6 +929,27 @@ impl FrameIo<'_> {
         Ok(*self.written_bytes + bytes <= self.load_bytes_per_frame)
     }
 
+    /// Loads `decoded` into the pools, counting what it read and wrote.
+    fn load(&mut self, decoded: DecodedChunk) -> anyhow::Result<LoadedChunk> {
+        self.loads += 1;
+        *self.bytes_read += decoded.bytes_read;
+        *self.placed_instances += decoded.chunk.placements.len();
+        #[cfg(debug_assertions)]
+        let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
+        let written_before = self.load_staging_written_bytes();
+        let loaded = self.load_into_pools(&decoded);
+        let written_bytes = self.load_staging_written_bytes() - written_before;
+        #[cfg(debug_assertions)]
+        assert!(
+            written_bytes <= most_written_bytes,
+            "a Chunk wrote {written_bytes} bytes, past the {most_written_bytes} it was sized at"
+        );
+        *self.written_bytes += written_bytes;
+        loaded
+    }
+}
+
+impl LoadsIntoPools for FrameIo<'_, Renderer> {
     /// Whether loading `decoded` needs an Asset the pools lack that a Chunk
     /// read in flight since before its own came back claimed, and so may be
     /// decoding.
@@ -917,7 +964,7 @@ impl FrameIo<'_> {
             mesh_pool,
             material_pool,
             ..
-        } = &*self.renderer;
+        } = &*self.pools;
         let claimed = self.claimed.lock().unwrap_or_else(PoisonError::into_inner);
         let available = |id| {
             !claimed.contains(&id)
@@ -937,7 +984,7 @@ impl FrameIo<'_> {
             mesh_pool,
             material_pool,
             ..
-        } = &*self.renderer;
+        } = &*self.pools;
         let reader = DecodedReader {
             decoded: RefCell::new(&mut *self.decoded),
             cache: self.cache,
@@ -986,22 +1033,8 @@ impl FrameIo<'_> {
         Ok(bytes)
     }
 
-    /// Loads `decoded` into the pools, counting what it read and wrote.
-    fn load(&mut self, decoded: DecodedChunk) -> anyhow::Result<LoadedChunk> {
-        *self.bytes_read += decoded.bytes_read;
-        *self.placed_instances += decoded.chunk.placements.len();
-        #[cfg(debug_assertions)]
-        let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
-        let written_before = self.renderer.load_staging.written_bytes();
-        let loaded = self.load_into_pools(&decoded);
-        let written_bytes = self.renderer.load_staging.written_bytes() - written_before;
-        #[cfg(debug_assertions)]
-        assert!(
-            written_bytes <= most_written_bytes,
-            "a Chunk wrote {written_bytes} bytes, past the {most_written_bytes} it was sized at"
-        );
-        *self.written_bytes += written_bytes;
-        loaded
+    fn load_staging_written_bytes(&self) -> u64 {
+        self.pools.load_staging.written_bytes()
     }
 
     fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk> {
@@ -1017,7 +1050,7 @@ impl FrameIo<'_> {
             material_pool,
             load_staging,
             ..
-        } = &mut *self.renderer;
+        } = &mut *self.pools;
         let mut loader = PoolLoader {
             device,
             staging: load_staging,
@@ -1032,7 +1065,10 @@ impl FrameIo<'_> {
     }
 }
 
-impl ChunkIo for FrameIo<'_> {
+impl<Pools> ChunkIo for FrameIo<'_, Pools>
+where
+    Self: LoadsIntoPools,
+{
     fn request(&mut self, coordinates: [i32; 2]) {
         let id = self.scene.chunk_id(coordinates);
         if let Some(cook_chunk) = self.cook_chunk
@@ -1106,13 +1142,12 @@ mod tests {
     use super::*;
     use crate::cooked::CookedMaterial;
 
-    /// A Chunk waits only on the Chunk reads in flight when its own came back:
-    /// any later read found what it names claimed and skipped it.
-    #[test]
-    fn a_chunk_waits_only_on_the_reads_in_flight_when_its_own_came_back() {
-        let (request_sender, _requests) = mpsc::channel();
+    /// An IO pool without threads, with the end its requests arrive at and
+    /// the end that finishes them.
+    fn io_pool() -> (IoPool, mpsc::Receiver<IoRequest>, mpsc::Sender<Finished>) {
+        let (request_sender, requests) = mpsc::channel();
         let (finished_sender, finished) = mpsc::channel();
-        let mut io = IoPool {
+        let io = IoPool {
             requests: Some(request_sender),
             finished,
             threads: Vec::new(),
@@ -1122,7 +1157,13 @@ mod tests {
             ready: BTreeMap::new(),
             ready_mips: BTreeMap::new(),
         };
-        let decoded = |coordinates| DecodedChunk {
+        (io, requests, finished_sender)
+    }
+
+    /// The read of a Chunk without Placements at `coordinates`, as it comes
+    /// back from the IO pool.
+    fn read_chunk(coordinates: [i32; 2]) -> Finished {
+        let decoded = DecodedChunk {
             id: AssetId(1),
             coordinates,
             chunk: CookedChunk {
@@ -1136,14 +1177,140 @@ mod tests {
             bytes_read: 0,
             reads_requested_before_it_came_back: 0,
         };
-        let finish = |coordinates| {
-            finished_sender
-                .send(Finished::Chunk(
-                    coordinates,
-                    Box::new(Ok(decoded(coordinates))),
-                ))
-                .unwrap();
-        };
+        Finished::Chunk(coordinates, Box::new(Ok(decoded)))
+    }
+
+    /// Pools that load any Chunk but the one at `refused`, without its
+    /// Placements, and write nothing.
+    struct NoPools {
+        refused: Option<[i32; 2]>,
+    }
+
+    impl LoadsIntoPools for FrameIo<'_, NoPools> {
+        fn waits_on_a_read(&self, _decoded: &DecodedChunk) -> bool {
+            false
+        }
+
+        fn most_written_bytes(&mut self, _chunk: &CookedChunk) -> anyhow::Result<u64> {
+            Ok(0)
+        }
+
+        fn load_staging_written_bytes(&self) -> u64 {
+            0
+        }
+
+        fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk> {
+            anyhow::ensure!(self.pools.refused != Some(decoded.coordinates), "refused");
+            Ok(LoadedChunk {
+                id: decoded.id,
+                coordinates: decoded.coordinates,
+                placements: Vec::new(),
+                lights: Vec::new(),
+                meshes: Vec::new(),
+                materials: Vec::new(),
+                held: false,
+            })
+        }
+    }
+
+    /// The nine Chunks around Chunk [0, 0], in coordinate order.
+    fn nine_chunks() -> impl Iterator<Item = [i32; 2]> {
+        (-1..=1).flat_map(|x| (-1..=1).map(move |z| [x, z]))
+    }
+
+    /// The Chunks each of four frames loads, at most four loads a frame, for
+    /// a camera over the middle of Chunk [0, 0] of `nine_chunks`, whose reads
+    /// all come back between the first frame and the second; the pools
+    /// refuse the Chunk at `refused`.
+    fn loads_by_frame(settle: bool, refused: Option<[i32; 2]>) -> Vec<Vec<[i32; 2]>> {
+        let (mut io, _requests, finished_sender) = io_pool();
+        let cache = CookedCache::new(std::env::temp_dir());
+        let claimed = Mutex::new(HashSet::new());
+        let mut streamer = ChunkStreamer::new(nine_chunks(), 256.0);
+        let camera = DVec3::new(128.0, 10.0, 128.0);
+        let mut decoded = DecodedAssets::default();
+        let mut finished = BTreeMap::new();
+        let frames = (0..4).map(|frame| {
+            if frame == 1 {
+                for coordinates in nine_chunks() {
+                    finished_sender.send(read_chunk(coordinates)).unwrap();
+                }
+            }
+            let mut frame_io = FrameIo {
+                cook_chunk: &mut None,
+                io: &mut io,
+                scene: ReferenceScene::TextureWall,
+                shift: DVec3::ZERO,
+                camera,
+                cache: &cache,
+                claimed: &claimed,
+                decoded: &mut decoded,
+                finished: &mut finished,
+                pools: &mut NoPools { refused },
+                settle,
+                load_bytes_per_frame: u64::MAX,
+                instances_placed_per_frame: usize::MAX,
+                loads_per_frame: 4,
+                loads: 0,
+                written_bytes: &mut 0,
+                placed_instances: &mut 0,
+                bytes_read: &mut 0,
+                error: &mut None,
+                waiting: HashSet::new(),
+            };
+            streamer.update(camera, false, &mut frame_io).loaded.clone()
+        });
+        frames.collect()
+    }
+
+    /// Nine reads come back in one frame that loads four Chunks at most: the
+    /// four nearest the camera load, and the rest on the frames after,
+    /// nearest first.
+    #[test]
+    fn loads_past_the_frames_count_wait_for_later_frames_nearest_first() {
+        assert_eq!(
+            loads_by_frame(false, None),
+            [
+                vec![],
+                vec![[0, 0], [-1, 0], [0, -1], [0, 1]],
+                vec![[1, 0], [-1, -1], [-1, 1], [1, -1]],
+                vec![[1, 1]],
+            ]
+        );
+    }
+
+    /// A load the pools refuse is one of its frame's four: the nearest
+    /// Chunk fails, and three load beside it.
+    #[test]
+    fn a_load_that_fails_counts_towards_its_frames_loads() {
+        assert_eq!(
+            loads_by_frame(false, Some([0, 0])),
+            [
+                vec![],
+                vec![[-1, 0], [0, -1], [0, 1]],
+                vec![[1, 0], [-1, -1], [-1, 1], [1, -1]],
+                vec![[1, 1]],
+            ]
+        );
+    }
+
+    /// A settling frame loads every Chunk read, past the frame's count, in
+    /// coordinate order.
+    #[test]
+    fn a_settling_frame_loads_past_the_frames_count_in_coordinate_order() {
+        let every_chunk: Vec<[i32; 2]> = nine_chunks().collect();
+        assert_eq!(
+            loads_by_frame(true, None),
+            [vec![], every_chunk, vec![], vec![]]
+        );
+    }
+
+    /// A Chunk waits only on the Chunk reads in flight when its own came back:
+    /// any later read found what it names claimed and skipped it.
+    #[test]
+    fn a_chunk_waits_only_on_the_reads_in_flight_when_its_own_came_back() {
+        let (mut io, _requests, finished_sender) = io_pool();
+        let finish = |coordinates| finished_sender.send(read_chunk(coordinates)).unwrap();
         let reads_before = |io: &IoPool, coordinates| match &io.ready[&coordinates] {
             Ok(decoded) => io.reads_in_flight_before(decoded.reads_requested_before_it_came_back),
             Err(_) => unreachable!(),

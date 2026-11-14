@@ -30,6 +30,138 @@ its commit.
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
+| `LOADS_PER_FRAME` (`src/streaming/io.rs`) | A frame that loads Chunks of one Placement, each with a Mesh of 5,832 triangles, a Material and two Textures of its own, costs 3.77 to 3.82 ms of CPU more than a frame that loads none, 3.49 to 3.58 ms of it in `MeshPool::compact_blases`, and 545 to 555 µs more a Chunk; past `world`'s slowest frame, 10,959.6 µs, and that fixed cost as the probe's frames measured it, 16,667 µs holds 3.5 such loads | M4 Pro, Metal | c42712e5 with #811's change and the probe (2026-11-14) | A probe on `world`'s State at 2560×1440, 1 to 16 loads a frame, three runs; "A frame that loads new Meshes: 3.8 ms, then 0.55 ms a load" below |
+
+## A frame that loads new Meshes: 3.8 ms, then 0.55 ms a load (2026-11-14, #811)
+
+**Decision.** A frame makes at most 3 Chunk loads (`LOADS_PER_FRAME`). A
+frame that loads Chunks of one Placement, each bringing a Mesh, a Material
+and two Textures no loaded Chunk shares, as a Far proxy's load will, costs
+3.77 to 3.82 ms of CPU more than a frame that loads none, and 545 to 555 µs
+more for each Chunk. Of the first figure, 3.49 to 3.58 ms is the main
+thread in `MeshPool::compact_blases`, which waits for the GPU to finish
+what is in flight, the frame's new BLASes among it, and then to compact
+them; `world` never pays it on a measured frame, as its Chunks share their
+Meshes. `world`'s slowest frame reads 10,959.6 µs in its Baseline, so
+16,667 µs leaves 5,707.4 µs, a loading frame's fixed cost takes 3,769.6 to
+3,815.5 µs of that as the probe's frames measured it, and the 1,891.9 to
+1,937.8 µs left hold 3.5 loads. The fixed cost is ticketed (#851): without
+it the same figures give 10 loads a frame.
+
+Apple M4 Pro, Metal, a release build of `c42712e5` with the cap and a probe,
+2026-11-14, before `cbbad8c6` put LOD chains in the Mesh Blob; a Mesh's load
+writes its LOD 0 alone after it, as before.
+
+### The probe
+
+`world`'s State at 2560×1440, its flocks spawned, with its Chunk streaming
+pointed at a Cooked cache of stand-ins: one Chunk at each of the 137
+coordinates within 1,536 m of the camera, holding one Placement of a Mesh
+of its own, a 54 × 54 grid of 5,832 triangles, the most a Far proxy may
+have. Each Mesh names a Material of its own, which samples two Textures of
+its own, one BC7 and one BC5, each a 256² chain of 87,408 bytes: what the
+Resident tail of a 2,048² Texture is, so no mip streams after the load. A
+loading frame uploaded 376,668 to 376,684 bytes a Chunk more than the
+frames before it, by each load count's median, the Chunk's Instance among
+them.
+
+Every read came back before the first load. Each frame then loaded a set
+count of Chunks, 1, 2, 4, 8, 12 or 16, until all 137 had, timed as the
+bench times a frame: two frames in flight, the main thread spinning for the
+older. A load count's cost is the median CPU frame over the frames that
+loaded that count, the first left out, less the median of the 40 frames
+before them. Three runs: the third behind the quiet gate (one-minute load
+under 2, four GPU load reads at 5% or under); the first two after the gate
+had stayed shut, at loads of 2.23 and 1.27 and GPU loads of 15% and 7%.
+
+| Loads a frame | Frames | CPU frame over the frames before, µs | `blas_compaction` | `stream_chunks` | `upload` | Slowest frame, µs |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 136 | 4,305.2 | 3,838.4 | 193.0 | 77.9 | 9,245.6 |
+| 2 | 67 | 4,924.6 | 4,366.2 | 228.0 | 126.9 | 7,887.1 |
+| 4 | 33 | 5,991.9 | 5,153.0 | 363.7 | 206.3 | 9,051.2 |
+| 8 | 16 | 8,207.1 | 6,711.1 | 674.7 | 360.5 | 11,558.2 |
+| 12 | 10 | 10,422.2 | 8,285.2 | 1,056.3 | 535.7 | 13,492.9 |
+| 16 | 7 | 12,458.9 | 9,911.9 | 1,375.1 | 730.4 | 15,811.0 |
+
+The third run's medians; a stage's column is its own median over the same
+frames, less its median before. The frames before read 1,219.9 to
+1,258.6 µs.
+
+The line through each run's six medians, by least squares:
+
+| Run | A frame that loads, µs | A load, µs | `blas_compaction`, a frame | a load | `stream_chunks`, a load | `upload`, a load |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 3,769.6 | 554.6 | 3,493.2 | 413.5 | 82.5 | 44.1 |
+| 2 | 3,796.4 | 552.1 | 3,580.2 | 385.7 | 90.4 | 41.1 |
+| 3 | 3,815.5 | 544.6 | 3,514.5 | 399.5 | 80.8 | 42.7 |
+
+What a load costs past those three stages, prepare, the static TLAS's entry
+changes, the recording and the submit among it, is 14.5 to 34.9 µs. The
+lines are through medians: a load count's slowest frame read 1.5 to 3.7 ms
+over its median, over the three runs.
+
+### Where the time goes
+
+The probe times `MeshPool::compact_blases` as one stage, `blas_compaction`.
+As its code reads, `Renderer::upload` submits the frame's loads and calls
+it; when they brought a Mesh whose BLAS it compacts, it blocks twice, each
+time until every submission in flight is done: once for the builds, once
+for the compacted copies. That fits a cost paid once a frame, 3.49 to
+3.58 ms, with 386 to 414 µs more in the stage for each load. Sizing and the
+pool writes, `stream_chunks`, are 81 to 90 µs a load, and the `upload`
+stage, which submits the load staging, 41 to 44 µs.
+
+The probe's frames draw `world`'s flocks and the stand-ins loaded so far,
+not `world`'s Chunks, and it records no GPU time. If the waits end only
+once the frames in flight have, they move with what those frames draw;
+behind `world`'s own frames, whose GPU median is 4,891.3 µs, they are not
+measured here.
+
+### The cap
+
+The count holds the per-load part. No count holds the fixed part, which a
+frame pays in full at its first new Mesh, so the cap is what fits beside it:
+16,667 µs less `world`'s slowest frame and that fixed part, over a load's
+cost, 3.46 to 3.49 loads by the three runs' lines. The Instances' cap
+already bounds what the frame's other loads place, and `world`'s slowest
+frame is taken as their cost. At 3 loads such a frame reads 16,393.0 to
+16,412.3 µs by those lines, and at 10, the count the per-load part alone
+would give, 20,221.1 to 20,277.0 µs.
+
+The cap bounds what a frame's loads add, not every frame: the lines are
+medians, and the fixed part is the probe's. Until that part goes (#851), no
+count keeps a frame that loads a new Mesh beside `world`'s slowest frame
+within 16,667 µs in every run.
+
+### `world` at the cap
+
+At 3 loads a frame the Fast travel's arrival loads three Chunks a frame
+where it loaded four, and `world`'s slowest frame reads 7,828.2 to
+8,179.8 µs against its Baseline's 10,959.6 µs, with no Late Chunk and the
+hold as short. Three runs of `praxis bench <dir> world --no-publish`, a
+release build of `cbbad8c6` with this change: the first at a one-minute
+load of 12.13 after the gate had stayed shut four minutes, the second and
+third behind the quiet gate; the third's record alone stamps quiet.
+
+| `praxis report`, `world` | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame, run 1 | 1,426.4 | 1,759.9 | 2,233.6 | 7,828.2 | 1,482.2 | 1,900.3 | -55.8 | 0.962 | 6,000.0 |
+| CPU frame, run 2 | 1,372.6 | 1,734.1 | 2,203.1 | 8,031.1 | 1,482.2 | 1,900.3 | -109.6 | 0.926 | 6,000.0 |
+| CPU frame, run 3 | 1,381.4 | 1,750.0 | 2,224.8 | 8,179.8 | 1,482.2 | 1,900.3 | -100.8 | 0.932 | 6,000.0 |
+
+| `praxis report`, `world` | Late Chunks | Chunks loaded | Fast-travel hold, ms | Fast-travel hold, frames |
+|---|---:|---:|---:|---:|
+| Run 1 | 0 | 42 | 26.9 | 5 |
+| Run 2 | 0 | 42 | 28.1 | 5 |
+| Run 3 | 0 | 42 | 25.2 | 4 |
+
+The Baseline's hold is 31.2 ms over 5 frames and its CPU frame p99
+2,316.8 µs. Each run's counters equal the Baseline's: 42 Chunks loaded, 41
+unloaded, 27,994,879 bytes read, no Late Chunk, and on the counter frames
+2,000,224 bytes uploaded and 10,473 heap allocations. No measured frame
+waited on a BLAS. One `praxis traverse` followed while another session's
+file copies had the antivirus scanning, so its times are not quoted: no
+Late Chunk and no Chunk not loaded over the traversal.
 
 ## The Fast travel's arrival frame: Assets read on the main thread while their reads were in flight (2026-11-12, #773)
 
