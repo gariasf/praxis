@@ -1,16 +1,16 @@
 one pixel at the Load radius: 0.14727594 m
-1600 proxies cooked in 57.4 s, one thread
-of which Cook keys 1.9 s, Blobs 55.3 s
+1600 proxies cooked in 65.6 s, one thread
+of which Cook keys 2.4 s, Blobs 63.0 s
 LOD 0 triangles outside the ground: least 0, median 1224, most 5832, sum 3130200
 LOD 0 ground triangles: least 8, median 8, most 8, sum 12800
 triangles of every LOD, ground included: least 8, median 1920, most 9088, sum 4893248
 LODs: least 1, median 2, most 2, sum 3006
 vertices: least 16, median 2736, most 12976, sum 6981600
-Blob bytes: least 163, median 9882, most 49886, sum 26136398
+Blob bytes: least 168, median 9885, most 49881, sum 26136144
 proxies with any triangle outside the ground: 1406; farthest vertex from a pivot: 189.94 m
 LOD 1: 1406 proxies hold one, largest error 0.2722 m
 
-densest Chunk [-19, -3]: 29941 Placements, Blob 48590 bytes, 12976 vertices
+densest Chunk [-19, -3]: 29941 Placements, Blob 48592 bytes, 12976 vertices
   LOD 0: error 0.0000 m, 5832 triangles outside the ground, 8 of ground, 184 Meshlets, 17520 indices
   LOD 1: error 0.2703 m, 3240 triangles outside the ground, 8 of ground, 103 Meshlets, 9744 indices
   LOD 0 welded and simplified to half its triangles with no error limit: 2916 triangles, error 2.788 m
