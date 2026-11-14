@@ -1,0 +1,469 @@
+world: 1600 Chunks, 16214556 static Placements, 173900 buildings; buildings a Chunk: most 324, median 68, Chunks with 300 or more: 227, with 250 or more: 327, with any: 1406
+most buildings in Chunks within 2256 m of a camera on a 64 m grid: 35022 buildings in 282 Chunks (256 with a building); at 18 triangles a building 630396 triangles, at 10 350220
+measured Chunk [-19, -3] (origin DVec3(-4864.0, 0.0, -768.0)): 29941 Placements
+  Ground: 4 Placements, 8 triangles, 16 vertices, 65536.0 m2
+  Walls: 324 Placements, 2592 triangles, 5184 vertices, 162195.2 m2
+  Roof: 324 Placements, 3240 triangles, 6480 vertices, 28834.1 m2
+  Window: 29289 Placements, 292890 triangles, 585780 vertices, 127934.0 m2
+windows whose pivot lies on no wall of this Chunk (their building's pivot is in a neighbour): 48; windows given no building: 48
+windows this Chunk's walls carry: 29886; of them held by this Chunk: 29241; held by a neighbour: 645
+one pixel at 256 m, 1440 rows, 45 degrees: 0.14728 m; triangle cap 3863
+input all: 298722 triangles, 597444 vertices, simplify_scale 256.360 m, sloppy's finest cell 0.2504 m
+input shell: 5832 triangles, 11664 vertices, simplify_scale 254.600 m, sloppy's finest cell 0.2486 m
+input all-welded: 298722 triangles, 239496 vertices, simplify_scale 256.360 m, sloppy's finest cell 0.2504 m
+input shell-welded: 5832 triangles, 5184 vertices, simplify_scale 254.600 m, sloppy's finest cell 0.2486 m
+
+per candidate against the merged source, windows included, totals and farthest over 8 views (south-60m, south-2m, east-60m, east-2m, north-60m, north-2m, west-60m, west-2m):
+candidate | input | triangles | reported error m | reference px | lost px | gained px | lost beyond 1 px | gained beyond 1 px | farthest lost px | farthest gained px | other building px
+windows-dropped | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+sloppy-error | all | 199128 | 0.1338 | 2489416 | 426 | 0 | 0 | 0 | 1.0 | 0.0 | 1055
+sloppy-cap | all | 2948 | 5.9696 | 2489416 | 715059 | 16127 | 668520 | 12267 | 57.3 | 16.0 | 879346
+sloppy-half-cap | all | 1200 | 8.5586 | 2489416 | 894953 | 73318 | 856615 | 63758 | 99.1 | 36.0 | 1210767
+collapse-error | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-error-prune | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-cap | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-cap-prune | all | 3644 | 6.1248 | 2489416 | 33232 | 0 | 22648 | 0 | 41.4 | 0.0 | 77159
+collapse-two-pixels-prune | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-half-cap-prune | all | 1656 | 7.4975 | 2489416 | 111843 | 0 | 89910 | 0 | 52.6 | 0.0 | 268671
+attributes-error | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-error-prune | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-cap | all | 298722 | 0.0000 | 2489416 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-cap-prune | all | 3644 | 6.1248 | 2489416 | 33232 | 0 | 22648 | 0 | 41.4 | 0.0 | 77159
+attributes-cap-permissive | all | 120396 | 7.5530 | 2489416 | 24516 | 0 | 8719 | 0 | 6.2 | 0.0 | 53773
+sloppy-error | shell | 5832 | 0.0795 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+sloppy-cap | shell | 3568 | 2.0001 | 2489416 | 16716 | 11236 | 7761 | 7230 | 28.5 | 12.4 | 168555
+sloppy-half-cap | shell | 1808 | 7.0712 | 2489416 | 215754 | 58955 | 185897 | 46432 | 58.2 | 41.0 | 1084539
+collapse-error | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-error-prune | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-cap | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-cap-prune | shell | 3644 | 6.1248 | 2489416 | 33232 | 0 | 22648 | 0 | 41.4 | 0.0 | 77159
+collapse-two-pixels-prune | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-half-cap-prune | shell | 1656 | 7.4975 | 2489416 | 111843 | 0 | 89910 | 0 | 52.6 | 0.0 | 268671
+attributes-error | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+attributes-error-prune | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+attributes-cap | shell | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+attributes-cap-prune | shell | 3644 | 6.1248 | 2489416 | 33232 | 0 | 22648 | 0 | 41.4 | 0.0 | 77159
+attributes-cap-permissive | shell | 3862 | 6.1397 | 2489416 | 16919 | 0 | 5073 | 0 | 28.9 | 0.0 | 44567
+collapse-error | all-welded | 123006 | 0.1472 | 2489416 | 740 | 0 | 0 | 0 | 1.0 | 0.0 | 1657
+collapse-error-prune | all-welded | 123006 | 0.1472 | 2489416 | 740 | 0 | 0 | 0 | 1.0 | 0.0 | 1657
+collapse-cap | all-welded | 3240 | 0.6876 | 2489416 | 25831 | 0 | 9905 | 0 | 29.0 | 0.0 | 58009
+collapse-cap-prune | all-welded | 3240 | 0.6876 | 2489416 | 25831 | 0 | 9905 | 0 | 29.0 | 0.0 | 58009
+collapse-two-pixels-prune | all-welded | 120396 | 0.2700 | 2489416 | 23452 | 0 | 8156 | 0 | 4.2 | 0.0 | 49331
+collapse-half-cap-prune | all-welded | 1931 | 5.7551 | 2489416 | 61923 | 0 | 38909 | 0 | 30.3 | 0.0 | 169182
+collapse-error | shell-welded | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-error-prune | shell-welded | 5832 | 0.0000 | 2489416 | 2983 | 0 | 1631 | 0 | 28.5 | 0.0 | 10471
+collapse-cap | shell-welded | 3862 | 0.2694 | 2489416 | 19576 | 0 | 6635 | 0 | 29.0 | 0.0 | 45445
+collapse-cap-prune | shell-welded | 3862 | 0.2694 | 2489416 | 19576 | 0 | 6635 | 0 | 29.0 | 0.0 | 45445
+collapse-two-pixels-prune | shell-welded | 3240 | 0.2702 | 2489416 | 25831 | 0 | 9905 | 0 | 29.0 | 0.0 | 58009
+collapse-half-cap-prune | shell-welded | 1931 | 5.7550 | 2489416 | 61923 | 0 | 38909 | 0 | 30.3 | 0.0 | 169182
+
+per candidate against the shell, walls and roofs alone, totals and farthest over 8 views (south-60m, south-2m, east-60m, east-2m, north-60m, north-2m, west-60m, west-2m):
+candidate | input | triangles | reported error m | reference px | lost px | gained px | lost beyond 1 px | gained beyond 1 px | farthest lost px | farthest gained px | other building px
+windows-dropped | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+sloppy-error | all | 199128 | 0.1338 | 2486433 | 0 | 2557 | 0 | 1453 | 0.0 | 28.0 | 9416
+sloppy-cap | all | 2948 | 5.9696 | 2486433 | 712249 | 16300 | 665778 | 12403 | 56.6 | 16.0 | 878564
+sloppy-half-cap | all | 1200 | 8.5586 | 2486433 | 893147 | 74495 | 854867 | 64925 | 99.1 | 36.0 | 1209375
+collapse-error | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+collapse-error-prune | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+collapse-cap | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+collapse-cap-prune | all | 3644 | 6.1248 | 2486433 | 30249 | 0 | 20950 | 0 | 41.4 | 0.0 | 67061
+collapse-two-pixels-prune | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+collapse-half-cap-prune | all | 1656 | 7.4975 | 2486433 | 108860 | 0 | 88101 | 0 | 52.6 | 0.0 | 261364
+attributes-error | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+attributes-error-prune | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+attributes-cap | all | 298722 | 0.0000 | 2486433 | 0 | 2983 | 0 | 1631 | 0.0 | 28.5 | 10471
+attributes-cap-prune | all | 3644 | 6.1248 | 2486433 | 30249 | 0 | 20950 | 0 | 41.4 | 0.0 | 67061
+attributes-cap-permissive | all | 120396 | 7.5530 | 2486433 | 22782 | 1249 | 8180 | 783 | 4.2 | 27.0 | 52216
+sloppy-error | shell | 5832 | 0.0795 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+sloppy-cap | shell | 3568 | 2.0001 | 2486433 | 14121 | 11624 | 6157 | 7505 | 8.0 | 12.4 | 163929
+sloppy-half-cap | shell | 1808 | 7.0712 | 2486433 | 214002 | 60186 | 184435 | 47577 | 58.2 | 41.0 | 1082180
+collapse-error | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-error-prune | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-cap | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-cap-prune | shell | 3644 | 6.1248 | 2486433 | 30249 | 0 | 20950 | 0 | 41.4 | 0.0 | 67061
+collapse-two-pixels-prune | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-half-cap-prune | shell | 1656 | 7.4975 | 2486433 | 108860 | 0 | 88101 | 0 | 52.6 | 0.0 | 261364
+attributes-error | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-error-prune | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-cap | shell | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+attributes-cap-prune | shell | 3644 | 6.1248 | 2486433 | 30249 | 0 | 20950 | 0 | 41.4 | 0.0 | 67061
+attributes-cap-permissive | shell | 3862 | 6.1397 | 2486433 | 13936 | 0 | 3393 | 0 | 3.8 | 0.0 | 34368
+collapse-error | all-welded | 123006 | 0.1472 | 2486433 | 0 | 2243 | 0 | 1434 | 0.0 | 28.0 | 8821
+collapse-error-prune | all-welded | 123006 | 0.1472 | 2486433 | 0 | 2243 | 0 | 1434 | 0.0 | 28.0 | 8821
+collapse-cap | all-welded | 3240 | 0.6876 | 2486433 | 22848 | 0 | 8206 | 0 | 4.2 | 0.0 | 47951
+collapse-cap-prune | all-welded | 3240 | 0.6876 | 2486433 | 22848 | 0 | 8206 | 0 | 4.2 | 0.0 | 47951
+collapse-two-pixels-prune | all-welded | 120396 | 0.2700 | 2486433 | 22712 | 2243 | 8156 | 1434 | 4.2 | 28.0 | 56520
+collapse-half-cap-prune | all-welded | 1931 | 5.7551 | 2486433 | 58940 | 0 | 37135 | 0 | 23.6 | 0.0 | 159947
+collapse-error | shell-welded | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-error-prune | shell-welded | 5832 | 0.0000 | 2486433 | 0 | 0 | 0 | 0 | 0.0 | 0.0 | 0
+collapse-cap | shell-welded | 3862 | 0.2694 | 2486433 | 16593 | 0 | 4948 | 0 | 3.8 | 0.0 | 35194
+collapse-cap-prune | shell-welded | 3862 | 0.2694 | 2486433 | 16593 | 0 | 4948 | 0 | 3.8 | 0.0 | 35194
+collapse-two-pixels-prune | shell-welded | 3240 | 0.2702 | 2486433 | 22848 | 0 | 8206 | 0 | 4.2 | 0.0 | 47951
+collapse-half-cap-prune | shell-welded | 1931 | 5.7550 | 2486433 | 58940 | 0 | 37135 | 0 | 23.6 | 0.0 | 159947
+
+windows-dropped against the merged source without the windows of neighbours' buildings, over the views: lost 1114 px, beyond a pixel 0, farthest 1.0 px, other building 3224 px
+
+per candidate and view:
+windows-dropped | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+windows-dropped | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+windows-dropped | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+windows-dropped | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+windows-dropped | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+windows-dropped | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+windows-dropped | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+windows-dropped | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+sloppy-error | all | south-60m | source 372374 | proxy 372326 | lost 48 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 109
+sloppy-error | all | south-2m | source 248302 | proxy 248281 | lost 21 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 30
+sloppy-error | all | east-60m | source 372967 | proxy 372903 | lost 64 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 159
+sloppy-error | all | east-2m | source 256257 | proxy 256235 | lost 22 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 115
+sloppy-error | all | north-60m | source 361678 | proxy 361549 | lost 129 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 228
+sloppy-error | all | north-2m | source 260149 | proxy 260063 | lost 86 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 169
+sloppy-error | all | west-60m | source 366077 | proxy 366041 | lost 36 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 159
+sloppy-error | all | west-2m | source 251612 | proxy 251592 | lost 20 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 86
+sloppy-cap | all | south-60m | source 372374 | proxy 277138 | lost 96742 | gained 1506 | lost>1 89723 | gained>1 960 | farthest lost 47.7 | farthest gained 11.0 | other building 136481
+sloppy-cap | all | south-2m | source 248302 | proxy 176781 | lost 72370 | gained 849 | lost>1 67616 | gained>1 571 | farthest lost 48.5 | farthest gained 8.0 | other building 73327
+sloppy-cap | all | east-60m | source 372967 | proxy 275433 | lost 99383 | gained 1849 | lost>1 93001 | gained>1 1286 | farthest lost 52.7 | farthest gained 16.0 | other building 151482
+sloppy-cap | all | east-2m | source 256257 | proxy 178084 | lost 80299 | gained 2126 | lost>1 75364 | gained>1 1678 | farthest lost 48.7 | farthest gained 16.0 | other building 89289
+sloppy-cap | all | north-60m | source 361678 | proxy 263756 | lost 100334 | gained 2412 | lost>1 94070 | gained>1 1711 | farthest lost 50.8 | farthest gained 7.4 | other building 128752
+sloppy-cap | all | north-2m | source 260149 | proxy 178799 | lost 81793 | gained 443 | lost>1 76616 | gained>1 306 | farthest lost 42.0 | farthest gained 8.8 | other building 77196
+sloppy-cap | all | west-60m | source 366077 | proxy 265144 | lost 104433 | gained 3500 | lost>1 97528 | gained>1 2833 | farthest lost 45.0 | farthest gained 14.0 | other building 137652
+sloppy-cap | all | west-2m | source 251612 | proxy 175349 | lost 79705 | gained 3442 | lost>1 74602 | gained>1 2922 | farthest lost 57.3 | farthest gained 14.0 | other building 85167
+sloppy-half-cap | all | south-60m | source 372374 | proxy 253723 | lost 129760 | gained 11109 | lost>1 124034 | gained>1 9452 | farthest lost 73.1 | farthest gained 33.9 | other building 182321
+sloppy-half-cap | all | south-2m | source 248302 | proxy 155387 | lost 98884 | gained 5969 | lost>1 94789 | gained>1 5109 | farthest lost 89.8 | farthest gained 23.0 | other building 111205
+sloppy-half-cap | all | east-60m | source 372967 | proxy 247481 | lost 136441 | gained 10955 | lost>1 130868 | gained>1 9663 | farthest lost 78.0 | farthest gained 36.0 | other building 186319
+sloppy-half-cap | all | east-2m | source 256257 | proxy 171805 | lost 90084 | gained 5632 | lost>1 85643 | gained>1 4891 | farthest lost 63.2 | farthest gained 22.0 | other building 135070
+sloppy-half-cap | all | north-60m | source 361678 | proxy 258231 | lost 116143 | gained 12696 | lost>1 111455 | gained>1 10983 | farthest lost 99.1 | farthest gained 32.2 | other building 179593
+sloppy-half-cap | all | north-2m | source 260149 | proxy 161553 | lost 102471 | gained 3875 | lost>1 98220 | gained>1 3158 | farthest lost 93.9 | farthest gained 22.4 | other building 115062
+sloppy-half-cap | all | west-60m | source 366077 | proxy 263419 | lost 118666 | gained 16008 | lost>1 113246 | gained>1 14264 | farthest lost 70.2 | farthest gained 35.0 | other building 188239
+sloppy-half-cap | all | west-2m | source 251612 | proxy 156182 | lost 102504 | gained 7074 | lost>1 98360 | gained>1 6238 | farthest lost 78.8 | farthest gained 26.0 | other building 112958
+collapse-error | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-error-prune | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-cap-prune | all | south-60m | source 372374 | proxy 365821 | lost 6553 | gained 0 | lost>1 5053 | gained>1 0 | farthest lost 41.4 | farthest gained 0.0 | other building 9150
+collapse-cap-prune | all | south-2m | source 248302 | proxy 246240 | lost 2062 | gained 0 | lost>1 956 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 8736
+collapse-cap-prune | all | east-60m | source 372967 | proxy 367939 | lost 5028 | gained 0 | lost>1 3596 | gained>1 0 | farthest lost 33.6 | farthest gained 0.0 | other building 9965
+collapse-cap-prune | all | east-2m | source 256257 | proxy 252701 | lost 3556 | gained 0 | lost>1 2441 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 6788
+collapse-cap-prune | all | north-60m | source 361678 | proxy 355041 | lost 6637 | gained 0 | lost>1 4983 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 11995
+collapse-cap-prune | all | north-2m | source 260149 | proxy 256638 | lost 3511 | gained 0 | lost>1 2140 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 9377
+collapse-cap-prune | all | west-60m | source 366077 | proxy 362440 | lost 3637 | gained 0 | lost>1 2058 | gained>1 0 | farthest lost 17.0 | farthest gained 0.0 | other building 13072
+collapse-cap-prune | all | west-2m | source 251612 | proxy 249364 | lost 2248 | gained 0 | lost>1 1421 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 8076
+collapse-two-pixels-prune | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-two-pixels-prune | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+collapse-half-cap-prune | all | south-60m | source 372374 | proxy 348893 | lost 23481 | gained 0 | lost>1 20336 | gained>1 0 | farthest lost 52.6 | farthest gained 0.0 | other building 29645
+collapse-half-cap-prune | all | south-2m | source 248302 | proxy 241210 | lost 7092 | gained 0 | lost>1 4768 | gained>1 0 | farthest lost 22.5 | farthest gained 0.0 | other building 29526
+collapse-half-cap-prune | all | east-60m | source 372967 | proxy 354830 | lost 18137 | gained 0 | lost>1 14876 | gained>1 0 | farthest lost 37.1 | farthest gained 0.0 | other building 33263
+collapse-half-cap-prune | all | east-2m | source 256257 | proxy 250825 | lost 5432 | gained 0 | lost>1 3399 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 32236
+collapse-half-cap-prune | all | north-60m | source 361678 | proxy 339493 | lost 22185 | gained 0 | lost>1 18934 | gained>1 0 | farthest lost 44.4 | farthest gained 0.0 | other building 33825
+collapse-half-cap-prune | all | north-2m | source 260149 | proxy 254914 | lost 5235 | gained 0 | lost>1 2883 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 36395
+collapse-half-cap-prune | all | west-60m | source 366077 | proxy 342197 | lost 23880 | gained 0 | lost>1 20570 | gained>1 0 | farthest lost 49.8 | farthest gained 0.0 | other building 36673
+collapse-half-cap-prune | all | west-2m | source 251612 | proxy 245211 | lost 6401 | gained 0 | lost>1 4144 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 37108
+attributes-error | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-error-prune | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | south-60m | source 372374 | proxy 372374 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | south-2m | source 248302 | proxy 248302 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | east-60m | source 372967 | proxy 372967 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | east-2m | source 256257 | proxy 256257 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | north-60m | source 361678 | proxy 361678 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | north-2m | source 260149 | proxy 260149 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | west-60m | source 366077 | proxy 366077 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap | all | west-2m | source 251612 | proxy 251612 | lost 0 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 0.0 | farthest gained 0.0 | other building 0
+attributes-cap-prune | all | south-60m | source 372374 | proxy 365821 | lost 6553 | gained 0 | lost>1 5053 | gained>1 0 | farthest lost 41.4 | farthest gained 0.0 | other building 9150
+attributes-cap-prune | all | south-2m | source 248302 | proxy 246240 | lost 2062 | gained 0 | lost>1 956 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 8736
+attributes-cap-prune | all | east-60m | source 372967 | proxy 367939 | lost 5028 | gained 0 | lost>1 3596 | gained>1 0 | farthest lost 33.6 | farthest gained 0.0 | other building 9965
+attributes-cap-prune | all | east-2m | source 256257 | proxy 252701 | lost 3556 | gained 0 | lost>1 2441 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 6788
+attributes-cap-prune | all | north-60m | source 361678 | proxy 355041 | lost 6637 | gained 0 | lost>1 4983 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 11995
+attributes-cap-prune | all | north-2m | source 260149 | proxy 256638 | lost 3511 | gained 0 | lost>1 2140 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 9377
+attributes-cap-prune | all | west-60m | source 366077 | proxy 362440 | lost 3637 | gained 0 | lost>1 2058 | gained>1 0 | farthest lost 17.0 | farthest gained 0.0 | other building 13072
+attributes-cap-prune | all | west-2m | source 251612 | proxy 249364 | lost 2248 | gained 0 | lost>1 1421 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 8076
+attributes-cap-permissive | all | south-60m | source 372374 | proxy 369724 | lost 2650 | gained 0 | lost>1 619 | gained>1 0 | farthest lost 3.4 | farthest gained 0.0 | other building 8976
+attributes-cap-permissive | all | south-2m | source 248302 | proxy 244930 | lost 3372 | gained 0 | lost>1 1483 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 3526
+attributes-cap-permissive | all | east-60m | source 372967 | proxy 370226 | lost 2741 | gained 0 | lost>1 711 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 9474
+attributes-cap-permissive | all | east-2m | source 256257 | proxy 253079 | lost 3178 | gained 0 | lost>1 1336 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3679
+attributes-cap-permissive | all | north-60m | source 361678 | proxy 358818 | lost 2860 | gained 0 | lost>1 689 | gained>1 0 | farthest lost 3.4 | farthest gained 0.0 | other building 8048
+attributes-cap-permissive | all | north-2m | source 260149 | proxy 256922 | lost 3227 | gained 0 | lost>1 1315 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3531
+attributes-cap-permissive | all | west-60m | source 366077 | proxy 363200 | lost 2877 | gained 0 | lost>1 863 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 11173
+attributes-cap-permissive | all | west-2m | source 251612 | proxy 248001 | lost 3611 | gained 0 | lost>1 1703 | gained>1 0 | farthest lost 6.2 | farthest gained 0.0 | other building 5366
+sloppy-error | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+sloppy-error | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+sloppy-error | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+sloppy-error | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+sloppy-error | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+sloppy-error | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+sloppy-error | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+sloppy-error | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+sloppy-cap | shell | south-60m | source 372374 | proxy 373141 | lost 1657 | gained 2424 | lost>1 441 | gained>1 1556 | farthest lost 5.4 | farthest gained 6.0 | other building 24981
+sloppy-cap | shell | south-2m | source 248302 | proxy 247539 | lost 1710 | gained 947 | lost>1 811 | gained>1 587 | farthest lost 4.2 | farthest gained 9.0 | other building 12084
+sloppy-cap | shell | east-60m | source 372967 | proxy 372523 | lost 2347 | gained 1903 | lost>1 1078 | gained>1 1233 | farthest lost 13.3 | farthest gained 10.4 | other building 20266
+sloppy-cap | shell | east-2m | source 256257 | proxy 254366 | lost 2197 | gained 306 | lost>1 1195 | gained>1 118 | farthest lost 4.2 | farthest gained 5.8 | other building 11484
+sloppy-cap | shell | north-60m | source 361678 | proxy 362042 | lost 2138 | gained 2502 | lost>1 979 | gained>1 1753 | farthest lost 28.5 | farthest gained 10.0 | other building 20027
+sloppy-cap | shell | north-2m | source 260149 | proxy 258630 | lost 2426 | gained 907 | lost>1 1192 | gained>1 550 | farthest lost 8.0 | farthest gained 6.8 | other building 13633
+sloppy-cap | shell | west-60m | source 366077 | proxy 365606 | lost 2037 | gained 1566 | lost>1 745 | gained>1 903 | farthest lost 4.2 | farthest gained 8.2 | other building 39344
+sloppy-cap | shell | west-2m | source 251612 | proxy 250089 | lost 2204 | gained 681 | lost>1 1320 | gained>1 530 | farthest lost 25.0 | farthest gained 12.4 | other building 26736
+sloppy-half-cap | shell | south-60m | source 372374 | proxy 331089 | lost 50999 | gained 9714 | lost>1 45488 | gained>1 7756 | farthest lost 41.0 | farthest gained 26.0 | other building 160689
+sloppy-half-cap | shell | south-2m | source 248302 | proxy 228444 | lost 23508 | gained 3650 | lost>1 20555 | gained>1 2752 | farthest lost 58.2 | farthest gained 14.0 | other building 114273
+sloppy-half-cap | shell | east-60m | source 372967 | proxy 351345 | lost 31037 | gained 9415 | lost>1 26797 | gained>1 7035 | farthest lost 39.2 | farthest gained 17.0 | other building 150724
+sloppy-half-cap | shell | east-2m | source 256257 | proxy 252066 | lost 9605 | gained 5414 | lost>1 7525 | gained>1 4168 | farthest lost 49.3 | farthest gained 24.0 | other building 105474
+sloppy-half-cap | shell | north-60m | source 361678 | proxy 339085 | lost 30836 | gained 8243 | lost>1 26023 | gained>1 6309 | farthest lost 34.2 | farthest gained 16.4 | other building 151559
+sloppy-half-cap | shell | north-2m | source 260149 | proxy 250764 | lost 16150 | gained 6765 | lost>1 13540 | gained>1 5723 | farthest lost 47.0 | farthest gained 41.0 | other building 106286
+sloppy-half-cap | shell | west-60m | source 366077 | proxy 340393 | lost 35496 | gained 9812 | lost>1 30679 | gained>1 7684 | farthest lost 42.4 | farthest gained 17.1 | other building 176859
+sloppy-half-cap | shell | west-2m | source 251612 | proxy 239431 | lost 18123 | gained 5942 | lost>1 15290 | gained>1 5005 | farthest lost 39.0 | farthest gained 18.1 | other building 118675
+collapse-error | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-error | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-error | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-error | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-error | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-error | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-error | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-error | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-error-prune | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-error-prune | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-error-prune | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-error-prune | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-error-prune | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-error-prune | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-error-prune | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-error-prune | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-cap | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-cap | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-cap | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-cap | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-cap | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-cap | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-cap | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-cap | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-cap-prune | shell | south-60m | source 372374 | proxy 365821 | lost 6553 | gained 0 | lost>1 5053 | gained>1 0 | farthest lost 41.4 | farthest gained 0.0 | other building 9150
+collapse-cap-prune | shell | south-2m | source 248302 | proxy 246240 | lost 2062 | gained 0 | lost>1 956 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 8736
+collapse-cap-prune | shell | east-60m | source 372967 | proxy 367939 | lost 5028 | gained 0 | lost>1 3596 | gained>1 0 | farthest lost 33.6 | farthest gained 0.0 | other building 9965
+collapse-cap-prune | shell | east-2m | source 256257 | proxy 252701 | lost 3556 | gained 0 | lost>1 2441 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 6788
+collapse-cap-prune | shell | north-60m | source 361678 | proxy 355041 | lost 6637 | gained 0 | lost>1 4983 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 11995
+collapse-cap-prune | shell | north-2m | source 260149 | proxy 256638 | lost 3511 | gained 0 | lost>1 2140 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 9377
+collapse-cap-prune | shell | west-60m | source 366077 | proxy 362440 | lost 3637 | gained 0 | lost>1 2058 | gained>1 0 | farthest lost 17.0 | farthest gained 0.0 | other building 13072
+collapse-cap-prune | shell | west-2m | source 251612 | proxy 249364 | lost 2248 | gained 0 | lost>1 1421 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 8076
+collapse-two-pixels-prune | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-two-pixels-prune | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-two-pixels-prune | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-two-pixels-prune | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-two-pixels-prune | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-two-pixels-prune | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-two-pixels-prune | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-two-pixels-prune | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-half-cap-prune | shell | south-60m | source 372374 | proxy 348893 | lost 23481 | gained 0 | lost>1 20336 | gained>1 0 | farthest lost 52.6 | farthest gained 0.0 | other building 29645
+collapse-half-cap-prune | shell | south-2m | source 248302 | proxy 241210 | lost 7092 | gained 0 | lost>1 4768 | gained>1 0 | farthest lost 22.5 | farthest gained 0.0 | other building 29526
+collapse-half-cap-prune | shell | east-60m | source 372967 | proxy 354830 | lost 18137 | gained 0 | lost>1 14876 | gained>1 0 | farthest lost 37.1 | farthest gained 0.0 | other building 33263
+collapse-half-cap-prune | shell | east-2m | source 256257 | proxy 250825 | lost 5432 | gained 0 | lost>1 3399 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 32236
+collapse-half-cap-prune | shell | north-60m | source 361678 | proxy 339493 | lost 22185 | gained 0 | lost>1 18934 | gained>1 0 | farthest lost 44.4 | farthest gained 0.0 | other building 33825
+collapse-half-cap-prune | shell | north-2m | source 260149 | proxy 254914 | lost 5235 | gained 0 | lost>1 2883 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 36395
+collapse-half-cap-prune | shell | west-60m | source 366077 | proxy 342197 | lost 23880 | gained 0 | lost>1 20570 | gained>1 0 | farthest lost 49.8 | farthest gained 0.0 | other building 36673
+collapse-half-cap-prune | shell | west-2m | source 251612 | proxy 245211 | lost 6401 | gained 0 | lost>1 4144 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 37108
+attributes-error | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+attributes-error | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+attributes-error | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+attributes-error | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+attributes-error | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+attributes-error | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+attributes-error | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+attributes-error | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+attributes-error-prune | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+attributes-error-prune | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+attributes-error-prune | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+attributes-error-prune | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+attributes-error-prune | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+attributes-error-prune | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+attributes-error-prune | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+attributes-error-prune | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+attributes-cap | shell | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+attributes-cap | shell | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+attributes-cap | shell | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+attributes-cap | shell | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+attributes-cap | shell | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+attributes-cap | shell | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+attributes-cap | shell | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+attributes-cap | shell | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+attributes-cap-prune | shell | south-60m | source 372374 | proxy 365821 | lost 6553 | gained 0 | lost>1 5053 | gained>1 0 | farthest lost 41.4 | farthest gained 0.0 | other building 9150
+attributes-cap-prune | shell | south-2m | source 248302 | proxy 246240 | lost 2062 | gained 0 | lost>1 956 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 8736
+attributes-cap-prune | shell | east-60m | source 372967 | proxy 367939 | lost 5028 | gained 0 | lost>1 3596 | gained>1 0 | farthest lost 33.6 | farthest gained 0.0 | other building 9965
+attributes-cap-prune | shell | east-2m | source 256257 | proxy 252701 | lost 3556 | gained 0 | lost>1 2441 | gained>1 0 | farthest lost 32.0 | farthest gained 0.0 | other building 6788
+attributes-cap-prune | shell | north-60m | source 361678 | proxy 355041 | lost 6637 | gained 0 | lost>1 4983 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 11995
+attributes-cap-prune | shell | north-2m | source 260149 | proxy 256638 | lost 3511 | gained 0 | lost>1 2140 | gained>1 0 | farthest lost 24.0 | farthest gained 0.0 | other building 9377
+attributes-cap-prune | shell | west-60m | source 366077 | proxy 362440 | lost 3637 | gained 0 | lost>1 2058 | gained>1 0 | farthest lost 17.0 | farthest gained 0.0 | other building 13072
+attributes-cap-prune | shell | west-2m | source 251612 | proxy 249364 | lost 2248 | gained 0 | lost>1 1421 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 8076
+attributes-cap-permissive | shell | south-60m | source 372374 | proxy 370689 | lost 1685 | gained 0 | lost>1 224 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 6386
+attributes-cap-permissive | shell | south-2m | source 248302 | proxy 246426 | lost 1876 | gained 0 | lost>1 423 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2875
+attributes-cap-permissive | shell | east-60m | source 372967 | proxy 370830 | lost 2137 | gained 0 | lost>1 619 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 6618
+attributes-cap-permissive | shell | east-2m | source 256257 | proxy 254132 | lost 2125 | gained 0 | lost>1 625 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2812
+attributes-cap-permissive | shell | north-60m | source 361678 | proxy 359591 | lost 2087 | gained 0 | lost>1 613 | gained>1 0 | farthest lost 28.9 | farthest gained 0.0 | other building 6397
+attributes-cap-permissive | shell | north-2m | source 260149 | proxy 257861 | lost 2288 | gained 0 | lost>1 824 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3243
+attributes-cap-permissive | shell | west-60m | source 366077 | proxy 364070 | lost 2007 | gained 0 | lost>1 467 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 10037
+attributes-cap-permissive | shell | west-2m | source 251612 | proxy 248898 | lost 2714 | gained 0 | lost>1 1278 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 6199
+collapse-error | all-welded | south-60m | source 372374 | proxy 372238 | lost 136 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 257
+collapse-error | all-welded | south-2m | source 248302 | proxy 248267 | lost 35 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 100
+collapse-error | all-welded | east-60m | source 372967 | proxy 372875 | lost 92 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 184
+collapse-error | all-welded | east-2m | source 256257 | proxy 256236 | lost 21 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 150
+collapse-error | all-welded | north-60m | source 361678 | proxy 361468 | lost 210 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 332
+collapse-error | all-welded | north-2m | source 260149 | proxy 259987 | lost 162 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 256
+collapse-error | all-welded | west-60m | source 366077 | proxy 366004 | lost 73 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 247
+collapse-error | all-welded | west-2m | source 251612 | proxy 251601 | lost 11 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 131
+collapse-error-prune | all-welded | south-60m | source 372374 | proxy 372238 | lost 136 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 257
+collapse-error-prune | all-welded | south-2m | source 248302 | proxy 248267 | lost 35 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 100
+collapse-error-prune | all-welded | east-60m | source 372967 | proxy 372875 | lost 92 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 184
+collapse-error-prune | all-welded | east-2m | source 256257 | proxy 256236 | lost 21 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 150
+collapse-error-prune | all-welded | north-60m | source 361678 | proxy 361468 | lost 210 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 332
+collapse-error-prune | all-welded | north-2m | source 260149 | proxy 259987 | lost 162 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 256
+collapse-error-prune | all-welded | west-60m | source 366077 | proxy 366004 | lost 73 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 247
+collapse-error-prune | all-welded | west-2m | source 251612 | proxy 251601 | lost 11 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 131
+collapse-cap | all-welded | south-60m | source 372374 | proxy 369610 | lost 2764 | gained 0 | lost>1 648 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 9108
+collapse-cap | all-welded | south-2m | source 248302 | proxy 244876 | lost 3426 | gained 0 | lost>1 1483 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 3592
+collapse-cap | all-welded | east-60m | source 372967 | proxy 369997 | lost 2970 | gained 0 | lost>1 923 | gained>1 0 | farthest lost 13.9 | farthest gained 0.0 | other building 9549
+collapse-cap | all-welded | east-2m | source 256257 | proxy 253079 | lost 3178 | gained 0 | lost>1 1336 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3768
+collapse-cap | all-welded | north-60m | source 361678 | proxy 358575 | lost 3103 | gained 0 | lost>1 954 | gained>1 0 | farthest lost 29.0 | farthest gained 0.0 | other building 8184
+collapse-cap | all-welded | north-2m | source 260149 | proxy 256811 | lost 3338 | gained 0 | lost>1 1450 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3619
+collapse-cap | all-welded | west-60m | source 366077 | proxy 363048 | lost 3029 | gained 0 | lost>1 938 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 13102
+collapse-cap | all-welded | west-2m | source 251612 | proxy 247589 | lost 4023 | gained 0 | lost>1 2173 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 7087
+collapse-cap-prune | all-welded | south-60m | source 372374 | proxy 369610 | lost 2764 | gained 0 | lost>1 648 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 9108
+collapse-cap-prune | all-welded | south-2m | source 248302 | proxy 244876 | lost 3426 | gained 0 | lost>1 1483 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 3592
+collapse-cap-prune | all-welded | east-60m | source 372967 | proxy 369997 | lost 2970 | gained 0 | lost>1 923 | gained>1 0 | farthest lost 13.9 | farthest gained 0.0 | other building 9549
+collapse-cap-prune | all-welded | east-2m | source 256257 | proxy 253079 | lost 3178 | gained 0 | lost>1 1336 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3768
+collapse-cap-prune | all-welded | north-60m | source 361678 | proxy 358575 | lost 3103 | gained 0 | lost>1 954 | gained>1 0 | farthest lost 29.0 | farthest gained 0.0 | other building 8184
+collapse-cap-prune | all-welded | north-2m | source 260149 | proxy 256811 | lost 3338 | gained 0 | lost>1 1450 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3619
+collapse-cap-prune | all-welded | west-60m | source 366077 | proxy 363048 | lost 3029 | gained 0 | lost>1 938 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 13102
+collapse-cap-prune | all-welded | west-2m | source 251612 | proxy 247589 | lost 4023 | gained 0 | lost>1 2173 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 7087
+collapse-two-pixels-prune | all-welded | south-60m | source 372374 | proxy 369748 | lost 2626 | gained 0 | lost>1 613 | gained>1 0 | farthest lost 3.4 | farthest gained 0.0 | other building 8858
+collapse-two-pixels-prune | all-welded | south-2m | source 248302 | proxy 244960 | lost 3342 | gained 0 | lost>1 1482 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 3452
+collapse-two-pixels-prune | all-welded | east-60m | source 372967 | proxy 370448 | lost 2519 | gained 0 | lost>1 633 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 9364
+collapse-two-pixels-prune | all-welded | east-2m | source 256257 | proxy 253103 | lost 3154 | gained 0 | lost>1 1336 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3498
+collapse-two-pixels-prune | all-welded | north-60m | source 361678 | proxy 358894 | lost 2784 | gained 0 | lost>1 630 | gained>1 0 | farthest lost 3.4 | farthest gained 0.0 | other building 7924
+collapse-two-pixels-prune | all-welded | north-2m | source 260149 | proxy 256970 | lost 3179 | gained 0 | lost>1 1274 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3361
+collapse-two-pixels-prune | all-welded | west-60m | source 366077 | proxy 363329 | lost 2748 | gained 0 | lost>1 828 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 9169
+collapse-two-pixels-prune | all-welded | west-2m | source 251612 | proxy 248512 | lost 3100 | gained 0 | lost>1 1360 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3705
+collapse-half-cap-prune | all-welded | south-60m | source 372374 | proxy 362829 | lost 9545 | gained 0 | lost>1 5765 | gained>1 0 | farthest lost 16.3 | farthest gained 0.0 | other building 28747
+collapse-half-cap-prune | all-welded | south-2m | source 248302 | proxy 244171 | lost 4131 | gained 0 | lost>1 1996 | gained>1 0 | farthest lost 7.0 | farthest gained 0.0 | other building 16750
+collapse-half-cap-prune | all-welded | east-60m | source 372967 | proxy 364154 | lost 8813 | gained 0 | lost>1 5638 | gained>1 0 | farthest lost 20.8 | farthest gained 0.0 | other building 26141
+collapse-half-cap-prune | all-welded | east-2m | source 256257 | proxy 250764 | lost 5493 | gained 0 | lost>1 3454 | gained>1 0 | farthest lost 23.6 | farthest gained 0.0 | other building 13942
+collapse-half-cap-prune | all-welded | north-60m | source 361678 | proxy 349120 | lost 12558 | gained 0 | lost>1 8685 | gained>1 0 | farthest lost 30.3 | farthest gained 0.0 | other building 25121
+collapse-half-cap-prune | all-welded | north-2m | source 260149 | proxy 255649 | lost 4500 | gained 0 | lost>1 2362 | gained>1 0 | farthest lost 21.8 | farthest gained 0.0 | other building 16929
+collapse-half-cap-prune | all-welded | west-60m | source 366077 | proxy 355116 | lost 10961 | gained 0 | lost>1 7228 | gained>1 0 | farthest lost 21.0 | farthest gained 0.0 | other building 26701
+collapse-half-cap-prune | all-welded | west-2m | source 251612 | proxy 245690 | lost 5922 | gained 0 | lost>1 3781 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 14851
+collapse-error | shell-welded | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-error | shell-welded | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-error | shell-welded | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-error | shell-welded | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-error | shell-welded | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-error | shell-welded | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-error | shell-welded | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-error | shell-welded | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-error-prune | shell-welded | south-60m | source 372374 | proxy 372104 | lost 270 | gained 0 | lost>1 27 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 511
+collapse-error-prune | shell-welded | south-2m | source 248302 | proxy 248189 | lost 113 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 246
+collapse-error-prune | shell-welded | east-60m | source 372967 | proxy 372438 | lost 529 | gained 0 | lost>1 277 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 383
+collapse-error-prune | shell-welded | east-2m | source 256257 | proxy 256212 | lost 45 | gained 0 | lost>1 0 | gained>1 0 | farthest lost 1.0 | farthest gained 0.0 | other building 420
+collapse-error-prune | shell-welded | north-60m | source 361678 | proxy 361160 | lost 518 | gained 0 | lost>1 312 | gained>1 0 | farthest lost 28.5 | farthest gained 0.0 | other building 603
+collapse-error-prune | shell-welded | north-2m | source 260149 | proxy 259838 | lost 311 | gained 0 | lost>1 163 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 524
+collapse-error-prune | shell-welded | west-60m | source 366077 | proxy 365766 | lost 311 | gained 0 | lost>1 83 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 4223
+collapse-error-prune | shell-welded | west-2m | source 251612 | proxy 250726 | lost 886 | gained 0 | lost>1 769 | gained>1 0 | farthest lost 26.0 | farthest gained 0.0 | other building 3561
+collapse-cap | shell-welded | south-60m | source 372374 | proxy 370398 | lost 1976 | gained 0 | lost>1 239 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 5651
+collapse-cap | shell-welded | south-2m | source 248302 | proxy 246351 | lost 1951 | gained 0 | lost>1 475 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2017
+collapse-cap | shell-welded | east-60m | source 372967 | proxy 370689 | lost 2278 | gained 0 | lost>1 677 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 6978
+collapse-cap | shell-welded | east-2m | source 256257 | proxy 253898 | lost 2359 | gained 0 | lost>1 803 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2617
+collapse-cap | shell-welded | north-60m | source 361678 | proxy 359125 | lost 2553 | gained 0 | lost>1 891 | gained>1 0 | farthest lost 29.0 | farthest gained 0.0 | other building 7664
+collapse-cap | shell-welded | north-2m | source 260149 | proxy 256982 | lost 3167 | gained 0 | lost>1 1438 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3566
+collapse-cap | shell-welded | west-60m | source 366077 | proxy 363845 | lost 2232 | gained 0 | lost>1 583 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 10827
+collapse-cap | shell-welded | west-2m | source 251612 | proxy 248552 | lost 3060 | gained 0 | lost>1 1529 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 6125
+collapse-cap-prune | shell-welded | south-60m | source 372374 | proxy 370398 | lost 1976 | gained 0 | lost>1 239 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 5651
+collapse-cap-prune | shell-welded | south-2m | source 248302 | proxy 246351 | lost 1951 | gained 0 | lost>1 475 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2017
+collapse-cap-prune | shell-welded | east-60m | source 372967 | proxy 370689 | lost 2278 | gained 0 | lost>1 677 | gained>1 0 | farthest lost 12.9 | farthest gained 0.0 | other building 6978
+collapse-cap-prune | shell-welded | east-2m | source 256257 | proxy 253898 | lost 2359 | gained 0 | lost>1 803 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 2617
+collapse-cap-prune | shell-welded | north-60m | source 361678 | proxy 359125 | lost 2553 | gained 0 | lost>1 891 | gained>1 0 | farthest lost 29.0 | farthest gained 0.0 | other building 7664
+collapse-cap-prune | shell-welded | north-2m | source 260149 | proxy 256982 | lost 3167 | gained 0 | lost>1 1438 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3566
+collapse-cap-prune | shell-welded | west-60m | source 366077 | proxy 363845 | lost 2232 | gained 0 | lost>1 583 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 10827
+collapse-cap-prune | shell-welded | west-2m | source 251612 | proxy 248552 | lost 3060 | gained 0 | lost>1 1529 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 6125
+collapse-two-pixels-prune | shell-welded | south-60m | source 372374 | proxy 369610 | lost 2764 | gained 0 | lost>1 648 | gained>1 0 | farthest lost 5.4 | farthest gained 0.0 | other building 9108
+collapse-two-pixels-prune | shell-welded | south-2m | source 248302 | proxy 244876 | lost 3426 | gained 0 | lost>1 1483 | gained>1 0 | farthest lost 4.2 | farthest gained 0.0 | other building 3592
+collapse-two-pixels-prune | shell-welded | east-60m | source 372967 | proxy 369997 | lost 2970 | gained 0 | lost>1 923 | gained>1 0 | farthest lost 13.9 | farthest gained 0.0 | other building 9549
+collapse-two-pixels-prune | shell-welded | east-2m | source 256257 | proxy 253079 | lost 3178 | gained 0 | lost>1 1336 | gained>1 0 | farthest lost 3.8 | farthest gained 0.0 | other building 3768
+collapse-two-pixels-prune | shell-welded | north-60m | source 361678 | proxy 358575 | lost 3103 | gained 0 | lost>1 954 | gained>1 0 | farthest lost 29.0 | farthest gained 0.0 | other building 8184
+collapse-two-pixels-prune | shell-welded | north-2m | source 260149 | proxy 256811 | lost 3338 | gained 0 | lost>1 1450 | gained>1 0 | farthest lost 8.0 | farthest gained 0.0 | other building 3619
+collapse-two-pixels-prune | shell-welded | west-60m | source 366077 | proxy 363048 | lost 3029 | gained 0 | lost>1 938 | gained>1 0 | farthest lost 4.0 | farthest gained 0.0 | other building 13102
+collapse-two-pixels-prune | shell-welded | west-2m | source 251612 | proxy 247589 | lost 4023 | gained 0 | lost>1 2173 | gained>1 0 | farthest lost 27.6 | farthest gained 0.0 | other building 7087
+collapse-half-cap-prune | shell-welded | south-60m | source 372374 | proxy 362829 | lost 9545 | gained 0 | lost>1 5765 | gained>1 0 | farthest lost 16.3 | farthest gained 0.0 | other building 28747
+collapse-half-cap-prune | shell-welded | south-2m | source 248302 | proxy 244171 | lost 4131 | gained 0 | lost>1 1996 | gained>1 0 | farthest lost 7.0 | farthest gained 0.0 | other building 16750
+collapse-half-cap-prune | shell-welded | east-60m | source 372967 | proxy 364154 | lost 8813 | gained 0 | lost>1 5638 | gained>1 0 | farthest lost 20.8 | farthest gained 0.0 | other building 26141
+collapse-half-cap-prune | shell-welded | east-2m | source 256257 | proxy 250764 | lost 5493 | gained 0 | lost>1 3454 | gained>1 0 | farthest lost 23.6 | farthest gained 0.0 | other building 13942
+collapse-half-cap-prune | shell-welded | north-60m | source 361678 | proxy 349120 | lost 12558 | gained 0 | lost>1 8685 | gained>1 0 | farthest lost 30.3 | farthest gained 0.0 | other building 25121
+collapse-half-cap-prune | shell-welded | north-2m | source 260149 | proxy 255649 | lost 4500 | gained 0 | lost>1 2362 | gained>1 0 | farthest lost 21.8 | farthest gained 0.0 | other building 16929
+collapse-half-cap-prune | shell-welded | west-60m | source 366077 | proxy 355116 | lost 10961 | gained 0 | lost>1 7228 | gained>1 0 | farthest lost 21.0 | farthest gained 0.0 | other building 26701
+collapse-half-cap-prune | shell-welded | west-2m | source 251612 | proxy 245690 | lost 5922 | gained 0 | lost>1 3781 | gained>1 0 | farthest lost 28.2 | farthest gained 0.0 | other building 14851
+
+shelf pack of the shell's quads into 4096 columns, one rectangle a quad:
+texel m | ground chart | padding texels a side | aligned to texels | charts | unpadded texels | padded texels | rows used | fits 4096
+0.14728 | false | 0 | 1 | 2916 | 8992836 | 8992836 | 2271 | true
+0.14728 | false | 1 | 1 | 2916 | 8992836 | 9656018 | 2445 | true
+0.14728 | false | 2 | 1 | 2916 | 8992836 | 10342528 | 2585 | true
+0.14728 | false | 4 | 1 | 2916 | 8992836 | 11785532 | 2963 | true
+0.14728 | false | 8 | 1 | 2916 | 8992836 | 14951476 | 3751 | true
+0.14728 | false | 2 | 4 | 2916 | 8992836 | 10716112 | 2708 | true
+0.14728 | false | 4 | 8 | 2916 | 8992836 | 13204224 | 3296 | true
+0.14728 | false | 8 | 16 | 2916 | 8992836 | 19149824 | 4752 | false
+0.14728 | true | 0 | 1 | 2917 | 12016957 | 12016957 | 3962 | true
+0.14728 | true | 1 | 1 | 2917 | 12016957 | 12687099 | 4129 | false
+0.14728 | true | 2 | 1 | 2917 | 12016957 | 13380577 | 4304 | false
+0.14728 | true | 4 | 1 | 2917 | 12016957 | 14837541 | 4645 | false
+0.14728 | true | 8 | 1 | 2917 | 12016957 | 18031501 | 5467 | false
+0.14728 | true | 2 | 4 | 2917 | 12016957 | 13757648 | 4388 | false
+0.14728 | true | 4 | 8 | 2917 | 12016957 | 16273728 | 5032 | false
+0.14728 | true | 8 | 16 | 2917 | 12016957 | 22247424 | 6496 | false
+0.29455 | false | 0 | 1 | 2916 | 2293067 | 2293067 | 572 | true
+0.29455 | false | 1 | 1 | 2916 | 2293067 | 2633519 | 662 | true
+0.29455 | false | 2 | 1 | 2916 | 2293067 | 2997299 | 756 | true
+0.29455 | false | 4 | 1 | 2916 | 2293067 | 3794843 | 959 | true
+0.29455 | false | 8 | 1 | 2916 | 2293067 | 5669867 | 1430 | true
+0.29455 | false | 2 | 4 | 2916 | 2293067 | 3301056 | 836 | true
+0.29455 | false | 4 | 8 | 2916 | 2293067 | 4787456 | 1200 | true
+0.29455 | false | 8 | 16 | 2916 | 2293067 | 8607232 | 2128 | true
+0.29455 | true | 0 | 1 | 2917 | 3049967 | 3049967 | 1428 | true
+0.29455 | true | 1 | 1 | 2917 | 3049967 | 3393903 | 1519 | true
+0.29455 | true | 2 | 1 | 2917 | 3049967 | 3761175 | 1592 | true
+0.29455 | true | 4 | 1 | 2917 | 3049967 | 4565727 | 1798 | true
+0.29455 | true | 8 | 1 | 2917 | 3049967 | 6454863 | 2267 | true
+0.29455 | true | 2 | 4 | 2917 | 3049967 | 4068432 | 1672 | true
+0.29455 | true | 4 | 8 | 2917 | 3049967 | 5561856 | 2048 | true
+0.29455 | true | 8 | 16 | 2917 | 3049967 | 9410048 | 3008 | true
