@@ -736,7 +736,7 @@ fn frame_times(
         };
         (TIMED_PASSES[pass], taken)
     });
-    let culling_phase_one = pass_position(CullingPhase::One.label());
+    let culling_phase_one = pass_position(CullingPhase::One.slots_label());
     let (_, gate_end) = bounds(culling_phase_one..lit_pass + 1);
     let (_, before_lit_end) = bounds(culling_phase_one..lit_pass);
     FrameTimes {
@@ -820,7 +820,7 @@ pub(crate) mod tests {
                 TONEMAPPING_PASS,
             ];
             let shadow_ray_passes = [PHASE_TWO_DEPTH_PASS, SHADOW_MASK_PASS];
-            let first_pass = pass_position(CullingPhase::One.label());
+            let first_pass = pass_position(CullingPhase::One.slots_label());
             for (position, pass) in TIMED_PASSES.iter().enumerate().skip(first_pass) {
                 if shadow_rays || !shadow_ray_passes.contains(pass) {
                     let kind = if render_passes.contains(pass) {
@@ -878,16 +878,16 @@ pub(crate) mod tests {
         assert_eq!(times.gate_time, microseconds(gate_microseconds), "{kind}");
         let lit_pass_wait = microseconds(lit_pass_wait_microseconds);
         assert_eq!(times.lit_pass_wait, lit_pass_wait, "{kind}");
-        assert_eq!(times.last_pass_end, 1314, "{kind}");
+        assert_eq!(times.last_pass_end, 1334, "{kind}");
     }
 
     #[test]
     fn a_frame_that_neither_builds_nor_bends_spans_its_last_submission() {
         let frame = RecordedFrame::STILL;
-        let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 84, 74, 6);
-        let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 84, 74, 26);
+        let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 104, 94, 6);
+        let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 104, 94, 26);
     }
 
     #[test]
@@ -896,10 +896,10 @@ pub(crate) mod tests {
             built: true,
             ..RecordedFrame::STILL
         };
-        let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 87, 74, 6);
-        let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 87, 74, 26);
+        let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 107, 94, 6);
+        let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 107, 94, 26);
     }
 
     /// A bent frame whose refit is absent and whose build is not bracketed,
@@ -915,10 +915,10 @@ pub(crate) mod tests {
             (untimed_refit, true),
         ] {
             let frame = RecordedFrame { bending, built };
-            let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-            assert_spread_frame(frame, true, with_shadow_rays, 204, 74, 6);
-            let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-            assert_spread_frame(frame, false, without_shadow_rays, 204, 74, 26);
+            let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+            assert_spread_frame(frame, true, with_shadow_rays, 224, 94, 6);
+            let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+            assert_spread_frame(frame, false, without_shadow_rays, 224, 94, 26);
         }
     }
 
@@ -928,10 +928,10 @@ pub(crate) mod tests {
             bending: Bending::InFrame,
             built: true,
         };
-        let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 207, 74, 6);
-        let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 207, 74, 26);
+        let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 227, 94, 6);
+        let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 227, 94, 26);
     }
 
     /// No Moving Instance, so no build, beside a timed refit of a bent Mesh.
@@ -941,10 +941,10 @@ pub(crate) mod tests {
             bending: Bending::Submitted { refit_timed: true },
             built: false,
         };
-        let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 95, 74, 6);
-        let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 95, 74, 26);
+        let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 115, 94, 6);
+        let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 115, 94, 26);
     }
 
     #[test]
@@ -953,10 +953,10 @@ pub(crate) mod tests {
             bending: Bending::Submitted { refit_timed: true },
             built: true,
         };
-        let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 98, 74, 6);
-        let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 98, 74, 26);
+        let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 118, 94, 6);
+        let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 118, 94, 26);
     }
 
     #[test]
@@ -1020,7 +1020,7 @@ pub(crate) mod tests {
         let microseconds = Duration::from_micros;
         let (froxel_pass, lit_pass) = (pass_position(FROXEL_PASS), pass_position(LIT_PASS));
         let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
-        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.slots_label())];
         ticks[2 * froxel_pass] = culling_start - 30;
         ticks[2 * lit_pass + 1] = ticks[QUERIES_PER_FRAME - 1] + 20;
         ticks[2 * shadow_mask_pass] = 1;
@@ -1059,7 +1059,7 @@ pub(crate) mod tests {
     #[test]
     fn the_gate_spans_culling_phase_one_to_the_lit_pass() {
         let mut ticks = spread_ticks();
-        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.slots_label())];
         let lit_end = ticks[2 * pass_position(LIT_PASS) + 1];
         let built = RecordedFrame {
             built: true,
@@ -1085,8 +1085,8 @@ pub(crate) mod tests {
     fn the_lit_pass_waits_from_the_latest_end_before_it() {
         let mut ticks = spread_ticks();
         let microseconds = Duration::from_micros;
-        let culling_start = ticks[2 * pass_position(CullingPhase::One.label())];
-        let culling_two_end = ticks[2 * pass_position(CullingPhase::Two.label()) + 1];
+        let culling_start = ticks[2 * pass_position(CullingPhase::One.slots_label())];
+        let culling_two_end = ticks[2 * pass_position(CullingPhase::Two.triangles_label()) + 1];
         let lit_pass = pass_position(LIT_PASS);
         ticks[2 * lit_pass] = culling_two_end + 12_000;
         ticks[2 * lit_pass + 1] = culling_two_end + 12_500;
@@ -1118,7 +1118,7 @@ pub(crate) mod tests {
     fn a_render_pass_counts_from_the_end_of_the_passes_before_it() {
         let mut ticks = spread_ticks();
         let microseconds = Duration::from_micros;
-        let culling_phase_one = pass_position(CullingPhase::One.label());
+        let culling_phase_one = pass_position(CullingPhase::One.slots_label());
         let froxel_pass = pass_position(FROXEL_PASS);
         let shadow_mask_pass = pass_position(SHADOW_MASK_PASS);
         let (lit_pass, tonemapping_pass) =

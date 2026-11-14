@@ -193,7 +193,7 @@ src/
                                  compute pass that lists each Froxel's
                                  lights from the light buffer;
                                  culling_pass: the
-                                 compute pass that builds the frame's
+                                 compute passes that build the frame's
                                  draw; main_pass: the depth pre-pass,
                                  phase two's depth pass and the lit pass
                                  that draw it, their pipelines and

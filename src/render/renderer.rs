@@ -12,7 +12,7 @@ use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
-use crate::render::readback::GpuStatsReadback;
+use crate::render::readback::{FrameTimestamps, GpuStatsReadback};
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
@@ -34,15 +34,17 @@ use crate::stats::{
 /// those frames with the crowd's refit form; phase two's depth pass and the
 /// shadow mask pass only with shadow rays on. The rebuild form, an oracle,
 /// times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 12] = [
+pub(crate) const TIMED_PASSES: [&str; 14] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
-    CullingPhase::One.label(),
+    CullingPhase::One.slots_label(),
+    CullingPhase::One.triangles_label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
-    CullingPhase::Two.label(),
+    CullingPhase::Two.slots_label(),
+    CullingPhase::Two.triangles_label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
     LIT_PASS,
@@ -737,6 +739,7 @@ impl Renderer {
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
         recorder.counters.uploaded_bytes += uploaded_bytes;
+        recorder.counters.instance_slots_in_use = frame.instance_slot_count;
         // 0 bytes: the staging slot failed to map, as logged, and the
         // frame's writes never land.
         if uploaded_bytes == 0 {
@@ -822,9 +825,7 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::One,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(CullingPhase::One.label()).compute()),
+            culling_timestamp_writes(&mut timestamps, CullingPhase::One),
         );
         // After the first culling dispatch, so ADR 0019's gate, which spans
         // from it to the end of the lit pass, counts the lights' culling.
@@ -859,9 +860,7 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(CullingPhase::Two.label()).compute()),
+            culling_timestamp_writes(&mut timestamps, CullingPhase::Two),
         );
         if self.shadow_rays {
             self.main_pass.record_depth_pass(
@@ -972,6 +971,19 @@ impl Renderer {
     pub fn gpu_memory_bytes_by_kind(&self) -> [u64; GpuMemoryKind::COUNT] {
         self.memory.bytes_by_kind()
     }
+}
+
+/// The timestamp writes of `phase`'s two compute passes, the one over the
+/// Instance slots first, each marked run in `timestamps`' log.
+fn culling_timestamp_writes<'queries>(
+    timestamps: &mut Option<FrameTimestamps<'queries>>,
+    phase: CullingPhase,
+) -> [Option<wgpu::ComputePassTimestampWrites<'queries>>; 2] {
+    [phase.slots_label(), phase.triangles_label()].map(|pass| {
+        timestamps
+            .as_mut()
+            .map(|timestamps| timestamps.pass(pass).compute())
+    })
 }
 
 fn create_frame_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {

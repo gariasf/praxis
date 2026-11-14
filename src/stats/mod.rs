@@ -29,6 +29,9 @@ pub struct FrameStats {
     /// Texture classes staged since the frame before copy. The pools' own
     /// loads are not counted.
     pub uploaded_bytes: u64,
+    /// The Instance slots in use: one past the highest slot taken, the slots
+    /// each culling phase's pass over them scans.
+    pub instance_slots_in_use: u32,
     /// Instances the frame wrote: those of new Renderables and of those whose
     /// World transform or Material changed, and those of Chunks' Placements
     /// newly loaded or rewritten (ADR 0003).

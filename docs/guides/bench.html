@@ -401,7 +401,7 @@ const SETTLED_FRAMES: std::ops::RangeTo&lt;u32&gt; = ..COUNTER_FRAMES.end;</code
   </div>
   <p>The last three are written into the record only where measured. Shadow-ray time is a difference of two frames that were rendered the same way, since both runs follow one camera path with one injected clock: frame 700 of the second run is frame 700 of the first without its rays. A Fast travel's hold lasts as long as the IO pool takes, so the two runs can draw a path frame again a different number of times; <code>path_frame_times</code> leaves out each frame drawn again while the path paused, so the pairs stay one path frame each. No pass is only the rays, so this is how their whole cost is read. Where the rays cost little, the difference of two noisy totals is centred near zero and its median can be negative; <a href="#compare">section 5</a> says how such a line is judged.</p>
   <div class="code-source"><code>measure</code>, <code>src/bench/mod.rs</code></div>
-<pre class="code"><code>    let gate_passes: Vec&lt;usize&gt; = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
+<pre class="code"><code>    let gate_passes: Vec&lt;usize&gt; = (position_of(CullingPhase::One.slots_label())..=position_of(LIT_PASS))
         .filter(|&amp;pass| {
             measured_without_rays
                 .iter()

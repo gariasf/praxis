@@ -272,7 +272,7 @@ const NON_METRIC_FIELDS = new Set(["commit", "source_hash", "committed_unix_seco
 // How many of a Series' latest counter changes show before the rest fold.
 const SHOWN_COUNTER_CHANGES = 6;
 // Each counter's name, as `Counters::NAMES` spells it: a row holds them flat for the counter frames and under `measured_counters` for the measured frames.
-const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed", "late_chunks", "chunks_loaded", "chunks_unloaded", "bytes_read", "pool_entries_freed", "late_mips", "tlas_build_allocations"];
+const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed", "late_chunks", "chunks_loaded", "chunks_unloaded", "bytes_read", "pool_entries_freed", "late_mips", "tlas_build_allocations", "instance_slots_in_use"];
 // `COUNTER_FRAMES`' length (src/bench/mod.rs): a row that measured no more frames than these holds the same counters twice.
 const COUNTER_FRAME_COUNT = 64;
 const BUDGET_STATISTICS = {
@@ -299,6 +299,7 @@ const METRIC_LABELS = {
   froxel_lights_overflowed: "Froxel lights overflowed",
   gpu_memory_bytes: "GPU memory",
   heap_allocations: "Heap allocations",
+  instance_slots_in_use: "Instance slots in use",
   instances_drawn: "Instances drawn",
   instances_overflowed: "Instances overflowed",
   late_chunks: "Late Chunks",

@@ -50,6 +50,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // draws with one call, and the lit pass with two, phase two's into depth
     // first; then the tonemapping pass's one triangle.
     assert_eq!(last.draw_calls, 4);
+    // A slot per sphere, none freed.
+    assert_eq!(last.instance_slots_in_use, 10);
     // Every frame writes the 144-byte camera and 32-byte light uniforms and
     // the sun and four point lights, 48 bytes each; only the first also
     // writes the ten 128-byte Instances and the 4-byte count of Instance
@@ -258,8 +260,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
     // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
-    // Phase two's depth pass draws nothing in a frame whose phase one drew
-    // every visible Instance, and NVIDIA times an empty pass at 0.
+    // Phase two's pass over its Meshlet records appends nothing and its depth
+    // pass draws nothing in a frame whose phase one drew every visible
+    // Instance, and NVIDIA times an empty pass at 0.
     for (frame, stats) in frames.iter().enumerate() {
         assert_eq!(stats.gpu_readbacks_skipped, 0, "frame {frame}");
         let Some(gpu) = stats.gpu else {
@@ -272,11 +275,13 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
                 "dynamic_tlas_build",
                 "bend_pass",
                 "blas_refit",
-                "culling_phase_one",
+                "culling_phase_one_slots",
+                "culling_phase_one_triangles",
                 "froxel_pass",
                 "depth_prepass",
                 "depth_pyramid_pass",
-                "culling_phase_two",
+                "culling_phase_two_slots",
+                "culling_phase_two_triangles",
                 "phase_two_depth_pass",
                 "shadow_mask_pass",
                 "lit_pass",
@@ -286,7 +291,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         );
         for (pass, time) in gpu.pass_times {
             let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
-            let may_be_empty = pass == "phase_two_depth_pass" && gpu.phase_two_triangles_drawn == 0;
+            let may_be_empty = ["culling_phase_two_triangles", "phase_two_depth_pass"]
+                .contains(&pass)
+                && gpu.phase_two_triangles_drawn == 0;
             assert!(
                 (Duration::ZERO < time || may_be_empty) == runs
                     && time <= gpu.frame_time
