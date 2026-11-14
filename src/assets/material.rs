@@ -285,6 +285,15 @@ pub(crate) enum StreamedMips {
     Stale,
 }
 
+/// Which of the Material table's two counts a Material takes an entry of:
+/// the Far proxies', or the one every other Material shares (ADR 0017).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaterialUse {
+    Ordinary,
+    #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
+    FarProxy,
+}
+
 /// A Material loaded by Asset ID: its Handle, how many loads returned it,
 /// less those `remove_user` took back, when its last user left, and the
 /// Textures it counts as a user of.
@@ -450,6 +459,11 @@ pub struct MaterialPool {
     materials: Vec<MaterialData>,
     /// The Asset ID `load` loaded each Material from, at its Handle's index.
     material_ids: Vec<Option<AssetId>>,
+    /// The count each Material takes an entry of, at its Handle's index.
+    material_uses: Vec<MaterialUse>,
+    /// The entries each count holds and how many are taken, by `MaterialUse`.
+    count_capacities: [u32; 2],
+    count_entries: [u32; 2],
     materials_buffer: Counted<wgpu::Buffer>,
     channels: [ChannelTextures; 5],
     /// Each loaded Texture, which its Asset ID names.
@@ -474,7 +488,6 @@ pub struct MaterialPool {
     bind_group_is_stale: bool,
     /// The residency switch: every Texture loads its Resident tail alone.
     holds_back_finer_mips: bool,
-    material_capacity: u32,
 }
 
 impl MaterialPool {
@@ -531,7 +544,8 @@ impl MaterialPool {
             GpuMemoryKind::SceneAndPassBuffers,
             &wgpu::BufferDescriptor {
                 label: Some("materials_buffer"),
-                size: u64::from(capacities.materials) * std::mem::size_of::<MaterialData>() as u64,
+                size: (u64::from(capacities.materials) + u64::from(capacities.far_proxy_materials))
+                    * std::mem::size_of::<MaterialData>() as u64,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             },
@@ -569,6 +583,9 @@ impl MaterialPool {
             generations: Generations::default(),
             materials: Vec::new(),
             material_ids: Vec::new(),
+            material_uses: Vec::new(),
+            count_capacities: [capacities.materials, capacities.far_proxy_materials],
+            count_entries: [0; 2],
             materials_buffer,
             channels,
             loaded_textures: HashMap::new(),
@@ -583,45 +600,75 @@ impl MaterialPool {
             bind_group,
             bind_group_is_stale: false,
             holds_back_finer_mips,
-            material_capacity: capacities.materials,
         }
     }
 
     /// Registers a material in the SSBO through `staging`, returning its
-    /// handle, or `None`, logged, when the SSBO is full.
+    /// handle, or `None`, logged, when the count other than the Far proxies'
+    /// is full.
+    #[cfg(test)]
     pub fn insert(
         &mut self,
         staging: &mut LoadStaging,
         data: MaterialData,
     ) -> Option<MaterialHandle> {
-        if self.refused_as_full() {
+        self.insert_as(staging, data, MaterialUse::Ordinary)
+    }
+
+    /// `insert`, into an entry of `material_use`'s count.
+    fn insert_as(
+        &mut self,
+        staging: &mut LoadStaging,
+        data: MaterialData,
+        material_use: MaterialUse,
+    ) -> Option<MaterialHandle> {
+        if self.refused_as_full(material_use) {
             return None;
         }
         let (index, generation) = self.generations.take();
+        self.count_entries[material_use as usize] += 1;
         let offset = u64::from(index) * std::mem::size_of::<MaterialData>() as u64;
         staging.write(&self.materials_buffer, offset, bytemuck::bytes_of(&data));
         if index as usize == self.materials.len() {
             self.materials.push(data);
             self.material_ids.push(None);
+            self.material_uses.push(material_use);
         } else {
             self.materials[index as usize] = data;
             self.material_ids[index as usize] = None;
+            self.material_uses[index as usize] = material_use;
         }
         tracing::debug!(handle = index, "material registered");
         Some(MaterialHandle { index, generation })
     }
 
-    /// Whether the SSBO is full, logged and counted when it is.
-    fn refused_as_full(&mut self) -> bool {
-        let full = self.generations.full(self.material_capacity);
+    /// Whether every entry of `material_use`'s count is taken.
+    fn full(&self, material_use: MaterialUse) -> bool {
+        self.count_entries[material_use as usize] >= self.count_capacities[material_use as usize]
+    }
+
+    /// Whether `material_use`'s count is full, logged and counted when it is.
+    fn refused_as_full(&mut self, material_use: MaterialUse) -> bool {
+        let full = self.full(material_use);
         if full {
             self.refusals += 1;
             tracing::warn!(
-                capacity = self.material_capacity,
-                "Material refused: the Material SSBO is full"
+                ?material_use,
+                capacity = self.count_capacities[material_use as usize],
+                "Material refused: its count of the Material table is full"
             );
         }
         full
+    }
+
+    /// Frees `handle`'s index and its entry of its count; false, changing
+    /// nothing, when it finds no Material.
+    fn free_entry(&mut self, handle: MaterialHandle) -> bool {
+        let freed = self.generations.free(handle.index, handle.generation);
+        if freed {
+            self.count_entries[self.material_uses[handle.index as usize] as usize] -= 1;
+        }
+        freed
     }
 
     /// The data of `handle`'s Material, or None when it was freed.
@@ -639,7 +686,7 @@ impl MaterialPool {
     /// Material is warned about.
     #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
     pub fn free(&mut self, handle: MaterialHandle) {
-        if !self.generations.free(handle.index, handle.generation) {
+        if !self.free_entry(handle) {
             tracing::warn!(?handle, "Material not freed: its Handle finds no Material");
             return;
         }
@@ -666,15 +713,20 @@ impl MaterialPool {
             return false;
         }
         let frees_before = self.frame_frees;
-        let freed = self.free_unused(reader);
+        let freed = self.free_unused(reader, None);
         self.capped_frees += self.frame_frees - frees_before;
         freed
     }
 
-    /// Frees the least recently used unused Material as `free` does, and
-    /// tells `reader` which Assets it freed; false when none is unused.
-    fn free_unused(&mut self, reader: &dyn AssetReader) -> bool {
-        let Some(id) = self.unused.pop_least_recent() else {
+    /// Frees the least recently used unused Material, of `material_use`'s
+    /// count when one is given, as `free` does, and tells `reader` which
+    /// Assets it freed; false when none is unused.
+    fn free_unused(&mut self, reader: &dyn AssetReader, material_use: Option<MaterialUse>) -> bool {
+        let (loaded_materials, material_uses) = (&self.loaded_materials, &self.material_uses);
+        let Some(id) = self.unused.pop_least_recent_where(|id| {
+            let index = loaded_materials[id].handle.index;
+            material_use.is_none_or(|wanted| material_uses[index as usize] == wanted)
+        }) else {
             return false;
         };
         let loaded = self
@@ -682,7 +734,7 @@ impl MaterialPool {
             .remove(&id)
             .expect("an unused Material is loaded");
         let handle = loaded.handle;
-        self.generations.free(handle.index, handle.generation);
+        self.free_entry(handle);
         let mut freed = self.release_textures(&loaded.textures);
         freed.push(id);
         self.frame_frees += freed.len();
@@ -773,23 +825,32 @@ impl MaterialPool {
         reader: &dyn AssetReader,
         id: AssetId,
     ) -> anyhow::Result<MaterialHandle> {
-        self.load_making_room(device, staging, reader, id, &mut |_| false)
+        self.load_making_room(
+            device,
+            staging,
+            reader,
+            id,
+            MaterialUse::Ordinary,
+            &mut |_| false,
+        )
     }
 
     /// Loads the Material `id` from `reader`, and each Texture it samples, once
-    /// per Asset ID, written through `staging`, and returns its Handle, or
-    /// the SSBO's refusal when it is full; a load of a loaded Material counts
-    /// one more user of it. A full SSBO frees the least recently used unused
-    /// Material, past `ENTRIES_FREED_PER_FRAME`, as each such free makes the
-    /// one entry the load needs, and once none is left has `make_room` free
-    /// what keeps Materials in use. A Channel the Material lacks samples
-    /// Layer 0, as does one already full.
+    /// per Asset ID, written through `staging`, into an entry of
+    /// `material_use`'s count, and returns its Handle, or the refusal when
+    /// that count is full; a load of a loaded Material counts one more user
+    /// of it, in the count it took. A full count frees its least recently
+    /// used unused Material, past `ENTRIES_FREED_PER_FRAME`, as each such
+    /// free makes the one entry the load needs, and once none is left has
+    /// `make_room` free what keeps Materials in use. A Channel the Material
+    /// lacks samples Layer 0, as does one already full.
     pub fn load_making_room(
         &mut self,
         device: &wgpu::Device,
         staging: &mut LoadStaging,
         reader: &dyn AssetReader,
         id: AssetId,
+        material_use: MaterialUse,
         make_room: &mut dyn FnMut(&mut MaterialPool) -> bool,
     ) -> anyhow::Result<MaterialHandle> {
         if let Some(loaded) = self.loaded_materials.get_mut(&id) {
@@ -799,10 +860,10 @@ impl MaterialPool {
             }
             return Ok(loaded.handle);
         }
-        while self.generations.full(self.material_capacity)
-            && (self.free_unused(reader) || make_room(self))
+        while self.full(material_use)
+            && (self.free_unused(reader, Some(material_use)) || make_room(self))
         {}
-        if self.refused_as_full() {
+        if self.refused_as_full(material_use) {
             anyhow::bail!("the Material pool refused Material {id}");
         }
         let material = reader.material(id)?;
@@ -839,7 +900,7 @@ impl MaterialPool {
             extra: [layers[4], 0, 0, 0],
         };
         let handle = self
-            .insert(staging, data)
+            .insert_as(staging, data, material_use)
             .with_context(|| format!("the Material pool refused Material {id}"))?;
         let loaded = LoadedMaterial {
             handle,
@@ -1807,7 +1868,7 @@ mod tests {
             MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
         assert_eq!(
             memory.bytes_by_kind()[GpuMemoryKind::SceneAndPassBuffers as usize],
-            4 * std::mem::size_of::<MaterialData>() as u64
+            (4 + 285) * std::mem::size_of::<MaterialData>() as u64
         );
         let material = MaterialData {
             base_color: [1.0; 4],
@@ -1825,5 +1886,103 @@ mod tests {
         assert!(log.contains("WARN"), "not a warning: {log:?}");
         assert!(log.contains("Material refused"), "not logged: {log:?}");
         assert_eq!(pool.materials.len(), 4);
+    }
+
+    /// The checked-in table holds 285 Far proxies' Materials and 222 others
+    /// at once, loaded in turn; one more of either is refused, logged and
+    /// counted, also while the other count has an unused Material to free.
+    #[test]
+    fn far_proxies_materials_and_the_others_fill_their_own_counts() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities::checked_in();
+        let memory = gpu_memory(&context);
+        let mut pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        assert_eq!(
+            memory.bytes_by_kind()[GpuMemoryKind::SceneAndPassBuffers as usize],
+            (222 + 285) * std::mem::size_of::<MaterialData>() as u64
+        );
+        let device = &context.device;
+        let mut load = |pool: &mut MaterialPool, id: u128, material_use: MaterialUse| {
+            let id = AssetId(id);
+            pool.load_making_room(
+                device,
+                &mut staging,
+                &FactorsReader,
+                id,
+                material_use,
+                &mut |_| false,
+            )
+        };
+        for id in 0..285 {
+            load(&mut pool, id, MaterialUse::FarProxy).unwrap();
+            if id < 222 {
+                load(&mut pool, 1000 + id, MaterialUse::Ordinary).unwrap();
+            }
+        }
+        assert_eq!(pool.take_refusals(), 0);
+
+        let (far_proxy, log) = logged(|| load(&mut pool, 285, MaterialUse::FarProxy));
+        assert!(far_proxy.is_err(), "a 286th Far proxy's Material loaded");
+        assert!(log.contains("capacity=285"), "not logged: {log:?}");
+        assert_eq!(pool.take_refusals(), 1);
+        let (other, log) = logged(|| load(&mut pool, 1222, MaterialUse::Ordinary));
+        assert!(other.is_err(), "a 223rd other Material loaded");
+        assert!(log.contains("capacity=222"), "not logged: {log:?}");
+        assert_eq!(pool.take_refusals(), 1);
+
+        pool.remove_user(AssetId(1000));
+        let (far_proxy, _) = logged(|| load(&mut pool, 285, MaterialUse::FarProxy));
+        assert!(far_proxy.is_err(), "it took another Material's entry");
+        assert!(pool.is_loaded(AssetId(1000)));
+        load(&mut pool, 1000, MaterialUse::Ordinary).unwrap();
+        pool.remove_user(AssetId(0));
+        let (other, _) = logged(|| load(&mut pool, 1222, MaterialUse::Ordinary));
+        assert!(other.is_err(), "it took a Far proxy's Material's entry");
+        assert!(pool.is_loaded(AssetId(0)));
+    }
+
+    /// A full count frees the least recently used unused Material of its
+    /// own, and leaves an unused Material of the other count loaded.
+    #[test]
+    fn a_full_count_frees_an_unused_material_of_its_own() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let capacities = PoolCapacities {
+            materials: 2,
+            far_proxy_materials: 2,
+            ..PoolCapacities::checked_in()
+        };
+        let memory = gpu_memory(&context);
+        let mut pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        let device = &context.device;
+        let mut load = |pool: &mut MaterialPool, id: u128, material_use: MaterialUse| {
+            let id = AssetId(id);
+            pool.load_making_room(
+                device,
+                &mut staging,
+                &FactorsReader,
+                id,
+                material_use,
+                &mut |_| false,
+            )
+        };
+        load(&mut pool, 1, MaterialUse::Ordinary).unwrap();
+        pool.remove_user(AssetId(1));
+        load(&mut pool, 2, MaterialUse::FarProxy).unwrap();
+        load(&mut pool, 3, MaterialUse::FarProxy).unwrap();
+        pool.remove_user(AssetId(3));
+
+        load(&mut pool, 4, MaterialUse::FarProxy).unwrap();
+        assert!(pool.is_loaded(AssetId(1)));
+        assert!(pool.is_loaded(AssetId(2)));
+        assert!(!pool.is_loaded(AssetId(3)));
+        assert_eq!(pool.take_frame_frees(), 1);
     }
 }

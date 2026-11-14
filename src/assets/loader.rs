@@ -1,6 +1,8 @@
 use anyhow::Context;
 
-use crate::assets::{MaterialChannel, MaterialHandle, MaterialPool, MeshHandle, MeshPool, MeshUse};
+use crate::assets::{
+    MaterialChannel, MaterialHandle, MaterialPool, MaterialUse, MeshHandle, MeshPool, MeshUse,
+};
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
 use crate::render::LoadStaging;
 
@@ -94,6 +96,7 @@ impl AssetLoader for PoolLoader<'_> {
             self.staging,
             self.reader,
             id,
+            MaterialUse::Ordinary,
             &mut free_unused_mesh(self.mesh_pool),
         );
         self.forget_freed_meshes();

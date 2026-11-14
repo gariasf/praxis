@@ -23,18 +23,22 @@ const GEOMETRY_BYTES_PER_MESH: u64 = 4488;
 /// past its Resident tail.
 pub(crate) const TEXTURE_POOL_BYTES_PER_MATERIAL: u64 = 19_267_584;
 
+/// The most Far proxies Resident at once, each with one baked Material.
+const FAR_PROXY_MATERIALS: u32 = 285;
+
 /// Unused entries each pool frees in one frame to make room for refused
 /// loads, so a load that fits nowhere cannot empty a pool in one frame; the
 /// Textures freed with a Material count, and may take the Material pool past
-/// it. A full Material table's frees do not count toward it: one unused
-/// Material for each Material it loads, which makes exactly the room the load
-/// needs.
+/// it. The frees of a full count of the Material table do not count toward
+/// it: one unused Material for each Material it loads, which makes exactly
+/// the room the load needs.
 pub(crate) const ENTRIES_FREED_PER_FRAME: usize = 64;
 
 /// What each pool holds, derived from the GPU memory Budgets at device
 /// creation at real bytes per entry: the geometry Arenas' Budget in each
 /// Arena's share and the Mesh table beside it, the texture pool's the
-/// Material table and each Channel's Texture classes, a class for each
+/// Material table's entries but those of Far proxies' Materials, which are
+/// a count of their own, and each Channel's Texture classes, a class for each
 /// `RESIDENT_TAIL_LEVEL_BYTES` of the Channel's share, less than any class
 /// past the Resident tail holds, up to what the Capability floor binds (ADRs
 /// 0013, 0017). The scene and pass buffers' Budget holds the two tables.
@@ -47,6 +51,7 @@ pub struct PoolCapacities {
     pub meshlet_triangle_arena_bytes: u64,
     pub meshes: u32,
     pub materials: u32,
+    pub far_proxy_materials: u32,
     pub texture_classes_per_channel: u32,
 }
 
@@ -72,6 +77,7 @@ impl PoolCapacities {
             meshlet_triangle_arena_bytes: meshlet_triangle_bytes,
             meshes: entries(budgets.geometry_arenas / GEOMETRY_BYTES_PER_MESH),
             materials: entries(budgets.texture_pool / TEXTURE_POOL_BYTES_PER_MATERIAL),
+            far_proxy_materials: FAR_PROXY_MATERIALS,
             texture_classes_per_channel: entries(
                 budgets.texture_pool / (channels * RESIDENT_TAIL_LEVEL_BYTES),
             )
@@ -1002,6 +1008,12 @@ impl<Key> Unused<Key> {
     pub(crate) fn pop_least_recent(&mut self) -> Option<Key> {
         self.order.pop_first().map(|(_, key)| key)
     }
+
+    /// Takes out the least recently used key that `wanted` holds for.
+    pub(crate) fn pop_least_recent_where(&mut self, wanted: impl Fn(&Key) -> bool) -> Option<Key> {
+        let tick = *self.order.iter().find(|(_, key)| wanted(key))?.0;
+        self.order.remove(&tick)
+    }
 }
 
 /// What freeing a loaded Mesh gives back: its range of each Arena, in
@@ -1208,6 +1220,7 @@ pub(crate) mod tests {
                 meshlet_triangle_arena_bytes: 8_808_036,
                 meshes: 18_691,
                 materials: 222,
+                far_proxy_materials: 285,
                 texture_classes_per_channel: 13_107,
             }
         );

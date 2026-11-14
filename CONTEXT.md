@@ -166,6 +166,10 @@ _Avoid_: Streaming radius, active area, grid size
 A Chunk the camera came within the Load radius of before it was loaded.
 _Avoid_: Pop-in, streaming miss
 
+**Far proxy**:
+What stands for a Chunk between the Load radius and the View distance: one merged Mesh with a Material baked for it.
+_Avoid_: HLOD, impostor, Shadow proxy (traced, never drawn)
+
 **Late mip**:
 A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
 _Avoid_: Missing mip, texture pop
