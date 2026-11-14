@@ -6557,3 +6557,355 @@ url = "https://github.com/zeux/meshoptimizer/blob/v0.25/LICENSE.md"
 section = "meshoptimizer 0.25, LICENSE.md, lines 1-3"
 quote = '''MIT License [...] Copyright (c) 2016-2025 Arseny Kapoulkine'''
 checked = 2026-11-14
+
+["majercik-2019-ddgi-hysteresis"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §4.3, p. 10 (the blend factor); §4.1, p. 8 (the latency); §5.3, p. 15 (later bounces)"
+quote = '''We set α between 0.85 and 0.98 for all of our results. [...] indirect illumination can sometimes appear to “flow” in and out of areas with dramatic visibility changes, due to the latency in the indirect illumination update [...] This leads to a time-lag artifact for indirect bounces that is most evident in static scenes viewed by a static camera'''
+checked = 2026-11-14
+
+["majercik-2019-ddgi-timings"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=19"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §6, p. 19, Table 2 and the text beside it; Table 1's caption names the GPU"
+quote = '''note that our implementation updates all probes every frame, and thus incurs a high probe update cost [...] Probes were at 8 × 8 resolution using RGB10A2 format for color and RG16F format for depth. [...] The total time of our contributions is 7ms.'''
+cost = '''Table 2. Timings for the indirect light components of a single frame render using 32 × 8 × 32 probes with 64 rays/probe. [...] Ray generation 0.1 [...] Ray cast 0.8 [...] Ray shade 0.4 [...] Probe update 0.7 (0.3 color + 0.4 depth) [...] Sample irradiance probes for primary ray shading 0.5 [...] Deferred direct shading 0.1 [...] Total 2.6 [...] Timings were taken on our Greek Temple Scene (876127 primitives) using an NVIDIA RTX 2080 Ti.'''
+checked = 2026-11-14
+
+["majercik-2019-ddgi-probe-encoding"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=6"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §3, p. 6 (what a probe stores, and the passes that read it); §5.2, p. 14 (the visibility test); §6, p. 19 and §7, p. 25 (leaks); §4.2, p. 9 (spacing)"
+quote = '''we encode the spherical diffuse irradiance (in GL_R11G11B10F format at 8 × 8 octahedral resolution), spherical distance and squared distances to the nearest geometry (both in GL_RG16F format at 16 × 16 octahedral resolution) [...] In a forward or deferred shading render pass, probes can [...] we apply mean- and variance-biased Chebyshev interpolants, as detailed in the variance shadow-mapping method, to our visibility queries (see Figure 7) in order to appropriately filter radiance queries [...] low probe count/density can lead to subtle light leaking artifacts [...] Our method does not suffer from light- or shadow-leaking artifacts [...] For human-scale scenes, we found a spacing of one to two meters sufficient'''
+checked = 2026-11-14
+
+["majercik-2021-ddgi-lag"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=9"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.2, p. 9"
+quote = '''If the irradiance probes are slow to converge, abrupt lighting changes in a scene can create noticeable lag in the diffuse indirect illumination. The lag is most salient in light-to-dark transitions. [...] We determined experimentally that an exponent of 5.0 leads to best results'''
+checked = 2026-11-14
+
+["majercik-2021-ddgi-hysteresis-thresholds"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=10"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.3, pp. 10-11, with Listing 2; §9, p. 25 (what remains)"
+quote = '''Our lower threshold detects changes with magnitude above 25% of maximum value and lowers the hysteresis by 0.15. [...] changes with magnitude above 80% and lowers the hysteresis to 0.0 [...] These thresholds are active only for irradiance updates—we found them to be too unstable when updating visibility. [...] Small lighting change (e.g., player-held flashlight turns on): reduce irradiance hysteresis by 15% for four frames [...] Large object change (e.g., ceiling caves in): reduce irradiance hysteresis by 50% for 10 frames and visibility hysteresis by 50% for seven frames. [...] hysteresis for all probes (not just the probes local to the change) is reduced [...] Note that temporal anti-aliasing (TAA) applies its own hysteresis, so the base hysteresis for our technique can be lower if TAA is applied. [...] there is still some ghosting in the indirect illumination for small, bright light sources'''
+checked = 2026-11-14
+
+["majercik-2021-ddgi-rays-against-hysteresis"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=18"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §6, pp. 17-18 (probe states and rays per probe); §9, p. 25 (no ray budget); §8, p. 21 (scale)"
+quote = '''Optionally trace a large number of rays for “Newly Vigilant” and “Newly Awake” probes to converge them in a frame, setting hysteresis to 0. [...] Casting more rays per probe makes new probe values more stable and allows for a lower global hysteresis, which makes the GI converge faster. [...] Probe sleeping using our probe-state scheme leads to a 30–50% average performance improvement (Figure 8). [...] a per-frame ray budget could be implemented to allow more control over the render budget of the technique [...] we do not have the compute or ray-tracing budget to update and trace a level-sized, high-resolution probe grid as it may contain tens of thousands of probes'''
+checked = 2026-11-14
+
+["leblanc-conte-2025-acs-probe-cascades"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=36"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides Probe volume (p. 36), Probe G-buffer update (p. 42), Sky approximation (p. 47) and Memory (p. 127), with speaker notes"
+quote = '''5 cascades 16x16x8 (10k probes) [...] 2 meters – 32 meters spacing [...] The largest grid covers 512 meters (32*16) [...] we will generate their gbuffer by tracing rays at the center of their texel. There is no jittering nor temporal accumulation [...] Maximum distance based on cascade [...] If the position fall outside the probe volume, a sky approximation will be used. [...] The sky approximation is a small 8x8 texture update every frame. [...] 73MB in total [...] The largest buffer is the probe G-buffer which is 55MB.'''
+checked = 2026-11-14
+
+["leblanc-conte-2025-acs-probe-update-rate"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=39"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides Probe selection (pp. 38-40) and Probe lighting update (pp. 43-44), with speaker notes"
+quote = '''Updating all probes every frame is too costly [...] We support full updates in some special cases, like after loading a region or teleporting to a region. [...] 512/1024 probes per frame according to priority [...] Those probes are going to be relight and convolve only. [...] Each probe is updated around 3 times per seconds (lighting) and has a full update every 2 seconds [...] probes are fully updated around each 2 seconds [...] lighting computation is to rescale the radiance and irradiance of all probes that have not been selected [...] Rescaling the lighting of probe not being updated reduce visual artefacts seen when changing rapidly the lighting'''
+checked = 2026-11-14
+
+["leblanc-conte-2025-acs-probe-timings"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=129"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slide Performance: Probe update timings (p. 129), table and speaker notes; the PlayStation 5 column"
+quote = '''16% of updated probes are traced [...] Profiled in quality mode at 30fps on consoles. [...] In orange, timings for a single queue graphics pipeline.'''
+cost = '''G-buffer update 0.35 ms [...] Sun shadows 0.20 ms [...] Lighting update 0.49 ms [...] Lighting convolution 0.06ms [...] Probe relocation 0.11 ms [...] Total (No Async) (0.91) 1.24 ms'''
+checked = 2026-11-14
+
+["leblanc-conte-2025-acs-interior-classification"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=108"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides on light leaking (pp. 103, 107-108), probe spacing (p. 122) and Limitations (p. 133), with speaker notes"
+quote = '''The visibility test is not precise enough for thin wall, angled wall or corners. [...] We reuse the list of planes from our baked GI solution. [...] Each probe is classified to be either interior or exterior. When using the probe volume, we first classify the hit position and then only use probes having the same classification. [...] our nearest probes are spaced at 2m from each others [...] Probe interpolation always leaks [...] Leaks are bound to happen with this algorithm, visibility is a big factor in this. [...] Probe grid and buffer resolutions limit details'''
+checked = 2026-11-14
+
+["leblanc-conte-2025-acs-per-pixel-gather"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=54"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides Overview (p. 11), Per-pixel indirect diffuse (pp. 54, 56, 59), probes on characters (p. 123) and Performance: per-pixel diffuse (p. 130, PlayStation 5 column), with speaker notes"
+quote = '''using probe volume as a cache for secondary hit GI [...] 1 ray per pixel at quarter resolution [...] Trace cascade probe range * 2 [...] We also compute the indirect lighting by using the irradiance probe volume. [...] After the lighting is done, we need to run a denoiser to reconstruct the full indirect lighting. [...] for disoccluded pixels on characters and replace their result. [...] Too much artefacts.'''
+cost = '''Denoising 2.04ms [...] Total (No-Async) (4.58) 7.12ms'''
+checked = 2026-11-14
+
+["patry-2021-got-sky-visibility"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021.pdf#page=24"
+section = "Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances, slides on sky visibility (pp. 24-25), the relighting's cost (p. 50) and the limitations (p. 60), with speaker notes"
+quote = '''Sky visibility encoded in degree 2 SH (mono) [...] Multiply sky SH by sky visibility [...] Capture “bounced sky visibility” [...] Multiply by average sky color (from 0th SH band) [...] since they required at least nine times the storage [...] we updated 8x8 tiles per frame, plus the 3x3 tiles closest to the camera every frame [...] Bounced light assumption (shadowing ≈ sky visibility) is often wrong [...] No indirect light from local lights [...] Baked data is completely static'''
+cost = '''Performance (Base PS4) [...] Full Update (baseline) 60 μs 123 μs'''
+checked = 2026-11-14
+
+["patry-2021-got-interior-mask"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021.pdf#page=52"
+section = "Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances, slides on the probe grid and tetrahedral meshes (pp. 16, 18) and on interior leaks (pp. 51-52), with speaker notes"
+quote = '''16x16x3 per 200m square tile, 20x80 tiles [...] This spacing of probes was too coarse to accurately light interiors [...] When loaded, the tet meshes override the grid, and they blend at the boundary. [...] they all had _very thin_ walls [...] Classify tetrahedral mesh probes as interior or exterior [...] We then assign all surfaces an _interior mask_ value w, which defaults to 0.5.'''
+checked = 2026-11-14
+
+["patry-2021-got-reflection-probes"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021.pdf#page=61"
+section = "Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances, slides on reflection probe relighting (pp. 61-63), with speaker notes"
+quote = '''Tsushima used 235 [...] Up to 128 relit probes at a time [...] (1.5 times than the size of the compressed lit probes) [...] Offline captured data: [...] Albedo cube map (BC1 format) [...] Normal + Depth cube map (BC6H format) [...] Performed round-robin in async compute (one per frame) [...] which has a 128x128 shadow map per 200m tile'''
+checked = 2026-11-14
+
+["sousa-2025-idtech8-gi-timings"]
+url = "https://advances.realtimerendering.com/s2025/content/SOUSA_SIGGRAPH_2025_Final.pdf#page=32"
+section = "Sousa (id Software), Fast as Hell: idTech 8 Global Illumination, SIGGRAPH 2025 Advances, slides on irradiance volumes (pp. 16, 21), the radiance cache (p. 20), the gather's filters (p. 23) and Performance (p. 32); the table's columns are five platforms, Xbox Series X at 1440p the second"
+quote = '''16 x 16 x 16 x 6 cascades. 10 x 10 x 10 for local volumes. [...] Per frame: 1 cascade + 1 volume. [...] Per frame: 64 / 32 / 16 rays. [...] ~20k cache entries updated per frame. Re-use for N frames. [...] Add previous frame. [...] 64 MB (30MB lower specs) [...] Temporal filter [Mattausch2010] [...] TAA/others acts as another temporal filter at end of frame. [...] On this machine had a 4080'''
+cost = '''(900p) (1440p) (1440p) (1800p) (4k) [...] World Sampling 0.38 ms 0.27 ms 0.45 ms 0.083 ms 0.091 ms [...] 0.2 ms 0.21 ms 0.109 ms 0.11 ms 0.109 ms [...] 0.08 ms 0.08 ms 0.046 ms 0.035 ms 0.07 ms [...] Final Gather 0.6 ms 0.535 ms 0.489 ms 0.385 ms 0.5 ms [...] Denoise 0.208 ms 0.18 ms 0.266 ms 0.22 ms 0.52 ms [...] Upscale 0.65 ms 0.59 ms 0.69 ms 0.72 ms 0.445 ms [...] Cost ( serial ) ~2.11 ms ~1.9 ms ~2.05 ms ~1.923 ms ~1.7 ms'''
+checked = 2026-11-14
+
+["apers-2024-gibs-probe-budget"]
+url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=18"
+section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF pp. 16-19 (probe storage, ray budget, hysteresis), 53-54 (timings) and 57-58 (60 Hz gameplay), notes"
+quote = '''we need to fit our probes in100mb storage, which means we have about 1kb available per probe [...] we have 100k rays that we can dispatch [...] we need at least 16 rays for this to work properly [...] about 6k probes we can raytrace each frame [...] we drive the probes hysteresis (blend factor with historical data) using the same Multi-Scale Mean Estimator we have for our surfels [...] Doing so introduces some update latency [...] during 60hz we only have a 2ms budget [...] halt any irradiance updates when going into 60hz gameplay'''
+cost = '''XBSX at 1440p resolution without any upscaling [...] totaling around 25k probes [...] Each frame we update a portion of our probes, which takes 0.7ms with ray tracing inclusive.'''
+checked = 2026-11-14
+
+["netzel-costa-2022-rtow-shipped-one-tlas"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
+section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slides 15 and 16 (the two fields' radii) and 32 (one TLAS, the far field offset), speaker notes"
+quote = '''Radius - 150 m [...] Radius - 1 km [...] Reuse HLOD (Hierarchical Level of Detail) [...] For the Matrix Awakens we set it to to around 1 km radius around the player. [...] For the Matrix Awakens we actually shipped using this approach due to time constraints late in development of the project.'''
+checked = 2026-11-14
+
+["freeman-2026-split-rc-single-frame"]
+url = "https://arxiv.org/pdf/2607.20384v2#page=1"
+section = "Freeman, Sannikov and Pitt-Francis, Split Radiance Cascades: Real-Time Global Illumination via Sparse Radiance Probes, arXiv 2607.20384v2 (2026-10-11), Fig. 1's caption (p. 1) and Table 2 with its text (p. 9); v1's Table 2 and caption are the same"
+quote = '''“Single frame” shows the result of Split RC after a single frame of calculation; “Accumulated” is a result after 10 frames of temporal accumulation [...] We have not included the cost for [...] creating the G-buffer or tracing shadow rays'''
+cost = '''Runtime for Split RC in “Single frame” is 13.2ms, of [...] which 6.1ms consists of 1spp raytracing. [...] Table 2. Performance breakdown of single-frame Split RC for Fig. 10 and [...] Fig. 13, running on a RTX 3080 Laptop GPU. [...] Total 8.6 11.5'''
+checked = 2026-11-14
+
+["majercik-2021-ddgi-integrations"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=1"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, Figure 1's caption (p. 1) and §1 (p. 2)"
+quote = '''Image rendered in a pre-release version of Unity [...] the NVIDIA RTXGI SDK, and several unannounced commercial'''
+checked = 2026-11-14
+
+["wgpu-pr-10144"]
+url = "https://github.com/gfx-rs/wgpu/pull/10144"
+section = "gfx-rs/wgpu pull request 10144, [wgpu-core] Ray tracing pipelines (merged into trunk 2026-11-05 as 9e744954; v30.0.2 does not hold it), description"
+quote = '''Exposes the already added hal ray tracing pipelines as safe wgpu pipelines. [...] However, because metal has no way of retrieving them setting this above zero requires ray tracing pipelines to be enabled too.'''
+checked = 2026-11-14
+
+["wgpu-trunk-1278811-metal-no-ray-tracing-pipeline"]
+url = "https://github.com/gfx-rs/wgpu/blob/12788112433a65869bbc08edfbf03a002d5122e1/wgpu-hal/src/metal/device.rs#L2107-L2116"
+section = "wgpu-hal at trunk 12788112 (2026-11-14), metal/device.rs, create_ray_tracing_pipeline"
+quote = '''unimplemented!("Ray tracing pipelines are unsupported on Metal")'''
+checked = 2026-11-14
+
+["wgpu-trunk-1278811-dx12-no-ray-tracing-pipeline"]
+url = "https://github.com/gfx-rs/wgpu/blob/12788112433a65869bbc08edfbf03a002d5122e1/wgpu-hal/src/dx12/device.rs#L2356-L2365"
+section = "wgpu-hal at trunk 12788112 (2026-11-14), dx12/device.rs, create_ray_tracing_pipeline"
+quote = '''unreachable!("ray tracing pipelines not yet implemented")'''
+checked = 2026-11-14
+
+["wgpu-trunk-1278811-rebuild-only"]
+url = "https://github.com/gfx-rs/wgpu/blob/12788112433a65869bbc08edfbf03a002d5122e1/wgpu-core/src/command/ray_tracing.rs#L399-L404"
+section = "wgpu-core at trunk 12788112 (2026-11-14), command/ray_tracing.rs, TLAS descriptors in build_acceleration_structures (L399-L404) and map_blas (L1208-L1210); the file is unchanged between v30.0.1 and v30.0.2"
+quote = '''log::warn!("build_acceleration_structures called with PreferUpdate, but only rebuild is implemented"); [...] mode: hal::AccelerationStructureBuildMode::Build, [...] log::debug!("only rebuild implemented")'''
+checked = 2026-11-14
+
+["wgpu-pr-9961"]
+url = "https://github.com/gfx-rs/wgpu/pull/9961"
+section = "gfx-rs/wgpu pull request 9961, Optimise Tlas building (merged into trunk 2026-08-28 as 68d122e9; v30.0.2 does not hold it), description; it names neither the Instance count nor the machine"
+quote = '''Some low hanging fruit optimisations which save a few miliseconds (total ~7 ms in an initially 17-19 ms function)'''
+checked = 2026-11-14
+
+["freeman-2026-split-rc-limits"]
+url = "https://arxiv.org/pdf/2607.20384v2#page=2"
+section = "Freeman, Sannikov and Pitt-Francis, Split Radiance Cascades: Real-Time Global Illumination via Sparse Radiance Probes, arXiv 2607.20384v2 (2026-10-11), §2 Related work (p. 2), §5 Implementation (p. 8) and §7 Limitations (p. 12); v1 holds the same sentence on Love and Deepspace"
+quote = '''Deepspace utilizes Radiance Cascades in 3D [Ruan 2026] to increase the efficiency of standard irradiance probes for use on mobile [...] position as a 64-bit integer, using 18 bits for each coordinate axis [...] tracing is handled by OptiX. [...] Split RC can exhibit light leaking and other artifacts, particularly for geometry smaller than the base probe spacing'''
+checked = 2026-11-14
+
+["ruan-2026-love-and-deepspace-gi"]
+url = "https://gdcvault.com/play/1035619/The-Evolution-of-Real-Time"
+section = "Ruan (Infold Games), The Evolution of Real-Time Global Illumination in 'Love and Deepspace' (Presented by Arm), GDC 2026, session overview; the page shows no slides, timings or hardware without a login"
+quote = '''We developed a real-time GI algorithm based on Surfel and 3D Radiance Cascade, which runs smoothly on mobile, supports dynamic transformations of objects and light sources'''
+checked = 2026-11-14
+
+["freeman-2025-holographic-rc-2d"]
+url = "https://arxiv.org/pdf/2505.02041v1#page=1"
+section = "Freeman, Sannikov and Margel, Holographic Radiance Cascades for 2D Global Illumination, arXiv 2505.02041v1 (2025-05-04), abstract, p. 1"
+quote = '''and does not need any temporal caching'''
+cost = '''1.85 ms for a 512 × 512 pixel image and 7.67 ms for 1024 × 1024 on an RTX [...] 3080 Laptop.'''
+checked = 2026-11-14
+
+["chen-2026-spatial-mis-probes"]
+url = "https://pubmed.ncbi.nlm.nih.gov/41774582/"
+section = "Chen, Zhou, Yan and Hu, Spatial Multiple Importance Sampling for Real-Time Irradiance Probes, IEEE TVCG 32(7):5551-5563, July 2026, doi 10.1109/TVCG.2026.3669877: the abstract, as PubMed's record 41774582 gives it; the paper itself is closed and was not read"
+quote = '''reuses ray-surface intersection data among real-time irradiance probes to significantly reduce flicker caused by variance [...] a probe selection mechanism to enhance reuse efficiency and a visibility estimation method to mitigate bias [...] significantly reduces variance at a fixed ray tracing cost'''
+checked = 2026-11-14
+
+["coomans-2026-neural-irradiance-volume"]
+url = "https://arxiv.org/pdf/2602.12949v1#page=1"
+section = "Coomans, Nazzaro, Dominici, Döring, Verhoeven, Vardis and Steinberger, Real-time Rendering with a Neural Irradiance Volume, Computer Graphics Forum (Eurographics 2026), doi 10.1111/cgf.70400, arXiv 2602.12949v1: abstract and introduction (p. 1), training (pp. 5-6), the comparison with a DDGI-like grid (p. 6)"
+quote = '''As long as most of the scene remains static, probes approximate irradiance for all surfaces immersed in the irradiance volume, including novel dynamic objects [...] converges after around five minutes [...] or thirty minutes for a medium sized scene like Sponza [...] requires 1168 bytes per probe, 1024 of which are dedicated to depth buffers [...] leaks when ray-traced visibility is not employed'''
+cost = '''providing fast inference (around 1 ms per frame on consumer GPUs at full HD resolution), reduced memory usage (1–5 MB for medium-sized scenes), and only requires a G-buffer as input, without expensive ray tracing or denoising [...] which altogether incurs a cost of around 1 ms on an RTX 4090'''
+checked = 2026-11-14
+
+["silvennoinen-2025-sh-exponentials"]
+url = "https://arisilvennoinen.github.io/Publications/HPG_2025_CRC.pdf#page=1"
+section = "Silvennoinen, Sloan, Iwanicki and Nowrouzezahrai, Spherical Harmonic Exponentials for Efficient Glossy Reflections, Computer Graphics Forum 44(8) (High-Performance Graphics 2025), doi 10.1111/cgf.70219, author's copy: abstract (p. 1), introduction (p. 2), results (p. 6)"
+quote = '''Our method requires 200× less memory, enabling alias-free reconstruction over continuous roughness and angular domains using only 33 coefficients per-color channel at roughly equal time (9.95ms vs. 9.85ms) [...] would require roughly 700MB of runtime memory [...] our representation requires only 3MB storage [...] regime, i.e., α < 0.25 is not well suited for a severely bandlimited'''
+cost = '''mean precomputation time is 0.328ms compared to 0.536ms for [...] reconstruction is roughly 0.1ms, or 1% of total GPU frame time [...] atop the split-sum cost, at a target resolution of 1920 × 1080 [...] 3970X CPU and a NVIDIA RTX A6000 GPU'''
+checked = 2026-11-14
+
+["fritsch-2025-horizon-maps"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20251171/hpg20251171.pdf#page=1"
+section = "Fritsch, Schneegans, Friederichs, Flatken, Eisemann and Gerndt, Fast Planetary Shadows using Fourier-Compressed Horizon Maps, High-Performance Graphics 2025, doi 10.2312/hpg.20251171: abstract (p. 1), Table 1 (p. 7), performance (p. 9)"
+quote = '''we create a compact representation of each pixel’s horizon profile and use it to render soft shadows at runtime [...] Fourier mipmap (fm16) 16 Coeff., 4 Levels 1.33MB [...] The measured frame times also include some base cost of'''
+cost = '''a window resolution of 1920x1080 pixels [...] NVIDIA RTX 4090 [...] run in well under 1ms and are easily real-time capable [...] NVIDIA RTX 2050 [...] the medium preset at about 4.1ms (2.8ms'''
+checked = 2026-11-14
+
+["van-antwerpen-2026-foliage-ptlas"]
+url = "https://www.highperformancegraphics.org/2026/_assets/slides/Dietger_slides.pdf#page=17"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch and Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, High-Performance Graphics 2026 (Proc. ACM CGIT 9(4), doi 10.1145/3820021), the talk's slides, pp. 2, 17, 21 and 22; the paper was not read"
+quote = '''60M Plants [...] Instanced over 5×5 Km terrain [...] Building Top-Level Acceleration Structure (TLAS) for 60M plants is slow [...] Use Partition TLAS for accelerated partial updates (DX 2.0) [...] PTLAS updates ~6x faster [...] Shading error not bounded [...] Rely on temporal denoiser for smooth LOD shading transitions'''
+checked = 2026-11-14
+
+["wang-2026-gradient-restir-pt"]
+url = "https://elitesheep.blob.core.windows.net/publications/grestir-eg-2026/Gradient-ReSTIR-author.pdf#page=1"
+section = "Wang, Kettunen, Lin, Wyman, Wu and Zhao, Gradient-domain ReSTIR Path Tracing, Computer Graphics Forum (Eurographics 2026), doi 10.1111/cgf.70328, author's copy: abstract and Fig. 1 (p. 1), results (p. 8)"
+quote = '''real-time rendering by spatiotemporal sample reuse'''
+cost = '''an equal-time comparison (30 ms) [...] an Nvidia GeForce RTX 5090 GPU and AMD Ryzen 5900X CPU [...] All results are rendered in 1920x1080 resolution'''
+checked = 2026-11-14
+
+["pikulsky-2026-svgf-modern-gpus"]
+url = "https://jcgt.org/published/0015/01/02/paper.pdf#page=1"
+section = "Pikulsky, Optimizing Spatiotemporal Variance-Guided Filtering for Modern GPU Architectures, JCGT 15(1), 2026, abstract (p. 1) and test hardware (p. 7)"
+quote = '''a 1.3–2.5× performance gain is achieved [...] AMD Radeon RX 7800 XT and NVIDIA RTX 2080 Super'''
+checked = 2026-11-14
+
+["kuenlin-2024-snowdrop-probe-cascades"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf#page=14"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop, GDC 2024 Advanced Graphics Summit, slides on the probe volume (pp. 7, 13-15, 17, 22), its cost (p. 59; the columns are Xbox Series X, Xbox Series S and RTX 4080) and its limits (pp. 65, 68), with speaker notes"
+quote = '''We are using 4 cascade of 32x32x8 probes each [...] Cascade 0 far away with 1024m between probes 32x32x8km [...] As we are caching the trace result, probes can be traced and lit independently on [...] Our update budget for each frames is 1024 probes [...] Some probes are fully retraced and lit (~15% ~162 probes if have full budget) [...] For each probes we send 400 rays uniformly around it [...] mainly used when lighting indirect hits, and forward rendered objects. [...] Walls need to be thick enough to avoid leaks [...] Interiors cannot be too big to avoid leaks [...] We ended up trying an octree approach to replace the cascade.'''
+cost = '''TOTAL COST 0.715ms 1.868ms 0.258ms'''
+checked = 2026-11-14
+
+["koshlo-2024-snowdrop-rt-world"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Koshlo_Oleksandr_Snowdrop_Custom_BVH.pdf#page=14"
+section = "Koshlo (Massive Entertainment), Ray Tracing in Snowdrop: Scene Representation and Custom BVH, GDC 2024, slides on what the ray-tracing world holds (pp. 11, 14-16) and on alpha testing (p. 60), with speaker notes"
+quote = '''Using DXR 1.1 with inline trace for PC, and a custom BVH implementation for consoles and PC hardware without RT support [...] Using average materials per mesh [...] We go over the scene in a radius around a camera (currently 4km), adding relevant mesh data [...] We randomly prune-out meshes from procedural sectors with some heuristics, to avoid excessive amount of instances in RT [...] Instead heightfield is ray-marched directly inside intersection routine [...] Impostors are added for distant sun shadows (beyond CSM range) [...] Each alpha-tested instance gets a constant alpha value, and we randomly reject triangle hits based on dithering test'''
+checked = 2026-11-14
+
+["mueller-2026-glacier-ddgi"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=14"
+section = "Mueller (IO Interactive), Smolder, SIGGRAPH 2026 Advances in Real-Time Rendering in Games, slide on the lighting the volumetrics read (p. 14), speaker notes"
+quote = '''With 007 First Light we added a fully real-time DDGI style global illumination system. [...] store irradiance, radiance and depth in 8x8 octahedral textures. We have 3 cascades, each with 64x64x16 probes, and the probes are 60 centimeters apart on the smallest grid level. [...] We have to sample 8 probes and trilinearly interpolate between them.'''
+checked = 2026-11-14
+
+["de-vahl-2025-indiana-jones-probe-cascades"]
+url = "https://enginearchitecture.org/downloads/REAC_2025_Indy.pdf#page=54"
+section = "de Vahl (MachineGames), the rendering of Indiana Jones and the Great Circle, Rendering Engine Architecture Conference 2025, slides on the frame (pp. 25-26) and on global illumination (p. 54), speaker notes"
+quote = '''Opaque renders out full forward+ lighting as well as storing out a mini g-buffer to be used for some subsequent passes. [...] Hit is diffuse only shaded using probe and accumulated into a spherical harmonic stored per pixel. This is then denoised [...] Our GI is based on a set of ray traced probe cascades, and similar to shadows we update one cascade every frame. The difference being that we don’t fully update probes, we blend in new contributions to let the probe converge over time. [...] We calculate how far rays can reach and limit our top level acceleration structure to only that area. Also we skip any instance we deem likely to have a low impact on GI.'''
+checked = 2026-11-14
+
+["wicked-engine-fc8385b-ddgi-ray-queries"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/ddgi_raytraceCS.hlsl#L206"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/ddgi_raytraceCS.hlsl (L206, L492) and shaders/ddgi_updateCS.hlsl (L176, L227): the probe rays are inline ray queries in a compute shader; read, not run"
+quote = '''q.TraceRayInline( [...] // Infinite bounces based on previous frame probe sampling: [...] result = lerp(prev_result, result, 0.02); [...] MultiscaleMeanEstimator(result, varianceData, push.blendSpeed);'''
+checked = 2026-11-14
+
+["wicked-engine-fc8385b-features"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/features.txt"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), features.txt, lines 6, 35, 58 and 85"
+quote = '''Metal renderer [...] MSAA [...] Tiled forward (Forward+) rendering (+2.5D culling) [...] Dynamic Diffuse Global Illumination (DDGI)'''
+checked = 2026-11-14
+
+["wicked-engine-fc8385b-licence"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/LICENSE.txt"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), LICENSE.txt"
+quote = '''The MIT License (MIT) [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-14
+
+["flax-1.13-probe-specular"]
+url = "https://web.archive.org/web/20261024020107/https://flaxengine.com/blog/flax-1-13-released/"
+section = "Flax Engine, Flax 1.13 released (2026-10-21), the section DDGI Specular Reflections; the cost is the vendor's and its resolution is not stated"
+quote = '''Real-time global illumination gets rough specular reflections! No need to place Environment Probes anymore. All lighting becomes fully dynamic. Flax already has full-scene reflections tracing (via our custom software ratracer based on SDFs) but only for mirror-like surfaces. Materials of higher roughness fall back to prebaked (or dynamic) Environment Probes. Now, DDGI can allocate a new set of probes with specular:'''
+cost = '''Complex scenes can have around 50,000 probes automatically placed around the camera (in cascades) and updated periodically. On presented level, effect adds 49mb of VRAM and 0.5ms – 0.9ms of GPU time (on 2080Ti).'''
+checked = 2026-11-14
+
+["wohllaib-2026-yotei-probes-and-interiors"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Wohllaib_Eric_Ambient_Diffuse_Lighting_in_Ghost_of_Yotei.pdf#page=10"
+section = "Wohllaib (Sucker Punch Productions), Ambient Diffuse Lighting in Ghost of Yōtei, GDC 2026, slides on the probes (pp. 10, 59, 69, 118), the interior mask (pp. 30, 41, 43, 55), the ray-traced layer (pp. 73, 106, 115) and its cost (p. 143), with speaker notes"
+quote = '''we replaced our sky visibility probes with per probe octahedral g buffers that we relight at runtime, improving our response to local lights. [...] Interior surfaces ignore exterior probes, and vis versa. [...] Every probe is marked as interior or exterior only, no blending. [...] The artist would author a watertight mesh that fit inside of the walls of the building they were trying to mark up. [...] There’s no good way to prevent light leaking between adjacent interior areas, for instance. [...] This reduces the number of probes we need to relight from that 12 thousand to about 12 hundred. [...] we only include geometry for LODs that start about 20 meters away from the camera. [...] We also look at last frame’s screen space probes and find ones that were close to this one to use as history data. [...] Max distance of 4 meters [...] In this shot, the octree was baked with the door closed.'''
+cost = '''PS5 1440p 30hz (ms) PS5 Pro 1440p 60hz (ms) [...] Total 6.12 2.78 [...] It fires about 1.4 million rays per frame at 1440p'''
+checked = 2026-11-14
+
+["feng-2026-roco-sky-visibility-clipmap"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Sheng_Feng_IlluminatingRocosLegacyScalableGlobalIlluminationfromTheorytoPractice.pdf#page=18"
+section = "Feng (Tencent), Illuminating Roco's Legacy: Scalable Global Illumination from Theory to Practice, GDC 2026, slides on the renderer (p. 5), the baked data (pp. 9-10, 51), the clipmap (pp. 15, 18, 40-41) and its cost (p. 45)"
+quote = '''Forward+ for dynamic local lighting [...] No G-Buffer needed [...] Probe data: 15 MB per chunk [...] Diffuse GI ≈ Sky Light × Direct Sky Visibility + Mean Sky Light × Indirect Sky Visibility + Sun Light × Indirect Sky Visibility [...] Uses 4 LODs in the game [...] Process fixed number of probes (4×16³) every frame [...] No latency!! [...] Pre-Mix adjacent LODs with a compute dispatch [...] Blocks in LODs must be Center-Aligned [...] Outdoor Resolution: 4m Probe Interval (8 MB/Chunk)'''
+cost = '''Measured on iPhone 12 @ 60 FPS [...] GPU frame time increases about 0.83 millisecond'''
+checked = 2026-11-14
+
+["stefanov-2016-division-probes"]
+url = "http://www.mrakobes.com/Nikolay.Stefanov.GDC.2016.pdf#page=54"
+section = "Stefanov (Massive Entertainment), Global Illumination in Tom Clancy's The Division, GDC 2016, the author's copy, slides on the probes (pp. 21, 36), their cost (p. 54), interiors (pp. 56, 66) and the far field (p. 57)"
+quote = '''4m spacing between probes [...] Relight probes every frame on the GPU [...] Use stencil to choose between interior and outdoor volume [...] Large 2D texture outside of irradiance volume [...] Direct illumination from sky only [...] Sharp transition between indoors and outdoors'''
+cost = '''Relight two probe sectors every frame [...] Xbox One 0.95ms (non-async!)'''
+checked = 2026-11-14
+
+["garcia-2025-veilguard-wall-rule"]
+url = "https://enginearchitecture.org/downloads/REAC_2025_Bioware.pdf#page=12"
+section = "Garcia, Stewart and Garg (BioWare), the rendering of Dragon Age: The Veilguard, Rendering Engine Architecture Conference 2025, slide on baked probe lighting (p. 12); slides without speaker notes"
+quote = '''Up to 0.5m for highest resolution [...] Light leaking: build chunky architecture. Thinnest wall .5m'''
+checked = 2026-11-14
+
+["scherzinger-2026-anno-117-rt"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Scherzinger_Aaron_AllRaysLeadToRome.pdf#page=128"
+section = "Scherzinger (Ubisoft Mainz), All Rays Lead to Rome: ray tracing in Anno 117: Pax Romana, GDC 2026, slides on the technique (pp. 89-90), the TLAS (p. 93), cost on the base PlayStation 5 at 1440p upscaled to 4K (p. 122) and lessons (p. 128), with speaker notes"
+quote = '''Our raytracing implementation does not use any probes, we always trace rays directly from the Gbuffer against geometry. [...] We use the NVIDIA realtime denoiser in quarter resolution and afterwards do a bilateral upsampling of the result. [...] we use inline raytracing which was up to 20% faster compared to using dedicated raytracing pipelines. [...] Instead of the mesh, we initially use its static bounding box in the TLAS as a proxy. When we determine it is active, we build the BLAS and replace the bounding box. [...] With MSAA we had issues with noise since a lot of features rely on a temporal component. [...] MSAA with RT is a pain (do not have the temporal smoothing PLUS multiple samples per pixel), our only solution was to trace in higher resolution :('''
+cost = '''Performance (PS5, 4K FSR 3 Quality): [...] where we render in 1440p and then upscale to 4K. On the base PS5 with the low setting tracing diffuse GI takes 0.9ms and denoising 0.5ms'''
+checked = 2026-11-14
+
+["olejnik-2026-cod-variable-rate-ray-tracing"]
+url = "https://advances.realtimerendering.com/s2026/content/SIGGRAPH2026%20-%20Micha%C5%82%20Olejnik%20-%20Variable%20Rate%20Ray%20Tracing%20in%20COD%20MW4.pdf#page=10"
+section = "Olejnik (Infinity Ward), Variable Rate Ray Tracing in Call of Duty: Modern Warfare 4, SIGGRAPH 2026 Advances in Real-Time Rendering in Games, slides pp. 2, 7, 10, 14 and 31, with speaker notes"
+quote = '''VRRT is an umbrella term I use for couple different functionalities that reallocate rays to fix common screen space denoising issues. [...] because we were a primarily F+ pipeline (not deferred) we became reliant on shader permutations and this needed a major rework to find a good balance with RT hit point shading [...] In 2025, we finally shipped RT reflections on PC, supporting full range of gloss as well as reflections on transparencies (glass etc.). [...] so expect a hybrid RTGI-baked solution [...] We only need to track current and previous frame color buffer, and we use exponential smoothing to combine them. [...] industry standard variance-based color clamping is simply not good enough'''
+checked = 2026-11-14
+
+["greenberg-2026-orca"]
+url = "https://advances.realtimerendering.com/s2026/content/ORCA%20Siggraph%20r3.4_%20Advances.pptx"
+section = "Greenberg (EA SEED), ORCA, SIGGRAPH 2026 Advances in Real-Time Rendering in Games, slides 18, 36, 38, 39, 50 and 57, with speaker notes"
+quote = '''This means best case, heavy latency in lighting, but more commonly no accounting for dynamic objects in the cache. [...] We’re resetting and rebuilding the entire voxel cache from scratch every frame. [...] let the denoiser “fix” them [...] about one path for every 16 pixels ideally, or about 6.25% of pixels [...] Note the only denoising I’m applying here is simple temporal anti-aliasing. [...] WIP - Orca hasn’t shipped yet. [...] It doesn’t need to because the cache is rebuilt from scratch every frame by default.'''
+cost = '''Taking PT timings from XBox Series X: [...] PT baseline for given shot 1536x864p is 14.2ms [...] 5.035 ms'''
+checked = 2026-11-14
+
+["ue-5.9-preview-lumen-world-cache"]
+url = "https://web.archive.org/web/20261109222503/https://dev.epicgames.com/documentation/unreal-engine/lumen-world-cache-in-unreal-engine"
+section = "Epic Games, Lumen World Cache in Unreal Engine, documentation of Unreal Engine 5.9 Preview (snapshot of 2026-11-09)"
+quote = '''Every frame, Lumen fills the cache by tracing paths from the screen. It picks one random pixel in each 8 × 8 pixel tile and traces a path of up to three bounces from it. [...] Lighting in each cell is averaged over up to 16 frames to reduce noise. Cells that no path has reached for 64 frames are removed to make room for new ones. [...] Lighting lags behind changes. Each cell averages lighting over several frames, and newly seen areas need a few frames to fill in, so lighting changes can take a moment to appear. [...] so it needs ray tracing material shaders and isn't available in Inline mode [...] The World Cache is off by default.'''
+checked = 2026-11-14
+
+["ue-5.8-release-notes-lumen-lite"]
+url = "https://web.archive.org/web/20261014191625/https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes"
+section = "Epic Games, Unreal Engine 5.8 Release Notes (snapshot of 2026-10-14), Lumen Lite and its Irradiance Field Gather (Beta), and MegaLights"
+quote = '''Irradiance Field Gather is an irradiance field with probe occlusion and automatic probe placement that reuses Lumen's World Space Radiance Cache. Interpolation to pixels is downsampled and relies on TAA to reconstruct at full resolution. [...] Indirect specular comes from Screen Space Reflections for smooth surfaces, and cheap rough specular from radiance probe mipmaps for rough surfaces. No rays are traced for reflections. [...] Probes are moved outside geometry using the GBuffer. This helps overall but needs improvement as it makes the lighting view dependent, especially indoors. [...] Megalights is now entering Production Ready status with Unreal Engine 5.8.'''
+checked = 2026-11-14
+
+["jms55-2026-solari-0.19-world-cache"]
+url = "https://web.archive.org/web/20261014182752/https://jms55.github.io/posts/2026-04-12-solari-bevy-0-19/"
+section = "JMS55, Realtime Raytracing in Bevy 0.19 (Solari) (2026-04-12, snapshot of 2026-10-14), the world cache's update; the post names neither the GPU nor the resolution of these figures"
+quote = '''Stochastic world cache updates keep the performance hit down in larger scenes, at the cost of less reactive lighting.'''
+cost = '''2.65ms to update every world cache cell in Bistro [...] 0.47ms to update a random 40,000 world cache cells in Bistro'''
+checked = 2026-11-14
+
+["nvidia-2026-path-tracing-whitepaper-sharc"]
+url = "https://github.com/NVIDIA-RTX/Whitepapers/blob/20463fd355c817a50381343d9d12b7ac811d2e39/pt_performance_whitepaper/README.md"
+section = "NVIDIA, Real-Time Path Tracing in Games (whitepaper headed June 2026, commit 20463fd of 2026-10-09), the sections on radiance caches, ray queries and the SHaRC update's profile; vendor figures"
+quote = '''Radiance caches store approximations of outgoing radiance in world space or another stable domain. They allow low-frequency indirect lighting to be reused across pixels, frames, and paths. [...] Caches can fall behind dynamic changes, causing lighting lag. [...] RayQuery operates inline within the caller shader. It is well suited for local visibility, shadow rays, cache visibility, early termination checks, and simple traversal queries where full material dispatch is unnecessary. [...] dense alpha-tested geometry such as foliage can sometimes be simplified, treated as opaque, omitted at distance, or represented by proxy geometry.'''
+cost = '''Initial SHaRC Update profile - RTXGI2 path tracing sample on RTX 5090 at 1920 × 1080 native resolution. [...] Adding `RAY_FLAG_FORCE_OPAQUE` to the SHaRC Update rays removed that any-hit workload, reducing Update time from 0.69 ms to 0.31 ms.'''
+checked = 2026-11-14
+
+["pearce-2025-overwatch-ddgi-apply"]
+url = "https://enginearchitecture.org/downloads/REAC_2025_Overwatch.pdf#page=28"
+section = "Pearce (Blizzard Entertainment), the rendering of Overwatch 2, Rendering Engine Architecture Conference 2025, slides on baked probes in DDGI's encoding (pp. 17, 28), speaker notes"
+quote = '''A baked solution is still favorable since our maps use mostly static lighting once a match has begun.'''
+cost = '''Performance – GTX 1080 [...] The DDGI apply pass is taking about 330 microseconds at full resolution.'''
+checked = 2026-11-14
+
+["hammersley-2026-f1-25-ddgi"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Hammersley_Tom_EA_SPORTS_F1_25_Path_Tracing_at_200mph+2026-03-26+16.59.00.pdf#page=66"
+section = "Hammersley (Codemasters), EA SPORTS F1 25: Path Tracing at 200 mph, GDC 2026, slides on the game's DDGI as the path tracer's cache (pp. 65-67), speaker notes"
+quote = '''We had a working, optimized DDGI system in the game. [...] Given it’s a persistent, world space data structure, it copes well with cars moving through it at high speed [...] Multiplying the DDGI results by a function of AO got things looking right.'''
+checked = 2026-11-14
