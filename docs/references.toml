@@ -6909,3 +6909,642 @@ url = "https://media.gdcvault.com/gdc2026/Slides/Hammersley_Tom_EA_SPORTS_F1_25_
 section = "Hammersley (Codemasters), EA SPORTS F1 25: Path Tracing at 200 mph, GDC 2026, slides on the game's DDGI as the path tracer's cache (pp. 65-67), speaker notes"
 quote = '''We had a working, optimized DDGI system in the game. [...] Given it’s a persistent, world space data structure, it copes well with cars moving through it at high speed [...] Multiplying the DDGI results by a function of AO got things looking right.'''
 checked = 2026-11-14
+
+["hillaire-2020-atmosphere-luts-every-frame"]
+url = "https://sebh.github.io/publications/egsr2020.pdf#page=5"
+section = "Hillaire, A Scalable and Production Ready Sky and Atmosphere Rendering Technique, EGSR 2020, Computer Graphics Forum 39(4) (doi 10.1111/cgf.14050), section 5.5 Multiple scattering LUT and section 8 Conclusion"
+quote = '''Our goal is to propose a cheaper and instant O(1) method that is independent of the scattering order, to be able to evaluate the light multiple scattering contribution each and every frame without any delay. [...] our method can render sky and atmosphere from many view points efficiently in real time while constantly updating the LUTs, with light multiple scattering simulated, but without requiring cumbersome iterative computations per scattering orders.'''
+checked = 2026-11-14
+
+["hillaire-2020-atmosphere-cost"]
+url = "https://sebh.github.io/publications/egsr2020.pdf#page=8"
+section = "Hillaire 2020 (doi 10.1111/cgf.14050), section 7 Performance and Discussion, Table 2"
+quote = '''On a PC equipped with an NVIDIA 1080, the final on-screen rendering of the sky and atmospheric perspective is 0.14 milliseconds (ms) considering the daytime situation depicted in Figure 9. [...] In the end, the total render time is 0.31 ms for a resolution of 1280 × 720.'''
+cost = '''the total render time is 0.31 ms for a resolution of 1280 × 720 [...] For Epic Games’ Fortnite, the total sky rendering cost was roughly 1ms on iPhone 6s. [...] Table 2: Performance for each step of our method, as measured on a PC (NVIDIA 1080) and a mobile device (iPhone 6s).'''
+checked = 2026-11-14
+
+["hillaire-2020-aerial-perspective-volume"]
+url = "https://sebh.github.io/publications/egsr2020.pdf#page=4"
+section = "Hillaire 2020 (doi 10.1111/cgf.14050), section 5.4 Aerial Perspective LUT"
+quote = '''we evaluate in-scattering and transmittance towards the camera in a volume texture fit to the view camera frustum [...] The default resolution used in our case is 32 × 32 over the screen and 32 depth slices over a depth range of 32 kilometers, which is enough for most applications and games. [...] For transparent elements in a forward-rendering pipeline, we apply aerial perspective at the per-vertex level.'''
+checked = 2026-11-14
+
+["hillaire-2020-volumetric-shadows-reprojection"]
+url = "https://sebh.github.io/publications/egsr2020.pdf#page=9"
+section = "Hillaire 2020 (doi 10.1111/cgf.14050), section 7 Performance and Discussion, Figure 14"
+quote = '''It is not possible to use epipolar sampling [BCR*10] because the atmosphere is not a homogeneous medium. And it is also not possible to use a shadow volume approach [BN08; Hoo16] because our LUTs do not allow that kind of integral sampling over view ray paths in the atmosphere. Last but not least, these techniques cannot represent soft shadows cast by clouds: we must ray march. Similar to Valient [Val14] and Gjoel [GS16], we recommend using per-ray sample jittering and reprojection to combine samples from previous frames. [...] and reprojection can automatically be achieved via a temporal antialiasing (TAA) approach [Kar14]. [...] our real-time approach using ray marching and cascaded shadow maps.'''
+cost = '''In this example, we use 32 samples, which causes the sky and atmosphere rendering time to go up to 1.0ms. To reduce this cost, it is also possible to trace at a lower resolution and temporally reproject and upsample the result.'''
+checked = 2026-11-14
+
+["hillaire-2020-vs-bruneton-update-cost"]
+url = "https://sebh.github.io/publications/egsr2020.pdf#page=8"
+section = "Hillaire 2020 (doi 10.1111/cgf.14050), section 7 Performance and Discussion"
+quote = '''For the same view, the Bruneton model [BN08] renders in 0.22ms, but this is without all the LUTs being updated. Updating all the LUTs using the code provided [Bru17b] costs 250ms, where 99% of this cost comes from the many iterations required to estimate multiple scattering. As already shown by Hillaire [Hil16], it is possible to time slice the update over several frames. However, latency would increase when evaluating high scattering orders, and it would take a long time before any result would be available on screen.'''
+cost = '''Updating all the LUTs using the code provided [Bru17b] costs 250ms'''
+checked = 2026-11-14
+
+["hillaire-2020-reference-code-licence"]
+url = "https://github.com/sebh/UnrealEngineSkyAtmosphere/blob/183ead5bdacc701b3b626347a680a2f3cd3d4fbd/LICENSE"
+section = "sebh/UnrealEngineSkyAtmosphere, LICENSE at commit 183ead5bdacc701b3b626347a680a2f3cd3d4fbd (head of master, committed 2022-09-11; fetched from the master branch 2026-11-14, GitHub API reports licence MIT)"
+quote = '''MIT License Copyright (c) 2020 Epic Games, Inc. Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction'''
+checked = 2026-11-14
+
+["bruneton-2017-reference-code-licence"]
+url = "https://github.com/ebruneton/precomputed_atmospheric_scattering/blob/34f14e745cff948f4ca3157d1b62a445ffa7286f/LICENSE"
+section = "ebruneton/precomputed_atmospheric_scattering, LICENSE at commit 34f14e745cff948f4ca3157d1b62a445ffa7286f (head of master, committed 2025-10-05; fetched from the master branch 2026-11-14, GitHub API reports licence BSD-3-Clause)"
+quote = '''Copyright (c) 2017 Eric Bruneton All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: [...] 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.'''
+checked = 2026-11-14
+
+["schneider-2017-nubis-reprojection-cost"]
+url = "https://advances.realtimerendering.com/s2017/Nubis%20-%20Authoring%20Realtime%20Volumetric%20Cloudscapes%20with%20the%20Decima%20Engine%20-%20Final%20.pdf#page=96"
+section = "Schneider and Vos (Guerrilla), Nubis: Authoring Real-Time Volumetric Cloudscapes with the Decima Engine, SIGGRAPH 2017 Advances in Real-Time Rendering, slides Ray-March Optimizations, PDF pages 96 to 98 (printed 98 to 100), speaker notes"
+quote = '''The reason we are able to render our cloudscapes in 2ms is re-projection. You can look at the 2015 course for more information on this. One thing to keep in mind is that your cloud ray march must be fast enough so that all of the threads can produce pixels fast enough to prevent artifacts.'''
+cost = '''Clouds are partially obscured by the landscape and take up roughly half of the screen. Without any optimizations except temporal reprojection, Our shader takes 22ms to draw on the Standard PS4 Hardware. [...] that number drops to 3.34 ms [...] This brings the render time down to 1.81 ms. [...] This brings the render time down to 1.2 ms'''
+checked = 2026-11-14
+
+["schneider-2017-nubis-occluder-artifacts"]
+url = "https://advances.realtimerendering.com/s2017/Nubis%20-%20Authoring%20Realtime%20Volumetric%20Cloudscapes%20with%20the%20Decima%20Engine%20-%20Final%20.pdf#page=98"
+section = "Schneider and Vos (Guerrilla), Nubis, SIGGRAPH 2017 Advances, slide Ray-March Optimizations (Depth Culling), PDF page 98 (printed 100), speaker notes"
+quote = '''Finally, we only start the ray march in areas of the frame where the sky is or has the potential to be un-occluded in the next frame. However, thin occluders like trees could move across frame quickly enough to introduce reprojection artifacts. So, to prevent this we take a max() of a low lod sample of our depth channel.'''
+checked = 2026-11-14
+
+["schneider-2022-nubis-evolved-temporal-upscale"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-NubisEvolved-NoVideos.pdf, has the same slide numbers and no notes), slides 81 and 82 (Skies / Performance), speaker notes"
+quote = '''use the technique known as Temporal upscaling to amortize the cost of a full frame render – that is - Every frame we only update 1 pixel out of every 4x4 tile of the full frame image. The working buffer resolution is 480x270 and we upscale to 1920x1080.'''
+cost = '''This turns a 16 millisecond full frame render into a 2 millisecond render. [...] As you can see the perf remained around 2ms, like in 2017 and 2015. These results are on a PS5 at 4k 30hz'''
+checked = 2026-11-14
+
+["schneider-2022-nubis-evolved-flythrough-no-temporal"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-NubisEvolved-NoVideos.pdf, has the same slide numbers and no notes), slides 92, 127 and 128 (Environments / The Envelope Model), speaker notes"
+quote = '''And it is expensive enough on its own that you need to use temporal upscaling to render it in 2ms. And we can’t do that if we fly through them because the image will not resolve in time. So the shader itself needs to be fast enough to avoid the use of temporal upscaling. [...] We do not use temporal upscaling for these renders as that wouldn’t work. So these are rendered all at once. [...] Background orographic clouds are rendered at 960X540 resolution [...] Foreground orographic clouds that we fly through are rendered at 480X270 resolution. [...] The results are blended together over depth.'''
+cost = '''In this case with a mix of orographic clouds and tropospheric clouds, it comes out at about 2.5ms with the orographic clouds costing a little over a millisecond. This capture was made in our 60hz performance mode, where the output resolution is 960X540. In Resolution mode at 1920x1080 30hz it costs 5 milliseconds with orographic and tropospheric clouds combined. As much as we wanted to, we just couldn’t make these clouds work on Playstation 4.'''
+checked = 2026-11-14
+
+["schneider-2022-nubis-evolved-motion-vectors"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-NubisEvolved-NoVideos.pdf, has the same slide numbers and no notes), slides 153 to 158 (VFX / Animating Superstorm Density, Animating Cloud Density For Skies), speaker notes and slide code"
+quote = '''However, this can pose a problem when the cloud moves faster than the image can be constructed - as seen here. It produces a sort of pixel soup. This is because there is not enough time to resolve a shape before that shape has moved somewhere else in frame. The only way to mitigate this is to tell the upscale shader where the shape will be in the next frame and order the renders of pixels accordingly. [...] we could calculate these translation values, known across the industry as motion vectors, for each ring and use this to solve the serious temporal artifacts that would occur in the fast-moving vortex. [...] float cloud_distance = inCloudAttrWorkingBuffer.SampleLOD(inSampler, inUV, 0).r; [...] float4 prev_sample_pos = mul(inReprojectionMatrix, float4(view_space_vec, 1.0)); [...] Generating motion vectors for scrolling clouds is as simple as multiplying the scroll direction by a timestep. [...] On the left we have scrolling clouds with no motion vectors for upscaling and on the right we use motion vectors. There is an upward limit to scroll speed of course, but this is far faster movement than was possible before in our system.'''
+checked = 2026-11-14
+
+["schneider-2022-nubis-evolved-lightning-16-frames"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-NubisEvolved-NoVideos.pdf, has the same slide numbers and no notes), slides 179 and 180 (VFX / Superstorm Lightning Effects), speaker notes"
+quote = '''Recall once again that we build cloud renders over 16 frames. The lighting flashes can sometimes occur over 4-8 frames, which means that the results would appear less intense and degraded by temporal artifacts. [...] suggested that we Generate a mask using position and radius data before each flash So this could be used to modulate the internal flash intensity over the duration of the animation.'''
+checked = 2026-11-14
+
+["schneider-2023-nubis-cubed-temporal-limit"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/Nubis%20Cubed%20-%201080.pptx"
+section = "Schneider (Guerrilla), Nubis Cubed (slide header Nubis3; the voxel cloud talk), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2023/Nubis%20Cubed%20(Advances%202023).pdf, has no notes), slides 44 and 45 (A Brief History of Cloud Rendering), speaker notes"
+quote = '''Vertical profile clouds used temporal upscaling which Amortizes the cost of the render over 16 frames. [...] This had the effect of making a 20ms render a 2ms render and worked for distant clouds but not for nearby clouds because the image would not be able to resolve in time when the camera moves quickly. [...] So, for immersive Envelope clouds, we instead [...] split the render into two passes: Lower resolution near camera where rendering is more expensive, and higher farther away where we want to prevent aliasing.'''
+checked = 2026-11-14
+
+["schneider-2023-nubis-cubed-voxel-cost"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/Nubis%20Cubed%20-%201080.pptx"
+section = "Schneider (Guerrilla), Nubis Cubed (slide header Nubis3; the voxel cloud talk), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2023/Nubis%20Cubed%20(Advances%202023).pdf, has no notes), slides 52, 151 to 155 and 157 to 160 (Voxel Clouds / Ray-Marching, Rendering), speaker notes and slide text"
+quote = '''Recall that for the Envelope Method, we did away with temporal upscaling and split the render into two passes: High res in the distance to prevent aliasing and low res up close to improve performance for the most expensive parts of the ray-march. Would a similar approach work for 40 and 60hz modes? The answer is yes. [...] < 200 Meters: 480px * 270px [...] > 200 Meters: 960px * 540px [...] You can see that there is a bit more pixelation on sharp and dense features of the clouds on the right hand 60hz video, but lower density regions hide this better. [...] and a temporally jittered offset designed to counter under-sampling noise. [...] The jitter switches from animated close by to static far away to reduce under sampling artifacts without making distant clouds shimmer.'''
+cost = '''Each of these renders is done at 960x540 resolution [...] Costs range from 2.2ms to 4ms depending on if we are on the ground or in the air. [...] This frame cost 4ms in 30hz mode. But when we split the render into two resolutions over depth the cost goes to 2.1ms. We used this solution for both 40 and 60hz modes. [...] we learned that the Burning Shores DLC would be a PS5 only release'''
+checked = 2026-11-14
+
+["schneider-2023-nubis-cubed-light-voxel-grid"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/Nubis%20Cubed%20-%201080.pptx"
+section = "Schneider (Guerrilla), Nubis Cubed (slide header Nubis3; the voxel cloud talk), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, PPTX with speaker notes (the course PDF, https://advances.realtimerendering.com/s2023/Nubis%20Cubed%20(Advances%202023).pdf, has no notes), slides 113, 114 and 134 (Voxel Clouds / Lighting), speaker notes and slide text"
+quote = '''The first two samples are taken as we did before [...] but the remaining samples are pre-computed in a separate pass and stored in a 256x256x32 voxel grid that we sample after the first two samples. [...] If a voxel has cloud in it, then a ray is marched between that voxel and the boundaries of the voxel grid and density is accumulated at each step. [...] In addition to the savings, We could finally render long distance inter-cloud shadows.'''
+cost = '''We found that this reduced the render times by around 40%. The operation itself costs between 0.1 and 0.2ms depending on the time of day and the length of the rays toward the sun. The cost itself is amortized over 8 frames. [...] Amortized Cost: 0.1 to 0.2ms every 8 frames'''
+checked = 2026-11-14
+
+["hillaire-2016-frostbite-clouds-temporal"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf#page=36"
+section = "Hillaire (EA Frostbite), Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, SIGGRAPH 2016 course Physically Based Shading in Theory and Practice, course notes, section 5.5.3 Temporal scattering integration (p. 36) and section 5.10 Performance, Table 4 (p. 45)"
+quote = '''We render the clouds in a single pass. Each frame, samples are randomly offset within their sampling step/depth range. Once the current frame solution has been estimated, it is blended with the previous frame solution according to a constant blend factor. This result in a temporal integration of the scattering solution achieved using an exponential moving average. For the final frame to not look blurry when the camera is moving moving/rotating very fast, we re-project the previous result according to previous and current camera properties, i.e. projection and transform.'''
+cost = '''720p Main 0.91 ms [...] 1080p Main 1.60 ms [...] Table 4: Cloud rendering performance on XBox One. [...] are given for the worst case when looking at the horizon, 3/5 of the screen covered by clouds and 16 samples per pass. Main cloud view is rendered at half resolution and planar reflection a fourth of the the resolution.'''
+checked = 2026-11-14
+
+["hillaire-2016-frostbite-cloud-shadow-texture"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf#page=42"
+section = "Hillaire (EA Frostbite), Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, SIGGRAPH 2016 course Physically Based Shading in Theory and Practice, course notes, section 5.9 Other interactions (p. 42)"
+quote = '''Shadow: volumetric cloud shadows are baked into a 2D texture storing transmittance and pro- jected onto the world. It is applied on all opaque, transparent surfaces, and also sampled by our emitter system to correctly lit particles. The projection is very simple and assumes a overall flat planet around the camera, which is reasonable to assume for typical planets. [...] GI: the volumetric cloud shadow map is also sampled when updating input to our dynamic global illumination system'''
+checked = 2026-11-14
+
+["hillaire-2016-frostbite-low-res-compositing-limit"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf#page=51"
+section = "Hillaire (EA Frostbite), Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite, SIGGRAPH 2016 course Physically Based Shading in Theory and Practice, course notes, section 6.1 Future work (p. 51)"
+quote = '''Clouds are rendered in a layer behind everything. If one would want clouds to intersects with opaque geometry such a big mountain, it would need to only ray-march up to closest depth. Since clouds are rendered at lower resolution, extra compositing steps would be required: downsampled depth and bilateral upsampling from low resolution to full resolution.'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-raymarch-reconstruction"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering in 3D Graphics and Games, PPTX, slides 51 and 52 (Raymarch: Main Viewport, Raymarch Reconstruction), speaker notes and slide text"
+quote = '''Reconstruction over 4 frames [...] Our target resolution is half screen resolution, which was sufficient for our data (and the resulting high frequency detail) but still expensive with our per-sample workload. So instead of casting one ray per half resolution pixel, we decided to cast fewer rays and implement a reconstruction scheme. [...] For this scheme, we are casting one ray out of a 2x2 half resolution pixel tile, and reproject the skipped ones from the previous frame. Once sampled from the history buffer, we clamp in-scattering and transmittance with the color AABB of the 3x3 neighborhood, to validate outdated samples. We refine that neighborhood on depth discrepancies by dropping samples with high depth differences to the current pixel. This prevents overly large AABBs which can’t sufficiently clamp the reprojected pixel and therefore cause ghosting in motion. When there’s no history available (i.e. frustum edges), we use the closest ray result instead. [...] We start by downsampling the depth buffer from full to half resolution in a checkerboarded min/max fashion [...] High depth variance hard to resolve (i.e. vegetation, hair, stochastic transparency, etc.)'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-upscale-relies-on-taa"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering in 3D Graphics and Games, PPTX, slide 56 (Raymarch: Full Resolution Upscale), speaker notes and slide text"
+quote = '''Dithered upscale + TAA [...] The reconstruction gives us a fairly reliable frame (some flickering can still occur from undersampling + clamp), but we still need to upscale it to full resolution. This is done by dithering the half resolution source image using 4 taps and a blue noise point set, where we either average the taps or choose the sample with the closest depth on depth discrepancies.'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-cloud-shadow-map"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering in 3D Graphics and Games, PPTX, slides 35 (Visibility: Cloud Shadow Map) and 57 (Performance), slide text and speaker notes"
+quote = '''768x768 R16F, 6 mips [...] The cloud shadow map also stores visibility for the directional light, encoded as an ESM. The depth for the ESM is generated by raymarching the cloud scape from the perspective of the directional light and tracking the transmittance weighted ray length. The result is then blurred and stored in several mips to reduce aliasing, flickering and unwanted crawling effects. [...] In addition we only update 1 ray in a 4x4 tile for the cloud shadow map and implement temporal refinement for the terrain shadow map, since directional light shadows don’t change rapidly in regular gameplay. [...] We are not tracing any additional rays, and instead rely on the cloud shadow map for visibility.'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-sky-probes-and-reflection"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering in 3D Graphics and Games, PPTX, slides 36 (Ambient Light), 66 and 68 (Scene Integration: Sky Irradiance Probes), 70 (Reflection Probes) and 71 (Water Reflections), slide text and speaker notes"
+quote = '''The raymarcher uses a weighted average of the Rayleigh and Mie scattering terms, which we render into a low resolution paraboloid texture and apply parallel reduction to. [...] To do this, we are maintaining 32x32 probes, encoded as 3rd Order Spherical Harmonics. [...] Each probe then casts rays (constrained by the occlusion and surface gradient) into the world and accumulates in-scattering and transmittance. [...] For the camera reflection probe, we generate a lower resolution cube map containing in-scattering and transmittance, which is then composited in the deferred reflection lighting pass. [...] Instead we cast yet another set of rays, again using simplified raymarching and a strong temporal blend (running exponential average).'''
+cost = '''0.22ms on PS4 [...] 0.15ms on PS4 [...] Resolution: 512x256 [...] 0.19ms on PS4'''
+checked = 2026-11-14
+
+["patry-2021-tsushima-clouds-paraboloid"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021/index.html"
+section = "Patry (Sucker Punch), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering in Games, HTML slides Atmospheric Lighting and Atmospheric Lighting | Clouds (slide text; the deck has no speaker notes)"
+quote = '''Clouds render to a paraboloid texture [...] Clouds rendered to 768x768 paraboloid texture [...] Three textures: [...] Two for scrolling & lerping [...] One for rendering (timesliced over 60 frames) [...] Antialiasing for cloud density: [...] Reduce cloud density when derivative is high'''
+checked = 2026-11-14
+
+["hillaire-2020-unreal-cloud-amortisation-tradeoff"]
+url = "https://blog.selfshadow.com/publications/s2020-shading-course/hillaire/s2020_pbs_hillaire_slides.pdf#page=25"
+section = "Hillaire (Epic Games), Physically Based and Scalable Atmospheres in Unreal Engine, SIGGRAPH 2020 course Physically Based Shading in Theory and Practice, slides with speaker notes, PDF page 25 (clouds, previous work), speaker notes"
+quote = '''[Schneider 15, 17] [...] Update 1 pixel per 4x4 tile ⇒ 16 frame latency but looks full-res [...] [Bauer 19] [...] Trace at quarter resolution with TAA upsampling ⇒ Instant result but looks blurrier'''
+checked = 2026-11-14
+
+["hillaire-2020-unreal-cloud-shadow-taa-or-lut"]
+url = "https://blog.selfshadow.com/publications/s2020-shading-course/hillaire/s2020_pbs_hillaire_slides.pdf#page=40"
+section = "Hillaire (Epic Games), Physically Based and Scalable Atmospheres in Unreal Engine, SIGGRAPH 2020 course Physically Based Shading in Theory and Practice, slides with speaker notes, PDF page 40 (SkyView LUT with shadows), slide text and speaker notes"
+quote = '''Quality: Per-pixel tracing + jitter + TAA [...] Stored in LUTs (SkyView and AP) [...] We can now evaluate volumetric shadow using beer shadow maps. We can use per-pixel tracing with sample jitter and TAA to achieve sharpness but at the cost of full resolution rendering. [...] And if this per-pixel tracing cost is prohibitive for your use case, it is possible to simply store the shadows as part of the Sky-View and aerial perspective LUTs.'''
+checked = 2026-11-14
+
+["unreal-docs-volumetric-render-target-modes"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-cloud-component-in-unreal-engine"
+section = "Epic Games, Unreal Engine documentation, Volumetric Cloud Component, section on quality modes (r.VolumetricRenderTarget), read 2026-11-14"
+quote = '''Reactive modes supporting cloud intersections with opaque surfaces but with traces completed at a lower resolution: [...] r.VolumetricRenderTarget.Mode 0 is the recommended option for quality. It supports fast-paced gameplay that may have ground-to-space transitions, or flying through clouds. Clouds are fast to trace but can appear to have low resolution. Traces happen at quarter resolution, reconstruction at half resolution, and upsample on screen at full resolution. [...] A less reactive mode but looks full resolution: [...] r.VolumetricRenderTarget.Mode 2 focuses on higher quality while still supporting ground views for real-time gameplay. This mode is fast to trace and looks high resolution, but it does not support cloud intersection with opaque meshes.'''
+checked = 2026-11-14
+
+["unreal-docs-sky-light-time-slicing"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/sky-lights-in-unreal-engine"
+section = "Epic Games, Unreal Engine documentation, Sky Lights, sections Real Time Capture and Time Slicing Optimization, read 2026-11-14"
+quote = '''SkyAtmosphere, VolumetricCloud Components as well as sky domes with Sky materials are taken into account. [...] Real Time Capture mode utilizes a performance optimization called Time Slicing to distribute the captured scene over several frames rather than performing a full scene process every frame. [...] Time slicing is enabled by default, but can be set using the console variable r.SkyLight.RealTimeReflectionCapture.TimeSlice .'''
+checked = 2026-11-14
+
+["unity-hdrp-clouds-temporal-accumulation"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/volumetric-clouds-volume-override-reference.html"
+section = "Unity Technologies, High Definition Render Pipeline 17.0 manual, Volumetric Clouds Volume Override reference (properties Temporal Accumulation Factor, Ghosting Reduction, Perceptual Blending) and Create realistic clouds (volumetric clouds), API section, read 2026-11-14"
+quote = '''The amount of temporal accumulation to apply to the clouds. Temporal accumulation increases the visual quality of clouds by decreasing the noise. A higher value produces better quality clouds, but can create ghosting . [...] When you enable this property, HDRP removes the ghosting caused by temporal accumulation. This effect might cause a flickering effect when the Temporal Accumulation Factor value is low. [...] Blend the clouds with the environment. This might cause artifacts if the sky is overexposed. This setting only has an effect when you disable multi-sample antialiasing (MSAA). [...] // We reset the camera to discard the history buffer manually'''
+checked = 2026-11-14
+
+["ang-2018-sea-of-thieves-mesh-clouds"]
+url = "https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf#page=1"
+section = "Ang, Catling, Ciardi and Kozin (Rare), The Technical Art of Sea of Thieves, SIGGRAPH 2018 Talks (doi:10.1145/3214745.3214820), section 2 Cloudscape Rendering, p. 1"
+quote = '''Because of the performance requirements of the system and the high degree of artistic control desired, we chose not to pursue a ray-marched approach as favoured by modern game titles aiming at photo-realism. Instead, we developed a system that renders opaque geometry with simple per-vertex illumination that approximates sub-surface scattering. [...] we render the cloud geometry into a separate off-screen buffer. The image is then downsampled to a quarter resolution, where the RGB channels undergo a Gaussian blur. In addition, we save out the depth information to the alpha channel and apply a box blur. We then project a quad in front of the player’s camera which reads this texture and composites the computed image back into the primary scene colour buffer.'''
+checked = 2026-11-14
+
+["godot-docs-sky-shader-subpasses-and-cubemap"]
+url = "https://docs.godotengine.org/en/stable/tutorials/shaders/shader_reference/sky_shader.html"
+section = "Godot Engine documentation (stable), Shading reference, Sky shaders, introduction and Render modes, read 2026-11-14 (documentation only; no engine source read; the engine is MIT-licensed, the documentation CC BY 3.0)"
+quote = '''Subpasses allow you to do more expensive calculations at a lower resolution to speed up your shaders. For example the following code renders clouds at a lower resolution than the rest of the sky: [...] // Run cloud calculation for 1/4 of the pixels [...] The visible sky is always rendered by calling the fragment shader for every pixel. With complex fragment shaders, this can result in a high rendering overhead. If the sky is static (the conditions listed above are met) or changes slowly, running the full fragment shader every frame is not needed. This can be avoided by rendering the full sky into the radiance cubemap, and reading from this cubemap when rendering the visible sky.'''
+checked = 2026-11-14
+
+["wronski-2014-ac4-grid-fixed-cost"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slide 25, speaker notes"
+quote = '''We used volumes sized 160x90x64 or 160x90x128 depending on the platform. It provides fixed cost of almost all of the passes, not dependent on the screen resolution. [...] Effect range depends on artist defined settings, but we distances between 50 and 128 meters'''
+checked = 2026-11-14
+
+["wronski-2014-world-space-volume-rejected"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slide 25, speaker notes"
+quote = '''At first, we tried simplest data layout –cuboid aligned to world space coordinates. It provided multiple benefits – for example very easy temporal filtering, but raymarching through such volume required multiple samples, was slow and produced aliasing artifacts. [...] Aligning our texture with the viewing frustum has several disadvantages such as being prone to temporal aliasing and flickering, but raymarching is just a parallel scan through depth slices.'''
+checked = 2026-11-14
+
+["wronski-2014-cost-xbox-one"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slide 47 and its speaker notes"
+quote = '''Total cost was surprisingly small, around 1.1ms. Calculating it in double resolution had a cost of 1.6ms. [...] Most costly part was building density and lighting the volume, around 0.43ms.'''
+cost = '''Performanceon XboxOne [...] Total cost [...] 1.1ms [...] Shadowmap downsample [...] 0.163ms [...] Shadowmap blur [...] 0.177ms [...] Lighting volume and calculating scattering [...] 0.43ms [...] Solving scattering equation [...] 0.116ms [...] Applying on screen (can be combined) [...] 0.247ms'''
+checked = 2026-11-14
+
+["wronski-2014-temporal-added-after-ac4"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slides 51, 56 and 60, speaker notes"
+quote = '''In the final presentation section, I will describe extensions to volumetric fog developed after AC4. [...] Making the effect even more stable by introducing temporal reprojection and jittering. [...] While we spend considerable amount of time to remove aliasing and under-sampling problems on volumetric fog by using down-sampled SM representation, there still may be some under-sampling artifacts. [...] This two screenshots show how much better results are achieved by only simplest 1-sample temporal jitter and reprojection – almost all edge artifacts are gone!'''
+checked = 2026-11-14
+
+["wronski-2014-reprojection-validity"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slide 58, speaker notes"
+quote = '''In 3D it is much easier. While space occupied by a dynamic object after movement is still invalid, all the data behind it is proper (if not using any early culling optimizations). Only data that was outside the volume aligned with frustum is invalid. [...] (But still, obvious reprojection problems can happen with strongly view dependent and anisotropic phase functions).'''
+checked = 2026-11-14
+
+["wronski-2014-shadow-prefilter-esm"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slides 31 and 33, speaker notes"
+quote = '''For smooth and approximate volumetric fog we needed something of much smaller resolution to reduce any flickering / aliasing artifacts from moving foliage etc. [...] First implementations using wide kernel PCF had very poor performance and still some flickering and aliasing artifacts. [...] First we downsample our cascaded shadowmaps four times (target R32F 1024 x 256 texture). [...] We also do additional separable box filter (as two separate steps) during this pass to make shadows softer and remove aliasing artifacts. [...] One disadvantage of ESM making it not practical for regular rendering – shadow leaking – wasn’t noticeable in our case in participating media.'''
+checked = 2026-11-14
+
+["wronski-2014-forward-and-transparent-apply"]
+url = "https://advances.realtimerendering.com/s2014/wronski/bwronski_volumetric_fog_siggraph2014.pptx"
+section = "Wronski (Ubisoft Montreal), Volumetric Fog: Unified compute shader based solution to atmospheric scattering, SIGGRAPH 2014 Advances in Real-Time Rendering (Assassin's Creed 4: Black Flag), slides 27 and 45, speaker notes"
+quote = '''Final application of effect on screen is trivial in both deferred and forward – no special tricks, just a simple bilinear look-up from a 3D texture and a fused multiply-add operation. [...] Thing worth noting is that the effect is compatible with any number of transparent objects layers. [...] Final advantage of not relying on scene depth is possibility of computing this pass in parallel with regular scene rendering as soon as shadow-maps are ready'''
+checked = 2026-11-14
+
+["hillaire-2015-froxel-temporal"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 23 and its speaker notes"
+quote = '''To mitigate these issues, we temporally integrate our frame result with the one of previous frame. [...] we jitter our samples per frame uniformly along the view ray [...] Integrate each frame according to an exponential moving average [...] And we ignore previous result in case no history sample is available (out of previous frustum) [...] Re-project previous scattering/extinction [...] 5% Blend current with previous'''
+checked = 2026-11-14
+
+["hillaire-2015-one-sample-aliasing"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slides 21 and 22, speaker notes"
+quote = '''As I said, we are only using a single sample per froxel. [...] This can unfortunately result in very strong aliasing for very thick participating media and when integrating the local light contribution. [...] You can also notice it in the video, as well as very strong aliasing of the shadow coming from the tree.'''
+checked = 2026-11-14
+
+["hillaire-2015-temporal-trails"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 26 and its speaker notes"
+quote = '''Local fog volume and lights will leave trails when moving [...] One could use local fog volumes motion stored in a buffer the same way as we do in screenspace for motion blur [...] But what do we do when two volumes intersect? This is the same problem as deep compositing [...] For lighting, we could use neighbour colour clamping but this will not solve the problem entirely [...] Re-project using velocity? [...] Challenging R&D area!'''
+checked = 2026-11-14
+
+["hillaire-2015-cost-ps4"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slides 35 and 36"
+quote = '''Sun + shadow cascade [...] 14 point lights [...] 2 with regular & volumetric shadows [...] 6 local fog volumes'''
+cost = '''Performance: PS4, 900p [...] 64 depth slices [...] Volume tile resolution [...] 8x8 [...] 16x16 [...] PM Material voxelization [...] 0.45 ms [...] 0.15 ms [...] Light scattering [...] 2.00 ms [...] 0.50 ms [...] Final accumulation [...] 0.40 ms [...] 0.08 ms [...] Application (Fog pass) [...] +0.1 ms [...] +0.1 ms [...] Total [...] 2.95 ms [...] 0.83 ms [...] Light scattering components [...] 8x8 [...] Local lights [...] 1.1 ms [...] +Sun scattering [...] +0.5 ms [...] +Temporal integration [...] +0.4 ms'''
+checked = 2026-11-14
+
+["hillaire-2015-grid-size"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 12, speaker notes"
+quote = '''This volume is also aligned with our screen light tiles. This is because we are reusing the forward light tile list culling result to accelerate the scattered light evaluation [...] Depth resolution of 64 [...] 8x8 volume tiles [...] 720p requires 160x90x64 (~7mb per rgbaF16 texture) [...] 1080p requires 240x135x64 (~15mb per rgbaF16 texture)'''
+checked = 2026-11-14
+
+["hillaire-2015-sun-shadow-and-ambient"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slide 19, speaker notes"
+quote = '''We first integrate ambient the same way as Wronski. Frostbite allows us to sample diffuse SH light probes. We use one per local fog volume positioned at their centre. [...] We also integrate the sun light according to our cascaded shadow maps. We could use exponential shadow maps but we do not as our temporal up-sampling is enough to soften the result.'''
+checked = 2026-11-14
+
+["hillaire-2015-extinction-clipmap-volumetric-shadows"]
+url = "https://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx"
+section = "Hillaire (EA Frostbite), Physically Based and Unified Volumetric Rendering in Frostbite, SIGGRAPH 2015 Advances in Real-Time Rendering, slides 38 and 41 and speaker notes"
+quote = '''We first define a 3 levels cascaded clip map volume following and containing the camera. [...] With tweakable per level voxel size and world space snapping [...] This volume contains all our participating media entities voxelized again within it (required for out of view shadow caster, clip space volume would not be enough) [...] A volumetric shadow map is defined as a 3D texture (assigned to a light) that stores transmittance [...] Transmittance is evaluated by ray marching the extinction volume'''
+cost = '''Performance: PS4 [...] Ray marching of 323 volumetric shadow maps [...] Spot light: 0.04 ms [...] Point light: 0.14 ms'''
+checked = 2026-11-14
+
+["valient-2014-killzone-raymarch-dither-blur"]
+url = "https://www.guerrilla-games.com/media/News/Files/GDC2014_Valient_Killzone_Graphics.pdf#page=65"
+section = "Valient (Guerrilla Games), Taking Killzone Shadow Fall Image Quality into the Next Generation, GDC 2014 (the deck that cites Vos's GPU Pro 5 chapter), slides on pages 65, 66 and 73"
+quote = '''Implemented as straightforward view space raymarching [...] Rendered at half resolution [...] Bilateral upscale to full resolution [...] Raymarch step offset by random value [...] Bilateral blur removes the dither pattern [...] Composing with transparencies is problematic [...] Solved by 3D Volume Light Intensity Buffer'''
+checked = 2026-11-14
+
+["valient-2014-killzone-reuses-previous-buffer"]
+url = "https://www.guerrilla-games.com/media/News/Files/GDC2014_Valient_Killzone_Graphics.pdf#page=75"
+section = "Valient (Guerrilla Games), Taking Killzone Shadow Fall Image Quality into the Next Generation, GDC 2014 (the deck that cites Vos's GPU Pro 5 chapter), slide on page 75"
+quote = '''Increased quality without extra raymarch samples [...] Reuse previous volumetric buffer [...] Decide on color and depth similarities [...] result = lerp(current, previous, 0.5*saturate(similarity)) [...] Change raymarch offset every frame [...] Alternate between two configurations [...] Effectively doubles the sample count*'''
+checked = 2026-11-14
+
+["hoobler-2016-polygonal-light-volumes"]
+url = "https://developer.nvidia.com/sites/default/files/akamai/gameworks/downloads/papers/NVVL/Fast_Flexible_Physically-Based_Volumetric_Light_Scattering.pdf#page=40"
+section = "Hoobler (NVIDIA), Fast, Flexible, Physically-Based Volumetric Light Scattering, GDC 2016, slides on pages 40 and 46"
+quote = '''Convert light description + shadow map into geometry [...] Solve Integral at each intersection and add or subtract based on facing [...] Directional Light - Analytical Solution [...] Omnidirectional Light - Look-up Texture [...] Bilateral upsampling: helpful at ¼-resolution, situational at ½-resolution'''
+checked = 2026-11-14
+
+["hoobler-2016-cost-1080p"]
+url = "https://developer.nvidia.com/sites/default/files/akamai/gameworks/downloads/papers/NVVL/Fast_Flexible_Physically-Based_Volumetric_Light_Scattering.pdf#page=60"
+section = "Hoobler (NVIDIA), Fast, Flexible, Physically-Based Volumetric Light Scattering, GDC 2016, slides on pages 60 and 61 (vendor figures; NVIDIA GameWorks library in the Fallout 4 'Concord' scene)"
+quote = '''Concord, High Quality @ 1080p'''
+cost = '''GTX 980 Ti 0.037 ms 0.908 ms 0.264 ms 1.209 ms [...] GTX 970 0.049 ms 1.364 ms 0.389 ms 1.802 ms [...] Radeon Fury X 0.038 ms 2.581 ms 0.305 ms 2.924 ms [...] Concord, Medium Quality @ 1080p [...] GTX 980 Ti 0.035 ms 0.415 ms 0.394 ms 0.844 ms'''
+checked = 2026-11-14
+
+["hoobler-2016-msaa-and-temporal-resolve"]
+url = "https://developer.nvidia.com/sites/default/files/akamai/gameworks/downloads/papers/NVVL/Fast_Flexible_Physically-Based_Volumetric_Light_Scattering.pdf#page=45"
+section = "Hoobler (NVIDIA), Fast, Flexible, Physically-Based Volumetric Light Scattering, GDC 2016, slides on pages 45 and 66"
+quote = '''Use MSAA when down-sampling [...] Resolve MSAA accumulation buffer before compositing [...] If temporal sampling, feed resolved accumulation through TAA system [...] Problem: Temporal AA jitter causes flickering [...] A 1 px flicker at full-res could become 4x4 px in the down-sampled buffer! [...] Solution: Added separate TAA resolve to down-sampled buffers'''
+checked = 2026-11-14
+
+["toth-2009-interleaved-sampling"]
+url = "https://diglib.eg.org/handle/10.2312/egs.20091048.057-060"
+section = "Tóth and Umenhoffer (BME), Real-time Volumetric Lighting in Participating Media, Eurographics 2009 Short Papers, pp. 57-60, doi:10.2312/egs.20091048, abstract and section 5"
+quote = '''The proposed method uses shadow maps to account for shadowing and interleaved sampling to maintain high frame rates without sacrificing image quality. [...] We divide the screen into M × M pixel blocks, and the N terms are distributed in them in a periodic way. [...] the samples in the M × M pixel blocks are lying approximately on the same view ray [...] As the addition filter is separable we can use an addition once in a horizontal and once in a vertical direction instead of taking all the M × M samples in a single filter operation.'''
+cost = '''an NVidia 8800GTX GPU. The scene consists of 66000 triangles and is illuminated by a point light. Without volumetric scattering the application renders 110 frames per second at 800 × 600 resolution. With volumetric scattering but without interleaved sampling the performance drops to 42 frames per second. However, if we turn interleaved sampling on, the performance goes back to 100 frames per second again.'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-no-temporal-on-scattered-light"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slide 48 and its speaker notes"
+quote = '''We are not applying temporal blending on the scattered light volume. [...] Not only would we be suffering from ghosting for moving lights, we’d also see trailing effects on static lights in highly anisotropic fog (heavily view vector dependent scattering behavior) when the camera moves. [...] Instead, we rely on dithered lookups of the accumulation volume in conjunction with TAA. [...] NO temporal blending on scattered light volume'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-temporal-on-shadow-and-material"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 43 and 46 and speaker notes"
+quote = '''The shadow volume uses a 16bit float format and stores the directional light shadow term sampled from the shadow map cascade as well as cloud and terrain shadow map. [...] It is also temporally filtered to resolve undersampling on high frequency shadow detail. [...] Like with the shadow volume, we apply temporal filtering, however this is only done for scattering and absorption coefficients. [...] Since we animate tiling noise lookups with wind, we are using the wind velocity as our reprojection motion vector. [...] This can cause leaking issues for interiors, where we reproject to an exterior voxel position. [...] Therefore we also maintain a velocity magnitude frustum volume, which scales the motion down based on the opacity of alpha and particle volumes.'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-froxel-limits"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 42 and 49 and speaker notes"
+quote = '''Depth coverage is dynamic and can go up to 160m, but in some cases (like interiors) artists can reduce it to resolve undersampling issues. [...] due to the nature of these volumes (limited resolution in all dimensions) results with high frequency detail are unreliable and cause instability even with strong temporal integration. [...] Resolution of 160x88x64'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-far-raymarch-history"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 51, 52 and 56, speaker notes"
+quote = '''The ray origin is placed after the last slice of the frustum volume, offset using blue noise. [...] For this scheme, we are casting one ray out of a 2x2 half resolution pixel tile, and reproject the skipped ones from the previous frame. [...] Once sampled from the history buffer, we clamp in-scattering and transmittance with the color AABB of the 3x3 neighborhood, to validate outdated samples. [...] We refine that neighborhood on depth discrepancies by dropping samples with high depth differences to the current pixel. [...] When there’s no history available (i.e. frustum edges), we use the closest ray result instead. [...] The reconstruction gives us a fairly reliable frame (some flickering can still occur from undersampling + clamp)'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-cost-ps4"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slide 57 (the labels and the timings are two lists in the same order on the slide)"
+quote = '''Heavily dependent on cloud cover and fog composition [...] Worst offender: Long rays'''
+cost = '''Cloud/Fog Map [...] Cloud ESM [...] Shadow Volume [...] Material Volume [...] Scattering Volume [...] Raymarch [...] Raymarch Reconstruction [...] 0.04ms [...] 0.156ms [...] 0.204ms [...] 0.33ms [...] 0.34ms [...] 1.31ms [...] 0.232ms [...] Measured on PS4'''
+checked = 2026-11-14
+
+["bauer-2019-rdr2-visibility-and-ambient"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 33, 34, 38, 47 and 57, speaker notes"
+quote = '''For visibility, we are mainly relying on shadow map lookups. [...] We get terrain shadows by raymarching a terrain heightmap along the sun/moon direction and storing both intersection height as well as ray length. [...] Local lights are sampled from a light cluster volume, and their visibility is calculated via shadow map lookups (no additional tracing). [...] accumulates scattered luminance for direct light (sun/moon and local lights) and ambient light (sampling our irradiance probe grid). [...] In addition we only update 1 ray in a 4x4 tile for the cloud shadow map and implement temporal refinement for the terrain shadow map, since directional light shadows don’t change rapidly in regular gameplay.'''
+checked = 2026-11-14
+
+["patry-2021-tsushima-haze-froxel-temporal"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021/index.html"
+section = "Patry (Sucker Punch), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering, HTML slides, slides 'Atmospheric Lighting | Volumetric Haze'"
+quote = '''Froxel grid, 128 W x 64 H x 64 D [...] Covers entire depth range (10 cm to 100 km) [...] Uses only analytic and integrable density functions [...] Single compute dispatch populates froxel grid [...] Temporal filtering: [...] Shadow and ambient fraction (RG16f) [...] Local lighting (RGB11f) [...] Skip lighting of occluded froxels [...] Still compute shadow and ambient fraction to reduce reprojection errors'''
+cost = '''Async compute (~0.5 ms on base PS4)'''
+checked = 2026-11-14
+
+["patry-2021-tsushima-density-antialiasing"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021/index.html"
+section = "Patry (Sucker Punch), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering, HTML slides, slides 'Atmospheric Lighting | Volumetric Haze Anti-Aliasing' and the bonus performance slide"
+quote = '''Froxel volume has very low resolution but covers entire view frustum (10 cm to 100 km) [...] Using traditional approach results in bad aliasing at horizon and with thin haze layers (density aliasing) [...] Solve by storing inscattered radiance divided by opacity [...] Re-apply opacity per-pixel when compositing into scene [...] Use tricubic B-spline filtering to smooth and denoise [...] Less than 50 us more than trilinear on PS4 Pro'''
+cost = '''Base PS4 (μs) [...] (1080p) [...] PS4 Pro (μs) [...] (1800cb) [...] Trilinear [...] 363 [...] 430 [...] Bicubic [...] 430 [...] 443 [...] Tricubic [...] 667 [...] 483'''
+checked = 2026-11-14
+
+["kovalovs-2020-tlou2-temporal-filter"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/Volumetrics.pptx"
+section = "Kovalovs (Naughty Dog), Volumetric Effects of The Last of Us: Part Two, SIGGRAPH 2020 Talks (deck linked from https://www.naughtydog.com/blog/naughty_dog_at_siggraph_2020), slides 62 and 125"
+quote = '''When we update a froxel, reproject its position into previous frame’s grid [...] Use previous_value * 0.95 + current_value * 0.05 [...] Use jittered position for evaluating current frame [...] Our approach: we don’t touch anything not visible. Keep those invisible froxels garbage. [...] When doing temporal filtering, we project the froxel to previous frame and check against our 2D froxel depth visibility texture.'''
+checked = 2026-11-14
+
+["kovalovs-2020-tlou2-runtime-lights-not-temporal"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/Volumetrics.pptx"
+section = "Kovalovs (Naughty Dog), Volumetric Effects of The Last of Us: Part Two, SIGGRAPH 2020 Talks (deck linked from https://www.naughtydog.com/blog/naughty_dog_at_siggraph_2020), slides 67, 93 and 95"
+quote = '''Can’t use temporal for lighting with runtime lights, they move and ghost (we revisit this in latter slides) [...] Need to produce acceptable results in 1 frame [...] Would need to do a lot of multisampling per froxel, or come up with analytical integration for falloffs [...] We want some sort of precalculated data to allow us lookup instead of calculating on the fly [Hoobler16] [...] We know temporal doesn’t work for the light itself, because it can move and would ghost [...] Good news: we can put temporal filtering on the shadow value'''
+checked = 2026-11-14
+
+["kovalovs-2020-tlou2-ambient-from-probes"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/Volumetrics.pptx"
+section = "Kovalovs (Naughty Dog), Volumetric Effects of The Last of Us: Part Two, SIGGRAPH 2020 Talks (deck linked from https://www.naughtydog.com/blog/naughty_dog_at_siggraph_2020), 'Ambient Lighting' slides"
+quote = '''Use existing ambient probes for fog lighting [...] Temporal jitter introduced flickering because of limited size of the list of probes [...] Divergence could cause some wavefronts take up to 5ms [...] Use temporal filtering with jitter for better results [...] Resolution on 1080p is 20x12x64 : 96x90pix froxels [...] Probe light leaking is an issue and this is one of the ways we have to deal with it'''
+checked = 2026-11-14
+
+["kovalovs-2020-tlou2-history-artefacts"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/Volumetrics.pptx"
+section = "Kovalovs (Naughty Dog), Volumetric Effects of The Last of Us: Part Two, SIGGRAPH 2020 Talks (deck linked from https://www.naughtydog.com/blog/naughty_dog_at_siggraph_2020), slides 109, 126, 128 and 135"
+quote = '''Unfortunately each optimization can open a can of worms. It can take a day to implement something and a month to fix new artifacts [...] Newly revealed froxels don’t have history [...] Sometimes we fall on light, sometimes on shadow [...] Then that result sticks around [...] If we just use previous frame’s data with tex coord clamp to edge, we will keep replicating same data from frame to frame as camera rotates [...] This causes smearing of same value [...] With these fixes, final result looks good! [...] Solution for this is simple: before sampling previous frame, check if the coordinate is at least half froxel into the texture.'''
+checked = 2026-11-14
+
+["kovalovs-2020-tlou2-cost"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/Volumetrics.pptx"
+section = "Kovalovs (Naughty Dog), Volumetric Effects of The Last of Us: Part Two, SIGGRAPH 2020 Talks (deck linked from https://www.naughtydog.com/blog/naughty_dog_at_siggraph_2020), slides 150, 151 and 154 (hardware not stated on these slides)"
+quote = '''Don’t forget the results are used for particle lighting (a lot of savings there) [...] A lot of shadowed mixed Runtime light froxels near camera'''
+cost = '''Usually within 2-3ms sometimes spiking to 4ms of FPS cost [...] Resolution (pix) [...] Grid Size [...] FPS Cost [...] 8x8 [...] 2.1mil [...] 3.5ms'''
+checked = 2026-11-14
+
+["mueller-2026-smolder-no-temporal-filter"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=90"
+section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Rendering in Glacier and 007 First Light, SIGGRAPH 2026 Advances in Real-Time Rendering, speaker notes, pages 2, 21 and 90"
+quote = '''We shipped 007 First Light roughly 2 months ago, and we shipped it with a lot of volumetric effects. [...] A lot of existing volumetric systems rely on temporal filtering to make that balance between quality and performance happen. [...] Unfortunately, when effects move quickly or are close to the camera this tends to result in heavy ghosting due to the lack of motion vectors. [...] One of the stated goals for Smolder was to not have any temporal filtering in the system itself. But that being said, there is some filtering for the entire frame in the form of TAA.'''
+checked = 2026-11-14
+
+["mueller-2026-smolder-taa-ghosting"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=90"
+section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Rendering in Glacier and 007 First Light, SIGGRAPH 2026 Advances in Real-Time Rendering, speaker notes, page 90"
+quote = '''The most obvious one is to use blue noise to offset the sample depth during the raymarch per pixel. [...] In return we had to combat the ghosting we had due to the lack of motion vectors for the volumetrics. [...] For FSR 3, we had to hook Smolder up to the reactive mask input, otherwise we got very heavy ghosting. [...] It was extremely important to keep the noise per pixel for it to be able to produce good results'''
+checked = 2026-11-14
+
+["mueller-2026-smolder-volumetric-shadows"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=89"
+section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Rendering in Glacier and 007 First Light, SIGGRAPH 2026 Advances in Real-Time Rendering, speaker notes, pages 15, 39 to 48 and 89"
+quote = '''If we also want to see the shadows on the environment, we need to shoot an additional shadow ray from each surface to the light source, for each pixel in our scene. [...] Clearly that amount of shadow rays isn’t happening. [...] That way we remove all of the duplication cost, we only render the shadow once in a very wave coherent way and sample that shadow where needed. [...] Ultimately I decided to stick with MBOIT style moments for the shadows. [...] These ones here are 128x128, but we support resolutions from 64x64 on the low end [...] I also added sampling support of the shadows to the volumetric fog. [...] Since they are running in compute shaders, we can just run them in async compute. [...] And since they have no dependency on any GPU frame data and only need the volumes as input, they can run in places during the frame where almost nothing else can run.'''
+checked = 2026-11-14
+
+["mueller-2026-smolder-ddgi-sampling"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=84"
+section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Rendering in Glacier and 007 First Light, SIGGRAPH 2026 Advances in Real-Time Rendering, speaker notes, pages 14 and 84"
+quote = '''With 007 First Light we added a fully real-time DDGI style global illumination system. [...] Volumetrics require a full integration of the incoming radiance over a sphere. [...] For global illumination, I decided to limit sampling it to 1 sample position per volume. The baked occlusion helps to sell it. [...] I ended up sampling 2 directions per probe, which is not ideal but seemed good enough.'''
+checked = 2026-11-14
+
+["krause-2025-enshrouded-shadow-volume-accumulation"]
+url = "https://static.graphicsprogrammingconference.com/public/2025/talks/the-fog-is-lifting-volumetric-rendering-enshrouded/Krause-the-fog-is-lifting-volumetric-rendering-enshrouded.pdf#page=35"
+section = "Krause (Keen Games), The fog is lifting, volumetric rendering Enshrouded, Graphics Programming Conference 2025, slides on pages 34, 35 and 55"
+quote = '''Volumetric shadow Volume – Sweep [...] // temporal accumulate result into voxel [...] g_output[ pos ] = lerp( g_output[ pos ], accumulatedTransimttance, 1.0f / 64.0f ); [...] Sample cascade shadow map [...] Sample volumetric shadow volume'''
+checked = 2026-11-14
+
+["krause-2025-enshrouded-froxel-split"]
+url = "https://static.graphicsprogrammingconference.com/public/2025/talks/the-fog-is-lifting-volumetric-rendering-enshrouded/Krause-the-fog-is-lifting-volumetric-rendering-enshrouded.pdf#page=41"
+section = "Krause (Keen Games), The fog is lifting, volumetric rendering Enshrouded, Graphics Programming Conference 2025, slides 'Froxel Volume - Populate' and 'Froxel Volume - In-scatter & Extinction'"
+quote = '''Output radiance texture [...] Point lights, global illumination and emissive from Injected fog volumes [...] Output directional light visibility texture [...] Temporal accumulate with previous frame [...] Output in-scatter texture [...] No temporal accumulation, [...] Phase function is view angle dependent and leads to smearing'''
+checked = 2026-11-14
+
+["krause-2025-enshrouded-raymarch-reconstruction"]
+url = "https://static.graphicsprogrammingconference.com/public/2025/talks/the-fog-is-lifting-volumetric-rendering-enshrouded/Krause-the-fog-is-lifting-volumetric-rendering-enshrouded.pdf#page=49"
+section = "Krause (Keen Games), The fog is lifting, volumetric rendering Enshrouded, Graphics Programming Conference 2025, slides 'Ray marching – Ray Reconstruction' and 'Ray marching - Upscale & Temporal'"
+quote = '''Ray march 1 of 4 rays in half resolution [...] Reproject missing rays from previous frame [...] Use weighted average of neighborhood if reprojection fails [...] Ray placement in 2x2 tile follows [Bauer19] [...] Use transmittance weighted depth for reprojection [...] Depth weighted bilateral filtering of history [...] Clamp with neighborhoods AABB'''
+checked = 2026-11-14
+
+["krause-2025-enshrouded-world-fog-data"]
+url = "https://static.graphicsprogrammingconference.com/public/2025/talks/the-fog-is-lifting-volumetric-rendering-enshrouded/Krause-the-fog-is-lifting-volumetric-rendering-enshrouded.pdf#page=20"
+section = "Krause (Keen Games), The fog is lifting, volumetric rendering Enshrouded, Graphics Programming Conference 2025, slides 'Voxel Fog - World Volume' and 'Froxel Volume'"
+quote = '''Covers the entire playable area [...] Tile atlas with 16^3 voxels per tile [...] Resolution is 43 x 13 x 43 cells [...] Each cell covers 240^3 meter in the game world [...] Contains aerial perspective and all fog types other than voxel [...] Covers full view depth range up to 10km'''
+checked = 2026-11-14
+
+["lewin-2025-vaporwave-no-reprojection"]
+url = "https://static.graphicsprogrammingconference.com/public/2025/talks/vaporwave-scalable-real-time-smoke-simulation-rendering/Lewin-vaporwave-scalable-real-time-smoke-simulation-rendering.pdf"
+section = "Lewin (EA SEED), Vaporwave: Scalable Real-Time Smoke Simulation & Rendering, Graphics Programming Conference 2025, rendering slides ('Primary Traversal', 'Lighting', 'Volumetric Occlusion') and 'Future Direction'"
+quote = '''Vaporwave content is: [...] Thick, [...] Inhomogeneous, [...] Fast-moving. [...] We don’t want to rely on temporal reprojection. [...] We just use ray-marching to the depth [...] buffer [...] Do light culling+sampling, shadowing etc [...] during traversal. [...] No need to stash results in a froxel grid. [...] Punctual lighting: can raymarch but [...] expensive. [...] Ship a game!'''
+checked = 2026-11-14
+
+["drobot-2017-cod-iw-froxel-volumetrics"]
+url = "https://www.activision.com/cdn/research/2017_DD_Rendering_of_COD_IW.pdf#page=88"
+section = "Drobot (Infinity Ward), Rendering of Call of Duty: Infinite Warfare, Digital Dragons 2017, slide notes, pages 85 to 88 and 95"
+quote = '''Volumetrics were important part of COD:IW look. Could not ship without them, nor [...] use them as quality setting. [...] Volumetrics use Froxel buffer [6][7] [...] Static lighting and GI resamples the lightgrid. [...] Temporal Re-projection to stabilize [...] 2 x memory & bandwidth consumption [...] Opaque / Transparent just sample 3D texture with integrated in-scatter light and [...] integrated extinction.'''
+checked = 2026-11-14
+
+["kuenlin-2024-snowdrop-probe-average-for-fog"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop: An Optimized Raytracing Pipeline for Consoles, GDC 2024, speaker notes"
+quote = '''Our probe system is based on the GDC 2019 presentation “Dynamic Diffuse Global [...] Illumination” by Morgan McGuire, most commonly known as RTXGI [...] Secondly, we are storing the average light of each probes, which is mainly used for the fog [...] Average + Validity volumes are used mainly for fog and cloud rendering.'''
+checked = 2026-11-14
+
+["unreal-docs-volumetric-fog-temporal-reprojection"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-fog-in-unreal-engine"
+section = "Epic Games, Volumetric Fog in Unreal Engine, Unreal Engine 5.9 Documentation (public docs page, fetched 2026-11-14), sections 'Temporal Reprojection' and 'Performance'"
+quote = '''The volume textures (voxels) used by Volumetric Fog are relatively low-resolution and aligned to the camera frustum. Volumetric Fog uses a heavy temporal reprojection filter with a different sub-voxel jitter [...] per frame to smooth out the aliasing. As a side-effect, fast-changing lights, like flashlights and muzzle flashes, leave lighting trails. To disable the contribution of these lights, set Volumetric Scattering Intensity to 0.'''
+cost = '''Volumetric Fog costs 1 millisecond on PlayStation 4 at High settings, [...] and 3 milliseconds on an NVIDIA 970 GTX on Epic settings, which has eight times more voxels to operate on.'''
+checked = 2026-11-14
+
+["unreal-docs-megalights-fog-shadow-rays"]
+url = "https://dev.epicgames.com/documentation/unreal-engine/megalights-in-unreal-engine"
+section = "Epic Games, MegaLights in Unreal Engine, Unreal Engine 5.9 Documentation (public docs page), section 'Lit Translucency and Volumetric Fog'"
+quote = '''MegaLights integrates with the Translucency Lighting Volume and Volumetric Fog to stochastically evaluate lighting and shadowing on those volumes. It uses the same importance-sampling approach as opaque surfaces, tracing a fixed number of shadow rays per voxel and denoising the result. [...] Shadowing is calculated using a shared froxel volume, which means both features share the same sampling and tracing work. [...] Lower resolutions can result in blurrier, less stable shadowing, while higher resolutions increase GPU cost.'''
+checked = 2026-11-14
+
+["unity-hdrp-docs-fog-denoising-modes"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/fog-volume-override-reference.html"
+section = "Unity Technologies, Fog Volume Override reference, High Definition Render Pipeline 17.0.4 manual (public docs page), property 'Denoising Mode' and 'Anisotropy'; and Frame Settings reference, property 'Reprojection' (https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/frame-settings-reference.html)"
+quote = '''• None: Applies no denoising. [...] • Reprojection: A denoising technique that's effective for static lighting, but can lead to severe ghosting for highly dynamic lighting. [...] • Gaussian: A denoising technique that's better than Reprojection for dynamic lighting. [...] • Both: Applies both Reprojection and Gaussian techniques. [...] High values may have compatibility issues with the Enable Reprojection for Volumetrics Frame Setting. [...] Enabling this feature causes HDRP to use several previous frames to calculate the volumetric effects.'''
+checked = 2026-11-14
+
+["godot-docs-fog-temporal-reprojection"]
+url = "https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html"
+section = "Godot Engine documentation (stable, fetched 2026-11-14), Volumetric fog and fog volumes, sections 'Volumetric fog properties' and 'Balancing performance and quality'"
+quote = '''Volumetric fog is only supported in the Forward+ renderer, not the Mobile or [...] Compatibility renderers. [...] Temporal reprojection blends the current frame's volumetric [...] fog with the last frame's volumetric fog to smooth out jagged edges. The [...] performance cost is minimal, however it does lead to moving FogVolumes and [...] Light3Ds "ghosting" and leaving a trail behind them. [...] A lower value reduces ghosting but can [...] result in the per-frame temporal jitter becoming visible. [...] Enables filtering [...] of the volumetric fog effect prior to integration. This substantially blurs [...] the fog which reduces fine details, but also smooths out harsh edges and [...] aliasing artifacts.'''
+checked = 2026-11-14
+
+["godot-source-fog-reprojection-inputs"]
+url = "https://github.com/godotengine/godot/blob/4.7.2-stable/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl#L329-L350"
+section = "Godot Engine source, tag 4.7.2-stable, servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl (MIT licence, LICENSE.txt at the same tag), lines 147, 198, 272 and 329 to 350"
+quote = '''layout(set = 0, binding = 16) uniform texture3D prev_density_texture; [...] #define TEMPORAL_FRAMES 16 [...] vec3 prev_view = (params.to_prev_view * vec4(view_pos, 1.0)).xyz; [...] if (all(greaterThan(prev_view, vec3(0.0))) && all(lessThan(prev_view, vec3(1.0)))) { [...] reprojected_density = textureLod(sampler3D(prev_density_texture, linear_sampler), prev_view, 0.0); [...] // This is done here because cells that can't reproject should not jitter.'''
+checked = 2026-11-14
+
+["bevy-source-fog-raymarch-per-pixel"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_pbr/src/volumetric_fog/volumetric_fog.wesl#L1-L10"
+section = "Bevy source, tag v0.20.1 (MIT OR Apache-2.0), crates/bevy_pbr/src/volumetric_fog/volumetric_fog.wesl lines 1 to 10 and 131 to 133"
+quote = '''A postprocessing shader that implements volumetric fog via raymarching and [...] sampling directional light shadow maps. [...] First, we raytrace the AABB of the fog [...] volume in order to determine how long our ray is. Then we do a raymarch, with [...] physically-based calculations at each step [...] Sample the depth to put an upper bound on the length of the ray (as we [...] shouldn't trace through solid objects). If this is multisample, just use [...] sample 0; this is approximate but good enough.'''
+checked = 2026-11-14
+
+["bevy-source-fog-jitter-for-taa"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_light/src/volumetric.rs#L45-L57"
+section = "Bevy source, tag v0.20.1 (MIT OR Apache-2.0), crates/bevy_light/src/volumetric.rs lines 45 to 57"
+quote = '''The maximum distance to offset the ray origin randomly by, in meters. [...] This is intended for use with temporal antialiasing. It helps fog look [...] less blocky by varying the start position of the ray, using interleaved [...] gradient noise. [...] Higher values produce higher-quality results with less banding, but [...] reduce performance. [...] The default value is 64.'''
+checked = 2026-11-14
+
+["nvidia-rtx-remix-docs-froxel-visibility-rays"]
+url = "https://docs.omniverse.nvidia.com/kit/docs/rtx_remix/1.4.0-0/docs/runtimeinterface/renderingtab/remix-runtimeinterface-rendering-volumetrics.html"
+section = "NVIDIA, RTX Remix documentation 1.4.0, Runtime Interface, Rendering Tab, Volumetrics (vendor docs page), options 1 to 3, 10 and 11"
+quote = '''The scale factor to divide the x and y render resolution by to determine the x and y dimensions of the froxel grid. [...] The number of frames to accumulate volume lighting samples over, maximum of 254. [...] Large values result in greater image stability at the cost of potentially more temporal lag. [...] Determines whether to trace a visibility ray for Reservoir samples. [...] Results in slightly higher quality froxel grid light samples at the cost of a ray per froxel cell each frame and should generally be enabled. [...] Temporal resampling allows for reuse of temporal information when picking froxel grid light samples similar to how ReSTIR works, providing higher quality light samples.'''
+checked = 2026-11-14
+
+["engelhardt-2010-epipolar-needs"]
+url = "http://www.vis.uni-stuttgart.de/~dachsbcn/download/espmss10.pdf#page=2"
+section = "Engelhardt and Dachsbacher, Epipolar Sampling for Shadows and Crepuscular Rays in Participating Media with Single Scattering, I3D 2010 (doi 10.1145/1730804.1730823), section 3 The Volumetric Rendering Equation (author's copy linked from cg.ivd.kit.edu/english/publications.php; fetched through web.archive.org/web/2015/)"
+quote = '''When restricting to single scattering, only direct light, i.e. radiance emitted by light sources (and attenuated in the medium), is scattered into an eye path. Throughout this paper we will also ignore volume emission and restrict ourselves to homogeneous media [...] Under these assumptions we compute the integral using ray marching, i.e. by stepping along the ray x + sω. The direct lighting Ld (replacing Li in Eq. 4) is evaluated using regular shadow mapping'''
+checked = 2026-11-14
+
+["chen-2011-minmax-needs"]
+url = "http://groups.csail.mit.edu/graphics/mmvs/mmvs.pdf#page=1"
+section = "Chen, Baran, Durand, Jarosz, Real-Time Volumetric Shadows using 1D Min-Max Mipmaps, I3D 2011, Figure 1, Introduction and section Discussion and Limitations"
+quote = '''To compute single scattering in scenes with occluders (left) we compute a depth image from the camera, and a shadow map from [...] Like a lot of previous work, we further assume that the scattering medium is homogeneously distributed through the scene. [...] Like several other methods for speeding up volumetric shadows, we assume a homogeneous isotropic medium.'''
+checked = 2026-11-14
+
+["peters-2016-moment-single-scattering"]
+url = "https://momentsingraphics.de/Media/I3D2016/MSMBeyondHardShadows.pdf#page=1"
+section = "Peters, Münstermann, Wetzstein, Klein, Beyond Hard Shadows: Moment Shadow Maps for Single Scattering, Soft Shadows and Translucent Occluders, I3D 2016 (doi 10.1145/2856400.2856402), Figure 1 and Abstract"
+quote = '''Prefiltered single scattering uses convolution shadow maps to render single scattering in homogenous participating media'''
+cost = '''Single scattering, 6 moments, 1.49 ms [...] Timings are for full scene rendering at 1920 · 1080. [...] Throughout the paper all our timings refer to an nVidia GeForce GTX 980'''
+checked = 2026-11-14
+
+["billeter-2012-lpv-media"]
+url = "https://www.cse.chalmers.se/~uffe/multi_scatter.pdf#page=1"
+section = "Billeter, Sintorn, Assarsson, Real-Time Multiple Scattering using Light Propagation Volumes, I3D 2012 (doi 10.1145/2159616.2159636), Abstract and section 1 Introduction"
+quote = '''The initial state of the light propagation volumes is based on single-scattered light identified with shadow maps; this allows generation of a high quality initial distribution of radiance. [...] The current implementation assumes that the participating medium is isotropic and homogeneous, although this limitation could be relaxed in the future. As no data is kept between frames, our method supports fully dynamic scenes.'''
+checked = 2026-11-14
+
+["billeter-2012-lpv-media-cost"]
+url = "https://www.cse.chalmers.se/~uffe/multi_scatter.pdf#page=2"
+section = "Billeter et al. 2012 (doi 10.1145/2159616.2159636), Figure 1 caption, Introduction and the results section"
+quote = '''Since LPVs perform badly for high-frequency effects, such as the sharp volumetric shadows from single-scattering, these are rendered separately.'''
+cost = '''The view in (a) is rendered at ∼ 30 FPS at a resolution of 1280 × 720 by our implementation on an NVIDIA GTX480 GPU using OpenGL and CUDA. [...] We render six additional shadow maps, from which the fuzzy blockers are computed. [...] Ray marching is currently the most time consuming step, taking approximately 14 ms at full resolution. [...] At half resolution, the cost for ray marching is reduced to around 4 ms.'''
+checked = 2026-11-14
+
+["hu-2023-mrpnn-cost"]
+url = "https://sites.cs.ucsb.edu/~lingqi/publications/paper_mrpnn.pdf#page=7"
+section = "Hu, Yu, Liu, Yan, Wu, Jin, Deep Real-time Volumetric Rendering Using Multi-feature Fusion, SIGGRAPH 2023 Conference Proceedings (doi 10.1145/3588432.3591493), section Experiments and Analysis, Table 1"
+quote = '''Each frame’s cost is made up of the network’s inference time and the rendering time. [...] Our MRPNN was able to render in real time (frame cost ≤ 33.3ms), and is order(s) of magnitude faster than both RPNN and the reference'''
+cost = '''All tests were carried out on an Nvidia RTX 2080 GPU with a 10242 resolution (exceptions explicitly noted). Our training time is about 4 days. The resolution of volumetric data is 10243 . [...] Cloud0 Front 2.21e-2 1.75e-2 5.2 597.5 [...] Model0 Front 1.86e-2 2.20e-2 5.0 447.0'''
+checked = 2026-11-14
+
+["hu-2023-mrpnn-limits"]
+url = "https://sites.cs.ucsb.edu/~lingqi/publications/paper_mrpnn.pdf#page=3"
+section = "Hu et al. 2023 (doi 10.1145/3588432.3591493), section Rendering with Multi-features and the closing limitations paragraph"
+quote = '''3) Perform delta tracing, predict and accumulate 1-SPP radiance. 4) Repeat from Step 1 (for ambient light), or repeat from Step 3 (for directional light). [...] Our approach has limitations. First, the use of mipmaps may cause issues in highly fragmented portions of the volume, resulting in more biased brightness (see Fig. 7). [...] Second, because the scaled transmittance fields in our case are directionally consistent, stochastic progressive sampling and denoisers are disabled (if any) (see Fig. 8). [...] Finally, we assumed that the albedos and phase parameters are homogeneous over the entire volume'''
+checked = 2026-11-14
+
+["leonard-2026-halort-no-accumulation"]
+url = "https://arxiv.org/pdf/2611.12103#page=1"
+section = "Leonard and Westermann, Real-Time Volumetric Light Transport Inference without a Path, arXiv 2611.12103v1 (9 Nov 2026), Figure 1, Abstract, section 1 Introduction and section 6 Discussion and Limitations"
+quote = '''our approach directly infers the final light-transport solution from inexpensive primary-ray and environment sample evaluations. [...] put is stable across realizations without requiring accumulation over frames. [...] its accuracy is therefore tied to how well the training distribution covers the scenes encountered at inference time.'''
+cost = '''HaloRT 10.16 ms [...] in real-time on an NVIDIA GeForce RTX 5090.'''
+checked = 2026-11-14
+
+["donnelly-2024-fast-spatial-filter"]
+url = "https://arxiv.org/pdf/2310.15364#page=12"
+section = "Donnelly et al., I3D 2024, section 6.2 Spatial Filtering, Figure 5 caption and section 6.3 Only Temporal Filtering"
+quote = '''When using noise complementary to a specific filter being used, the noise in the resulting image is optimized to be removed by that filter. This is shown in those same figures where the noise optimized for a 5×5 box filter tends to have the lowest RMSE when box filtered [...] Our render results show that these statements hold when using importance sampled vectors in ambient occlusion, a single scalar to ray march through participating media with four equally spaced steps [...] We have found that separating the kernels gives the best results when no spatial filtering occurs, but combining the kernels via a tensor product provides the best results when spatially filtering.'''
+checked = 2026-11-14
+
+["donnelly-2024-fast-single-frame"]
+url = "https://arxiv.org/pdf/2310.15364#page=8"
+section = "Donnelly et al., I3D 2024, section 5.1 Noise spectrum"
+quote = '''By combining Gaussian over time with a sum rather than a product, we create samples with the spectral properties of spatiotemporal blue noise [Wolfe et al. 2022]. Optimization with the temporal filter ensures that after averaging all frames, the noise is uniformly suppressed, as seen from the 𝑡 = 0 slice of the noise spectrum. However, this comes at the expense of the single frame spectrum, which exhibits blue noise properties but not as strongly as two-dimensional scalar samples.'''
+checked = 2026-11-14
+
+["donnelly-2024-fast-code-licence"]
+url = "https://github.com/electronicarts/fastnoise/blob/2cf53e4bb510d07511fe63a312556d2a2e108c70/LICENSE.txt"
+section = "electronicarts/fastnoise, LICENSE.txt at commit 2cf53e4bb510d07511fe63a312556d2a2e108c70 (head of main, committed 2025-01-06; GitHub API reports licence BSD-3-Clause)"
+quote = '''Copyright (c) 2023 Electronic Arts Inc. All rights reserved.'''
+checked = 2026-11-14
+
+["lin-2021-volumetric-restir-cost"]
+url = "https://graphics.cs.utah.edu/research/projects/volumetric-restir/volumetric_restir.pdf#page=12"
+section = "Lin, Wyman, Yuksel, Fast Volume Rendering with Spatiotemporal Reservoir Resampling, SIGGRAPH Asia 2021, ACM TOG 40(6) (doi 10.1145/3478513.3480499), Figure 1 and section Results"
+quote = '''We captured results on an NVIDIA GeForce RTX 3090. Performance numbers include initial candidate generation, spatiotemporal reuse, and final shading. [...] We report error metrics and timing for 1920 × 1080 images, averaging over 256 frames (after a warmup) to smooth variations.'''
+cost = '''show our work with (left) single scattering in 55 ms and (right) three-bounce multiple scattering in 142 ms.'''
+checked = 2026-11-14
+
+["lin-2021-volumetric-restir-reprojection"]
+url = "https://graphics.cs.utah.edu/research/projects/volumetric-restir/volumetric_restir.pdf#page=6"
+section = "Lin et al. 2021 (doi 10.1145/3478513.3480499), section 4 Spatiotemporal Reuse (overview) and section 4.4 Temporal Reuse"
+quote = '''a new stochastic reprojection for temporally reusing volumetric path samples, as surface motion vectors fail in volumes. [...] An important limitation of this temporal reuse and reprojection is it remains unbiased only for static volumes and camera. [...] Bias increases with larger camera motion or volume deformation (see Figure 9). But the bias is generally hard to perceive.'''
+checked = 2026-11-14
+
+["hofmann-2021-realtime-practice"]
+url = "https://d1qx31qr3h6wln.cloudfront.net/publications/paper_v3.pdf#page=5"
+section = "Hofmann et al. 2021 (doi 10.1145/3451256), section Related Work and the paragraph Motion Vectors"
+quote = '''Since all of these approaches operate in a highly runtime constrained environment, they often rely on some form of ray marching with (varying) high step sizes and temporal filtering [Karis 2014] to achieve best possible frame rates. [...] Unfortunately, for volumes, the motion information is much noisier, and we found it very hard to find publicly available volume assets containing motion data. [...] we did not see a clear benefit from reprojecting data, neither when using the raw motion vectors nor motion vectors pre-filtered by another small neural network.'''
+checked = 2026-11-14
+
+["stojanovic-2023-shared-shadow-grid"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20231136/055-064.pdf#page=3"
+section = "Stojanovic, Weinrauch, Tatzgern, Kurz, Steinberger, Efficient Rendering of Participating Media for Multiple Viewpoints, High Performance Graphics 2023 (doi 10.2312/hpg.20231136), section 2 Related Work (end) and section 3.1.1 Shared Voxel Update"
+quote = '''Typically, froxel-based techniques use some variant of shadow mapping to evaluate the shadowing at the froxel centers. Our rendering pipeline does not use shadow mapping but instead uses ray tracing to compute the shadow term of the individual froxels. [...] ray tracing is still computationally expensive, and as a result, the vast majority of the total computational cost for volumetric rendering lies within shadow ray tracing. Our initial testing found that it amounted to roughly 80% of the total cost. [...] Since the shadow grid is fixed in place, we found that an alternating update strategy can be utilized without causing any noticeable artifacts. By alternating the updated voxels based on the parity of their z-axis index, we can reduce the total number of traced rays per frame by roughly half.'''
+checked = 2026-11-14
+
+["stojanovic-2023-temporal-froxels"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20231136/055-064.pdf#page=4"
+section = "Stojanovic et al. 2023 (doi 10.2312/hpg.20231136), sections 3.1.1 to 3.1.3"
+quote = '''We did not notice any issues regarding temporal inconsistencies even in dynamic scenes, which is likely attributed to the temporal accumulation of the evaluated frustum in a later step in the pipeline (Section 3.1.3). [...] The results of the lighting computation are stored in a per-camera froxel volume, that stores the in-scattered lighting and media density of the participating media. [...] This volume is also integrated temporally by jittering the sample locations along the individual view rays to reduce noise and aliasing.'''
+checked = 2026-11-14
+
+["stojanovic-2023-cost"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20231136/055-064.pdf#page=5"
+section = "Stojanovic et al. 2023 (doi 10.2312/hpg.20231136), section 4 Evaluation, Table 1"
+quote = '''we evaluate the performance of our approach using a test machine configured with an NVIDIA Geforce RTX 3090 GPU, an AMD Ryzen 9 3900X Processor, and 32GB of RAM. The resolution of every viewer was set to 1920x1080. [...] we also modified the reference implementation to only trace rays within the scene bounds.'''
+cost = '''Cameras Reference Shared Shadow Grid 1 1.10 ms 0.91 ms 2 2.13 ms 1.57 ms [...] Table 1: San Miguel performance comparison using realistic camera positioning and movement. The used voxel size is 0.125 meters, which yields a grid resolution of 554x216x122.'''
+checked = 2026-11-14
+
+["stojanovic-2023-limits"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20231136/055-064.pdf#page=9"
+section = "Stojanovic et al. 2023 (doi 10.2312/hpg.20231136), section 5 Limitations & Future Work"
+quote = '''Our approach assumes the scenes to be limited to small or medium sizes, as we span our shadow grid across the whole scene. For large open-world type environments the required resolution of the shadow grid texture would be very large and, because of that, storing the whole grid in memory would be impractical. [...] Our approach focuses on effects close to the viewer, so the rendering of far-away phenomena such as clouds is currently not'''
+checked = 2026-11-14
+
+["mueller-2026-smolder-cost"]
+url = "https://advances.realtimerendering.com/s2026/content/AlexanderMueller_Smolder_Siggraph26.pdf#page=107"
+section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Rendering in Glacier and 007 First Light, SIGGRAPH 2026 Advances in Real-Time Rendering, page 107: speaker notes, and the slide Performance Numbers, whose table is an image, transcribed here a column to a row, each with its three scenes in the slide's order"
+quote = '''Let’s talk about some performance numbers, here’s a bunch of cases with PS5 equivalent quality settings. These do not contain the async shadow rendering cost.'''
+cost = '''PS5 Equivalent Settings [...] RTX 3060, 1080p: 1.230ms, 1.080ms, 3.462ms [...] RX 6700 XT, 1080p: 0.775ms, 0.642ms, 1.970ms [...] RTX 5060 Ti (DLSS Quality), 1080p(720p): 0.367ms, 0.299ms, 1.020ms [...] RTX 5060 Ti, 1080p: 0.637ms, 0.630ms, 1.820ms [...] RTX 5060 Ti, 4k: 2.410ms, 2.010ms, 7.160ms'''
+checked = 2026-11-14
