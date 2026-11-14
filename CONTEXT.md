@@ -18,6 +18,10 @@ _Avoid_: Model, geometry
 One contiguous range of a Mesh's vertices and, in each LOD, of its indices.
 _Avoid_: Submesh, surface
 
+**Thin Primitive**:
+A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower.
+_Avoid_: Wire, strand, thin feature
+
 **LOD**:
 One of a Mesh's cooked simplifications; LOD 0 is the source.
 _Avoid_: Level, detail level

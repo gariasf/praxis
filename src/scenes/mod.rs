@@ -1352,6 +1352,17 @@ pub(crate) struct Geometry {
     /// A box its Mesh's cooked bounds must hold besides its vertices, for a
     /// Mesh the GPU bends: every shape it bends to.
     pub(crate) bounds: Option<[[f32; 3]; 2]>,
+    pub(crate) thin_radius_metres: Option<f32>,
+}
+
+#[cfg(feature = "cook")]
+impl Geometry {
+    pub(crate) fn thin(self, radius_metres: f32) -> Self {
+        Self {
+            thin_radius_metres: Some(radius_metres),
+            ..self
+        }
+    }
 }
 
 /// A sphere of `radius` around the origin, 48 segments around and 24 from
@@ -1443,6 +1454,7 @@ pub(crate) fn ground_plane(half_size: f32, uv_repeat: f32) -> Geometry {
         ],
         indices: vec![0, 1, 2, 0, 2, 3],
         bounds: None,
+        thin_radius_metres: None,
     }
 }
 

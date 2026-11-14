@@ -172,6 +172,7 @@ pub(crate) mod tests {
                 index_count: 3 * triangles.len() as u32,
                 material: None,
                 texel_density: 0.0,
+                thin_radius_metres: None,
                 meshlets: CookedMeshlet::split(&triangles, counts).expect("within the limits"),
             }],
             coarser_lods: Vec::new(),

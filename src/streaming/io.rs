@@ -1430,6 +1430,7 @@ mod tests {
                     index_count: 0,
                     material: Some(material),
                     texel_density: 0.0,
+                    thin_radius_metres: None,
                     meshlets: Vec::new(),
                 }],
                 coarser_lods: Vec::new(),
