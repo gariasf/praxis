@@ -794,10 +794,10 @@ fn a_renamed_mesh_a_reference_scene_names_is_warned_of() {
     fs::remove_dir_all(&directory).unwrap();
 }
 
-/// SciFiHelmet's cooked Mesh Blob bytes per triangle, Meshlets included, at
-/// most: the ceiling the Meshlet cook's measurement sets. A lower figure
-/// re-records it.
-const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 13.83;
+/// SciFiHelmet's cooked Mesh Blob bytes per triangle of LOD 0, Meshlets and
+/// its LOD chain included, at most: the ceiling the LOD chain cook's
+/// measurement sets. A lower figure re-records it.
+const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 15.28;
 const HELMET_TRIANGLES: usize = 23_358;
 
 #[test]

@@ -37,7 +37,9 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 3;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 4;
+/// The most LODs a Mesh's LOD chain holds, LOD 0 among them.
+pub(crate) const MESH_MAX_LODS: usize = 8;
 /// The most vertices a Meshlet holds: a packed index carries the vertex
 /// within its Meshlet in six bits (ADR 0019).
 pub(crate) const MESHLET_MAX_VERTICES: usize = 64;
@@ -569,15 +571,31 @@ impl CookedMeshlet {
     }
 }
 
-/// A Mesh Asset in mesh-local space: welded vertices, u32 indices into them
-/// and the Primitives that split the indices by Material.
+/// A Mesh Asset in mesh-local space: welded vertices, LOD 0's u32 indices
+/// into them, the Primitives that split those indices by Material, and the
+/// rest of its LOD chain.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CookedMesh {
     pub vertices: Vec<CookedVertex>,
     pub indices: Vec<u32>,
     pub primitives: Vec<CookedPrimitive>,
+    /// LOD 1 and up, each coarser than the one before.
+    pub coarser_lods: Vec<CookedLod>,
     /// The box that holds every vertex: its lowest corner, then its highest.
     pub bounds: [[f32; 3]; 2],
+}
+
+/// One LOD of a Mesh past LOD 0: its own indices into the Mesh's vertices.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CookedLod {
+    /// Its LOD error: the simplifier's error from LOD 0 down to it, of
+    /// position, normal and UV together.
+    pub error_metres: f32,
+    pub indices: Vec<u32>,
+    /// The Mesh's Primitives in order, each with its run of `indices`, which
+    /// is empty where the LOD keeps no triangle of it, and LOD 0's Material
+    /// and texel density.
+    pub primitives: Vec<CookedPrimitive>,
 }
 
 /// The vertices in each block of meshopt's vertex codec, for a vertex of
@@ -590,23 +608,39 @@ impl CookedMesh {
     #[cfg(feature = "cook")]
     pub(crate) const ZSTD_LEVEL: i32 = 19;
 
+    /// Each LOD's error, indices and Primitives, LOD 0 first.
+    pub fn lods(&self) -> impl Iterator<Item = (f32, &[u32], &[CookedPrimitive])> {
+        let coarser = self
+            .coarser_lods
+            .iter()
+            .map(|lod| (lod.error_metres, &lod.indices[..], &lod.primitives[..]));
+        std::iter::once((0.0, &self.indices[..], &self.primitives[..])).chain(coarser)
+    }
+
     /// After the magic and version, one zstd frame holding the vertex,
-    /// index and Primitive counts as little-endian u32s, the bounds as six
-    /// little-endian f32s, each Primitive's first index, index count,
-    /// Material Asset ID (zero for none), texel density as a little-endian
-    /// f32 and Meshlet count, then a byte per
-    /// Meshlet, its triangle count, the byte length of the encoded vertices,
-    /// then meshopt's encoded vertices and indices. Each Meshlet's vertices
-    /// and triangles are its run of the indices, rebuilt on reading.
+    /// Primitive and LOD counts as little-endian u32s, the bounds as six
+    /// little-endian f32s, each Primitive's Material Asset ID (zero for
+    /// none) and texel density as a little-endian f32, then per LOD, LOD 0
+    /// first, its error as a little-endian f32, its index count and each
+    /// Primitive's first index, index count and Meshlet count, then a byte
+    /// per Meshlet, its triangle count, the byte length of the encoded
+    /// vertices, then meshopt's encoded vertices and every LOD's indices as
+    /// one encoded stream. Each Meshlet's vertices and triangles are its run
+    /// of the indices, rebuilt on reading.
     #[cfg(feature = "cook")]
     pub(crate) fn to_blob(&self) -> anyhow::Result<Vec<u8>> {
         let vertices = meshopt::encode_vertex_buffer(&self.vertices)?;
-        let indices = meshopt::encode_index_buffer(&self.indices, self.vertices.len())?;
+        let every_index: Vec<u32> = self
+            .lods()
+            .flat_map(|(_, indices, _)| indices)
+            .copied()
+            .collect();
+        let indices = meshopt::encode_index_buffer(&every_index, self.vertices.len())?;
         let mut payload = Vec::new();
         for count in [
             self.vertices.len(),
-            self.indices.len(),
             self.primitives.len(),
+            self.lods().count(),
         ] {
             payload.extend((count as u32).to_le_bytes());
         }
@@ -614,15 +648,27 @@ impl CookedMesh {
             payload.extend(coordinate.to_le_bytes());
         }
         for primitive in &self.primitives {
-            payload.extend(primitive.first_index.to_le_bytes());
-            payload.extend(primitive.index_count.to_le_bytes());
             payload.extend(primitive.material.map_or(0, |id| id.0).to_be_bytes());
             payload.extend(primitive.texel_density.to_le_bytes());
-            payload.extend((primitive.meshlets.len() as u32).to_le_bytes());
+        }
+        for (error_metres, indices, primitives) in self.lods() {
+            anyhow::ensure!(
+                primitives.len() == self.primitives.len(),
+                "a LOD of {} Primitives in a Mesh of {}",
+                primitives.len(),
+                self.primitives.len()
+            );
+            payload.extend(error_metres.to_le_bytes());
+            payload.extend((indices.len() as u32).to_le_bytes());
+            for primitive in primitives {
+                payload.extend(primitive.first_index.to_le_bytes());
+                payload.extend(primitive.index_count.to_le_bytes());
+                payload.extend((primitive.meshlets.len() as u32).to_le_bytes());
+            }
         }
         for meshlet in self
-            .primitives
-            .iter()
+            .lods()
+            .flat_map(|(_, _, primitives)| primitives)
             .flat_map(|primitive| &primitive.meshlets)
         {
             payload.push(u8::try_from(meshlet.triangles.len())?);
@@ -641,38 +687,65 @@ impl CookedMesh {
         let mut rest = payload.as_slice();
         let rest = &mut rest;
         let vertex_count = take_u32(rest)? as usize;
-        let index_count = take_u32(rest)? as usize;
-        // meshopt's index decoder writes whole triangles and checks neither.
-        anyhow::ensure!(
-            index_count.is_multiple_of(3),
-            "Mesh Blob's index count is not whole triangles"
-        );
         let primitive_count = take_u32(rest)?;
+        let lod_count = take_u32(rest)? as usize;
+        anyhow::ensure!(
+            (1..=MESH_MAX_LODS).contains(&lod_count),
+            "Mesh Blob has {lod_count} LODs"
+        );
         let mut bounds = [[0.0; 3]; 2];
         for coordinate in bounds.as_flattened_mut() {
             *coordinate = f32::from_bits(take_u32(rest)?);
         }
-        let mut primitives = Vec::new();
-        let mut meshlet_counts = Vec::new();
+        let mut materials = Vec::new();
         for _ in 0..primitive_count {
-            let first_index = take_u32(rest)?;
-            let primitive_index_count = take_u32(rest)?;
             let material = u128::from_be_bytes(take(rest, 16)?.try_into().expect("16 bytes"));
             let texel_density = f32::from_bits(take_u32(rest)?);
-            anyhow::ensure!(
-                first_index as usize + primitive_index_count as usize <= index_count,
-                "Mesh Blob has a Primitive past its indices"
-            );
-            meshlet_counts.push(take_u32(rest)? as usize);
-            primitives.push(CookedPrimitive {
-                first_index,
-                index_count: primitive_index_count,
-                material: (material != 0).then_some(AssetId(material)),
-                texel_density,
-                meshlets: Vec::new(),
-            });
+            materials.push(((material != 0).then_some(AssetId(material)), texel_density));
         }
-        // Each Primitive's Meshlets' triangle counts.
+        let mut lods = Vec::new();
+        let mut meshlet_counts = Vec::new();
+        let mut finer_error_metres = 0.0;
+        for _ in 0..lod_count {
+            let error_metres = f32::from_bits(take_u32(rest)?);
+            anyhow::ensure!(
+                error_metres.is_finite() && error_metres >= finer_error_metres,
+                "Mesh Blob has a LOD error of {error_metres} m after {finer_error_metres} m"
+            );
+            finer_error_metres = error_metres;
+            let index_count = take_u32(rest)? as usize;
+            // meshopt's index decoder writes whole triangles and checks neither.
+            anyhow::ensure!(
+                index_count.is_multiple_of(3),
+                "Mesh Blob's index count is not whole triangles"
+            );
+            let mut primitives = Vec::new();
+            for &(material, texel_density) in &materials {
+                let first_index = take_u32(rest)?;
+                let primitive_index_count = take_u32(rest)?;
+                anyhow::ensure!(
+                    first_index as usize + primitive_index_count as usize <= index_count,
+                    "Mesh Blob has a Primitive past its indices"
+                );
+                meshlet_counts.push(take_u32(rest)? as usize);
+                primitives.push(CookedPrimitive {
+                    first_index,
+                    index_count: primitive_index_count,
+                    material,
+                    texel_density,
+                    meshlets: Vec::new(),
+                });
+            }
+            lods.push((
+                index_count,
+                CookedLod {
+                    error_metres,
+                    indices: Vec::new(),
+                    primitives,
+                },
+            ));
+        }
+        // Each Primitive's Meshlets' triangle counts, LOD by LOD.
         let meshlet_triangle_counts: Vec<&[u8]> = meshlet_counts
             .into_iter()
             .map(|meshlet_count| take(rest, meshlet_count))
@@ -690,35 +763,56 @@ impl CookedMesh {
             "Mesh Blob has more vertices than its encoded bytes hold"
         );
         let vertices = meshopt::decode_vertex_buffer(encoded_vertices, vertex_count)?;
+        let index_count: usize = lods.iter().map(|(index_count, _)| index_count).sum();
         // The index codec spends at least a byte per triangle, so a count
         // past that is corrupt and must not size an allocation.
         anyhow::ensure!(
             index_count / 3 <= rest.len(),
             "Mesh Blob has more indices than its encoded bytes hold"
         );
-        let indices: Vec<u32> = meshopt::decode_index_buffer(rest, index_count)?;
+        let mut every_index: Vec<u32> = meshopt::decode_index_buffer(rest, index_count)?;
         // meshopt's decoder may turn corrupt input into any index.
         anyhow::ensure!(
-            indices.iter().all(|&index| (index as usize) < vertex_count),
+            every_index
+                .iter()
+                .all(|&index| (index as usize) < vertex_count),
             "Mesh Blob has an index past its vertices"
         );
-        for (primitive, triangle_counts) in primitives.iter_mut().zip(meshlet_triangle_counts) {
-            let first_index = primitive.first_index as usize;
-            let (triangles, partial) =
-                indices[first_index..][..primitive.index_count as usize].as_chunks::<3>();
-            anyhow::ensure!(
-                partial.is_empty(),
-                "Mesh Blob has a Primitive of partial triangles"
-            );
-            primitive.meshlets = CookedMeshlet::split(
-                triangles,
-                triangle_counts.iter().map(|&count| count as usize),
-            )?;
+        // Coarsest first, which leaves LOD 0's indices in the decoded Vec.
+        for (index_count, lod) in lods.iter_mut().skip(1).rev() {
+            lod.indices = every_index.split_off(every_index.len() - *index_count);
         }
+        lods[0].1.indices = every_index;
+        let mut meshlet_triangle_counts = meshlet_triangle_counts.into_iter();
+        let mut chain = Vec::new();
+        for (_, mut lod) in lods {
+            for (primitive, triangle_counts) in
+                lod.primitives.iter_mut().zip(&mut meshlet_triangle_counts)
+            {
+                let first_index = primitive.first_index as usize;
+                let (triangles, partial) =
+                    lod.indices[first_index..][..primitive.index_count as usize].as_chunks::<3>();
+                anyhow::ensure!(
+                    partial.is_empty(),
+                    "Mesh Blob has a Primitive of partial triangles"
+                );
+                primitive.meshlets = CookedMeshlet::split(
+                    triangles,
+                    triangle_counts.iter().map(|&count| count as usize),
+                )?;
+            }
+            chain.push(lod);
+        }
+        let CookedLod {
+            indices,
+            primitives,
+            ..
+        } = chain.remove(0);
         Ok(Self {
             vertices,
             indices,
             primitives,
+            coarser_lods: chain,
             bounds,
         })
     }
@@ -1235,18 +1329,66 @@ mod tests {
         assert!(error.contains("6x4: re-cook"), "{error}");
     }
 
-    /// M2's Mesh Blobs, which hold no Meshlets.
+    /// A Mesh round-trips with its LOD chain, a Primitive that a LOD leaves
+    /// no triangle of included; a Blob of format version 3, which holds no
+    /// LOD chain, is refused.
     #[cfg(feature = "cook")]
     #[test]
-    fn mesh_blob_of_format_version_1_is_refused_with_a_re_cook_message() {
+    fn mesh_blob_round_trips_its_lod_chain_and_refuses_format_version_3() {
+        let primitive = |first_index: u32, indices: &[u32], material: u128, texel_density: f32| {
+            let triangles = indices.as_chunks::<3>().0;
+            CookedPrimitive {
+                first_index,
+                index_count: indices.len() as u32,
+                material: (material != 0).then_some(AssetId(material)),
+                texel_density,
+                meshlets: CookedMeshlet::split(
+                    triangles,
+                    (!triangles.is_empty()).then_some(triangles.len()),
+                )
+                .unwrap(),
+            }
+        };
+        let vertices = (0..6)
+            .map(|vertex| CookedVertex {
+                position: [vertex as f32, 0.5, -1.0],
+                uv: [0.25, vertex as f32],
+                qtangent: [0, 0, 0, i16::MAX],
+            })
+            .collect();
         let mesh = CookedMesh {
-            vertices: Vec::new(),
-            indices: Vec::new(),
-            primitives: Vec::new(),
-            bounds: [[0.0; 3]; 2],
+            vertices,
+            indices: vec![0, 1, 2, 0, 2, 3, 3, 4, 5],
+            primitives: vec![
+                primitive(0, &[0, 1, 2, 0, 2, 3], 7, 2.0),
+                primitive(6, &[3, 4, 5], 0, 0.5),
+            ],
+            coarser_lods: vec![
+                CookedLod {
+                    error_metres: 0.125,
+                    indices: vec![0, 1, 3, 3, 4, 5],
+                    primitives: vec![
+                        primitive(0, &[0, 1, 3], 7, 2.0),
+                        primitive(3, &[3, 4, 5], 0, 0.5),
+                    ],
+                },
+                CookedLod {
+                    error_metres: 0.75,
+                    indices: vec![0, 1, 3],
+                    primitives: vec![primitive(0, &[0, 1, 3], 7, 2.0), primitive(3, &[], 0, 0.5)],
+                },
+            ],
+            bounds: [[0.0, 0.5, -1.0], [5.0, 0.5, -1.0]],
         };
         let mut blob = mesh.to_blob().unwrap();
-        blob[4..8].copy_from_slice(&1u32.to_le_bytes());
+        // The index codec may rotate a triangle.
+        let with_lowest_rotations = crate::cook::mesh::tests::with_lowest_rotations;
+        assert_eq!(
+            with_lowest_rotations(CookedMesh::from_blob(&blob).unwrap()),
+            with_lowest_rotations(mesh)
+        );
+
+        blob[4..8].copy_from_slice(&3u32.to_le_bytes());
         let error = CookedMesh::from_blob(&blob).unwrap_err().to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
     }
@@ -1308,12 +1450,13 @@ mod tests {
             vertices: vec![CookedVertex::default(); 3],
             indices: vec![0, 1, 2],
             primitives: Vec::new(),
+            coarser_lods: Vec::new(),
             bounds: [[0.0; 3]; 2],
         };
         let blob = mesh.to_blob().unwrap();
         let mut payload = zstd::decode_all(&blob[8..]).unwrap();
-        // The index count, after the vertex count.
-        payload[4..8].copy_from_slice(&4u32.to_le_bytes());
+        // LOD 0's index count, after the three counts, the bounds and its error.
+        payload[40..44].copy_from_slice(&4u32.to_le_bytes());
         let mut corrupt = blob[..8].to_vec();
         corrupt.extend(zstd::bulk::compress(&payload, 1).unwrap());
         let error = CookedMesh::from_blob(&corrupt).unwrap_err().to_string();
@@ -1329,6 +1472,7 @@ mod tests {
             vertices: vec![CookedVertex::default(); 3],
             indices: vec![0, 1, 2],
             primitives: Vec::new(),
+            coarser_lods: Vec::new(),
             bounds: [[0.0; 3]; 2],
         };
         let blob = mesh.to_blob().unwrap();

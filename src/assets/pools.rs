@@ -1277,6 +1277,7 @@ pub(crate) mod tests {
                 meshlets,
             }],
             indices,
+            coarser_lods: Vec::new(),
             bounds: [[0.0; 3]; 2],
         }
     }
@@ -1358,6 +1359,7 @@ pub(crate) mod tests {
             vertices: (0..4).map(|index| vertex(index as f32)).collect(),
             indices: indices.clone(),
             primitives: vec![primitive(0), primitive(3)],
+            coarser_lods: Vec::new(),
             bounds: [[-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]],
         };
         let material = MaterialHandle {

@@ -277,6 +277,7 @@ mod tests {
                         }],
                     })
                     .into(),
+                coarser_lods: Vec::new(),
                 bounds: [[0.0; 3]; 2],
             };
             cache
@@ -375,6 +376,7 @@ mod tests {
             vertices: vec![CookedVertex::default(); 3],
             indices: vec![0, 1, 2],
             primitives: vec![primitive.clone(), primitive],
+            coarser_lods: Vec::new(),
             bounds: [[0.0; 3]; 2],
         };
         cache
@@ -465,6 +467,7 @@ mod tests {
                     triangles: vec![[0, 1, 2]],
                 }],
             }],
+            coarser_lods: Vec::new(),
             bounds: [[0.0; 3]; 2],
         };
         cache
