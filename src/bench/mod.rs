@@ -2162,17 +2162,29 @@ mod tests {
             });
             measurements
         };
-        let without = Measurements {
+        let without_per_slot_time = Measurements {
             culling_per_slot_microseconds: None,
             ..baseline()
         };
         assert_eq!(
-            verdicts(&per_slot(1000.0), &without, CompareMode::Local),
+            verdicts(
+                &per_slot(1000.0),
+                &without_per_slot_time,
+                CompareMode::Local
+            ),
             []
         );
-        assert_eq!(verdicts(&without, &baseline(), CompareMode::Local), []);
-        let findings =
-            compare(&per_slot(1000.5), &without, &BUDGETS, CompareMode::Local).expect("comparable");
+        assert_eq!(
+            verdicts(&without_per_slot_time, &baseline(), CompareMode::Local),
+            []
+        );
+        let findings = compare(
+            &per_slot(1000.5),
+            &without_per_slot_time,
+            &BUDGETS,
+            CompareMode::Local,
+        )
+        .expect("comparable");
         assert_eq!(
             findings,
             [Finding {
@@ -2182,7 +2194,10 @@ mod tests {
                     .to_owned(),
             }]
         );
-        assert_eq!(verdicts(&per_slot(1000.5), &without, CompareMode::Ci), []);
+        assert_eq!(
+            verdicts(&per_slot(1000.5), &without_per_slot_time, CompareMode::Ci),
+            []
+        );
     }
 
     /// The dynamic TLAS's CPU cost and its build answer to their ceilings,

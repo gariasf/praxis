@@ -470,11 +470,11 @@ fn level_bytes(texture: &amp;wgpu::Texture) -&gt; impl Iterator&lt;Item = u64&gt
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
-    CullingPhase::One.label(),
+    CullingPhase::One.slots_label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
-    CullingPhase::Two.label(),
+    CullingPhase::Two.slots_label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
     LIT_PASS,
@@ -726,7 +726,7 @@ enum SlotState {
   <h3>The gate and the lit pass's wait</h3>
   <p>ADR 0019's gate is the span its reopen clause names: from the start of culling phase one, not from the earliest start among the gate's passes, to the latest end of the passes up to and including the lit pass. The build and the tonemapping pass are outside it. The lit pass's wait is how long after the latest end of the passes from culling phase one up to it the lit pass started, and none where it started beside them; with the span of the passes before it and the lit pass's own time it makes up the gate, which is how <code>praxis report</code> prints the gate as a table that sums.</p>
   <div class="code-source"><code>frame_times</code>, <code>src/render/readback.rs</code></div>
-<pre class="code"><code>    let culling_phase_one = pass_position(CullingPhase::One.label());
+<pre class="code"><code>    let culling_phase_one = pass_position(CullingPhase::One.slots_label());
     let (_, gate_end) = bounds(culling_phase_one..lit_pass + 1);
     let (_, before_lit_end) = bounds(culling_phase_one..lit_pass);
     FrameTimes {

@@ -1,4 +1,4 @@
-//! The culling pass: a compute pass that builds the frame's draw from the
+//! The culling pass: the compute passes that build the frame's draw from the
 //! Instances, a Meshlet record per Meshlet of each Instance and a packed
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
@@ -36,7 +36,8 @@ pub enum CullingPhase {
 impl CullingPhase {
     /// The label, and the name in Frame stats, of the phase's pass over the
     /// Instance slots in use: `offset_slots`, `offset_blocks` and
-    /// `append_records`, whose time follows the slots.
+    /// `append_records`, whose time follows the slots, and in
+    /// `append_records` the Meshlet records it writes.
     pub(crate) const fn slots_label(self) -> &'static str {
         match self {
             CullingPhase::One => "culling_phase_one_slots",
@@ -288,20 +289,20 @@ impl CullingPass {
     /// Records `phase` of the pass into `encoder`: phase one clears the
     /// frame's draw first. It appends the Meshlets of the Instances the phase
     /// draws among `frame`'s slots in use, with `bind_groups` set, in two
-    /// compute passes timed into `slots_timestamp_writes` and
-    /// `triangles_timestamp_writes`. Where they need more Meshlet records or
-    /// packed indices than the draw holds, it draws the Instances that fit
-    /// and counts the others as overflowed, which the GPU stats readback
-    /// warns about.
+    /// compute passes, each timed into its `timestamp_writes`: the pass over
+    /// the slots, then the one over the Meshlet records. Where they need
+    /// more Meshlet records or packed indices than the draw holds, it draws
+    /// the Instances that fit and counts the others as overflowed, which the
+    /// GPU stats readback warns about.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
         phase: CullingPhase,
-        slots_timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
-        triangles_timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        timestamp_writes: [Option<wgpu::ComputePassTimestampWrites<'_>>; 2],
     ) {
+        let [slots_timestamp_writes, triangles_timestamp_writes] = timestamp_writes;
         let pipelines = match phase {
             CullingPhase::One => {
                 encoder.clear_buffer(&self.buffers.frame_draw, 0, None);

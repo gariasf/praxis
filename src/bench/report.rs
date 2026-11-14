@@ -493,7 +493,7 @@ mod tests {
             lit_pass_wait_microseconds: Some(spread(1204.5, 1391.0)),
             culling_per_slot_microseconds: Some(tailed(41.2, 44.0, 47.5, 96.3)),
             gate_pass_microseconds: [
-                ("culling_phase_one", spread(170.1, 175.0)),
+                ("culling_phase_one_slots", spread(170.1, 175.0)),
                 ("lit_pass", spread(1575.4, 1600.2)),
             ]
             .into_iter()
@@ -504,7 +504,7 @@ mod tests {
                 tailed(4208.6, 5204.5, 5390.2, 17_001.5),
                 tailed(2950.0, 3010.4, 3044.0, 3521.7),
                 [
-                    ("culling_phase_one", spread(166.3, 169.8)),
+                    ("culling_phase_one_slots", spread(166.3, 169.8)),
                     ("dynamic_tlas_build", spread(48.7, 462.9)),
                     ("lit_pass", spread(755.8, 768.1)),
                 ],
@@ -519,7 +519,7 @@ mod tests {
             spread(4000.0, 5000.0),
             spread(3000.0, 3100.0),
             [
-                ("culling_phase_one", spread(160.0, 170.0)),
+                ("culling_phase_one_slots", spread(160.0, 170.0)),
                 ("dynamic_tlas_build", spread(50.0, 400.0)),
                 ("lit_pass", spread(800.0, 810.0)),
             ],
@@ -547,7 +547,7 @@ mod tests {
 | Gate, rays off | 2,950.0 | 3,010.4 | 3,044.0 | 3,521.7 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
 | Shadow-ray time | -3.2 | 40.5 | — | — | -3.2 | 40.5 | +0.0 | — | — |
 | Culling, per-slot stages | 41.2 | 44.0 | 47.5 | 96.3 | — | — | — | — | 1,000.0 |
-| `culling_phase_one` | 166.3 | 169.8 | — | — | 160.0 | 170.0 | +6.3 | 1.039 | — |
+| `culling_phase_one_slots` | 166.3 | 169.8 | — | — | 160.0 | 170.0 | +6.3 | 1.039 | — |
 | `dynamic_tlas_build` | 48.7 | 462.9 | — | — | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | — | — | 800.0 | 810.0 | -44.2 | 0.945 | — |
 
@@ -555,7 +555,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 
 | Gate, rays off, µs | Median | p95 |
 |---|---:|---:|
-| `culling_phase_one` | 170.1 | 175.0 |
+| `culling_phase_one_slots` | 170.1 | 175.0 |
 | `lit_pass` | 1,575.4 | 1,600.2 |
 | Lit pass's wait | 1,204.5 | 1,391.0 |
 | Their medians' sum | 2,950.0 | — |
