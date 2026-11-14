@@ -139,7 +139,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // up to 2048. The load's staging is gone.
     let staging = 3 * 2048;
     // The scene and pass buffers: the Mesh table of 18,691 Meshes of 40
-    // bytes, 222 Materials of 80 bytes, the camera and light uniforms, the
+    // bytes, 222 Materials of 80 bytes and 285 Far proxies' Materials
+    // beside them, the camera and light uniforms, the
     // light buffer of 4,893 lights of 48 bytes, 517,376 Instances of 128
     // bytes, the culling pass's 4-byte Instance slot count and 8-byte
     // offsets for each slot and block of 256 slots and of the phase's
@@ -153,7 +154,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
     // 4,096 bends of 20 bytes.
     let scene_and_pass_buffers = 18_691 * 40
-        + 222 * 80
+        + (222 + 285) * 80
         + 144
         + 32
         + 4893 * 48

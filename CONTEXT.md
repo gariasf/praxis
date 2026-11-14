@@ -166,6 +166,10 @@ _Avoid_: Streaming radius, active area, grid size
 A Chunk the camera came within the Load radius of before it was loaded.
 _Avoid_: Pop-in, streaming miss
 
+**Far proxy**:
+What is drawn in place of a Chunk that is not loaded, out to the View distance: one merged Mesh with a Material baked for it.
+_Avoid_: HLOD, impostor, Shadow proxy (traced, never drawn)
+
 **Late mip**:
 A mip of a Texture that a frame's drawn Chunks need, by its priority, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
 _Avoid_: Missing mip, texture pop
@@ -269,7 +273,7 @@ A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The 
 _Avoid_: Slowdown, perf bug
 
 **Budget**:
-A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019's gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools' capacities, the Instance slots, the light buffer's and the static TLAS's derive from them at device creation, each its share of its kind's Budget at its real bytes per entry (ADRs 0013, 0017). Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.
+A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019's gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools' capacities, the Instance slots, the light buffer's and the static TLAS's derive from them at device creation, each its share of its kind's Budget at its real bytes per entry, but the Material table's entries for Far proxies' Materials, a fixed count (ADRs 0013, 0017). Counters such as draw calls, bytes uploaded and the lights the light buffer had no room for are held to their Baselines instead.
 _Avoid_: Target, threshold
 
 **Capability floor**:
