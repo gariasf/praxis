@@ -27,8 +27,8 @@ on:
       - 'bench/cycles/**'
       - '.github/pull_request_template.md'
       - 'LICENSE'
-  # A dispatched run judges nothing: it records the lavapipe Goldens and
-  # Baselines a PR's run would fail on, for `scripts/lavapipe-files.sh`.
+  # A dispatched run judges nothing, so none of its jobs may report under a
+  # required check's name: each job it skips or records in is renamed.
   workflow_dispatch:
 
 # A newer push to a PR cancels the run it supersedes. Each push to main runs
@@ -104,7 +104,7 @@ jobs:
           fi
 
   check:
-    name: Check, Clippy & Format
+    name: "Check, Clippy & Format${{ github.event_name == 'workflow_dispatch' && ' (recording)' || '' }}"
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -133,7 +133,7 @@ jobs:
         run: cargo test
 
   windows-check:
-    name: Check & Clippy (Windows)
+    name: "Check & Clippy (Windows)${{ github.event_name == 'workflow_dispatch' && ' (recording)' || '' }}"
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: windows-2025
@@ -160,7 +160,7 @@ jobs:
         run: cargo clippy --all-targets --no-default-features -- -D warnings
 
   software-goldens:
-    name: Goldens (software Vulkan)
+    name: "Goldens (software Vulkan)${{ github.event_name == 'workflow_dispatch' && ' (recording)' || '' }}"
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
@@ -204,7 +204,7 @@ jobs:
       # `scripts/lavapipe-files.sh` copies the artifact over the checkout, so
       # each file sits at its path in the repository.
       - name: Record the Goldens that changed
-        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        if: ${{ !cancelled() && (failure() || github.event_name == 'workflow_dispatch') }}
         shell: bash
         env:
           PRAXIS_UPDATE_GOLDENS: "1"
@@ -216,7 +216,7 @@ jobs:
             xargs -0 -r cp --parents -t target/lavapipe-files
 
       - name: Upload the Goldens that changed
-        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        if: ${{ !cancelled() && (failure() || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: lavapipe-goldens
@@ -227,7 +227,7 @@ jobs:
     # The runtime opens no source path (ADR 0018): a build without `cook`
     # links no source decoder, and renders every CI Golden from a cooked
     # `cooked/` with `assets/` absent.
-    name: Goldens from a shipping build (software Vulkan)
+    name: "Goldens from a shipping build (software Vulkan)${{ github.event_name == 'workflow_dispatch' && ' (recording)' || '' }}"
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'workflow_dispatch' && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
@@ -284,7 +284,7 @@ jobs:
           if-no-files-found: ignore
 
   software-bench:
-    name: Bench counters (software Vulkan)
+    name: "Bench counters (software Vulkan)${{ github.event_name == 'workflow_dispatch' && ' (recording)' || '' }}"
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04

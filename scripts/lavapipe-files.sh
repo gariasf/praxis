@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Copies into the checkout the lavapipe Goldens and Baselines a CI run
-# recorded: the ones the checkout's would fail on. With no argument it has CI
-# record the current branch's pushed head first, in a run that judges nothing,
-# so a PR that moves them opens with them committed. With a run's id it copies
-# that run's, as after a PR's run that failed on them.
+# recorded: a run it dispatches on the current branch, or the run given.
 #
 # Usage: scripts/lavapipe-files.sh [<run id>]
 set -euo pipefail
@@ -11,7 +8,8 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 newest_recording() {
-  gh run list --workflow ci.yml --event workflow_dispatch --commit "$1" --limit 1 \
+  local commit=$1
+  gh run list --workflow ci.yml --event workflow_dispatch --commit "$commit" --limit 1 \
     --json databaseId --jq '.[0].databaseId // empty'
 }
 
@@ -21,6 +19,11 @@ if [ $# -eq 0 ]; then
   pushed_commit=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
   if [ "$pushed_commit" != "$head_commit" ]; then
     echo "push $branch first: CI records the commit origin holds" >&2
+    exit 1
+  fi
+  git fetch --quiet origin main
+  if ! git merge-base --is-ancestor origin/main "$head_commit"; then
+    echo "rebase $branch onto origin/main first: a PR's run judges its merge with main" >&2
     exit 1
   fi
   earlier_recording=$(newest_recording "$head_commit")
@@ -43,7 +46,7 @@ fi
 artifacts=$(gh api "repos/{owner}/{repo}/actions/runs/$run_id/artifacts" \
   --jq '.artifacts[].name | select(startswith("lavapipe-"))')
 if [ -z "$artifacts" ]; then
-  echo "run $run_id recorded no lavapipe file: the checkout's all pass"
+  echo "run $run_id holds no lavapipe file"
   exit 0
 fi
 download_directory=$(mktemp -d)
