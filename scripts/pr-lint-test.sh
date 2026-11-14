@@ -162,13 +162,15 @@ expect_fail "an AI co-author" 'AI co-author' "$body" \
   $'Add the check\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
 expect_fail "an AI co-author in lower case" 'AI co-author' "$body" \
   $'Add the check\n\nco-authored-by: GitHub Copilot <copilot@github.com>'
-expect_fail "a Generated with Claude line" 'Generated with Claude' "$body" \
+expect_fail "a Generated with Claude line" '"Generated with" line' "$body" \
   $'Add the check\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)'
 expect_fail "a 73-character subject" 'subject is 73 characters' "$body" "x$subject_72"
 
 squash='squash commit (title, number, body)'
-expect_fail "a Generated with Claude line in the PR body" "$squash: \"Generated with Claude\" line" \
+expect_fail "a Generated with Claude line in the PR body" "$squash: \"Generated with\" line" \
   "$body"$'\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)'
+expect_fail "another tool's Generated with line in the PR body" "$squash: \"Generated with\" line" \
+  "$body"$'\n\nGenerated with Codex'
 expect_fail "an AI co-author in the PR body" "$squash: AI co-author" \
   "$body"$'\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
 title=${subject_72:0:65}
@@ -178,6 +180,13 @@ expect_fail "a 65-character title with a four-digit number" "$squash: subject is
 number=316
 title="x$title"
 expect_fail "a 66-character title" "$squash: subject is 73 characters" "$body"
+title="-e;system(qq(touch $work/ran));#$subject_72"
+expect_fail "a long title that opens with a switch" "$squash: subject is" "$body"
+cases=$((cases + 1))
+if [ -e "$work/ran" ]; then
+  failures=$((failures + 1))
+  printf 'FAIL  a title that opens with a switch: its text ran\n'
+fi
 title='Add the check'
 
 raw=https://raw.githubusercontent.com/gariasf/praxis/010f64c0e7dd10ba7790c98060ffdad8a6ccf9d0/pr-369

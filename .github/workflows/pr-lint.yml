@@ -39,7 +39,7 @@ jobs:
       # through environment variables and files, never expanded into the script
       # itself, so no text in them runs. A renamed file lists both its paths,
       # its changed lines beside the new one.
-      - name: Lint the body, commits and rendering images
+      - name: Lint the title, body, size, commits and rendering images
         env:
           GH_TOKEN: ${{ github.token }}
           TITLE: ${{ github.event.pull_request.title }}

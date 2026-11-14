@@ -12,7 +12,8 @@ set -uo pipefail
 
 number="$1"
 title="$2"
-shift 2
+body_file="$3"
+changed_lines_file="${4:-}"
 template="$(dirname "$0")/../.github/pull_request_template.md"
 misses=0
 
@@ -24,7 +25,7 @@ miss() {
 # The body without carriage returns, HTML comments or trailing blanks, so a
 # section that holds only its placeholder comment reads as empty. Lines in
 # code fences are indented, so pasted output is never a heading or ticket line.
-body=$(tr -d '\r' <"$1" | perl -0pe 's/<!--.*?-->//gs; s/[ \t]+$//mg' |
+body=$(tr -d '\r' <"$body_file" | perl -0pe 's/<!--.*?-->//gs; s/[ \t]+$//mg' |
   perl -pe 'if (/^\s*```/) { $fenced = !$fenced; next } $_ = " $_" if $fenced')
 
 # The lines under a "## " heading, up to the next heading.
@@ -71,8 +72,8 @@ if ! awk '
   miss 'body: Verification lacks a "Sources checked" line listing each reference and its verdict, or None (workflow.md, Review)'
 fi
 
-# Whether the Images section links an image of the kind: a link to an image
-# whose text or file name names it.
+# Whether the text on standard input links an image whose link text or file
+# name names the kind.
 links_image() {
   KIND="$1" perl -ne '
     while (/(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) {
@@ -81,61 +82,59 @@ links_image() {
       my $name = $text . " " . ($url =~ s{.*/}{}r);
       $found = 1 if $name =~ /(?<![[:alpha:]])$ENV{KIND}(?![[:alpha:]])/i;
     }
-    END { exit !$found }' <<<"$images"
+    END { exit !$found }'
 }
 
-# A PR touching the renderer, the cooker's textures or meshes, or ADR 0019 or
-# 0020 links scripts/gallery.sh's before, after and difference images. One that
-# moves no Golden and changes no .wgsl file may count its identical images
-# instead: no image differs when the two counts are equal.
-if [ ! -r "${2:-}" ]; then
+# The count line stands for the images only where its two counts are equal.
+if [ ! -r "$changed_lines_file" ]; then
   miss 'paths: no changed-lines file to check'
 else
-  paths=$(cut -f 2- "$2")
+  paths=$(cut -f 2- "$changed_lines_file")
   if grep -Eq '^(src/render/|src/cook/(texture|mesh)(\.rs$|/)|docs/adr/00(19|20)-)' <<<"$paths"; then
     images=$(section '## Images')
     unlinked=()
     for kind in before after difference; do
-      links_image "$kind" || unlinked+=("$kind")
+      links_image "$kind" <<<"$images" || unlinked+=("$kind")
     done
     if [ ${#unlinked[@]} -gt 0 ]; then
       linking="body: a rendering PR's Images links scripts/gallery.sh's before, after and difference images, each named by its kind in its link text or file name (missing: ${unlinked[*]})"
       if grep -Eq '^tests/goldens/|\.wgsl$' <<<"$paths"; then
         miss "$linking; a PR that moves a Golden or changes a .wgsl file links all three (workflow.md, PRs)"
-      elif ! perl -ne '$counted = 1 if /(?<![0-9])([0-9]+) of \1(?![0-9]) gallery images identical/; END { exit !$counted }' <<<"$images"; then
+      elif ! perl -ne '$counted = 1 if /(?<![0-9])([1-9][0-9]*) of \1(?![0-9]) gallery images identical/; END { exit !$counted }' <<<"$images"; then
         miss "$linking, or gives the gallery's count on one line when no image differs, as \"22 of 22 gallery images identical to the base's\" (workflow.md, PRs)"
       fi
     fi
   fi
   code_line_limit=800
   code_lines=$(awk -F '\t' -v uncounted='^(docs/|[^/]+[.]md$|tests/goldens/|Cargo[.]lock$|bench/(baselines|cycles)/|vendor/)' \
-    '$2 !~ uncounted { lines += $1 } END { print lines + 0 }' "$2")
+    '$2 !~ uncounted { lines += $1 } END { print lines + 0 }' "$changed_lines_file")
   if [ "$code_lines" -gt "$code_line_limit" ]; then
     miss "size: $code_lines changed lines of code, over $code_line_limit; a ticket that cannot fit splits along a seam (workflow.md, Tickets)"
   fi
 fi
 
+ai_tools='claude|anthropic|copilot|openai|chatgpt|gemini|cursor|codex|devin'
 check_message() {
   local name="$1" message="$2"
   local subject length
   subject=$(head -n 1 <<<"$message")
-  length=$(perl -CA -e 'print length $ARGV[0]' "$subject")
+  length=$(perl -CA -e 'print length $ARGV[0]' -- "$subject")
   if [ "$length" -gt 72 ]; then
     miss "$name: subject is $length characters, over 72 (workflow.md, PRs)"
   fi
-  if grep -Eiq '^co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gemini|cursor|codex|devin)' <<<"$message"; then
+  if grep -Eiq "^co-authored-by:.*($ai_tools)" <<<"$message"; then
     miss "$name: AI co-author trailer; commits name no AI co-author (workflow.md, PRs)"
   fi
   # A line that opens with the phrase, after any emoji, not prose naming it.
-  if grep -Eiq '^[^[:alnum:]]*generated with \[?claude' <<<"$message"; then
-    miss "$name: \"Generated with Claude\" line; commits carry no AI attribution (workflow.md, PRs)"
+  if grep -Eiq "^[^[:alnum:]]*generated with \[?($ai_tools)" <<<"$message"; then
+    miss "$name: \"Generated with\" line naming an AI tool; commits carry no AI attribution (workflow.md, PRs)"
   fi
 }
 
 # The squash merge commits the title, with the number appended, over the body.
-check_message 'squash commit (title, number, body)' "$title (#$number)"$'\n\n'"$(tr -d '\r' <"$1")"
+check_message 'squash commit (title, number, body)' "$title (#$number)"$'\n\n'"$(tr -d '\r' <"$body_file")"
 
-for file in "${@:3}"; do
+for file in "${@:5}"; do
   name=$(basename "$file")
   if [ ! -r "$file" ]; then
     miss "commit $name: no message to check"
