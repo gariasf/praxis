@@ -117,7 +117,7 @@ impl MainPass {
         // With PRAXIS_PROTOTYPE_LOD set, part 2's `fade` unless a carrier is named.
         let carrier = std::env::var("PRAXIS_PROTOTYPE_CARRIER")
             .ok()
-            .or_else(|| crate::prototype::enabled().then(|| "fade".to_owned()))
+            .or_else(|| crate::prototype::carrier_enabled().then(|| "fade".to_owned()))
             .filter(|carrier| carrier != "none");
         let kept_samples: u32 = std::env::var("PRAXIS_PROTOTYPE_KEPT_SAMPLES")
             .ok()

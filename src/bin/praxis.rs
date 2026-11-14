@@ -108,6 +108,12 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
     {
         return praxis::prototype::series(rest);
     }
+    #[cfg(feature = "cook")]
+    if let [command, rest @ ..] = arguments
+        && command == "prototype-thin"
+    {
+        return praxis::prototype::thin_series(rest);
+    }
     match parse_command(arguments)? {
         Command::Window(scene) => praxis::run(scene),
         Command::Capabilities => print_capabilities(),

@@ -46,6 +46,33 @@ fn fade_word(fading: bool, second: bool, first_share: u32, lod: u32) -> u32 {
     return u32(fading) | (u32(second) << 1u) | (first_share << 8u) | (lod << 16u);
 }
 
+// PROTOTYPE (ticket 801): the camera's control word past the LOD prototype's
+// bits. Bits 18 and 19: how thin Meshes draw, as cooked, widened with their
+// coverage rounded, widened with it dithered, or widened with every sample
+// kept. Bit 20: shadow rays leave out a thin Mesh narrower than the
+// receiver's pixel. Bit 21: thin Meshes draw magenta. With any of them the
+// camera's `prototype_band` holds the target's height in pixels.
+const THIN_AS_COOKED: u32 = 0u;
+const THIN_ROUNDED: u32 = 1u;
+const THIN_DITHERED: u32 = 2u;
+const THIN_WIDENED_ONLY: u32 = 3u;
+
+// PROTOTYPE (ticket 801): a Meshlet record's thin word, the top 12 bits of
+// its fade word: the tube's radius in millimetres in bits 0 to 7; bit 8 set
+// where the tube stands about the Mesh's +Y axis, so its radial direction is
+// its position's, clear where every normal is radial; its faces around in
+// bits 9 to 11, 0 for round.
+const THIN_WORD_SHIFT: u32 = 20u;
+// A radius that marks the box Mesh, whose Instances are thin by their scale.
+const THIN_BOX: u32 = 255u;
+
+// The TLAS instance masks of the two thin Meshes, and the widths in metres
+// below which a receiver's pixel is too wide for their shadow.
+const WIRE_RAY_MASK: u32 = 2u;
+const POST_RAY_MASK: u32 = 4u;
+const WIRE_WIDTH: f32 = 0.03;
+const POST_WIDTH: f32 = 0.05;
+
 // ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from
 // Rust's when a module is assembled (src/render/shaders/mod.rs).
 
@@ -216,7 +243,8 @@ struct MeshData {
     // first triangle and triangle count, LOD 0's as above, and its LOD
     // error in metres.
     lod_count: u32,
-    padding: u32,
+    // PROTOTYPE (ticket 801): `thin_word`, zero unless the Mesh is thin.
+    thin: u32,
     lods: array<vec4<u32>, 8>,
     lod_errors: array<f32, 8>,
 }

@@ -428,10 +428,10 @@ impl StaticTlas {
                     .then(|| {
                         mesh_pool
                             .handle_at(instance.mesh)
-                            .and_then(|handle| mesh_pool.blas(handle))
+                            .and_then(|handle| mesh_pool.blas(handle).zip(mesh_pool.get(handle)))
                     })
                     .flatten();
-                let Some(blas) = blas else {
+                let Some((blas, mesh)) = blas else {
                     if let Some(entry) = self.release(slot) {
                         changes.push(EntryChange {
                             entry,
@@ -441,7 +441,7 @@ impl StaticTlas {
                     continue;
                 };
                 let instance = StaticInstance {
-                    tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot),
+                    tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot, mesh.bounds),
                     position: InstancePosition::of(instance),
                 };
                 match self.entry_of(slot) {
@@ -809,7 +809,7 @@ impl DynamicTlas {
                     }),
                 );
                 uploaded_entries += 1;
-                tlas_instance(blas, transform, moving.slot)
+                tlas_instance(blas, transform, moving.slot, mesh.bounds)
             });
         }
         for index in filled..previously_filled {
@@ -902,9 +902,14 @@ impl DynamicTlas {
 
 /// An Instance's entry in a TLAS: `blas`, placed by `transform`
 /// (`anchored_transform`) and tagged with its `slot`.
-fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::TlasInstance {
-    // Every ray's cull mask.
-    wgpu::TlasInstance::new(blas, transform, slot, 0xff)
+fn tlas_instance(
+    blas: &wgpu::Blas,
+    transform: [f32; 12],
+    slot: u32,
+    bounds: [[f32; 3]; 2],
+) -> wgpu::TlasInstance {
+    // Every ray's cull mask; PROTOTYPE (ticket 801): a thin Mesh's own bit.
+    wgpu::TlasInstance::new(blas, transform, slot, crate::prototype::ray_mask(bounds, &transform))
 }
 
 /// The share of a Mesh's largest coordinate its box grows by before it is

@@ -96,10 +96,15 @@ const NORMALS_AGREE: f32 = 0.9986295347545738;
 // only at run time, which costs a scene of few, short rays a little more
 // than constant flags would, and saves scenes of many rays more
 // (docs/performance.md).
+// PROTOTYPE (ticket 801): the instance mask of the rays `shadowed` casts:
+// every Instance, or with the control word's bit 20 a thin Mesh's only
+// where the receiver's pixel is no wider than the Mesh.
+var<private> prototype_ray_mask: u32 = 0xffu;
+
 fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
     // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, end_distance, origin, direction));
+    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, prototype_ray_mask, start_distance, end_distance, origin, direction));
     rayQueryProceed(&query);
     let static_hit = rayQueryGetCommittedIntersection(&query);
     let found = static_hit.kind != RAY_QUERY_INTERSECTION_NONE;
@@ -115,7 +120,7 @@ fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start
     if !segment_meets_box(origin, direction, start_distance, dynamic_end_distance, bounds_min - margin, bounds_max + margin) {
         return static_hit;
     }
-    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, dynamic_end_distance, origin, direction));
+    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, prototype_ray_mask, start_distance, dynamic_end_distance, origin, direction));
     rayQueryProceed(&query);
     let dynamic_hit = rayQueryGetCommittedIntersection(&query);
     if dynamic_hit.kind == RAY_QUERY_INTERSECTION_NONE {
@@ -158,6 +163,12 @@ fn shadowed(
         SHADOW_RAY_OFFSET_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0)),
         SHADOW_RAY_PIXEL_OFFSET * pixel_width
     );
+    prototype_ray_mask = 0xffu;
+    if ((camera.prototype_control >> 20u) & 1u) == 1u {
+        prototype_ray_mask = 1u
+            | select(0u, WIRE_RAY_MASK, pixel_width <= WIRE_WIDTH)
+            | select(0u, POST_RAY_MASK, pixel_width <= POST_WIDTH);
+    }
     let facing = dot(triangle_normal, direction);
     let leaves_surface = facing >= TRIANGLE_TURN_MARGIN
         || (facing >= AGREEING_TRIANGLE_TURN_MARGIN

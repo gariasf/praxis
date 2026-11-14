@@ -108,6 +108,7 @@ impl RenderTargets {
         width: u32,
         height: u32,
     ) -> RenderTargets {
+        crate::prototype::set_target_height(height);
         // The second surfaces' list holds a pixel's row in 14 bits
         // (`shadow_mask.wgsl`).
         assert!(height <= 1 << 14, "targets {height} pixels tall");

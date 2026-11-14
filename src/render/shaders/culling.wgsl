@@ -514,7 +514,8 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
             slot,
             meshlet_index,
             material_id,
-            fade_word(fading, in_second, selection.first_share, select(selection.first, selection.second, in_second)),
+            fade_word(fading, in_second, selection.first_share, select(selection.first, selection.second, in_second))
+                | (mesh.thin << THIN_WORD_SHIFT),
             select(NOT_APPENDED, first.y + 3u * triangles_before, fitting)
         );
     }

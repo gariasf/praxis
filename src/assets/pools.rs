@@ -544,7 +544,7 @@ impl MeshPool {
             bounds_min: mesh.bounds[0],
             bounds_max: mesh.bounds[1],
             lod_count: chain.len() as u32,
-            _padding: 0,
+            _padding: crate::prototype::thin_word(mesh.bounds),
             lods,
             lod_errors,
         };

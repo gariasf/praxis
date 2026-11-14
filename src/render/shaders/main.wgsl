@@ -13,6 +13,9 @@ struct VertexOutput {
     @location(4) tangent_world: vec4<f32>, // xyz = world tangent, w = bitangent sign
     // PROTOTYPE (ticket 800): its Meshlet record's fade word.
     @location(5) @interpolate(flat) fade: u32,
+    // PROTOTYPE (ticket 801): a thin Mesh's true width over the width it is
+    // drawn with, 1 elsewhere.
+    @location(6) coverage: f32,
 }
 
 @vertex
@@ -31,6 +34,7 @@ struct DepthNormalsOutput {
     @location(1) normal: vec3<f32>,
     @location(2) @interpolate(flat) material_id: u32,
     @location(3) @interpolate(flat) fade: u32,
+    @location(4) coverage: f32,
 }
 
 @vertex
@@ -41,7 +45,8 @@ fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOut
         out.camera_relative_position,
         out.normal,
         out.material_id,
-        out.fade
+        out.fade,
+        out.coverage
     );
 }
 
@@ -82,12 +87,30 @@ struct PrototypeDepthFlatOutput {
     @builtin(position) @invariant clip_position: vec4<f32>,
     @location(0) @interpolate(flat) material_id: u32,
     @location(1) @interpolate(flat) fade: u32,
+    @location(2) coverage: f32,
 }
 
 @vertex
 fn vs_depth_flat(@builtin(vertex_index) packed_index: u32) -> PrototypeDepthFlatOutput {
     let out = vertex_output(packed_index);
-    return PrototypeDepthFlatOutput(out.clip_position, out.material_id, out.fade);
+    return PrototypeDepthFlatOutput(out.clip_position, out.material_id, out.fade, out.coverage);
+}
+
+// PROTOTYPE (ticket 801): the samples a fragment of a widened thin Mesh
+// keeps of the pixel's four, a count that follows `coverage`: its nearest
+// (rounded), or one more or fewer by the Peters mask at the pixel, so the
+// mean over pixels is the coverage (dithered). The same samples at every
+// fragment of a pixel, so a tube's faces share them.
+fn thin_kept_samples(coverage: f32, clip_position: vec4<f32>) -> u32 {
+    let mode = thin_mode();
+    let pixel = vec2<u32>(clip_position.xy);
+    let stored = textureLoad(dither_mask, pixel % vec2<u32>(DITHER_MASK_SIDE), 0).r;
+    let threshold = (stored * 255.0 + 0.5) / 256.0;
+    let level = saturate(coverage) * 4.0;
+    let count = u32(level + select(0.5, threshold, mode == THIN_DITHERED));
+    // Samples 0, then 3, 1 and 2: opposite corners of the pattern first.
+    let kept = (0xfb910u >> (4u * min(count, 4u))) & 15u;
+    return select(kept, ALL_SAMPLES, mode == THIN_AS_COOKED || mode == THIN_WIDENED_ONLY);
 }
 
 // PROTOTYPE (part 2): the samples a fragment of a Meshlet record keeps, from
@@ -119,18 +142,24 @@ fn kept_samples(fade: u32, clip_position: vec4<f32>) -> u32 {
 
 @fragment
 fn fs_surface_normals_fade(in: DepthNormalsOutput) -> PrototypeMaskedNormals {
-    return PrototypeMaskedNormals(surface_normals(in), kept_samples(in.fade, in.clip_position));
+    return PrototypeMaskedNormals(
+        surface_normals(in),
+        kept_samples(in.fade, in.clip_position) & thin_kept_samples(in.coverage, in.clip_position)
+    );
 }
 
 @fragment
 fn fs_depth_fade(in: PrototypeDepthFlatOutput) -> @builtin(sample_mask) u32 {
-    return kept_samples(in.fade, in.clip_position);
+    return kept_samples(in.fade, in.clip_position) & thin_kept_samples(in.coverage, in.clip_position);
 }
 
 @fragment
 fn fs_main_fade(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> PrototypeMaskedColour {
-    let kept = kept_samples(in.fade, in.clip_position);
-    let colour = lit_colour(in, covered_samples & kept);
+    let kept = kept_samples(in.fade, in.clip_position) & thin_kept_samples(in.coverage, in.clip_position);
+    var colour = lit_colour(in, covered_samples & kept);
+    if ((camera.prototype_control >> 21u) & 1u) == 1u && in.coverage < 1.0 {
+        colour = vec4<f32>(1000.0, 0.0, 1000.0, colour.a);
+    }
     let lod = (in.fade >> 16u) & 15u;
     let tinted = ((camera.prototype_control >> 17u) & 1u) == 1u && lod != 0u;
     let grey = max(colour.r, max(colour.g, colour.b));
@@ -222,6 +251,66 @@ fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
     return vertex_output(packed_index);
 }
 
+fn thin_mode() -> u32 {
+    return (camera.prototype_control >> 18u) & 3u;
+}
+
+// PROTOTYPE (ticket 801): a vertex of a thin Mesh moved out from its tube's
+// centre line until the tube is a pixel wide where it would be narrower,
+// and the coverage that leaves it: its true radius over the one drawn. The
+// centre line is the vertex less its radial direction times the radius. A
+// tube of few faces is narrower seen across a face than its circumscribed
+// circle, so it is widened until its narrowest view spans the pixel.
+struct WidenedVertex {
+    position: vec3<f32>,
+    coverage: f32,
+}
+
+fn widened_thin(
+    thin: u32,
+    rotation_scale: mat3x3<f32>,
+    local_position: vec3<f32>,
+    local_normal: vec3<f32>,
+    position: vec3<f32>
+) -> WidenedVertex {
+    if thin == 0u || thin_mode() == THIN_AS_COOKED {
+        return WidenedVertex(position, 1.0);
+    }
+    let local_radius = f32(thin & 255u) * 0.001;
+    let about_y = (thin & 256u) != 0u;
+    let sides = f32((thin >> 9u) & 7u);
+    let across = vec3<f32>(local_position.x, 0.0, local_position.z);
+    // From the centre line to the vertex.
+    var radial = rotation_scale * select(local_normal, normalize(across), about_y) * local_radius;
+    if (thin & 255u) == THIN_BOX {
+        // The box Mesh, whose Instances are bars where one axis is long and
+        // the other two are scaled under 6 cm: the centre line runs along
+        // the long axis through the box's middle, which is half way up it.
+        let lengths = vec3<f32>(length(rotation_scale[0]), length(rotation_scale[1]), length(rotation_scale[2]));
+        let longest = max(lengths.x, max(lengths.y, lengths.z));
+        let long_axis = vec3<f32>(lengths == vec3<f32>(longest));
+        let short_axes = 1.0 - long_axis;
+        if dot(long_axis, vec3<f32>(1.0)) != 1.0 || longest < 0.5 || any(lengths * short_axes >= vec3<f32>(0.06)) {
+            return WidenedVertex(position, 1.0);
+        }
+        radial = rotation_scale * ((local_position - vec3<f32>(0.0, 0.5, 0.0)) * short_axes);
+    }
+    let radius = length(radial);
+    let centre = position - radial;
+    let view_depth = (camera.view_proj * vec4<f32>(centre, 1.0)).w;
+    // A metre at a metre's distance spans this many half heights of the target.
+    let projection_scale = length(vec3<f32>(camera.view_proj[0][1], camera.view_proj[1][1], camera.view_proj[2][1]));
+    let pixel_width = 2.0 * view_depth / (projection_scale * camera.prototype_band);
+    let half_face_angle = 3.14159265 / max(sides, 1.0);
+    let odd = (u32(sides) & 1u) == 1u;
+    let narrowest = select(select(cos(half_face_angle), 0.5 + 0.5 * cos(half_face_angle), odd), 1.0, sides == 0.0);
+    let widened_radius = 0.5 * pixel_width / narrowest;
+    if view_depth <= 0.0 || widened_radius <= radius {
+        return WidenedVertex(position, 1.0);
+    }
+    return WidenedVertex(centre + radial * (widened_radius / radius), radius / widened_radius);
+}
+
 fn vertex_output(packed_index: u32) -> VertexOutput {
     var out: VertexOutput;
     // The frame's draw has no base vertex, so the vertex index is the packed
@@ -239,9 +328,17 @@ fn vertex_output(packed_index: u32) -> VertexOutput {
         camera.offset,
         instance.rotation_scale * vertex.position
     );
-    out.clip_position = camera.view_proj * vec4<f32>(position, 1.0);
-    out.uv = vertex.uv;
     let tangent_frame = vertex.tangent_frame;
+    let widened = widened_thin(
+        record.fade >> THIN_WORD_SHIFT,
+        instance.rotation_scale,
+        vertex.position,
+        tangent_frame.normal,
+        position
+    );
+    out.clip_position = camera.view_proj * vec4<f32>(widened.position, 1.0);
+    out.coverage = widened.coverage;
+    out.uv = vertex.uv;
     out.normal = instance.normal_matrix * tangent_frame.normal;
     // Tangents are directions along the surface, so they follow the
     // rotation-scale; only normals need the inverse-transpose.
