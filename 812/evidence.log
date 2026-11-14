@@ -1,0 +1,50 @@
+one pixel at the Load radius: 0.14727594 m
+1600 proxies cooked in 57.4 s, one thread
+of which Cook keys 1.9 s, Blobs 55.3 s
+LOD 0 triangles outside the ground: least 0, median 1224, most 5832, sum 3130200
+LOD 0 ground triangles: least 8, median 8, most 8, sum 12800
+triangles of every LOD, ground included: least 8, median 1920, most 9088, sum 4893248
+LODs: least 1, median 2, most 2, sum 3006
+vertices: least 16, median 2736, most 12976, sum 6981600
+Blob bytes: least 163, median 9882, most 49886, sum 26136398
+proxies with any triangle outside the ground: 1406; farthest vertex from a pivot: 189.94 m
+LOD 1: 1406 proxies hold one, largest error 0.2722 m
+
+densest Chunk [-19, -3]: 29941 Placements, Blob 48590 bytes, 12976 vertices
+  LOD 0: error 0.0000 m, 5832 triangles outside the ground, 8 of ground, 184 Meshlets, 17520 indices
+  LOD 1: error 0.2703 m, 3240 triangles outside the ground, 8 of ground, 103 Meshlets, 9744 indices
+  LOD 0 welded and simplified to half its triangles with no error limit: 2916 triangles, error 2.788 m
+
+view | reference | LOD | reference px | proxy px | lost | gained | lost beyond 1 px | gained beyond 1 px | farthest lost px | farthest gained px
+south-60m | source | 0 | 402013 | 401917 | 96 | 0 | 27 | 0 | 5.4 | 0.0
+south-60m | source without windows | 0 | 401917 | 401917 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+south-60m | source | 1 | 402013 | 399554 | 2459 | 0 | 601 | 0 | 5.4 | 0.0
+south-60m | source without windows | 1 | 401917 | 399554 | 2363 | 0 | 569 | 0 | 3.4 | 0.0
+south-2m | source | 0 | 248950 | 248837 | 113 | 0 | 0 | 0 | 1.0 | 0.0
+south-2m | source without windows | 0 | 248837 | 248837 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+south-2m | source | 1 | 248950 | 245524 | 3426 | 0 | 1483 | 0 | 4.2 | 0.0
+south-2m | source without windows | 1 | 248837 | 245524 | 3313 | 0 | 1483 | 0 | 4.2 | 0.0
+east-60m | source | 0 | 402653 | 402270 | 383 | 0 | 277 | 0 | 12.9 | 0.0
+east-60m | source without windows | 0 | 402270 | 402270 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+east-60m | source | 1 | 402653 | 399912 | 2741 | 0 | 901 | 0 | 13.9 | 0.0
+east-60m | source without windows | 1 | 402270 | 399912 | 2358 | 0 | 614 | 0 | 3.8 | 0.0
+east-2m | source | 0 | 256913 | 256868 | 45 | 0 | 0 | 0 | 1.0 | 0.0
+east-2m | source without windows | 0 | 256868 | 256868 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+east-2m | source | 1 | 256913 | 253735 | 3178 | 0 | 1336 | 0 | 3.8 | 0.0
+east-2m | source without windows | 1 | 256868 | 253735 | 3133 | 0 | 1336 | 0 | 3.8 | 0.0
+north-60m | source | 0 | 407956 | 407577 | 379 | 0 | 312 | 0 | 28.5 | 0.0
+north-60m | source without windows | 0 | 407577 | 407577 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+north-60m | source | 1 | 407956 | 405300 | 2656 | 0 | 854 | 0 | 29.0 | 0.0
+north-60m | source without windows | 1 | 407577 | 405300 | 2277 | 0 | 530 | 0 | 3.4 | 0.0
+north-2m | source | 0 | 261025 | 260714 | 311 | 0 | 163 | 0 | 8.0 | 0.0
+north-2m | source without windows | 0 | 260714 | 260714 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+north-2m | source | 1 | 261025 | 257687 | 3338 | 0 | 1450 | 0 | 8.0 | 0.0
+north-2m | source without windows | 1 | 260714 | 257687 | 3027 | 0 | 1281 | 0 | 3.8 | 0.0
+west-60m | source | 0 | 400529 | 400463 | 66 | 0 | 0 | 0 | 1.0 | 0.0
+west-60m | source without windows | 0 | 400463 | 400463 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+west-60m | source | 1 | 400529 | 397919 | 2610 | 0 | 802 | 0 | 3.8 | 0.0
+west-60m | source without windows | 1 | 400463 | 397919 | 2544 | 0 | 802 | 0 | 3.8 | 0.0
+west-2m | source | 0 | 252266 | 251380 | 886 | 0 | 769 | 0 | 26.0 | 0.0
+west-2m | source without windows | 0 | 251380 | 251380 | 0 | 0 | 0 | 0 | 0.0 | 0.0
+west-2m | source | 1 | 252266 | 248243 | 4023 | 0 | 2173 | 0 | 27.6 | 0.0
+west-2m | source without windows | 1 | 251380 | 248243 | 3137 | 0 | 1378 | 0 | 3.8 | 0.0
