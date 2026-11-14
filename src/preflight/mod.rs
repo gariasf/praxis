@@ -194,7 +194,7 @@ fn goldens(key: &str, machine: Machine) -> Check {
         );
     }
     let fix = match machine {
-        Machine::Lavapipe => "take them from CI's golden-differences artifact",
+        Machine::Lavapipe => "`scripts/lavapipe-files.sh` copies them from CI",
         _ => {
             "record them with `PRAXIS_UPDATE_GOLDENS=1 cargo test --test goldens` for the owner to judge"
         }
@@ -230,9 +230,9 @@ fn baselines(adapter: &str, backend: wgpu::Backend, machine: Machine) -> Check {
     let fix = match machine {
         // CI fetches no helmet, so benches none.
         Machine::Lavapipe if absent.iter().any(|scene| scene == "helmet") => format!(
-            "copy them from CI's bench-results artifact, and `praxis bench {directory} helmet`"
+            "`scripts/lavapipe-files.sh` copies them from CI, and `praxis bench {directory} helmet`"
         ),
-        Machine::Lavapipe => "copy them from CI's bench-results artifact".to_owned(),
+        Machine::Lavapipe => "`scripts/lavapipe-files.sh` copies them from CI".to_owned(),
         _ => format!("on a quiet machine, `praxis bench {directory}{scenes}`"),
     };
     Check::new(

@@ -673,10 +673,7 @@ fn compare(results: &str, mode: CompareMode) -> anyhow::Result<()> {
         let ci_run =
             (current.width, current.height) == (Configuration::CI.width, Configuration::CI.height);
         let record = if ci_run {
-            format!(
-                "copy {}.json from CI's bench-results artifact",
-                current.scene
-            )
+            "`scripts/lavapipe-files.sh` copies it from CI".to_owned()
         } else {
             let scene = match current.scene.strip_prefix("crowd-") {
                 Some(form) => format!("--crowd-form {form}"),
