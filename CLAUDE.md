@@ -98,7 +98,8 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 Pinned in `Cargo.toml`. Version bumps and new dependencies are owner
 decisions: propose them in the ticket, justify them in the PR. Each
 milestone's exit reviews the releases published since the last one
-(`docs/agents/workflow.md`, The ladder). One
+(`docs/agents/workflow.md`, The ladder), and checks ADR 0007's reopen
+trigger there. One
 standing exception: until wgpu 31 ships, a fix Praxis needs from wgpu's
 trunk is carried on a vendored 30.0.1 crate under `vendor/`, behind
 `[patch.crates-io]`, without a further decision; `vendor/README.md` names
@@ -396,7 +397,14 @@ When reviewing changes, check for:
 - [ ] No GPU resources stored on ECS components — components are pure
       authoring data
 - [ ] Code adapted from elsewhere cites its source and licence;
-      noncommercial or unclear licences are never copied
+      noncommercial or unclear licences are never copied, and nothing
+      is pushed, to any branch, that the public repo may not publish
+      under MIT: a secret, or a file its licence keeps from
+      redistribution (ADR 0025)
+- [ ] A cost that rejects a technique, or decides a reopen trigger,
+      names its adapter and is final only with the figure on
+      the M4 Pro and the RTX 2070 SUPER from one engine source
+      (ADR 0013)
 - [ ] Every reference the change's code or ADRs rely on or add exists,
       says what the change claims, is cited to the right place, and is
       implemented as it says; one that cannot be opened and confirmed is
