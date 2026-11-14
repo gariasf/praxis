@@ -49,8 +49,10 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   `bench-history` in the browser (ADR 0024), on Pages beside the guides.
 - `docs/audit/` — the audits: `deviations.md`, where the code should not
   match the literature and why, read before judging code against a
-  source; `<milestone>/<lane>.md`, each Audit lane's report.
-  `docs/agents/audit.md` says how a lane runs.
+  source; `<milestone>/<lane>.md`, each Audit lane's report;
+  `strategy/<year>-<month>.md`, a strategy review: the ladder, the ADRs
+  and the way of working against the owner's goals, with its Decision
+  queue. `docs/agents/audit.md` says how a lane runs.
 - `ROADMAP.md` — long-range vision: target shape, design principles,
   scripting plan. Decisions are ADRs; the order of work is the ladder.
 
