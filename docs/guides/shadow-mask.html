@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 2, the shadow ray scene: one per static TLAS, each holding it and the dynamic TLAS, built once since each TLAS is rebuilt in place; each frame binds the one of the static TLAS rays trace that frame. Group 3, shadow mask build: everything above. The lit pass reads the mask and its samples through its own group 3, the main pass inputs.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/shadow_mask.wgsl</code>, assembled with the common and Froxel grid parts; it alone enables <code>wgpu_ray_query</code> among the passes that trace.</dd>
       <dt>Counted</dt><dd><code>shadow_mask_pass</code> in GPU time; <code>shadow_mask_lights_overflowed</code> in counters; its buffers, created through the GPU memory ledger, and the mask's targets in GPU memory; the whole cost of shadows as shadow-ray time, the frame with rays on less the same frame with them off.</dd>
+      <dt>Files</dt><dd><code>src/render/shadow_mask_pass.rs</code>, <code>src/render/shaders/shadow_mask.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

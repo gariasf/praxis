@@ -127,6 +127,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Format</dt><dd><code>HDR_FORMAT</code>, <code>Rgba16Float</code>, for both the target and the multisampled colour, which the <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> checks renders and resolves at 4x.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/hdr.wgsl</code>, a part of the main pass's module and the tonemapping pass's: <code>LARGEST_HALF</code>, <code>relative_luminance</code>, <code>resolve_weighted</code> and <code>resolve_unweighted</code>.</dd>
       <dt>Counted</dt><dd>In the render targets' GPU memory: 8 bytes a pixel for the target, and 32 for the multisampled colour where a transient attachment takes memory, none where the adapter reports that it saves it.</dd>
+      <dt>Files</dt><dd><code>src/render/targets.rs</code>, <code>src/render/shaders/hdr.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

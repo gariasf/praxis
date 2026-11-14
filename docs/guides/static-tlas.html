@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound_index</code>.</dd>
       <dt>Shader</dt><dd>Queried in <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>.</dd>
       <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; <code>static_tlas_build_time</code>, the worker's time on the build a frame submits, and <code>frames_until_traced</code>, in a frame that binds a new build that brings a change; both TLASes at full capacity in the acceleration structures' ledger, and so in <code>gpu_memory_bytes</code>; the main thread's share, the entry changes and the submit, in the <code>static_tlas_update</code> stage. No GPU pass time is taken of its build.</dd>
+      <dt>Files</dt><dd><code>src/render/acceleration_structures.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

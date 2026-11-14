@@ -4,7 +4,9 @@
 //! series links reach the guides before and after it in the hub's order.
 //! Each page but a volume names the commit of `main` it describes, which
 //! must be on `main`, names in code font only identifiers `main` holds, and
-//! names no ticket or PR.
+//! names no ticket or PR. A page with an Interface box lists its mechanism's
+//! files there, and one whose files changed on `main` after the commit it
+//! describes is stale, which is reported and fails nothing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -185,6 +187,44 @@ fn code_font_text(html: &str) -> String {
         .collect()
 }
 
+/// The files of its mechanism that a page lists in its Interface box's Files
+/// row, each in code font.
+fn mechanism_files(html: &str) -> Vec<String> {
+    let Some((_, row)) = html.split_once("<dt>Files</dt>") else {
+        return Vec::new();
+    };
+    let row = &row[..row.find("</dd>").unwrap_or(row.len())];
+    code_font_text(row).lines().map(str::to_owned).collect()
+}
+
+/// The stale pages among `pages`, every guide but the `volumes`: a line for
+/// each whose `changes`, those of the files it lists since the commit it
+/// describes, are any, and a line for each change under it.
+fn stale_pages(
+    pages: &BTreeMap<String, String>,
+    volumes: &[&str],
+    changes: impl Fn(&str, &[String]) -> Vec<String>,
+) -> Vec<String> {
+    let mut report = Vec::new();
+    for (name, html) in pages
+        .iter()
+        .filter(|(name, _)| !volumes.contains(&name.as_str()))
+    {
+        let files = mechanism_files(html);
+        let Some(commit) = described_commit(html).filter(|_| !files.is_empty()) else {
+            continue;
+        };
+        let changed = changes(commit, &files);
+        if !changed.is_empty() {
+            report.push(format!(
+                "{name} is stale, its files changed since {commit}:"
+            ));
+            report.extend(changed.iter().map(|change| format!("  {change}")));
+        }
+    }
+    report
+}
+
 /// The identifiers in `text`, as `tests/conventions.rs` splits code into
 /// tokens, numeric literals left out.
 fn identifiers_in(text: &str) -> impl Iterator<Item = &str> {
@@ -194,8 +234,9 @@ fn identifiers_in(text: &str) -> impl Iterator<Item = &str> {
 
 /// What is wrong with the pages among `pages`, every guide but the
 /// `volumes`: a page whose Describes line names no commit, or one `on_main`
-/// rejects; an identifier in code font that `identifiers`, every one on
-/// `main`, lacks; and a volume listed that is gone.
+/// rejects; an Interface box without a Files row; an identifier in code
+/// font that `identifiers`, every one on `main`, lacks; and a volume listed
+/// that is gone.
 fn page_problems(
     pages: &BTreeMap<String, String>,
     volumes: &[&str],
@@ -215,6 +256,9 @@ fn page_problems(
                 problems.push(format!("{name} describes {commit}, which is not on main"))
             }
             Some(_) => {}
+        }
+        if html.contains("class=\"interface\"") && mechanism_files(html).is_empty() {
+            problems.push(format!("{name}'s Interface box has no Files row"));
         }
         let code_font = code_font_text(html);
         let missing: BTreeSet<&str> = identifiers_in(&code_font)
@@ -334,6 +378,35 @@ fn every_page_describes_main_names_what_it_holds_and_no_ticket() {
 }
 
 #[test]
+fn stale_pages_are_listed_and_every_file_a_page_lists_exists() {
+    let (_, pages) = guides();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let absent: Vec<String> = pages
+        .iter()
+        .flat_map(|(name, html)| {
+            mechanism_files(html)
+                .into_iter()
+                .filter(|file| !root.join(file).is_file())
+                .map(move |file| format!("{name} lists {file}, which is absent"))
+        })
+        .collect();
+    assert!(absent.is_empty(), "{}", absent.join("\n"));
+
+    let changes = |commit: &str, files: &[String]| {
+        let range = format!("{commit}..origin/main");
+        let mut arguments = vec!["log", "--format=%h %s", &range, "--"];
+        arguments.extend(files.iter().map(String::as_str));
+        String::from_utf8_lossy(&git(&arguments).1)
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    };
+    for line in stale_pages(&pages, VOLUMES, changes) {
+        println!("{line}");
+    }
+}
+
+#[test]
 fn link_check_names_absent_files_missing_ids_outside_links_unlisted_guides_and_broken_series() {
     let pages = BTreeMap::from([
         (
@@ -388,6 +461,14 @@ fn page_check_names_a_page_that_describes_no_commit_or_one_off_main() {
             r#"<p class="describes"><b>Describes</b> <code>main</code> at 9f8e7d6c.</p>"#.to_owned(),
         ),
         ("undated.html".to_owned(), "<p>A page.</p>".to_owned()),
+        (
+            "unlisted.html".to_owned(),
+            concat!(
+                r#"<p class="describes"><code>main</code> at 1a2b3c4d.</p> "#,
+                r#"<aside class="interface"><dl><dt>Runs</dt><dd>Every frame.</dd></dl></aside>"#,
+            )
+            .to_owned(),
+        ),
         ("volume.html".to_owned(), "<p>A volume.</p>".to_owned()),
     ]);
 
@@ -401,6 +482,7 @@ fn page_check_names_a_page_that_describes_no_commit_or_one_off_main() {
         [
             "future.html describes 9f8e7d6c, which is not on main",
             "undated.html has no Describes line naming a commit of main",
+            "unlisted.html's Interface box has no Files row",
             "the volumes list dropped.html, which is absent",
         ]
     );
@@ -478,6 +560,44 @@ fn page_check_names_a_ticket_or_pr_in_prose_or_a_link() {
             "hash.html names a ticket or PR: #123",
             "link.html names a ticket or PR: https://github.com/gariasf/praxis/issues/17",
             "pull.html names a ticket or PR: PR 487",
+        ]
+    );
+}
+
+#[test]
+fn stale_report_lists_a_page_whose_files_changed_since_its_commit_and_no_other() {
+    let page = |commit: &str| {
+        format!(
+            "<p class=\"describes\"><code>main</code> at {commit}.</p> \
+             <aside class=\"interface\"><dl><dt>Shader</dt><dd><code>src/elsewhere.wgsl</code></dd>\
+             <dt>Files</dt><dd><code>src/render/culling_pass.rs</code>, \
+             <code>src/render/shaders/culling.wgsl</code></dd></dl></aside> \
+             <code>src/quoted.rs</code>"
+        )
+    };
+    let pages = BTreeMap::from([
+        (
+            "index.html".to_owned(),
+            r#"<p class="describes"><code>main</code> at 1a2b3c4d.</p>"#.to_owned(),
+        ),
+        ("old.html".to_owned(), page("1a2b3c4d")),
+        ("current.html".to_owned(), page("9f8e7d6c")),
+        ("volume.html".to_owned(), page("1a2b3c4d")),
+    ]);
+    let changes = |commit: &str, files: &[String]| match commit {
+        "1a2b3c4d" => files
+            .iter()
+            .map(|file| format!("5e6f7a8b Change {file}"))
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    assert_eq!(
+        stale_pages(&pages, &["volume.html"], changes),
+        [
+            "old.html is stale, its files changed since 1a2b3c4d:",
+            "  5e6f7a8b Change src/render/culling_pass.rs",
+            "  5e6f7a8b Change src/render/shaders/culling.wgsl",
         ]
     );
 }

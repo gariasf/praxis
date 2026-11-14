@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>The marker's group 3, <code>BLAS_REFIT_MARKERS</code>: the refits' scratch, read-only, and the result. The refits themselves bind nothing.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/blas_refit_marker.wgsl</code>, the module <code>BLAS_REFIT_MARKER</code>, built on Apple targets and in tests.</dd>
       <dt>Counted</dt><dd><code>blas_refit</code> in GPU time, the refit form's on Metal; the CPU stage <code>blas_refit</code>, which <code>dynamic_tlas_cpu_microseconds</code> sums; the scratch and the marker's result in GPU memory; the refitted BLASes in the acceleration-structure estimate, at the uncompacted rate.</dd>
+      <dt>Files</dt><dd><code>src/render/blas_refit.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

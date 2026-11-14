@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 0, the frame; group 1, the Materials; group 2, the scene geometry; group 3, the main pass inputs.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>, entry points <code>vs_main</code> and <code>fs_main</code>, assembled after the common, Froxel grid, HDR and shading parts; the <code>SHADOW_RAYS</code> and <code>FROXEL_LIGHTS</code> pipeline constants come from the Render switches.</dd>
       <dt>Counted</dt><dd><code>lit_pass</code> in GPU time, and the end of ADR 0019's gate; its draws in <code>draw_calls</code>; the HDR target and the multisampled colour in GPU memory.</dd>
+      <dt>Files</dt><dd><code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>src/render/shaders/shading.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

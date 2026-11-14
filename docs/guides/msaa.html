@@ -125,6 +125,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Targets</dt><dd><code>MULTISAMPLED_FORMATS</code>: the depth target, the multisampled colour and the surface normals. The <span class="concept" data-term="Capability floor" data-tip="The GPU features and limits the engine requires to start. An adapter below it is refused with every gap named; nothing in it has a fallback.">Capability floor</span> checks 4x MSAA on each, and <code>RenderTargets::new</code> creates no multisampled target of another format.</dd>
       <dt>Resolved</dt><dd>The multisampled colour, into the HDR target, at the end of the lit pass, from colour weighted by 1/(1 + luminance).</dd>
       <dt>Read per sample</dt><dd>The depth pyramid pass and the shadow mask pass load every sample of the depth target, as the light count pass does when its Render switch is on; the shadow mask pass also each sample's surface normals; the lit pass reads which samples its fragment covers.</dd>
+      <dt>Files</dt><dd><code>src/render/targets.rs</code>, <code>src/render/main_pass.rs</code>, <code>src/render/shaders/hdr.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

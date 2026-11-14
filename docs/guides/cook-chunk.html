@@ -126,6 +126,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Writes</dt><dd>One Blob per Chunk into the <span class="concept" data-term="Cooked cache" data-tip="The store of Blobs plus the index from Asset ID to Blob. Disposable: it can always be rebuilt from sources.">Cooked cache</span>, under <code>ReferenceScene::chunk_id</code>; its Cook key; and to the cook's report, each Mesh or Material a Placement names that the cook does not make.</dd>
       <dt>Counted</dt><dd>Not in Frame stats: the cook runs outside the frame. The cook's <code>cook complete</code> log counts Chunks among the Assets cooked and unchanged.</dd>
       <dt>Where in the code</dt><dd><code>chunks</code> and <code>cook_key</code> in <code>src/cook/chunk.rs</code>; <code>read_sources</code>, <code>Sources::chunk</code> and <code>cook_sources</code> in <code>src/cook/mod.rs</code>; a dev launch's cook in <code>CookingLoader</code>, <code>src/cook/launch.rs</code>; the Blob in <code>CookedChunk</code>, <code>CookedPlacement</code> and <code>CookedLight</code>, <code>src/assets/cooked.rs</code>; each scene's content in <code>static_content</code> and <code>chunk_content</code>, <code>src/scenes/mod.rs</code>, <code>town</code>'s in <code>src/scenes/town.rs</code>, <code>world</code>'s in <code>static_content_reaching</code>, <code>src/scenes/world.rs</code>.</dd>
+      <dt>Files</dt><dd><code>src/cook/chunk.rs</code>, <code>src/assets/cooked.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

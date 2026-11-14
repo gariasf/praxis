@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>None: no pass binds a BLAS. A TLAS entry names one, and a ray reaches it through the TLAS.</dd>
       <dt>Shader</dt><dd>None.</dd>
       <dt>Counted</dt><dd>In the acceleration structures' kind of <code>gpu_memory_bytes</code>: each BLAS at the size its driver gives for it, and once compacted at the adapter's estimated fraction of that size. The compaction's two CPU waits count as the CPU stage <code>blas_compaction</code> of the frame that runs them, recorded only in a frame that waits and taken out of its <code>upload</code> stage. No GPU pass time is taken of the builds or the copies.</dd>
+      <dt>Files</dt><dd><code>src/assets/pools.rs</code>, <code>src/render/acceleration_structures.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

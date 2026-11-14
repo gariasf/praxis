@@ -126,6 +126,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Shaded</dt><dd>In the lit pass, in f32: each light's illuminance at the surface, from lux as given or from candela over the squared distance, through the BRDF into luminance, plus the ambient term and the emissive; then times the exposure and clamped to fp16's largest value, 65504, before the HDR target stores it.</dd>
       <dt>Set</dt><dd>Each <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s EV100 by hand, from its sun's illuminance; a camera made without one starts at EV100 15.</dd>
       <dt>Decided</dt><dd>ADR 0023.</dd>
+      <dt>Files</dt><dd><code>src/components.rs</code>, <code>src/environment/mod.rs</code>, <code>src/camera/mod.rs</code>, <code>src/scenes/mod.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
