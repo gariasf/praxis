@@ -88,9 +88,18 @@ pub(crate) struct FrameDraw {
     pub(crate) phase_two_draw: wgpu::util::DrawIndexedIndirectArgs,
     phase_two_offsets: [u32; 2],
     append_dispatch: wgpu::util::DispatchIndirectArgs,
+    /// PROTOTYPE (ticket 800): the draw split in two, all but its last
+    /// indices and those.
+    prototype_first: wgpu::util::DrawIndexedIndirectArgs,
+    prototype_rest: wgpu::util::DrawIndexedIndirectArgs,
     /// To WGSL's size: `phase_two_offsets` aligns the struct to 8 bytes.
     _padding: u32,
 }
+
+pub(crate) const PROTOTYPE_FIRST_DRAW_OFFSET: u64 =
+    std::mem::offset_of!(FrameDraw, prototype_first) as u64;
+pub(crate) const PROTOTYPE_REST_DRAW_OFFSET: u64 =
+    std::mem::offset_of!(FrameDraw, prototype_rest) as u64;
 
 /// Where the frame's draw holds the indirect arguments of phase two's draw.
 pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
@@ -252,6 +261,12 @@ impl CullingPass {
                 .constants()
                 .into_iter()
                 .chain([("PHASE_TWO", f64::from(u8::from(phase_two)))])
+                .chain(
+                    std::env::var("PRAXIS_PROTOTYPE_SPLIT_PERCENT")
+                        .ok()
+                        .and_then(|percent| percent.parse().ok())
+                        .map(|percent: f64| ("PROTOTYPE_SPLIT_PERCENT", percent)),
+                )
                 .collect();
             let pipeline =
                 |entry_point| compute_pipeline(device, &layout, &shader, entry_point, &constants);

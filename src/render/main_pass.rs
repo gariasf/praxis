@@ -10,7 +10,9 @@
 //! lit pass draws it first.
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
-use crate::render::culling_pass::{CullingPhase, PHASE_TWO_DRAW_OFFSET};
+use crate::render::culling_pass::{
+    CullingPhase, PHASE_TWO_DRAW_OFFSET, PROTOTYPE_FIRST_DRAW_OFFSET, PROTOTYPE_REST_DRAW_OFFSET,
+};
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
@@ -26,6 +28,9 @@ pub(crate) const LIT_PASS: &str = "lit_pass";
 
 /// The main pass's pipelines.
 pub struct MainPass {
+    /// PROTOTYPE (ticket 800): the depth pre-pass's, the lit pass's depth
+    /// and the lit pipelines without a carrier, where the draw is split.
+    plain_pipelines: Option<[wgpu::RenderPipeline; 3]>,
     depth_prepass_pipeline: wgpu::RenderPipeline,
     /// With shadow rays off, phase two's draw into depth, inside the lit
     /// pass, before it shades.
@@ -119,8 +124,9 @@ impl MainPass {
             .and_then(|kept| kept.parse().ok())
             .unwrap_or(0b1111);
         tracing::info!(?carrier, kept_samples, "PROTOTYPE fade carrier");
+        let pipelines = |carrier: Option<&str>| {
         let entry = |name: &str| -> &'static str {
-            match carrier.as_deref() {
+            match carrier {
                 Some(carrier) => format!("{name}_{carrier}").leak(),
                 None => name.to_owned().leak(),
             }
@@ -235,7 +241,17 @@ impl MainPass {
             multiview_mask: None,
             cache: None,
         });
+        [depth_prepass_pipeline, lit_pass_depth_pipeline, lit_pipeline]
+        };
+        let [depth_prepass_pipeline, lit_pass_depth_pipeline, lit_pipeline] =
+            pipelines(carrier.as_deref());
+        // PROTOTYPE: with PRAXIS_PROTOTYPE_SPLIT_PERCENT, the pipelines
+        // without a carrier, which draw all but the draw's last indices.
+        let plain_pipelines = std::env::var_os("PRAXIS_PROTOTYPE_SPLIT_PERCENT")
+            .is_some()
+            .then(|| pipelines(None));
         MainPass {
+            plain_pipelines,
             depth_prepass_pipeline,
             lit_pass_depth_pipeline,
             lit_pipeline,
@@ -330,6 +346,20 @@ impl MainPass {
             timestamp_writes,
             multiview_mask: None,
         });
+        if let (Some([plain, ..]), CullingPhase::One) = (&self.plain_pipelines, phase) {
+            self.bind(
+                &mut depth_pass,
+                bind_groups
+                    .iter()
+                    .copied()
+                    .filter(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
+            );
+            depth_pass.set_pipeline(plain);
+            depth_pass.draw_indexed_indirect(&self.frame_draw_buffer, PROTOTYPE_FIRST_DRAW_OFFSET);
+            depth_pass.set_pipeline(&self.depth_prepass_pipeline);
+            depth_pass.draw_indexed_indirect(&self.frame_draw_buffer, PROTOTYPE_REST_DRAW_OFFSET);
+            return;
+        }
         depth_pass.set_pipeline(&self.depth_prepass_pipeline);
         self.bind(
             &mut depth_pass,
@@ -369,6 +399,13 @@ impl MainPass {
         if !self.shadow_rays {
             lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
             lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_TWO_DRAW_OFFSET);
+        }
+        if let Some([_, _, plain]) = &self.plain_pipelines {
+            lit_pass.set_pipeline(plain);
+            lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PROTOTYPE_FIRST_DRAW_OFFSET);
+            lit_pass.set_pipeline(&self.lit_pipeline);
+            lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PROTOTYPE_REST_DRAW_OFFSET);
+            return;
         }
         lit_pass.set_pipeline(&self.lit_pipeline);
         lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, 0);

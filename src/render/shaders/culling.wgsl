@@ -49,7 +49,14 @@ struct FrameDraw {
     phase_two_draw: DrawIndexedIndirect,
     phase_two_offsets: vec2<u32>,
     append_dispatch: DispatchIndirect,
+    // PROTOTYPE (ticket 800): the draw split in two, all but its last
+    // PROTOTYPE_SPLIT_PERCENT of phase one's indices, then those and phase
+    // two's.
+    prototype_first: DrawIndexedIndirect,
+    prototype_rest: DrawIndexedIndirect,
 }
+
+override PROTOTYPE_SPLIT_PERCENT: u32 = 0u;
 
 // Where instance_offsets holds, after each slot's and block's, the phase's
 // first Meshlet record and where its records end, short of the buffer's
@@ -420,9 +427,16 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
         }
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
+        let indices_end = min(offset.y, arrayLength(&packed_indices));
         if !PHASE_TWO {
             frame_draw.phase_two_offsets = offset;
+            let last = 3u * (indices_end / 100u * PROTOTYPE_SPLIT_PERCENT / 3u);
+            atomicStore(&frame_draw.prototype_first.index_count, indices_end - last);
+            frame_draw.prototype_first.instance_count = 1u;
+            frame_draw.prototype_rest.first_index = indices_end - last;
+            frame_draw.prototype_rest.instance_count = 1u;
         }
+        atomicStore(&frame_draw.prototype_rest.index_count, indices_end - frame_draw.prototype_rest.first_index);
         let record_capacity = arrayLength(&meshlet_records);
         let appended = min(vec2<u32>(first.x, offset.x), vec2<u32>(record_capacity));
         instance_offsets[APPENDED_RECORDS] = appended;
