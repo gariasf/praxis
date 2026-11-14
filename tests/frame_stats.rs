@@ -111,7 +111,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // 1×1 neutral Textures, one per Channel (the spheres sample no other), RGBA8
     // but the normal Channel's RGBA16F, each a mip of 64 KiB or less; so nothing
     // in the texture pool.
-    let geometry_arenas = 40_852_520 + 26_591_884 + 503_316 + 7_130_316 + 8_808_036;
+    let geometry_arenas = 34_225_520 + 22_229_808 + 838_860 + 12_163_480 + 14_428_404;
     let resident_tails = 4 * 4 + 8;
     // The render targets: the 160×90 Depth32Float texture at 4 samples, its
     // 4x RGBA16F colour, which Apple GPUs keep in tile memory, so it counts
@@ -140,7 +140,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Staging: three slots of the first frame's 1700 uploaded bytes rounded
     // up to 2048. The load's staging is gone.
     let staging = 3 * 2048;
-    // The scene and pass buffers: the Mesh table of 18,691 Meshes of 40
+    // The scene and pass buffers: the Mesh table of 16,371 Meshes of 188
     // bytes, 222 Materials of 80 bytes and 285 Far proxies' Materials
     // beside them, the camera and light uniforms, the
     // light buffer of 4,893 lights of 48 bytes, 517,376 Instances of 128
@@ -155,7 +155,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // pass's lists, 32 × 18 × 32 of 128 u32s, and its 16 bytes of light
     // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
     // 4,096 bends of 20 bytes.
-    let scene_and_pass_buffers = 18_691 * 40
+    let scene_and_pass_buffers = 16_371 * 188
         + (222 + 285) * 80
         + 144
         + 32
@@ -203,9 +203,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     );
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only
-    // a dropped triangle used, which the cook's weld drops; and its Meshlets
-    // as its Blob holds them, 16 bytes each, with a u32 per triangle and per
-    // Meshlet vertex.
+    // a dropped triangle used, which the cook's weld drops; and every LOD's
+    // Meshlets as its Blob holds them, 16 bytes each, with a u32 per triangle
+    // and per Meshlet vertex.
     let sphere = CookedCache::new(COOKED_CACHE_DIRECTORY)
         .mesh(AssetId::new(
             AssetSource::Scene(ReferenceScene::PbrSweep.name()),
@@ -215,18 +215,19 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         .expect("capture cooked the sphere");
     let meshlets = || {
         sphere
-            .primitives
-            .iter()
+            .lods()
+            .flat_map(|(_, _, primitives)| primitives)
             .flat_map(|primitive| &primitive.meshlets)
     };
     let meshlet_vertices: usize = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
+    let meshlet_triangles: usize = meshlets().map(|meshlet| meshlet.triangles.len()).sum();
     assert_eq!(
         last.arena_bytes_in_use,
         (25 * 49 - 2) * 28
             + triangles * 3 * 4
             + meshlets().count() as u64 * 16
             + meshlet_vertices as u64 * 4
-            + triangles * 4
+            + meshlet_triangles as u64 * 4
     );
 
     let timed: Vec<&str> = last

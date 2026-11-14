@@ -4,7 +4,7 @@ use crate::{
     assets::material::CLASSES_PER_CHANNEL,
     assets::{MaterialChannel, MaterialHandle, Mesh, MeshData, MeshHandle, MeshletData},
     bench::Budgets,
-    cooked::{AssetId, CookedMesh, CookedVertex},
+    cooked::{AssetId, CookedMesh, CookedPrimitive, CookedVertex},
     render::{LoadStaging, NO_MATERIAL, blas_bytes},
     stats::gpu_memory::RESIDENT_TAIL_LEVEL_BYTES,
     stats::{Charge, Counted, GpuMemory, GpuMemoryBudgets, GpuMemoryKind},
@@ -12,11 +12,12 @@ use crate::{
 
 /// Thousandths of the geometry Arenas' Budget each Arena takes, in the
 /// order of `PoolCapacities`' Arenas: the shares of the bytes `helmet`'s,
-/// `town`'s and `world`'s Meshes put in each.
-const ARENA_PER_MILLE: [u64; 5] = [487, 317, 6, 85, 105];
+/// `town`'s and `world`'s Meshes put in each, every LOD's Meshlets and LOD
+/// 0's indices.
+const ARENA_PER_MILLE: [u64; 5] = [408, 265, 10, 145, 172];
 
 /// A Mesh's bytes in the geometry Arenas: the mean of `town`'s 19 Meshes.
-const GEOMETRY_BYTES_PER_MESH: u64 = 4488;
+const GEOMETRY_BYTES_PER_MESH: u64 = 5124;
 
 /// A Material's bytes in the texture pool: the largest of the Reference
 /// scenes', `helmet`'s three 2048² BC7 and BC5 Textures and its BC4 one, each
@@ -295,15 +296,12 @@ impl MeshPool {
             word_count += mesh.indices.len();
         }
         let mut meshlet_count = 0;
-        if mesh_use.drawn() {
-            for meshlet in mesh
-                .primitives
-                .iter()
-                .flat_map(|primitive| &primitive.meshlets)
-            {
-                meshlet_count += 1;
-                word_count += meshlet.vertices.len() + meshlet.triangles.len();
-            }
+        for meshlet in drawn_lods(mesh, mesh_use)
+            .flat_map(|(_, _, primitives)| primitives)
+            .flat_map(|primitive| &primitive.meshlets)
+        {
+            meshlet_count += 1;
+            word_count += meshlet.vertices.len() + meshlet.triangles.len();
         }
         (mesh.vertices.len() * size_of::<CookedVertex>()
             + word_count * size_of::<u32>()
@@ -424,13 +422,14 @@ impl MeshPool {
         std::mem::take(&mut self.refusals)
     }
 
-    /// Writes `mesh` through `staging` into one range of each Arena, and its
-    /// entry into the Mesh table, each Primitive drawn with its Material of
-    /// `materials`, in Primitive order, where no Renderable overrides it; and,
-    /// where `mesh_use` has rays trace it, its index stream and its BLAS's
-    /// build from its vertex and index ranges, which `compact_blases`
-    /// compacts once `staging` is submitted, unless it is refitted. A Mesh no
-    /// pass draws keeps no Meshlets. Returns its Handle, or why it was
+    /// Writes `mesh` through `staging` into one range of each Arena, every
+    /// LOD's Meshlets in LOD order, and its entry into the Mesh table, each
+    /// Primitive drawn with its Material of `materials`, in Primitive order,
+    /// where no Renderable overrides it; and, where `mesh_use` has rays trace
+    /// it, LOD 0's index stream and its BLAS's build from its vertex and
+    /// index ranges, which `compact_blases` compacts once `staging` is
+    /// submitted, unless it is refitted. A Mesh no pass draws keeps no
+    /// Meshlets. Returns its Handle, or why it was
     /// refused, unlogged, when the Mesh table is full or an Arena's longest
     /// free range is too short; a refused Mesh leaves the pool as it was.
     pub fn load_for(
@@ -445,14 +444,9 @@ impl MeshPool {
             mesh.primitives.len(),
             "a Material, or none, per Primitive"
         );
-        let drawn_primitives = if mesh_use.drawn() {
-            &mesh.primitives[..]
-        } else {
-            &[]
-        };
         let meshlets = || {
-            drawn_primitives
-                .iter()
+            drawn_lods(mesh, mesh_use)
+                .flat_map(|(_, _, primitives)| primitives)
                 .flat_map(|primitive| &primitive.meshlets)
         };
         let meshlet_count = meshlets().count();
@@ -513,35 +507,39 @@ impl MeshPool {
         let mut meshlet_table = Vec::with_capacity(meshlet_count);
         let mut vertex_indices = Vec::with_capacity(meshlet_vertex_count);
         let mut triangles = Vec::with_capacity(triangle_count);
-        for (primitive, material) in drawn_primitives.iter().zip(materials) {
-            for meshlet in &primitive.meshlets {
-                meshlet_table.push(MeshletData {
-                    first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
-                    first_triangle: meshlet_triangles.offset + triangles.len() as u32,
-                    triangle_count: meshlet.triangles.len() as u32,
-                    material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
-                });
-                vertex_indices.extend(
-                    meshlet
-                        .vertices
-                        .iter()
-                        .map(|vertex| vertices.offset + vertex),
-                );
-                triangles.extend(
-                    meshlet.triangles.iter().map(|&[first, second, third]| {
-                        u32::from_le_bytes([first, second, third, 0])
-                    }),
-                );
-            }
-        }
-        let mesh_data = MeshData {
-            first_meshlet: meshlet_range.offset,
-            meshlet_count: meshlet_count as u32,
-            first_triangle: meshlet_triangles.offset,
-            triangle_count: triangle_count as u32,
+        let mut mesh_data = MeshData {
             bounds_min: mesh.bounds[0],
             bounds_max: mesh.bounds[1],
+            ..bytemuck::Zeroable::zeroed()
         };
+        for (lod, (error_metres, _, primitives)) in drawn_lods(mesh, mesh_use).enumerate() {
+            let (meshlets_before, triangles_before) = (meshlet_table.len(), triangles.len());
+            for (primitive, material) in primitives.iter().zip(materials) {
+                for meshlet in &primitive.meshlets {
+                    meshlet_table.push(MeshletData {
+                        first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
+                        first_triangle: meshlet_triangles.offset + triangles.len() as u32,
+                        triangle_count: meshlet.triangles.len() as u32,
+                        material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
+                    });
+                    vertex_indices.extend(
+                        meshlet
+                            .vertices
+                            .iter()
+                            .map(|vertex| vertices.offset + vertex),
+                    );
+                    triangles.extend(meshlet.triangles.iter().map(|&[first, second, third]| {
+                        u32::from_le_bytes([first, second, third, 0])
+                    }));
+                }
+            }
+            mesh_data.lod_count += 1;
+            mesh_data.first_meshlets[lod] = meshlet_range.offset + meshlets_before as u32;
+            mesh_data.meshlet_counts[lod] = (meshlet_table.len() - meshlets_before) as u32;
+            mesh_data.first_triangles[lod] = meshlet_triangles.offset + triangles_before as u32;
+            mesh_data.triangle_counts[lod] = (triangles.len() - triangles_before) as u32;
+            mesh_data.lod_errors_metres[lod] = error_metres;
+        }
         self.vertex_arena.write(
             staging,
             vertices.offset,
@@ -1099,6 +1097,16 @@ impl Generations {
     }
 }
 
+/// The LODs of `mesh` whose Meshlets a load for `mesh_use` keeps, as
+/// `CookedMesh::lods` gives them: every LOD of a Mesh a pass draws, else none.
+fn drawn_lods(
+    mesh: &CookedMesh,
+    mesh_use: MeshUse,
+) -> impl Iterator<Item = (f32, &[u32], &[CookedPrimitive])> {
+    let lod_count = if mesh_use.drawn() { usize::MAX } else { 0 };
+    mesh.lods().take(lod_count)
+}
+
 /// A range of each of `counts` elements in each of `arenas`, or None, with
 /// every Arena as it was, when one's longest free range is too short.
 fn allocate_all<const N: usize>(
@@ -1196,7 +1204,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::capture::submit_and_map;
-    use crate::cooked::{CookedMeshlet, CookedPrimitive};
+    use crate::cooked::{CookedLod, CookedMeshlet};
     use crate::gpu::GpuContext;
     use crate::stats::gpu_memory::tests::gpu_memory;
 
@@ -1220,12 +1228,12 @@ pub(crate) mod tests {
         assert_eq!(
             PoolCapacities::checked_in(),
             PoolCapacities {
-                vertex_arena_bytes: 40_852_520,
-                index_arena_bytes: 26_591_884,
-                meshlet_arena_bytes: 503_316,
-                meshlet_vertex_arena_bytes: 7_130_316,
-                meshlet_triangle_arena_bytes: 8_808_036,
-                meshes: 18_691,
+                vertex_arena_bytes: 34_225_520,
+                index_arena_bytes: 22_229_808,
+                meshlet_arena_bytes: 838_860,
+                meshlet_vertex_arena_bytes: 12_163_480,
+                meshlet_triangle_arena_bytes: 14_428_404,
+                meshes: 16_371,
                 materials: 222,
                 far_proxy_materials: 285,
                 texture_classes_per_channel: 13_107,
@@ -1234,7 +1242,7 @@ pub(crate) mod tests {
     }
 
     /// Budgets for two Meshes make a Mesh table of two and Arenas in their
-    /// shares of 8,976 bytes: a third triangle, which the Arenas have room
+    /// shares of 10,248 bytes: a third triangle, which the Arenas have room
     /// for, is refused and logged.
     #[test]
     fn a_mesh_past_the_mesh_table_its_budget_sizes_is_refused() {
@@ -1249,7 +1257,7 @@ pub(crate) mod tests {
         let memory = gpu_memory(&context);
         let mut pool = MeshPool::new(&context.device, &memory, &capacities);
         let bytes_by_kind = memory.bytes_by_kind();
-        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 8964);
+        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 10236);
         assert_eq!(
             bytes_by_kind[GpuMemoryKind::SceneAndPassBuffers as usize],
             2 * size_of::<MeshData>() as u64
@@ -1385,7 +1393,11 @@ pub(crate) mod tests {
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];
-        assert_eq!((mesh_data.meshlet_count, mesh_data.triangle_count), (2, 2));
+        assert_eq!(mesh_data.lod_count, 1);
+        assert_eq!(
+            (mesh_data.meshlet_counts[0], mesh_data.triangle_counts[0]),
+            (2, 2)
+        );
         assert_eq!(
             [mesh_data.bounds_min, mesh_data.bounds_max],
             two_primitives.bounds
@@ -1399,11 +1411,11 @@ pub(crate) mod tests {
         for (meshlet_in_mesh, material_id) in
             [material.index(), NO_MATERIAL].into_iter().enumerate()
         {
-            let meshlet = meshlets[mesh_data.first_meshlet as usize + meshlet_in_mesh];
+            let meshlet = meshlets[mesh_data.first_meshlets[0] as usize + meshlet_in_mesh];
             assert_eq!(meshlet.material_id, material_id);
             assert_eq!(
                 meshlet.first_triangle,
-                mesh_data.first_triangle + meshlet_in_mesh as u32
+                mesh_data.first_triangles[0] + meshlet_in_mesh as u32
             );
             let corners = triangles[meshlet.first_triangle as usize].to_le_bytes();
             for &corner in &corners[..3] {
@@ -1485,7 +1497,104 @@ pub(crate) mod tests {
         let entry = mesh_table[loaded.index as usize];
         bounds = [entry.bounds_min, entry.bounds_max];
         assert_eq!(bounds, replacement.bounds);
-        assert_eq!(entry.triangle_count, 2);
+        assert_eq!(entry.triangle_counts[0], 2);
+    }
+
+    /// A Mesh of two LODs, loaded after another Mesh, reaches the tables
+    /// with each LOD's Meshlets, whose corners pull that LOD's triangles,
+    /// each LOD's ranges and LOD error in its entry, and LOD 0's indices
+    /// alone in the index Arena; freed, it gives every range back. Loaded to
+    /// be traced alone, it keeps no LOD.
+    #[test]
+    fn a_mesh_loads_every_lods_meshlets_and_frees_them_with_it() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let mut staging = LoadStaging::new(context.device.clone());
+        let mut pool = MeshPool::new(
+            &context.device,
+            &gpu_memory(&context),
+            &PoolCapacities::checked_in(),
+        );
+        pool.load(&mut staging, &mesh(3, vec![0, 1, 2]), &[None])
+            .expect("a triangle fits");
+        let arena_bytes_in_use = pool.arena_bytes_in_use();
+        let index_arena_bytes_in_use = pool.index_arena.bytes_in_use;
+        let lod_indices = [vec![0, 1, 2, 2, 1, 3], vec![0, 1, 3]];
+        let mut quad = mesh(4, lod_indices[0].clone());
+        // Each vertex's x is its index, so a pulled vertex names itself.
+        for (index, vertex) in quad.vertices.iter_mut().enumerate() {
+            vertex.position[0] = index as f32;
+        }
+        quad.coarser_lods = vec![CookedLod {
+            error_metres: 0.5,
+            primitives: mesh(4, lod_indices[1].clone()).primitives,
+            indices: lod_indices[1].clone(),
+        }];
+        assert_eq!(
+            MeshPool::written_bytes(&quad, MeshUse::DrawnAndTraced),
+            (4 * size_of::<CookedVertex>()
+                + 6 * 4
+                + 2 * size_of::<MeshletData>()
+                + (4 + 3) * 4
+                + (2 + 1) * 4
+                + size_of::<MeshData>()) as u64
+        );
+        let handle = pool
+            .load_asset(
+                &mut staging,
+                AssetId(1),
+                &quad,
+                &[None],
+                MeshUse::DrawnAndTraced,
+                &mut Vec::new(),
+            )
+            .expect("a quad fits");
+        staging.submit(&context.queue);
+        assert_eq!(
+            pool.index_arena.bytes_in_use - index_arena_bytes_in_use,
+            6 * 4
+        );
+
+        let mesh_data = read_storage::<MeshData>(&context, &pool.mesh_table, 2)[1];
+        assert_eq!(mesh_data.lod_count, 2);
+        assert_eq!(mesh_data.meshlet_counts, [1, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(mesh_data.triangle_counts, [2, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(mesh_data.lod_errors_metres[..2], [0.0, 0.5]);
+        let meshlets: Vec<MeshletData> = read_storage(&context, &pool.meshlet_arena.buffer, 64);
+        let meshlet_vertices: Vec<u32> =
+            read_storage(&context, &pool.meshlet_vertex_arena.buffer, 64);
+        let triangles: Vec<u32> = read_storage(&context, &pool.meshlet_triangle_arena.buffer, 64);
+        let vertices: Vec<CookedVertex> = read_storage(&context, &pool.vertex_arena.buffer, 64);
+        for (lod, indices) in lod_indices.iter().enumerate() {
+            let meshlet = meshlets[mesh_data.first_meshlets[lod] as usize];
+            assert_eq!(meshlet.first_triangle, mesh_data.first_triangles[lod]);
+            assert_eq!(meshlet.triangle_count, mesh_data.triangle_counts[lod]);
+            let mut pulled = Vec::new();
+            for triangle in 0..meshlet.triangle_count {
+                let corners = triangles[(meshlet.first_triangle + triangle) as usize].to_le_bytes();
+                for &corner in &corners[..3] {
+                    let vertex =
+                        meshlet_vertices[(meshlet.first_vertex + u32::from(corner)) as usize];
+                    pulled.push(vertices[vertex as usize].position[0] as u32);
+                }
+            }
+            assert_eq!(&pulled, indices, "LOD {lod}");
+        }
+
+        pool.free(handle);
+        assert_eq!(pool.arena_bytes_in_use(), arena_bytes_in_use);
+
+        let meshlet_bytes_in_use = pool.meshlet_arena.bytes_in_use;
+        let traced = pool
+            .load_for(&mut staging, &quad, &[None], MeshUse::Traced)
+            .expect("a quad fits");
+        staging.submit(&context.queue);
+        assert_eq!(pool.meshlet_arena.bytes_in_use, meshlet_bytes_in_use);
+        let traced_data =
+            read_storage::<MeshData>(&context, &pool.mesh_table, 2)[traced.index as usize];
+        assert_eq!(traced_data.lod_count, 0);
+        assert_eq!(traced_data.meshlet_counts, [0; 8]);
     }
 
     /// Arenas full of Meshes whose last users left: the next load frees the

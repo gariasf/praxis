@@ -179,14 +179,17 @@ struct InstanceData {
     mesh: u32,
 }
 
-// A Mesh as the Mesh table holds it, at its Handle's index: its Meshlets,
-// whose triangles follow one another in the Meshlet triangle Arena, and the
-// box that holds its vertices, its lowest corner, then its highest.
+// A Mesh as the Mesh table holds it, at its Handle's index: each LOD of its
+// chain at the LOD's index, LOD 0 first, as its Meshlets, whose triangles
+// follow one another in the Meshlet triangle Arena, with its LOD error; and
+// the box that holds its vertices, its lowest corner, then its highest.
 struct MeshData {
-    first_meshlet: u32,
-    meshlet_count: u32,
-    first_triangle: u32,
-    triangle_count: u32,
+    lod_count: u32,
+    first_meshlets: array<u32, MESH_MAX_LODS>,
+    meshlet_counts: array<u32, MESH_MAX_LODS>,
+    first_triangles: array<u32, MESH_MAX_LODS>,
+    triangle_counts: array<u32, MESH_MAX_LODS>,
+    lod_errors_metres: array<f32, MESH_MAX_LODS>,
     bounds_min: array<f32, 3>,
     bounds_max: array<f32, 3>,
 }
