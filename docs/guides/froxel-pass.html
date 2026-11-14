@@ -128,7 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 3, Froxel lists: the camera, the light uniform, the light buffer, the lists and the light counts. Three passes read the lists, each through a group of its own: the lit pass through group 0, the frame; the shadow mask pass through its shadow mask build group; the light count pass through its input group.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/froxel.wgsl</code>, assembled with the common part and <code>froxel_grid.wgsl</code>, whose <code>froxel_at</code> the three readers share to find a pixel's Froxel.</dd>
       <dt>Counted</dt><dd><code>froxel_pass</code> in GPU time; <code>froxel_lights_overflowed</code> and, for the light buffer, <code>lights_overflowed</code> in counters; the lists and the light counts in GPU memory; with <code>count_point_lights</code> on, <code>lit_pixels</code>, <code>listed_point_lights</code> and <code>reaching_point_lights</code>.</dd>
-      <dt>Files</dt><dd><code>src/render/froxel_pass.rs</code>, <code>src/render/shaders/froxel.wgsl</code></dd>
+      <dt>Files</dt><dd><code>src/render/froxel_pass.rs</code>, <code>src/render/shaders/froxel.wgsl</code>, <code>src/render/shaders/froxel_grid.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

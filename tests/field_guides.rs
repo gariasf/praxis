@@ -9,6 +9,7 @@
 //! describes is stale, which is reported and fails nothing.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Write as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -190,20 +191,26 @@ fn code_font_text(html: &str) -> String {
 /// The files of its mechanism that a page lists in its Interface box's Files
 /// row, each in code font.
 fn mechanism_files(html: &str) -> Vec<String> {
-    let Some((_, row)) = html.split_once("<dt>Files</dt>") else {
-        return Vec::new();
-    };
-    let row = &row[..row.find("</dd>").unwrap_or(row.len())];
-    code_font_text(row).lines().map(str::to_owned).collect()
+    let files_row = html
+        .split_once("class=\"interface\"")
+        .and_then(|(_, interface)| interface.split_once("<dt>Files</dt>"))
+        .map_or("", |(_, after)| {
+            &after[..after.find("</dd>").unwrap_or(after.len())]
+        });
+    code_font_text(files_row)
+        .lines()
+        .map(str::to_owned)
+        .collect()
 }
 
-/// The stale pages among `pages`, every guide but the `volumes`: a line for
-/// each whose `changes`, those of the files it lists since the commit it
-/// describes, are any, and a line for each change under it.
+/// The stale pages among `pages`, every guide but the `volumes`. For a page
+/// that lists files, `changes_since` gives, from the page's name, the commit
+/// it describes and those files, the changes to them since; a page with any
+/// gets a line that names them.
 fn stale_pages(
     pages: &BTreeMap<String, String>,
     volumes: &[&str],
-    changes: impl Fn(&str, &[String]) -> Vec<String>,
+    changes_since: impl Fn(&str, &str, &[String]) -> Vec<String>,
 ) -> Vec<String> {
     let mut report = Vec::new();
     for (name, html) in pages
@@ -211,15 +218,18 @@ fn stale_pages(
         .filter(|(name, _)| !volumes.contains(&name.as_str()))
     {
         let files = mechanism_files(html);
-        let Some(commit) = described_commit(html).filter(|_| !files.is_empty()) else {
+        let Some(commit) = described_commit(html) else {
             continue;
         };
-        let changed = changes(commit, &files);
-        if !changed.is_empty() {
+        if files.is_empty() {
+            continue;
+        }
+        let changes = changes_since(name, commit, &files);
+        if !changes.is_empty() {
             report.push(format!(
-                "{name} is stale, its files changed since {commit}:"
+                "{name} is stale since {commit}: {}",
+                changes.join(" ")
             ));
-            report.extend(changed.iter().map(|change| format!("  {change}")));
         }
     }
     report
@@ -258,7 +268,9 @@ fn page_problems(
             Some(_) => {}
         }
         if html.contains("class=\"interface\"") && mechanism_files(html).is_empty() {
-            problems.push(format!("{name}'s Interface box has no Files row"));
+            problems.push(format!(
+                "{name}'s Interface box lists no file in a Files row"
+            ));
         }
         let code_font = code_font_text(html);
         let missing: BTreeSet<&str> = identifiers_in(&code_font)
@@ -392,17 +404,34 @@ fn stale_pages_are_listed_and_every_file_a_page_lists_exists() {
         .collect();
     assert!(absent.is_empty(), "{}", absent.join("\n"));
 
-    let changes = |commit: &str, files: &[String]| {
-        let range = format!("{commit}..origin/main");
-        let mut arguments = vec!["log", "--format=%h %s", &range, "--"];
+    // A new page describes its change's base: the commit that adds it is not counted.
+    let changes_since = |name: &str, commit: &str, files: &[String]| {
+        let page = format!("docs/guides/{name}");
+        let (found, added) = git(&["log", "--diff-filter=A", "--format=%H", "--", &page]);
+        assert!(found, "git log of {page} failed");
+        let added = String::from_utf8_lossy(&added);
+        let mut arguments = vec!["log", "--format=%h", "--abbrev=8"];
+        arguments.extend(["origin/main", "--not", commit]);
+        arguments.extend(added.lines());
+        arguments.push("--");
         arguments.extend(files.iter().map(String::as_str));
-        String::from_utf8_lossy(&git(&arguments).1)
+        let (listed, changes) = git(&arguments);
+        assert!(listed, "git log of {name}'s files since {commit} failed");
+        String::from_utf8_lossy(&changes)
             .lines()
             .map(str::to_owned)
-            .collect()
+            .collect::<Vec<_>>()
     };
-    for line in stale_pages(&pages, VOLUMES, changes) {
-        println!("{line}");
+    let culling_pass = ["src/render/culling_pass.rs".to_owned()];
+    let oldest = changes_since("culling-pass.html", "fbae12f4", &culling_pass).pop();
+    assert!(
+        oldest.is_some_and(|change| change.starts_with("f99166b5")),
+        "the culling pass's first change after fbae12f4 is f99166b5"
+    );
+
+    // Not `eprintln!`, which libtest captures from passing tests.
+    for line in stale_pages(&pages, VOLUMES, changes_since) {
+        writeln!(std::io::stderr(), "{line}").ok();
     }
 }
 
@@ -482,7 +511,7 @@ fn page_check_names_a_page_that_describes_no_commit_or_one_off_main() {
         [
             "future.html describes 9f8e7d6c, which is not on main",
             "undated.html has no Describes line naming a commit of main",
-            "unlisted.html's Interface box has no Files row",
+            "unlisted.html's Interface box lists no file in a Files row",
             "the volumes list dropped.html, which is absent",
         ]
     );
@@ -584,20 +613,19 @@ fn stale_report_lists_a_page_whose_files_changed_since_its_commit_and_no_other()
         ("current.html".to_owned(), page("9f8e7d6c")),
         ("volume.html".to_owned(), page("1a2b3c4d")),
     ]);
-    let changes = |commit: &str, files: &[String]| match commit {
+    let changes_since = |_: &str, commit: &str, files: &[String]| match commit {
         "1a2b3c4d" => files
             .iter()
-            .map(|file| format!("5e6f7a8b Change {file}"))
+            .map(|file| format!("5e6f7a8b:{file}"))
             .collect(),
         _ => Vec::new(),
     };
 
     assert_eq!(
-        stale_pages(&pages, &["volume.html"], changes),
+        stale_pages(&pages, &["volume.html"], changes_since),
         [
-            "old.html is stale, its files changed since 1a2b3c4d:",
-            "  5e6f7a8b Change src/render/culling_pass.rs",
-            "  5e6f7a8b Change src/render/shaders/culling.wgsl",
+            "old.html is stale since 1a2b3c4d: 5e6f7a8b:src/render/culling_pass.rs \
+             5e6f7a8b:src/render/shaders/culling.wgsl"
         ]
     );
 }

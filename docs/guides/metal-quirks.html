@@ -131,7 +131,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>The compiler</dt><dd><code>pixel_minimum</code> and <code>build_shadow_mask</code> load the four samples by index; the lit pass shades the first directional light without a branch; <code>final_depth_attachment</code> discards depth unless a later pass reads it.</dd>
       <dt>The kernel</dt><dd>No answer yet: the time the kernel spends scheduling the lit pass's command buffer, which grows faster than its distinct Textures, is reported as the lit pass's wait in Frame stats.</dd>
       <dt>Measured on</dt><dd>One Apple M4 Pro, macOS 27.0.1, wgpu 30.0.1 on Metal. Every other GPU family is unmeasured.</dd>
-      <dt>Files</dt><dd><code>src/render/shaders/main.wgsl</code>, <code>src/render/shaders/culling.wgsl</code>, <code>src/render/shaders/bend.wgsl</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>src/render/shaders/depth_pyramid.wgsl</code>, <code>src/render/blas_refit.rs</code></dd>
+      <dt>Files</dt><dd><code>src/render/shaders/main.wgsl</code>, <code>src/render/shaders/culling.wgsl</code>, <code>src/render/shaders/bend.wgsl</code>, <code>src/render/shaders/shadow_mask.wgsl</code>, <code>src/render/shaders/depth_pyramid.wgsl</code>, <code>src/render/targets.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

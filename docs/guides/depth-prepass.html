@@ -128,7 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>The groups its vertex stage sees: group 0, the frame, for the camera; group 2, the scene geometry; group 3, the main pass inputs, for the Meshlet records. Its fragment stage reads no bind group.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>: <code>vs_depth_prepass</code> with no fragment stage, or with shadow rays on <code>vs_depth_normals</code> and <code>fs_surface_normals</code>.</dd>
       <dt>Counted</dt><dd><code>depth_prepass</code> and <code>phase_two_depth_pass</code> in GPU time; the pre-pass inside ADR 0019's gate, which is measured with shadow rays off, when phase two's depth is the lit pass's; their draws in <code>draw_calls</code>; the depth target and the surface normals in GPU memory.</dd>
-      <dt>Files</dt><dd><code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code></dd>
+      <dt>Files</dt><dd><code>src/render/main_pass.rs</code>, <code>src/render/targets.rs</code>, <code>src/render/shaders/main.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
