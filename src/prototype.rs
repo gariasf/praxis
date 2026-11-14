@@ -214,6 +214,26 @@ pub fn series(arguments: &[String]) -> anyhow::Result<()> {
     for (&frame, pixels) in frames.iter().zip(&reference) {
         save(&reference_variant.replace(':', "-"), frame, pixels)?;
     }
+    // How many pixels of a variant's own frames change by more than 8 and
+    // by more than 32 from each frame to the next, with no reference.
+    let own_changes = |name: &str, rendered: &[Vec<u8>]| {
+        for (pair, &frame) in rendered.windows(2).zip(&frames[1..]) {
+            let changes = pair[0].as_chunks::<4>().0.iter().zip(pair[1].as_chunks::<4>().0).map(
+                |(before, after)| {
+                    (0..3)
+                        .map(|channel| before[channel].abs_diff(after[channel]))
+                        .max()
+                        .unwrap_or(0)
+                },
+            );
+            println!(
+                "own {name} {frame} {} {}",
+                changes.clone().filter(|&change| change > 8).count(),
+                changes.filter(|&change| change > 32).count()
+            );
+        }
+    };
+    own_changes(&reference_variant.replace(':', "-"), &reference);
     println!(
         "variant frame differing_pixels max_delta mean_delta_per_mille change_over_8 change_over_32 max_change"
     );
@@ -221,6 +241,7 @@ pub fn series(arguments: &[String]) -> anyhow::Result<()> {
         let (mode, band, threshold) = parse(variant)?;
         let rendered = render(mode, band, threshold)?;
         let name = variant.replace(':', "-");
+        own_changes(&name, &rendered);
         let mut previous: Option<Vec<i16>> = None;
         for ((&frame, pixels), reference_pixels) in frames.iter().zip(&rendered).zip(&reference) {
             let deltas: Vec<i16> = pixels
