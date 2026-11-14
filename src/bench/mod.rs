@@ -229,6 +229,12 @@ pub struct Measurements {
     /// before results carried them.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub gate_pass_microseconds: BTreeMap<String, Spread>,
+    /// Both culling phases' per-slot stages (`offset_slots`, `offset_blocks`
+    /// and `append_records`), each frame's the sum of the two phases' passes
+    /// over the Instance slots in use, apart from `append_triangles`. Absent
+    /// from Baselines recorded before results carried it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub culling_per_slot_microseconds: Option<Spread>,
     /// Each pass's own GPU time, by pass.
     pub gpu_pass_microseconds: BTreeMap<String, Spread>,
     /// Each ECS system's and renderer stage's CPU time (Frame stats), by
@@ -271,15 +277,16 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 22;
+const COUNTER_COUNT: usize = 23;
 
 /// Medians of counters, which repeat exactly on every run, but for the
 /// Instances overflowed and the refusals, from the Renderables refused to
 /// the shadow mask's light overflows: the most of any frame, so one overflow
 /// counts; and for the streaming counters, from the Late Chunks to the late
 /// mips: the sum over the frames, as each counts events. The refusals, the
-/// streaming counters and the TLAS build's allocations are absent from
-/// Baselines recorded before results carried them, which read as none.
+/// streaming counters, the TLAS build's allocations and the Instance slots in
+/// use are absent from Baselines recorded before results carried them, which
+/// read as none.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
@@ -318,6 +325,9 @@ pub struct Counters {
     pub late_mips: u64,
     #[serde(default)]
     pub tlas_build_allocations: u64,
+    /// The slots both culling phases' per-slot stages scan.
+    #[serde(default)]
+    pub instance_slots_in_use: u64,
 }
 
 impl Counters {
@@ -364,6 +374,7 @@ impl Counters {
             pool_entries_freed: total(|stats| stats.pool_entries_freed.into()),
             late_mips: total(|stats| stats.late_mips.into()),
             tlas_build_allocations: median(|stats| stats.tlas_build_allocations),
+            instance_slots_in_use: median(|stats| stats.instance_slots_in_use.into()),
         }
     }
 
@@ -410,6 +421,7 @@ impl Counters {
         "pool_entries_freed",
         "late_mips",
         "tlas_build_allocations",
+        "instance_slots_in_use",
     ];
 
     fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
@@ -436,6 +448,7 @@ impl Counters {
             self.pool_entries_freed,
             self.late_mips,
             self.tlas_build_allocations,
+            self.instance_slots_in_use,
         ];
         std::array::from_fn(|index| (Self::NAMES[index], values[index]))
     }
@@ -670,6 +683,10 @@ pub struct Budgets {
     /// the GPU, from the end of the frame before.
     pub dynamic_tlas_cpu_microseconds: f64,
     pub dynamic_tlas_gpu_microseconds: f64,
+    /// A guard, not a Budget: the median of both culling phases' per-slot
+    /// stages past which the decision to cull Instances with no hierarchy
+    /// reopens (ADR 0013).
+    pub culling_per_slot_microseconds: f64,
     /// The longest CPU frame and GPU frame allowed: one 60 Hz period.
     pub maximum_frame_microseconds: f64,
     pub gpu_memory_bytes: u64,
@@ -888,9 +905,10 @@ fn measure(
     let gpu_pass_microseconds = pass_spreads(measured_gpu, &every_pass);
     let position_of = |name: &str| {
         let position = TIMED_PASSES.iter().position(|&pass| pass == name);
-        position.expect("the gate's first and last passes are timed")
+        position.expect("the gate's first and last passes and the culling phases' are timed")
     };
-    let gate_passes: Vec<usize> = (position_of(CullingPhase::One.label())..=position_of(LIT_PASS))
+    let first_gate_pass = position_of(CullingPhase::One.slots_label());
+    let gate_passes: Vec<usize> = (first_gate_pass..=position_of(LIT_PASS))
         .filter(|&pass| {
             measured_without_rays
                 .iter()
@@ -952,6 +970,17 @@ fn measure(
                 .collect(),
         )),
         gate_pass_microseconds,
+        culling_per_slot_microseconds: {
+            let per_slot_passes = [CullingPhase::One, CullingPhase::Two]
+                .map(|phase| position_of(phase.slots_label()));
+            let frame_microseconds = measured_gpu.iter().map(|gpu| {
+                let passes = per_slot_passes.iter();
+                passes
+                    .map(|&pass| microseconds(gpu.pass_times[pass].1))
+                    .sum()
+            });
+            Some(spread(frame_microseconds.collect()))
+        },
         gpu_pass_microseconds,
         cpu_time_microseconds: {
             let mut microseconds_by_name = BTreeMap::<&str, Vec<f64>>::new();
@@ -1018,7 +1047,8 @@ fn path_frame_times(
 /// One line, `key=value` pairs after the scene name: the CPU frame's
 /// median, p95, p99 and maximum, the dynamic TLAS's CPU median, the same
 /// four of the GPU frame and the gate, the median and p95 of shadow-ray time
-/// and, when measured, of the lit pass's wait, each pass's median, the
+/// and, when measured, of the lit pass's wait and of both culling phases'
+/// per-slot stages, each pass's median, the
 /// counters, the aliasing figures when measured, then the Fast travel's
 /// hold, the frames until traced and the BLAS compaction's waits, where the
 /// measured frames had them.
@@ -1059,6 +1089,13 @@ impl std::fmt::Display for Measurements {
                 wait.median, wait.p95
             )?;
         }
+        if let Some(per_slot) = self.culling_per_slot_microseconds {
+            write!(
+                formatter,
+                " culling_per_slot_us median={:.1} p95={:.1}",
+                per_slot.median, per_slot.p95
+            )?;
+        }
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
@@ -1092,7 +1129,8 @@ impl std::fmt::Display for Measurements {
 /// frame and the gate count at the median and p99, the CPU frame at the p95
 /// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
 /// GPU memory in total and by kind; other p95s are reported only, as they
-/// move with one slow frame. Runs that measured as many frames compare their
+/// move with one slow frame. Both culling phases' per-slot stages count at
+/// the median against their guard. Runs that measured as many frames compare their
 /// measured frames' counters, unless the Baseline's measured frames streamed:
 /// then their counter frames', and the measured frames' refusals as well.
 /// Runs of other lengths compare their counter frames', and only with
@@ -1257,6 +1295,19 @@ pub fn compare(
             build.median,
             budgets.dynamic_tlas_gpu_microseconds,
         );
+    }
+    let guard = budgets.culling_per_slot_microseconds;
+    if let Some(per_slot) = current.culling_per_slot_microseconds
+        && per_slot.median > guard
+    {
+        findings.push(Finding {
+            metric: "culling_per_slot_microseconds",
+            verdict: Verdict::Fail,
+            detail: format!(
+                "{:.1} over its guard of {guard:.1}: the culling decision reopens (ADR 0013)",
+                per_slot.median
+            ),
+        });
     }
     // CPU times move with the machine's load where GPU times hold, so a
     // failed CPU line says what load each run started under.
@@ -1549,6 +1600,7 @@ mod tests {
         pool_entries_freed: 0,
         late_mips: 0,
         tlas_build_allocations: 0,
+        instance_slots_in_use: 10,
     };
 
     #[test]
@@ -1576,6 +1628,7 @@ mod tests {
             pool_entries_freed: 20,
             late_mips: 21,
             tlas_build_allocations: 22,
+            instance_slots_in_use: 23,
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
@@ -1626,6 +1679,12 @@ mod tests {
             },
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            culling_per_slot_microseconds: Some(Spread {
+                median: 400.0,
+                p95: 450.0,
+                p99: Some(480.0),
+                maximum: Some(900.0),
+            }),
             cpu_time_microseconds: BTreeMap::new(),
             cpu_frame_hitches: None,
             gpu_frame_hitches: None,
@@ -1685,6 +1744,7 @@ mod tests {
         gate_microseconds: 6000.0,
         dynamic_tlas_cpu_microseconds: 1100.0,
         dynamic_tlas_gpu_microseconds: 1000.0,
+        culling_per_slot_microseconds: 1000.0,
         maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
         gpu_memory_bytes_by_kind: GpuMemoryBudgets::each(1 << 30),
@@ -2087,6 +2147,44 @@ mod tests {
         assert_eq!(verdicts(&over_budget, &over_budget, CompareMode::Ci), []);
     }
 
+    /// Both culling phases' per-slot stages answer to their guard at the
+    /// median alone, whatever their Baseline, which may hold none; the
+    /// failure names the guard and what passing it reopens.
+    #[test]
+    fn the_culling_phases_per_slot_stages_fail_past_their_guard() {
+        let per_slot = |median| {
+            let mut measurements = baseline();
+            measurements.culling_per_slot_microseconds = Some(Spread {
+                median,
+                p95: 1900.0,
+                p99: Some(2000.0),
+                maximum: Some(5000.0),
+            });
+            measurements
+        };
+        let without = Measurements {
+            culling_per_slot_microseconds: None,
+            ..baseline()
+        };
+        assert_eq!(
+            verdicts(&per_slot(1000.0), &without, CompareMode::Local),
+            []
+        );
+        assert_eq!(verdicts(&without, &baseline(), CompareMode::Local), []);
+        let findings =
+            compare(&per_slot(1000.5), &without, &BUDGETS, CompareMode::Local).expect("comparable");
+        assert_eq!(
+            findings,
+            [Finding {
+                metric: "culling_per_slot_microseconds",
+                verdict: Verdict::Fail,
+                detail: "1000.5 over its guard of 1000.0: the culling decision reopens (ADR 0013)"
+                    .to_owned(),
+            }]
+        );
+        assert_eq!(verdicts(&per_slot(1000.5), &without, CompareMode::Ci), []);
+    }
+
     /// The dynamic TLAS's CPU cost and its build answer to their ceilings,
     /// whatever their Baselines.
     #[test]
@@ -2332,6 +2430,7 @@ mod tests {
                         reaching_point_lights: 0,
                     }),
                     draw_calls: if counted { 10 } else { 99 },
+                    instance_slots_in_use: if counted { 12 } else { 4096 },
                     heap_allocations: if counted { 50 } else { 999 },
                     renderables_refused: refused(1),
                     lights_overflowed: refused(2),
@@ -2414,6 +2513,8 @@ mod tests {
                 counters.shadow_mask_lights_overflowed,
             ]
         };
+        assert_eq!(reference.counters.instance_slots_in_use, 4096);
+        assert_eq!(reference.counter_frames.counters.instance_slots_in_use, 12);
         assert_eq!(refusals(reference.counters), [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(refusals(reference.counter_frames.counters), [0; 7]);
         let streamed = |counters: Counters| {
@@ -2471,8 +2572,10 @@ mod tests {
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
             [
-                "culling_phase_one",
-                "culling_phase_two",
+                "culling_phase_one_slots",
+                "culling_phase_one_triangles",
+                "culling_phase_two_slots",
+                "culling_phase_two_triangles",
                 "depth_prepass",
                 "depth_pyramid_pass",
                 "froxel_pass",
@@ -2487,6 +2590,56 @@ mod tests {
         );
         let counters_only = measurements(Configuration::COUNTERS);
         assert_eq!(counters_only.counter_frames, reference.counter_frames);
+    }
+
+    /// Each measured frame's per-slot stages are its two phases' passes over
+    /// the slots, summed before the median is taken, with shadow rays on:
+    /// even frames take 100 and 500 µs, odd frames 300 and 100 µs, so the
+    /// passes' own medians, 100 µs each, sum to another figure. Neither the
+    /// warm-up nor `append_triangles` counts.
+    #[test]
+    fn the_culling_phases_per_slot_stages_are_summed_per_frame() {
+        let configuration = Configuration::REFERENCE;
+        let position = |name: &str| {
+            let position = TIMED_PASSES.iter().position(|&pass| pass == name);
+            position.expect("a Timed pass")
+        };
+        let mut frames = frames(configuration);
+        for (frame, stats) in frames.iter_mut().enumerate() {
+            let gpu = stats.gpu.as_mut().expect("every frame has GPU stats");
+            let warming_up = frame < configuration.warm_up_frames as usize;
+            let (phase_one, phase_two) = match (warming_up, frame % 2) {
+                (true, _) => (9000, 9000),
+                (false, 0) => (100, 500),
+                (false, _) => (300, 100),
+            };
+            for (pass, microseconds) in [
+                ("culling_phase_one_slots", phase_one),
+                ("culling_phase_one_triangles", 7000),
+                ("culling_phase_two_slots", phase_two),
+                ("culling_phase_two_triangles", 7000),
+            ] {
+                gpu.pass_times[position(pass)].1 = Duration::from_micros(microseconds);
+            }
+        }
+        let measurements = measure(
+            ReferenceScene::PbrSweep,
+            "Apple M4 Pro".to_owned(),
+            wgpu::Backend::Metal,
+            configuration,
+            &frames,
+            &frames_without_rays(configuration),
+        )
+        .expect("every frame read back its GPU stats");
+        assert_eq!(
+            measurements.culling_per_slot_microseconds,
+            Some(Spread {
+                median: 400.0,
+                p95: 600.0,
+                p99: Some(600.0),
+                maximum: Some(600.0),
+            })
+        );
     }
 
     #[test]

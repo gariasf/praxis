@@ -15,7 +15,8 @@ use super::{
 /// measured, as markdown tables, each against its `baseline`, when there is
 /// one, and the Budgets. Times compare only with a Baseline of as many
 /// frames on the same adapter, whatever its backend, though `compare` also
-/// requires the backend, each pass with the Baseline's pass of its name; counters compare
+/// requires the backend, each pass with the Baseline's pass of its name; both
+/// culling phases' per-slot stages show their guard in the Budget column; counters compare
 /// as `compare` reads them. A run whose measured frames streamed also shows
 /// what they streamed: Late Chunks, late mips, Chunks loaded, the Fast
 /// travel's hold, the frames until traced and the longest wait on BLAS
@@ -94,6 +95,17 @@ pub fn report(
             None,
         ),
     ];
+    let culling_per_slot = current.culling_per_slot_microseconds.map(|time| {
+        let baseline_time =
+            times_baseline.and_then(|baseline| baseline.culling_per_slot_microseconds);
+        let guard = Some(budgets.culling_per_slot_microseconds);
+        (
+            "Culling, per-slot stages".to_owned(),
+            time,
+            baseline_time,
+            guard,
+        )
+    });
     let pass_times = current.gpu_pass_microseconds.iter().map(|(pass, &time)| {
         let baseline_time = times_baseline
             .and_then(|baseline| baseline.gpu_pass_microseconds.get(pass))
@@ -109,6 +121,7 @@ pub fn report(
     let times = frame_times
         .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
         .into_iter()
+        .chain(culling_per_slot)
         .chain(blas_compaction)
         .chain(pass_times);
     for (name, time, baseline_time, budget) in times {
@@ -135,7 +148,7 @@ pub fn report(
 
     writeln!(
         report,
-        "\nThe Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to {} µs.",
+        "\nThe Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to {} µs. The culling phases' per-slot stages answer to a guard, at the median alone.",
         grouped(budgets.maximum_frame_microseconds, 1)
     )?;
 
@@ -397,6 +410,7 @@ mod tests {
         pool_entries_freed: 0,
         late_mips: 0,
         tlas_build_allocations: 0,
+        instance_slots_in_use: 11,
     };
 
     const BUDGETS: Budgets = Budgets {
@@ -405,6 +419,7 @@ mod tests {
         gate_microseconds: 6000.0,
         dynamic_tlas_cpu_microseconds: 1100.0,
         dynamic_tlas_gpu_microseconds: 1000.0,
+        culling_per_slot_microseconds: 1000.0,
         maximum_frame_microseconds: 16_667.0,
         gpu_memory_bytes: 8_000_000_000,
         gpu_memory_bytes_by_kind: GpuMemoryBudgets::each(1 << 30),
@@ -449,6 +464,7 @@ mod tests {
             shadow_ray_microseconds: spread(-3.2, 40.5),
             lit_pass_wait_microseconds: None,
             gate_pass_microseconds: BTreeMap::new(),
+            culling_per_slot_microseconds: None,
             cpu_time_microseconds: BTreeMap::new(),
             cpu_frame_hitches: None,
             gpu_frame_hitches: None,
@@ -475,6 +491,7 @@ mod tests {
     fn current() -> Measurements {
         Measurements {
             lit_pass_wait_microseconds: Some(spread(1204.5, 1391.0)),
+            culling_per_slot_microseconds: Some(tailed(41.2, 44.0, 47.5, 96.3)),
             gate_pass_microseconds: [
                 ("culling_phase_one", spread(170.1, 175.0)),
                 ("lit_pass", spread(1575.4, 1600.2)),
@@ -529,11 +546,12 @@ mod tests {
 | GPU frame | 4,208.6 | 5,204.5 | 5,390.2 | 17,001.5 | 4,000.0 | 5,000.0 | +208.6 | 1.052 | 12,000.0 |
 | Gate, rays off | 2,950.0 | 3,010.4 | 3,044.0 | 3,521.7 | 3,000.0 | 3,100.0 | -50.0 | 0.983 | 6,000.0 |
 | Shadow-ray time | -3.2 | 40.5 | — | — | -3.2 | 40.5 | +0.0 | — | — |
+| Culling, per-slot stages | 41.2 | 44.0 | 47.5 | 96.3 | — | — | — | — | 1,000.0 |
 | `culling_phase_one` | 166.3 | 169.8 | — | — | 160.0 | 170.0 | +6.3 | 1.039 | — |
 | `dynamic_tlas_build` | 48.7 | 462.9 | — | — | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | — | — | 800.0 | 810.0 | -44.2 | 0.945 | — |
 
-The Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to 16,667.0 µs.
+The Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to 16,667.0 µs. The culling phases' per-slot stages answer to a guard, at the median alone.
 
 | Gate, rays off, µs | Median | p95 |
 |---|---:|---:|
@@ -567,6 +585,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 | `pool_entries_freed` | 0 | 0 | +0 | — | — |
 | `late_mips` | 0 | 0 | +0 | — | — |
 | `tlas_build_allocations` | 0 | 0 | +0 | — | — |
+| `instance_slots_in_use` | 11 | 11 | +0 | 1.000 | — |
 "
         );
     }

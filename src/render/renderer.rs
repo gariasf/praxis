@@ -34,15 +34,17 @@ use crate::stats::{
 /// those frames with the crowd's refit form; phase two's depth pass and the
 /// shadow mask pass only with shadow rays on. The rebuild form, an oracle,
 /// times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 12] = [
+pub(crate) const TIMED_PASSES: [&str; 14] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
-    CullingPhase::One.label(),
+    CullingPhase::One.slots_label(),
+    CullingPhase::One.triangles_label(),
     FROXEL_PASS,
     DEPTH_PREPASS,
     DEPTH_PYRAMID_PASS,
-    CullingPhase::Two.label(),
+    CullingPhase::Two.slots_label(),
+    CullingPhase::Two.triangles_label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
     LIT_PASS,
@@ -737,6 +739,7 @@ impl Renderer {
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
         recorder.counters.uploaded_bytes += uploaded_bytes;
+        recorder.counters.instance_slots_in_use = frame.instance_slot_count;
         // 0 bytes: the staging slot failed to map, as logged, and the
         // frame's writes never land.
         if uploaded_bytes == 0 {
@@ -822,9 +825,14 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::One,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(CullingPhase::One.label()).compute()),
+            timestamps.as_mut().map(|timestamps| {
+                let pass = CullingPhase::One.slots_label();
+                timestamps.pass(pass).compute()
+            }),
+            timestamps.as_mut().map(|timestamps| {
+                let pass = CullingPhase::One.triangles_label();
+                timestamps.pass(pass).compute()
+            }),
         );
         // After the first culling dispatch, so ADR 0019's gate, which spans
         // from it to the end of the lit pass, counts the lights' culling.
@@ -859,9 +867,14 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(CullingPhase::Two.label()).compute()),
+            timestamps.as_mut().map(|timestamps| {
+                let pass = CullingPhase::Two.slots_label();
+                timestamps.pass(pass).compute()
+            }),
+            timestamps.as_mut().map(|timestamps| {
+                let pass = CullingPhase::Two.triangles_label();
+                timestamps.pass(pass).compute()
+            }),
         );
         if self.shadow_rays {
             self.main_pass.record_depth_pass(

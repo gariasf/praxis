@@ -10,7 +10,8 @@
 //! off, phase one draws every Instance in use. Each phase sums its
 //! Instances' offsets over the slots in use, writes their Meshlet records,
 //! then their packed indices with a workgroup per Meshlet record, dispatched
-//! indirectly, all in one compute pass.
+//! indirectly: the steps over the slots in one compute pass, the packed
+//! indices in a second, so Frame stats time them apart.
 
 use crate::cooked::MESHLET_MAX_VERTICES;
 use crate::render::bind_groups::{
@@ -33,11 +34,23 @@ pub enum CullingPhase {
 }
 
 impl CullingPhase {
-    /// The phase's label, and its name in frame stats.
-    pub(crate) const fn label(self) -> &'static str {
+    /// The label, and the name in Frame stats, of the phase's pass over the
+    /// Instance slots in use: `offset_slots`, `offset_blocks` and
+    /// `append_records`, whose time follows the slots.
+    pub(crate) const fn slots_label(self) -> &'static str {
         match self {
-            CullingPhase::One => "culling_phase_one",
-            CullingPhase::Two => "culling_phase_two",
+            CullingPhase::One => "culling_phase_one_slots",
+            CullingPhase::Two => "culling_phase_two_slots",
+        }
+    }
+
+    /// The label, and the name in Frame stats, of the phase's pass over its
+    /// Meshlet records: `append_triangles`, whose time follows the triangles
+    /// drawn.
+    pub(crate) const fn triangles_label(self) -> &'static str {
+        match self {
+            CullingPhase::One => "culling_phase_one_triangles",
+            CullingPhase::Two => "culling_phase_two_triangles",
         }
     }
 }
@@ -274,18 +287,20 @@ impl CullingPass {
 
     /// Records `phase` of the pass into `encoder`: phase one clears the
     /// frame's draw first. It appends the Meshlets of the Instances the phase
-    /// draws among `frame`'s slots in use, with `bind_groups` set, timed into
-    /// `timestamp_writes`. Where they need more Meshlet records or packed
-    /// indices than the draw holds, it draws the Instances that fit and
-    /// counts the others as overflowed, which the GPU stats readback warns
-    /// about.
+    /// draws among `frame`'s slots in use, with `bind_groups` set, in two
+    /// compute passes timed into `slots_timestamp_writes` and
+    /// `triangles_timestamp_writes`. Where they need more Meshlet records or
+    /// packed indices than the draw holds, it draws the Instances that fit
+    /// and counts the others as overflowed, which the GPU stats readback
+    /// warns about.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
         phase: CullingPhase,
-        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        slots_timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        triangles_timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         let pipelines = match phase {
             CullingPhase::One => {
@@ -294,15 +309,14 @@ impl CullingPass {
             }
             CullingPhase::Two => &self.phase_two,
         };
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(phase.label()),
-            timestamp_writes,
-        });
-        for &(definition, bind_group) in bind_groups {
-            pass.set_bind_group(definition.index, bind_group, &[]);
-        }
-        pass.set_bind_group(FRAME_DRAW.index, &self.bind_group, &[]);
         let slots = frame.instance_slot_count;
+        let mut pass = begin_pass(
+            encoder,
+            phase.slots_label(),
+            slots_timestamp_writes,
+            bind_groups,
+            &self.bind_group,
+        );
         if slots > 0 {
             // Each slot's offsets are the sum of the earlier slots' Meshlet
             // records and packed indices: summed by block, then the blocks.
@@ -313,8 +327,17 @@ impl CullingPass {
             // An invocation per slot.
             pass.set_pipeline(&pipelines.append_records);
             pass.dispatch_workgroups(slots.div_ceil(SCAN_BLOCK_SIZE), 1, 1);
+        }
+        drop(pass);
+        let mut pass = begin_pass(
+            encoder,
+            phase.triangles_label(),
+            triangles_timestamp_writes,
+            bind_groups,
+            &self.append_bind_group,
+        );
+        if slots > 0 {
             // A workgroup per Meshlet record the phase appends.
-            pass.set_bind_group(FRAME_DRAW.index, &self.append_bind_group, &[]);
             pass.set_pipeline(&pipelines.append_triangles);
             pass.dispatch_workgroups_indirect(&self.buffers.frame_draw, APPEND_DISPATCH_OFFSET);
         }
@@ -350,6 +373,27 @@ impl CullingPass {
     pub fn frame_draw(&self) -> &wgpu::Buffer {
         &self.buffers.frame_draw
     }
+}
+
+/// A compute pass of `encoder` labelled `label`, timed into
+/// `timestamp_writes`, with `bind_groups` and `frame_draw`, the pass's group
+/// 3, set.
+fn begin_pass<'encoder>(
+    encoder: &'encoder mut wgpu::CommandEncoder,
+    label: &str,
+    timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+    bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
+    frame_draw: &wgpu::BindGroup,
+) -> wgpu::ComputePass<'encoder> {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some(label),
+        timestamp_writes,
+    });
+    for &(definition, bind_group) in bind_groups {
+        pass.set_bind_group(definition.index, bind_group, &[]);
+    }
+    pass.set_bind_group(FRAME_DRAW.index, frame_draw, &[]);
+    pass
 }
 
 impl FrameDrawBuffers {
