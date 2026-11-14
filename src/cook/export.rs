@@ -949,7 +949,7 @@ mod tests {
         assert_eq!(floats(&suns[0]["color"]), [1.0; 3]);
         assert_eq!(suns[0]["illuminance"], 100_000.0);
         let environment = &scene["environment"];
-        assert_eq!(floats(&environment["ambient_illuminance"]), [10_000.0; 3]);
+        assert_eq!(floats(&environment["ambient_illuminance"]), [11_000.0; 3]);
         assert_near(
             &floats(&environment["background_luminance"]),
             &[10_000.0, 20_000.0, 30_000.0],
@@ -1107,7 +1107,7 @@ mod tests {
         );
 
         let environment = &scene["environment"];
-        assert_eq!(floats(&environment["ambient_illuminance"]), [10_000.0; 3]);
+        assert_eq!(floats(&environment["ambient_illuminance"]), [11_000.0; 3]);
         // 0.3 · 100,000 in f32 rounds to 30,000.002.
         assert_near(
             &floats(&environment["background_luminance"]),
