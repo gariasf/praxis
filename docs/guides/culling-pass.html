@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 0, the frame's camera; group 2, the scene geometry; group 3, <code>FRAME_DRAW</code>, the draw's buffers and the depth pyramid, in two copies that differ in the buffer bound as <code>frame_draw</code>.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/culling.wgsl</code>, after the common part; each phase's pipelines set the <code>PHASE_TWO</code> and <code>CULLING</code> overrides.</dd>
       <dt>Counted</dt><dd><code>culling_phase_one</code> and <code>culling_phase_two</code> in GPU time; <code>instances_drawn</code>, <code>triangles_drawn</code>, <code>phase_two_triangles_drawn</code> and <code>instances_overflowed</code> in counters, read back from <code>FrameDraw</code>; its buffers in GPU memory.</dd>
+      <dt>Files</dt><dd><code>src/render/culling_pass.rs</code>, <code>src/render/shaders/culling.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

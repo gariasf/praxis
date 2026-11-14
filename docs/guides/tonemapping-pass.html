@@ -128,6 +128,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Bind groups</dt><dd>Group 3, tonemapping input: the HDR target and the dither mask, rebuilt by <code>bind_render_targets</code> after every resize.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/tonemapping.wgsl</code>, assembled after the HDR, GT7 and display parts: <code>hdr.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>.</dd>
       <dt>Counted</dt><dd><code>tonemapping_pass</code> in GPU time; the dither mask's 4,096 bytes in GPU memory.</dd>
+      <dt>Files</dt><dd><code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>src/render/shaders/display.wgsl</code>, <code>src/render/shaders/gt7.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">

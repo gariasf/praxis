@@ -127,6 +127,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Formats</dt><dd>Albedo and emissive <code>Bc7RgbaUnormSrgb</code>; normal and metallic-roughness <code>Bc5RgUnorm</code>; occlusion <code>Bc4RUnorm</code>. Every mip, from the full size down to 1 texel on the longer side.</dd>
       <dt>Counted</dt><dd>Not in Frame stats: the cook runs outside the frame. Each cook logs how many Assets it cooked and how many it found up to date (<code>cook complete</code>).</dd>
       <dt>Where in the code</dt><dd><code>TextureSource::cook</code> and its helpers in <code>src/cook/texture.rs</code>; the batches in <code>cook_sources</code>, <code>src/cook/mod.rs</code>; the Blob and its decoders in <code>CookedTexture</code>, <code>src/assets/cooked.rs</code>; the load in <code>ChannelTextures::push</code>, <code>src/assets/material.rs</code>.</dd>
+      <dt>Files</dt><dd><code>src/cook/texture.rs</code>, <code>src/assets/cooked.rs</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
