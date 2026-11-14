@@ -13,7 +13,7 @@ pollster = "0.4"
 anyhow = "1"
 bytemuck = "1.25.0"
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
-gltf = { version = "1.4.1", default-features = false, features = ["import", "names", "utils"], optional = true }
+gltf = { version = "1.4.1", default-features = false, features = ["extras", "import", "names", "utils"], optional = true }
 bevy_ecs = { version = "0.18.1", features = ["trace", "debug", "multi_threaded"] }
 bevy_tasks = { version = "0.18.1", default-features = false, features = ["multi_threaded"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

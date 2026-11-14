@@ -724,6 +724,19 @@ fn asset_names<'a>(names: impl Iterator<Item = Option<&'a str>>) -> Vec<AssetNam
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_thin_primitive_without_radial_normals_is_refused_by_mesh_and_primitive() {
+        let flat = crate::scenes::ground_plane(1.0, 1.0).thin(0.03);
+        let primitives = [(crate::scenes::ground_plane(1.0, 1.0), None), (flat, None)];
+        let error = mesh_blob(AssetId(7), "town bar", &primitives).unwrap_err();
+        let error = format!("{error:#}");
+        assert!(
+            error.contains("cooking Mesh town bar")
+                && error.contains("Primitive 1: it is declared thin"),
+            "{error}"
+        );
+    }
+
     /// A Texture or Material that only the Cooked cache holds, which this
     /// cook neither wrote nor found up to date, is stale and dangles; while a
     /// source is absent, the cache's Blobs are kept and it passes. One the

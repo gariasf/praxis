@@ -271,6 +271,7 @@ mod tests {
                         index_count: 3,
                         material: Some(AssetId(material)),
                         texel_density: 0.0,
+                        thin_radius_metres: None,
                         meshlets: vec![CookedMeshlet {
                             vertices: vec![0, 1, 2],
                             triangles: vec![[0, 1, 2]],
@@ -367,6 +368,7 @@ mod tests {
             index_count: 3,
             material: Some(AssetId(1)),
             texel_density: 0.0,
+            thin_radius_metres: None,
             meshlets: vec![CookedMeshlet {
                 vertices: vec![0, 1, 2],
                 triangles: vec![[0, 1, 2]],
@@ -462,6 +464,7 @@ mod tests {
                 index_count: 3,
                 material: Some(AssetId(1)),
                 texel_density: 0.0,
+                thin_radius_metres: None,
                 meshlets: vec![CookedMeshlet {
                     vertices: vec![0, 1, 2],
                     triangles: vec![[0, 1, 2]],

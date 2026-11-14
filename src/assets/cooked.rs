@@ -37,7 +37,7 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 4;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 5;
 /// The most LODs a Mesh's LOD chain holds, LOD 0 among them.
 pub(crate) const MESH_MAX_LODS: usize = 8;
 /// The most vertices a Meshlet holds: a packed index carries the vertex
@@ -495,6 +495,9 @@ pub struct CookedPrimitive {
     /// as a length. Times a Texture's side and over the Instance's scale it
     /// is texels per metre, which mip priority reads (ADR 0017).
     pub texel_density: f32,
+    /// Its radius, if it is a Thin Primitive: a side vertex's position less
+    /// its normal times this is on its centre line; a cap's is not.
+    pub thin_radius_metres: Option<f32>,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,
 }
@@ -593,8 +596,8 @@ pub struct CookedLod {
     pub error_metres: f32,
     pub indices: Vec<u32>,
     /// The Mesh's Primitives in order, each with its run of `indices`, which
-    /// is empty where the LOD keeps no triangle of it, and LOD 0's Material
-    /// and texel density.
+    /// is empty where the LOD keeps no triangle of it, and LOD 0's Material,
+    /// texel density and Thin Primitive radius.
     pub primitives: Vec<CookedPrimitive>,
 }
 
@@ -620,7 +623,8 @@ impl CookedMesh {
     /// After the magic and version, one zstd frame holding the vertex,
     /// Primitive and LOD counts as little-endian u32s, the bounds as six
     /// little-endian f32s, each Primitive's Material Asset ID (zero for
-    /// none) and texel density as a little-endian f32, then per LOD, LOD 0
+    /// none), texel density and Thin Primitive radius (zero for none) as
+    /// little-endian f32s, then per LOD, LOD 0
     /// first, its error as a little-endian f32, its index count and each
     /// Primitive's first index, index count and Meshlet count, then a byte
     /// per Meshlet, its triangle count, the byte length of the encoded
@@ -650,6 +654,7 @@ impl CookedMesh {
         for primitive in &self.primitives {
             payload.extend(primitive.material.map_or(0, |id| id.0).to_be_bytes());
             payload.extend(primitive.texel_density.to_le_bytes());
+            payload.extend(primitive.thin_radius_metres.unwrap_or(0.0).to_le_bytes());
         }
         for (error_metres, indices, primitives) in self.lods() {
             anyhow::ensure!(
@@ -701,7 +706,16 @@ impl CookedMesh {
         for _ in 0..primitive_count {
             let material = u128::from_be_bytes(take(rest, 16)?.try_into().expect("16 bytes"));
             let texel_density = f32::from_bits(take_u32(rest)?);
-            materials.push(((material != 0).then_some(AssetId(material)), texel_density));
+            let thin_radius_metres = f32::from_bits(take_u32(rest)?);
+            anyhow::ensure!(
+                thin_radius_metres.is_finite() && thin_radius_metres >= 0.0,
+                "Mesh Blob has a Thin Primitive of radius {thin_radius_metres} m"
+            );
+            materials.push((
+                (material != 0).then_some(AssetId(material)),
+                texel_density,
+                (thin_radius_metres != 0.0).then_some(thin_radius_metres),
+            ));
         }
         let mut lods = Vec::new();
         let mut meshlet_counts = Vec::new();
@@ -720,7 +734,7 @@ impl CookedMesh {
                 "Mesh Blob's index count is not whole triangles"
             );
             let mut primitives = Vec::new();
-            for &(material, texel_density) in &materials {
+            for &(material, texel_density, thin_radius_metres) in &materials {
                 let first_index = take_u32(rest)?;
                 let primitive_index_count = take_u32(rest)?;
                 anyhow::ensure!(
@@ -733,6 +747,7 @@ impl CookedMesh {
                     index_count: primitive_index_count,
                     material,
                     texel_density,
+                    thin_radius_metres,
                     meshlets: Vec::new(),
                 });
             }
@@ -1330,11 +1345,12 @@ mod tests {
     }
 
     /// A Mesh round-trips with its LOD chain, a Primitive that a LOD leaves
-    /// no triangle of included; a Blob of format version 3, which holds no
-    /// LOD chain, is refused.
+    /// no triangle of and a Thin Primitive's radius included; a Blob of
+    /// format version 4, which holds no radius, is refused, and so is a
+    /// radius below zero.
     #[cfg(feature = "cook")]
     #[test]
-    fn mesh_blob_round_trips_its_lod_chain_and_refuses_format_version_3() {
+    fn mesh_blob_round_trips_its_lod_chain_and_thin_radius_and_refuses_format_version_4() {
         let primitive = |first_index: u32, indices: &[u32], material: u128, texel_density: f32| {
             let triangles = indices.as_chunks::<3>().0;
             CookedPrimitive {
@@ -1342,6 +1358,7 @@ mod tests {
                 index_count: indices.len() as u32,
                 material: (material != 0).then_some(AssetId(material)),
                 texel_density,
+                thin_radius_metres: (material == 0).then_some(0.015),
                 meshlets: CookedMeshlet::split(
                     triangles,
                     (!triangles.is_empty()).then_some(triangles.len()),
@@ -1383,12 +1400,26 @@ mod tests {
         let mut blob = mesh.to_blob().unwrap();
         // The index codec may rotate a triangle.
         let with_lowest_rotations = crate::cook::mesh::tests::with_lowest_rotations;
+        let read = CookedMesh::from_blob(&blob).unwrap();
+        for (_, _, primitives) in read.lods() {
+            let radii = primitives
+                .iter()
+                .map(|primitive| primitive.thin_radius_metres);
+            assert_eq!(radii.collect::<Vec<_>>(), [None, Some(0.015)]);
+        }
         assert_eq!(
-            with_lowest_rotations(CookedMesh::from_blob(&blob).unwrap()),
-            with_lowest_rotations(mesh)
+            with_lowest_rotations(read),
+            with_lowest_rotations(mesh.clone())
         );
 
-        blob[4..8].copy_from_slice(&3u32.to_le_bytes());
+        let mut negative = mesh;
+        negative.primitives[1].thin_radius_metres = Some(-0.015);
+        let error = CookedMesh::from_blob(&negative.to_blob().unwrap())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("radius -0.015 m"), "{error}");
+
+        blob[4..8].copy_from_slice(&4u32.to_le_bytes());
         let error = CookedMesh::from_blob(&blob).unwrap_err().to_string();
         assert!(error.contains("re-cook with `praxis cook`"), "{error}");
     }

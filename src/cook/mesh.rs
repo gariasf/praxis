@@ -5,6 +5,9 @@
 //! Primitive's triangles, in that order, into Meshlets; then simplifies the
 //! Mesh into the rest of its LOD chain, each LOD ordered and cut alike.
 
+use std::collections::HashSet;
+
+use anyhow::Context as _;
 use glam::{Mat3, Quat, Vec2, Vec3};
 use sha2::{Digest, Sha256};
 
@@ -69,6 +72,7 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
             uvs,
             indices,
             bounds,
+            thin_radius_metres,
         } = geometry;
         hash_part(bytemuck::cast_slice(positions));
         hash_part(bytemuck::cast_slice(normals));
@@ -76,6 +80,9 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
         hash_part(bytemuck::cast_slice(indices));
         if let Some(bounds) = bounds {
             hash_part(bytemuck::cast_slice(bounds));
+        }
+        if let Some(thin_radius_metres) = thin_radius_metres {
+            hash_part(&thin_radius_metres.to_le_bytes());
         }
         hash_part(&material.map_or(0, |material| material.0).to_be_bytes());
     }
@@ -86,8 +93,61 @@ pub(super) fn cook_key(primitives: &[SourcePrimitive]) -> String {
 /// bound, within which f32 rotation keeps its precision bar.
 const MAX_PIVOT_DISTANCE_METRES: f32 = 128.0;
 
+/// How far a Thin Primitive's radius may lie from the one declared, as a
+/// share of it.
+const THIN_RADIUS_TOLERANCE: f32 = 0.25;
+
+/// Refuses a Primitive declared thin whose triangles are neither the side of
+/// a tube of `radius_metres` nor a cap that closes one.
+fn check_thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        radius_metres.is_finite() && radius_metres > 0.0,
+        "it is declared thin with a radius of {radius_metres} m"
+    );
+    let position = |vertex: u32| Vec3::from(geometry.positions[vertex as usize]);
+    let normal = |vertex: u32| Vec3::from(geometry.normals[vertex as usize]).normalize_or_zero();
+    let position_bits = |vertex: u32| geometry.positions[vertex as usize].map(f32::to_bits);
+    let on_one_ring = |[first, second]: [u32; 2]| {
+        let normals_apart = normal(first) - normal(second);
+        let centres_apart = position(first) - position(second) - normals_apart * radius_metres;
+        normals_apart != Vec3::ZERO
+            && centres_apart.length()
+                <= THIN_RADIUS_TOLERANCE * radius_metres * normals_apart.length()
+    };
+    let edges =
+        |&[first, second, third]: &[u32; 3]| [[first, second], [second, third], [third, first]];
+    let triangles = geometry.indices.as_chunks::<3>().0;
+    let ring_positions: HashSet<[u32; 3]> = triangles
+        .iter()
+        .flat_map(edges)
+        .filter(|&edge| on_one_ring(edge))
+        .flatten()
+        .map(position_bits)
+        .collect();
+    let widest_cap_edge_metres = 2.0 * radius_metres * (1.0 + THIN_RADIUS_TOLERANCE);
+    let stray = triangles.iter().find(|&triangle| {
+        let on_rings =
+            (triangle.iter()).all(|&vertex| ring_positions.contains(&position_bits(vertex)));
+        let is_side = edges(triangle).into_iter().any(on_one_ring);
+        let is_cap = edges(triangle).into_iter().all(|[first, second]| {
+            position(first).distance(position(second)) <= widest_cap_edge_metres
+        });
+        !(on_rings && (is_side || is_cap))
+    });
+    if let Some(&[first, second, third]) = stray {
+        anyhow::bail!(
+            "it is declared thin with a radius of {radius_metres} m, and its triangle at {}, {}, {} is neither on a tube of that radius nor a cap of one",
+            position(first),
+            position(second),
+            position(third)
+        );
+    }
+    Ok(())
+}
+
 /// Cooks one Mesh from its Primitives' geometry and Material Asset IDs, or
-/// refuses one with a vertex past `MAX_PIVOT_DISTANCE_METRES` from its pivot.
+/// refuses one with a vertex past `MAX_PIVOT_DISTANCE_METRES` from its pivot
+/// or a Thin Primitive without radial normals.
 pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh> {
     let farthest_metres = primitives
         .iter()
@@ -106,7 +166,11 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
         bounds: [[0.0; 3]; 2],
     };
     let mut triangle_counts = Vec::new();
-    for (geometry, material) in primitives {
+    for (primitive_index, (geometry, material)) in primitives.iter().enumerate() {
+        if let Some(radius_metres) = geometry.thin_radius_metres {
+            check_thin_primitive(geometry, radius_metres)
+                .with_context(|| format!("Primitive {primitive_index}"))?;
+        }
         let (vertices, indices) = cook_primitive(geometry);
         let triangles = indices.as_chunks::<3>().0;
         triangle_counts.push(meshlet_triangle_counts(triangles, vertices.len()));
@@ -116,6 +180,7 @@ pub(crate) fn cook(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh>
             index_count: indices.len() as u32,
             material: *material,
             texel_density: texel_density(geometry),
+            thin_radius_metres: geometry.thin_radius_metres,
             meshlets: Vec::new(),
         });
         mesh.indices
@@ -254,6 +319,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
                 index_count: indices.len() as u32,
                 material: primitive.material,
                 texel_density: primitive.texel_density,
+                thin_radius_metres: primitive.thin_radius_metres,
                 meshlets: CookedMeshlet::split(
                     triangles,
                     meshlet_triangle_counts(triangles, mesh.vertices.len()),
@@ -390,6 +456,7 @@ pub(crate) fn weld(geometry: &Geometry) -> Geometry {
         normals: keys.iter().map(|key| [key[5], key[6], key[7]]).collect(),
         indices: meshopt::remap_index_buffer(Some(&geometry.indices), vertex_count, &remap),
         bounds: None,
+        thin_radius_metres: None,
     }
 }
 
@@ -500,7 +567,8 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
 
 /// Every Mesh of a glTF file, with its name, in mesh-local space, with each
 /// Primitive's geometry and the Asset ID of its Material, named as the
-/// Material cook names it; a Primitive on glTF's default Material names none.
+/// Material cook names it; a Primitive on glTF's default Material names none,
+/// and one whose `extras` hold `thin_radius_metres` is a Thin Primitive.
 pub(super) fn gltf_meshes<'document>(
     guid: u128,
     document: &'document gltf::Document,
@@ -539,12 +607,25 @@ pub(super) fn gltf_meshes<'document>(
                 .material()
                 .index()
                 .map(|index| AssetId::new(source, AssetKind::Material, material_names[index]));
+            let thin_radius_metres = (primitive.extras().as_deref())
+                .map(|extras| serde_json::from_str::<serde_json::Value>(extras.get()))
+                .transpose()?
+                .as_ref()
+                .and_then(|extras| extras.get("thin_radius_metres"))
+                .map(|radius_metres| {
+                    radius_metres.as_f64().with_context(|| {
+                        format!("{name:?}: a primitive's thin_radius_metres is {radius_metres}")
+                    })
+                })
+                .transpose()?
+                .map(|radius_metres| radius_metres as f32);
             let geometry = Geometry {
                 positions,
                 normals,
                 uvs,
                 indices,
                 bounds: None,
+                thin_radius_metres,
             };
             primitives.push((geometry, material));
         }
@@ -572,16 +653,18 @@ pub(crate) mod tests {
                 uvs: vec![[0.0; 2]; 3],
                 indices: vec![0, 1, 2],
                 bounds: None,
+                thin_radius_metres: None,
             };
             (geometry, None)
         };
         let key = cook_key(&[triangle()]);
-        let changes: [fn(&mut SourcePrimitive); 6] = [
+        let changes: [fn(&mut SourcePrimitive); 7] = [
             |(geometry, _)| geometry.positions[0][0] = 1.0,
             |(geometry, _)| geometry.normals[0][2] = -1.0,
             |(geometry, _)| geometry.uvs[0][0] = 1.0,
             |(geometry, _)| geometry.indices[0] = 2,
             |(geometry, _)| geometry.bounds = Some([[-1.0; 3], [1.0; 3]]),
+            |(geometry, _)| geometry.thin_radius_metres = Some(0.5),
             |(_, material)| *material = Some(AssetId(1)),
         ];
         for change in changes {
@@ -589,6 +672,65 @@ pub(crate) mod tests {
             change(&mut primitive);
             assert_ne!(cook_key(&[primitive]), key);
         }
+    }
+
+    #[test]
+    fn towns_wire_and_railing_post_cook_as_thin_primitives() {
+        let meshes = ReferenceScene::Town.meshes();
+        for (name, radius_metres) in [("wire", 0.015), ("railing-post", 0.025)] {
+            let (_, primitives) = meshes.iter().find(|(mesh, _)| *mesh == name).unwrap();
+            let primitives: Vec<SourcePrimitive> = primitives
+                .iter()
+                .map(|(geometry, _)| (geometry.clone(), None))
+                .collect();
+            let cooked = cook(&primitives).unwrap();
+            for (_, _, primitives) in cooked.lods() {
+                let radii: Vec<_> = primitives
+                    .iter()
+                    .map(|primitive| primitive.thin_radius_metres)
+                    .collect();
+                assert_eq!(radii, [Some(radius_metres)], "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_gltf_primitives_extras_declare_it_thin() {
+        let primitive =
+            |extras: &str| format!(r#"{{"attributes": {{"POSITION": 0, "NORMAL": 0}}{extras}}}"#);
+        let meshes = |primitives: [String; 3]| {
+            format!(
+                r#"{{
+                    "asset": {{"version": "2.0"}},
+                    "buffers": [{{"byteLength": 36}}],
+                    "bufferViews": [{{"buffer": 0, "byteLength": 36}}],
+                    "accessors": [{{
+                        "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
+                        "min": [0, 0, 0], "max": [0, 0, 0]
+                    }}],
+                    "meshes": [{{"primitives": [{}]}}]
+                }}"#,
+                primitives.join(", ")
+            )
+        };
+        let read = |json: String| {
+            let gltf = gltf::Gltf::from_slice(json.as_bytes()).unwrap();
+            let buffers = [gltf::buffer::Data(vec![0; 36])];
+            gltf_meshes(0, &gltf.document, &buffers).map(|meshes| {
+                (meshes[0].2.iter())
+                    .map(|(geometry, _)| geometry.thin_radius_metres)
+                    .collect::<Vec<_>>()
+            })
+        };
+        let radii = read(meshes([
+            primitive(r#", "extras": {"thin_radius_metres": 0.015}"#),
+            primitive(""),
+            primitive(r#", "extras": 3"#),
+        ]));
+        assert_eq!(radii.unwrap(), [Some(0.015), None, None]);
+        let not_a_number = primitive(r#", "extras": {"thin_radius_metres": "thin"}"#);
+        let error = read(meshes([not_a_number, primitive(""), primitive("")])).unwrap_err();
+        assert!(error.to_string().contains("thin_radius_metres"), "{error}");
     }
 
     /// One Snorm16 step of a component.
@@ -666,6 +808,7 @@ pub(crate) mod tests {
                 .collect(),
             indices: (0..6).collect(),
             bounds: None,
+            thin_radius_metres: None,
         };
         assert_eq!(weld(&soup).positions.len(), 4);
         assert_eq!(cook(&[(soup, None)]).unwrap().vertices.len(), 4);

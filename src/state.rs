@@ -978,6 +978,7 @@ mod tests {
                 index_count: 6,
                 material: Some(material_id),
                 texel_density: 1.0 / (2.0 * half_size),
+                thin_radius_metres: None,
                 meshlets: vec![CookedMeshlet {
                     vertices: vec![0, 1, 2, 3],
                     triangles: vec![[0, 1, 2], [0, 2, 3]],

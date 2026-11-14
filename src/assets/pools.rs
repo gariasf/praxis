@@ -500,6 +500,11 @@ impl MeshPool {
                 .iter()
                 .map(|primitive| primitive.texel_density)
                 .collect(),
+            thin_radii_metres: mesh
+                .primitives
+                .iter()
+                .map(|primitive| primitive.thin_radius_metres)
+                .collect(),
             materials: materials.to_vec(),
         });
 
@@ -1274,6 +1279,7 @@ pub(crate) mod tests {
                 index_count: indices.len() as u32,
                 material: None,
                 texel_density: 0.0,
+                thin_radius_metres: None,
                 meshlets,
             }],
             indices,
@@ -1352,6 +1358,7 @@ pub(crate) mod tests {
             index_count: 3,
             material: None,
             texel_density: first_index as f32,
+            thin_radius_metres: (first_index > 0).then_some(0.5),
             meshlets: CookedMeshlet::split(&[[0, 1, 2], [2, 1, 3]][first_index / 3..][..1], [1])
                 .expect("one Meshlet"),
         };
@@ -1371,6 +1378,10 @@ pub(crate) mod tests {
             .expect("the Mesh fits");
         staging.submit(&context.queue);
         assert_eq!(pool.get(handle).unwrap().texel_densities, [0.0, 3.0]);
+        assert_eq!(
+            pool.get(handle).unwrap().thin_radii_metres,
+            [None, Some(0.5)]
+        );
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];

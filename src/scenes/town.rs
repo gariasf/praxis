@@ -963,6 +963,9 @@ mod generators {
     pub(crate) fn meshes() -> Vec<(&'static str, Vec<ScenePrimitive>)> {
         // A Primitive of `parts`, which names `material`.
         let of = |material, parts: Vec<Geometry>| (merged(parts), Some(material));
+        let thin = |(geometry, material): ScenePrimitive, radius_metres| {
+            (geometry.thin(radius_metres), material)
+        };
         let car = |paint| {
             let wheels = [(-0.8, -1.35), (0.8, -1.35), (-0.8, 1.35), (0.8, 1.35)].map(|(x, z)| {
                 let axle = Quat::from_rotation_z(TAU / 4.0);
@@ -1086,7 +1089,10 @@ mod generators {
             ),
             (
                 TownMesh::RailingPost,
-                vec![of("steel", vec![cylinder(0.025, 0.025, 1.0, 6)])],
+                vec![thin(
+                    of("steel", vec![cylinder(0.025, 0.025, 1.0, 6)]),
+                    0.025,
+                )],
             ),
             (
                 TownMesh::Lamp,
@@ -1111,9 +1117,12 @@ mod generators {
             ),
             (
                 TownMesh::Wire,
-                vec![of(
-                    "cable",
-                    vec![wire(super::POLE_SPACING as f32, 0.6, 0.015, 15, 3)],
+                vec![thin(
+                    of(
+                        "cable",
+                        vec![wire(super::POLE_SPACING as f32, 0.6, 0.015, 15, 3)],
+                    ),
+                    0.015,
                 )],
             ),
             (
@@ -1335,5 +1344,33 @@ mod generators {
             }
         }
         geometry
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn cooks_as_thin(geometry: Geometry, radius_metres: f32) -> bool {
+            crate::cook::mesh::cook(&[(geometry.thin(radius_metres), None)]).is_ok()
+        }
+
+        #[test]
+        fn the_cook_takes_a_thin_primitive_only_as_a_tube_near_its_declared_radius() {
+            assert!(cooks_as_thin(wire(30.0, 0.6, 0.015, 15, 3), 0.015));
+            assert!(cooks_as_thin(cylinder(0.025, 0.025, 1.0, 6), 0.025));
+            assert!(cooks_as_thin(cylinder(0.05, 0.05, 1.0, 6), 0.06));
+            assert!(!cooks_as_thin(cylinder(0.05, 0.05, 1.0, 6), 0.07));
+            assert!(cooks_as_thin(cylinder(0.05, 0.05, 1.0, 24), 0.06));
+            assert!(!cooks_as_thin(cylinder(0.05, 0.05, 1.0, 24), 0.07));
+            assert!(cooks_as_thin(cylinder(0.09, 0.06, 5.2, 8), 0.075));
+            assert!(!cooks_as_thin(cylinder(0.1, 0.02, 1.0, 8), 0.06));
+            assert!(!cooks_as_thin(cylinder(0.25, 0.025, 2.5, 6), 0.025));
+            let bar = || cuboid(vec3(-0.03, 0.0, -0.03), vec3(0.03, 1.0, 0.03));
+            assert!(!cooks_as_thin(bar(), 0.03));
+            let post_and_bar = merged([cylinder(0.025, 0.025, 1.0, 6), bar()]);
+            assert!(!cooks_as_thin(post_and_bar, 0.025));
+            assert!(!cooks_as_thin(cylinder(0.025, 0.025, 1.0, 6), 0.0));
+            assert!(!cooks_as_thin(cylinder(0.025, 0.025, 1.0, 6), f32::NAN));
+        }
     }
 }

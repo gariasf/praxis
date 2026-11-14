@@ -13,6 +13,11 @@ pub struct Mesh {
     pub bounds: [[f32; 3]; 2],
     /// Each Primitive's `CookedPrimitive::texel_density`, in Primitive order.
     pub texel_densities: Vec<f32>,
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "read once Thin Primitives draw")
+    )]
+    pub thin_radii_metres: Vec<Option<f32>>,
     /// Each Primitive's Material, in Primitive order; `None` for one that
     /// names none or is not drawn.
     pub materials: Vec<Option<MaterialHandle>>,
