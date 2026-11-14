@@ -5,6 +5,8 @@ name: lavapipe files
 # the checkout, so a file sits in it at its path in the repository.
 on:
   workflow_dispatch:
+  push:
+    branches: ['throwaway/835-seam']
 
 permissions:
   contents: read
