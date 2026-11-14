@@ -559,6 +559,7 @@ impl FramePreparer {
         material_generations: &Generations,
         aspect_ratio: f32,
     ) -> &FrameData {
+        std::hint::black_box(Box::new(0_u8));
         let Self {
             directional_light_query,
             point_light_query,

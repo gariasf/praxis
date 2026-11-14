@@ -575,7 +575,7 @@ impl ReferenceScene {
             | Self::Crowd
             | Self::Town
             | Self::World => Environment {
-                ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
+                ambient_illuminance: glam::Vec3::splat(0.11 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },
         }
