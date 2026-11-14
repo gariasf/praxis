@@ -29,10 +29,10 @@
 #     >~/Library/LaunchAgents/com.github.gariasf.praxis.sweep.plist
 #   launchctl bootstrap "gui/$(id -u)" \
 #     ~/Library/LaunchAgents/com.github.gariasf.praxis.sweep.plist
-# Install on the RTX 2070 SUPER (Task Scheduler, 04:00 local, waking the
-# PC if the power plan allows wake timers; it runs only while the owner is
-# logged on, as the bench needs the GPU; a night the PC is off is skipped,
-# not caught up in the day), in Git Bash:
+# Install on the RTX 2070 SUPER (Task Scheduler, once the PC is idle,
+# never waking it, as its fans are too loud for the night; it runs only
+# while the owner is logged on, as the bench needs the GPU, and stops before
+# its next run once their input arrives), in Git Bash:
 #   git clone https://github.com/gariasf/praxis.git ~/praxis-sweep
 #   sweep=$(cd ~/praxis-sweep && pwd -W)
 #   sed "s|@SWEEP@|$sweep|g; s|@BASH@|$(cygpath -m "$(command -v bash)")|g" \
@@ -128,6 +128,31 @@
   fi
   preparation_seconds=$((SECONDS - preparation_start_seconds))
 
+  # On Windows, where the sweep starts once the PC is idle, whether keyboard
+  # or mouse input has arrived since this script started: the owner is back,
+  # and a bench beside them would not be quiet. GetLastInputInfo through
+  # PowerShell, which needs no dependency; the command is encoded, so no
+  # quoting stands between bash and the C# string literals.
+  # Elsewhere, and when the query prints no number, it reads as no input.
+  input_since_start() {
+    local query seconds
+    case "$OSTYPE" in msys* | cygwin*) ;; *) return 1 ;; esac
+    read -r -d '' query <<'QUERY'
+Add-Type -Namespace Praxis -Name Input -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential)] public struct LastInputInfo { public uint Size; public uint Time; }
+[DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInputInfo info);
+[DllImport("kernel32.dll")] static extern uint GetTickCount();
+public static string SecondsSinceInput() {
+  var info = new LastInputInfo(); info.Size = 8;
+  return GetLastInputInfo(ref info) ? ((GetTickCount() - info.Time) / 1000).ToString() : "";
+}
+'@
+[Praxis.Input]::SecondsSinceInput()
+QUERY
+    seconds=$(powershell -NoProfile -NonInteractive -EncodedCommand \
+      "$(printf '%s' "$query" | iconv -t UTF-16LE | base64 -w0)" 2>/dev/null | tr -d '\r')
+    [[ "$seconds" =~ ^[0-9]+$ ]] && [ "$seconds" -lt "$SECONDS" ]
+  }
   # Each scene's bench reads the GPU load at its start, and a utilisation
   # reading lags the work it measures: nvidia-smi's covers the past 1/6 s
   # to 1 s [ref:nvidia-smi-utilization-sample-period], and on the RTX 2070
@@ -139,6 +164,10 @@
   # for preparing. Whether the next run, $1, may start: within the time cap,
   # once the machine is idle; it logs why not.
   may_start() {
+    if input_since_start; then
+      log "input arrived since the sweep started; left for the next idle: $1 and after"
+      return 1
+    fi
     [ $((SECONDS - benching_start_seconds)) -lt "$cap_seconds" ] &&
       quiet_by $((benching_start_seconds + cap_seconds)) '[cg]pu load' && return 0
     log "time cap of ${cap_seconds}s of benching reached; left for the next night: $1 and after"
