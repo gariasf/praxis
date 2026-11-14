@@ -21,7 +21,8 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   (`docs/adr/`) are made for the eventual scope. Implementation depth
   follows the live milestone.
 - **No throwaway code.** Clean naming, structure, and conventions at
-  every step.
+  every step. The one exception is a prototype ticket's branch, which
+  is never merged (`docs/agents/workflow.md`, Tickets).
 - **Goals are explicit.** Work traces to a ticket in the live milestone
   (`docs/agents/workflow.md`).
 - Teaching happens on request, and the standing request is a field guide
@@ -43,8 +44,9 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   its keys (`[ref:<key>]`) beside the prose citation.
 - `docs/guides/` — the field guides: the engine's reference, a page per
   mechanism and per concept, which GitHub Pages serves from `main`. Read
-  when you need one of those concepts; `docs/agents/workflow.md` says when
-  to write or rewrite one.
+  when you need one of those concepts; a page describes the commit its
+  *Describes* line names and may be stale since. `docs/agents/workflow.md`
+  says when to write or rewrite one.
 - `docs/bench/` — the page that draws the Bench history's Series from
   `bench-history` in the browser (ADR 0024), on Pages beside the guides.
 - `docs/audit/` — the audits: `deviations.md`, where the code should not
@@ -78,7 +80,7 @@ An Audit lane of a Consolidation milestone, and the standing form of a milestone
 
 Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-## Stack (frozen)
+## Stack (frozen between milestone exits)
 
 - **Language:** Rust (edition 2024)
 - **Graphics:** wgpu 30, WGSL shaders
@@ -94,7 +96,9 @@ Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/ag
 - **Structure:** Single crate: a library plus a thin binary.
 
 Pinned in `Cargo.toml`. Version bumps and new dependencies are owner
-decisions: propose them in the ticket, justify them in the PR. One
+decisions: propose them in the ticket, justify them in the PR. Each
+milestone's exit reviews the releases published since the last one
+(`docs/agents/workflow.md`, The ladder). One
 standing exception: until wgpu 31 ships, a fix Praxis needs from wgpu's
 trunk is carried on a vendored 30.0.1 crate under `vendor/`, behind
 `[patch.crates-io]`, without a further decision; `vendor/README.md` names
@@ -288,8 +292,9 @@ When a feature folder grows past one file, split into
 - Implement tickets end to end: code, tests, verification, PR, merge.
   Make routine calls yourself and state them in the PR; bring the owner
   only roadmap decisions (milestones, ADRs, dependencies) and visual or
-  interactive checks, with a recommendation attached. A rendering change
-  or a visual check shows before and after images in its PR
+  interactive checks, with a recommendation attached. A PR whose gallery
+  reports a difference, that moves a Golden or changes a `.wgsl` file, or
+  that needs a visual check, shows before and after images
   (`docs/agents/workflow.md`, PRs).
 - Work the live milestone's frontier. Work that is not a ticket becomes
   a proposed ticket first.
@@ -391,10 +396,11 @@ When reviewing changes, check for:
       authoring data
 - [ ] Code adapted from elsewhere cites its source and licence;
       noncommercial or unclear licences are never copied
-- [ ] Every reference the change relies on or adds exists, says what
-      the change claims, is cited to the right place, and is implemented
-      as it says; one that cannot be opened and confirmed is fixed or
-      removed (`docs/agents/workflow.md`, Review: Sources)
+- [ ] Every reference the change's code or ADRs rely on or add exists,
+      says what the change claims, is cited to the right place, and is
+      implemented as it says; one that cannot be opened and confirmed is
+      fixed or removed; a survey's rows wait for its decision
+      (`docs/agents/workflow.md`, Review: Sources)
 - [ ] Every name the change renames, removes or changes the behaviour
       of (pass, buffer, format, Blob field, constant) is grepped in
       comments, ADRs and `CONTEXT.md`; each clause the change makes
