@@ -179,5 +179,5 @@ scripts/lavapipe-files.sh      # has CI record a pushed branch's lavapipe
                                  and copies the changed ones into the tree
 vendor/                        # crates.io crates carrying upstream fixes
                                  until their release (README.md): wgpu-core
-                                 30.0.1 with the TLAS dependency dedup
+                                 30.0.2 with the TLAS dependency dedup
 ```
