@@ -178,6 +178,8 @@ pub struct MeshPool {
     /// Bytes of the BLASes compacted, as built, and of the others.
     compacted_blas_bytes: u64,
     uncompacted_blas_bytes: u64,
+    /// The loaded Meshes a pass draws a Thin Primitive of.
+    thin_meshes: u32,
     /// The BLASes' bytes, the compacted ones' at `compacted_blas_fraction`
     /// of theirs.
     blas_charge: Charge,
@@ -213,6 +215,7 @@ impl MeshPool {
             refitted_blases: Vec::new(),
             compacted_blas_bytes: 0,
             uncompacted_blas_bytes: 0,
+            thin_meshes: 0,
             blas_charge: memory.charge(GpuMemoryKind::AccelerationStructures, 0),
             compacted_blas_fraction: memory.compacted_blas_fraction(),
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
@@ -503,11 +506,6 @@ impl MeshPool {
                 .iter()
                 .map(|primitive| primitive.texel_density)
                 .collect(),
-            thin_radii_metres: mesh
-                .primitives
-                .iter()
-                .map(|primitive| primitive.thin_radius_metres)
-                .collect(),
             materials: materials.to_vec(),
         });
 
@@ -523,13 +521,24 @@ impl MeshPool {
         };
         for (lod, (error_metres, _, primitives)) in drawn_lods(mesh, mesh_use).enumerate() {
             let (meshlets_before, triangles_before) = (meshlet_table.len(), triangles.len());
-            for (primitive, material) in primitives.iter().zip(materials) {
+            let mut thin_triangles = 0;
+            // The culling pass draws a LOD's Thin Primitives apart: their
+            // Meshlets follow its others'.
+            let thin_radius_metres =
+                |primitive: &CookedPrimitive| primitive.thin_radius_metres.unwrap_or(0.0);
+            let (thin, ordinary): (Vec<_>, Vec<_>) = (primitives.iter().zip(materials))
+                .partition(|(primitive, _)| thin_radius_metres(primitive) > 0.0);
+            for (primitive, material) in ordinary.into_iter().chain(thin) {
                 for meshlet in &primitive.meshlets {
+                    if thin_radius_metres(primitive) > 0.0 {
+                        thin_triangles += meshlet.triangles.len() as u32;
+                    }
                     meshlet_table.push(MeshletData {
                         first_vertex: meshlet_vertices.offset + vertex_indices.len() as u32,
                         first_triangle: meshlet_triangles.offset + triangles.len() as u32,
                         triangle_count: meshlet.triangles.len() as u32,
                         material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
+                        thin_radius_metres: thin_radius_metres(primitive),
                     });
                     vertex_indices.extend(
                         meshlet
@@ -547,6 +556,7 @@ impl MeshPool {
             mesh_data.meshlet_counts[lod] = (meshlet_table.len() - meshlets_before) as u32;
             mesh_data.first_triangles[lod] = meshlet_triangles.offset + triangles_before as u32;
             mesh_data.triangle_counts[lod] = (triangles.len() - triangles_before) as u32;
+            mesh_data.thin_triangle_counts[lod] = thin_triangles;
             mesh_data.lod_errors_metres[lod] = error_metres;
         }
         self.vertex_arena.write(
@@ -611,7 +621,9 @@ impl MeshPool {
             ],
             blas_bytes: built_bytes,
             blas_compacted: false,
+            thin: mesh_data.thin_triangle_counts[0] > 0,
         };
+        self.thin_meshes += u32::from(allocation.thin);
         let index = handle.index as usize;
         if index == self.allocations.len() {
             self.allocations.push(Some(allocation));
@@ -881,6 +893,7 @@ impl MeshPool {
         let allocation = self.allocations[index]
             .take()
             .expect("a live index holds a Mesh's allocation");
+        self.thin_meshes -= u32::from(allocation.thin);
         for (arena, range) in self.arenas_mut().into_iter().zip(allocation.ranges) {
             arena.free(range);
         }
@@ -896,6 +909,11 @@ impl MeshPool {
         }
         tracing::debug!(?handle, "Mesh freed");
         true
+    }
+
+    /// Whether a loaded Mesh has a Thin Primitive a pass draws.
+    pub fn draws_thin_primitives(&self) -> bool {
+        self.thin_meshes > 0
     }
 
     /// The loaded Meshes, as prepare reads them.
@@ -1144,6 +1162,8 @@ struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
     blas_bytes: u64,
     blas_compacted: bool,
+    /// Whether a pass draws a Thin Primitive of it.
+    thin: bool,
 }
 
 /// The indices of a pool's table, each with the generation its Handles
@@ -1457,10 +1477,11 @@ pub(crate) mod tests {
 
     /// A Mesh of two Primitives, loaded after another Mesh, reaches the
     /// tables as the GPU reads them: its entry at its Handle, then each of
-    /// its Meshlets, with its Primitive's Material ID, whose triangles' corners
-    /// pull the Mesh's own vertices from the vertex Arena, in cooked order.
+    /// its Meshlets, its Thin Primitive's last, with its Primitive's Material
+    /// ID and thin radius, whose triangles' corners pull the Mesh's own
+    /// vertices from the vertex Arena, each Primitive's in cooked order.
     #[test]
-    fn a_meshs_meshlets_reach_the_tables_with_their_primitives_material_ids() {
+    fn a_meshs_meshlets_reach_the_tables_with_their_primitives_material_ids_thin_ones_last() {
         let Some(context) = gpu_context() else {
             return;
         };
@@ -1483,7 +1504,7 @@ pub(crate) mod tests {
             index_count: 3,
             material: None,
             texel_density: first_index as f32,
-            thin_radius_metres: (first_index > 0).then_some(0.5),
+            thin_radius_metres: (first_index == 0).then_some(0.5),
             meshlets: CookedMeshlet::split(&[[0, 1, 2], [2, 1, 3]][first_index / 3..][..1], [1])
                 .expect("one Meshlet"),
         };
@@ -1503,10 +1524,7 @@ pub(crate) mod tests {
             .expect("the Mesh fits");
         staging.submit(&context.queue);
         assert_eq!(pool.get(handle).unwrap().texel_densities, [0.0, 3.0]);
-        assert_eq!(
-            pool.get(handle).unwrap().thin_radii_metres,
-            [None, Some(0.5)]
-        );
+        assert!(pool.draws_thin_primitives());
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];
@@ -1515,6 +1533,7 @@ pub(crate) mod tests {
             (mesh_data.meshlet_counts[0], mesh_data.triangle_counts[0]),
             (2, 2)
         );
+        assert_eq!(mesh_data.thin_triangle_counts[0], 1);
         assert_eq!(
             [mesh_data.bounds_min, mesh_data.bounds_max],
             two_primitives.bounds
@@ -1525,11 +1544,14 @@ pub(crate) mod tests {
         let triangles: Vec<u32> = read_storage(&context, &pool.meshlet_triangle_arena.buffer, 64);
         let vertices: Vec<CookedVertex> = read_storage(&context, &pool.vertex_arena.buffer, 64);
         let mut pulled = Vec::new();
-        for (meshlet_in_mesh, material_id) in
-            [material.index(), NO_MATERIAL].into_iter().enumerate()
+        for (meshlet_in_mesh, (material_id, thin_radius_metres)) in
+            [(NO_MATERIAL, 0.0), (material.index(), 0.5)]
+                .into_iter()
+                .enumerate()
         {
             let meshlet = meshlets[mesh_data.first_meshlets[0] as usize + meshlet_in_mesh];
             assert_eq!(meshlet.material_id, material_id);
+            assert_eq!(meshlet.thin_radius_metres, thin_radius_metres);
             assert_eq!(
                 meshlet.first_triangle,
                 mesh_data.first_triangles[0] + meshlet_in_mesh as u32
@@ -1540,7 +1562,7 @@ pub(crate) mod tests {
                 pulled.push(vertices[vertex as usize].position[0] as u32);
             }
         }
-        assert_eq!(pulled, indices);
+        assert_eq!(pulled, [&indices[3..], &indices[..3]].concat());
     }
 
     /// A freed Mesh gives back its Arena ranges and its BLAS's bytes; the

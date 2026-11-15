@@ -2301,6 +2301,70 @@ fn sums_in_every_order(terms: &[f32]) -> Vec<f32> {
     sums
 }
 
+#[test]
+fn a_thin_primitive_draws_a_pixel_wide_where_it_is_narrower() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let radius_pixel_width_and_drawn_radius_metres: [[f32; 3]; 7] = [
+        [0.015, 0.012, 0.015],
+        [0.015, 0.0225, 0.015],
+        [0.015, 0.03, 0.02],
+        [0.015, 0.06, 0.04],
+        [0.015, 0.12, 0.08],
+        [0.025, 0.03, 0.025],
+        [0.025, 0.06, 0.04],
+    ];
+    let cases = radius_pixel_width_and_drawn_radius_metres;
+    let inputs = cases.map(|[radius, pixel, _]| [radius, pixel, 0.0, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(thin_drawn_radius(input.x, input.y))",
+        &inputs,
+    );
+    for ([radius, pixel, expected], result) in cases.into_iter().zip(results) {
+        assert!(
+            (result[0] - expected).abs() < 1e-6,
+            "a radius of {radius} m under a pixel of {pixel} m draws at {}, not {expected}",
+            result[0]
+        );
+    }
+}
+
+#[test]
+fn a_thin_primitive_keeps_the_samples_nearest_its_coverage() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases: [(f32, u32); 12] = [
+        (0.0, 0b0000),
+        (0.124, 0b0000),
+        (0.125, 0b0001),
+        (0.25, 0b0001),
+        (0.374, 0b0001),
+        (0.375, 0b1001),
+        (0.5, 0b1001),
+        (0.625, 0b1011),
+        (0.874, 0b1011),
+        (0.875, 0b1111),
+        (1.0, 0b1111),
+        (3.0, 0b1111),
+    ];
+    let inputs = cases.map(|(coverage, _)| [coverage, 0.0, 0.0, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(f32(thin_kept_samples(input.x)))",
+        &inputs,
+    );
+    for ((coverage, expected), result) in cases.into_iter().zip(results) {
+        assert_eq!(
+            result[0] as u32, expected,
+            "a coverage of {coverage} keeps samples {:04b}, not {expected:04b}",
+            result[0] as u32
+        );
+    }
+}
+
 /// The culling pass draws the coarsest LOD whose LOD error, times its
 /// Instance's scale, is under the threshold times the distance: each case
 /// holds its LOD as a literal, over a chain whose errors double from 1 cm,

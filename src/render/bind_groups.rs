@@ -124,7 +124,7 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
     label: "Frame Draw Bind Group",
     bindings: &[
         uniform("instance_slot_count", "u32", wgpu::ShaderStages::COMPUTE),
-        storage("instance_offsets", "array<vec2<u32>>"),
+        storage("instance_offsets", "array<vec3<u32>>"),
         storage("meshlet_records", "array<MeshletRecord>"),
         storage("packed_indices", "array<u32>"),
         storage("frame_draw", "FrameDraw"),

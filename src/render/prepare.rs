@@ -1141,7 +1141,6 @@ mod tests {
                 vertices: 0..3,
                 bounds: [[0.0; 3]; 2],
                 texel_densities: Vec::new(),
-                thin_radii_metres: Vec::new(),
                 materials: Vec::new(),
             });
             let mut world = World::new();
@@ -1569,7 +1568,6 @@ mod tests {
             vertices: 0..0,
             bounds: [[0.0; 3]; 2],
             texel_densities: Vec::new(),
-            thin_radii_metres: Vec::new(),
             materials: Vec::new(),
         });
         let first_mesh = frames.mesh;
@@ -1808,7 +1806,6 @@ mod tests {
             vertices: first_vertex..frames.vertices_loaded,
             bounds: [[0.0; 3]; 2],
             texel_densities: Vec::new(),
-            thin_radii_metres: Vec::new(),
             materials: Vec::new(),
         })
     }

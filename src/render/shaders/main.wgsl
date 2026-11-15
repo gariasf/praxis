@@ -47,21 +47,20 @@ fn vs_depth_normals(@builtin(vertex_index) packed_index: u32) -> DepthNormalsOut
 // the normal interpolated over it. A triangle seen edge-on, whose derivatives
 // span no plane, faces the camera, and a normal interpolated to nothing is
 // the triangle's.
-@fragment
-fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
-    let crossed = cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position));
+fn surface_normals(camera_relative_position: vec3<f32>, normal: vec3<f32>, material_id: u32) -> vec4<f32> {
+    let crossed = cross(dpdx(camera_relative_position), dpdy(camera_relative_position));
     let crossed_length_squared = dot(crossed, crossed);
-    let toward_camera = -normalize(in.camera_relative_position);
+    let toward_camera = -normalize(camera_relative_position);
     let unit_crossed = crossed * inverseSqrt(crossed_length_squared);
     let triangle_normal = select(
         toward_camera,
         select(unit_crossed, -unit_crossed, dot(unit_crossed, toward_camera) < 0.0),
         crossed_length_squared > 0.0
     );
-    let normal_length_squared = dot(in.normal, in.normal);
+    let normal_length_squared = dot(normal, normal);
     let interpolated_normal = select(
         triangle_normal,
-        in.normal * inverseSqrt(normal_length_squared),
+        normal * inverseSqrt(normal_length_squared),
         normal_length_squared > 0.0
     );
     let encoded_normals = vec4<f32>(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
@@ -69,7 +68,12 @@ fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
     // Reads the flat input, so the stage has one the compiler cannot drop,
     // to no effect: Material IDs index the Material table, far below
     // NO_MATERIAL - 1.
-    return select(encoded_normals, vec4<f32>(0.0), in.material_id == NO_MATERIAL - 1u);
+    return select(encoded_normals, vec4<f32>(0.0), material_id == NO_MATERIAL - 1u);
+}
+
+@fragment
+fn fs_surface_normals(in: DepthNormalsOutput) -> @location(0) vec4<f32> {
+    return surface_normals(in.camera_relative_position, in.normal, in.material_id);
 }
 
 // With shadow rays off, the lit pass draws phase two's Instances into depth
@@ -80,6 +84,88 @@ fn fs_depth() {}
 @vertex
 fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
     return vertex_output(packed_index);
+}
+
+// A Thin Primitive's vertex in each of its pipelines: the lit pass's, with
+// its tube's radius as its Instance scales it and what a pixel spans at the
+// tube's centre line there.
+struct ThinVertexOutput {
+    @builtin(position) @invariant clip_position: vec4<f32>,
+    @location(0) camera_relative_position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) @interpolate(flat) material_id: u32,
+    @location(4) tangent_world: vec4<f32>,
+    @location(5) @interpolate(flat) radius_metres: f32,
+    @location(6) pixel_metres: f32,
+}
+
+// A Thin Primitive's vertex, moved out from its tube's centre line, which
+// lies the radius behind it along its normal, until the tube draws a pixel
+// wide where it would draw narrower. Every pipeline that draws one runs this
+// stage, so the lit pass meets the depths the depth passes kept.
+@vertex
+fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
+    var out = vertex_output(packed_index);
+    let index = unpack_index(packed_index);
+    let record = meshlet_records[index.record];
+    let meshlet = meshlets[record.meshlet];
+    let normal = decode_vertex(vertices[meshlet_vertices[meshlet.first_vertex + index.vertex]]).tangent_frame.normal;
+    let radial = instances[record.instance_slot].rotation_scale * (normal * meshlet.thin_radius_metres);
+    let radius_metres = length(radial);
+    let centre = out.camera_relative_position - radial;
+    let pixel_metres = camera.pixel_size_per_metre * (camera.view_proj * vec4<f32>(centre, 1.0)).w;
+    // At or behind the camera's plane a pixel spans nothing: the vertex stays.
+    if pixel_metres > 0.0 && radius_metres > 0.0 {
+        let drawn_radius_metres = thin_drawn_radius(radius_metres, pixel_metres);
+        out.camera_relative_position = centre + radial * (drawn_radius_metres / radius_metres);
+        out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
+    }
+    return ThinVertexOutput(
+        out.clip_position,
+        out.camera_relative_position,
+        out.normal,
+        out.uv,
+        out.material_id,
+        out.tangent_world,
+        radius_metres,
+        pixel_metres
+    );
+}
+
+// The samples of a pixel's four that a fragment of a Thin Primitive keeps:
+// the tube's true width over the width it draws, of them, to the nearest.
+// The depth passes write them, and the lit pass shades what covers them. The
+// radius is a flat input, which keeps the M4 Pro from merging the fragments
+// of triangles that share indices (ADR 0019).
+fn thin_fragment_samples(in: ThinVertexOutput) -> u32 {
+    return thin_kept_samples(in.radius_metres / thin_drawn_radius(in.radius_metres, max(in.pixel_metres, 1e-9)));
+}
+
+@fragment
+fn fs_thin_depth(in: ThinVertexOutput) -> @builtin(sample_mask) u32 {
+    return thin_fragment_samples(in);
+}
+
+struct ThinSurfaceNormals {
+    @location(0) normals: vec4<f32>,
+    @builtin(sample_mask) kept_samples: u32,
+}
+
+@fragment
+fn fs_thin_surface_normals(in: ThinVertexOutput) -> ThinSurfaceNormals {
+    return ThinSurfaceNormals(
+        surface_normals(in.camera_relative_position, in.normal, in.material_id),
+        thin_fragment_samples(in)
+    );
+}
+
+// Its triangle may reach samples the depth passes did not keep.
+@fragment
+fn fs_thin_main(in: ThinVertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
+    let vertex =
+        VertexOutput(in.clip_position, in.camera_relative_position, in.normal, in.uv, in.material_id, in.tangent_world);
+    return lit(vertex, covered_samples & thin_fragment_samples(in));
 }
 
 fn vertex_output(packed_index: u32) -> VertexOutput {
@@ -163,12 +249,16 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
     return select(UNMASKED, light.directional_light_count + low, listed);
 }
 
+@fragment
+fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
+    return lit(in, covered_samples);
+}
+
 // Every Texture is sampled first, and the shading normal differentiated, so
 // neither happens under non-uniform control flow; the rest sums what each
 // light reflects, unless the shadow mask hides it, with the ambient term and
 // the emissive.
-@fragment
-fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
+fn lit(in: VertexOutput, covered_samples: u32) -> vec4<f32> {
     let material = materials[in.material_id];
     let albedo_class_and_slice = layer_class_and_slice(material.layers.x);
     let normal_class_and_slice = layer_class_and_slice(material.layers.y);

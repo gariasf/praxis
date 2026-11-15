@@ -57,8 +57,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // writes the ten 128-byte Instances and the 4-byte count of Instance
     // slots in use, and streams the Chunks: the sphere Mesh's bytes in the
     // Arenas, which the cook's simplifier leaves a few apart between machines,
-    // its 188-byte Mesh table entry and ten 80-byte Materials.
-    let streamed_bytes = last.arena_bytes_in_use + 188 + 10 * 80;
+    // its 220-byte Mesh table entry and ten 80-byte Materials.
+    let streamed_bytes = last.arena_bytes_in_use + 220 + 10 * 80;
     assert_eq!(
         frames[0].uploaded_bytes,
         10 * 128 + 144 + 32 + 5 * 48 + 4 + streamed_bytes
@@ -141,34 +141,36 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Staging: three slots of the first frame's 1700 uploaded bytes rounded
     // up to 2048. The load's staging is gone.
     let staging = 3 * 2048;
-    // The scene and pass buffers: the Mesh table of 16,371 Meshes of 188
+    // The scene and pass buffers: the Mesh table of 16,371 Meshes of 220
     // bytes, 222 Materials of 80 bytes and 285 Far proxies' Materials
     // beside them, the camera and light uniforms, the
-    // light buffer of 4,893 lights of 48 bytes, 517,376 Instances of 128
-    // bytes, the culling pass's 4-byte Instance slot count and 8-byte
-    // offsets for each slot and block of 256 slots and of the phase's
-    // records, and visibility bit for each slot, the frame's draw of 2^20
-    // Meshlet records of 12 bytes, 2^25 packed indices of 4 bytes and 72
-    // bytes of both phases' indirect arguments, counts, phase two's offsets
-    // and the phase's dispatch, and its 72-byte stand-in, the shadow mask
+    // light buffer of 4,893 lights of 48 bytes, 488,448 Instances of 128
+    // bytes, the culling pass's 4-byte Instance slot count and 16-byte
+    // offsets for each slot and block of 256 slots, of the phase's records
+    // and of its Thin Primitives' packed indices, and visibility bit for
+    // each slot, the frame's draw of 2^20 Meshlet records of 12 bytes, 2^25
+    // packed indices of 4 bytes and 112 bytes of both phases' indirect
+    // arguments, counts, phase two's offsets, the phase's dispatch and each
+    // phase's Thin Primitives' arguments, and its 112-byte stand-in, the
+    // shadow mask
     // pass's 4-byte overflow count and its two 12-byte dispatches and
     // stand-in, the tonemapping pass's 64×64 R8 dither mask, the Froxel
     // pass's lists, 32 × 18 × 32 of 128 u32s, and its 16 bytes of light
     // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
     // 4,096 bends of 20 bytes.
-    let scene_and_pass_buffers = 16_371 * 188
+    let scene_and_pass_buffers = 16_371 * 220
         + (222 + 285) * 80
         + 144
         + 32
         + 4893 * 48
-        + 517_376 * 128
+        + 488_448 * 128
         + 4
-        + (517_376 + 2021 + 1) * 8
-        + 517_376 / 8
+        + (488_448 + 1908 + 2) * 16
+        + 488_448 / 8
         + (1 << 20) * 12
         + (1 << 25) * 4
-        + 72
-        + 72
+        + 112
+        + 112
         + 4
         + 12
         + 12
@@ -205,7 +207,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // One UV sphere in the Arenas: its triangles of three u32s, and 25 rings
     // of 49 vertices of 28 bytes, less the one vertex at each pole that only
     // a dropped triangle used, which the cook's weld drops; and every LOD's
-    // Meshlets as its Blob holds them, 16 bytes each, with a u32 per triangle
+    // Meshlets as its Blob holds them, 20 bytes each, with a u32 per triangle
     // and per Meshlet vertex.
     let sphere = CookedCache::new(COOKED_CACHE_DIRECTORY)
         .mesh(AssetId::new(
@@ -226,7 +228,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         last.arena_bytes_in_use,
         (25 * 49 - 2) * 28
             + triangles * 3 * 4
-            + meshlets().count() as u64 * 16
+            + meshlets().count() as u64 * 20
             + meshlet_vertices as u64 * 4
             + meshlet_triangles as u64 * 4
     );

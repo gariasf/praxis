@@ -299,6 +299,10 @@ When reviewing changes, check for:
       (`.cargo/config.toml`)
 - [ ] The main pass reads no screen-space history, and no change rules
       out its 4x MSAA (ADRs 0008, 0019, 0020)
+- [ ] No main-pass pipeline enables alpha-to-coverage. Partial coverage
+      is a `sample_mask` the depth passes write, through pipelines of
+      their own, the same samples in every fragment of a pixel, from a
+      stage that reads a flat input (ADR 0027)
 - [ ] A newly used wgpu feature or limit joins the Capability floor,
       or, outside the capability matrix's Tiers 1-2, has a path for
       adapters without it (ADR 0021)

@@ -14,11 +14,6 @@ pub struct Mesh {
     pub bounds: [[f32; 3]; 2],
     /// Each Primitive's `CookedPrimitive::texel_density`, in Primitive order.
     pub texel_densities: Vec<f32>,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "read once Thin Primitives draw")
-    )]
-    pub thin_radii_metres: Vec<Option<f32>>,
     /// Each Primitive's Material, in Primitive order; `None` for one that
     /// names none or is not drawn.
     pub materials: Vec<Option<MaterialHandle>>,
@@ -34,8 +29,8 @@ pub struct MeshHandle {
 
 /// A Mesh as the Mesh table holds it, at its Handle's index: each LOD of its
 /// chain at the LOD's index, LOD 0 first, as its Meshlets, whose triangles
-/// follow one another in the Meshlet triangle Arena, with its LOD error; and
-/// the box that holds its vertices.
+/// follow one another in the Meshlet triangle Arena, its Thin Primitives'
+/// last, with its LOD error; and the box that holds its vertices.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshData {
@@ -45,6 +40,8 @@ pub struct MeshData {
     pub meshlet_counts: [u32; MESH_MAX_LODS],
     pub first_triangles: [u32; MESH_MAX_LODS],
     pub triangle_counts: [u32; MESH_MAX_LODS],
+    /// How many of each LOD's triangles, its last, are its Thin Primitives'.
+    pub thin_triangle_counts: [u32; MESH_MAX_LODS],
     pub lod_errors_metres: [f32; MESH_MAX_LODS],
     /// The box's lowest corner, then its highest, in mesh space.
     pub bounds_min: [f32; 3],
@@ -54,8 +51,8 @@ pub struct MeshData {
 /// A Meshlet as the Meshlet Arena holds it: its vertices in the Meshlet
 /// vertex Arena, each an index into the vertex Arena; its triangles in the
 /// Meshlet triangle Arena, each its three corners as indices into those
-/// vertices, a byte each, lowest byte first; and its Primitive's Material ID,
-/// or `NO_MATERIAL`.
+/// vertices, a byte each, lowest byte first; its Primitive's Material ID,
+/// or `NO_MATERIAL`; and its Thin Primitive's radius, 0 for any other's.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshletData {
@@ -63,4 +60,5 @@ pub struct MeshletData {
     pub first_triangle: u32,
     pub triangle_count: u32,
     pub material_id: u32,
+    pub thin_radius_metres: f32,
 }

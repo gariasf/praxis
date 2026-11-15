@@ -54,7 +54,9 @@ pub struct CameraUniform {
     /// TLAS's entries, its lowest corner then its highest: shadow rays that
     /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
     pub dynamic_tlas_bounds_min: [f32; 3],
-    pub _pad_dynamic_tlas_bounds_min: u32,
+    /// What a pixel spans a metre from the camera, in metres, which the
+    /// Renderer sets from its target's height.
+    pub pixel_size_per_metre: f32,
     pub dynamic_tlas_bounds_max: [f32; 3],
     pub _pad_dynamic_tlas_bounds_max: u32,
 }

@@ -10,9 +10,10 @@
 // exposure as the scale the lit pass applies to luminance (ADR 0023), the
 // LOD error allowed a metre from the camera, in metres, the static TLAS's
 // frame as the Anchor whose corner is its origin, which rays
-// start from (ADR 0020), how many entries the dynamic TLAS holds, and a box
+// start from (ADR 0020), how many entries the dynamic TLAS holds, a box
 // in that frame, its lowest corner then its highest, that holds every
-// triangle of theirs.
+// triangle of theirs, and what a pixel spans a metre from the camera, in
+// metres.
 struct CameraUniform {
     view_proj: mat4x4<f32>,
     anchor: vec3<i32>,
@@ -22,6 +23,7 @@ struct CameraUniform {
     tlas_anchor: vec3<i32>,
     dynamic_tlas_entries: u32,
     dynamic_tlas_bounds_min: vec3<f32>,
+    pixel_size_per_metre: f32,
     dynamic_tlas_bounds_max: vec3<f32>,
 }
 
@@ -183,14 +185,16 @@ struct InstanceData {
 
 // A Mesh as the Mesh table holds it, at its Handle's index: each LOD of its
 // chain at the LOD's index, LOD 0 first, as its Meshlets, whose triangles
-// follow one another in the Meshlet triangle Arena, with its LOD error; and
-// the box that holds its vertices, its lowest corner, then its highest.
+// follow one another in the Meshlet triangle Arena, its Thin Primitives'
+// last, with its LOD error; and the box that holds its vertices, its lowest
+// corner, then its highest.
 struct MeshData {
     lod_count: u32,
     first_meshlets: array<u32, MESH_MAX_LODS>,
     meshlet_counts: array<u32, MESH_MAX_LODS>,
     first_triangles: array<u32, MESH_MAX_LODS>,
     triangle_counts: array<u32, MESH_MAX_LODS>,
+    thin_triangle_counts: array<u32, MESH_MAX_LODS>,
     lod_errors_metres: array<f32, MESH_MAX_LODS>,
     bounds_min: array<f32, 3>,
     bounds_max: array<f32, 3>,
@@ -216,15 +220,30 @@ fn selected_lod(
     return selected;
 }
 
+// A tube of three faces seen along a face is this share of its diameter wide.
+const THIN_NARROWEST_VIEW: f32 = 0.75;
+
+fn thin_drawn_radius(radius_metres: f32, pixel_metres: f32) -> f32 {
+    return max(radius_metres, 0.5 * pixel_metres / THIN_NARROWEST_VIEW);
+}
+
+// The mask depends on the count alone: every fragment of a pixel must keep the same samples.
+fn thin_kept_samples(coverage: f32) -> u32 {
+    let count = u32(saturate(coverage) * 4.0 + 0.5);
+    return (0xfb910u >> (4u * count)) & 15u;
+}
+
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
 // the Meshlet vertex Arena, each an index into the vertex Arena; its first
 // triangle in the Meshlet triangle Arena, each three corners indexing those
-// vertices, a byte each, lowest byte first; and its Primitive's Material ID.
+// vertices, a byte each, lowest byte first; its Primitive's Material ID; and
+// its Thin Primitive's radius, 0 for any other's.
 struct MeshletData {
     first_vertex: u32,
     first_triangle: u32,
     triangle_count: u32,
     material_id: u32,
+    thin_radius_metres: f32,
 }
 
 // One Meshlet of one Instance in the frame's draw, by the Instance's slot,

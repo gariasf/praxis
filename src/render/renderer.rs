@@ -190,7 +190,13 @@ const LOD_THRESHOLD_PIXELS: f32 = 1.0;
 /// on a target `height` pixels high, which a pixel there spans
 /// 2 tan(fov / 2) / `height` of [ref:meshoptimizer-0.25-lod-selection].
 fn lod_error_per_metre(height: u32) -> f32 {
-    LOD_THRESHOLD_PIXELS * 2.0 * (0.5 * FIELD_OF_VIEW).tan() / height as f32
+    LOD_THRESHOLD_PIXELS * pixel_size_per_metre(height)
+}
+
+/// What a pixel spans, in metres, a metre from the camera on a target
+/// `height` pixels high.
+fn pixel_size_per_metre(height: u32) -> f32 {
+    2.0 * (0.5 * FIELD_OF_VIEW).tan() / height as f32
 }
 
 /// Thousandths of the scene and pass buffers' Budget the Instance slots take.
@@ -206,8 +212,8 @@ const STATIC_TLAS_PER_MILLE: u64 = 570;
 /// Bytes a scan block of Instance slots takes: each slot's Instance, offsets
 /// and visibility bit, and the block's offsets.
 const INSTANCE_SCAN_BLOCK_BYTES: u64 = SCAN_BLOCK_SIZE as u64
-    * (size_of::<InstanceData>() + size_of::<[u32; 2]>()) as u64
-    + size_of::<[u32; 2]>() as u64
+    * (size_of::<InstanceData>() + size_of::<[u32; 4]>()) as u64
+    + size_of::<[u32; 4]>() as u64
     + SCAN_BLOCK_SIZE as u64 / u8::BITS as u64;
 
 /// The most bytes a TLAS entry costs, its driver's bytes and wgpu-core's
@@ -248,9 +254,9 @@ impl RenderCapacities {
         let entries = |bytes: u64, bytes_per_entry: u64| {
             u32::try_from(bytes / bytes_per_entry).unwrap_or(u32::MAX)
         };
-        // Past the blocks' offsets, the count of appended records.
+        // Past the blocks' offsets, the phase's two entries.
         let instance_bytes = share(budgets.scene_and_pass_buffers, INSTANCE_SLOTS_PER_MILLE)
-            .saturating_sub(size_of::<[u32; 2]>() as u64);
+            .saturating_sub(2 * size_of::<[u32; 4]>() as u64);
         let instances = entries(instance_bytes, INSTANCE_SCAN_BLOCK_BYTES) * SCAN_BLOCK_SIZE;
         let lights = entries(
             share(budgets.scene_and_pass_buffers, LIGHTS_PER_MILLE),
@@ -295,6 +301,8 @@ pub struct Renderer {
     aspect_ratio: f32,
     /// `lod_error_per_metre` of the targets' height.
     lod_error_per_metre: f32,
+    /// `pixel_size_per_metre` of the targets' height.
+    pixel_size_per_metre: f32,
     render_targets: RenderTargets,
     bend_pass: BendPass,
     froxel_pass: FroxelPass,
@@ -582,6 +590,7 @@ impl Renderer {
             queue,
             aspect_ratio: width as f32 / height as f32,
             lod_error_per_metre: lod_error_per_metre(height),
+            pixel_size_per_metre: pixel_size_per_metre(height),
             render_targets,
             bend_pass,
             froxel_pass,
@@ -635,6 +644,7 @@ impl Renderer {
         }
         self.aspect_ratio = width as f32 / height as f32;
         self.lod_error_per_metre = lod_error_per_metre(height);
+        self.pixel_size_per_metre = pixel_size_per_metre(height);
     }
 
     /// The width of the target over its height.
@@ -715,6 +725,7 @@ impl Renderer {
         let started = started + compaction_time + prepare_time + update_time + fill_time;
         let camera = CameraUniform {
             lod_error_per_metre: self.lod_error_per_metre,
+            pixel_size_per_metre: self.pixel_size_per_metre,
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.
             dynamic_tlas_entries: frame.moving_instances.len() as u32,
@@ -862,11 +873,13 @@ impl Renderer {
             (&MATERIALS, &self.material_pool.bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
         ];
+        let thin_primitives = self.mesh_pool.draws_thin_primitives();
         self.main_pass.record_depth_pass(
             &mut encoder,
             &self.render_targets,
             &bind_groups,
             CullingPhase::One,
+            thin_primitives,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(DEPTH_PREPASS).render()),
@@ -890,6 +903,7 @@ impl Renderer {
                 &self.render_targets,
                 &bind_groups,
                 CullingPhase::Two,
+                thin_primitives,
                 timestamps
                     .as_mut()
                     .map(|timestamps| timestamps.pass(PHASE_TWO_DEPTH_PASS).render()),
@@ -907,6 +921,7 @@ impl Renderer {
             &self.render_targets,
             &bind_groups,
             frame.background,
+            thin_primitives,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(LIT_PASS).render()),
@@ -924,9 +939,10 @@ impl Renderer {
         }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
-        // phases', each with one indirect call; the tonemapping pass draws
-        // one triangle.
-        recorder.counters.draw_calls += 4;
+        // phases', each with one indirect call, and while a loaded Mesh has
+        // a Thin Primitive each phase's again for theirs; the tonemapping
+        // pass draws one triangle.
+        recorder.counters.draw_calls += if thin_primitives { 8 } else { 4 };
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),
@@ -1035,7 +1051,7 @@ pub(crate) mod tests {
     };
     use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
-    use crate::render::depth_pyramid_pass::tests::read_texture;
+    use crate::render::depth_pyramid_pass::tests::{read_depth_samples, read_texture};
     use crate::render::froxel_pass::{
         FIRST_FROXEL_SLICE_DEPTH, FROXEL_COLUMNS, FROXEL_COUNT, FROXEL_LIGHT_CAPACITY, FROXEL_ROWS,
         FROXEL_SLICES, FROXEL_SLICES_PER_OCTAVE,
@@ -1070,10 +1086,10 @@ pub(crate) mod tests {
         assert_eq!(
             RenderCapacities::checked_in(),
             RenderCapacities {
-                instances: 517_376,
+                instances: 488_448,
                 lights: 4893,
                 static_tlas_instances: 264_720,
-                load_bytes_per_frame: 22_937_393,
+                load_bytes_per_frame: 26_640_177,
             }
         );
     }
@@ -3104,6 +3120,119 @@ pub(crate) mod tests {
         let mesh = load_triangles(renderer, &[[0.0, 0.0]], &[None]);
         let red = emissive_material(renderer, [1.0, 0.0, 0.0]);
         frame_of(vec![instance(mesh, red.index(), [0.0, 0.0])])
+    }
+
+    /// A Thin Primitive a quarter of a pixel wide draws a pixel wide and
+    /// keeps one sample of four along its length: in every column of pixels
+    /// it crosses, depth is written at a pixel's first sample and at no
+    /// other, and the lit pass shades that pixel. One 0.7 of a pixel wide
+    /// keeps two, as its three faces draw a third wider than a pixel.
+    #[test]
+    fn a_thin_primitive_a_quarter_of_a_pixel_wide_keeps_one_sample_of_four_along_its_length() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        for (width_pixels, kept_samples) in [(0.25, vec![(31, 0)]), (0.7, vec![(30, 3), (31, 0)])] {
+            assert_eq!(thin_primitive_samples(&context, width_pixels), kept_samples);
+        }
+    }
+
+    /// The row and sample of each sample a Thin Primitive `width_pixels` wide
+    /// keeps in every column of pixels it crosses.
+    fn thin_primitive_samples(context: &GpuContext, width_pixels: f32) -> Vec<(usize, usize)> {
+        const SIDE: u32 = 64;
+        const DISTANCE_METRES: f32 = 10.0;
+        let switches = RenderSwitches {
+            // The lit pass keeps the depth this reads.
+            count_point_lights: true,
+            ..RenderSwitches::default()
+        };
+        let mut renderer = Renderer::new(context, TARGET_FORMAT, SIDE, SIDE, switches);
+        let pixel_metres = pixel_size_per_metre(SIDE) * DISTANCE_METRES;
+        let radius_metres = 0.5 * width_pixels * pixel_metres;
+        // A tube of three faces along X, each vertex's normal radial: the
+        // QTangent turns +Z about X onto it.
+        let ring = [90.0_f32, -30.0, -150.0].map(|degrees| {
+            let angle = degrees.to_radians();
+            let qtangent = [-(0.5 * angle).sin(), 0.0, 0.0, (0.5 * angle).cos()]
+                .map(|part| (part * f32::from(i16::MAX)).round() as i16);
+            ([angle.sin(), angle.cos()], qtangent)
+        });
+        let vertices = [-3.0, 3.0]
+            .into_iter()
+            .flat_map(|x| {
+                ring.map(|([y, z], qtangent)| CookedVertex {
+                    position: [x, y * radius_metres, z * radius_metres],
+                    uv: [0.0, 0.0],
+                    qtangent,
+                })
+            })
+            .collect();
+        let triangles = vec![
+            [0, 1, 4],
+            [0, 4, 3],
+            [1, 2, 5],
+            [1, 5, 4],
+            [2, 0, 3],
+            [2, 3, 5],
+        ];
+        let mesh = CookedMesh {
+            vertices,
+            indices: triangles
+                .iter()
+                .flatten()
+                .map(|&corner| u32::from(corner))
+                .collect(),
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 18,
+                material: None,
+                texel_density: 0.0,
+                thin_radius_metres: Some(radius_metres),
+                meshlets: vec![CookedMeshlet {
+                    vertices: (0..6).collect(),
+                    triangles,
+                }],
+            }],
+            coarser_lods: Vec::new(),
+            bounds: [
+                [-3.0, -radius_metres, -radius_metres],
+                [3.0, radius_metres, radius_metres],
+            ],
+        };
+        let tube = renderer
+            .mesh_pool
+            .load(&mut renderer.load_staging, &mesh, &[None])
+            .expect("the tube fits");
+        let white = emissive_material(&mut renderer, [1.0; 3]);
+        // The tube's face towards the camera draws a pixel high, from two
+        // thirds of one above its centre line: this height puts row 31's
+        // first sample, an eighth of a pixel down it, half way up the face.
+        let height_metres = (32.0 - 31.292) * pixel_metres;
+        let frame = FrameData {
+            camera: CameraUniform {
+                view_proj: projection_matrix(1.0).to_cols_array_2d(),
+                exposure: 1.0,
+                ..CameraUniform::default()
+            },
+            ..frame_of(vec![InstanceData {
+                offset: [0.0, height_metres, -DISTANCE_METRES],
+                ..instance(tube, white.index(), [0.0, 0.0])
+            }])
+        };
+        let (image, _, _) = render_frame(context, &mut renderer, &frame, SIDE, SIDE);
+        let samples = read_depth_samples(context, renderer.render_targets.depth());
+        let kept_in = |column: usize| -> Vec<(usize, usize)> {
+            (0..SIDE as usize)
+                .flat_map(|row| (0..4).map(move |sample| (row, sample)))
+                .filter(|&(row, sample)| samples[(row * SIDE as usize + column) * 4 + sample] > 0.0)
+                .collect()
+        };
+        for column in 12..52 {
+            assert_eq!(kept_in(column), kept_in(12), "column {column}");
+            assert_ne!(image.get_pixel(column as u32, 31), image.get_pixel(0, 0));
+        }
+        kept_in(12)
     }
 
     /// A Material that is black and unlit, so only its `emissive` colour

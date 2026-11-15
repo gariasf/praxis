@@ -678,6 +678,12 @@ section = "WebGPU specification source, Rasterization, standard sample patterns"
 quote = '''The standard sample patterns are as follows, with positions in framebuffer coordinates relative to the top-left corner of the pixel, such that the pixel ranges from (0, 0) to (1, 1): [...] 4: Sample 0: (0.375, 0.125) Sample 1: (0.875, 0.375) Sample 2: (0.125, 0.625) Sample 3: (0.625, 0.875) [...] Implementations must use the standard sample pattern for the given multisample.count when performing rasterization.'''
 checked = 2026-10-26
 
+["webgpu-alpha-to-coverage-sample-mask"]
+url = "https://github.com/gpuweb/gpuweb/blob/10be35c70d7bfc37e0557f2d0e38ec42742aba63/spec/index.bs#L8792-L8794"
+section = "WebGPU specification source, Render Pipeline Creation, validating GPURenderPipelineDescriptor"
+quote = '''If the sample_mask builtin is a shader stage output of descriptor.fragment: descriptor.multisample.alphaToCoverageEnabled is false.'''
+checked = 2026-11-15
+
 ["hillis-steele-partial-sums"]
 url = "https://doi.org/10.1145/7902.7903"
 section = "Hillis and Steele, Data Parallel Algorithms, Communications of the ACM 29(12), 1986, All Partial Sums of an Array, p. 1173"

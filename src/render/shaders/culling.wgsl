@@ -2,7 +2,8 @@
 // Meshlets of the LOD selected for each Instance they draw to the frame's
 // draw in slot order, which the main pass draws with one indirect call per
 // phase and depth pipeline, and one of both phases for the lit pipeline
-// (ADR 0019). Phase
+// (ADR 0019), Thin Primitives' Meshlets apart from the others (ADR 0027).
+// Phase
 // one draws the Instances visible the frame before; phase two, after the
 // depth pyramid, the other Instances in view that the pyramid does not
 // hide, and it records which Instances were visible for the next frame. With
@@ -45,16 +46,19 @@ struct DispatchIndirect {
 // draws, then both phases', which the lit pass draws; the Instances it holds
 // and those it has no room for, which Frame stats read back; phase two's own
 // draw, of the indices after phase one's, which the lit pass draws into
-// depth before it shades; where phase two's Meshlet records and packed
-// indices start, phase one's sums; and the phase's dispatch of
-// append_triangles.
+// depth before it shades; where phase two's Meshlet records, packed indices
+// and Thin Primitives' packed indices start, phase one's sums; the phase's
+// dispatch of append_triangles; and each phase's draw of its Thin
+// Primitives, whose packed indices end the buffer, phase one's last.
 struct FrameDraw {
     draw: DrawIndexedIndirect,
     instances_drawn: atomic<u32>,
     instances_overflowed: atomic<u32>,
     phase_two_draw: DrawIndexedIndirect,
-    phase_two_offsets: vec2<u32>,
+    phase_two_offsets: vec3<u32>,
     append_dispatch: DispatchIndirect,
+    phase_one_thin_draw: DrawIndexedIndirect,
+    phase_two_thin_draw: DrawIndexedIndirect,
 }
 
 // Where instance_offsets holds, after each slot's and block's, the phase's
@@ -63,7 +67,11 @@ struct FrameDraw {
 // frame_draw's binding, so that frame_draw can hold its dispatch.
 const APPENDED_RECORDS = INSTANCE_CAPACITY + INSTANCE_CAPACITY / SCAN_BLOCK_SIZE;
 
-var<workgroup> scan: array<vec2<u32>, SCAN_BLOCK_SIZE>;
+// Where instance_offsets holds, after those, the sums of Thin Primitives'
+// packed indices the phase starts and ends at.
+const THIN_INDICES = APPENDED_RECORDS + 1u;
+
+var<workgroup> scan: array<vec3<u32>, SCAN_BLOCK_SIZE>;
 
 // Phase two's visibility bits for its block of slots, gathered before they
 // are written.
@@ -71,22 +79,22 @@ var<workgroup> visible_words: array<atomic<u32>, SCAN_BLOCK_SIZE / 32u>;
 
 // The offsets of a slot the pass does not draw, freed or culled: past every
 // capacity, as a sum past a u32 saturates to.
-const NOT_DRAWN = vec2<u32>(0xffffffffu);
+const NOT_DRAWN = vec3<u32>(0xffffffffu);
 
 // `sum + addend`, or the most a u32 holds where that would pass it: past
 // every capacity, as the sum it stands for is.
-fn saturating_add(sum: vec2<u32>, addend: vec2<u32>) -> vec2<u32> {
-    return select(sum + addend, vec2<u32>(0xffffffffu), sum > vec2<u32>(0xffffffffu) - addend);
+fn saturating_add(sum: vec3<u32>, addend: vec3<u32>) -> vec3<u32> {
+    return select(sum + addend, vec3<u32>(0xffffffffu), sum > vec3<u32>(0xffffffffu) - addend);
 }
 
 // The sum of `value` over the workgroup's invocations before this one, which
 // they all call together: a Hillis and Steele scan
 // [ref:hillis-steele-partial-sums], read one place back.
-fn exclusive_scan(invocation: u32, value: vec2<u32>) -> vec2<u32> {
+fn exclusive_scan(invocation: u32, value: vec3<u32>) -> vec3<u32> {
     scan[invocation] = value;
     for (var stride = 1u; stride < SCAN_BLOCK_SIZE; stride *= 2u) {
         workgroupBarrier();
-        var before = vec2<u32>(0u);
+        var before = vec3<u32>(0u);
         if invocation >= stride {
             before = scan[invocation - stride];
         }
@@ -94,7 +102,7 @@ fn exclusive_scan(invocation: u32, value: vec2<u32>) -> vec2<u32> {
         scan[invocation] = saturating_add(scan[invocation], before);
     }
     workgroupBarrier();
-    var before = vec2<u32>(0u);
+    var before = vec3<u32>(0u);
     if invocation > 0u {
         before = scan[invocation - 1u];
     }
@@ -261,12 +269,15 @@ fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
     );
 }
 
-// The Meshlet records and packed indices that LOD `lod` of the Mesh at
-// `mesh_index` in the Mesh table takes in the frame's draw.
-fn lod_counts(mesh_index: u32, lod: u32) -> vec2<u32> {
-    return vec2<u32>(
+// The Meshlet records, the packed indices and the Thin Primitives' packed
+// indices that LOD `lod` of the Mesh at `mesh_index` in the Mesh table takes
+// in the frame's draw.
+fn lod_counts(mesh_index: u32, lod: u32) -> vec3<u32> {
+    let thin_triangles = meshes[mesh_index].thin_triangle_counts[lod];
+    return vec3<u32>(
         meshes[mesh_index].meshlet_counts[lod],
-        3u * meshes[mesh_index].triangle_counts[lod]
+        3u * (meshes[mesh_index].triangle_counts[lod] - thin_triangles),
+        3u * thin_triangles
     );
 }
 
@@ -288,10 +299,10 @@ fn visible_before(slot: u32) -> bool {
 }
 
 // A workgroup per block of SCAN_BLOCK_SIZE slots: each slot's Meshlet
-// records and packed indices, those of the LOD its Instance draws where the
-// phase draws it or none, summed over the block's earlier slots into its
-// offsets, under that LOD, NOT_DRAWN in their place where it is not drawn,
-// and the block's sum after every slot's.
+// records, packed indices and Thin Primitives' packed indices, those of the
+// LOD its Instance draws where the phase draws it or none, summed over the
+// block's earlier slots into its offsets, under that LOD, NOT_DRAWN in
+// their place where it is not drawn, and the block's sum after every slot's.
 // Phase one draws an Instance in view that was visible the frame before.
 // Phase two finds each Instance in view visible unless it lies behind what
 // phase one drew, records which are, and draws those phase one did not.
@@ -303,7 +314,7 @@ fn offset_slots(
     let slot = block.x * SCAN_BLOCK_SIZE + invocation;
     var visible = false;
     var drawn = false;
-    var counts = vec2<u32>(0u);
+    var counts = vec3<u32>(0u);
     var lod = 0u;
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
@@ -338,7 +349,7 @@ fn offset_slots(
     }
     if slot < instance_slot_count {
         let record_and_lod = min(offset.x, SLOT_RECORD_MASK) | (lod << SLOT_LOD_SHIFT);
-        instance_offsets[slot] = select(NOT_DRAWN, vec2<u32>(record_and_lod, offset.y), drawn);
+        instance_offsets[slot] = select(NOT_DRAWN, vec3<u32>(record_and_lod, offset.yz), drawn);
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
         instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
@@ -351,20 +362,22 @@ fn offset_slots(
 // the phase may append short of the buffer's end, in rows of at most
 // MAX_WORKGROUPS_PER_DIMENSION. Each invocation takes a run of blocks, its
 // loops bounded alike in every invocation so the scan's barriers stay in
-// uniform control flow. Phase one's sums are where phase two starts.
+// uniform control flow. Phase one's sums are where phase two starts. The
+// phase's Thin Primitives' packed indices fill the buffer's end back from
+// the phases' before, so each phase's are in slot order.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     let block_count = (instance_slot_count + SCAN_BLOCK_SIZE - 1u) / SCAN_BLOCK_SIZE;
     let blocks_per_invocation = (block_count + SCAN_BLOCK_SIZE - 1u) / SCAN_BLOCK_SIZE;
     let first_block = invocation * blocks_per_invocation;
-    var sum = vec2<u32>(0u);
+    var sum = vec3<u32>(0u);
     for (var step = 0u; step < blocks_per_invocation; step++) {
         if first_block + step < block_count {
             sum = saturating_add(sum, instance_offsets[INSTANCE_CAPACITY + first_block + step]);
         }
     }
     // Phase one's last invocation writes these below: phase one reads none.
-    var first = vec2<u32>(0u);
+    var first = vec3<u32>(0u);
     if PHASE_TWO {
         first = frame_draw.phase_two_offsets;
     }
@@ -383,11 +396,21 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
         }
         let record_capacity = arrayLength(&meshlet_records);
         let appended = min(vec2<u32>(first.x, offset.x), vec2<u32>(record_capacity));
-        instance_offsets[APPENDED_RECORDS] = appended;
+        instance_offsets[APPENDED_RECORDS] = vec3<u32>(appended, 0u);
         let records = appended.y - appended.x;
         // At least one row, so no records dispatch no workgroups.
         let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
         frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);
+        instance_offsets[THIN_INDICES] = vec3<u32>(first.z, offset.z, 0u);
+        let index_capacity = arrayLength(&packed_indices);
+        let first_thin_index = index_capacity - min(offset.z, index_capacity);
+        if PHASE_TWO {
+            frame_draw.phase_two_thin_draw.instance_count = 1u;
+            frame_draw.phase_two_thin_draw.first_index = first_thin_index;
+        } else {
+            frame_draw.phase_one_thin_draw.instance_count = 1u;
+            frame_draw.phase_one_thin_draw.first_index = first_thin_index;
+        }
     }
     if invocation == 0u {
         if PHASE_TWO {
@@ -399,24 +422,39 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     }
 }
 
-// The first Meshlet record and packed index of the Instance in `slot`: its
-// block's offsets plus its own within the block.
-fn slot_offsets(slot: u32) -> vec2<u32> {
+// The first Meshlet record, packed index and Thin Primitives' packed index
+// of the Instance in `slot`: its block's offsets plus its own within the
+// block.
+fn slot_offsets(slot: u32) -> vec3<u32> {
     let in_block = instance_offsets[slot];
     return saturating_add(
         instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE],
-        vec2<u32>(in_block.x & SLOT_RECORD_MASK, in_block.y)
+        vec3<u32>(in_block.x & SLOT_RECORD_MASK, in_block.yz)
     );
 }
 
 // Whether an Instance's `counts` of Meshlet records and packed indices from
-// `first` fit in their buffers. Where an Instance's would pass either
-// buffer's end, neither it nor any Instance after it is drawn, so the draw
-// ends at the
-// last Instance that fits, and every index before is written.
-fn fits(first: vec2<u32>, counts: vec2<u32>) -> bool {
-    let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
-    return all(first <= capacity) && all(counts <= capacity - first);
+// `first` fit in their buffers, short of the Thin Primitives' packed indices
+// of the phases so far, which end the packed indices' buffer. Where an
+// Instance's would pass either end, or those do not fit the buffer, neither
+// it nor any Instance after it is drawn, so each draw ends at the last
+// Instance that fits, and every index before is written.
+fn fits(first: vec3<u32>, counts: vec3<u32>) -> bool {
+    let thin_indices_end = instance_offsets[THIN_INDICES].y;
+    let index_capacity = arrayLength(&packed_indices);
+    if thin_indices_end > index_capacity {
+        return false;
+    }
+    let capacity = vec2<u32>(arrayLength(&meshlet_records), index_capacity - thin_indices_end);
+    return all(first.xy <= capacity) && all(counts.xy <= capacity - first.xy);
+}
+
+// Where the buffer holds the Thin Primitives' packed indices of an Instance
+// that fits, whose first is the sum `first_thin_index`: the phase's fill the
+// buffer's end back from the phases' before.
+fn thin_index(first_thin_index: u32) -> u32 {
+    let phase = instance_offsets[THIN_INDICES].xy;
+    return arrayLength(&packed_indices) - phase.y + (first_thin_index - phase.x);
 }
 
 // An invocation per Instance slot: writes the Meshlet records of the
@@ -438,9 +476,13 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
         let indices_end = first.y + counts.y;
         atomicMax(&frame_draw.draw.index_count, indices_end);
         atomicAdd(&frame_draw.instances_drawn, 1u);
+        let thin_indices_end = first.z + counts.z - instance_offsets[THIN_INDICES].x;
         if PHASE_TWO {
             let phase_two_first = frame_draw.phase_two_draw.first_index;
             atomicMax(&frame_draw.phase_two_draw.index_count, indices_end - phase_two_first);
+            atomicMax(&frame_draw.phase_two_thin_draw.index_count, thin_indices_end);
+        } else {
+            atomicMax(&frame_draw.phase_one_thin_draw.index_count, thin_indices_end);
         }
     } else {
         atomicAdd(&frame_draw.instances_overflowed, 1u);
@@ -463,15 +505,17 @@ const APPEND_WORKGROUP_SIZE = 32u;
 // A workgroup per Meshlet record the phase appends, dispatched indirectly in
 // the rows offset_blocks sized: writes the record's packed indices where its
 // Instance fits, at the Instance's first index plus its Meshlet's triangles
-// before it in the LOD, an invocation per index in turn, so that adjacent
-// invocations write adjacent indices.
+// before it in the LOD, or for a Thin Primitive's Meshlet at the Instance's
+// first of theirs plus the LOD's triangles of theirs before it, an
+// invocation per index in turn, so that adjacent invocations write adjacent
+// indices.
 @compute @workgroup_size(APPEND_WORKGROUP_SIZE)
 fn append_triangles(
     @builtin(workgroup_id) workgroup: vec3<u32>,
     @builtin(num_workgroups) workgroups: vec3<u32>,
     @builtin(local_invocation_index) invocation: u32
 ) {
-    let appended = instance_offsets[APPENDED_RECORDS];
+    let appended = instance_offsets[APPENDED_RECORDS].xy;
     let record_index = appended.x + workgroup.y * workgroups.x + workgroup.x;
     if record_index >= appended.y {
         return;
@@ -486,7 +530,13 @@ fn append_triangles(
     }
     // The LOD's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - meshes[mesh_index].first_triangles[lod]);
+    let triangles_before = meshlet.first_triangle - meshes[mesh_index].first_triangles[lod];
+    var first_index = first.y + 3u * triangles_before;
+    if meshlet.thin_radius_metres > 0.0 {
+        let ordinary_triangles = meshes[mesh_index].triangle_counts[lod]
+            - meshes[mesh_index].thin_triangle_counts[lod];
+        first_index = thin_index(first.z) + 3u * (triangles_before - ordinary_triangles);
+    }
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);
