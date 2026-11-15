@@ -37,6 +37,8 @@ enum SourceEntry {
     Material(usize),
     Mesh(usize),
     Chunk(usize),
+    /// The Far proxy of the Chunk at this index.
+    FarProxy(usize),
     Texture(usize),
 }
 
@@ -73,11 +75,20 @@ impl<'a> CookingLoader<'a> {
         let chunks = chunks.map(|(index, (scene, coordinates))| {
             (scene.chunk_id(*coordinates), SourceEntry::Chunk(index))
         });
+        let far_proxies = (sources.chunks.iter().enumerate())
+            .filter(|(_, (scene, _))| scene.far_field_ground().is_some())
+            .map(|(index, (scene, coordinates))| {
+                (
+                    scene.far_proxy_id(*coordinates),
+                    SourceEntry::FarProxy(index),
+                )
+            });
         let textures = sources.textures.iter().enumerate();
         let textures = textures.map(|(index, texture)| (texture.id, SourceEntry::Texture(index)));
         let entry_by_id = materials
             .chain(meshes)
             .chain(chunks)
+            .chain(far_proxies)
             .chain(textures)
             .collect();
         let cook = LaunchCook {
@@ -171,6 +182,16 @@ impl LaunchCook {
                     generated.chunk.to_blob()
                 })
             }
+            SourceEntry::FarProxy(index) => {
+                let (scene, coordinates) = sources.chunks[index];
+                let proxy = self.sources.far_proxy(scene, coordinates)?;
+                if proxy.kept {
+                    return Ok(());
+                }
+                self.cook_after_named(cache, id, &proxy.cook_key, proxy.references, |sources| {
+                    sources.far_proxy_blob(scene, coordinates)
+                })
+            }
             SourceEntry::Texture(index) => {
                 let cook_key =
                     sources.textures[index].cook_key(&self.settings, TEXTURE_FORMAT_VERSION);
@@ -192,7 +213,7 @@ impl LaunchCook {
         id: AssetId,
         cook_key: &str,
         named: Vec<(Referrer, AssetId)>,
-        blob: impl FnOnce(&Sources) -> anyhow::Result<Vec<u8>>,
+        blob: impl FnOnce(&mut Sources) -> anyhow::Result<Vec<u8>>,
     ) -> anyhow::Result<()> {
         for (referrer, named) in named {
             self.cook_on_miss(cache, referrer, named)?;
@@ -200,7 +221,7 @@ impl LaunchCook {
         if is_fresh(cache, id, cook_key) {
             return Ok(());
         }
-        cache.write(id, cook_key, &blob(&self.sources)?)?;
+        cache.write(id, cook_key, &blob(&mut self.sources)?)?;
         tracing::debug!(asset = %id, "cooked on a miss");
         Ok(())
     }
@@ -262,6 +283,7 @@ mod tests {
     use super::*;
     use crate::assets::pools::tests::{gpu_context, logged};
     use crate::assets::{MaterialPool, MeshPool, PoolCapacities, PoolLoader};
+    use crate::cook::export::AssetRecorder;
     use crate::cook::{chunk, mesh};
     use crate::render::LoadStaging;
     use crate::scenes::ground_plane;
@@ -370,6 +392,30 @@ mod tests {
             std::fs::remove_dir_all(&directory).unwrap();
         }
         assert!(textures_cooked > 0, "no loaded Chunk named a Texture");
+    }
+
+    #[test]
+    fn loading_a_far_proxy_cooks_it_and_its_grounds_material_and_no_other_blob() {
+        let scene = ReferenceScene::World;
+        let directory = scratch("far-proxy");
+        let cache_path = directory.join("cooked");
+        let cache = CookedCache::new(&cache_path);
+        let mut recorder = AssetRecorder::default();
+        let assets = directory.join("assets");
+        let settings = CookSettings::default();
+        let mut loader =
+            CookingLoader::new(scene, &assets, &cache, settings, &mut recorder).unwrap();
+        let id = scene.far_proxy_id([0, 0]);
+        loader.mesh(id).unwrap();
+
+        let ground_material = cache.mesh(id).unwrap().primitives[1].material.unwrap();
+        cache.material(ground_material).unwrap();
+        let expected: BTreeSet<_> = [id, ground_material]
+            .iter()
+            .map(AssetId::to_string)
+            .collect();
+        assert_eq!(file_names(&cache_path.join("index")), expected);
+        std::fs::remove_dir_all(&directory).unwrap();
     }
 
     /// The sources of uv-grid's Mesh `plane`, `half_size` metres to each

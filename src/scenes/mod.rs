@@ -349,6 +349,20 @@ impl ReferenceScene {
         AssetId::new(source, AssetKind::Chunk, AssetName::Name(&name))
     }
 
+    #[cfg(feature = "cook")]
+    pub(crate) fn far_proxy_id(self, [x, z]: [i32; 2]) -> AssetId {
+        let source = AssetSource::Scene(self.name());
+        let name = format!("far proxy {x} {z}");
+        AssetId::new(source, AssetKind::Mesh, AssetName::Name(&name))
+    }
+
+    /// The Mesh of the ground tiles of a scene with a Far field, each of
+    /// whose Chunks cooks a Far proxy.
+    #[cfg(feature = "cook")]
+    pub(crate) fn far_field_ground(self) -> Option<AssetId> {
+        (self == Self::World).then(|| self.mesh_id("ground"))
+    }
+
     /// The coordinates of the Chunks the scene's static content lies in, x
     /// then z, in coordinate order: the Chunks its spawn loads.
     pub(crate) fn chunk_coordinates(self) -> Vec<[i32; 2]> {
@@ -1349,8 +1363,9 @@ pub(crate) struct Geometry {
     pub(crate) normals: Vec<[f32; 3]>,
     pub(crate) uvs: Vec<[f32; 2]>,
     pub(crate) indices: Vec<u32>,
-    /// A box its Mesh's cooked bounds must hold besides its vertices, for a
-    /// Mesh the GPU bends: every shape it bends to.
+    /// A box its Mesh's cooked bounds must hold besides its vertices: for a
+    /// Mesh the GPU bends, every shape it bends to; for a Far proxy, its
+    /// Chunk's static content.
     pub(crate) bounds: Option<[[f32; 3]; 2]>,
     pub(crate) thin_radius_metres: Option<f32>,
 }

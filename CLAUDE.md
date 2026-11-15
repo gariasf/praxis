@@ -175,6 +175,9 @@ src/
                                  in git-ignored `cooked/` (ADR 0018), and
                                  launch.rs cooks a dev launch's Assets as
                                  each load finds its Blob missing or stale;
+                                 far_proxy.rs cooks each Chunk of a scene
+                                 with a Far field its Far proxy's Mesh
+                                 (ADR 0026);
                                  `praxis fetch` downloads the manifest's
                                  fetched sources, as a dev launch that
                                  lacks one does; `praxis export-scene`

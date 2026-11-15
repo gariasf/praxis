@@ -1908,7 +1908,7 @@ fn camera_relative_position_meets_the_precision_bar_within_100_km() {
             }
         }
     }
-    // Vertices up to 128 m from their pivot, the most a cooked mesh holds.
+    // Vertices up to 128 m from their pivot, the most a rotated cooked Mesh holds.
     let local_positions = [
         glam::Vec3::ZERO,
         glam::Vec3::new(100.0, -50.25, 20.125),
