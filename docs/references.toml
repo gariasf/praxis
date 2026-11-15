@@ -6302,7 +6302,7 @@ checked = 2026-11-14
 
 ["jylanki-2010-maxrects"]
 url = "https://github.com/juj/RectangleBinPack/blob/83e7e1132d93777e3732dfaae26b0f3703be2036/RectangleBinPack.pdf"
-section = "Jylänki, A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing, self-published technical report, 2010-02-27, §5 Conclusions and Future Work, pp. 32-33; in the author's repository at commit 83e7e11, whose Readme.txt says 'All the code is released to Public Domain.'"
+section = "Jylänki, A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing, self-published technical report, 2010-02-27, §5 Conclusions and Future Work, p. 33; in the author's repository at commit 83e7e11, whose Readme.txt says 'All the code is released to Public Domain.'"
 quote = '''clear that the MAXRECTS algorithms perform the best of all. [...] The GUILLOTINE variants are [...] faster than the MAXRECTS algorithms, but also perform slightly worse. The SHELF algorithms should only be favored if implementation simplicity is a concern.'''
 checked = 2026-11-14
 

@@ -171,9 +171,8 @@ fn faceted(positions: &[[f32; 3]], indices: &[u32]) -> Geometry {
 }
 
 /// `neighbours` gives each neighbouring Chunk with its origin from `chunk`'s.
-/// The proxy's first Primitive is every Placement but the ground's, with UVs
-/// in its atlas, its second the ground tiles; its pivot is the Chunk's centre
-/// on the ground.
+/// The proxy's first Primitive is every Placement but the ground's, its
+/// second the ground tiles; its pivot is the Chunk's centre on the ground.
 pub(super) fn cook<'sources>(
     chunk: &CookedChunk,
     neighbours: &[(DVec3, &CookedChunk)],
@@ -273,7 +272,7 @@ pub(super) fn cook<'sources>(
         }),
         ..faceted(&positions, &finest)
     };
-    let atlas = bake::Atlas::chart(&mut shell, pixel_metres)?;
+    let atlas = bake::Atlas::chart_shell(&mut shell, pixel_metres)?;
     let mut proxy = mesh::lod_0(&[(shell, None), (ground_geometry.clone(), ground_material)])?;
     let positions_metres = proxy
         .vertices
@@ -295,7 +294,7 @@ pub(super) fn cook<'sources>(
         }
         let mut shell = faceted(&positions, &coarser);
         if let Some(atlas) = &atlas {
-            atlas.map(&mut shell);
+            atlas.map_lod(&mut shell);
         }
         mesh::push_lod(&mut proxy, error_metres, &[&shell, &ground_geometry])?;
         finer_indices = coarser.len();
@@ -309,7 +308,7 @@ mod tests {
     use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_4};
     use std::path::Path;
 
-    use glam::{Quat, dvec3};
+    use glam::{Quat, Vec2, dvec3};
 
     use super::*;
     use crate::ReferenceScene;
@@ -458,6 +457,27 @@ mod tests {
         assert!(flat_roofed.error_metres <= 2.0 * PIXEL_METRES);
         assert!(flat_roofed.primitives[0].index_count * 100 <= shell.index_count * 85);
         assert_eq!(flat_roofed.primitives[1].index_count / 3, 8);
+        let shell_vertices = |indices: &[u32], primitive: &crate::cooked::CookedPrimitive| {
+            let indices =
+                &indices[primitive.first_index as usize..][..primitive.index_count as usize];
+            let vertices = indices.iter().map(|&index| proxy.vertices[index as usize]);
+            vertices.collect::<Vec<_>>()
+        };
+        let finest = shell_vertices(&proxy.indices, shell);
+        let lowered_roofs: Vec<_> =
+            shell_vertices(&flat_roofed.indices, &flat_roofed.primitives[0])
+                .into_iter()
+                .filter(|vertex| !finest.contains(vertex))
+                .collect();
+        assert_eq!(lowered_roofs.len(), 324 * 6);
+        for lowered in lowered_roofs.iter().step_by(13) {
+            let above = millimetres(Vec3::from(lowered.position) + Vec3::Y * 0.3);
+            let reads_its_roof_top = finest.iter().any(|vertex| {
+                millimetres(Vec3::from(vertex.position)) == above
+                    && Vec2::from(vertex.uv).distance(Vec2::from(lowered.uv)) < 1e-6
+            });
+            assert!(reads_its_roof_top, "{:?}", lowered.position);
+        }
         assert_eq!(ground.material, Some(scene.material_id("grass")));
         assert_eq!(ground.index_count / 3, 8);
         let ground_corners: BTreeSet<_> = corners(&proxy, 1).into_iter().map(millimetres).collect();

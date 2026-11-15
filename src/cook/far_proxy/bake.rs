@@ -1,7 +1,7 @@
 //! A Far proxy's atlas (ADR 0026): one rectangle a planar face of its first
 //! Primitive, packed with gutters, and each LOD's UVs in it.
 
-use glam::{Vec2, Vec3};
+use glam::{UVec2, Vec2, Vec3};
 
 use crate::cooked::MAX_TEXTURE_SIDE;
 use crate::scenes::Geometry;
@@ -12,61 +12,64 @@ const LIKE_NORMAL_COSINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 pub(super) fn settings() -> String {
     format!(
-        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart facing within 45 degrees"
+        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs"
     )
 }
 
-fn padded(texels: u32) -> u32 {
-    (texels + 2 * GUTTER_TEXELS).next_multiple_of(GRID_TEXELS)
+fn padded_texels(size_texels: UVec2) -> UVec2 {
+    (size_texels + 2 * GUTTER_TEXELS).map(|texels| texels.next_multiple_of(GRID_TEXELS))
 }
 
 struct Chart {
     normal: Vec3,
-    /// Its first texel's corner, and the unit vectors along its columns and
-    /// its rows: `across` × `down` is `normal`.
     corner: Vec3,
+    // `across` × `down` is `normal`.
     across: Vec3,
     down: Vec3,
-    /// Its columns and rows of texels, and its first texel's in the atlas.
-    size: [u32; 2],
-    position: [u32; 2],
+    size_texels: UVec2,
+    position_texels: UVec2,
 }
 
 impl Chart {
-    /// The least-area rectangle about a face's `points` along one of its
-    /// `edges`, its rows no longer than its columns.
     fn fit(normal: Vec3, points: &[Vec3], edges: &[[Vec3; 2]], texel_metres: f32) -> Self {
-        let span = |axis: Vec3| {
+        let extent_metres = |axis: Vec3| {
             let along = points.iter().map(|point| point.dot(axis));
             let lowest = along.clone().fold(f32::INFINITY, f32::min);
             (lowest, along.fold(f32::NEG_INFINITY, f32::max) - lowest)
         };
         let rectangles = edges.iter().map(|[from, to]| {
-            let mut across = (*to - *from).normalize();
-            if span(normal.cross(across)).1 > span(across).1 {
-                across = normal.cross(across);
-            }
+            let across = (*to - *from).normalize();
             let down = normal.cross(across);
-            (across, down, span(across), span(down))
+            let ((left, width), (top, height)) = (extent_metres(across), extent_metres(down));
+            if height > width {
+                let lowest = Vec2::new(top, -(left + width));
+                (down, -across, lowest, Vec2::new(height, width))
+            } else {
+                (across, down, Vec2::new(left, top), Vec2::new(width, height))
+            }
         });
-        let area =
-            |(_, _, (_, width), (_, height)): &(Vec3, Vec3, (f32, f32), (f32, f32))| width * height;
-        let (across, down, (left, width), (top, height)) = rectangles
-            .min_by(|first, second| area(first).total_cmp(&area(second)))
+        let (across, down, lowest_metres, size_metres) = rectangles
+            .min_by(|(.., first), (.., second)| {
+                first.element_product().total_cmp(&second.element_product())
+            })
             .expect("a face has an edge");
+        let in_plane = across * lowest_metres.x + down * lowest_metres.y;
         Self {
             normal,
-            corner: across * left + down * top + normal * points[0].dot(normal),
+            corner: in_plane + normal * points[0].dot(normal),
             across,
             down,
-            size: [width, height].map(|metres| ((metres / texel_metres).ceil() as u32).max(1)),
-            position: [0; 2],
+            size_texels: (size_metres / texel_metres)
+                .ceil()
+                .as_uvec2()
+                .max(UVec2::ONE),
+            position_texels: UVec2::ZERO,
         }
     }
 
-    /// `point` in `unit_metres` across and down from its corner, and in
-    /// metres out of its plane.
-    fn local(&self, point: Vec3, unit_metres: f32) -> Vec3 {
+    /// `point` in `unit_metres` across and down from the corner, and in
+    /// metres out of the plane.
+    fn in_chart(&self, point: Vec3, unit_metres: f32) -> Vec3 {
         let from_corner = point - self.corner;
         Vec3::new(
             from_corner.dot(self.across) / unit_metres,
@@ -75,23 +78,22 @@ impl Chart {
         )
     }
 
-    fn size_texels(&self) -> Vec2 {
-        Vec2::new(self.size[0] as f32, self.size[1] as f32)
-    }
-
-    fn distance_metres(&self, point: Vec3, texel_metres: f32) -> f32 {
-        let local = self.local(point, texel_metres);
-        let within = local.truncate().clamp(Vec2::ZERO, self.size_texels());
-        ((local.truncate() - within) * texel_metres)
-            .extend(local.z)
-            .length()
+    /// `point`'s texel in the atlas, held inside the chart, and its distance
+    /// from the chart's rectangle in metres.
+    fn nearest_texel(&self, point: Vec3, texel_metres: f32) -> (Vec2, f32) {
+        let from_corner = self.in_chart(point, texel_metres);
+        let held = (from_corner.truncate()).clamp(Vec2::ZERO, self.size_texels.as_vec2());
+        let outside_metres = (from_corner.truncate() - held) * texel_metres;
+        (
+            self.position_texels.as_vec2() + held,
+            outside_metres.extend(from_corner.z).length(),
+        )
     }
 }
 
-/// Each vertex's face and the number of faces: a face is the triangles that
-/// share vertices, which lie in one plane in a Geometry with a vertex per
-/// position and face normal.
-fn faces(geometry: &Geometry) -> (Vec<usize>, usize) {
+// Triangles that share a vertex must lie in one plane: a vertex per position
+// and face normal.
+fn faces(geometry: &Geometry) -> Vec<Vec<usize>> {
     fn root(parents: &mut [usize], mut vertex: usize) -> usize {
         while parents[vertex] != vertex {
             parents[vertex] = parents[parents[vertex]];
@@ -105,70 +107,72 @@ fn faces(geometry: &Geometry) -> (Vec<usize>, usize) {
         parents[second] = first;
         parents[third] = first;
     }
-    let (mut face_of_root, mut count) = (vec![usize::MAX; parents.len()], 0);
-    let face_of = (0..parents.len()).map(|vertex| {
+    let mut face_of_root = vec![usize::MAX; parents.len()];
+    let mut faces: Vec<Vec<usize>> = Vec::new();
+    for vertex in 0..parents.len() {
         let root = root(&mut parents, vertex);
         if face_of_root[root] == usize::MAX {
-            face_of_root[root] = count;
-            count += 1;
+            face_of_root[root] = faces.len();
+            faces.push(Vec::new());
         }
-        face_of_root[root]
-    });
-    (face_of.collect(), count)
+        faces[face_of_root[root]].push(vertex);
+    }
+    faces
 }
 
-/// Places each chart on shelves, tallest first, each on the grid with its
-/// gutter, in the smallest square atlas of a power-of-two side that holds
-/// them all, and gives that side.
 fn pack(charts: &mut [Chart]) -> anyhow::Result<u32> {
     let mut order: Vec<usize> = (0..charts.len()).collect();
-    order.sort_by_key(|&chart| std::cmp::Reverse(charts[chart].size[1]));
-    let mut side = GRID_TEXELS;
-    while side <= MAX_TEXTURE_SIDE {
+    order.sort_by_key(|&chart| std::cmp::Reverse(charts[chart].size_texels.y));
+    let mut side_texels = GRID_TEXELS;
+    while side_texels <= MAX_TEXTURE_SIDE {
         let (mut column, mut row, mut shelf_rows, mut fits) = (0, 0, 0, true);
         let mut positions = Vec::with_capacity(charts.len());
         for &chart in &order {
-            let [columns, rows] = charts[chart].size.map(padded);
-            if column + columns > side {
+            let padded = padded_texels(charts[chart].size_texels);
+            if column + padded.x > side_texels {
                 (column, row, shelf_rows) = (0, row + shelf_rows, 0);
             }
-            shelf_rows = shelf_rows.max(rows);
-            fits &= columns <= side && row + shelf_rows <= side;
-            positions.push([column + GUTTER_TEXELS, row + GUTTER_TEXELS]);
-            column += columns;
+            shelf_rows = shelf_rows.max(padded.y);
+            fits &= padded.x <= side_texels && row + shelf_rows <= side_texels;
+            positions.push(UVec2::new(column, row) + GUTTER_TEXELS);
+            column += padded.x;
         }
         if fits {
             for (&chart, position) in order.iter().zip(positions) {
-                charts[chart].position = position;
+                charts[chart].position_texels = position;
             }
-            return Ok(side);
+            return Ok(side_texels);
         }
-        side *= 2;
+        side_texels *= 2;
     }
     anyhow::bail!("the Far proxy's charts do not fit an atlas of {MAX_TEXTURE_SIDE} texels a side")
 }
 
 pub(super) struct Atlas {
     charts: Vec<Chart>,
-    side: u32,
+    side_texels: u32,
     texel_metres: f32,
 }
 
 impl Atlas {
-    /// Charts `shell`'s planar faces at `texel_metres` a texel and gives its
-    /// vertices their UVs; none for a shell without a triangle.
-    pub(super) fn chart(shell: &mut Geometry, texel_metres: f32) -> anyhow::Result<Option<Self>> {
+    /// Gives `shell`'s vertices their UVs; none for a shell without a
+    /// triangle.
+    pub(super) fn chart_shell(
+        shell: &mut Geometry,
+        texel_metres: f32,
+    ) -> anyhow::Result<Option<Self>> {
         if shell.indices.is_empty() {
             return Ok(None);
         }
-        let (face_of, count) = faces(shell);
+        let faces = faces(shell);
         let position = |vertex: usize| Vec3::from(shell.positions[vertex]);
-        let (mut points, mut edges) = (vec![Vec::new(); count], vec![Vec::new(); count]);
-        let mut normals = vec![Vec3::ZERO; count];
-        for (vertex, &face) in face_of.iter().enumerate() {
-            points[face].push(position(vertex));
-            normals[face] = Vec3::from(shell.normals[vertex]);
+        let mut face_of = vec![0; shell.positions.len()];
+        for (face, vertices) in faces.iter().enumerate() {
+            for &vertex in vertices {
+                face_of[vertex] = face;
+            }
         }
+        let mut edges = vec![Vec::new(); faces.len()];
         for triangle in shell.indices.as_chunks::<3>().0 {
             let [first, second, third] = triangle.map(|index| position(index as usize));
             edges[face_of[triangle[0] as usize]].extend([
@@ -177,13 +181,17 @@ impl Atlas {
                 [third, first],
             ]);
         }
-        let mut charts: Vec<Chart> = (0..count)
-            .map(|face| Chart::fit(normals[face], &points[face], &edges[face], texel_metres))
+        let mut charts: Vec<Chart> = (faces.iter().zip(&edges))
+            .map(|(vertices, edges)| {
+                let points: Vec<Vec3> = vertices.iter().map(|&vertex| position(vertex)).collect();
+                let normal = Vec3::from(shell.normals[vertices[0]]);
+                Chart::fit(normal, &points, edges, texel_metres)
+            })
             .collect();
-        let side = pack(&mut charts)?;
+        let side_texels = pack(&mut charts)?;
         let atlas = Self {
             charts,
-            side,
+            side_texels,
             texel_metres,
         };
         let uvs = face_of.iter().enumerate();
@@ -192,24 +200,18 @@ impl Atlas {
         Ok(Some(atlas))
     }
 
-    /// Gives `lod`, a coarser LOD of the charted shell, its UVs: each face's
-    /// in the chart nearest it of those facing within 45° of it, or of all.
-    pub(super) fn map(&self, lod: &mut Geometry) {
-        let (face_of, count) = faces(lod);
-        let mut vertices = vec![Vec::new(); count];
-        for (vertex, &face) in face_of.iter().enumerate() {
-            vertices[face].push(vertex);
-        }
+    /// Gives `lod`, a coarser LOD of the charted shell, its UVs.
+    pub(super) fn map_lod(&self, lod: &mut Geometry) {
         let position = |vertex: usize| Vec3::from(lod.positions[vertex]);
-        let mut uvs = vec![[0.0; 2]; face_of.len()];
-        for face in vertices {
+        let mut uvs = vec![[0.0; 2]; lod.positions.len()];
+        for face in faces(lod) {
             let normal = Vec3::from(lod.normals[face[0]]);
             let nearest = |like_cosine: f32| {
                 let like = (self.charts.iter())
                     .filter(|chart| chart.normal.dot(normal) >= like_cosine)
                     .map(|chart| {
-                        let distances = face.iter().map(|&vertex| {
-                            chart.distance_metres(position(vertex), self.texel_metres)
+                        let distances = (face.iter()).map(|&vertex| {
+                            chart.nearest_texel(position(vertex), self.texel_metres).1
                         });
                         (distances.sum::<f32>(), chart)
                     });
@@ -226,119 +228,135 @@ impl Atlas {
     }
 
     fn uv(&self, chart: &Chart, point: Vec3) -> [f32; 2] {
-        let within = chart.local(point, self.texel_metres).truncate();
-        let texel = Vec2::new(chart.position[0] as f32, chart.position[1] as f32)
-            + within.clamp(Vec2::ZERO, chart.size_texels());
-        (texel / self.side as f32).to_array()
+        let (texel, _) = chart.nearest_texel(point, self.texel_metres);
+        (texel / self.side_texels as f32).to_array()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::f32::consts::{FRAC_PI_2, PI};
+
     use super::*;
     use crate::cook::far_proxy::faceted;
 
     const TEXEL_METRES: f32 = 0.1473;
+    const TURN_RADIANS: f32 = 0.3;
 
-    /// Upright quads by width, height and where each stands, turned about
-    /// the vertical by `turn`, as a faceted shell.
-    fn quads(sizes: &[([f32; 2], Vec3)], turn: f32) -> Geometry {
+    const QUADS: [([f32; 2], Vec3, f32); 6] = [
+        ([4.0, 3.0], Vec3::new(0.0, 0.0, 0.0), TURN_RADIANS),
+        ([2.0, 9.0], Vec3::new(10.0, 0.0, -5.0), TURN_RADIANS),
+        ([30.0, 0.3], Vec3::new(20.0, 3.0, 5.0), TURN_RADIANS),
+        ([1.0, 1.0], Vec3::new(30.0, 0.0, 9.0), TURN_RADIANS),
+        ([7.0, 2.5], Vec3::new(40.0, 0.0, 2.0), TURN_RADIANS),
+        (
+            [5.0, 2.0],
+            Vec3::new(40.0, 0.0, 5.0),
+            TURN_RADIANS + FRAC_PI_2,
+        ),
+    ];
+
+    fn upright_quads(sizes_feet_and_turns: &[([f32; 2], Vec3, f32)]) -> Geometry {
         let (mut positions, mut indices) = (Vec::new(), Vec::new());
-        for ([width, height], foot) in sizes {
+        for ([width, height], foot, turn_radians) in sizes_feet_and_turns {
             let first = positions.len() as u32;
             for (across, up) in [(-0.5, 0.0), (0.5, 0.0), (0.5, 1.0), (-0.5, 1.0)] {
                 let corner = Vec3::new(across * width, up * height, 0.0);
-                positions.push((*foot + glam::Quat::from_rotation_y(turn) * corner).to_array());
+                let turned = glam::Quat::from_rotation_y(*turn_radians) * corner;
+                positions.push((*foot + turned).to_array());
             }
             indices.extend([0, 1, 2, 0, 2, 3].map(|corner| first + corner));
         }
         faceted(&positions, &indices)
     }
 
-    const SIZES: [([f32; 2], Vec3); 5] = [
-        ([4.0, 3.0], Vec3::new(0.0, 0.0, 0.0)),
-        ([2.0, 9.0], Vec3::new(10.0, 0.0, -5.0)),
-        ([30.0, 0.3], Vec3::new(20.0, 3.0, 5.0)),
-        ([1.0, 1.0], Vec3::new(30.0, 0.0, 9.0)),
-        ([7.0, 2.5], Vec3::new(40.0, 0.0, 2.0)),
-    ];
-
-    /// The chart that holds `uv`, gutter excluded.
-    fn chart_at(atlas: &Atlas, uv: [f32; 2]) -> Option<usize> {
-        let texel = Vec2::from(uv) * atlas.side as f32;
+    fn chart_holding(atlas: &Atlas, uv: [f32; 2]) -> Option<usize> {
+        let texel = Vec2::from(uv) * atlas.side_texels as f32;
         atlas.charts.iter().position(|chart| {
-            let first = Vec2::new(chart.position[0] as f32, chart.position[1] as f32);
-            let within = texel - first;
-            within.cmpge(Vec2::splat(-1e-3)).all() && within.cmple(chart.size_texels() + 1e-3).all()
+            let within = texel - chart.position_texels.as_vec2();
+            within.cmpge(Vec2::splat(-1e-3)).all()
+                && within.cmple(chart.size_texels.as_vec2() + 1e-3).all()
         })
     }
 
     #[test]
     fn each_face_has_a_chart_of_its_own_on_the_grid_with_its_gutter() {
-        let mut shell = quads(&SIZES, 0.3);
-        let atlas = Atlas::chart(&mut shell, TEXEL_METRES).unwrap().unwrap();
+        let mut shell = upright_quads(&QUADS);
+        let atlas = Atlas::chart_shell(&mut shell, TEXEL_METRES)
+            .unwrap()
+            .unwrap();
 
-        assert_eq!(atlas.side, 256);
-        let rectangles: Vec<_> = (atlas.charts.iter())
-            .map(|chart| {
-                let first = chart.position.map(|texel| texel - GUTTER_TEXELS);
-                let size = chart.size.map(padded);
-                assert!(
-                    first
-                        .iter()
-                        .chain(&size)
-                        .all(|texels| texels % GRID_TEXELS == 0)
-                );
-                assert!((0..2).all(|axis| first[axis] + size[axis] <= atlas.side));
-                (first, size)
-            })
-            .collect();
-        for (index, (first, size)) in rectangles.iter().enumerate() {
-            for (other_first, other_size) in &rectangles[index + 1..] {
-                let apart = (0..2).any(|axis| {
-                    first[axis] + size[axis] <= other_first[axis]
-                        || other_first[axis] + other_size[axis] <= first[axis]
-                });
-                assert!(apart, "two charts overlap");
+        assert_eq!(atlas.side_texels, 256);
+        let mut cells = vec![false; (256 / GRID_TEXELS).pow(2) as usize];
+        for chart in &atlas.charts {
+            let first_cell = (chart.position_texels - GUTTER_TEXELS) / GRID_TEXELS;
+            assert_eq!(chart.position_texels % GRID_TEXELS, UVec2::splat(4));
+            let past = chart.position_texels + chart.size_texels + 4;
+            let end_cell = past.map(|texels| texels.div_ceil(GRID_TEXELS));
+            assert!(end_cell.cmple(UVec2::splat(256 / GRID_TEXELS)).all());
+            for row in first_cell.y..end_cell.y {
+                for column in first_cell.x..end_cell.x {
+                    let cell = &mut cells[(row * (256 / GRID_TEXELS) + column) as usize];
+                    assert!(!*cell, "two charts share a cell of the grid");
+                    *cell = true;
+                }
             }
         }
-        for (quad, ([width, height], _)) in SIZES.iter().enumerate() {
+        for (quad, ([width, height], ..)) in QUADS.iter().enumerate() {
             let charts = shell.uvs[quad * 4..][..4].iter();
-            let charts: Vec<_> = charts.map(|uv| chart_at(&atlas, *uv)).collect();
+            let charts: Vec<_> = charts.map(|uv| chart_holding(&atlas, *uv)).collect();
             assert!(charts[0].is_some() && charts.iter().all(|chart| *chart == charts[0]));
             let chart = &atlas.charts[charts[0].unwrap()];
             let texels = [width.max(*height), width.min(*height)]
                 .map(|metres| (metres / TEXEL_METRES).ceil() as u32);
-            assert_eq!(chart.size, texels);
-            let span = Vec2::from(shell.uvs[quad * 4 + 2]) - Vec2::from(shell.uvs[quad * 4]);
-            let metres = span.abs() * atlas.side as f32 * TEXEL_METRES;
+            assert_eq!(chart.size_texels.to_array(), texels);
+            let diagonal = Vec2::from(shell.uvs[quad * 4 + 2]) - Vec2::from(shell.uvs[quad * 4]);
+            let metres = diagonal.abs() * atlas.side_texels as f32 * TEXEL_METRES;
             assert!((metres.max_element() - width.max(*height)).abs() < 1e-3);
             assert!((metres.min_element() - width.min(*height)).abs() < 1e-3);
         }
     }
 
     #[test]
-    fn a_coarser_lods_face_reads_the_nearest_chart_facing_its_way() {
-        let mut shell = quads(&SIZES, 0.3);
-        let atlas = Atlas::chart(&mut shell, TEXEL_METRES).unwrap().unwrap();
-        let mut moved = SIZES;
-        moved[0].1.y -= 0.3;
-        moved[4].0 = [9.0, 2.5];
-        let mut lod = quads(&moved, 0.5);
+    fn a_coarser_lods_face_reads_the_nearest_chart_facing_its_way_held_inside_it() {
+        let mut shell = upright_quads(&QUADS);
+        let atlas = Atlas::chart_shell(&mut shell, TEXEL_METRES)
+            .unwrap()
+            .unwrap();
+        let chart_of = |quad: usize| chart_holding(&atlas, shell.uvs[quad * 4]);
+        let mut lod_quads = QUADS.map(|(size, foot, turn)| (size, foot, turn + 0.2));
+        lod_quads[0].1.y -= 0.3;
+        lod_quads[4].0 = [9.0, 2.5];
+        let on_the_turned_chart = ([1.0, 1.0], QUADS[5].1, TURN_RADIANS);
+        let facing_away = ([1.0, 1.0], QUADS[3].1, TURN_RADIANS + PI);
+        let mut lod =
+            upright_quads(&[&lod_quads[..], &[on_the_turned_chart, facing_away]].concat());
 
-        atlas.map(&mut lod);
+        atlas.map_lod(&mut lod);
 
-        for quad in 0..SIZES.len() {
-            let own = chart_at(&atlas, shell.uvs[quad * 4]);
-            for uv in &lod.uvs[quad * 4..][..4] {
-                assert_eq!(chart_at(&atlas, *uv), own, "quad {quad}");
-            }
-        }
-        let lowered = Vec2::from(lod.uvs[2]) - Vec2::from(lod.uvs[0]);
-        let own = Vec2::from(shell.uvs[2]) - Vec2::from(shell.uvs[0]);
-        assert!(
-            lowered.abs().cmplt(own.abs()).any(),
-            "the lowered quad was not held inside"
-        );
+        let charts: Vec<_> = (lod.uvs.as_chunks::<4>().0.iter())
+            .map(|quad| {
+                let chart = chart_holding(&atlas, quad[0]);
+                assert!(
+                    chart.is_some() && quad.iter().all(|uv| chart_holding(&atlas, *uv) == chart)
+                );
+                chart
+            })
+            .collect();
+        let expected: Vec<_> = (0..6).chain([4, 3]).map(chart_of).collect();
+        assert_eq!(charts, expected);
+    }
+
+    #[test]
+    fn a_face_longer_than_the_largest_atlas_fails_and_a_triangle_without_area_has_no_face() {
+        let mut too_long = upright_quads(&[([1300.0, 1.0], Vec3::ZERO, 0.0)]);
+        assert!(Atlas::chart_shell(&mut too_long, TEXEL_METRES).is_err());
+
+        let collinear = [[0.0; 3], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
+        let mut no_face = faceted(&collinear, &[0, 1, 2]);
+        assert!(matches!(
+            Atlas::chart_shell(&mut no_face, TEXEL_METRES),
+            Ok(None)
+        ));
     }
 }

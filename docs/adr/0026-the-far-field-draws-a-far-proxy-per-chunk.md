@@ -27,7 +27,8 @@ The decisions left these to the build of the cook; the owner accepts them with t
 The bake decision left these to the build of the bake.
 
 - **A chart.** A planar face is the triangles of the first Primitive that share vertices, which carry a position and a face normal. Its chart is the least-area rectangle about it along one of its edges, a texel a pixel at the Load radius, its rows no longer than its columns. Charts are packed on shelves, tallest first, each with 4 texels of gutter a side on a grid of 8, into the smallest square atlas of a power-of-two side that holds them; a proxy whose charts pass 8,192 texels a side fails its cook. `world`'s densest Chunk charts into 4096².
-- **Coarser LODs.** Each face of a coarser LOD takes the chart nearest it among those facing within 45° of it, its UVs held inside that chart. On `world`, LOD 1's roof tops read LOD 0's.
+- **Coarser LODs.** Each face of a coarser LOD takes the chart nearest it among those facing within 45° of it, or among all of them where none does, its UVs held inside that chart. On `world`, LOD 1's roof tops read LOD 0's.
+- **No area, no face.** A triangle without area has no normal to chart by and is left out of the proxy.
 
 ## Considered options
 
