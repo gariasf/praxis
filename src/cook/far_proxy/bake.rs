@@ -13,29 +13,31 @@ use crate::cooked::{AssetId, MAX_TEXTURE_SIDE};
 use crate::scenes::Geometry;
 
 const SAMPLES_PER_SIDE: u32 = 4;
+const REACH_PIXELS: f32 = 2.0;
 const GUTTER_TEXELS: u32 = 4;
 const GRID_TEXELS: u32 = 8;
 const LIKE_NORMAL_COSINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 pub(super) fn settings() -> String {
     format!(
-        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs, baked at {SAMPLES_PER_SIDE}x{SAMPLES_PER_SIDE} samples a texel from the outermost source within two pixels of a face, dilated"
+        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs"
     )
+}
+
+pub(super) fn reach_metres(pixel_metres: f32) -> f32 {
+    REACH_PIXELS * pixel_metres
 }
 
 pub(super) fn sample_metres(texel_metres: f32) -> f32 {
     texel_metres / SAMPLES_PER_SIDE as f32
 }
 
-/// As `CookedPrimitive::texel_density` counts them.
-pub(super) fn uv_per_metre([first, second, third]: [Vec3; 3], uvs: [Vec2; 3]) -> f32 {
+/// As `CookedPrimitive::texel_density` counts them; none for a triangle
+/// without area.
+pub(super) fn uv_per_metre([first, second, third]: [Vec3; 3], uvs: [Vec2; 3]) -> Option<f32> {
     let area = (second - first).cross(third - first).length();
     let uv_area = (uvs[1] - uvs[0]).perp_dot(uvs[2] - uvs[0]).abs();
-    if area > 0.0 {
-        (uv_area / area).sqrt()
-    } else {
-        0.0
-    }
+    (area > 0.0).then(|| (uv_area / area).sqrt())
 }
 
 /// Albedo in linear light, then roughness and metallic.
@@ -305,7 +307,6 @@ pub(in crate::cook) struct Transfer {
     pub(super) surfaces: Vec<Placed>,
     /// Each Material the sources name, with the fewest UV units a sample of
     /// the bake spans on a triangle of it.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(in crate::cook) materials: Vec<(AssetId, f32)>,
     pub(super) reach_metres: f32,
 }
@@ -315,6 +316,7 @@ impl Transfer {
     /// `self.materials`' in order.
     #[cfg_attr(not(test), expect(dead_code))]
     pub(in crate::cook) fn bake(&self, materials: &[SourceMaterial]) -> [LoadedImage; 2] {
+        assert_eq!(materials.len(), self.materials.len());
         let charts = &self.atlas.charts;
         let next = AtomicUsize::new(0);
         let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
@@ -326,7 +328,10 @@ impl Transfer {
                     if chart >= charts.len() {
                         break tiles;
                     }
-                    tiles.push((chart, self.tile(&charts[chart], materials)));
+                    tiles.extend(
+                        self.tile(&charts[chart], materials)
+                            .map(|tile| (chart, tile)),
+                    );
                 }
             };
             let workers: Vec<_> = (0..threads).map(|_| scope.spawn(bake)).collect();
@@ -342,7 +347,7 @@ impl Transfer {
             sum = std::array::from_fn(|component| sum[component] + u64::from(texel[component]));
         }
         let [red, green, blue, roughness, metallic] =
-            sum.map(|component| (component / count) as u8);
+            sum.map(|component| (component / count.max(1)) as u8);
         let mut albedo = [red, green, blue, 255].repeat(side_texels * side_texels);
         let mut metallic_roughness =
             [0, roughness, metallic, 255].repeat(side_texels * side_texels);
@@ -364,8 +369,8 @@ impl Transfer {
     }
 
     /// `chart`'s texels with its gutter, row-major, as sRGB albedo, roughness
-    /// and metallic bytes.
-    fn tile(&self, chart: &Chart, materials: &[SourceMaterial]) -> Vec<[u8; 5]> {
+    /// and metallic bytes; none where no source covers a sample of it.
+    fn tile(&self, chart: &Chart, materials: &[SourceMaterial]) -> Option<Vec<[u8; 5]>> {
         let sample_metres = sample_metres(self.atlas.texel_metres);
         let samples = (chart.size_texels * SAMPLES_PER_SIDE).as_usizevec2();
         let mut outermost = vec![(f32::NEG_INFINITY, [0.0; 5]); samples.x * samples.y];
@@ -376,10 +381,10 @@ impl Transfer {
         });
         let lowest = corners.into_iter().fold(Vec3::INFINITY, Vec3::min) - self.reach_metres;
         let highest = corners.into_iter().fold(Vec3::NEG_INFINITY, Vec3::max) + self.reach_metres;
-        let near = |surface: &&Placed| {
+        let within_reach = |surface: &&Placed| {
             surface.lowest.cmple(highest).all() && surface.highest.cmpge(lowest).all()
         };
-        for surface in self.surfaces.iter().filter(near) {
+        for surface in self.surfaces.iter().filter(within_reach) {
             let triangles = surface.triangles.iter().zip(&surface.uvs);
             for ((triangle, uvs), material) in triangles.zip(&surface.materials) {
                 let Some(material) = material.map(|material| &materials[material]) else {
@@ -387,8 +392,8 @@ impl Transfer {
                 };
                 let [first, second, third] =
                     triangle.map(|corner| chart.in_chart(corner, sample_metres));
-                let flat = [first, second, third].map(Vec3::truncate);
-                let area = (flat[1] - flat[0]).perp_dot(flat[2] - flat[0]);
+                let in_plane = [first, second, third].map(Vec3::truncate);
+                let area = (in_plane[1] - in_plane[0]).perp_dot(in_plane[2] - in_plane[0]);
                 let heights_metres = [first.z, second.z, third.z];
                 let out_of_reach = heights_metres
                     .iter()
@@ -399,9 +404,10 @@ impl Transfer {
                 if area <= 0.0 || out_of_reach {
                     continue;
                 }
-                let levels = material.levels(uv_per_metre(*triangle, *uvs) * sample_metres);
-                let lowest = flat[0].min(flat[1]).min(flat[2]);
-                let highest = flat[0].max(flat[1]).max(flat[2]);
+                let levels =
+                    material.levels(uv_per_metre(*triangle, *uvs).unwrap_or(0.0) * sample_metres);
+                let lowest = in_plane[0].min(in_plane[1]).min(in_plane[2]);
+                let highest = in_plane[0].max(in_plane[1]).max(in_plane[2]);
                 let centres = |lowest: f32, highest: f32, count: usize| {
                     let first = (lowest - 0.5).ceil().max(0.0) as usize;
                     first..((highest - 0.5).floor() + 1.0).clamp(0.0, count as f32) as usize
@@ -410,21 +416,23 @@ impl Transfer {
                     for column in centres(lowest.x, highest.x, samples.x) {
                         let point = Vec2::new(column as f32 + 0.5, row as f32 + 0.5);
                         let weights = [
-                            (flat[2] - flat[1]).perp_dot(point - flat[1]) / area,
-                            (flat[0] - flat[2]).perp_dot(point - flat[2]) / area,
-                            (flat[1] - flat[0]).perp_dot(point - flat[0]) / area,
+                            (in_plane[2] - in_plane[1]).perp_dot(point - in_plane[1]) / area,
+                            (in_plane[0] - in_plane[2]).perp_dot(point - in_plane[2]) / area,
+                            (in_plane[1] - in_plane[0]).perp_dot(point - in_plane[0]) / area,
                         ];
-                        let weighed = |values: [f32; 3]| {
+                        let interpolated = |values: [f32; 3]| {
                             values[0] * weights[0] + values[1] * weights[1] + values[2] * weights[2]
                         };
-                        let height_metres = weighed(heights_metres);
+                        let height_metres = interpolated(heights_metres);
                         let sample = &mut outermost[row * samples.x + column];
                         if weights.iter().all(|weight| *weight >= 0.0)
                             && height_metres.abs() <= self.reach_metres
                             && height_metres > sample.0
                         {
-                            let uv =
-                                Vec2::new(weighed(uvs.map(|uv| uv.x)), weighed(uvs.map(|uv| uv.y)));
+                            let uv = Vec2::new(
+                                interpolated(uvs.map(|uv| uv.x)),
+                                interpolated(uvs.map(|uv| uv.y)),
+                            );
                             *sample = (height_metres, material.shade(uv, levels));
                         }
                     }
@@ -447,32 +455,43 @@ impl Transfer {
                 texels[(row + gutter) * padded.x + column + gutter] = mean(covered);
             }
         }
-        loop {
-            let before = texels.clone();
-            let mut filled = false;
-            for (texel, shade) in texels.iter_mut().enumerate() {
-                if shade.is_some() {
-                    continue;
-                }
-                let (column, row) = (texel % padded.x, texel / padded.x);
-                let around = (row.saturating_sub(1)..(row + 2).min(padded.y)).flat_map(|row| {
-                    let columns = column.saturating_sub(1)..(column + 2).min(padded.x);
-                    columns.map(move |column| row * padded.x + column)
-                });
-                *shade = mean(around.filter_map(|texel| before[texel]));
-                filled |= shade.is_some();
+        if texels.iter().all(Option::is_none) {
+            return None;
+        }
+        let neighbours = move |texel: usize| {
+            let (column, row) = (texel % padded.x, texel / padded.x);
+            (row.saturating_sub(1)..(row + 2).min(padded.y)).flat_map(move |row| {
+                let columns = column.saturating_sub(1)..(column + 2).min(padded.x);
+                columns.map(move |column| row * padded.x + column)
+            })
+        };
+        let mut uncovered: Vec<usize> = (0..texels.len())
+            .filter(|&texel| texels[texel].is_none())
+            .collect();
+        while !uncovered.is_empty() {
+            let dilated: Vec<(usize, Shade)> = (uncovered.iter())
+                .filter_map(|&texel| {
+                    let covered = neighbours(texel).filter_map(|neighbour| texels[neighbour]);
+                    Some((texel, mean(covered)?))
+                })
+                .collect();
+            for &(texel, shade) in &dilated {
+                texels[texel] = Some(shade);
             }
-            if !filled {
-                break;
-            }
+            uncovered = (dilated.iter())
+                .flat_map(|&(texel, _)| neighbours(texel))
+                .filter(|&neighbour| texels[neighbour].is_none())
+                .collect();
+            uncovered.sort_unstable();
+            uncovered.dedup();
         }
         let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-        let bytes = texels.into_iter().map(|shade| {
-            let [red, green, blue, roughness, metallic] = shade.unwrap_or([0.0; 5]);
+        let bytes = texels.into_iter().flatten().map(|shade| {
+            let [red, green, blue, roughness, metallic] = shade;
             let [red, green, blue] = [red, green, blue].map(|linear| byte(linear_to_srgb(linear)));
             [red, green, blue, byte(roughness), byte(metallic)]
         });
-        bytes.collect()
+        Some(bytes.collect())
     }
 }
 

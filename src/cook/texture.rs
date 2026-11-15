@@ -262,7 +262,7 @@ pub(super) struct Mips {
 
 impl Mips {
     fn level_of(side_texels: u32, uv_per_sample: f32) -> usize {
-        (uv_per_sample * side_texels as f32).log2().floor().max(0.0) as usize
+        (uv_per_sample * side_texels as f32).log2().ceil().max(0.0) as usize
     }
 
     /// The mip such a sample reads: the finest whose texels are no smaller
@@ -650,6 +650,32 @@ mod tests {
         assert_ne!(
             source.cook_key(&settings, TEXTURE_FORMAT_VERSION),
             source.cook_key(&settings, TEXTURE_FORMAT_VERSION + 1)
+        );
+    }
+
+    #[test]
+    fn a_sample_reads_the_finest_mip_whose_texels_are_no_smaller_than_it() {
+        let grey = || LoadedImage {
+            pixels: vec![128; 16 * 4 * 4],
+            width: 16,
+            height: 4,
+        };
+        let source = TextureSource::generated(
+            AssetId(1),
+            MaterialChannel::Albedo,
+            "grey".into(),
+            std::sync::Arc::new(grey),
+        );
+        let texels_per_sample = [0.0, 0.5, 1.0, 1.5, 3.0, 4.0, 100.0, f32::INFINITY];
+        let whole = source.mips(0.0).unwrap();
+        let levels = texels_per_sample.map(|texels| whole.level(texels / 16.0));
+        assert_eq!(levels, [0, 0, 0, 1, 2, 2, 4, 4]);
+        let from_the_third = source.mips(3.0 / 16.0).unwrap();
+        let levels = texels_per_sample.map(|texels| from_the_third.level(texels / 16.0));
+        assert_eq!(levels, [2, 2, 2, 2, 2, 2, 4, 4]);
+        assert_eq!(
+            from_the_third.sample(2, glam::Vec2::splat(0.3)),
+            whole.sample(2, glam::Vec2::splat(0.3))
         );
     }
 }

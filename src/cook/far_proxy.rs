@@ -37,7 +37,9 @@ pub(super) fn settings(pixel_metres: f32) -> String {
 struct Placed {
     triangles: Vec<[Vec3; 3]>,
     uvs: Vec<[Vec2; 3]>,
-    /// Each triangle's Material in the cook's list, none for one not drawn.
+    /// Each triangle's Material in the cook's list, none for a Placement
+    /// the runtime does not draw: one without a Material whose Mesh has a
+    /// Primitive that names none.
     materials: Vec<Option<usize>>,
     lowest: Vec3,
     highest: Vec3,
@@ -57,8 +59,11 @@ fn placed(
     materials: &mut Vec<(AssetId, f32)>,
 ) -> Placed {
     let (mut triangles, mut uvs, mut drawn_with) = (Vec::new(), Vec::new(), Vec::new());
+    let drawn =
+        placement.material.is_some() || (primitives.iter()).all(|(_, material)| material.is_some());
     for (geometry, material) in primitives {
-        let material = placement.material.or(*material).map(|material| {
+        let named = placement.material.or(*material).filter(|_| drawn);
+        let material = named.map(|material| {
             let listed = materials.iter().position(|(listed, _)| *listed == material);
             listed.unwrap_or_else(|| {
                 materials.push((material, f32::INFINITY));
@@ -74,8 +79,9 @@ fn placed(
                 )
             });
             let corner_uvs = triangle.map(|index| Vec2::from(geometry.uvs[index as usize]));
-            let uv_per_metre = bake::uv_per_metre(corners, corner_uvs);
-            if let Some(material) = material.filter(|_| uv_per_metre > 0.0) {
+            if let (Some(material), Some(uv_per_metre)) =
+                (material, bake::uv_per_metre(corners, corner_uvs))
+            {
                 materials[material].1 = materials[material].1.min(uv_per_metre);
             }
             triangles.push(corners);
@@ -235,8 +241,8 @@ pub(super) fn cook<'sources>(
                 let reaches = positions.map(|position| Vec3::from(*position).length());
                 reaches.fold(0.0, f32::max)
             });
-            let reach_metres =
-                mesh_reach_metres * placement.scale.abs().max_element() + pixel_metres;
+            let reach_metres = mesh_reach_metres * placement.scale.abs().max_element()
+                + bake::reach_metres(pixel_metres);
             let centre = (*origin - pivot + placement.translation).as_vec3();
             let reaches_the_chunk = centre.x + reach_metres >= lowest.x
                 && centre.x - reach_metres <= highest.x
@@ -333,7 +339,7 @@ pub(super) fn cook<'sources>(
         materials: (materials.into_iter())
             .map(|(material, uv_per_metre)| (material, uv_per_metre * sample_metres))
             .collect(),
-        reach_metres: 2.0 * pixel_metres,
+        reach_metres: bake::reach_metres(pixel_metres),
     });
     Ok((proxy, transfer))
 }
@@ -476,12 +482,13 @@ mod tests {
     }
 
     const GROUND: AssetId = AssetId(1);
+    const UNDRAWN: u128 = 0;
 
     fn flat(base_color: [f32; 3], roughness: f32) -> SourceMaterial {
         SourceMaterial {
             base_color,
             roughness,
-            metallic: 0.0,
+            metallic: 0.5,
             albedo: None,
             metallic_roughness: None,
         }
@@ -512,7 +519,7 @@ mod tests {
                 let mesh = AssetId(100 + sources.len() as u128);
                 sources.push((mesh, vec![(upright_quad(*width, *height, 0.0), None)]));
                 chunk.placements.push(CookedPlacement {
-                    material: Some(AssetId(*material)),
+                    material: (*material != UNDRAWN).then_some(AssetId(*material)),
                     ..at(mesh, *translation)
                 });
             }
@@ -587,35 +594,55 @@ mod tests {
             width: 16,
             height: 4,
         };
+        let half_rough_quarter_metal = || LoadedImage {
+            pixels: [0, 128, 64, 255].repeat(16),
+            width: 4,
+            height: 4,
+        };
         let material_of = |material: AssetId| match material.0 {
             10 => SourceMaterial {
                 albedo: Some(Arc::new(mips(brick(), MaterialChannel::Albedo))),
-                ..flat([1.0; 3], 0.85)
+                metallic_roughness: Some(Arc::new(mips(
+                    half_rough_quarter_metal(),
+                    MaterialChannel::MetallicRoughness,
+                ))),
+                ..flat([0.5, 1.0, 1.0], 0.8)
             },
             _ => flat(glass, 0.15),
         };
         let wall = ([4.0, 3.0], dvec3(2.0, 0.0, 100.0), 10);
         let pane = ([1.0, 1.0], dvec3(3.0, 1.0, 100.06), 11);
+        let pane_out_of_reach = ([1.0, 1.0], dvec3(1.0, 1.0, 100.5), 11);
         let neighbours_pane = ([1.0, 1.0], dvec3(255.95, 1.0, 100.06), 11);
 
-        let (proxy, [albedo, metallic_roughness]) =
-            baked(&[wall, pane], &[neighbours_pane], &material_of);
+        let (proxy, [albedo, metallic_roughness]) = baked(
+            &[wall, pane, pane_out_of_reach],
+            &[neighbours_pane],
+            &material_of,
+        );
 
-        assert_eq!(proxy.primitives[0].index_count, 6);
-        for (x, y, colour, roughness) in [
-            (1.0, 0.5, LINEAR_RED, 0.85),
-            (1.2, 1.5, LINEAR_RED, 0.85),
-            (0.3, 2.6, LINEAR_RED, 0.85),
-            (3.0, 0.5, LINEAR_BLUE, 0.85),
-            (3.7, 0.5, LINEAR_BLUE, 0.85),
-            (2.3, 2.6, LINEAR_BLUE, 0.85),
-            (3.0, 1.5, glass, 0.15),
-            (0.15, 1.5, glass, 0.15),
+        assert_eq!(proxy.primitives[0].index_count, 12);
+        let red = [0.5 * LINEAR_RED[0], LINEAR_RED[1], LINEAR_RED[2]];
+        let blue = [0.5 * LINEAR_BLUE[0], LINEAR_BLUE[1], LINEAR_BLUE[2]];
+        let brick_surface = [0.8 * 128.0 / 255.0, 0.5 * 64.0 / 255.0];
+        for (x, y, colour, roughness_and_metallic) in [
+            (1.0, 0.5, red, brick_surface),
+            (1.2, 1.5, red, brick_surface),
+            (0.3, 2.6, red, brick_surface),
+            (3.0, 0.5, blue, brick_surface),
+            (3.7, 0.5, blue, brick_surface),
+            (2.3, 2.6, blue, brick_surface),
+            (3.0, 1.5, glass, [0.15, 0.5]),
+            (0.15, 1.5, glass, [0.15, 0.5]),
         ] {
             let uv = uv_at(&proxy, Vec3::new(x, y, 100.0));
             let what = format!("({x}, {y})");
             assert_reads(albedo.sample(0, uv), &colour, &what);
-            assert_reads(metallic_roughness.sample(0, uv), &[roughness, 0.0], &what);
+            assert_reads(
+                metallic_roughness.sample(0, uv),
+                &roughness_and_metallic,
+                &what,
+            );
         }
     }
 
@@ -636,8 +663,18 @@ mod tests {
         let roughness = |material: u128| (material - 9) as f32 / 5.0;
         let material_of = |material: AssetId| flat(colour(material.0), roughness(material.0));
 
-        let (proxy, [albedo, metallic_roughness]) = baked(&plates, &[], &material_of);
+        let uncovered = ([2.0, 2.0], dvec3(50.0, 0.0, 60.0), UNDRAWN);
+        let all = [&plates[..], &[uncovered]].concat();
+        let (proxy, [albedo, metallic_roughness]) = baked(&all, &[], &material_of);
 
+        let outside_every_chart = Vec2::splat(127.5 / 128.0);
+        let on_the_uncovered = uv_at(&proxy, Vec3::new(50.0, 1.0, 60.0));
+        let fill = albedo.sample(0, outside_every_chart);
+        assert!(fill[..3].iter().all(|channel| *channel > 0.01), "{fill:?}");
+        assert_reads(albedo.sample(0, on_the_uncovered), &fill, "uncovered");
+        let surface_fill = metallic_roughness.sample(0, outside_every_chart);
+        let read = metallic_roughness.sample(0, on_the_uncovered);
+        assert_reads(read, &surface_fill, "uncovered");
         for ([width, height], centre, material) in plates {
             for (across, up) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)] {
                 let point = centre.as_vec3() + Vec3::new((across - 0.5) * width, up * height, 0.0);
@@ -646,7 +683,7 @@ mod tests {
                     let what = format!("{point} at mip {level}");
                     assert_reads(albedo.sample(level, uv), &colour(material), &what);
                     let read = metallic_roughness.sample(level, uv);
-                    assert_reads(read, &[roughness(material), 0.0], &what);
+                    assert_reads(read, &[roughness(material), 0.5], &what);
                 }
             }
         }
