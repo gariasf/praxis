@@ -458,8 +458,11 @@ pub(crate) struct ChunkStreaming {
     claimed: Claimed,
     /// Assets the IO pool decoded that no load has taken yet.
     decoded: DecodedAssets,
-    /// Chunks loaded into the pools this frame, by coordinates, until the
-    /// Chunk streamer takes or drops them.
+    /// Chunks loaded into the pools and not placed, in the order loaded,
+    /// each until rays may trace every Mesh it names.
+    made: Vec<LoadedChunk>,
+    /// Chunks placed this frame, by coordinates, until the Chunk streamer
+    /// takes or drops them.
     finished: BTreeMap<[i32; 2], LoadedChunk>,
     /// A load's failure while settling, which ends the wait.
     error: Option<anyhow::Error>,
@@ -476,8 +479,8 @@ pub(crate) struct ChunkStreaming {
 }
 
 /// The Instances a frame's streamed Chunk loads place, as prepare and the
-/// static TLAS take each one on the main thread in the frame it loads; sized
-/// in `docs/performance.md`, "Measurements behind the code".
+/// static TLAS take each one on the main thread in the frame it is placed;
+/// sized in `docs/performance.md`, "Measurements behind the code".
 const INSTANCES_PLACED_PER_FRAME: usize = 131_072;
 
 /// The Chunks a frame loads, as each load's sizing and pool writes, and the
@@ -510,6 +513,7 @@ impl ChunkStreaming {
             cache,
             claimed,
             decoded: DecodedAssets::default(),
+            made: Vec::new(),
             finished: BTreeMap::new(),
             error: None,
             cook_chunk: None,
@@ -593,12 +597,15 @@ impl ChunkStreaming {
 
     /// Runs the Chunk streamer for the World's camera: loads the Chunks whose
     /// reads finished into `renderer`'s pools, nearest the camera first, up
-    /// to the frame's caps on loads, placed Instances and load bytes, and
-    /// keeps the World's `LoadedChunks` to what the streamer holds. With
+    /// to the frame's caps on loads and load bytes; places those loaded, in
+    /// the order loaded, whose Meshes' BLASes the GPU has built and
+    /// compacted, up to the frame's cap on placed Instances; and keeps the
+    /// World's `LoadedChunks` to what the streamer holds. With
     /// `settle`, waits until the frame is Settled, loading the Chunks of
     /// each wait together once all have arrived, in coordinate order and
     /// past the frame's caps, so their order never depends on the IO pool's
-    /// timing; a load that fails then fails the frame. Ends the frame's
+    /// timing, and placing every Chunk loaded, whose BLASes the frame's
+    /// upload then waits for; a load that fails then fails the frame. Ends the frame's
     /// frees to make room, which it reports with the pools' refusals since
     /// the frame before, and clears the camera's `teleported`, timing the
     /// hold of the Fast travel it marks.
@@ -635,6 +642,9 @@ impl ChunkStreaming {
         let camera = world.resource::<Camera>().position - self.shift;
         let mut streamed = StreamedFrame::default();
         let mut placed_instances = 0;
+        if settle {
+            renderer.mesh_pool.wait_for_blases();
+        }
         loop {
             let Self {
                 streamer,
@@ -644,6 +654,7 @@ impl ChunkStreaming {
                 cache,
                 claimed,
                 decoded,
+                made,
                 finished,
                 error,
                 cook_chunk,
@@ -661,6 +672,7 @@ impl ChunkStreaming {
                 cache,
                 claimed,
                 decoded,
+                made,
                 finished,
                 pools: renderer,
                 settle,
@@ -859,6 +871,7 @@ struct FrameIo<'a, Pools> {
     cache: &'a CookedCache,
     claimed: &'a Mutex<HashSet<AssetId>>,
     decoded: &'a mut DecodedAssets,
+    made: &'a mut Vec<LoadedChunk>,
     finished: &'a mut BTreeMap<[i32; 2], LoadedChunk>,
     pools: &'a mut Pools,
     settle: bool,
@@ -884,6 +897,9 @@ trait LoadsIntoPools {
     /// The bytes written into the load staging so far.
     fn load_staging_written_bytes(&self) -> u64;
     fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk>;
+    /// Whether the GPU has built and compacted the BLAS of every Mesh
+    /// `chunk` names.
+    fn blases_ready(&self, chunk: &LoadedChunk) -> bool;
 }
 
 impl<Pools> FrameIo<'_, Pools>
@@ -907,19 +923,14 @@ where
         })
     }
 
-    /// Whether loading `chunk` keeps the frame's loads, placed Instances and
-    /// load bytes within their caps: always while settling; past the
-    /// Instances' cap only while the frame's loads have placed none, and
-    /// past the bytes' only while they have written none.
+    /// Whether loading `chunk` keeps the frame's loads and load bytes within
+    /// their caps: always while settling; past the bytes' cap only while the
+    /// frame's loads have written none.
     fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
         if self.settle {
             return Ok(true);
         }
         if self.loads >= self.loads_per_frame {
-            return Ok(false);
-        }
-        let instances = *self.placed_instances + chunk.placements.len();
-        if *self.placed_instances > 0 && instances > self.instances_placed_per_frame {
             return Ok(false);
         }
         if *self.written_bytes == 0 {
@@ -933,7 +944,6 @@ where
     fn load(&mut self, decoded: DecodedChunk) -> anyhow::Result<LoadedChunk> {
         self.loads += 1;
         *self.bytes_read += decoded.bytes_read;
-        *self.placed_instances += decoded.chunk.placements.len();
         #[cfg(debug_assertions)]
         let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
         let written_before = self.load_staging_written_bytes();
@@ -946,6 +956,50 @@ where
         );
         *self.written_bytes += written_bytes;
         loaded
+    }
+
+    /// Loads the next ready Chunk into the pools, if the frame's caps allow
+    /// it: its coordinates and its load, or None when no ready Chunk loads
+    /// this frame.
+    fn make_load(&mut self) -> Option<([i32; 2], anyhow::Result<LoadedChunk>)> {
+        let (coordinates, decoded) = loop {
+            let coordinates = self.next_ready()?;
+            let decoded = self.io.ready.remove(&coordinates)?;
+            match &decoded {
+                Ok(chunk) if !self.settle && self.waits_on_a_read(chunk) => {
+                    self.io.ready.insert(coordinates, decoded);
+                    self.waiting.insert(coordinates);
+                }
+                _ => break (coordinates, decoded),
+            }
+        };
+        let loaded = match decoded {
+            Ok(decoded) => match self.fits(&decoded.chunk) {
+                Ok(true) => self.load(decoded),
+                Ok(false) => {
+                    self.io.ready.insert(coordinates, Ok(decoded));
+                    return None;
+                }
+                Err(error) => Err(error),
+            },
+            Err(error) => Err(error),
+        };
+        Some((coordinates, loaded))
+    }
+
+    /// Takes the first Chunk loaded and not placed whose BLASes are ready,
+    /// or, while settling, the first: None when there is none, or when it
+    /// would take the frame's placed Instances past their cap after another
+    /// placed some.
+    fn place_next(&mut self) -> Option<LoadedChunk> {
+        let next = (self.made.iter()).position(|chunk| self.settle || self.blases_ready(chunk))?;
+        let instances = *self.placed_instances + self.made[next].placements.len();
+        let past_cap = instances > self.instances_placed_per_frame;
+        if !self.settle && *self.placed_instances > 0 && past_cap {
+            return None;
+        }
+        *self.placed_instances = instances;
+        Some(self.made.remove(next))
     }
 }
 
@@ -1037,6 +1091,7 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
         self.pools.load_staging.written_bytes()
     }
 
+    /// With the BLASes of the Meshes it brings deferred, unless settling.
     fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk> {
         let reader = DecodedReader {
             decoded: RefCell::new(&mut *self.decoded),
@@ -1058,10 +1113,17 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
             mesh_pool,
             material_pool,
         };
-        let mut chunk =
-            load_cooked_chunk(&mut loader, decoded.id, decoded.coordinates, &decoded.chunk)?;
+        loader.mesh_pool.defer_blases(!self.settle);
+        let chunk = load_cooked_chunk(&mut loader, decoded.id, decoded.coordinates, &decoded.chunk);
+        loader.mesh_pool.defer_blases(false);
+        let mut chunk = chunk?;
         chunk.shift(self.shift);
         Ok(chunk)
+    }
+
+    fn blases_ready(&self, chunk: &LoadedChunk) -> bool {
+        (chunk.meshes.iter())
+            .all(|&mesh| (self.pools.mesh_pool).asset_blas_ready(mesh, MeshUse::DrawnAndTraced))
     }
 }
 
@@ -1088,51 +1150,34 @@ where
         if self.settle && self.io.in_flight > 0 {
             return None;
         }
-        let (coordinates, decoded) = loop {
-            let coordinates = self.next_ready()?;
-            let decoded = self.io.ready.remove(&coordinates)?;
-            match &decoded {
-                Ok(chunk) if !self.settle && self.waits_on_a_read(chunk) => {
-                    self.io.ready.insert(coordinates, decoded);
-                    self.waiting.insert(coordinates);
+        while let Some((coordinates, loaded)) = self.make_load() {
+            match loaded {
+                Ok(chunk) => self.made.push(chunk),
+                Err(error) => {
+                    let error = error.context(format!("loading the Chunk at {coordinates:?}"));
+                    tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
+                    if self.settle {
+                        self.error.get_or_insert(error);
+                    }
+                    return Some(FinishedLoad {
+                        coordinates,
+                        assets: None,
+                    });
                 }
-                _ => break (coordinates, decoded),
             }
-        };
-        let loaded = match decoded {
-            Ok(decoded) => match self.fits(&decoded.chunk) {
-                Ok(true) => self.load(decoded),
-                Ok(false) => {
-                    self.io.ready.insert(coordinates, Ok(decoded));
-                    return None;
-                }
-                Err(error) => Err(error),
-            },
-            Err(error) => Err(error),
-        };
-        let assets = match loaded {
-            Ok(chunk) => {
-                let assets = chunk
-                    .meshes
-                    .iter()
-                    .chain(&chunk.materials)
-                    .copied()
-                    .collect();
-                self.finished.insert(coordinates, chunk);
-                Some(assets)
-            }
-            Err(error) => {
-                let error = error.context(format!("loading the Chunk at {coordinates:?}"));
-                tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
-                if self.settle {
-                    self.error.get_or_insert(error);
-                }
-                None
-            }
-        };
+        }
+        let chunk = self.place_next()?;
+        let coordinates = chunk.coordinates;
+        let assets = chunk
+            .meshes
+            .iter()
+            .chain(&chunk.materials)
+            .copied()
+            .collect();
+        self.finished.insert(coordinates, chunk);
         Some(FinishedLoad {
             coordinates,
-            assets,
+            assets: Some(assets),
         })
     }
 }
@@ -1181,12 +1226,14 @@ mod tests {
     }
 
     /// Pools that load any Chunk but the one at `refused`, without its
-    /// Placements, and write nothing.
-    struct NoPools {
+    /// Placements, and write nothing; the BLASes of the Chunks at `unready`
+    /// are not ready.
+    struct NoPools<'a> {
         refused: Option<[i32; 2]>,
+        unready: &'a [[i32; 2]],
     }
 
-    impl LoadsIntoPools for FrameIo<'_, NoPools> {
+    impl LoadsIntoPools for FrameIo<'_, NoPools<'_>> {
         fn waits_on_a_read(&self, _decoded: &DecodedChunk) -> bool {
             false
         }
@@ -1211,6 +1258,10 @@ mod tests {
                 held: false,
             })
         }
+
+        fn blases_ready(&self, chunk: &LoadedChunk) -> bool {
+            !self.pools.unready.contains(&chunk.coordinates)
+        }
     }
 
     /// The nine Chunks around Chunk [0, 0], in coordinate order.
@@ -1218,19 +1269,37 @@ mod tests {
         (-1..=1).flat_map(|x| (-1..=1).map(move |z| [x, z]))
     }
 
-    /// The Chunks each of four frames loads, at most four loads a frame, for
-    /// a camera over the middle of Chunk [0, 0] of `nine_chunks`, whose reads
-    /// all come back between the first frame and the second; the pools
+    /// The middle of Chunk [0, 0].
+    const MIDDLE: DVec3 = DVec3::new(128.0, 10.0, 128.0);
+
+    /// What streaming `nine_chunks` leaves: the Chunks the streamer loaded on
+    /// each frame, those loaded into the pools and not placed, and those
+    /// placed, which the streamer took or left for their pool users to be
+    /// given back.
+    struct Streamed {
+        loaded: Vec<Vec<[i32; 2]>>,
+        made: Vec<[i32; 2]>,
+        placed: Vec<[i32; 2]>,
+    }
+
+    /// Streams `nine_chunks`, whose reads all come back between the first
+    /// frame and the second, at most four loads a frame, over `frames`: each
+    /// a camera and the Chunks whose BLASes are not ready then. The pools
     /// refuse the Chunk at `refused`.
-    fn loads_by_frame(settle: bool, refused: Option<[i32; 2]>) -> Vec<Vec<[i32; 2]>> {
+    fn stream_nine_chunks(
+        settle: bool,
+        refused: Option<[i32; 2]>,
+        frames: &[(DVec3, &[[i32; 2]])],
+    ) -> Streamed {
         let (mut io, _requests, finished_sender) = io_pool();
         let cache = CookedCache::new(std::env::temp_dir());
         let claimed = Mutex::new(HashSet::new());
         let mut streamer = ChunkStreamer::new(nine_chunks(), 256.0);
-        let camera = DVec3::new(128.0, 10.0, 128.0);
         let mut decoded = DecodedAssets::default();
+        let mut made = Vec::new();
         let mut finished = BTreeMap::new();
-        let frames = (0..4).map(|frame| {
+        let mut loaded = Vec::new();
+        for (frame, &(camera, unready)) in frames.iter().enumerate() {
             if frame == 1 {
                 for coordinates in nine_chunks() {
                     finished_sender.send(read_chunk(coordinates)).unwrap();
@@ -1245,8 +1314,9 @@ mod tests {
                 cache: &cache,
                 claimed: &claimed,
                 decoded: &mut decoded,
+                made: &mut made,
                 finished: &mut finished,
-                pools: &mut NoPools { refused },
+                pools: &mut NoPools { refused, unready },
                 settle,
                 load_bytes_per_frame: u64::MAX,
                 instances_placed_per_frame: usize::MAX,
@@ -1258,9 +1328,55 @@ mod tests {
                 error: &mut None,
                 waiting: HashSet::new(),
             };
-            streamer.update(camera, false, &mut frame_io).loaded.clone()
-        });
-        frames.collect()
+            loaded.push(streamer.update(camera, false, &mut frame_io).loaded.clone());
+        }
+        Streamed {
+            loaded,
+            made: made.iter().map(|chunk| chunk.coordinates).collect(),
+            placed: finished.into_keys().collect(),
+        }
+    }
+
+    /// The Chunks each of four frames loads, for a camera over the middle of
+    /// Chunk [0, 0], every BLAS ready.
+    fn loads_by_frame(settle: bool, refused: Option<[i32; 2]>) -> Vec<Vec<[i32; 2]>> {
+        let frames: [(DVec3, &[[i32; 2]]); 4] = [(MIDDLE, &[]); 4];
+        stream_nine_chunks(settle, refused, &frames).loaded
+    }
+
+    /// The second frame loads four Chunks into the pools, and places none
+    /// while their BLASes are not ready. The third places three of them,
+    /// ready by then, in the order loaded, then the four it loads itself,
+    /// ready at once. The camera is past the hold radius by the fourth,
+    /// when [0, 0]'s BLASes are ready: it and [1, 1] are placed for the
+    /// streamer to drop, in no frame's loads.
+    #[test]
+    fn a_load_is_placed_once_its_blases_are_ready_and_dropped_if_its_chunk_left_meanwhile() {
+        let first_four = [[0, 0], [-1, 0], [0, -1], [0, 1]];
+        let far = MIDDLE + DVec3::new(10_000.0, 0.0, 0.0);
+        let frames: [(DVec3, &[[i32; 2]]); 4] = [
+            (MIDDLE, &[]),
+            (MIDDLE, &first_four),
+            (MIDDLE, &[[0, 0]]),
+            (far, &[]),
+        ];
+        let waiting = stream_nine_chunks(false, None, &frames[..2]);
+        assert!(waiting.loaded.iter().all(Vec::is_empty));
+        assert_eq!(waiting.made, first_four);
+        assert!(waiting.placed.is_empty());
+
+        let streamed = stream_nine_chunks(false, None, &frames);
+        assert_eq!(
+            streamed.loaded,
+            [
+                vec![],
+                vec![],
+                vec![[-1, 0], [0, -1], [0, 1], [1, 0], [-1, -1], [-1, 1], [1, -1]],
+                vec![],
+            ]
+        );
+        assert!(streamed.made.is_empty());
+        assert_eq!(streamed.placed, nine_chunks().collect::<Vec<_>>());
     }
 
     /// Nine reads come back in one frame that loads four Chunks at most: the

@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use crate::{
     assets::material::CLASSES_PER_CHANNEL,
@@ -166,9 +168,11 @@ pub struct MeshPool {
     /// Each Mesh's BLAS, at its Handle's index, built at load from its
     /// ranges of the vertex and index Arenas; none for a Mesh no ray traces.
     blases: Vec<Option<wgpu::Blas>>,
-    /// The Meshes whose BLAS is built but not yet compacted, with its
-    /// bytes.
-    awaiting_compaction: Vec<(MeshHandle, u64)>,
+    /// The Meshes whose BLAS the GPU has not finished building and
+    /// compacting, in load order.
+    awaiting_compaction: Vec<AwaitingCompaction>,
+    /// Whether the BLASes of the Meshes loaded now are deferred.
+    defers_blases: bool,
     /// The BLASes of the Meshes loaded as `MeshUse::Refitted`.
     refitted_blases: Vec<MeshBlas>,
     /// Bytes of the BLASes compacted, as built, and of the others.
@@ -205,6 +209,7 @@ impl MeshPool {
             refusals: 0,
             blases: Vec::new(),
             awaiting_compaction: Vec::new(),
+            defers_blases: false,
             refitted_blases: Vec::new(),
             compacted_blas_bytes: 0,
             uncompacted_blas_bytes: 0,
@@ -639,7 +644,12 @@ impl MeshPool {
         if refitted {
             self.refitted_blases.push(mesh_blas);
         } else {
-            self.awaiting_compaction.push((handle, built_bytes));
+            self.awaiting_compaction.push(AwaitingCompaction {
+                handle,
+                bytes: built_bytes,
+                deferred: self.defers_blases,
+                stage: CompactionStage::Recorded,
+            });
         }
         self.uncompacted_blas_bytes += built_bytes;
         self.charge_blases();
@@ -682,9 +692,41 @@ impl MeshPool {
         &self.refitted_blases
     }
 
-    /// Compacts the BLASes of the Meshes loaded since the last call, once
-    /// the staging their builds were recorded into is submitted: it waits
-    /// for the GPU to build them, then to compact them. Nothing else orders
+    /// Has the BLASes of the Meshes loaded from now on deferred, with
+    /// `defer`: `compact_blases` waits for none of them, and nothing may
+    /// take one into a TLAS until `blas_ready` says so.
+    pub fn defer_blases(&mut self, defer: bool) {
+        self.defers_blases = defer;
+    }
+
+    /// Has the next `compact_blases` wait for every deferred BLAS too.
+    pub fn wait_for_blases(&mut self) {
+        for awaiting in &mut self.awaiting_compaction {
+            awaiting.deferred = false;
+        }
+    }
+
+    /// Whether the GPU has finished building and compacting the BLAS of
+    /// `handle`'s Mesh, or it has none.
+    pub fn blas_ready(&self, handle: MeshHandle) -> bool {
+        !self
+            .awaiting_compaction
+            .iter()
+            .any(|awaiting| awaiting.handle == handle)
+    }
+
+    /// `blas_ready` of the Mesh `id` loaded for `mesh_use`; true when none is.
+    pub fn asset_blas_ready(&self, id: AssetId, mesh_use: MeshUse) -> bool {
+        self.asset_handles
+            .get(&(id, mesh_use))
+            .is_none_or(|shared| self.blas_ready(shared.handle))
+    }
+
+    /// Compacts the BLASes of the Meshes loaded, once the staging their
+    /// builds were recorded into is submitted. Unless every one awaiting is
+    /// deferred, it waits for the GPU to build them, then to compact them;
+    /// otherwise it takes each a step further as the device's polls since
+    /// found the GPU done, without waiting. Nothing else orders
     /// a TLAS build after the copies: wgpu-core 30.0.1 records no barrier
     /// after `compact_blas`'s copy on any backend, and Metal has no
     /// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
@@ -694,39 +736,75 @@ impl MeshPool {
         if self.awaiting_compaction.is_empty() {
             return false;
         }
-        for &(handle, _) in &self.awaiting_compaction {
-            if let Some(blas) = &self.blases[handle.index as usize] {
-                blas.prepare_compaction_async(|_| {});
+        let wait = (self.awaiting_compaction.iter()).any(|awaiting| !awaiting.deferred);
+        self.advance_compaction(queue);
+        if !wait {
+            return false;
+        }
+        // One wait ends the builds, the next the compacted copies.
+        for _ in 0..2 {
+            if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+                tracing::error!(%error, "waiting for BLAS builds and compaction failed");
             }
+            self.advance_compaction(queue);
         }
-        if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
-            tracing::error!(%error, "waiting for BLAS builds failed");
-        }
-        for (handle, bytes) in self.awaiting_compaction.drain(..) {
-            let Some(blas) = &mut self.blases[handle.index as usize] else {
+        self.awaiting_compaction.clear();
+        true
+    }
+
+    /// Takes each BLAS awaiting compaction as far as the GPU has got: has
+    /// its compaction prepared; once built, compacts it; and forgets it once
+    /// the GPU has finished every submission up to its compacted copy's.
+    fn advance_compaction(&mut self, queue: &wgpu::Queue) {
+        self.awaiting_compaction
+            .retain(|awaiting| match &awaiting.stage {
+                CompactionStage::Finishing(finished) => !finished.load(Ordering::Acquire),
+                _ => true,
+            });
+        let mut finishing: Option<Arc<AtomicBool>> = None;
+        for awaiting in &mut self.awaiting_compaction {
+            let index = awaiting.handle.index as usize;
+            let Some(blas) = &mut self.blases[index] else {
                 continue;
             };
-            if !blas.ready_for_compaction() {
-                tracing::warn!(
-                    mesh = handle.index,
-                    "BLAS not compacted: not ready after its build"
-                );
-                continue;
+            match &awaiting.stage {
+                CompactionStage::Recorded => {
+                    let prepared = Arc::new(OnceLock::new());
+                    let outcome = prepared.clone();
+                    blas.prepare_compaction_async(move |result| {
+                        let _ = outcome.set(result.is_ok());
+                    });
+                    awaiting.stage = CompactionStage::Building(prepared);
+                }
+                CompactionStage::Building(prepared) => {
+                    let Some(&prepared) = prepared.get() else {
+                        continue;
+                    };
+                    if prepared && blas.ready_for_compaction() {
+                        *blas = queue.compact_blas(blas);
+                        if let Some(allocation) = &mut self.allocations[index] {
+                            allocation.blas_compacted = true;
+                        }
+                        self.uncompacted_blas_bytes -= awaiting.bytes;
+                        self.compacted_blas_bytes += awaiting.bytes;
+                    } else {
+                        tracing::warn!(
+                            mesh = awaiting.handle.index,
+                            "BLAS not compacted: not ready after its build"
+                        );
+                    }
+                    let finished = finishing.get_or_insert_with(Arc::default).clone();
+                    awaiting.stage = CompactionStage::Finishing(finished);
+                }
+                CompactionStage::Finishing(_) => {}
             }
-            *blas = queue.compact_blas(blas);
-            if let Some(allocation) = &mut self.allocations[handle.index as usize] {
-                allocation.blas_compacted = true;
-            }
-            self.uncompacted_blas_bytes -= bytes;
-            self.compacted_blas_bytes += bytes;
         }
-        self.charge_blases();
-        // The copies wait in the queue's pending writes until a submit.
-        queue.submit(std::iter::empty());
-        if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
-            tracing::error!(%error, "waiting for BLAS compaction failed");
+        if let Some(finished) = finishing {
+            self.charge_blases();
+            // The copies wait in the queue's pending writes until a submit.
+            queue.submit(std::iter::empty());
+            queue.on_submitted_work_done(move || finished.store(true, Ordering::Release));
         }
-        true
     }
 
     /// The BLAS of `handle`'s Mesh, or None when the pool has no such Mesh
@@ -792,7 +870,7 @@ impl MeshPool {
         }
         if self.blases[index].take().is_some() {
             self.awaiting_compaction
-                .retain(|&(awaiting, _)| awaiting != handle);
+                .retain(|awaiting| awaiting.handle != handle);
             if allocation.blas_compacted {
                 self.compacted_blas_bytes -= allocation.blas_bytes;
             } else {
@@ -925,6 +1003,23 @@ impl LoadedMeshes {
     pub(crate) fn remove(&mut self, handle: MeshHandle) -> bool {
         self.generations.free(handle.index, handle.generation)
     }
+}
+
+/// A Mesh whose BLAS the GPU has not finished building and compacting.
+struct AwaitingCompaction {
+    handle: MeshHandle,
+    bytes: u64,
+    deferred: bool,
+    stage: CompactionStage,
+}
+
+enum CompactionStage {
+    /// Its build is recorded into a staging.
+    Recorded,
+    /// Its compaction is prepared, with the outcome once its build ends.
+    Building(Arc<OnceLock<bool>>),
+    /// Set once the GPU has finished its build and any compacted copy.
+    Finishing(Arc<AtomicBool>),
 }
 
 /// A Mesh loaded by Asset ID for a shared use: its Handle, how many loads
@@ -1742,10 +1837,23 @@ pub(crate) mod tests {
     /// A TLAS built once `compact_blases` returns holds the compacted BLAS
     /// while other devices load the GPU, as parallel tests do: no barrier
     /// orders a TLAS build after the copies that write its BLASes, so
-    /// `compact_blases` waits for them. Eight threads, each with its
-    /// own device, load and trace a triangle 25 times.
+    /// `compact_blases` waits for them.
     #[test]
     fn a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu() {
+        load_and_trace_on_eight_devices(false);
+    }
+
+    /// A TLAS built once a deferred BLAS is ready holds the compacted BLAS
+    /// while other devices load the GPU: `compact_blases` waits for none, and
+    /// the BLAS is ready only once the GPU has finished its compacted copy.
+    #[test]
+    fn a_tlas_built_once_a_deferred_blas_is_ready_holds_it_while_other_devices_load_the_gpu() {
+        load_and_trace_on_eight_devices(true);
+    }
+
+    /// Eight threads, each with its own device, load and trace a triangle 25
+    /// times, its BLAS deferred with `defer`.
+    fn load_and_trace_on_eight_devices(defer: bool) {
         if gpu_context().is_none() {
             return;
         }
@@ -1762,13 +1870,20 @@ pub(crate) mod tests {
                     ..arenas_of(4 << 10)
                 },
             );
+            pool.defer_blases(defer);
             (0..25)
                 .map(|_| {
                     let handle = pool
                         .load(&mut staging, &triangle_about_x(), &[None])
                         .expect("a triangle fits");
                     staging.submit(&context.queue);
-                    pool.compact_blases(&context.queue);
+                    assert_eq!(pool.compact_blases(&context.queue), !defer);
+                    assert_eq!(pool.blas_ready(handle), !defer);
+                    while !pool.blas_ready(handle) {
+                        std::thread::yield_now();
+                        (context.device.poll(wgpu::PollType::Poll)).expect("the device polls");
+                        assert!(!pool.compact_blases(&context.queue));
+                    }
                     let blas = pool.blas(handle).expect("the triangle's BLAS");
                     trace_triangle_about_x(&context, blas)
                 })

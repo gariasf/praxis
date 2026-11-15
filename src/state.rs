@@ -841,6 +841,18 @@ mod tests {
             if frame == 0 {
                 state.streaming.wait_for_reads().expect("the Chunks read");
             }
+            upload_loads(&mut state);
+        }
+        for _ in 0..2_000 {
+            if state.simulation.world.resource::<LoadedChunks>().0.len() == 4 {
+                break;
+            }
+            state
+                .streaming
+                .update(&mut state.simulation.world, &mut state.renderer, false)
+                .expect("the Chunks stream");
+            upload_loads(&mut state);
+            std::thread::sleep(Duration::from_millis(1));
         }
 
         let loaded = state.simulation.world.resource::<LoadedChunks>();
@@ -857,9 +869,19 @@ mod tests {
         assert_eq!(written_bytes[5], 0);
     }
 
+    /// What an upload does for the loads staged: submits them and takes
+    /// their BLASes as far as the GPU has got.
+    fn upload_loads(state: &mut State) {
+        let renderer = &mut state.renderer;
+        (renderer.device.poll(wgpu::PollType::Poll)).expect("the device polls");
+        renderer.load_staging.submit(&renderer.queue);
+        renderer.mesh_pool.compact_blases(&renderer.queue);
+    }
+
     /// With a frame's Chunk loads capped at one Instance, each of
-    /// `texture_wall`'s four Chunks places more alone, so each loads in a
-    /// frame of its own, nearest first, rather than all four at once.
+    /// `texture_wall`'s four Chunks places more alone, so each is placed in
+    /// a frame of its own once its BLAS is ready, in the order loaded,
+    /// nearest first, rather than all four at once.
     #[test]
     fn streamed_loads_past_the_frames_instances_wait_in_priority_order() {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
@@ -886,7 +908,7 @@ mod tests {
             ));
 
         let mut chunks_loaded = Vec::new();
-        for frame in 0..6 {
+        for frame in 0..2_000 {
             let streamed = state
                 .streaming
                 .update(&mut state.simulation.world, &mut state.renderer, false)
@@ -895,12 +917,98 @@ mod tests {
             if frame == 0 {
                 state.streaming.wait_for_reads().expect("the Chunks read");
             }
+            if state.simulation.world.resource::<LoadedChunks>().0.len() == 4 {
+                break;
+            }
+            upload_loads(&mut state);
+            std::thread::sleep(Duration::from_millis(1));
         }
 
         let loaded = state.simulation.world.resource::<LoadedChunks>();
         let arrivals: Vec<[i32; 2]> = loaded.0.iter().map(|chunk| chunk.coordinates).collect();
         assert_eq!(arrivals, [[0, 0], [-1, 0], [0, -1], [-1, -1]]);
-        assert_eq!(chunks_loaded, [0, 1, 1, 1, 1, 0]);
+        assert_eq!(chunks_loaded[0], 0);
+        chunks_loaded.retain(|&loaded| loaded > 0);
+        assert_eq!(chunks_loaded, [1, 1, 1, 1]);
+    }
+
+    /// `shadows`' Chunk, streamed into frames that do not settle, brings a
+    /// Mesh of its own: the frame that loads it places nothing, a later one
+    /// places it once its BLAS is built and compacted, and its shadow is
+    /// traced within ten frames of that one, which drew it unshadowed.
+    #[test]
+    fn a_streamed_chunk_is_placed_once_its_blas_is_ready_and_shadowed_within_ten_frames() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::Shadows;
+        let (width, height) = (320, 180);
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            width,
+            height,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("shadows loads");
+        let target = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Streamed Shadow Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: crate::capture::TARGET_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let brightness = |pixels: Vec<u8>| pixels.iter().map(|&byte| u64::from(byte)).sum::<u64>();
+
+        let mut loaded_on = None;
+        let mut placed = None;
+        let mut traced = None;
+        for frame in 0..2_000_u32 {
+            let camera = scene.camera_at(0, glam::DVec3::ZERO);
+            state.simulation.world.insert_resource(camera);
+            state.update(scene.frame_delta());
+            state.render(&target_view);
+            let stats = state.frame_stats();
+            if stats.bytes_read > 0 {
+                loaded_on.get_or_insert(frame);
+            }
+            let read_back = || {
+                let pixels = crate::capture::read_back(&context, &target);
+                brightness(pixels.expect("the frame reads back"))
+            };
+            if stats.chunks_loaded > 0 {
+                placed = Some((frame, read_back()));
+            }
+            if let (Some(_), Some(frames)) = (placed, stats.frames_until_traced) {
+                traced = Some((frames, read_back()));
+                break;
+            }
+            // A frame as long as the scene's, so the count is of such frames.
+            std::thread::sleep(scene.frame_delta());
+        }
+
+        let loaded_on = loaded_on.expect("the Chunk loads");
+        let (placed_on, unshadowed) = placed.expect("the Chunk is placed");
+        let (frames_until_traced, shadowed) = traced.expect("the Chunk is traced");
+        assert!(
+            loaded_on < placed_on,
+            "loaded on frame {loaded_on}, placed on {placed_on}"
+        );
+        assert!(frames_until_traced <= 10, "{frames_until_traced} frames");
+        assert!(
+            shadowed < unshadowed,
+            "{shadowed} of {unshadowed} with the shadow"
+        );
     }
 
     /// A Chunk whose 10 m quad samples a 2,048² Texture with mip 0 red, mip 1

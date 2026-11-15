@@ -426,9 +426,12 @@ impl StaticTlas {
                 // A freed slot's Instance has no Mesh, so no BLAS.
                 let blas = (!write.moving)
                     .then(|| {
-                        mesh_pool
-                            .handle_at(instance.mesh)
-                            .and_then(|handle| mesh_pool.blas(handle))
+                        let handle = mesh_pool.handle_at(instance.mesh)?;
+                        debug_assert!(
+                            mesh_pool.blas_ready(handle),
+                            "a static Instance placed before its Mesh's BLAS is ready"
+                        );
+                        mesh_pool.blas(handle)
                     })
                     .flatten();
                 let Some(blas) = blas else {
