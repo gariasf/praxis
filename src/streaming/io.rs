@@ -483,10 +483,9 @@ pub(crate) struct ChunkStreaming {
 /// sized in `docs/performance.md`, "Measurements behind the code".
 const INSTANCES_PLACED_PER_FRAME: usize = 131_072;
 
-/// The Chunks a frame loads, as each load's sizing and pool writes, and the
-/// wait for the BLAS of a Mesh it brings to build and compact, take the main
-/// thread whatever it places or writes; sized in `docs/performance.md`,
-/// "Measurements behind the code".
+/// The Chunks a frame loads, as each load's sizing and pool writes take the
+/// main thread whatever it places or writes; sized in
+/// `docs/performance.md`, "Measurements behind the code".
 const LOADS_PER_FRAME: usize = 3;
 
 /// Cooks a Chunk, by Asset ID, and the Assets it names, where missing or
