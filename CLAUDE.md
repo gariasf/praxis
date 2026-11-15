@@ -104,7 +104,7 @@ milestone's exit reviews the releases published since the last one
 (`docs/agents/workflow.md`, The ladder), and checks ADR 0007's reopen
 trigger there. One
 standing exception: until wgpu 31 ships, a fix Praxis needs from wgpu's
-trunk is carried on a vendored 30.0.1 crate under `vendor/`, behind
+trunk is carried on a vendored 30.0.2 crate under `vendor/`, behind
 `[patch.crates-io]`, without a further decision; `vendor/README.md` names
 each upstream commit applied.
 
