@@ -819,3 +819,86 @@ fn describe(
     };
     format!("`{name}` at offset {offset}: {size} bytes of {scalar}{strides}")
 }
+
+#[test]
+fn probe_873_msl() {
+    use naga::back::msl;
+    use naga::proc::{BoundsCheckPolicies, BoundsCheckPolicy};
+
+    let (module, info) = validate(&crate::render::shaders::SHADOW_MASK).unwrap();
+    let variants: [(&str, [bool; 4]); 6] = [
+        ("checked", [true, true, true, true]),
+        ("no-bounds", [false, true, true, true]),
+        ("no-loop", [true, false, true, true]),
+        ("no-ray", [true, true, false, true]),
+        ("no-int-div", [true, true, true, false]),
+        ("unchecked", [false, false, false, false]),
+    ];
+    let markers = [
+        "naga_query_init_tracker",
+        "naga_query_tmax_tracker",
+        "loop_bound",
+        "isnan",
+        "isinf",
+        "metal::min(unsigned",
+        "naga_div",
+        "naga_mod",
+    ];
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/probe-873");
+    for (variant, [bounds, loop_bounding, ray_tracking, int_div]) in variants {
+        for entry_point in &module.entry_points {
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                &module,
+                &info,
+                Some((entry_point.stage, &entry_point.name)),
+                &["CULLING", "FROXEL_LIGHTS", "SHADOW_RAYS"]
+                    .into_iter()
+                    .map(|switch| (switch.to_owned(), 1.0))
+                    .collect(),
+            )
+            .unwrap();
+            let policy = if bounds {
+                BoundsCheckPolicy::Restrict
+            } else {
+                BoundsCheckPolicy::Unchecked
+            };
+            let options = msl::Options {
+                lang_version: (4, 0),
+                fake_missing_bindings: true,
+                bounds_check_policies: BoundsCheckPolicies {
+                    index: policy,
+                    buffer: policy,
+                    image_load: policy,
+                    binding_array: BoundsCheckPolicy::Unchecked,
+                },
+                zero_initialize_workgroup_memory: true,
+                force_loop_bounding: loop_bounding,
+                emit_int_div_checks: int_div,
+                ray_query_initialization_tracking: ray_tracking,
+                ..Default::default()
+            };
+            let pipeline_options = msl::PipelineOptions {
+                entry_point: Some((entry_point.stage, entry_point.name.clone())),
+                allow_and_force_point_size: false,
+                vertex_pulling_transform: false,
+                vertex_buffer_mappings: Vec::new(),
+                binding_array_length_map: Default::default(),
+            };
+            let (source, _) =
+                msl::write_string(&module, &info, &options, &pipeline_options).unwrap();
+            let folder = directory.join(variant);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(folder.join(format!("{}.metal", entry_point.name)), &source).unwrap();
+            let counts: Vec<String> = markers
+                .iter()
+                .map(|marker| format!("{}={}", marker, source.matches(marker).count()))
+                .collect();
+            eprintln!(
+                "{variant:<11} {:<22} lines={:<5} {}",
+                entry_point.name,
+                source.lines().count(),
+                counts.join(" ")
+            );
+        }
+    }
+}

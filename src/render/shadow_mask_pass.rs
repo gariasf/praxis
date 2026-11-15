@@ -140,7 +140,38 @@ impl ShadowMaskPass {
             )
         });
         let layout = SHADOW_MASK_BUILD.layout(device);
-        let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor(capacities));
+        let descriptor = shaders::SHADOW_MASK.descriptor(capacities);
+        let checked = wgpu::ShaderRuntimeChecks::checked();
+        let probe = std::env::var("PRAXIS_PROBE_873").unwrap_or_default();
+        let runtime_checks = match probe.as_str() {
+            "" => None,
+            "checked" => Some(checked),
+            "no-bounds" => Some(wgpu::ShaderRuntimeChecks {
+                bounds_checks: false,
+                ..checked
+            }),
+            "no-loop" => Some(wgpu::ShaderRuntimeChecks {
+                force_loop_bounding: false,
+                ..checked
+            }),
+            "no-ray" => Some(wgpu::ShaderRuntimeChecks {
+                ray_query_initialization_tracking: false,
+                ..checked
+            }),
+            "no-int-div" => Some(wgpu::ShaderRuntimeChecks {
+                int_div_checks: false,
+                ..checked
+            }),
+            "unchecked" => Some(wgpu::ShaderRuntimeChecks::unchecked()),
+            other => panic!("PRAXIS_PROBE_873={other}: not a variant"),
+        };
+        tracing::info!(probe, ?runtime_checks, "shadow mask module");
+        let shader = match runtime_checks {
+            None => device.create_shader_module(descriptor),
+            // The shadow mask's WGSL is the engine's own: its loops end and its
+            // ray queries are initialized before they proceed.
+            Some(checks) => unsafe { device.create_shader_module_trusted(descriptor, checks) },
+        };
         let pipeline_layout = pipeline_layout(
             device,
             "Shadow Mask Pipeline Layout",
