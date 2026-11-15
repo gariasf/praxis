@@ -182,7 +182,7 @@ The horizontal distance from the camera within which Chunks are loaded.
 _Avoid_: Streaming radius, active area, grid size
 
 **Late Chunk**:
-A Chunk the camera came within the Load radius of before it was loaded.
+A Chunk the camera came within the Load radius of before it was loaded: before its Placements were placed, which a streamed load does once the BLASes of the Meshes it brings are built and compacted.
 _Avoid_: Pop-in, streaming miss
 
 **Far proxy**:
@@ -236,7 +236,7 @@ A committed image that a Reference scene must reproduce within tolerance.
 _Avoid_: Snapshot, screenshot
 
 **Settled frame**:
-A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.
+A frame rendered only after every load it requested is Resident and placed, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.
 _Avoid_: Blocking load, sync mode
 
 **Render switches**:

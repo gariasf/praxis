@@ -843,7 +843,7 @@ mod tests {
             }
             upload_loads(&mut state);
         }
-        for _ in 0..2_000 {
+        for _ in 0..20_000 {
             if state.simulation.world.resource::<LoadedChunks>().0.len() == 4 {
                 break;
             }
@@ -873,7 +873,6 @@ mod tests {
     /// their BLASes as far as the GPU has got.
     fn upload_loads(state: &mut State) {
         let renderer = &mut state.renderer;
-        (renderer.device.poll(wgpu::PollType::Poll)).expect("the device polls");
         renderer.load_staging.submit(&renderer.queue);
         renderer.mesh_pool.compact_blases(&renderer.queue);
     }
@@ -908,7 +907,7 @@ mod tests {
             ));
 
         let mut chunks_loaded = Vec::new();
-        for frame in 0..2_000 {
+        for frame in 0..20_000 {
             let streamed = state
                 .streaming
                 .update(&mut state.simulation.world, &mut state.renderer, false)
@@ -933,9 +932,10 @@ mod tests {
     }
 
     /// `shadows`' Chunk, streamed into frames that do not settle, brings a
-    /// Mesh of its own: the frame that loads it places nothing, a later one
-    /// places it once its BLAS is built and compacted, and its shadow is
-    /// traced within ten frames of that one, which drew it unshadowed.
+    /// Mesh of its own: the frame that loads it places nothing and waits
+    /// for no BLAS, nor does a later one, which places it once its BLAS is
+    /// built and compacted, and its shadow is traced within ten frames of
+    /// that one, which drew it unshadowed.
     #[test]
     fn a_streamed_chunk_is_placed_once_its_blas_is_ready_and_shadowed_within_ten_frames() {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
@@ -950,7 +950,10 @@ mod tests {
             height,
             scene,
             glam::DVec3::ZERO,
-            RenderSwitches::default(),
+            RenderSwitches {
+                wait_for_static_tlas: true,
+                ..RenderSwitches::default()
+            },
         )
         .expect("shadows loads");
         let target = context.device.create_texture(&wgpu::TextureDescriptor {
@@ -973,7 +976,8 @@ mod tests {
         let mut loaded_on = None;
         let mut placed = None;
         let mut traced = None;
-        for frame in 0..2_000_u32 {
+        let mut waited_for_a_blas = false;
+        for frame in 0..20_000_u32 {
             let camera = scene.camera_at(0, glam::DVec3::ZERO);
             state.simulation.world.insert_resource(camera);
             state.update(scene.frame_delta());
@@ -982,6 +986,9 @@ mod tests {
             if stats.bytes_read > 0 {
                 loaded_on.get_or_insert(frame);
             }
+            let compacted =
+                (stats.cpu_times.iter()).any(|(stage, _)| stage == crate::render::BLAS_COMPACTION);
+            waited_for_a_blas |= loaded_on.is_some() && compacted;
             let read_back = || {
                 let pixels = crate::capture::read_back(&context, &target);
                 brightness(pixels.expect("the frame reads back"))
@@ -993,8 +1000,7 @@ mod tests {
                 traced = Some((frames, read_back()));
                 break;
             }
-            // A frame as long as the scene's, so the count is of such frames.
-            std::thread::sleep(scene.frame_delta());
+            std::thread::sleep(Duration::from_millis(1));
         }
 
         let loaded_on = loaded_on.expect("the Chunk loads");
@@ -1004,10 +1010,73 @@ mod tests {
             loaded_on < placed_on,
             "loaded on frame {loaded_on}, placed on {placed_on}"
         );
+        assert!(!waited_for_a_blas);
         assert!(frames_until_traced <= 10, "{frames_until_traced} frames");
         assert!(
             shadowed < unshadowed,
             "{shadowed} of {unshadowed} with the shadow"
+        );
+    }
+
+    /// The camera leaves `texture_wall` after its Chunks load into the pools
+    /// and before any upload could have their Mesh's BLAS ready: none is
+    /// ever placed, and each gives back the user it counted of that Mesh.
+    #[test]
+    fn a_chunk_the_camera_left_before_its_blas_was_ready_is_not_placed_and_frees_its_users() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        use crate::assets::{AssetReader as _, MeshUse};
+        let scene = ReferenceScene::TextureWall;
+        let mut state = State::new(
+            &context,
+            crate::capture::TARGET_FORMAT,
+            64,
+            36,
+            scene,
+            glam::DVec3::ZERO,
+            RenderSwitches::default(),
+        )
+        .expect("texture_wall loads");
+        let chunk = (state.streaming.reader().chunk(scene.chunk_id([0, 0]))).expect("a Chunk");
+        let mesh = chunk.placements[0].mesh;
+        let stream_from = |state: &mut State, position: glam::DVec3| {
+            let camera = crate::camera::Camera::looking_at(position, position - glam::DVec3::Z);
+            state.simulation.world.insert_resource(camera);
+            let streamed = state
+                .streaming
+                .update(&mut state.simulation.world, &mut state.renderer, false)
+                .expect("the Chunks stream");
+            assert_eq!(streamed.chunks_loaded, 0);
+            state
+                .renderer
+                .mesh_pool
+                .users(mesh, MeshUse::DrawnAndTraced)
+        };
+
+        let beside = glam::dvec3(10.0, 5.0, 30.0);
+        assert_eq!(stream_from(&mut state, beside), 0);
+        state.streaming.wait_for_reads().expect("the Chunks read");
+        assert!(stream_from(&mut state, beside) > 0);
+
+        let far = beside + glam::dvec3(10_000.0, 0.0, 0.0);
+        let mut users = u32::MAX;
+        for _ in 0..20_000 {
+            upload_loads(&mut state);
+            users = stream_from(&mut state, far);
+            if users == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(users, 0);
+        assert!(
+            state
+                .simulation
+                .world
+                .resource::<LoadedChunks>()
+                .0
+                .is_empty()
         );
     }
 

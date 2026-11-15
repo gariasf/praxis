@@ -460,7 +460,7 @@ pub(crate) struct ChunkStreaming {
     decoded: DecodedAssets,
     /// Chunks loaded into the pools and not placed, in the order loaded,
     /// each until rays may trace every Mesh it names.
-    made: Vec<LoadedChunk>,
+    awaiting_placement: Vec<LoadedChunk>,
     /// Chunks placed this frame, by coordinates, until the Chunk streamer
     /// takes or drops them.
     finished: BTreeMap<[i32; 2], LoadedChunk>,
@@ -513,7 +513,7 @@ impl ChunkStreaming {
             cache,
             claimed,
             decoded: DecodedAssets::default(),
-            made: Vec::new(),
+            awaiting_placement: Vec::new(),
             finished: BTreeMap::new(),
             error: None,
             cook_chunk: None,
@@ -644,6 +644,8 @@ impl ChunkStreaming {
         let mut placed_instances = 0;
         if settle {
             renderer.mesh_pool.wait_for_blases();
+        } else {
+            renderer.mesh_pool.poll_blases();
         }
         loop {
             let Self {
@@ -654,7 +656,7 @@ impl ChunkStreaming {
                 cache,
                 claimed,
                 decoded,
-                made,
+                awaiting_placement,
                 finished,
                 error,
                 cook_chunk,
@@ -672,7 +674,7 @@ impl ChunkStreaming {
                 cache,
                 claimed,
                 decoded,
-                made,
+                awaiting_placement,
                 finished,
                 pools: renderer,
                 settle,
@@ -685,6 +687,7 @@ impl ChunkStreaming {
                 bytes_read: &mut streamed.bytes_read,
                 error,
                 waiting: HashSet::new(),
+                loads_ended: false,
             };
             let frame = streamer.update(camera, teleported, &mut frame_io);
             streamed.holding = frame.holding;
@@ -871,7 +874,7 @@ struct FrameIo<'a, Pools> {
     cache: &'a CookedCache,
     claimed: &'a Mutex<HashSet<AssetId>>,
     decoded: &'a mut DecodedAssets,
-    made: &'a mut Vec<LoadedChunk>,
+    awaiting_placement: &'a mut Vec<LoadedChunk>,
     finished: &'a mut BTreeMap<[i32; 2], LoadedChunk>,
     pools: &'a mut Pools,
     settle: bool,
@@ -888,6 +891,8 @@ struct FrameIo<'a, Pools> {
     error: &'a mut Option<anyhow::Error>,
     /// The ready Chunks that wait this frame on a read in flight.
     waiting: HashSet<[i32; 2]>,
+    /// Whether no further ready Chunk loads this frame.
+    loads_ended: bool,
 }
 
 /// What a frame's Chunk loads ask of the pools they load into.
@@ -961,7 +966,7 @@ where
     /// Loads the next ready Chunk into the pools, if the frame's caps allow
     /// it: its coordinates and its load, or None when no ready Chunk loads
     /// this frame.
-    fn make_load(&mut self) -> Option<([i32; 2], anyhow::Result<LoadedChunk>)> {
+    fn load_next_ready(&mut self) -> Option<([i32; 2], anyhow::Result<LoadedChunk>)> {
         let (coordinates, decoded) = loop {
             let coordinates = self.next_ready()?;
             let decoded = self.io.ready.remove(&coordinates)?;
@@ -992,14 +997,15 @@ where
     /// would take the frame's placed Instances past their cap after another
     /// placed some.
     fn place_next(&mut self) -> Option<LoadedChunk> {
-        let next = (self.made.iter()).position(|chunk| self.settle || self.blases_ready(chunk))?;
-        let instances = *self.placed_instances + self.made[next].placements.len();
+        let next = (self.awaiting_placement.iter())
+            .position(|chunk| self.settle || self.blases_ready(chunk))?;
+        let instances = *self.placed_instances + self.awaiting_placement[next].placements.len();
         let past_cap = instances > self.instances_placed_per_frame;
         if !self.settle && *self.placed_instances > 0 && past_cap {
             return None;
         }
         *self.placed_instances = instances;
-        Some(self.made.remove(next))
+        Some(self.awaiting_placement.remove(next))
     }
 }
 
@@ -1091,7 +1097,6 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
         self.pools.load_staging.written_bytes()
     }
 
-    /// With the BLASes of the Meshes it brings deferred, unless settling.
     fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk> {
         let reader = DecodedReader {
             decoded: RefCell::new(&mut *self.decoded),
@@ -1150,9 +1155,13 @@ where
         if self.settle && self.io.in_flight > 0 {
             return None;
         }
-        while let Some((coordinates, loaded)) = self.make_load() {
+        while !self.loads_ended {
+            let Some((coordinates, loaded)) = self.load_next_ready() else {
+                self.loads_ended = true;
+                break;
+            };
             match loaded {
-                Ok(chunk) => self.made.push(chunk),
+                Ok(chunk) => self.awaiting_placement.push(chunk),
                 Err(error) => {
                     let error = error.context(format!("loading the Chunk at {coordinates:?}"));
                     tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
@@ -1276,9 +1285,9 @@ mod tests {
     /// each frame, those loaded into the pools and not placed, and those
     /// placed, which the streamer took or left for their pool users to be
     /// given back.
-    struct Streamed {
+    struct NineChunksStreamed {
         loaded: Vec<Vec<[i32; 2]>>,
-        made: Vec<[i32; 2]>,
+        awaiting_placement: Vec<[i32; 2]>,
         placed: Vec<[i32; 2]>,
     }
 
@@ -1290,13 +1299,13 @@ mod tests {
         settle: bool,
         refused: Option<[i32; 2]>,
         frames: &[(DVec3, &[[i32; 2]])],
-    ) -> Streamed {
+    ) -> NineChunksStreamed {
         let (mut io, _requests, finished_sender) = io_pool();
         let cache = CookedCache::new(std::env::temp_dir());
         let claimed = Mutex::new(HashSet::new());
         let mut streamer = ChunkStreamer::new(nine_chunks(), 256.0);
         let mut decoded = DecodedAssets::default();
-        let mut made = Vec::new();
+        let mut awaiting_placement = Vec::new();
         let mut finished = BTreeMap::new();
         let mut loaded = Vec::new();
         for (frame, &(camera, unready)) in frames.iter().enumerate() {
@@ -1314,7 +1323,7 @@ mod tests {
                 cache: &cache,
                 claimed: &claimed,
                 decoded: &mut decoded,
-                made: &mut made,
+                awaiting_placement: &mut awaiting_placement,
                 finished: &mut finished,
                 pools: &mut NoPools { refused, unready },
                 settle,
@@ -1327,12 +1336,15 @@ mod tests {
                 bytes_read: &mut 0,
                 error: &mut None,
                 waiting: HashSet::new(),
+                loads_ended: false,
             };
             loaded.push(streamer.update(camera, false, &mut frame_io).loaded.clone());
         }
-        Streamed {
+        NineChunksStreamed {
             loaded,
-            made: made.iter().map(|chunk| chunk.coordinates).collect(),
+            awaiting_placement: (awaiting_placement.iter())
+                .map(|chunk| chunk.coordinates)
+                .collect(),
             placed: finished.into_keys().collect(),
         }
     }
@@ -1362,7 +1374,7 @@ mod tests {
         ];
         let waiting = stream_nine_chunks(false, None, &frames[..2]);
         assert!(waiting.loaded.iter().all(Vec::is_empty));
-        assert_eq!(waiting.made, first_four);
+        assert_eq!(waiting.awaiting_placement, first_four);
         assert!(waiting.placed.is_empty());
 
         let streamed = stream_nine_chunks(false, None, &frames);
@@ -1375,7 +1387,7 @@ mod tests {
                 vec![],
             ]
         );
-        assert!(streamed.made.is_empty());
+        assert!(streamed.awaiting_placement.is_empty());
         assert_eq!(streamed.placed, nine_chunks().collect::<Vec<_>>());
     }
 

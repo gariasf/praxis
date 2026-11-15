@@ -709,10 +709,21 @@ impl MeshPool {
     /// Whether the GPU has finished building and compacting the BLAS of
     /// `handle`'s Mesh, or it has none.
     pub fn blas_ready(&self, handle: MeshHandle) -> bool {
-        !self
-            .awaiting_compaction
-            .iter()
-            .any(|awaiting| awaiting.handle == handle)
+        self.awaiting_compaction.iter().all(|awaiting| {
+            awaiting.handle != handle
+                || matches!(&awaiting.stage, CompactionStage::Finishing(finished)
+                    if finished.load(Ordering::Acquire))
+        })
+    }
+
+    /// Polls the device while a BLAS awaits the GPU, so `blas_ready` sees
+    /// what it has finished since.
+    pub fn poll_blases(&self) {
+        if !self.awaiting_compaction.is_empty()
+            && let Err(error) = self.device.poll(wgpu::PollType::Poll)
+        {
+            tracing::error!(%error, "polling for BLAS builds and compaction failed");
+        }
     }
 
     /// `blas_ready` of the Mesh `id` loaded for `mesh_use`; true when none is.
@@ -736,9 +747,9 @@ impl MeshPool {
         if self.awaiting_compaction.is_empty() {
             return false;
         }
-        let wait = (self.awaiting_compaction.iter()).any(|awaiting| !awaiting.deferred);
+        let waits = (self.awaiting_compaction.iter()).any(|awaiting| !awaiting.deferred);
         self.advance_compaction(queue);
-        if !wait {
+        if !waits {
             return false;
         }
         // One wait ends the builds, the next the compacted copies.
@@ -748,7 +759,12 @@ impl MeshPool {
             }
             self.advance_compaction(queue);
         }
-        self.awaiting_compaction.clear();
+        for awaiting in self.awaiting_compaction.drain(..) {
+            tracing::warn!(
+                mesh = awaiting.handle.index,
+                "BLAS not compacted: not ready after its build"
+            );
+        }
         true
     }
 
@@ -777,10 +793,10 @@ impl MeshPool {
                     awaiting.stage = CompactionStage::Building(prepared);
                 }
                 CompactionStage::Building(prepared) => {
-                    let Some(&prepared) = prepared.get() else {
+                    let Some(&built) = prepared.get() else {
                         continue;
                     };
-                    if prepared && blas.ready_for_compaction() {
+                    if built && blas.ready_for_compaction() {
                         *blas = queue.compact_blas(blas);
                         if let Some(allocation) = &mut self.allocations[index] {
                             allocation.blas_compacted = true;
@@ -1014,11 +1030,13 @@ struct AwaitingCompaction {
 }
 
 enum CompactionStage {
-    /// Its build is recorded into a staging.
+    /// Its build is recorded into a staging, its compaction not prepared.
     Recorded,
-    /// Its compaction is prepared, with the outcome once its build ends.
+    /// Its compaction is prepared: whether it may be compacted, once the
+    /// GPU has built it.
     Building(Arc<OnceLock<bool>>),
-    /// Set once the GPU has finished its build and any compacted copy.
+    /// Its compacted copy, if any, is submitted: whether the GPU has
+    /// finished every submission up to that one.
     Finishing(Arc<AtomicBool>),
 }
 
@@ -1879,10 +1897,15 @@ pub(crate) mod tests {
                     staging.submit(&context.queue);
                     assert_eq!(pool.compact_blases(&context.queue), !defer);
                     assert_eq!(pool.blas_ready(handle), !defer);
+                    let waiting_since = std::time::Instant::now();
                     while !pool.blas_ready(handle) {
+                        assert!(waiting_since.elapsed().as_secs() < 60, "the BLAS is ready");
                         std::thread::yield_now();
-                        (context.device.poll(wgpu::PollType::Poll)).expect("the device polls");
+                        pool.poll_blases();
                         assert!(!pool.compact_blases(&context.queue));
+                        // As a frame's later submissions: none may end the wait early.
+                        let later = context.device.create_command_encoder(&Default::default());
+                        context.queue.submit(std::iter::once(later.finish()));
                     }
                     let blas = pool.blas(handle).expect("the triangle's BLAS");
                     trace_triangle_about_x(&context, blas)
