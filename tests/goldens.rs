@@ -351,7 +351,7 @@ fn golden_label(scene: ReferenceScene, frame: u32) -> String {
     }
 }
 
-/// Every Instance drawing LOD 0, as before the culling pass selected LODs.
+/// Every Instance drawing LOD 0.
 fn lod_0_forced() -> RenderSwitches {
     RenderSwitches {
         forced_lod: Some(0),

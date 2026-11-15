@@ -18,7 +18,7 @@ struct CameraUniform {
     anchor: vec3<i32>,
     exposure: f32,
     offset: vec3<f32>,
-    lod_threshold: f32,
+    lod_error_per_metre: f32,
     tlas_anchor: vec3<i32>,
     dynamic_tlas_entries: u32,
     dynamic_tlas_bounds_min: vec3<f32>,
@@ -197,19 +197,19 @@ struct MeshData {
 }
 
 // The LOD an Instance draws of a Mesh's `lod_count`: the coarsest whose LOD
-// error, scaled as the Instance scales its Mesh, is under `threshold`, the
-// error allowed a metre from the camera, times `distance`, in metres; LOD 0
+// error, scaled as the Instance scales its Mesh, is under `error_per_metre`,
+// the error allowed a metre from the camera, times its distance; LOD 0
 // where none is.
 fn selected_lod(
     lod_count: u32,
     lod_errors_metres: array<f32, MESH_MAX_LODS>,
     scale: f32,
-    distance: f32,
-    threshold: f32
+    distance_metres: f32,
+    error_per_metre: f32
 ) -> u32 {
     var selected = 0u;
     for (var lod = 1u; lod < min(lod_count, MESH_MAX_LODS); lod++) {
-        if lod_errors_metres[lod] * scale < threshold * distance {
+        if lod_errors_metres[lod] * scale < error_per_metre * distance_metres {
             selected = lod;
         }
     }

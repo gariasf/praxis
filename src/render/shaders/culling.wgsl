@@ -236,7 +236,9 @@ fn occluded(bounds: ClipBox) -> bool {
 // The LOD an Instance draws of its Mesh: the one forced, or the one selected
 // at the distance to the sphere about its Mesh bounds, under the Instance's
 // largest scale along an axis, so no nearer point of it and no axis strays
-// further than the LOD threshold allows. It reads the camera and the
+// further than the LOD threshold allows: a pixel's size at that distance
+// against the error, as meshoptimizer selects a LOD
+// [ref:meshoptimizer-0.25-lod-selection]. It reads the camera and the
 // Instance alone, so both phases draw an Instance's same LOD.
 fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
     if FORCED_LOD < MESH_MAX_LODS {
@@ -249,14 +251,23 @@ fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
         length(instance.rotation_scale[2])
     );
     let radius = 0.5 * length(bounds_max - bounds_min) * scale;
-    let distance = max(length(bounds_centre(instance, bounds_min, bounds_max)) - radius, 0.0);
-    return selected_lod(mesh.lod_count, mesh.lod_errors_metres, scale, distance, camera.lod_threshold);
+    let distance_metres = max(length(bounds_centre(instance, bounds_min, bounds_max)) - radius, 0.0);
+    return selected_lod(
+        mesh.lod_count,
+        mesh.lod_errors_metres,
+        scale,
+        distance_metres,
+        camera.lod_error_per_metre
+    );
 }
 
 // The Meshlet records and packed indices that LOD `lod` of the Mesh at
-// `mesh` in the Mesh table takes in the frame's draw.
-fn lod_counts(mesh: u32, lod: u32) -> vec2<u32> {
-    return vec2<u32>(meshes[mesh].meshlet_counts[lod], 3u * meshes[mesh].triangle_counts[lod]);
+// `mesh_index` in the Mesh table takes in the frame's draw.
+fn lod_counts(mesh_index: u32, lod: u32) -> vec2<u32> {
+    return vec2<u32>(
+        meshes[mesh_index].meshlet_counts[lod],
+        3u * meshes[mesh_index].triangle_counts[lod]
+    );
 }
 
 // A drawn slot's offsets hold its Instance's LOD above SLOT_LOD_SHIFT bits
@@ -467,15 +478,15 @@ fn append_triangles(
     }
     let record = meshlet_records[record_index];
     let meshlet = meshlets[record.meshlet];
-    let mesh = instances[record.instance_slot].mesh;
+    let mesh_index = instances[record.instance_slot].mesh;
     let lod = slot_lod(record.instance_slot);
     let first = slot_offsets(record.instance_slot);
-    if !fits(first, lod_counts(mesh, lod)) {
+    if !fits(first, lod_counts(mesh_index, lod)) {
         return;
     }
     // The LOD's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - meshes[mesh].first_triangles[lod]);
+    let first_index = first.y + 3u * (meshlet.first_triangle - meshes[mesh_index].first_triangles[lod]);
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);
