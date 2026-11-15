@@ -169,13 +169,45 @@ impl TextureSource {
             }
             MaterialChannel::Occlusion => wgpu::TextureFormat::Bc4RUnorm,
         };
-        let mips = width.max(height).ilog2() as usize + 1;
-        let mut level = linearise(&image, self.channel);
+        let mut levels = Vec::new();
+        self.filtered_levels(&image, |mip, level| {
+            let texels = match (mip, self.channel) {
+                // The source's own bytes, without a round trip through
+                // linear light.
+                (0, MaterialChannel::Albedo | MaterialChannel::Emissive) => Texels {
+                    width,
+                    height,
+                    bytes: image.pixels.clone(),
+                },
+                _ => level.to_texels(self.channel),
+            };
+            let blocks = encode(self.channel, format, &texels, encode_threads);
+            debug_assert_eq!(blocks.len(), level_bytes(format, width, height, mip));
+            levels.push(blocks);
+        })?;
+        CookedTexture {
+            format,
+            width,
+            height,
+            first_level: 0,
+            levels,
+        }
+        .to_blob(settings.texture_zstd_level)
+    }
+
+    /// Visits each mip of `image` in linear light as the cook filters it,
+    /// finest first.
+    fn filtered_levels(
+        &self,
+        image: &LoadedImage,
+        mut visit: impl FnMut(usize, &Level),
+    ) -> anyhow::Result<()> {
+        let mips = image.width.max(image.height).ilog2() as usize + 1;
+        let mut level = linearise(image, self.channel);
         let mut spread = match &self.normal_texture {
             Some(normal_texture) => Some(Level::spread(&normal_texture.decode()?)),
             None => None,
         };
-        let mut levels = Vec::with_capacity(mips);
         for mip in 0..mips {
             if mip > 0 {
                 level = level.downsample();
@@ -193,32 +225,79 @@ impl TextureSource {
                 (spread.width == level.width && spread.height == level.height)
                     .then(|| level.widened(spread))
             });
-            let texels = match (mip, self.channel) {
-                // The source's own bytes, without a round trip through
-                // linear light.
-                (0, MaterialChannel::Albedo | MaterialChannel::Emissive) => Texels {
-                    width,
-                    height,
-                    bytes: image.pixels.clone(),
-                },
-                _ => widened.as_ref().unwrap_or(&level).to_texels(self.channel),
-            };
-            let blocks = encode(self.channel, format, &texels, encode_threads);
-            debug_assert_eq!(blocks.len(), level_bytes(format, width, height, mip));
-            levels.push(blocks);
+            visit(mip, widened.as_ref().unwrap_or(&level));
         }
-        CookedTexture {
-            format,
-            width,
-            height,
-            first_level: 0,
+        Ok(())
+    }
+
+    /// Its mips in linear light, from the one a sample that spans
+    /// `uv_per_sample` UV units reads to the coarsest.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(super) fn mips(&self, uv_per_sample: f32) -> anyhow::Result<Mips> {
+        let image = self.decode()?;
+        let side = image.width.max(image.height);
+        let first_level = Mips::level_of(side, uv_per_sample).min(side.ilog2() as usize);
+        let mut levels = Vec::new();
+        self.filtered_levels(&image, |mip, level| {
+            if mip >= first_level {
+                levels.push(level.clone());
+            }
+        })?;
+        Ok(Mips {
+            side_texels: side,
+            first_level,
             levels,
+        })
+    }
+}
+
+/// A Texture's mips in linear light as its cook filters them, from
+/// `first_level` to the coarsest.
+pub(super) struct Mips {
+    /// Its finest mip's longer side, held or not.
+    side_texels: u32,
+    first_level: usize,
+    levels: Vec<Level>,
+}
+
+impl Mips {
+    fn level_of(side_texels: u32, uv_per_sample: f32) -> usize {
+        (uv_per_sample * side_texels as f32).log2().ceil().max(0.0) as usize
+    }
+
+    /// The mip such a sample reads: the finest whose texels are no smaller
+    /// than the sample, of those it holds.
+    pub(super) fn level(&self, uv_per_sample: f32) -> usize {
+        let coarsest = self.first_level + self.levels.len() - 1;
+        Self::level_of(self.side_texels, uv_per_sample).clamp(self.first_level, coarsest)
+    }
+
+    /// Mip `level` at `uv`, repeating, filtered bilinearly; a component its
+    /// Channel lacks reads 0.
+    pub(super) fn sample(&self, level: usize, uv: glam::Vec2) -> [f32; 4] {
+        let level = &self.levels[level - self.first_level];
+        let texel = uv * glam::Vec2::new(level.width as f32, level.height as f32) - 0.5;
+        let (first, blend) = (texel.floor(), texel - texel.floor());
+        let mut filtered = [0.0; 4];
+        for (column, row, weight) in [
+            (0, 0, (1.0 - blend.x) * (1.0 - blend.y)),
+            (1, 0, blend.x * (1.0 - blend.y)),
+            (0, 1, (1.0 - blend.x) * blend.y),
+            (1, 1, blend.x * blend.y),
+        ] {
+            let column = (first.x as i64 + column).rem_euclid(level.width.into()) as usize;
+            let row = (first.y as i64 + row).rem_euclid(level.height.into()) as usize;
+            let values = &level.values[(row * level.width as usize + column) * level.components..];
+            for (sum, value) in filtered.iter_mut().zip(&values[..level.components]) {
+                *sum += weight * value;
+            }
         }
-        .to_blob(settings.texture_zstd_level)
+        filtered
     }
 }
 
 /// One mip level in linear light: `components` floats per texel.
+#[derive(Clone)]
 struct Level {
     width: u32,
     height: u32,
@@ -396,14 +475,6 @@ impl Level {
     /// repeating the last row and column: RGBA8 sRGB for albedo and emissive, RG8 for a
     /// normal's x and y and for roughness and metallic, R8 for occlusion.
     fn to_texels(&self, channel: MaterialChannel) -> Texels {
-        // The sRGB encoding, ≤ at the knee [ref:khronos-dfs-srgb].
-        let linear_to_srgb = |linear: f32| {
-            if linear <= 0.0031308 {
-                linear * 12.92
-            } else {
-                1.055 * linear.powf(1.0 / 2.4) - 0.055
-            }
-        };
         let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
         let (width, height) = (
             self.width.next_multiple_of(4),
@@ -434,6 +505,15 @@ impl Level {
             height,
             bytes,
         }
+    }
+}
+
+/// The sRGB encoding, ≤ at the knee [ref:khronos-dfs-srgb].
+pub(super) fn linear_to_srgb(linear: f32) -> f32 {
+    if linear <= 0.0031308 {
+        linear * 12.92
+    } else {
+        1.055 * linear.powf(1.0 / 2.4) - 0.055
     }
 }
 
@@ -570,6 +650,32 @@ mod tests {
         assert_ne!(
             source.cook_key(&settings, TEXTURE_FORMAT_VERSION),
             source.cook_key(&settings, TEXTURE_FORMAT_VERSION + 1)
+        );
+    }
+
+    #[test]
+    fn a_sample_reads_the_finest_mip_whose_texels_are_no_smaller_than_it() {
+        let grey = || LoadedImage {
+            pixels: vec![128; 16 * 4 * 4],
+            width: 16,
+            height: 4,
+        };
+        let source = TextureSource::generated(
+            AssetId(1),
+            MaterialChannel::Albedo,
+            "grey".into(),
+            std::sync::Arc::new(grey),
+        );
+        let texels_per_sample = [0.0, 0.5, 1.0, 1.5, 3.0, 4.0, 100.0, f32::INFINITY];
+        let whole = source.mips(0.0).unwrap();
+        let levels = texels_per_sample.map(|texels| whole.level(texels / 16.0));
+        assert_eq!(levels, [0, 0, 0, 1, 2, 2, 4, 4]);
+        let from_the_third = source.mips(3.0 / 16.0).unwrap();
+        let levels = texels_per_sample.map(|texels| from_the_third.level(texels / 16.0));
+        assert_eq!(levels, [2, 2, 2, 2, 2, 2, 4, 4]);
+        assert_eq!(
+            from_the_third.sample(2, glam::Vec2::splat(0.3)),
+            whole.sample(2, glam::Vec2::splat(0.3))
         );
     }
 }
