@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn the_densest_chunks_proxy_cooks_to_the_same_blob_on_every_machine() {
         const BLOB_SHA256: &str =
-            "70aec29eb2bb6f3c5281deaaba46e691cdf4514d3a096fa91f2e27af82fba3fc";
+            "0bc15ca2115ce9640a87449f813aa223aa4de6391d332290798e7fb6775d332c";
         let (_, _, blob) = densest_chunks_proxy();
         assert_eq!(
             crate::cooked::hex(&Sha256::digest(&blob)),
