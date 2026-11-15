@@ -353,6 +353,7 @@ mod tests {
     use std::sync::Arc;
 
     use glam::{Quat, dvec3};
+    use sha2::{Digest, Sha256};
 
     use super::bake::SourceMaterial;
     use super::*;
@@ -783,6 +784,18 @@ mod tests {
                 "the proxy's vertex {corner} is no vertex of its walls and roofs"
             );
         }
+    }
+
+    #[test]
+    fn the_densest_chunks_proxy_cooks_to_the_same_blob_on_every_machine() {
+        const BLOB_SHA256: &str =
+            "0bc15ca2115ce9640a87449f813aa223aa4de6391d332290798e7fb6775d332c";
+        let (_, _, blob) = densest_chunks_proxy();
+        assert_eq!(
+            crate::cooked::hex(&Sha256::digest(&blob)),
+            BLOB_SHA256,
+            "a change to the cook moves this hash on every machine alike; a machine that alone disagrees cooks other bytes"
+        );
     }
 
     #[test]

@@ -302,7 +302,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
         .iter()
         .zip(&primitive_of_vertex)
         .map(|(vertex, &primitive_index)| {
-            let normal = Quat::from_array(vertex.qtangent.map(f32::from)).normalize() * Vec3::Z;
+            let [normal_x, normal_y, normal_z] = qtangent_normal(vertex.qtangent);
             let uv_units_across_extent =
                 mesh.primitives[primitive_index].texel_density * extent_metres;
             let [u, v] = vertex.uv.map(|coordinate| {
@@ -312,7 +312,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
                     0.0
                 }
             });
-            [normal.x, normal.y, normal.z, u, v]
+            [normal_x, normal_y, normal_z, u, v]
         })
         .collect();
     let weights = [
@@ -391,6 +391,17 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
         finer = simplified;
     }
     Ok(lods)
+}
+
+fn qtangent_normal(qtangent: [i16; 4]) -> [f32; 3] {
+    // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
+    let [x, y, z, w] = qtangent.map(f32::from);
+    let length_squared = x * x + y * y + z * z + w * w;
+    [
+        2.0 * (x * z + w * y) / length_squared,
+        2.0 * (y * z - w * x) / length_squared,
+        1.0 - 2.0 * (x * x + y * y) / length_squared,
+    ]
 }
 
 /// `geometry`'s UV units per metre, as `CookedPrimitive::texel_density`
@@ -610,7 +621,10 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
         .try_normalize()
         .unwrap_or_else(|| normal.any_orthonormal_vector());
     let frame = Mat3::from_cols(tangent, normal.cross(tangent), normal);
-    let mut rotation = Quat::from_mat3(&frame).normalize();
+    // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
+    let [x, y, z, w] = Quat::from_mat3(&frame).to_array();
+    let length = (x * x + y * y + z * z + w * w).sqrt();
+    let mut rotation = Quat::from_xyzw(x / length, y / length, z / length, w / length);
     // A quaternion and its negation are the same rotation.
     if rotation.w < 0.0 {
         rotation = -rotation;
@@ -923,6 +937,36 @@ pub(crate) mod tests {
         meshes
     }
 
+    fn reference_scene_meshes() -> impl Iterator<Item = (&'static str, Vec<SourcePrimitive>)> {
+        ReferenceScene::ALL.into_iter().flat_map(|scene| {
+            scene.meshes().into_iter().map(|(name, primitives)| {
+                let primitives = primitives
+                    .into_iter()
+                    .map(|(geometry, _)| (geometry, Some(AssetId(1))))
+                    .collect();
+                (name, primitives)
+            })
+        })
+    }
+
+    #[test]
+    fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
+        const BLOBS_SHA256: &str =
+            "a03cbf5cd01e7006a61ba530703ff0923f1e8922c34732be9254c07306218c2a";
+        let committed_gltf_meshes = reference_gltf_meshes()
+            .into_iter()
+            .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));
+        let mut hasher = Sha256::new();
+        for (_, primitives) in reference_scene_meshes().chain(committed_gltf_meshes) {
+            hasher.update(cook(&primitives).unwrap().to_blob().unwrap());
+        }
+        assert_eq!(
+            crate::cooked::hex(&hasher.finalize()),
+            BLOBS_SHA256,
+            "a change to the cook moves this hash on every machine alike; a machine that alone disagrees cooks other bytes"
+        );
+    }
+
     /// `triangle` rotated to its lowest rotation: meshopt's index codec may
     /// rotate a triangle, which keeps its winding.
     fn rotate_to_lowest<T: Ord + Copy>(triangle: &mut [T; 3]) {
@@ -1057,16 +1101,8 @@ pub(crate) mod tests {
         let directory =
             std::env::temp_dir().join(format!("praxis-mesh-read-back-{}", std::process::id()));
         let cache = CookedCache::new(&directory);
-        let procedural = ReferenceScene::ALL.into_iter().flat_map(|scene| {
-            scene.meshes().into_iter().map(|(name, primitives)| {
-                let primitives = primitives
-                    .into_iter()
-                    .map(|(geometry, _)| (geometry, Some(AssetId(1))))
-                    .collect();
-                (name, primitives)
-            })
-        });
-        for (id, (name, primitives)) in procedural.chain(reference_gltf_meshes()).enumerate() {
+        let meshes = reference_scene_meshes().chain(reference_gltf_meshes());
+        for (id, (name, primitives)) in meshes.enumerate() {
             let mesh = cook(&primitives).unwrap();
             let id = AssetId(id as u128);
             cache.write(id, "key", &mesh.to_blob().unwrap()).unwrap();

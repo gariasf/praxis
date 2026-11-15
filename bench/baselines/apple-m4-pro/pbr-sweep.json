@@ -311,7 +311,7 @@
   "instances_overflowed": 0,
   "uploaded_bytes": 416,
   "gpu_memory_bytes": 740015578,
-  "arena_bytes_in_use": 92892,
+  "arena_bytes_in_use": 92908,
   "heap_allocations": 389,
   "renderables_refused": 0,
   "lights_overflowed": 0,
@@ -339,7 +339,7 @@
     "instances_overflowed": 0,
     "uploaded_bytes": 416,
     "gpu_memory_bytes": 740015578,
-    "arena_bytes_in_use": 92892,
+    "arena_bytes_in_use": 92908,
     "heap_allocations": 389,
     "renderables_refused": 0,
     "lights_overflowed": 0,
@@ -357,8 +357,8 @@
     "tlas_build_allocations": 0,
     "instance_slots_in_use": 10
   },
-  "aliasing_rmse": 72037,
-  "aliasing_p99": 400763,
+  "aliasing_rmse": 71550,
+  "aliasing_p99": 395623,
   "provenance": {
     "source_hash": "12161cad2844c7519f021e0c9190d486ff0486a4",
     "commit": "91a90da4ddfc98792d75ff0872f3407966ec853b",

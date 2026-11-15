@@ -1,3 +1,6 @@
 [env]
 # Project default log filter. Override per-run via shell env var
 RUST_LOG = "praxis=debug,wgpu=warn,naga=warn"
+# meshoptimizer must not fuse a multiply and an add: a compiler that does cooks other bytes, and a Blob is the same bytes on every machine.
+CXXFLAGS_aarch64_apple_darwin = "-ffp-contract=off"
+CXXFLAGS_x86_64_unknown_linux_gnu = "-ffp-contract=off"
