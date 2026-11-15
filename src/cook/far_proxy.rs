@@ -6,7 +6,9 @@ mod bake;
 use std::collections::HashMap;
 
 use anyhow::Context;
-use glam::{DVec3, Vec3};
+use glam::{DVec3, Vec2, Vec3};
+
+use bake::Transfer;
 
 use super::mesh::{self, SourcePrimitive};
 use crate::camera::FIELD_OF_VIEW;
@@ -34,6 +36,9 @@ pub(super) fn settings(pixel_metres: f32) -> String {
 
 struct Placed {
     triangles: Vec<[Vec3; 3]>,
+    uvs: Vec<[Vec2; 3]>,
+    /// Each triangle's Material in the cook's list, none for one not drawn.
+    materials: Vec<Option<usize>>,
     lowest: Vec3,
     highest: Vec3,
 }
@@ -43,28 +48,48 @@ fn from_pivot(placement: &CookedPlacement, origin_from_pivot: DVec3, position: [
     (origin_from_pivot + placement.translation + turned.as_dvec3()).as_vec3()
 }
 
+/// `materials` gains each Material the Placement draws with, beside the
+/// fewest UV units a metre of a triangle of it spans.
 fn placed(
     placement: &CookedPlacement,
     origin_from_pivot: DVec3,
     primitives: &[SourcePrimitive],
+    materials: &mut Vec<(AssetId, f32)>,
 ) -> Placed {
-    let mut triangles = Vec::new();
-    for (geometry, _) in primitives {
-        let corner = |index: u32| {
-            from_pivot(
-                placement,
-                origin_from_pivot,
-                geometry.positions[index as usize],
-            )
-        };
-        let corners = geometry.indices.as_chunks::<3>().0.iter();
-        triangles.extend(corners.map(|triangle| triangle.map(corner)));
+    let (mut triangles, mut uvs, mut drawn_with) = (Vec::new(), Vec::new(), Vec::new());
+    for (geometry, material) in primitives {
+        let material = placement.material.or(*material).map(|material| {
+            let listed = materials.iter().position(|(listed, _)| *listed == material);
+            listed.unwrap_or_else(|| {
+                materials.push((material, f32::INFINITY));
+                materials.len() - 1
+            })
+        });
+        for triangle in geometry.indices.as_chunks::<3>().0 {
+            let corners = triangle.map(|index| {
+                from_pivot(
+                    placement,
+                    origin_from_pivot,
+                    geometry.positions[index as usize],
+                )
+            });
+            let corner_uvs = triangle.map(|index| Vec2::from(geometry.uvs[index as usize]));
+            let uv_per_metre = bake::uv_per_metre(corners, corner_uvs);
+            if let Some(material) = material.filter(|_| uv_per_metre > 0.0) {
+                materials[material].1 = materials[material].1.min(uv_per_metre);
+            }
+            triangles.push(corners);
+            uvs.push(corner_uvs);
+            drawn_with.push(material);
+        }
     }
     let corners = triangles.as_flattened().iter().copied();
     Placed {
         lowest: corners.clone().fold(Vec3::INFINITY, Vec3::min),
         highest: corners.fold(Vec3::NEG_INFINITY, Vec3::max),
         triangles,
+        uvs,
+        materials: drawn_with,
     }
 }
 
@@ -171,15 +196,16 @@ fn faceted(positions: &[[f32; 3]], indices: &[u32]) -> Geometry {
 }
 
 /// `neighbours` gives each neighbouring Chunk with its origin from `chunk`'s.
-/// The proxy's first Primitive is every Placement but the ground's, its
-/// second the ground tiles; its pivot is the Chunk's centre on the ground.
+/// The proxy's first Primitive is every Placement but the ground's, which
+/// the `Transfer` bakes where it has a triangle; its second the ground tiles;
+/// its pivot is the Chunk's centre on the ground.
 pub(super) fn cook<'sources>(
     chunk: &CookedChunk,
     neighbours: &[(DVec3, &CookedChunk)],
     primitives_of: &dyn Fn(AssetId) -> Option<&'sources [SourcePrimitive]>,
     ground: AssetId,
     pixel_metres: f32,
-) -> anyhow::Result<CookedMesh> {
+) -> anyhow::Result<(CookedMesh, Option<Transfer>)> {
     let pivot = DVec3::new(CHUNK_EDGE_METRES / 2.0, 0.0, CHUNK_EDGE_METRES / 2.0);
     let primitives = |placement: &CookedPlacement| {
         primitives_of(placement.mesh)
@@ -188,9 +214,10 @@ pub(super) fn cook<'sources>(
     let (ground_tiles, parts): (Vec<CookedPlacement>, Vec<CookedPlacement>) =
         (chunk.placements.iter()).partition(|placement| placement.mesh == ground);
 
-    let mut surfaces = Vec::new();
+    let (mut surfaces, mut materials) = (Vec::new(), Vec::new());
     for placement in &parts {
-        surfaces.push(placed(placement, -pivot, primitives(placement)?));
+        let source = primitives(placement)?;
+        surfaces.push(placed(placement, -pivot, source, &mut materials));
     }
     let lowest = surfaces
         .iter()
@@ -216,7 +243,7 @@ pub(super) fn cook<'sources>(
                 && centre.z + reach_metres >= lowest.z
                 && centre.z - reach_metres <= highest.z;
             if reaches_the_chunk {
-                surfaces.push(placed(placement, *origin - pivot, source));
+                surfaces.push(placed(placement, *origin - pivot, source, &mut materials));
             }
         }
     }
@@ -299,7 +326,16 @@ pub(super) fn cook<'sources>(
         mesh::push_lod(&mut proxy, error_metres, &[&shell, &ground_geometry])?;
         finer_indices = coarser.len();
     }
-    Ok(proxy)
+    let sample_metres = bake::sample_metres(pixel_metres);
+    let transfer = atlas.map(|atlas| Transfer {
+        atlas,
+        surfaces,
+        materials: (materials.into_iter())
+            .map(|(material, uv_per_metre)| (material, uv_per_metre * sample_metres))
+            .collect(),
+        reach_metres: 2.0 * pixel_metres,
+    });
+    Ok((proxy, transfer))
 }
 
 #[cfg(test)]
@@ -308,11 +344,16 @@ mod tests {
     use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_4};
     use std::path::Path;
 
-    use glam::{Quat, Vec2, dvec3};
+    use std::sync::Arc;
 
+    use glam::{Quat, dvec3};
+
+    use super::bake::SourceMaterial;
     use super::*;
     use crate::ReferenceScene;
-    use crate::cook::{ASSETS_DIRECTORY, read_sources};
+    use crate::assets::MaterialChannel;
+    use crate::cook::texture::Mips;
+    use crate::cook::{ASSETS_DIRECTORY, ImageGenerator, LoadedImage, TextureSource, read_sources};
     use crate::scenes::ground_plane;
 
     const PIXEL_METRES: f32 = 0.1473;
@@ -408,7 +449,7 @@ mod tests {
         };
         let neighbours = [(dvec3(-256.0, 0.0, 0.0), &west)];
 
-        let proxy = cook(&chunk, &neighbours, &primitives_of, ground, PIXEL_METRES).unwrap();
+        let (proxy, _) = cook(&chunk, &neighbours, &primitives_of, ground, PIXEL_METRES).unwrap();
 
         let quad = |[left, bottom]: [f32; 2], [right, top]: [f32; 2], forward: f32| {
             [[left, bottom], [right, bottom], [right, top], [left, top]]
@@ -432,6 +473,183 @@ mod tests {
         .collect();
         let cooked: BTreeSet<_> = corners(&proxy, 0).into_iter().map(millimetres).collect();
         assert_eq!(cooked, kept);
+    }
+
+    const GROUND: AssetId = AssetId(1);
+
+    fn flat(base_color: [f32; 3], roughness: f32) -> SourceMaterial {
+        SourceMaterial {
+            base_color,
+            roughness,
+            metallic: 0.0,
+            albedo: None,
+            metallic_roughness: None,
+        }
+    }
+
+    fn mips(image: LoadedImage, channel: MaterialChannel) -> Mips {
+        let image: ImageGenerator = Arc::new(move || image.clone());
+        let source = TextureSource::generated(AssetId(0), channel, "image".into(), image);
+        source.mips(0.0).unwrap()
+    }
+
+    /// A Chunk of upright quads `placements` gives by size, translation and
+    /// Material, on one ground tile, with `west`'s as its western neighbour's,
+    /// cooked to its proxy and that proxy's albedo and metallic-roughness.
+    fn baked(
+        placements: &[([f32; 2], DVec3, u128)],
+        west: &[([f32; 2], DVec3, u128)],
+        material_of: &dyn Fn(AssetId) -> SourceMaterial,
+    ) -> (CookedMesh, [Mips; 2]) {
+        let mut sources = vec![(GROUND, vec![(ground_plane(128.0, 1.0), None)])];
+        let mut chunks = [(); 2].map(|()| CookedChunk {
+            placements: Vec::new(),
+            lights: Vec::new(),
+            bounds: [DVec3::ZERO, DVec3::splat(256.0)],
+        });
+        for (chunk, placements) in chunks.iter_mut().zip([placements, west]) {
+            for ([width, height], translation, material) in placements {
+                let mesh = AssetId(100 + sources.len() as u128);
+                sources.push((mesh, vec![(upright_quad(*width, *height, 0.0), None)]));
+                chunk.placements.push(CookedPlacement {
+                    material: Some(AssetId(*material)),
+                    ..at(mesh, *translation)
+                });
+            }
+        }
+        let [mut chunk, west] = chunks;
+        chunk.placements.push(at(GROUND, dvec3(128.0, 0.0, 128.0)));
+        let primitives_of = |mesh: AssetId| {
+            let source = sources.iter().find(|(id, _)| *id == mesh);
+            source.map(|(_, primitives)| &primitives[..])
+        };
+        let neighbours = [(dvec3(-256.0, 0.0, 0.0), &west)];
+        let cooked = cook(&chunk, &neighbours, &primitives_of, GROUND, PIXEL_METRES);
+        let (proxy, transfer) = cooked.unwrap();
+        let transfer = transfer.unwrap();
+        let materials = transfer.materials.iter();
+        let materials: Vec<_> = materials.map(|(id, _)| material_of(*id)).collect();
+        let [albedo, metallic_roughness] = transfer.bake(&materials);
+        let baked = [
+            mips(albedo, MaterialChannel::Albedo),
+            mips(metallic_roughness, MaterialChannel::MetallicRoughness),
+        ];
+        (proxy, baked)
+    }
+
+    /// The proxy's UV at `point`, in the Chunk's metres, on its first
+    /// Primitive.
+    fn uv_at(proxy: &CookedMesh, point: Vec3) -> Vec2 {
+        let point = point - Vec3::new(128.0, 0.0, 128.0);
+        let shell = &proxy.primitives[0];
+        let indices = &proxy.indices[shell.first_index as usize..][..shell.index_count as usize];
+        for triangle in indices.as_chunks::<3>().0 {
+            let vertices = triangle.map(|index| proxy.vertices[index as usize]);
+            let [first, second, third] = vertices.map(|vertex| Vec3::from(vertex.position));
+            let normal = (second - first).cross(third - first);
+            let weight = |from: Vec3, to: Vec3| {
+                (to - from).cross(point - from).dot(normal) / normal.length_squared()
+            };
+            let weights = [
+                weight(second, third),
+                weight(third, first),
+                weight(first, second),
+            ];
+            let on_its_plane = (point - first).dot(normal.normalize()).abs() < 1e-3;
+            if on_its_plane && weights.iter().all(|weight| *weight >= -1e-4) {
+                let uvs = vertices.map(|vertex| Vec2::from(vertex.uv));
+                return uvs[0] * weights[0] + uvs[1] * weights[1] + uvs[2] * weights[2];
+            }
+        }
+        panic!("{point} is not on the proxy");
+    }
+
+    fn assert_reads(read: [f32; 4], expected: &[f32], what: &str) {
+        for (read, expected) in read.iter().zip(expected) {
+            assert!(
+                (read - expected).abs() < 0.01,
+                "{what}: {read}, not {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_baked_proxy_reads_the_outermost_source_along_its_faces_normal_a_neighbours_too() {
+        const LINEAR_RED: [f32; 3] = [0.5776, 0.0212, 0.0130];
+        const LINEAR_BLUE: [f32; 3] = [0.0130, 0.0212, 0.5776];
+        let glass = [0.04, 0.05, 0.07];
+        let brick = || LoadedImage {
+            pixels: [[200, 40, 30, 255], [30, 40, 200, 255]]
+                .iter()
+                .flat_map(|texel| texel.repeat(8))
+                .collect::<Vec<u8>>()
+                .repeat(4),
+            width: 16,
+            height: 4,
+        };
+        let material_of = |material: AssetId| match material.0 {
+            10 => SourceMaterial {
+                albedo: Some(Arc::new(mips(brick(), MaterialChannel::Albedo))),
+                ..flat([1.0; 3], 0.85)
+            },
+            _ => flat(glass, 0.15),
+        };
+        let wall = ([4.0, 3.0], dvec3(2.0, 0.0, 100.0), 10);
+        let pane = ([1.0, 1.0], dvec3(3.0, 1.0, 100.06), 11);
+        let neighbours_pane = ([1.0, 1.0], dvec3(255.95, 1.0, 100.06), 11);
+
+        let (proxy, [albedo, metallic_roughness]) =
+            baked(&[wall, pane], &[neighbours_pane], &material_of);
+
+        assert_eq!(proxy.primitives[0].index_count, 6);
+        for (x, y, colour, roughness) in [
+            (1.0, 0.5, LINEAR_RED, 0.85),
+            (1.2, 1.5, LINEAR_RED, 0.85),
+            (0.3, 2.6, LINEAR_RED, 0.85),
+            (3.0, 0.5, LINEAR_BLUE, 0.85),
+            (3.7, 0.5, LINEAR_BLUE, 0.85),
+            (2.3, 2.6, LINEAR_BLUE, 0.85),
+            (3.0, 1.5, glass, 0.15),
+            (0.15, 1.5, glass, 0.15),
+        ] {
+            let uv = uv_at(&proxy, Vec3::new(x, y, 100.0));
+            let what = format!("({x}, {y})");
+            assert_reads(albedo.sample(0, uv), &colour, &what);
+            assert_reads(metallic_roughness.sample(0, uv), &[roughness, 0.0], &what);
+        }
+    }
+
+    #[test]
+    fn no_chart_bleeds_into_another_down_to_mip_3() {
+        let plates = [
+            ([4.0, 3.0], dvec3(10.0, 0.0, 100.0), 10),
+            ([2.0, 1.0], dvec3(20.0, 0.0, 90.0), 11),
+            ([3.0, 2.0], dvec3(30.0, 0.0, 80.0), 12),
+            ([1.0, 0.5], dvec3(40.0, 0.0, 70.0), 13),
+        ];
+        let colour = |material: u128| match material {
+            10 => [0.8, 0.0, 0.0],
+            11 => [0.0, 0.8, 0.0],
+            12 => [0.0, 0.0, 0.8],
+            _ => [0.8; 3],
+        };
+        let roughness = |material: u128| (material - 9) as f32 / 5.0;
+        let material_of = |material: AssetId| flat(colour(material.0), roughness(material.0));
+
+        let (proxy, [albedo, metallic_roughness]) = baked(&plates, &[], &material_of);
+
+        for ([width, height], centre, material) in plates {
+            for (across, up) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)] {
+                let point = centre.as_vec3() + Vec3::new((across - 0.5) * width, up * height, 0.0);
+                let uv = uv_at(&proxy, point);
+                for level in 0..=3 {
+                    let what = format!("{point} at mip {level}");
+                    assert_reads(albedo.sample(level, uv), &colour(material), &what);
+                    let read = metallic_roughness.sample(level, uv);
+                    assert_reads(read, &[roughness(material), 0.0], &what);
+                }
+            }
+        }
     }
 
     fn densest_chunks_proxy() -> (CookedMesh, CookedChunk, Vec<u8>) {

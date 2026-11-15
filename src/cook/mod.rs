@@ -336,7 +336,7 @@ impl Sources {
         };
         let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
         far_proxy::cook(&chunk, &neighbouring, &primitives_of, ground, pixel_metres)
-            .and_then(|mesh| mesh.to_blob())
+            .and_then(|(mesh, _)| mesh.to_blob())
             .with_context(|| format!("cooking the Far proxy of {referrer}"))
     }
 
