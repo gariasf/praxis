@@ -44,7 +44,7 @@ The seam agreed for `/tdd`, the metric a render or hot-path change must not regr
 - #<n>, or None.
 ```
 
-Start here names real paths and items, read from the code when the ticket is written; a ticket whose work is only docs or issues names those files instead. "Ruled out" may say "nothing yet".
+Start here names real paths and items, read from the code when the ticket is written; a ticket whose work is only docs or issues names those files instead. "Ruled out" may say "nothing yet". A defect ticket whose fix is a choice of technique says in Start here to read published practice before choosing the fix; what the fix follows joins `docs/references.toml`.
 
 ## Pull requests as a triage surface
 

@@ -35,6 +35,9 @@ or interactive checks and roadmap decisions (`docs/agents/workflow.md`).
   work.
 - `docs/agents/sessions.md` — which skill starts which kind of session.
   Read when the owner asks what to run, or when unsure which flow fits.
+- `docs/agents/machine.md` — how sessions share one machine: claims,
+  worktrees, quiet turns. Read before the first build, bench or worktree
+  removal while other sessions run.
 - `CONTEXT.md` — glossary; its terms are the vocabulary of code,
   tickets, and reviews.
 - `docs/adr/` — decisions that are hard to reverse; a change that
@@ -109,183 +112,31 @@ each upstream commit applied.
 
 ```
 src/
-  lib.rs, state.rs             # library root (window shell) + orchestrator
-  bin/praxis.rs                # thin binary: command dispatch
-  gpu/                         # GPU context, windowed or headless
-  capture/                     # offscreen render read back as an image,
-                                 where its Goldens live, and how two
-                                 images differ
-  preflight/                   # `praxis preflight`: a session's starting
-                                 state, a line per check
-  bench/                       # Reference scene medians, compared with
-                                 Baselines and Budgets, published as
-                                 Bench records on `bench-history`, and
-                                 `praxis traverse`, the world's traversal;
-                                 history/import.rs, `praxis history
-                                 import`: the Baselines committed before
-                                 it, by Harness version era;
-                                 history/suspects.rs, which Series
-                                 records are Suspects
-  stats/                       # frame stats: CPU and GPU times, counts,
-                                 the GPU memory ledger by kind,
-                                 counting allocator
-  streaming/                   # the Chunk streamer: which Chunks of a
-                                 Game world to request, hold and unload
-                                 around the camera, its Late Chunks, hold
-                                 after a teleport and Settled report,
-                                 reaching IO through a narrow trait;
-                                 io.rs, the IO pool (ADR 0016) that reads
-                                 and decodes Chunks and their Assets, a
-                                 Texture's Resident tail first, and the
-                                 mips streamed after it, and
-                                 ChunkStreaming, which the State runs each
-                                 frame, Settled for captures and the
-                                 bench's frames through its counter
-                                 frames, timing a Fast travel's hold;
-                                 mips.rs, mip priority: the
-                                 finest mip each streamed Texture needs
-                                 and the requests for it, finest-needed
-                                 first, and how eviction ranks a Texture
-                                 whose finest mip could give way;
-                                 chunks.rs,
-                                 a Chunk loaded through the AssetLoader
-                                 into the World's LoadedChunks, which
-                                 prepare writes into the Chunk's range of
-                                 Instance slots
-  scenes/                      # Reference scenes: generated content,
-                                 camera paths in frames, frame deltas,
-                                 the Spin system (the orrery, town's and
-                                 world's flocks), the wrap that keeps
-                                 world's flocks about its camera and the
-                                 crowd's Sway system;
-                                 town.rs, the dense scene's generator;
-                                 world.rs, the streamed Game world's
-                                 generator
-  components.rs                # ECS components (Transform, MeshRef)
-  threading.rs                 # compute pool, schedule executor (ADR 0016)
-  camera/, time/, input/,      # feature modules: resource (+ systems)
-    helmet/, transform/,          per domain in one mod.rs
-    environment/
-  assets/                      # asset types, pools, the Cooked cache
-                                 reader (Asset IDs, Blobs), and the
-                                 loader from one into the other
-  cook/                        # the cooker behind the default-on `cook`
-                                 feature: `praxis cook` turns manifest
-                                 sources and Reference scenes into Blobs
-                                 in git-ignored `cooked/` (ADR 0018), and
-                                 launch.rs cooks a dev launch's Assets as
-                                 each load finds its Blob missing or stale;
-                                 far_proxy.rs cooks each Chunk of a scene
-                                 with a Far field its Far proxy's Mesh
-                                 (ADR 0026);
-                                 `praxis fetch` downloads the manifest's
-                                 fetched sources, as a dev launch that
-                                 lacks one does; `praxis export-scene`
-                                 writes what prepare reads of a Reference
-                                 scene at a frame, from source data, for
-                                 a reference renderer
-  render/                      # Renderer (owns the Pools, reads no
-                                 ECS World, calls the passes in order),
-                                 a module per pass (bend_pass: the
-                                 compute pass that bends Meshes from
-                                 their rest Meshes, a stand-in for
-                                 skinning; blas_refit: their BLASes
-                                 refitted through wgpu-hal on Metal,
-                                 or rebuilt, before the dynamic TLAS's
-                                 build; froxel_pass: the
-                                 compute pass that lists each Froxel's
-                                 lights from the light buffer;
-                                 culling_pass: the
-                                 compute passes that build the frame's
-                                 draw; main_pass: the depth pre-pass,
-                                 phase two's depth pass and the lit pass
-                                 that draw it, their pipelines and
-                                 recording; shadow_mask_pass: the compute
-                                 pass that traces each pixel's shadow
-                                 rays from the depth target into the
-                                 shadow mask the lit pass reads, and
-                                 directional lights' shadow edges again
-                                 per sample;
-                                 depth_pyramid_pass: the compute pass
-                                 that reduces the pre-pass's depth into
-                                 the depth pyramid, ADR 0019's Hi-Z
-                                 pyramid; tonemapping_pass: the pass
-                                 that turns the HDR target into the
-                                 target's display colour;
-                                 light_count_pass: with the
-                                 count_point_lights Render switch, the
-                                 compute pass that counts each lit
-                                 pixel's point lights), targets
-                                 (every size-dependent target, the depth
-                                 pyramid, the HDR target and the shadow
-                                 mask among them,
-                                 the depth and colour conventions),
-                                 prepare (ECS
-                                 World to Frame data), bind_groups (each
-                                 defined once), readback (each frame's
-                                 GPU stats through a ring of mapped
-                                 buffers),
-                                 acceleration_structures (the static
-                                 and dynamic TLAS, the sizes of
-                                 acceleration structures through
-                                 wgpu-hal), instance,
-                                 uniforms, staging,
-                                 shaders/ (WGSL parts and the modules
-                                 each pipeline assembles from them)
-tests/                         # integration tests at agreed seams
-  goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
-                                 cargo test --test goldens rewrites them;
-                                 the root README.md shows the metal
-                                 ones, and cargo test checks it lists
-                                 each scene
-bench/                         # budgets.json (ADR 0013) and baselines/
-                                 <adapter>/<scene>.json: the M4 Pro's,
-                                 CI's lavapipe (`--ci-counters`) and the RTX
-                                 2070 SUPER's, a `-dx12` directory for
-                                 its DX12 runs; `praxis
-                                 bench <dir>` then `praxis compare <dir>`;
-                                 `praxis report <dir>` prints the tables
-                                 PRs quote; cycles/<scene>.json, each
-                                 exported scene's Cycles Baseline, which
-                                 scripts/gallery.sh with PRAXIS_BLENDER
-                                 judges a run against
-scripts/pr-lint.sh             # CI's PR form check: title and body as the
-                                 squash commit, size, commits and a
-                                 rendering PR's gallery images against
-                                 docs/agents/workflow.md, tested by
-                                 scripts/pr-lint-test.sh
-scripts/gallery.sh             # the visual audit's capture gallery: each
-                                 Reference scene at 2560x1440, with
-                                 difference images against an earlier one,
-                                 and with PRAXIS_BLENDER each scene's Cycles
-                                 render beside it
-scripts/cycles-reference/      # the Cycles reference, Blender 5.2's Python:
-                                 calibrate.py checks its light units,
-                                 render.py builds and renders what
-                                 `praxis export-scene` writes, compare.py
-                                 ports the display transform and compares;
-                                 DIFFERENCES.md, what praxis differs in
-                                 on purpose or not yet
-scripts/sweep.sh               # the nightly sweep: re-benches a slower
-                                 Suspect beside the record before it and
-                                 bisects it (`praxis history bisect`), opens
-                                 a needs-triage issue per pinned Regression
-                                 (`praxis history regressions`), then
-                                 benches main's scenes lacking a record on a
-                                 Series here, on a quiet machine; beside it
-                                 its launchd
-                                 (sweep.plist) and Task Scheduler
-                                 (sweep-task.xml) definitions
-scripts/verify.sh              # the verify command: fmt, clippy, build,
-                                 tests with Goldens, bench counters
-                                 against Baselines and Budgets
-scripts/lavapipe-files.sh      # has CI record a pushed branch's lavapipe
-                                 Goldens and Baselines, or takes a run's,
-                                 and copies the changed ones into the tree
-vendor/                        # crates.io crates carrying upstream fixes
-                                 until their release (README.md): wgpu-core
-                                 30.0.1 with the TLAS dependency dedup
+  lib.rs, state.rs   # library root (window shell) + orchestrator
+  bin/praxis.rs      # thin binary: command dispatch
+  gpu/               # GPU context, windowed or headless
+  capture/           # offscreen captures, Goldens, image difference
+  preflight/         # `praxis preflight`
+  bench/             # bench, compare, report, traverse, the Bench history
+  stats/             # frame stats, GPU memory ledger, counting allocator
+  streaming/         # the Chunk streamer, its IO pool, mip priority
+  scenes/            # Reference scenes and their systems
+  components.rs      # ECS components
+  threading.rs       # compute pool, schedule executor
+  camera/, time/, input/, helmet/, transform/, environment/
+                     # feature modules: resource (+ systems) in one mod.rs
+  assets/            # asset types, Pools, the Cooked cache reader, loader
+  cook/              # the cooker (`cook` feature): cook, fetch, export-scene
+  render/            # Renderer, a module per pass, targets, prepare,
+                       bind_groups, readback, shaders/
+tests/               # integration tests at agreed seams; goldens/
+bench/               # budgets.json, baselines/<adapter>/, cycles/
+scripts/             # verify, gallery, pr-lint, sweep, lavapipe-files,
+                       cycles-reference/
+vendor/              # crates.io crates carrying upstream fixes
 ```
+
+What each holds, file by file and pass by pass: `docs/agents/project-shape.md`.
 
 Rendering **pulls** from `World` (Design Principle #3 in `ROADMAP.md`):
 prepare queries it into owned Frame data, and the Renderer draws only
@@ -376,30 +227,23 @@ When reviewing changes, check for:
       its layout and its group's index in pipeline layouts and
       `set_bind_group`; no WGSL part declares one. A group a pass uses
       is listed in its shader module, its pipeline layout and its render
-      pass. `cargo test` checks each binding's stages against the entry
-      points that use it, and the structs the CPU writes field by field
-      against their Rust twins (`src/render/shader_tests.rs`); Rust-only
-      padding fields start with `_`
+      pass. Rust-only padding fields start with `_`
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
-- [ ] Depth is cleared to 0 and compared with `Greater`, with no far
-      plane; shadow and Hi-Z passes follow the same direction (ADR 0015;
-      no `Less` and no nonzero depth clear tested)
+- [ ] Depth has no far plane, and WGSL that compares or reduces depth
+      (shadow, Hi-Z) keeps reversed depth's direction (ADR 0015)
 - [ ] Light values are photometric as glTF defines them (lux, candela,
       cd/m²) and exposure is an EV100; HDR colour is pre-exposed before
       fp16 stores it and clamped to 65504, so no backend sees infinity
       (ADR 0023)
-- [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`); a
-      `mat3x3` or `array<vec3>` field is padded per column or element
-      on the Rust side (the twin test compares each field's strides)
+- [ ] Matrices reach WGSL column-major (glam `to_cols_array_2d`)
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
 - [ ] Texture formats match between creation and surface config, and
       sRGB is encoded once: the tonemapping pass alone encodes it, in its
-      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps;
-      no target is an sRGB format (this last clause tested)
-- [ ] `unwrap()` on GPU operations that could fail at runtime — prefer
-      `?` or explicit handling (tested in `src/render/`)
+      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps
+- [ ] Outside `src/render/`, no `unwrap()` on a GPU operation that could
+      fail at runtime: `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure
       authoring data
 - [ ] Code adapted from elsewhere cites its source and licence;
@@ -463,7 +307,6 @@ When reviewing changes, check for:
 - [ ] Workflows keep least-privilege permissions and pin each action
       to a commit SHA with its version in a comment, as `pr-lint.yml`
       does
-- [ ] `cargo fmt` and `cargo clippy` pass
 
 ## Maintenance
 
@@ -472,7 +315,8 @@ faster they drift.
 
 **Update this file in the same PR when:**
 
-- Folder layout changes
+- Folder layout changes: a directory here, a file in
+  `docs/agents/project-shape.md`
 - A new cross-cutting convention is adopted
 - An ADR is added or superseded
 - A repeated correction emerges — same mistake twice means it's a rule

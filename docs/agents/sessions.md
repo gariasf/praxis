@@ -32,5 +32,6 @@ A step escalates one level when its gate fails twice in a row, or when it states
 - Build sessions start from a ticket and nothing else. Grilling and spec work (`/grill-with-docs`, `/to-spec`, `/to-tickets`) stay in their own sessions.
 - `/implement` closes with a local `/code-review`: run it before the PR opens. It is the only semantic review (workflow.md, Review).
 - Do not chart a milestone before the one ahead of it nears exit (workflow.md, The ladder).
-- Build sessions running at once need separate worktrees; PRs that share a module name their merge order (workflow.md, PRs).
+- Build sessions running at once need separate worktrees and take turns at timed runs (`docs/agents/machine.md`); PRs that share a module name their merge order (workflow.md, PRs).
+- A session ends by naming the next sessions as the commands that start them (`/implement #<n>`, "Resolve #<n>"), from a frontier computed then, and says which can run side by side: four or five at most.
 - Status at any time: "Status: frontier, open PRs, review state."
