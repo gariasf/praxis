@@ -447,7 +447,7 @@ impl Sources {
             {
                 let name = format!("{}'s Far proxy", Referrer::Chunk(scene, coordinates));
                 let image: ImageGenerator = Arc::new(move || image.clone());
-                let source = TextureSource::generated(id, channel, name, image);
+                let source = TextureSource::generated(id, channel, name, image).with_fastest_bc7();
                 cache.write(id, &proxy.cook_key, &source.cook(settings, threads)?)?;
                 textures[channel as usize] = Some(id);
             }
