@@ -498,6 +498,24 @@ mod tests {
     }
 
     #[test]
+    fn probe_far_proxy_hash() {
+        use sha2::{Digest, Sha256};
+        let (proxy, _, _) = densest_chunks_proxy();
+        let mut vertices = Sha256::new();
+        vertices.update(bytemuck::cast_slice::<_, u8>(&proxy.vertices));
+        let mut indices = Sha256::new();
+        indices.update(bytemuck::cast_slice::<u32, u8>(&proxy.indices));
+        for lod in &proxy.coarser_lods {
+            indices.update(bytemuck::cast_slice::<u32, u8>(&lod.indices));
+        }
+        panic!(
+            "\nPROBE far-proxy vertices {:?} indices {:?}\n",
+            &vertices.finalize()[..6],
+            &indices.finalize()[..6]
+        );
+    }
+
+    #[test]
     fn the_same_chunk_cooks_the_same_blob_twice() {
         let (_, _, first) = densest_chunks_proxy();
         let (_, _, second) = densest_chunks_proxy();
