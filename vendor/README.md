@@ -7,7 +7,8 @@ upstream commits listed below, wired in through `[patch.crates-io]` in
 trunk is carried here ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-6749721020));
 the wgpu 31 bump deletes each copy whose fixes 31 carries, with its
 `[patch.crates-io]` entry, and rewrites what names the copy: CLAUDE.md's
-Stack and tree, and ADR 0020's static TLAS clause.
+Stack, the tree in `docs/agents/project-shape.md` and ADR 0020's static
+TLAS clause.
 
 ## wgpu-core 30.0.2
 
@@ -23,11 +24,11 @@ Stack and tree, and ADR 0020's static TLAS clause.
   [`59209f276143212cc0aa3298a694d9c959a20e3b`](https://github.com/gfx-rs/wgpu/commit/59209f276143212cc0aa3298a694d9c959a20e3b),
   "Deduplicate TLAS build dependencies by unique BLAS" (gfx-rs/wgpu#9835,
   merged into trunk 2026-07-17), +12/−3 in `src/command/ray_tracing.rs`,
-  applied unchanged: 30.0.2 leaves that file as 30.0.1 had it. A TLAS build records one dependency
-  per distinct BLAS rather than per Instance, so each submit's walk of a
-  TLAS's dependencies and Metal's residency set for them shrink from the
-  Instances to the distinct BLASes. Measured in `docs/performance.md`,
-  "`world`'s CPU p99" (2026-11-09).
+  applied unchanged: 30.0.2 leaves that file as 30.0.1 had it. A TLAS
+  build records one dependency per distinct BLAS rather than per Instance,
+  so each submit's walk of a TLAS's dependencies and Metal's residency set
+  for them shrink from the Instances to the distinct BLASes. Measured in
+  `docs/performance.md`, "`world`'s CPU p99" (2026-11-09).
 
 To check the copy against its source, extract the `.crate` from crates.io
 and diff it against this directory: the only difference is the commit
