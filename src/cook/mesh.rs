@@ -272,6 +272,10 @@ pub(super) fn push_lod(
     Ok(())
 }
 
+thread_local! {
+    static PROBE_SCALAR_NORMAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// `mesh`'s LODs past LOD 0: each simplified from the one before to half its
 /// triangles, the whole Mesh in one call so that a border between Primitives
 /// collapses on both sides alike, until `MESH_MAX_LODS` or a LOD that keeps
@@ -302,7 +306,17 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
         .iter()
         .zip(&primitive_of_vertex)
         .map(|(vertex, &primitive_index)| {
-            let normal = Quat::from_array(vertex.qtangent.map(f32::from)).normalize() * Vec3::Z;
+            let normal = if PROBE_SCALAR_NORMAL.get() {
+                let [x, y, z, w] = vertex.qtangent.map(f32::from);
+                let length_squared = x * x + y * y + z * z + w * w;
+                Vec3::new(
+                    2.0 * (x * z + w * y) / length_squared,
+                    2.0 * (y * z - w * x) / length_squared,
+                    1.0 - 2.0 * (x * x + y * y) / length_squared,
+                )
+            } else {
+                Quat::from_array(vertex.qtangent.map(f32::from)).normalize() * Vec3::Z
+            };
             let uv_units_across_extent =
                 mesh.primitives[primitive_index].texel_density * extent_metres;
             let [u, v] = vertex.uv.map(|coordinate| {
@@ -1079,6 +1093,50 @@ pub(crate) mod tests {
             );
         }
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn probe_lod_chain_hashes() {
+        use sha2::{Digest, Sha256};
+        fn short_hex(hasher: Sha256) -> String {
+            let digest = hasher.finalize();
+            let mut text = String::new();
+            for byte in digest.iter().take(6) {
+                text.push_str(&format!("{byte:02x}"));
+            }
+            text
+        }
+        let mut lines = vec![format!("PROBE arch {}", std::env::consts::ARCH)];
+        for scalar_normal in [false, true] {
+            PROBE_SCALAR_NORMAL.set(scalar_normal);
+            for scene in ReferenceScene::ALL {
+                for (name, primitives) in scene.meshes() {
+                    let primitives: Vec<SourcePrimitive> = primitives
+                        .into_iter()
+                        .map(|(geometry, _)| (geometry, Some(AssetId(1))))
+                        .collect();
+                    let mesh = cook(&primitives).unwrap();
+                    let mut finest = Sha256::new();
+                    finest.update(bytemuck::cast_slice::<CookedVertex, u8>(&mesh.vertices));
+                    finest.update(bytemuck::cast_slice::<u32, u8>(&mesh.indices));
+                    let mut coarser = Sha256::new();
+                    let mut index_counts = Vec::new();
+                    for lod in &mesh.coarser_lods {
+                        coarser.update(lod.error_metres.to_le_bytes());
+                        coarser.update(bytemuck::cast_slice::<u32, u8>(&lod.indices));
+                        index_counts.push(lod.indices.len());
+                    }
+                    lines.push(format!(
+                        "PROBE scalar_normal={scalar_normal} {}/{name} lod0 {} coarser {} {index_counts:?}",
+                        scene.name(),
+                        short_hex(finest),
+                        short_hex(coarser),
+                    ));
+                }
+            }
+        }
+        PROBE_SCALAR_NORMAL.set(false);
+        panic!("\n{}\n", lines.join("\n"));
     }
 
     /// The scenes' sphere, of 2,208 triangles that collapse, with
