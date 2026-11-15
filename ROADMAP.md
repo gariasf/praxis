@@ -5,9 +5,12 @@ order of work is the milestone ladder (`docs/agents/workflow.md`, The
 ladder), and topics not yet charted are fog on the map issue.
 
 **Target shape:** a big-world, lore-heavy RPG (Skyrim-style) targeting
-**cutting-edge hardware**, not mass-market scalability. The engine prioritizes
-image quality and rendering correctness over breadth of compatibility — no
-PS4-class floor, no aggressive low-spec fallbacks. This anchors which
+**next-generation hardware** the owner does not own yet, which the reference
+machine stands in for (ADR 0013). Image quality and rendering correctness
+come first. Current-generation hardware may be skipped for now; lower
+settings for lesser devices come later, and a Steam Deck is the lowest bar
+anyone would consider. Until then the Capability floor is the only floor,
+and nothing in it has a fallback (ADR 0021). This anchors which
 rendering features are core: PBR, ray-traced lighting, GPU-driven rendering,
 streaming, LOD, scene hierarchy, long view distances. "Polish" is reserved
 for genuinely optional things (HDR10 metadata, color grading) — not RT, not
@@ -48,9 +51,14 @@ How new systems are built.
    sorts and batches, then issues draws.
    Prerequisite for culling, instancing, and (eventually) GPU-driven rendering.
 
-4. **One uber-shader, features behind flags.** Resist the urge to spawn a new
-   pipeline per effect. Add shader branches, immediates, or uniforms.
-   Fewer PSOs, fewer state changes, less to reason about.
+4. **Few pipelines; a feature's form follows its measured cost.** An effect
+   joins an existing pass where it can, as a uniform or an input, and a
+   variant only some runs need is a Render switch, chosen when the Renderer
+   is created. A branch in a hot shader is not free: on the M4 Pro an `if`
+   around one light's term cost the main pass 10 to 12%, and shadow rays
+   cost less in a compute pass of their own than inline in the lit pass on
+   eight of nine scenes (`docs/performance.md`). Where a branch, a switch or
+   a pass of its own would each do, an A/B decides.
 
 Inspired by modern AAA renderers (Spartan Engine, id Tech).
 
