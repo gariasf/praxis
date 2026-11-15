@@ -1,6 +1,6 @@
 # The far field draws a Far proxy per Chunk
 
-Between the Load radius and the View distance each Chunk draws one Far proxy in place of its Placements: a Mesh the cooker merges from the Chunk's static Placements, with a Material baked for it and, on a second Primitive, the Chunk's ground tiles under the ground's own Material. A Chunk swaps against its Far proxy at the Load radius, whole and hard; past the View distance only flat ground is drawn. Accepted 2026-11-14 ([decision](https://github.com/gariasf/praxis/issues/795#issuecomment-6874889765), items 1, 3, 8, 9 and 11; its bake as the [bake decision](https://github.com/gariasf/praxis/issues/804#issuecomment-6878696975) amends items 3 and 5, on the survey `docs/research/far-proxy-baking.md`). Implemented: the cook of a Far proxy's Mesh (#812), which also settled what the decisions left to the build: the LOD chain's cut, the pivot, and the three cases under *Settled by the cook*. Not yet: its baked Material, its streaming, its draw and the swap.
+Between the Load radius and the View distance each Chunk draws one Far proxy in place of its Placements: a Mesh the cooker merges from the Chunk's static Placements, with a Material baked for it and, on a second Primitive, the Chunk's ground tiles under the ground's own Material. A Chunk swaps against its Far proxy at the Load radius, whole and hard; past the View distance only flat ground is drawn. Accepted 2026-11-14 ([decision](https://github.com/gariasf/praxis/issues/795#issuecomment-6874889765), items 1, 3, 8, 9 and 11; its bake as the [bake decision](https://github.com/gariasf/praxis/issues/804#issuecomment-6878696975) amends items 3 and 5, on the survey `docs/research/far-proxy-baking.md`). Implemented: the cook of a Far proxy's Mesh (#812), which also settled what the decisions left to the build: the LOD chain's cut, the pivot, and the three cases under *Settled by the cook*; and its atlas (#867), with what *Settled by the bake* lists. Not yet: the Material baked into the atlas, its streaming, its draw and the swap.
 
 ## Decision
 
@@ -22,6 +22,14 @@ The decisions left these to the build of the cook; the owner accepts them with t
 - **Dropped against the dropped.** A Placement is dropped against any other Placement, one that is itself dropped included, so two Placements each within a pixel of the other's surface both go. `world` places neither case.
 - **Open land.** A Chunk with nothing but ground cooks a proxy whose first Primitive is empty.
 
+## Settled by the bake
+
+The bake decision left these to the build of the bake.
+
+- **A chart.** A planar face is the triangles of the first Primitive that share vertices, which carry a position and a face normal. Its chart is the least-area rectangle about it along one of its edges, a texel a pixel at the Load radius, its rows no longer than its columns. Charts are packed on shelves, tallest first, each with 4 texels of gutter a side on a grid of 8, into the smallest square atlas of a power-of-two side that holds them; a proxy whose charts pass 8,192 texels a side fails its cook. `world`'s densest Chunk charts into 4096².
+- **Coarser LODs.** Each face of a coarser LOD takes the chart nearest it among those facing within 45° of it, or among all of them where none does, its UVs held inside that chart. On `world`, LOD 1's roof tops read LOD 0's.
+- **No area, no face.** A triangle without area has no normal to chart by and is left out of the proxy.
+
 ## Considered options
 
 - Group proxies, one Mesh for several Chunks: at most 219 proxies are drawn, and their LOD chains already cut the triangles drawn with distance.
@@ -40,4 +48,4 @@ The decisions left these to the build of the cook; the owner accepts them with t
 - The Material table counts Far proxies' Materials apart, and a frame's loads are capped by count (ADR 0017).
 - A streamed scene whose Chunk keeps more triangles than the cap at one pixel fails its cook, naming the count.
 - A LOD error is what the simplifier reports, which on `world`'s flattened roofs is a tenth under the distance they moved.
-- A Far proxy's first Primitive has no UVs and names no Material until the bake gives it both.
+- A Far proxy's first Primitive names no Material until the bake gives it one.

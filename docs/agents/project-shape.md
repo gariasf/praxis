@@ -71,7 +71,8 @@ src/
                                  launch.rs cooks a dev launch's Assets as
                                  each load finds its Blob missing or stale;
                                  far_proxy.rs cooks each Chunk of a scene
-                                 with a Far field its Far proxy's Mesh
+                                 with a Far field its Far proxy's Mesh,
+                                 far_proxy/bake.rs that Mesh's atlas
                                  (ADR 0026);
                                  `praxis fetch` downloads the manifest's
                                  fetched sources, as a dev launch that
