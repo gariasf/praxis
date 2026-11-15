@@ -181,8 +181,42 @@ impl ShadowMaskPass {
             ],
         );
         let constants = switches.constants();
-        let pipeline = |entry_point| {
-            compute_pipeline(device, &pipeline_layout, &shader, entry_point, &constants)
+        let msl_directory = std::env::var("PRAXIS_PROBE_873_MSL").ok();
+        let pipeline = |entry_point: &str| {
+            let msl = msl_directory.as_ref().and_then(|directory| {
+                let path = std::path::Path::new(directory).join(format!("{entry_point}.metal"));
+                std::fs::read_to_string(path).ok()
+            });
+            let Some(msl) = msl else {
+                return compute_pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    entry_point,
+                    &constants,
+                );
+            };
+            tracing::info!(entry_point, "shadow mask passthrough MSL");
+            let workgroup_size = if entry_point.starts_with("trace_") {
+                (SHADOW_MASK_TILE_SIZE * SHADOW_MASK_TILE_SIZE, 1, 1)
+            } else {
+                (SHADOW_MASK_TILE_SIZE, SHADOW_MASK_TILE_SIZE, 1)
+            };
+            // The MSL is what wgpu-hal compiles for this entry point and
+            // layout, so its binding indices are the layout's.
+            let module = unsafe {
+                device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+                    label: Some(entry_point),
+                    entry_points: vec![wgpu::PassthroughShaderEntryPoint {
+                        name: entry_point.to_owned().into(),
+                        workgroup_size,
+                    }]
+                    .into(),
+                    msl: Some(msl.into()),
+                    ..Default::default()
+                })
+            };
+            compute_pipeline(device, &pipeline_layout, &module, entry_point, &[])
         };
         let buffers = buffers.map(|(name, buffer)| (name, buffer.clone()));
         let shadow_mask_lights_overflowed = memory.create_buffer(

@@ -68,7 +68,11 @@ impl GpuContext {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: floor_features(),
+                required_features: if std::env::var_os("PRAXIS_PROBE_873_MSL").is_some() {
+                    floor_features() | wgpu::Features::PASSTHROUGH_SHADERS
+                } else {
+                    floor_features()
+                },
                 // SAFETY: ray queries are an experimental wgpu feature, and
                 // enabling them accepts that a wgpu bug may cause undefined
                 // behaviour from safe calls
