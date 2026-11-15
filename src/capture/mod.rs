@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::camera::Camera;
 use crate::gpu::GpuContext;
+use crate::render::shadow_mask_pass::SHADOW_MASK_LIGHTS;
 use crate::render::{FRAMES_IN_FLIGHT, RenderSwitches};
 use crate::scenes::ReferenceScene;
 use crate::state::State;
@@ -87,6 +88,35 @@ pub fn difference_image(expected: &[u8], actual: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// How many pixels of two shadow masks of equal size differ in the lights
+/// hidden from their nearest surface, and `actual` as an RGBA8 image with
+/// each of them in opaque red, dark where its first light is hidden. A mask
+/// is its first layer as `read_back` copies it; the Froxel slice above its
+/// lights' bits is not compared.
+fn shadow_mask_difference(expected: &[u8], actual: &[u8]) -> (usize, Vec<u8>) {
+    assert_eq!(expected.len(), actual.len(), "shadow masks differ in size");
+    let lights = (1u64 << SHADOW_MASK_LIGHTS) - 1;
+    let mut differing_pixels = 0;
+    let image = expected
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .zip(actual.as_chunks::<8>().0)
+        .flat_map(|(expected_word, actual_word)| {
+            let hidden = u64::from_le_bytes(*actual_word) & lights;
+            if u64::from_le_bytes(*expected_word) & lights != hidden {
+                differing_pixels += 1;
+                [255, 0, 0, 255]
+            } else if hidden & 1 == 1 {
+                [64, 64, 64, 255]
+            } else {
+                [192, 192, 192, 255]
+            }
+        })
+        .collect();
+    (differing_pixels, image)
+}
+
 fn channel_delta(expected: &[u8], actual: &[u8]) -> u8 {
     expected
         .iter()
@@ -124,6 +154,7 @@ pub fn capture(
         height,
         0..FRAME_COUNT,
         &[last_frame],
+        ReadBack::Target,
         scene.frame_delta(),
         RenderSwitches {
             wait_for_static_tlas: true,
@@ -150,6 +181,65 @@ pub fn capture_frames(
     frames: &[u32],
     switches: RenderSwitches,
 ) -> anyhow::Result<Vec<Vec<u8>>> {
+    read_frames(
+        context,
+        scene,
+        shift,
+        width,
+        height,
+        frames,
+        switches,
+        ReadBack::Target,
+    )
+}
+
+/// For each of `frames` of `scene`, rendered as `capture_frames` renders
+/// them: how many pixels of its shadow mask differ from the same frame's
+/// with LOD 0 forced, and the image of them, as `shadow_mask_difference`
+/// counts and draws them.
+pub fn shadow_mask_differences(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    width: u32,
+    height: u32,
+    frames: &[u32],
+    switches: RenderSwitches,
+) -> anyhow::Result<Vec<(usize, Vec<u8>)>> {
+    let masks = |forced_lod| {
+        read_frames(
+            context,
+            scene,
+            glam::DVec3::ZERO,
+            width,
+            height,
+            frames,
+            RenderSwitches {
+                forced_lod,
+                ..switches
+            },
+            ReadBack::ShadowMask,
+        )
+    };
+    let (lod_zero, selected) = (masks(Some(0))?, masks(switches.forced_lod)?);
+    Ok(lod_zero
+        .iter()
+        .zip(&selected)
+        .map(|(lod_zero, selected)| shadow_mask_difference(lod_zero, selected))
+        .collect())
+}
+
+/// What `read` names of each of `frames`, as `capture_frames` renders them.
+#[expect(clippy::too_many_arguments)]
+fn read_frames(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    shift: glam::DVec3,
+    width: u32,
+    height: u32,
+    frames: &[u32],
+    switches: RenderSwitches,
+    read: ReadBack,
+) -> anyhow::Result<Vec<Vec<u8>>> {
     anyhow::ensure!(
         frames.is_sorted_by(|earlier, later| earlier < later),
         "frames {frames:?} are not in ascending order"
@@ -171,6 +261,7 @@ pub fn capture_frames(
         height,
         drawn,
         frames,
+        read,
         scene.frame_delta(),
         RenderSwitches {
             wait_for_static_tlas: true,
@@ -187,8 +278,8 @@ pub fn capture_frames(
 /// World runs undrawn through the frames before it, each frame advancing by
 /// `frame_delta`. While the Chunk streamer holds after the camera arrives,
 /// the path pauses: its frame is drawn again until the hold ends. Returns
-/// the pixels of each of `read_back`, which `drawn` holds, as the hold left
-/// them, with the stats of each frame rendered, held ones included, and the
+/// what `read` names of each of `read_back`, which `drawn` holds, as the hold
+/// left it, with the stats of each frame rendered, held ones included, and the
 /// scene's content hash, from the Blobs it loaded. Up to `FRAMES_IN_FLIGHT`
 /// frames are in flight, as a window's swapchain allows: the GPU stays busy,
 /// and the CPU never runs further ahead than a window would. The CPU waits
@@ -206,6 +297,7 @@ pub(crate) fn render_frames(
     height: u32,
     drawn: impl IntoIterator<Item = u32>,
     read_back: &[u32],
+    read: ReadBack,
     frame_delta: Duration,
     switches: RenderSwitches,
     wait: FrameWait,
@@ -290,7 +382,11 @@ pub(crate) fn render_frames(
             }
         }
         if read_back.contains(&frame) {
-            pixels.push(self::read_back(context, &target)?);
+            let texture = match read {
+                ReadBack::Target => &target,
+                ReadBack::ShadowMask => state.shadow_mask(),
+            };
+            pixels.push(self::read_back(context, texture)?);
         }
     }
     anyhow::ensure!(
@@ -310,6 +406,15 @@ const MAX_HELD_FRAMES: u32 = 3600;
 fn place_camera(world: &mut bevy_ecs::world::World, mut camera: Camera) {
     camera.teleported |= world.resource::<Camera>().teleported;
     world.insert_resource(camera);
+}
+
+/// What `render_frames` reads back of a frame.
+#[derive(Clone, Copy)]
+pub(crate) enum ReadBack {
+    /// The target's RGBA8 pixels.
+    Target,
+    /// The shadow mask's first layer, each pixel's nearest surface's word.
+    ShadowMask,
 }
 
 /// How `render_frames` waits for the oldest frame in flight.
@@ -335,11 +440,16 @@ fn add_gpu_stats(frame_stats: &mut [FrameStats], state: &State) {
     }
 }
 
-/// Copies an RGBA8 `texture`'s pixels to the CPU, rows top first, without the
-/// row padding the copy needs.
+/// Copies the pixels of `texture`'s first layer to the CPU, rows top first,
+/// without the row padding the copy needs: 4 bytes a pixel of an RGBA8
+/// texture, 8 of the shadow mask.
 pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<Vec<u8>> {
     let (width, height) = (texture.width(), texture.height());
-    let row_bytes = width * 4;
+    let pixel_bytes = texture
+        .format()
+        .block_copy_size(None)
+        .ok_or_else(|| anyhow::anyhow!("{:?} has no one size to copy", texture.format()))?;
+    let row_bytes = width * pixel_bytes;
     let padded_row_bytes = row_bytes.next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
     let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Capture Read-back Buffer"),
@@ -363,7 +473,10 @@ pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow
                 rows_per_image: None,
             },
         },
-        texture.size(),
+        wgpu::Extent3d {
+            depth_or_array_layers: 1,
+            ..texture.size()
+        },
     );
     submit_and_map(context, encoder, &buffer)?;
 
@@ -562,6 +675,7 @@ mod tests {
             36,
             0..4,
             &[],
+            ReadBack::Target,
             scene.frame_delta(),
             RenderSwitches::default(),
             FrameWait::Block,
@@ -613,6 +727,7 @@ mod tests {
             36,
             [0, 2, 3],
             &[],
+            ReadBack::Target,
             scene.frame_delta(),
             RenderSwitches::default(),
             FrameWait::Block,
@@ -641,6 +756,30 @@ mod tests {
         assert_eq!(
             difference_image(&expected, &actual),
             [[30, 30, 30, 255], [30, 30, 30, 255], [255, 0, 0, 255]].concat()
+        );
+    }
+
+    /// Four pixels' words: no light hidden; the first hidden, under another
+    /// Froxel slice; the last light's bit differing; the first's differing.
+    #[test]
+    fn shadow_masks_differ_where_the_lights_hidden_do_whatever_their_slice() {
+        let last_light = 1u64 << (SHADOW_MASK_LIGHTS - 1);
+        let slice = 1u64 << SHADOW_MASK_LIGHTS;
+        let mask = |words: [u64; 4]| words.map(u64::to_le_bytes).concat();
+        let expected = mask([0, 1, 1, 0]);
+        let actual = mask([0, 1 | slice, 1 | last_light, 1]);
+
+        let (differing_pixels, image) = shadow_mask_difference(&expected, &actual);
+        assert_eq!(differing_pixels, 2);
+        assert_eq!(
+            image,
+            [
+                [192, 192, 192, 255],
+                [64, 64, 64, 255],
+                [255, 0, 0, 255],
+                [255, 0, 0, 255]
+            ]
+            .concat()
         );
     }
 }

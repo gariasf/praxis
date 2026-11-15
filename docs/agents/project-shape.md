@@ -9,7 +9,7 @@ src/
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image,
                                  where its Goldens live, and how two
-                                 images differ
+                                 images, or two shadow masks, differ
   preflight/                   # `praxis preflight`: a session's starting
                                  state, a line per check
   bench/                       # Reference scene medians, compared with

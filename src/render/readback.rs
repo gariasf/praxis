@@ -765,7 +765,7 @@ pub(crate) mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::capture::{FrameWait, render_frames};
+    use crate::capture::{FrameWait, ReadBack, render_frames};
     use crate::gpu::GpuContext;
     use crate::render::main_pass::{DEPTH_PREPASS, PHASE_TWO_DEPTH_PASS};
     use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
@@ -1247,6 +1247,7 @@ pub(crate) mod tests {
                 36,
                 0..2,
                 &[],
+                ReadBack::Target,
                 scene.frame_delta(),
                 switches,
                 FrameWait::Block,

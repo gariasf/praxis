@@ -220,13 +220,16 @@ impl RenderTargets {
                 .collect(),
             depth_pyramid: depth_pyramid
                 .map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default())),
-            // Written as storage, then read by the lit pass.
+            // Written as storage, then read by the lit pass, and copied out
+            // by a capture of it.
             shadow_mask: layered_target(
                 "Shadow Mask",
                 SHADOW_MASK_FORMAT,
                 1,
                 SHADOW_MASK_SURFACES,
-                wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+                wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
             ),
             shadow_mask_samples: target(
                 "Shadow Mask Samples",
