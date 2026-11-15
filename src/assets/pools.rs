@@ -738,7 +738,7 @@ impl MeshPool {
     /// deferred, it waits for the GPU to build them, then to compact them;
     /// otherwise it takes each a step further as the device's polls since
     /// found the GPU done, without waiting. Nothing else orders
-    /// a TLAS build after the copies: wgpu-core 30.0.1 records no barrier
+    /// a TLAS build after the copies: wgpu-core 30.0.2 records no barrier
     /// after `compact_blas`'s copy on any backend, and Metal has no
     /// acceleration-structure barrier at all (gfx-rs/wgpu#9215). A Mesh keeps
     /// its compacted BLAS, or the one built where compaction failed, as
