@@ -8,16 +8,19 @@ use std::collections::HashMap;
 use anyhow::Context;
 use glam::{DVec3, Vec2, Vec3};
 
-use bake::Transfer;
+pub(super) use bake::{SourceMaterial, Transfer};
 
 use super::mesh::{self, SourcePrimitive};
 use crate::camera::FIELD_OF_VIEW;
 use crate::cooked::{
     AssetId, CHUNK_EDGE_METRES, CookedChunk, CookedMesh, CookedPlacement, MESH_MAX_LODS,
+    MaterialChannel,
 };
 use crate::scenes::Geometry;
 
 pub(super) const TRIANGLE_CAP: usize = 5832;
+pub(super) const BAKED_CHANNELS: [MaterialChannel; 2] =
+    [MaterialChannel::Albedo, MaterialChannel::MetallicRoughness];
 const TARGET_ROWS: f64 = 1440.0;
 const GRID_CELL_METRES: f32 = 16.0;
 const NORMAL_STEPS: f32 = 512.0;
@@ -202,14 +205,15 @@ fn faceted(positions: &[[f32; 3]], indices: &[u32]) -> Geometry {
 }
 
 /// `neighbours` gives each neighbouring Chunk with its origin from `chunk`'s.
-/// The proxy's first Primitive is every Placement but the ground's, which
-/// the `Transfer` bakes where it has a triangle; its second the ground tiles;
-/// its pivot is the Chunk's centre on the ground.
+/// The proxy's first Primitive is every Placement but the ground's, under
+/// `material`, which the `Transfer` bakes, where it has a triangle; its
+/// second the ground tiles; its pivot is the Chunk's centre on the ground.
 pub(super) fn cook<'sources>(
     chunk: &CookedChunk,
     neighbours: &[(DVec3, &CookedChunk)],
     primitives_of: &dyn Fn(AssetId) -> Option<&'sources [SourcePrimitive]>,
     ground: AssetId,
+    material: AssetId,
     pixel_metres: f32,
 ) -> anyhow::Result<(CookedMesh, Option<Transfer>)> {
     let pivot = DVec3::new(CHUNK_EDGE_METRES / 2.0, 0.0, CHUNK_EDGE_METRES / 2.0);
@@ -306,7 +310,11 @@ pub(super) fn cook<'sources>(
         ..faceted(&positions, &finest)
     };
     let atlas = bake::Atlas::chart_shell(&mut shell, pixel_metres)?;
-    let mut proxy = mesh::lod_0(&[(shell, None), (ground_geometry.clone(), ground_material)])?;
+    let material = atlas.as_ref().map(|_| material);
+    let mut proxy = mesh::lod_0(&[
+        (shell, material),
+        (ground_geometry.clone(), ground_material),
+    ])?;
     let positions_metres = proxy
         .vertices
         .iter()
@@ -355,10 +363,8 @@ mod tests {
     use glam::{Quat, dvec3};
     use sha2::{Digest, Sha256};
 
-    use super::bake::SourceMaterial;
     use super::*;
     use crate::ReferenceScene;
-    use crate::assets::MaterialChannel;
     use crate::cook::texture::Mips;
     use crate::cook::{ASSETS_DIRECTORY, ImageGenerator, LoadedImage, TextureSource, read_sources};
     use crate::scenes::ground_plane;
@@ -456,7 +462,17 @@ mod tests {
         };
         let neighbours = [(dvec3(-256.0, 0.0, 0.0), &west)];
 
-        let (proxy, _) = cook(&chunk, &neighbours, &primitives_of, ground, PIXEL_METRES).unwrap();
+        let material = AssetId(5);
+        let cooked = cook(
+            &chunk,
+            &neighbours,
+            &primitives_of,
+            ground,
+            material,
+            PIXEL_METRES,
+        );
+        let (proxy, _) = cooked.unwrap();
+        assert_eq!(proxy.primitives[0].material, Some(material));
 
         let quad = |[left, bottom]: [f32; 2], [right, top]: [f32; 2], forward: f32| {
             [[left, bottom], [right, bottom], [right, top], [left, top]]
@@ -532,7 +548,14 @@ mod tests {
             source.map(|(_, primitives)| &primitives[..])
         };
         let neighbours = [(dvec3(-256.0, 0.0, 0.0), &west)];
-        let cooked = cook(&chunk, &neighbours, &primitives_of, GROUND, PIXEL_METRES);
+        let cooked = cook(
+            &chunk,
+            &neighbours,
+            &primitives_of,
+            GROUND,
+            AssetId(2),
+            PIXEL_METRES,
+        );
         let (proxy, transfer) = cooked.unwrap();
         let transfer = transfer.unwrap();
         let materials = transfer.materials.iter();
@@ -693,7 +716,8 @@ mod tests {
     fn densest_chunks_proxy() -> (CookedMesh, CookedChunk, Vec<u8>) {
         let scene = ReferenceScene::World;
         let mut sources = read_sources(Path::new(ASSETS_DIRECTORY), &[scene], Some(&[])).unwrap();
-        let blob = sources.far_proxy_blob(scene, DENSEST_CHUNK).unwrap();
+        let (proxy, _) = sources.far_proxy_mesh(scene, DENSEST_CHUNK).unwrap();
+        let blob = proxy.to_blob().unwrap();
         let chunk = sources.chunk(scene, DENSEST_CHUNK).unwrap().chunk;
         (CookedMesh::from_blob(&blob).unwrap(), chunk, blob)
     }

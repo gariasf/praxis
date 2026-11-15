@@ -118,10 +118,7 @@ impl TextureSource {
     /// are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(TEXTURE_VERSION_KEY);
-        hasher.update(format_version.to_le_bytes());
-        hasher.update(ENCODER);
-        hasher.update(settings.texture_zstd_level.to_le_bytes());
+        hash_cook_settings(&mut hasher, settings, format_version);
         hasher.update([self.channel as u8]);
         // Tagged, and ahead of the source bytes, whose length varies, so that
         // no source's bytes can stand in for it.
@@ -232,7 +229,6 @@ impl TextureSource {
 
     /// Its mips in linear light, from the one a sample that spans
     /// `uv_per_sample` UV units reads to the coarsest.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(super) fn mips(&self, uv_per_sample: f32) -> anyhow::Result<Mips> {
         let image = self.decode()?;
         let side = image.width.max(image.height);
@@ -251,6 +247,19 @@ impl TextureSource {
     }
 }
 
+/// What every Texture's Cook key starts with: the format, the encoder and
+/// the settings.
+pub(super) fn hash_cook_settings(
+    hasher: &mut Sha256,
+    settings: &CookSettings,
+    format_version: u32,
+) {
+    hasher.update(TEXTURE_VERSION_KEY);
+    hasher.update(format_version.to_le_bytes());
+    hasher.update(ENCODER);
+    hasher.update(settings.texture_zstd_level.to_le_bytes());
+}
+
 /// A Texture's mips in linear light as its cook filters them, from
 /// `first_level` to the coarsest.
 pub(super) struct Mips {
@@ -263,6 +272,12 @@ pub(super) struct Mips {
 impl Mips {
     fn level_of(side_texels: u32, uv_per_sample: f32) -> usize {
         (uv_per_sample * side_texels as f32).log2().ceil().max(0.0) as usize
+    }
+
+    /// Whether it holds the mip a sample that spans `uv_per_sample` UV units
+    /// reads.
+    pub(super) fn holds(&self, uv_per_sample: f32) -> bool {
+        Self::level_of(self.side_texels, uv_per_sample) >= self.first_level
     }
 
     /// The mip such a sample reads: the finest whose texels are no smaller
