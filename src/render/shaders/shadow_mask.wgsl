@@ -170,33 +170,26 @@ fn shadowed(
     // passes the first it meets, wherever it leaves the mesh.
     let pass_distance = select(
         distance,
-        min(camera.lod_error_per_metre * length(position), distance),
+        camera.lod_error_per_metre * length(position),
         leaves_surface
     );
-    // The nearest triangle within that distance shadows the ray if it faces
-    // it; then any triangle past it does, or past that distance where there
-    // is none: two turns at most, through the one call.
+    // The nearest triangle shadows the ray unless it is a back face within
+    // that distance; the ray traces on from such a one, and any triangle past
+    // it shadows it: two turns at most, through the one call.
     var flags = 0u;
     var start_distance = 0.0;
-    var end_distance = pass_distance;
     var hidden = false;
     loop {
-        let hit = first_intersection(flags, origin, direction, start_distance, end_distance);
+        let hit = first_intersection(flags, origin, direction, start_distance, distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
-        if any_hit || (found && hit.front_face) {
-            hidden = found;
+        let shadows = any_hit || hit.front_face || hit.t > pass_distance;
+        if !found || shadows || hit.t + offset >= distance {
+            hidden = found && shadows;
             break;
         }
-        let traced_distance = select(end_distance, hit.t + offset, found);
-        if traced_distance >= distance {
-            break;
-        }
-        // A ray meets nothing at either of its ends, so the turn after an
-        // empty one starts short of where that one ended.
-        start_distance = select(max(traced_distance - offset, 0.0), traced_distance, found);
         flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
-        end_distance = distance;
+        start_distance = hit.t + offset;
     }
     return hidden;
 }
