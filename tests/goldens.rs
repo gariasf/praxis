@@ -11,6 +11,9 @@
 //! eight frames along its camera path, the others at their Goldens' frames.
 //! `world` has Goldens at three frames along its flight into a settlement,
 //! `<scene>-frame-<n>.png` beside `<scene>.png`; the others one.
+//! Each scene with LOD 0 forced must match its Golden too, or, where LOD
+//! selection changes the image, the LOD 0 Golden beside it,
+//! `<golden>-lod-0.png`: selection changes nothing an Instance at LOD 0 draws.
 //! The helmet scene has no Golden, since its source is fetched, and takes
 //! those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
@@ -191,7 +194,8 @@ fn reference_scenes_match_their_goldens() {
         }
         let golden_frames = golden_frames(scene);
         let shifted = golden_captures(scene, FAR_SHIFT);
-        for (&frame, shifted) in golden_frames.iter().zip(&shifted) {
+        let lod_0 = capture_frames(scene, glam::DVec3::ZERO, golden_frames, lod_0_forced());
+        for ((&frame, shifted), lod_0) in golden_frames.iter().zip(&shifted).zip(&lod_0) {
             let culled = &culled[frames
                 .iter()
                 .position(|&checked| checked == frame)
@@ -221,6 +225,16 @@ fn reference_scenes_match_their_goldens() {
                 &golden,
                 shifted,
                 &format!("{label}-100km"),
+                0,
+                &difference_directory,
+            ));
+            let lod_0_label = lod_0_label(&label);
+            let lod_0_golden = image::open(golden_directory.join(format!("{lod_0_label}.png")))
+                .map_or(golden, image::DynamicImage::into_rgba8);
+            failures.extend(mismatch(
+                &lod_0_golden,
+                lod_0,
+                &lod_0_label,
                 0,
                 &difference_directory,
             ));
@@ -335,6 +349,20 @@ fn golden_label(scene: ReferenceScene, frame: u32) -> String {
         GOLDEN_FRAME => scene.name().to_owned(),
         _ => format!("{}-frame-{frame}", scene.name()),
     }
+}
+
+/// Every Instance drawing LOD 0.
+fn lod_0_forced() -> RenderSwitches {
+    RenderSwitches {
+        forced_lod: Some(0),
+        ..RenderSwitches::default()
+    }
+}
+
+/// The name of the LOD 0 Golden beside the Golden named `label`, which a
+/// scene has only where LOD selection changes its image.
+fn lod_0_label(label: &str) -> String {
+    format!("{label}-lod-0")
 }
 
 /// `town`'s frames whose culling and Froxel lists the test checks, spread
@@ -466,28 +494,44 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
     );
 }
 
-/// Writes each scene's captures as its Goldens and prints the Goldens whose
-/// pixels changed, or that were absent.
+/// Writes each scene's captures as its Goldens, and with LOD 0 forced as its
+/// LOD 0 Goldens where they differ from those, removing the others, and
+/// prints the Goldens whose pixels changed, or that were absent.
 fn update_goldens(directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
     for scene in SCENES {
         let frames = golden_frames(scene);
         let captures = golden_captures(scene, glam::DVec3::ZERO);
-        for (&frame, actual) in frames.iter().zip(&captures) {
+        let lod_0 = capture_frames(scene, glam::DVec3::ZERO, frames, lod_0_forced());
+        for ((&frame, actual), lod_0) in frames.iter().zip(&captures).zip(&lod_0) {
             let label = golden_label(scene, frame);
-            let path = directory.join(format!("{label}.png"));
-            let unchanged = image::open(&path)
-                .is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
-            if unchanged {
-                continue;
-            }
-            actual.save(&path).expect("write Golden");
-            writeln!(
-                std::io::stderr(),
-                "updated Golden {label}: {}",
-                path.display()
-            )
-            .ok();
+            update_golden(directory, &label, Some(actual));
+            let differs = lod_0.as_raw() != actual.as_raw();
+            update_golden(directory, &lod_0_label(&label), differs.then_some(lod_0));
         }
     }
+}
+
+/// Writes `actual` as the Golden named `label` in `directory` and prints it,
+/// unless it holds those pixels; with none, removes that Golden.
+fn update_golden(directory: &Path, label: &str, actual: Option<&image::RgbaImage>) {
+    let path = directory.join(format!("{label}.png"));
+    let Some(actual) = actual else {
+        if std::fs::remove_file(&path).is_ok() {
+            writeln!(std::io::stderr(), "removed Golden {label}").ok();
+        }
+        return;
+    };
+    let unchanged =
+        image::open(&path).is_ok_and(|golden| golden.into_rgba8().as_raw() == actual.as_raw());
+    if unchanged {
+        return;
+    }
+    actual.save(&path).expect("write Golden");
+    writeln!(
+        std::io::stderr(),
+        "updated Golden {label}: {}",
+        path.display()
+    )
+    .ok();
 }

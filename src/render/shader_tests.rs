@@ -244,7 +244,7 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             anchor,
             exposure,
             offset,
-            _pad_offset,
+            lod_error_per_metre,
             tlas_anchor,
             dynamic_tlas_entries,
             dynamic_tlas_bounds_min,

@@ -2301,6 +2301,70 @@ fn sums_in_every_order(terms: &[f32]) -> Vec<f32> {
     sums
 }
 
+/// The culling pass draws the coarsest LOD whose LOD error, times its
+/// Instance's scale, is under the threshold times the distance: each case
+/// holds its LOD as a literal, over a chain whose errors double from 1 cm,
+/// with a pixel of a 1440-row target as the threshold, 0.575 mm a metre
+/// away, unless it names another. An error equal to what the threshold
+/// allows is not under it, and no distance draws a LOD the chain lacks.
+#[test]
+fn the_selected_lod_is_the_coarsest_whose_scaled_error_is_under_the_threshold() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let doubling: [f32; 8] = [0.0, 0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64];
+    let whole_metres: [f32; 8] = [0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0];
+    let pixel: f32 = 0.000575;
+    // LODs in the chain, its errors, scale, distance, threshold, and the LOD.
+    let cases = [
+        (8.0, doubling, 1.0, 10.0, pixel, 0.0),
+        (8.0, doubling, 1.0, 20.0, pixel, 1.0),
+        (8.0, doubling, 1.0, 100.0, pixel, 3.0),
+        (8.0, doubling, 2.0, 100.0, pixel, 2.0),
+        (8.0, doubling, 0.5, 100.0, pixel, 4.0),
+        (8.0, doubling, 1.0, 10.0, 2.0 * pixel, 1.0),
+        (8.0, doubling, 1.0, 10_000.0, pixel, 7.0),
+        (3.0, doubling, 1.0, 10_000.0, pixel, 2.0),
+        (1.0, doubling, 1.0, 10_000.0, pixel, 0.0),
+        (0.0, doubling, 1.0, 10_000.0, pixel, 0.0),
+        (8.0, doubling, 1.0, 0.0, pixel, 0.0),
+        (8.0, whole_metres, 1.0, 2.0, 0.5, 0.0),
+        (8.0, whole_metres, 1.0, 2.5, 0.5, 1.0),
+        (8.0, whole_metres, 2.0, 4.0, 0.5, 0.0),
+        (8.0, whole_metres, 2.0, 5.0, 0.5, 1.0),
+    ];
+
+    let inputs = cases.map(|(lod_count, errors, scale, distance, threshold, _)| {
+        let [first, second]: [[f32; 4]; 2] = bytemuck::cast(errors);
+        [[lod_count, scale, distance, threshold], first, second]
+    });
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(f32(selected_lod(
+            u32(inputs[0].x),
+            array<f32, MESH_MAX_LODS>(
+                inputs[1].x, inputs[1].y, inputs[1].z, inputs[1].w,
+                inputs[2].x, inputs[2].y, inputs[2].z, inputs[2].w
+            ),
+            inputs[0].y,
+            inputs[0].z,
+            inputs[0].w
+        )))",
+        &inputs,
+        &[],
+    );
+
+    for ((lod_count, errors, scale, distance, threshold, expected), result) in
+        cases.into_iter().zip(results)
+    {
+        assert_eq!(
+            result[0], expected,
+            "{lod_count} LODs of errors {errors:?} at scale {scale}, {distance} m away, \
+             under {threshold} m a metre"
+        );
+    }
+}
+
 /// Every Layer of texture-wall's albedo Channel, its neutral default then its
 /// 10,000 Textures of one 4 × 4 shape with three mips, decodes in WGSL to the
 /// Texture class and slice the CPU placed it in.

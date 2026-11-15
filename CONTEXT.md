@@ -33,6 +33,10 @@ A Mesh's LODs in order, each coarser than the one before.
 How far a LOD strays from LOD 0, in metres.
 _Avoid_: LOD distance
 
+**LOD threshold**:
+The pixels a LOD error may span on the target for its LOD to be drawn.
+_Avoid_: LOD bias, screen-space error
+
 **Material**:
 The appearance of a Primitive: PBR factors plus one Layer per Channel.
 _Avoid_: Shader, texture set, bind group
@@ -236,7 +240,7 @@ A frame rendered only after every load it requested is Resident, so streaming ca
 _Avoid_: Blocking load, sync mode
 
 **Render switches**:
-The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, the form the `crowd` scene's deforming meshes take in the TLAS, whether Textures hold back the mips finer than their Resident tails (residency), and whether a frame waits for the static TLAS's worker, as captures do. Their defaults are what ships; scene content such as ambient and background is not a switch.
+The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, the form the `crowd` scene's deforming meshes take in the TLAS, whether Textures hold back the mips finer than their Resident tails (residency), whether a frame waits for the static TLAS's worker, as captures do, and the LOD every Instance draws where one is forced, rather than the one selected for it. Their defaults are what ships; scene content such as ambient and background is not a switch.
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:

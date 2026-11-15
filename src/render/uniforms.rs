@@ -40,7 +40,10 @@ pub struct CameraUniform {
     /// What the lit pass scales luminance by (`Camera::exposure`).
     pub exposure: f32,
     pub offset: [f32; 3],
-    pub _pad_offset: u32,
+    /// The LOD error, in metres, the culling pass allows a LOD it draws a
+    /// metre from the camera: the LOD threshold's pixels at their size
+    /// there, which the Renderer sets from its target's height.
+    pub lod_error_per_metre: f32,
     /// The Anchor whose corner is the origin of the bound static TLAS's
     /// frame (ADR 0020), where shadow rays start: the Renderer sets it from
     /// the static TLAS (`StaticTlas::anchor`).

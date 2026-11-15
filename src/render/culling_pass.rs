@@ -1,5 +1,8 @@
 //! The culling pass: the compute passes that build the frame's draw from the
-//! Instances, a Meshlet record per Meshlet of each Instance's LOD 0 and a packed
+//! Instances, a Meshlet record per Meshlet of the LOD selected for each: the
+//! coarsest whose LOD error, at the Instance's scale, spans under the LOD
+//! threshold's pixels at the distance to its bounding sphere, or with the
+//! `forced_lod` Render switch the LOD it names; and a packed
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019). It runs in two
@@ -13,7 +16,7 @@
 //! indirectly: the steps over the slots in one compute pass, the packed
 //! indices in a second, so Frame stats time them apart.
 
-use crate::cooked::MESHLET_MAX_VERTICES;
+use crate::cooked::{MESH_MAX_LODS, MESHLET_MAX_VERTICES};
 use crate::render::bind_groups::{
     BindGroupDefinition, FRAME_DRAW, compute_pipeline, pipeline_layout,
 };
@@ -59,6 +62,13 @@ impl CullingPhase {
 /// Slots each workgroup of the pass's scans sums: the scans of the Instance
 /// slots take one workgroup of blocks, a run of them to an invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
+
+/// The bits of a drawn slot's first Meshlet record within its scan block,
+/// which its offsets hold under its Instance's LOD.
+pub(crate) const SLOT_LOD_SHIFT: u32 = 28;
+
+// A LOD short of all the bits above, which a slot not drawn holds set.
+const _: () = assert!(MESH_MAX_LODS < 1 << (u32::BITS - SLOT_LOD_SHIFT));
 
 /// The workgroups in each dimension of a dispatch the Capability floor
 /// guarantees, wgpu's default (ADR 0021)
@@ -185,6 +195,8 @@ impl CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
         assert!(draw_capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
+        // The most a slot's offsets hold of its first record is past them.
+        assert!(draw_capacity.meshlet_records < (1 << SLOT_LOD_SHIFT) - 1);
         assert!(
             device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
         );
@@ -260,12 +272,19 @@ impl CullingPass {
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
+        let coarsest_lod = MESH_MAX_LODS as u32 - 1;
+        let forced_lod = switches
+            .forced_lod
+            .map_or(MESH_MAX_LODS as u32, |lod| lod.min(coarsest_lod));
         let phase_pipelines = |phase| {
             let phase_two = phase == CullingPhase::Two;
             let constants: Vec<(&str, f64)> = switches
                 .constants()
                 .into_iter()
-                .chain([("PHASE_TWO", f64::from(u8::from(phase_two)))])
+                .chain([
+                    ("PHASE_TWO", f64::from(u8::from(phase_two))),
+                    ("FORCED_LOD", f64::from(forced_lod)),
+                ])
                 .collect();
             let pipeline =
                 |entry_point| compute_pipeline(device, &layout, &shader, entry_point, &constants);
@@ -287,8 +306,8 @@ impl CullingPass {
     }
 
     /// Records `phase` of the pass into `encoder`: phase one clears the
-    /// frame's draw first. It appends LOD 0's Meshlets of the Instances the phase
-    /// draws among `frame`'s slots in use, with `bind_groups` set, in two
+    /// frame's draw first. It appends the Meshlets of the LOD each Instance
+    /// draws, of those the phase draws among `frame`'s slots in use, with `bind_groups` set, in two
     /// compute passes, each timed into its `timestamp_writes`: the pass over
     /// the slots, then the one over the Meshlet records. Where they need
     /// more Meshlet records or packed indices than the draw holds, it draws
