@@ -88,14 +88,23 @@ pub fn difference_image(expected: &[u8], actual: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-/// How many pixels of two shadow masks of equal size differ in the lights
-/// hidden from their nearest surface, and `actual` as an RGBA8 image with
-/// each of them in opaque red, dark where its first light is hidden. A mask
-/// is its first layer as `read_back` copies it; the Froxel slice above its
-/// lights' bits is not compared.
-fn shadow_mask_difference(expected: &[u8], actual: &[u8]) -> (usize, Vec<u8>) {
+/// How a frame's shadow mask differs from the same frame's with LOD 0
+/// forced.
+#[derive(Debug, PartialEq)]
+pub struct ShadowMaskDifference {
+    /// Pixels whose nearest surface the two masks hide other lights from.
+    pub differing_pixels: usize,
+    /// The frame's mask as an RGBA8 image, rows top first: each of those
+    /// pixels in opaque red, any other dark where its first light is hidden.
+    pub image: Vec<u8>,
+}
+
+/// How `actual` differs from `expected`, two shadow masks of equal size,
+/// each its first layer as `read_back` copies it. The Froxel slice above a
+/// word's light bits is not compared.
+fn shadow_mask_difference(expected: &[u8], actual: &[u8]) -> ShadowMaskDifference {
     assert_eq!(expected.len(), actual.len(), "shadow masks differ in size");
-    let lights = (1u64 << SHADOW_MASK_LIGHTS) - 1;
+    let light_bits = (1u64 << SHADOW_MASK_LIGHTS) - 1;
     let mut differing_pixels = 0;
     let image = expected
         .as_chunks::<8>()
@@ -103,8 +112,8 @@ fn shadow_mask_difference(expected: &[u8], actual: &[u8]) -> (usize, Vec<u8>) {
         .iter()
         .zip(actual.as_chunks::<8>().0)
         .flat_map(|(expected_word, actual_word)| {
-            let hidden = u64::from_le_bytes(*actual_word) & lights;
-            if u64::from_le_bytes(*expected_word) & lights != hidden {
+            let hidden = u64::from_le_bytes(*actual_word) & light_bits;
+            if u64::from_le_bytes(*expected_word) & light_bits != hidden {
                 differing_pixels += 1;
                 [255, 0, 0, 255]
             } else if hidden & 1 == 1 {
@@ -114,7 +123,10 @@ fn shadow_mask_difference(expected: &[u8], actual: &[u8]) -> (usize, Vec<u8>) {
             }
         })
         .collect();
-    (differing_pixels, image)
+    ShadowMaskDifference {
+        differing_pixels,
+        image,
+    }
 }
 
 fn channel_delta(expected: &[u8], actual: &[u8]) -> u8 {
@@ -193,18 +205,16 @@ pub fn capture_frames(
     )
 }
 
-/// For each of `frames` of `scene`, rendered as `capture_frames` renders
-/// them: how many pixels of its shadow mask differ from the same frame's
-/// with LOD 0 forced, and the image of them, as `shadow_mask_difference`
-/// counts and draws them.
+/// How the shadow mask of each of `frames` of `scene`, rendered as
+/// `capture_frames` renders them, differs from the same frame's with LOD 0
+/// forced.
 pub fn shadow_mask_differences(
     context: &GpuContext,
     scene: ReferenceScene,
     width: u32,
     height: u32,
     frames: &[u32],
-    switches: RenderSwitches,
-) -> anyhow::Result<Vec<(usize, Vec<u8>)>> {
+) -> anyhow::Result<Vec<ShadowMaskDifference>> {
     let masks = |forced_lod| {
         read_frames(
             context,
@@ -215,12 +225,12 @@ pub fn shadow_mask_differences(
             frames,
             RenderSwitches {
                 forced_lod,
-                ..switches
+                ..RenderSwitches::default()
             },
             ReadBack::ShadowMask,
         )
     };
-    let (lod_zero, selected) = (masks(Some(0))?, masks(switches.forced_lod)?);
+    let (lod_zero, selected) = (masks(Some(0))?, masks(None)?);
     Ok(lod_zero
         .iter()
         .zip(&selected)
@@ -228,7 +238,8 @@ pub fn shadow_mask_differences(
         .collect())
 }
 
-/// What `read` names of each of `frames`, as `capture_frames` renders them.
+/// What `source` names of each of `frames`, as `capture_frames` renders
+/// them.
 #[expect(clippy::too_many_arguments)]
 fn read_frames(
     context: &GpuContext,
@@ -238,7 +249,7 @@ fn read_frames(
     height: u32,
     frames: &[u32],
     switches: RenderSwitches,
-    read: ReadBack,
+    source: ReadBack,
 ) -> anyhow::Result<Vec<Vec<u8>>> {
     anyhow::ensure!(
         frames.is_sorted_by(|earlier, later| earlier < later),
@@ -261,7 +272,7 @@ fn read_frames(
         height,
         drawn,
         frames,
-        read,
+        source,
         scene.frame_delta(),
         RenderSwitches {
             wait_for_static_tlas: true,
@@ -278,7 +289,7 @@ fn read_frames(
 /// World runs undrawn through the frames before it, each frame advancing by
 /// `frame_delta`. While the Chunk streamer holds after the camera arrives,
 /// the path pauses: its frame is drawn again until the hold ends. Returns
-/// what `read` names of each of `read_back`, which `drawn` holds, as the hold
+/// what `source` names of each of `read_back`, which `drawn` holds, as the hold
 /// left it, with the stats of each frame rendered, held ones included, and the
 /// scene's content hash, from the Blobs it loaded. Up to `FRAMES_IN_FLIGHT`
 /// frames are in flight, as a window's swapchain allows: the GPU stays busy,
@@ -297,7 +308,7 @@ pub(crate) fn render_frames(
     height: u32,
     drawn: impl IntoIterator<Item = u32>,
     read_back: &[u32],
-    read: ReadBack,
+    source: ReadBack,
     frame_delta: Duration,
     switches: RenderSwitches,
     wait: FrameWait,
@@ -382,7 +393,7 @@ pub(crate) fn render_frames(
             }
         }
         if read_back.contains(&frame) {
-            let texture = match read {
+            let texture = match source {
                 ReadBack::Target => &target,
                 ReadBack::ShadowMask => state.shadow_mask(),
             };
@@ -769,10 +780,10 @@ mod tests {
         let expected = mask([0, 1, 1, 0]);
         let actual = mask([0, 1 | slice, 1 | last_light, 1]);
 
-        let (differing_pixels, image) = shadow_mask_difference(&expected, &actual);
-        assert_eq!(differing_pixels, 2);
+        let difference = shadow_mask_difference(&expected, &actual);
+        assert_eq!(difference.differing_pixels, 2);
         assert_eq!(
-            image,
+            difference.image,
             [
                 [192, 192, 192, 255],
                 [64, 64, 64, 255],

@@ -2003,7 +2003,8 @@ pub(crate) mod tests {
     /// the TLAS holds its LOD 0: the same square nearer the sun, so every
     /// shadow ray meets it. A pixel at the floor spans 2 tan(π/8) / 16 of its
     /// 2.25 m, and the LOD error allowed there is that at the target's
-    /// middle and 1.16 times it at a corner, as far again from the camera.
+    /// middle and 1.16 times it at a corner, which lies 1.16 times as far
+    /// from the camera.
     /// Facing the sun, LOD 0 shows a ray its back: 0.9 of a pixel off, every
     /// ray passes it, and 1.3 off, it hides the sun from every pixel. Turned
     /// to the floor, it hides the sun at either distance.

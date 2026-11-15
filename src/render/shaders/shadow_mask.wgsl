@@ -183,14 +183,18 @@ fn shadowed(
     loop {
         let hit = first_intersection(flags, origin, direction, start_distance, end_distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
-        if (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u || (found && hit.front_face) {
+        let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
+        if any_hit || (found && hit.front_face) {
             hidden = found;
             break;
         }
-        start_distance = select(end_distance, hit.t + offset, found);
-        if start_distance >= distance {
+        let traced_distance = select(end_distance, hit.t + offset, found);
+        if traced_distance >= distance {
             break;
         }
+        // A ray meets nothing at either of its ends, so the turn after an
+        // empty one starts short of where that one ended.
+        start_distance = select(max(traced_distance - offset, 0.0), traced_distance, found);
         flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
         end_distance = distance;
     }

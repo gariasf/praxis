@@ -519,7 +519,8 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 /// assets are present, prints one line per scene, and writes
 /// `<scene>.json` into `output`. A crowd form other than the default
 /// benches `crowd` alone, written as `crowd-<form>.json`. With `forced_lod`,
-/// every Instance draws that LOD. With `publish`,
+/// every Instance draws that LOD, and a scene is written as
+/// `<scene>-lod-<n>.json`. With `publish`,
 /// the results then join the Bench history, as the `experiment` named; a
 /// publish that fails warns and fails no bench.
 fn bench(
@@ -568,6 +569,9 @@ fn bench(
         let mut result = praxis::bench::run(&context, scene, configuration, switches, &start)?;
         if other_form {
             result.scene = format!("{crowd}-{}", crowd_form.name());
+        }
+        if let Some(lod) = forced_lod {
+            result.scene = format!("{}-lod-{lod}", result.scene);
         }
         let path = Path::new(output).join(format!("{}.json", result.scene));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
@@ -951,22 +955,15 @@ fn shadow_mask_difference(
     let scene = parse_scene(scene)?;
     let (width, height) = parse_size(size)?;
     let context = pollster::block_on(GpuContext::headless())?;
-    let differences = praxis::shadow_mask_differences(
-        &context,
-        scene,
-        width,
-        height,
-        frames,
-        RenderSwitches::default(),
-    )?;
-    for ((frame, path), (differing_pixels, image)) in frames
+    let differences = praxis::shadow_mask_differences(&context, scene, width, height, frames)?;
+    for ((frame, path), difference) in frames
         .iter()
         .zip(frame_paths(output, frames))
         .zip(differences)
     {
         image::save_buffer_with_format(
             &path,
-            &image,
+            &difference.image,
             width,
             height,
             image::ExtendedColorType::Rgba8,
@@ -974,8 +971,9 @@ fn shadow_mask_difference(
         )?;
         writeln!(
             std::io::stdout(),
-            "{} frame {frame}: {differing_pixels} of {} shadow mask pixels differ from LOD 0's ({path})",
+            "{} frame {frame}: {} of {} shadow mask pixels differ from LOD 0's ({path})",
             scene.name(),
+            difference.differing_pixels,
             u64::from(width) * u64::from(height)
         )?;
     }
