@@ -8,7 +8,8 @@
 // camera sits at the origin and view_proj holds no translation. The camera's
 // World position arrives as the anchor of its grid cell plus an offset, its
 // exposure as the scale the lit pass applies to luminance (ADR 0023), the
-// static TLAS's frame as the Anchor whose corner is its origin, which rays
+// LOD error allowed a metre from the camera, in metres, the static TLAS's
+// frame as the Anchor whose corner is its origin, which rays
 // start from (ADR 0020), how many entries the dynamic TLAS holds, and a box
 // in that frame, its lowest corner then its highest, that holds every
 // triangle of theirs.
@@ -17,6 +18,7 @@ struct CameraUniform {
     anchor: vec3<i32>,
     exposure: f32,
     offset: vec3<f32>,
+    lod_threshold: f32,
     tlas_anchor: vec3<i32>,
     dynamic_tlas_entries: u32,
     dynamic_tlas_bounds_min: vec3<f32>,
@@ -192,6 +194,26 @@ struct MeshData {
     lod_errors_metres: array<f32, MESH_MAX_LODS>,
     bounds_min: array<f32, 3>,
     bounds_max: array<f32, 3>,
+}
+
+// The LOD an Instance draws of a Mesh's `lod_count`: the coarsest whose LOD
+// error, scaled as the Instance scales its Mesh, is under `threshold`, the
+// error allowed a metre from the camera, times `distance`, in metres; LOD 0
+// where none is.
+fn selected_lod(
+    lod_count: u32,
+    lod_errors_metres: array<f32, MESH_MAX_LODS>,
+    scale: f32,
+    distance: f32,
+    threshold: f32
+) -> u32 {
+    var selected = 0u;
+    for (var lod = 1u; lod < min(lod_count, MESH_MAX_LODS); lod++) {
+        if lod_errors_metres[lod] * scale < threshold * distance {
+            selected = lod;
+        }
+    }
+    return selected;
 }
 
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in

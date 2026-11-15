@@ -322,7 +322,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
 /// On every Reference scene, each frame reads back from the GPU the
 /// Instances and triangles its draw held, which equal the scene's
-/// closed-form counts, none overflowed: every Instance in use is drawn.
+/// closed-form counts, none overflowed: every Instance in use is drawn, at
+/// LOD 0, forced, as a coarser LOD's triangles are the simplifier's count.
 /// far-coplanar's tiles, town and `world`'s settlement lie partly out of
 /// any one view, so all three are drawn with culling off, which their
 /// Goldens compare with culling on: the frame's draw holds every tile, the
@@ -362,6 +363,7 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
                 scene,
                 ReferenceScene::Town | ReferenceScene::FarCoplanar | ReferenceScene::World
             ),
+            forced_lod: Some(0),
             ..praxis::RenderSwitches::default()
         };
         let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)

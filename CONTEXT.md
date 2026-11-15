@@ -33,6 +33,10 @@ A Mesh's LODs in order, each coarser than the one before.
 How far a LOD strays from LOD 0, in metres.
 _Avoid_: LOD distance
 
+**LOD threshold**:
+The pixels a LOD error may span on the target for its LOD to be drawn.
+_Avoid_: LOD bias, screen-space error
+
 **Material**:
 The appearance of a Primitive: PBR factors plus one Layer per Channel.
 _Avoid_: Shader, texture set, bind group

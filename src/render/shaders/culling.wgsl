@@ -1,7 +1,8 @@
-// The culling pass's entry points, after the shared parts: they append LOD
-// 0's Meshlets of the Instances they draw to the frame's draw in slot order,
-// which the main pass draws with one indirect call per phase and depth
-// pipeline, and one of both phases for the lit pipeline (ADR 0019). Phase
+// The culling pass's entry points, after the shared parts: they append the
+// Meshlets of the LOD selected for each Instance they draw to the frame's
+// draw in slot order, which the main pass draws with one indirect call per
+// phase and depth pipeline, and one of both phases for the lit pipeline
+// (ADR 0019). Phase
 // one draws the Instances visible the frame before; phase two, after the
 // depth pyramid, the other Instances in view that the pyramid does not
 // hide, and it records which Instances were visible for the next frame. With
@@ -17,6 +18,11 @@
 
 // Which phase a pipeline runs, set as it is created.
 override PHASE_TWO: bool;
+
+// The `forced_lod` Render switch: the LOD every Instance draws, the coarsest
+// its Mesh has where it has none so coarse, or MESH_MAX_LODS where each
+// draws the LOD selected for it.
+override FORCED_LOD: u32;
 
 // The indirect arguments of one indexed draw.
 struct DrawIndexedIndirect {
@@ -116,19 +122,23 @@ struct ClipBox {
     half_axes: mat3x4<f32>,
 }
 
-fn clip_space_bounds(instance: InstanceData, mesh: MeshData) -> ClipBox {
-    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
-    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
-    let half_extent = 0.5 * (bounds_max - bounds_min);
-    let centre = camera_relative_position(
+// The centre of an Instance's Mesh bounds, relative to the camera.
+fn bounds_centre(instance: InstanceData, bounds_min: vec3<f32>, bounds_max: vec3<f32>) -> vec3<f32> {
+    return camera_relative_position(
         instance.anchor,
         instance.offset,
         camera.anchor,
         camera.offset,
         instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
     );
+}
+
+fn clip_space_bounds(instance: InstanceData, mesh: MeshData) -> ClipBox {
+    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
+    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
+    let half_extent = 0.5 * (bounds_max - bounds_min);
     return ClipBox(
-        camera.view_proj * vec4<f32>(centre, 1.0),
+        camera.view_proj * vec4<f32>(bounds_centre(instance, bounds_min, bounds_max), 1.0),
         camera.view_proj * mat3x4<f32>(
             vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
             vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
@@ -223,6 +233,43 @@ fn occluded(bounds: ClipBox) -> bool {
     return nearest_depth < farthest;
 }
 
+// The LOD an Instance draws of its Mesh: the one forced, or the one selected
+// at the distance to the sphere about its Mesh bounds, under the Instance's
+// largest scale along an axis, so no nearer point of it and no axis strays
+// further than the LOD threshold allows. It reads the camera and the
+// Instance alone, so both phases draw an Instance's same LOD.
+fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
+    if FORCED_LOD < MESH_MAX_LODS {
+        return min(FORCED_LOD, max(mesh.lod_count, 1u) - 1u);
+    }
+    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
+    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
+    let scale = max(
+        max(length(instance.rotation_scale[0]), length(instance.rotation_scale[1])),
+        length(instance.rotation_scale[2])
+    );
+    let radius = 0.5 * length(bounds_max - bounds_min) * scale;
+    let distance = max(length(bounds_centre(instance, bounds_min, bounds_max)) - radius, 0.0);
+    return selected_lod(mesh.lod_count, mesh.lod_errors_metres, scale, distance, camera.lod_threshold);
+}
+
+// The Meshlet records and packed indices that LOD `lod` of the Mesh at
+// `mesh` in the Mesh table takes in the frame's draw.
+fn lod_counts(mesh: u32, lod: u32) -> vec2<u32> {
+    return vec2<u32>(meshes[mesh].meshlet_counts[lod], 3u * meshes[mesh].triangle_counts[lod]);
+}
+
+// A drawn slot's offsets hold its Instance's LOD above SLOT_LOD_SHIFT bits
+// of its first Meshlet record within its block: an offset those bits cannot
+// hold is stored as their most, which is past the draw's records as the
+// offset is. No LOD fills the bits above, so no drawn slot reads NOT_DRAWN.
+const SLOT_RECORD_MASK = (1u << SLOT_LOD_SHIFT) - 1u;
+
+// The LOD the Instance in `slot`, which the phase draws, draws.
+fn slot_lod(slot: u32) -> u32 {
+    return instance_offsets[slot].x >> SLOT_LOD_SHIFT;
+}
+
 // Whether the Instance in `slot` was visible in the frame before, as phase
 // two recorded it: one bit per slot.
 fn visible_before(slot: u32) -> bool {
@@ -230,9 +277,10 @@ fn visible_before(slot: u32) -> bool {
 }
 
 // A workgroup per block of SCAN_BLOCK_SIZE slots: each slot's Meshlet
-// records and packed indices, its Instance's where the phase draws it or
-// none, summed over the block's earlier slots into its offsets, NOT_DRAWN in
-// their place where it is not drawn, and the block's sum after every slot's.
+// records and packed indices, those of the LOD its Instance draws where the
+// phase draws it or none, summed over the block's earlier slots into its
+// offsets, under that LOD, NOT_DRAWN in their place where it is not drawn,
+// and the block's sum after every slot's.
 // Phase one draws an Instance in view that was visible the frame before.
 // Phase two finds each Instance in view visible unless it lies behind what
 // phase one drew, records which are, and draws those phase one did not.
@@ -245,6 +293,7 @@ fn offset_slots(
     var visible = false;
     var drawn = false;
     var counts = vec2<u32>(0u);
+    var lod = 0u;
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
@@ -262,7 +311,8 @@ fn offset_slots(
         // draws it.
         drawn = drawn && mesh.meshlet_counts[0] != 0u;
         if drawn {
-            counts = vec2<u32>(mesh.meshlet_counts[0], 3u * mesh.triangle_counts[0]);
+            lod = instance_lod(instance, mesh);
+            counts = lod_counts(instance.mesh, lod);
         }
     }
     if PHASE_TWO {
@@ -276,7 +326,8 @@ fn offset_slots(
             atomicLoad(&visible_words[invocation]);
     }
     if slot < instance_slot_count {
-        instance_offsets[slot] = select(NOT_DRAWN, offset, drawn);
+        let record_and_lod = min(offset.x, SLOT_RECORD_MASK) | (lod << SLOT_LOD_SHIFT);
+        instance_offsets[slot] = select(NOT_DRAWN, vec2<u32>(record_and_lod, offset.y), drawn);
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
         instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
@@ -340,22 +391,26 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
 // The first Meshlet record and packed index of the Instance in `slot`: its
 // block's offsets plus its own within the block.
 fn slot_offsets(slot: u32) -> vec2<u32> {
-    return saturating_add(instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE], instance_offsets[slot]);
+    let in_block = instance_offsets[slot];
+    return saturating_add(
+        instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE],
+        vec2<u32>(in_block.x & SLOT_RECORD_MASK, in_block.y)
+    );
 }
 
-// Whether the Meshlet records and packed indices of `mesh` from `first` fit
-// in their buffers. Where an Instance's would pass either buffer's end,
-// neither it nor any Instance after it is drawn, so the draw ends at the
+// Whether an Instance's `counts` of Meshlet records and packed indices from
+// `first` fit in their buffers. Where an Instance's would pass either
+// buffer's end, neither it nor any Instance after it is drawn, so the draw
+// ends at the
 // last Instance that fits, and every index before is written.
-fn fits(first: vec2<u32>, mesh: MeshData) -> bool {
-    let counts = vec2<u32>(mesh.meshlet_counts[0], 3u * mesh.triangle_counts[0]);
+fn fits(first: vec2<u32>, counts: vec2<u32>) -> bool {
     let capacity = vec2<u32>(arrayLength(&meshlet_records), arrayLength(&packed_indices));
     return all(first <= capacity) && all(counts <= capacity - first);
 }
 
 // An invocation per Instance slot: writes the Meshlet records of the
-// Instance from its offsets, unless they are NOT_DRAWN, those short of the
-// buffer's end even where the Instance does not fit, so that every record
+// Instance's LOD from its offsets, unless they are NOT_DRAWN, those short of
+// the buffer's end even where the Instance does not fit, so that every record
 // append_triangles reads is written; and counts the Instance drawn, or
 // overflowed.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
@@ -365,10 +420,11 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
         return;
     }
     let instance = instances[slot];
-    let mesh = meshes[instance.mesh];
+    let lod = slot_lod(slot);
+    let counts = lod_counts(instance.mesh, lod);
     let first = slot_offsets(slot);
-    if fits(first, mesh) {
-        let indices_end = first.y + 3u * mesh.triangle_counts[0];
+    if fits(first, counts) {
+        let indices_end = first.y + counts.y;
         atomicMax(&frame_draw.draw.index_count, indices_end);
         atomicAdd(&frame_draw.instances_drawn, 1u);
         if PHASE_TWO {
@@ -379,11 +435,12 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
         atomicAdd(&frame_draw.instances_overflowed, 1u);
     }
     let overridden = instance.material_id != NO_MATERIAL;
-    let records = min(mesh.meshlet_counts[0], arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
-    for (var meshlet_in_mesh = 0u; meshlet_in_mesh < records; meshlet_in_mesh++) {
-        let meshlet_index = mesh.first_meshlets[0] + meshlet_in_mesh;
+    let records = min(counts.x, arrayLength(&meshlet_records) - min(first.x, arrayLength(&meshlet_records)));
+    let first_meshlet = meshes[instance.mesh].first_meshlets[lod];
+    for (var meshlet_in_lod = 0u; meshlet_in_lod < records; meshlet_in_lod++) {
+        let meshlet_index = first_meshlet + meshlet_in_lod;
         let material_id = select(meshlets[meshlet_index].material_id, instance.material_id, overridden);
-        meshlet_records[first.x + meshlet_in_mesh] = MeshletRecord(slot, meshlet_index, material_id);
+        meshlet_records[first.x + meshlet_in_lod] = MeshletRecord(slot, meshlet_index, material_id);
     }
 }
 
@@ -395,7 +452,7 @@ const APPEND_WORKGROUP_SIZE = 32u;
 // A workgroup per Meshlet record the phase appends, dispatched indirectly in
 // the rows offset_blocks sized: writes the record's packed indices where its
 // Instance fits, at the Instance's first index plus its Meshlet's triangles
-// before it in the Mesh, an invocation per index in turn, so that adjacent
+// before it in the LOD, an invocation per index in turn, so that adjacent
 // invocations write adjacent indices.
 @compute @workgroup_size(APPEND_WORKGROUP_SIZE)
 fn append_triangles(
@@ -410,14 +467,15 @@ fn append_triangles(
     }
     let record = meshlet_records[record_index];
     let meshlet = meshlets[record.meshlet];
-    let mesh = meshes[instances[record.instance_slot].mesh];
+    let mesh = instances[record.instance_slot].mesh;
+    let lod = slot_lod(record.instance_slot);
     let first = slot_offsets(record.instance_slot);
-    if !fits(first, mesh) {
+    if !fits(first, lod_counts(mesh, lod)) {
         return;
     }
-    // LOD 0's triangles in cooked order, each with its corners as cooked,
+    // The LOD's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
-    let first_index = first.y + 3u * (meshlet.first_triangle - mesh.first_triangles[0]);
+    let first_index = first.y + 3u * (meshlet.first_triangle - meshes[mesh].first_triangles[lod]);
     for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);

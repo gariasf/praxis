@@ -130,7 +130,9 @@ src/
                                  each pipeline assembles from them)
 tests/                         # integration tests at agreed seams
   goldens/<backend>[-cpu]/     # committed Goldens; PRAXIS_UPDATE_GOLDENS=1
-                                 cargo test --test goldens rewrites them;
+                                 cargo test --test goldens rewrites them,
+                                 and a `<golden>-lod-0.png` beside each
+                                 that LOD selection changes;
                                  the root README.md shows the metal
                                  ones, and cargo test checks it lists
                                  each scene

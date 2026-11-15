@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::assets::{MaterialPool, MeshPool, PoolCapacities};
 use crate::bench::Budgets;
+use crate::camera::FIELD_OF_VIEW;
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
@@ -107,6 +108,10 @@ pub struct RenderSwitches {
     /// worker's timing, as a capture needs. Off, as it ships, a frame takes
     /// the worker's result once it is done.
     pub wait_for_static_tlas: bool,
+    /// The LOD every Instance draws, the coarsest its Mesh has where it has
+    /// none so coarse, rather than the one the culling pass selects for it:
+    /// `Some(0)` draws LOD 0 alone. `None`, as it ships, selects.
+    pub forced_lod: Option<u32>,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -160,6 +165,7 @@ impl Default for RenderSwitches {
             crowd_form: CrowdForm::Proxies,
             residency: false,
             wait_for_static_tlas: false,
+            forced_lod: None,
         }
     }
 }
@@ -174,6 +180,17 @@ impl RenderSwitches {
             ("SHADOW_RAYS", f64::from(u8::from(self.shadow_rays))),
         ]
     }
+}
+
+/// The LOD threshold: the pixels a LOD error may span on the target where the
+/// culling pass draws its LOD.
+const LOD_THRESHOLD_PIXELS: f32 = 1.0;
+
+/// The LOD error, in metres, the LOD threshold allows a metre from the camera
+/// on a target `height` pixels high, which a pixel there spans
+/// 2 tan(fov / 2) / `height` of.
+fn lod_threshold(height: u32) -> f32 {
+    LOD_THRESHOLD_PIXELS * 2.0 * (0.5 * FIELD_OF_VIEW).tan() / height as f32
 }
 
 /// Thousandths of the scene and pass buffers' Budget the Instance slots take.
@@ -276,6 +293,8 @@ pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     aspect_ratio: f32,
+    /// `lod_threshold` of the targets' height.
+    lod_threshold: f32,
     render_targets: RenderTargets,
     bend_pass: BendPass,
     froxel_pass: FroxelPass,
@@ -562,6 +581,7 @@ impl Renderer {
             device,
             queue,
             aspect_ratio: width as f32 / height as f32,
+            lod_threshold: lod_threshold(height),
             render_targets,
             bend_pass,
             froxel_pass,
@@ -614,6 +634,7 @@ impl Renderer {
             light_count_pass.bind_render_targets(&self.device, &self.render_targets);
         }
         self.aspect_ratio = width as f32 / height as f32;
+        self.lod_threshold = lod_threshold(height);
     }
 
     /// The width of the target over its height.
@@ -693,6 +714,7 @@ impl Renderer {
         let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
         let started = started + compaction_time + prepare_time + update_time + fill_time;
         let camera = CameraUniform {
+            lod_threshold: self.lod_threshold,
             tlas_anchor,
             // Prepare lists no more than the dynamic TLAS holds.
             dynamic_tlas_entries: frame.moving_instances.len() as u32,
@@ -1009,7 +1031,7 @@ pub(crate) mod tests {
     #[cfg(feature = "cook")]
     use crate::cooked::{AssetId, CookedCache, CookedMaterial, CookedTexture, level_bytes};
     use crate::cooked::{
-        CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex, MESHLET_MAX_VERTICES,
+        CookedLod, CookedMesh, CookedMeshlet, CookedPrimitive, CookedVertex, MESHLET_MAX_VERTICES,
     };
     use crate::environment::Environment;
     use crate::render::culling_pass::FrameDraw;
@@ -2917,6 +2939,137 @@ pub(crate) mod tests {
             assert_eq!(records, expected_records, "{case:?}");
             assert_eq!(indices, expected_indices, "{case:?}");
         }
+    }
+
+    /// Four Instances half a metre ahead of the camera, of Meshes whose LODs
+    /// hold three triangles, two and one. A pixel of the 16-row target spans
+    /// 2 tan(π/8) / 16 of the distance, and a Mesh's bounding sphere, 0.3 √2
+    /// in radius, starts 0.0757 m away, so a LOD error under 3.92 mm draws
+    /// its LOD: the first Mesh's LOD 1, of 3.5 mm, and not the second's, of
+    /// 4.5 mm, until its Instance is half the size and so 0.288 m away,
+    /// where 2.25 mm is under 14.9 mm; no LOD 2, a metre off. A triangle
+    /// with no coarser LOD draws itself. Phase two draws them in the first
+    /// frame and phase one in the second, the same LODs; and with a LOD
+    /// forced each Instance draws it, or the coarsest its Mesh has.
+    #[test]
+    fn each_instance_draws_the_lod_selected_for_it_in_either_phase_or_the_one_forced() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let corners = [
+            [-0.3, -0.3],
+            [0.3, -0.3],
+            [0.3, 0.3],
+            [-0.3, 0.3],
+            [0.0, 0.0],
+        ];
+        let primitive = |triangles: &[[u8; 3]]| CookedPrimitive {
+            first_index: 0,
+            index_count: 3 * triangles.len() as u32,
+            material: None,
+            texel_density: 0.0,
+            thin_radius_metres: None,
+            meshlets: vec![CookedMeshlet {
+                vertices: (0..corners.len() as u32).collect(),
+                triangles: triangles.to_vec(),
+            }],
+        };
+        let indices = |triangles: &[[u8; 3]]| {
+            triangles
+                .iter()
+                .flatten()
+                .map(|&corner| u32::from(corner))
+                .collect()
+        };
+        let lods: [&[[u8; 3]]; 3] = [
+            &[[0, 1, 4], [1, 2, 4], [2, 3, 4]],
+            &[[0, 1, 2], [0, 2, 3]],
+            &[[0, 1, 2]],
+        ];
+        let chain = |first_error_metres: f32| CookedMesh {
+            vertices: corners
+                .iter()
+                .map(|&[x, y]| CookedVertex {
+                    position: [x, y, 0.5],
+                    uv: [0.0, 0.0],
+                    qtangent: [0, 0, 0, i16::MAX],
+                })
+                .collect(),
+            indices: indices(lods[0]),
+            primitives: vec![primitive(lods[0])],
+            coarser_lods: [(first_error_metres, lods[1]), (1.0, lods[2])]
+                .into_iter()
+                .map(|(error_metres, triangles)| CookedLod {
+                    error_metres,
+                    indices: indices(triangles),
+                    primitives: vec![primitive(triangles)],
+                })
+                .collect(),
+            bounds: [[-0.3, -0.3, 0.5], [0.3, 0.3, 0.5]],
+        };
+        // The triangles each slot's Instance draws, frame by frame.
+        let triangles_drawn = |forced_lod, frame_count: usize| {
+            let switches = RenderSwitches {
+                forced_lod,
+                ..RenderSwitches::default()
+            };
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let mut load = |cooked: &CookedMesh| {
+                renderer
+                    .mesh_pool
+                    .load(&mut renderer.load_staging, cooked, &[None])
+                    .expect("the Mesh fits")
+            };
+            let switching = load(&chain(0.0035));
+            let holding = load(&chain(0.0045));
+            let single = load_triangles(&mut renderer, &[[0.0, 0.0]], &[None]);
+            let half = padded_columns(glam::Mat3::from_diagonal(glam::Vec3::splat(0.5)));
+            let frame = frame_of(vec![
+                instance(switching, NO_MATERIAL, [0.0, 0.0]),
+                instance(holding, NO_MATERIAL, [0.0, 0.0]),
+                InstanceData {
+                    rotation_scale: half,
+                    offset: [0.0, 0.0, 0.25],
+                    ..instance(holding, NO_MATERIAL, [0.0, 0.0])
+                },
+                instance(single, NO_MATERIAL, [0.0, 0.0]),
+            ]);
+            (0..frame_count)
+                .map(|_| {
+                    render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
+                    let draw =
+                        read_storage::<FrameDraw>(&context, renderer.culling_pass.frame_draw(), 1)
+                            [0];
+                    let records = read_storage::<[u32; 3]>(
+                        &context,
+                        renderer.culling_pass.meshlet_records(),
+                        4,
+                    );
+                    let indices = read_storage::<u32>(
+                        &context,
+                        renderer.culling_pass.packed_indices(),
+                        draw.draw.index_count as usize,
+                    );
+                    let mut triangles = [0; 4];
+                    for index in indices {
+                        let record = index >> MESHLET_MAX_VERTICES.ilog2();
+                        triangles[records[record as usize][0] as usize] += 1;
+                    }
+                    (
+                        triangles.map(|corners| corners / 3),
+                        draw.phase_two_triangles_drawn(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            triangles_drawn(None, 2),
+            [([2, 3, 2, 1], 8), ([2, 3, 2, 1], 0)]
+        );
+        assert_eq!(triangles_drawn(Some(0), 1), [([3, 3, 3, 1], 10)]);
+        assert_eq!(triangles_drawn(Some(2), 1), [([1, 1, 1, 1], 4)]);
+        assert_eq!(triangles_drawn(Some(7), 1), [([1, 1, 1, 1], 4)]);
     }
 
     /// A headless context, or `None` after saying so on a machine without a

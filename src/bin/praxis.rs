@@ -51,6 +51,8 @@ enum Command {
         size: String,
         crowd_form: CrowdForm,
         frames: Vec<u32>,
+        /// The LOD every Instance draws, in place of the one selected.
+        forced_lod: Option<u32>,
     },
     #[cfg(feature = "cook")]
     ExportScene {
@@ -117,7 +119,8 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             size,
             crowd_form,
             frames,
-        } => capture(&scene, &output, &size, crowd_form, &frames),
+            forced_lod,
+        } => capture(&scene, &output, &size, crowd_form, &frames, forced_lod),
         #[cfg(feature = "cook")]
         Command::ExportScene {
             scene,
@@ -185,6 +188,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         })
         .transpose()?
         .unwrap_or_default();
+    let forced_lod = take_option(&mut arguments, "--lod")?
+        .map(|lod| {
+            lod.parse::<u32>()
+                .map_err(|_| anyhow::anyhow!("--lod takes a LOD's number, not {lod:?}"))
+        })
+        .transpose()?;
     let release_build_seconds = take_option(&mut arguments, "--release-build-seconds")?
         .map(|seconds| {
             seconds.parse::<u64>().map_err(|_| {
@@ -232,6 +241,10 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         "only `capture` and `export-scene` take --frame"
     );
     anyhow::ensure!(
+        forced_lod.is_none() || command == Some("capture"),
+        "only `capture` takes --lod"
+    );
+    anyhow::ensure!(
         frames.len() <= 1 || command == Some("capture"),
         "`export-scene` takes one --frame"
     );
@@ -266,6 +279,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             size: DEFAULT_CAPTURE_SIZE.into(),
             crowd_form,
             frames,
+            forced_lod,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => Command::Capture {
@@ -274,6 +288,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             size: size.clone(),
             crowd_form,
             frames,
+            forced_lod,
         },
         #[cfg(feature = "cook")]
         [command, scene, directory] if command == "export-scene" => Command::ExportScene {
@@ -345,7 +360,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             // Like the commands, their usage exists only in a `cook` build.
             let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
-                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...]]`, \
+                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...]] [--lod <n>]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
                     "`capture` and `bench` also take",
@@ -804,8 +819,8 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 /// camera path, rendered in one run, as PNGs: one frame to `output`, each of
 /// several beside it as `<output stem>-frame-<n>.png`. With no frame, it
 /// writes the last frame `praxis::capture` renders and prints that frame's
-/// stats, its point lights per lit pixel counted. The PNG encoder comes with
-/// `cook`.
+/// stats, its point lights per lit pixel counted. With `forced_lod`, every
+/// Instance draws that LOD. The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
 fn capture(
     scene: &str,
@@ -813,6 +828,7 @@ fn capture(
     size: &str,
     crowd_form: CrowdForm,
     frames: &[u32],
+    forced_lod: Option<u32>,
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = size
@@ -823,6 +839,7 @@ fn capture(
     let switches = RenderSwitches {
         count_point_lights: frames.is_empty(),
         crowd_form,
+        forced_lod,
         ..RenderSwitches::default()
     };
     let (captures, last_frame) = if frames.is_empty() {
@@ -1171,6 +1188,30 @@ mod tests {
             assert_eq!(scene, "town");
             assert_eq!(frames, [300]);
         }
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn capture_alone_takes_a_forced_lod() {
+        let Command::Capture { forced_lod, .. } =
+            parse(&["capture", "town", "out.png", "--lod", "0"]).unwrap()
+        else {
+            panic!("capture parsed as another command");
+        };
+        assert_eq!(forced_lod, Some(0));
+        let Command::Capture { forced_lod, .. } = parse(&["capture", "town", "out.png"]).unwrap()
+        else {
+            panic!("capture parsed as another command");
+        };
+        assert_eq!(forced_lod, None);
+        let error = parse(&["capture", "town", "out.png", "--lod", "finest"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("--lod takes a LOD's number"), "{error}");
+        let error = parse(&["bench", "out", "--lod", "0"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("only `capture` takes --lod"), "{error}");
     }
 
     #[cfg(feature = "cook")]
