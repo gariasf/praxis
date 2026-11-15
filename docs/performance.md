@@ -30,7 +30,91 @@ its commit.
 | `DATA_ANISOTROPY` (`src/assets/material.rs`) | 4x on the data Channels takes 126 µs off minification's lit pass against 16x | M4 Pro, Metal | f4c7442d (2026-10-22, #257) | "Anisotropy candidates" below |
 | `INSTANCES_PLACED_PER_FRAME` (`src/streaming/io.rs`) | The Fast travel's arrival frame placed 262,212 Instances and read 44.4 ms of CPU uncapped; capped at 131,072 a frame, the hold's frames read at most 12.6 ms, at 65,536 at most 11.9 ms, the hold 5 frames either way; over three interleaved quiet rounds against `main`, the segment's slowest frame read 15.7 to 17.2 ms against 34.2 to 40.3 ms | M4 Pro, Metal | addc1305 with #743's change (2026-11-09) | `world`'s bench segment with a per-frame probe, one run per cap, not quiet; "`world`'s slowest frames: whole Textures read on the main thread, and an arrival placed at once" below |
 | `grow_frame_staging_to_largest` (`src/render/renderer.rs`, called by `State::new` for `world`) | Growing the frame staging's three mapped slots on a frame cost 3.8 to 4.0 ms at 16 MiB, 6.9 to 7.3 ms at 32 MiB and 13.5 to 14.1 ms at the 66,541,092-byte bound, and set the traversal's CPU maximum; created at the bound with the State, the traversal's maximum read 10.3 to 13.0 ms against `main`'s 24.2 to 48.2 ms, over three interleaved quiet rounds | M4 Pro, Metal | 27d88d5c with #755's change (2026-11-11) | "The traversal's CPU maximum: the frame staging grew on the frame" below |
-| `LOADS_PER_FRAME` (`src/streaming/io.rs`) | A frame that loads Chunks of one Placement, each with a Mesh of 5,832 triangles, a Material and two Textures of its own, costs 3.77 to 3.82 ms of CPU more than a frame that loads none, 3.49 to 3.58 ms of it in `MeshPool::compact_blases`, and 545 to 555 µs more a Chunk; past `world`'s slowest frame, 10,959.6 µs, and that fixed cost as the probe's frames measured it, 16,667 µs holds 3.5 such loads | M4 Pro, Metal | c42712e5 with #811's change and the probe (2026-11-14) | A probe on `world`'s State at 2560×1440, 1 to 16 loads a frame, three runs; "A frame that loads new Meshes: 3.8 ms, then 0.55 ms a load" below |
+| `LOADS_PER_FRAME` (`src/streaming/io.rs`) | A frame that loads and places Chunks of one Placement, each with a Mesh of 5,832 triangles, a Material and two Textures of its own, costs 336 to 393 µs of CPU more than a frame that loads none, and 95 to 115 µs more a Chunk, where `main` read 3.73 to 3.83 ms and 542 to 576 µs; `world`'s slowest frame reads 8.3 to 8.4 ms at 3 loads a frame, 12.1 to 12.4 ms at 8 and 12.4 to 13.1 ms at 16, so the count stays 3 | M4 Pro, Metal | b2fe0a38 and 94273c1f, each with #851's change (2026-11-15) | The probe of #811 on `world`'s State at 2560×1440, 1 to 16 loads a frame, three interleaved runs of `main` and the branch; `world`'s bench, three rounds each of `main` and the branch at 3, 8 and 16 loads a frame; "A streamed load is placed once its BLASes are ready" below |
+
+## A streamed load is placed once its BLASes are ready: 0.37 ms a loading frame, then 0.11 ms a load (2026-11-15, #851)
+
+**Decision.** A frame that loads a Mesh rays trace no longer waits on the
+GPU. The load's writes and its BLAS's build go out in its frame; the Mesh
+pool then takes the BLAS through its build and its compacted copy a step a
+frame, from the device's polls, and the Chunk's Instances are placed in the
+first frame that finds every Mesh they name ready. On the probe below, a
+frame that loads and places Chunks of one Placement costs 336.0 to 393.0 µs
+of CPU more than a frame that loads none, and 95.4 to 115.1 µs more for each
+Chunk, where `main` read 3,728.7 to 3,833.2 µs and 541.8 to 575.8 µs; no
+frame has a `blas_compaction` stage. A load is placed 4 frames after the
+frame that makes it, by the median and the maximum of each run's 822 loads.
+`LOADS_PER_FRAME` stays 3: `world`'s own Chunks, of many Placements each,
+now size it.
+
+Apple M4 Pro, Metal, release builds, 2026-11-15, each run behind the quiet
+gate (one-minute load under 2, four GPU load reads at 5% or under), which
+opened for every one. The probe ran on `b2fe0a38` and on it with the
+change, three runs each, interleaved; `world`'s bench on `94273c1f` and on
+it with the change, three rounds each, the order rotated.
+
+### The probe
+
+The probe of the section below, with one change: a load count's frames are
+those that both load and place that many Chunks, since a load made in one
+frame is placed in a later one, and the frames between do one or the other.
+A load's wait is the frames from the one that makes it to the one that
+places it, loads paired with placements in order.
+
+| Loads a frame | Frames | CPU frame over the frames before, µs | `stream_chunks` | `upload` | Slowest frame, µs | Frames to placement, median / maximum |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 132 | 593.6 | 188.8 | 122.8 | 3,340.9 | 3 / 4 |
+| 2 | 48 | 620.4 | 233.0 | 134.8 | 3,610.1 | 4 / 4 |
+| 4 | 30 | 653.3 | 346.2 | 220.9 | 3,650.0 | 4 / 4 |
+| 8 | 13 | 1,215.5 | 641.4 | 399.9 | 3,915.5 | 4 / 4 |
+| 12 | 7 | 1,712.3 | 884.9 | 592.8 | 4,191.7 | 4 / 4 |
+| 16 | 4 | 2,132.1 | 1,253.9 | 809.9 | 5,163.8 | 4 / 4 |
+
+The branch's third run; the frames before read 1,259.1 to 1,402.5 µs. The
+line through each run's six medians, by least squares:
+
+| Run | A frame that loads, µs | A load, µs | `blas_compaction`, a frame | a load | `stream_chunks`, a load | `upload`, a load |
+|---|---:|---:|---:|---:|---:|---:|
+| `main` 1 | 3,833.2 | 541.8 | 3,552.5 | 383.6 | 85.8 | 44.0 |
+| `main` 2 | 3,813.2 | 546.8 | 3,504.0 | 388.1 | 88.3 | 42.7 |
+| `main` 3 | 3,728.7 | 575.8 | 3,514.3 | 408.7 | 92.0 | 43.1 |
+| Branch 1 | 336.0 | 115.1 | 0.0 | 0.0 | 75.5 | 44.5 |
+| Branch 2 | 393.0 | 95.4 | 0.0 | 0.0 | 64.1 | 40.2 |
+| Branch 3 | 376.9 | 108.5 | 0.0 | 0.0 | 70.3 | 46.4 |
+
+What remains of a loading frame's fixed part is spread over its stages:
+`stream_chunks` 59.9 to 94.7 µs, `upload` 47.9 to 67.8 µs, which now holds
+the pool's step (preparing a BLAS's compaction, the compacted copy and its
+submit), the encode 94.6 to 97.8 µs where `main` read 53.6 to 60.3 µs, and
+the submit 14.1 to 16.4 µs. The lines are through medians of few frames at
+the higher counts, 4 at 16 loads a frame.
+
+The wait is the GPU's, not the code's: with two frames in flight, the
+build's submission ends behind them, and the compacted copy's behind the
+frames submitted meanwhile. The code allows 2 frames at the least, which
+one load met in each of two runs; of a run's 822 loads, 203 to 211 waited 3
+frames and 611 to 618 waited 4.
+
+### The count stays 3
+
+By the line, 16,667 µs less `world`'s slowest frame leaves room for more
+than 16 one-Placement loads a frame, past what the probe measured. `world`
+does not load such Chunks, and its own decide the count:
+
+| `world`, loads a frame | CPU frame p99, µs | Maximum, µs | Fast travel's hold, ms | Late Chunks |
+|---|---:|---:|---:|---:|
+| `main`, 3 | 2,173.7 to 2,259.7 | 8,213.7 to 8,682.0 | 24.73 to 30.52 | 0 |
+| Branch, 3 | 2,227.4 to 2,461.8 | 8,337.9 to 8,379.2 | 24.52 to 28.54 | 0 |
+| Branch, 8 | 2,099.4 to 2,225.2 | 12,129.3 to 12,417.2 | 27.04 to 27.31 | 0 |
+| Branch, 16 | 2,170.4 to 2,213.8 | 12,368.2 to 13,057.4 | 27.41 to 30.70 | 0 |
+
+Three rounds each; four of the twelve runs stamped not quiet (`main`'s
+second and third, the branch's first at 3 and third at 8), the branch's
+2,461.8 µs p99 among them. At 3 the branch reads as `main` does, counters
+equal, and no run has a `blas_compaction` stage. At 8 or 16 the slowest
+frame reads about 4 ms longer, so the count stays 3; a Far proxy's load,
+one Placement and a Mesh of its own, costs what the probe's did, which is
+the figure a count of its own would be sized from.
 
 ## A frame that loads new Meshes: 3.8 ms, then 0.55 ms a load (2026-11-14, #811)
 

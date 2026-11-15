@@ -663,8 +663,8 @@ impl Renderer {
     /// has finished [ref:wgpu-30-poll-retires], so which encoder records what
     /// never depends on which of this frame's submissions would have found
     /// them finished; then it submits the loads staged since the last frame,
-    /// and, when they loaded Meshes, waits for the GPU to build their BLASes
-    /// and to compact them.
+    /// and, when they loaded Meshes whose BLASes are not deferred, waits for
+    /// the GPU to build their BLASes and to compact them.
     pub fn upload(&mut self, frame: &FrameData, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         // wgpu reuses the encoder retired last, so retire before taking any.
@@ -677,7 +677,7 @@ impl Renderer {
         );
         // Loads staged since the last frame land before its copies and
         // draws, and their BLASes are compacted before the static TLAS
-        // takes them.
+        // takes them: a deferred one's Instances are placed once it is.
         recorder.counters.uploaded_bytes += self.load_staging.submit(&self.queue);
         let compacting = Instant::now();
         let compaction_time = if self.mesh_pool.compact_blases(&self.queue) {

@@ -25,9 +25,9 @@ pub(crate) trait ChunkIo {
     fn request(&mut self, coordinates: [i32; 2]);
 
     /// A load that finished since the last call, if any. A load finishes
-    /// once its Chunk's content is applied and the Assets it names are
-    /// Resident, the point the lead and the Settled report count to, or once
-    /// it failed.
+    /// once its Chunk's content is applied, the Assets it names are
+    /// Resident and rays may trace its Meshes, the point the lead and the
+    /// Settled report count to, or once it failed.
     fn take_finished(&mut self) -> Option<FinishedLoad>;
 }
 
