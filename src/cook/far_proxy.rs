@@ -1,6 +1,8 @@
 //! The Far proxy cook (ADR 0026): a Chunk's static Placements merged into one
 //! Mesh about the Chunk's centre.
 
+mod bake;
+
 use std::collections::HashMap;
 
 use anyhow::Context;
@@ -24,8 +26,9 @@ pub(super) fn pixel_metres(load_radius_metres: f64) -> f32 {
 
 pub(super) fn settings(pixel_metres: f32) -> String {
     format!(
-        "far proxy: Placements within {pixel_metres} m of another's surface dropped, positions welded, simplified to {pixel_metres} m absolute under {TRIANGLE_CAP} triangles, each coarser LOD at twice the error of the one before and kept up to {} of it, faces split on normals in steps of 1/{NORMAL_STEPS}",
-        mesh::LOD_KEPT_INDICES_CEILING
+        "far proxy: Placements within {pixel_metres} m of another's surface dropped, positions welded, simplified to {pixel_metres} m absolute under {TRIANGLE_CAP} triangles, each coarser LOD at twice the error of the one before and kept up to {} of it, faces split on normals in steps of 1/{NORMAL_STEPS}, {}",
+        mesh::LOD_KEPT_INDICES_CEILING,
+        bake::settings()
     )
 }
 
@@ -145,6 +148,9 @@ fn faceted(positions: &[[f32; 3]], indices: &[u32]) -> Geometry {
     for triangle in indices.as_chunks::<3>().0 {
         let [first, second, third] = triangle.map(|index| Vec3::from(positions[index as usize]));
         let normal = (second - first).cross(third - first).normalize_or_zero();
+        if normal == Vec3::ZERO {
+            continue;
+        }
         // Two triangles of one face may differ in their normals' last bits.
         let facing = (normal * NORMAL_STEPS)
             .round()
@@ -165,8 +171,9 @@ fn faceted(positions: &[[f32; 3]], indices: &[u32]) -> Geometry {
 }
 
 /// `neighbours` gives each neighbouring Chunk with its origin from `chunk`'s.
-/// The proxy's first Primitive is every Placement but the ground's, its
-/// second the ground tiles; its pivot is the Chunk's centre on the ground.
+/// The proxy's first Primitive is every Placement but the ground's, with UVs
+/// in its atlas, its second the ground tiles; its pivot is the Chunk's centre
+/// on the ground.
 pub(super) fn cook<'sources>(
     chunk: &CookedChunk,
     neighbours: &[(DVec3, &CookedChunk)],
@@ -258,7 +265,7 @@ pub(super) fn cook<'sources>(
     }
 
     let [chunk_lowest, chunk_highest] = chunk.bounds;
-    let shell = Geometry {
+    let mut shell = Geometry {
         bounds: chunk_lowest.cmple(chunk_highest).all().then(|| {
             chunk
                 .bounds
@@ -266,6 +273,7 @@ pub(super) fn cook<'sources>(
         }),
         ..faceted(&positions, &finest)
     };
+    let atlas = bake::Atlas::chart(&mut shell, pixel_metres)?;
     let mut proxy = mesh::lod_0(&[(shell, None), (ground_geometry.clone(), ground_material)])?;
     let positions_metres = proxy
         .vertices
@@ -285,7 +293,10 @@ pub(super) fn cook<'sources>(
         {
             break;
         }
-        let shell = faceted(&positions, &coarser);
+        let mut shell = faceted(&positions, &coarser);
+        if let Some(atlas) = &atlas {
+            atlas.map(&mut shell);
+        }
         mesh::push_lod(&mut proxy, error_metres, &[&shell, &ground_geometry])?;
         finer_indices = coarser.len();
     }
@@ -441,6 +452,8 @@ mod tests {
         };
         assert!((pixel_metres(256.0) - PIXEL_METRES).abs() < 1e-4);
         assert!((1..=5832).contains(&(shell.index_count / 3)));
+        let atlas_texels_per_metre = shell.texel_density * 4096.0;
+        assert!((atlas_texels_per_metre * PIXEL_METRES - 1.0).abs() < 1e-3);
         let flat_roofed = &proxy.coarser_lods[0];
         assert!(flat_roofed.error_metres <= 2.0 * PIXEL_METRES);
         assert!(flat_roofed.primitives[0].index_count * 100 <= shell.index_count * 85);
