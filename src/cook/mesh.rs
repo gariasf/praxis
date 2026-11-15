@@ -1168,22 +1168,36 @@ pub(crate) mod tests {
                 }
             }
         }
-        PROBE_SCALAR_NORMAL.set(false);
-        for (path, primitives) in reference_gltf_meshes() {
-            let mesh = cook(&primitives).unwrap();
-            let mut vertices = Sha256::new();
-            vertices.update(bytemuck::cast_slice::<CookedVertex, u8>(&mesh.vertices));
-            vertices.update(bytemuck::cast_slice::<u32, u8>(&mesh.indices));
-            let mut coarser = Sha256::new();
-            for lod in &mesh.coarser_lods {
-                coarser.update(bytemuck::cast_slice::<u32, u8>(&lod.indices));
+        for scalar_normal in [false, true] {
+            PROBE_SCALAR_NORMAL.set(scalar_normal);
+            for (path, primitives) in reference_gltf_meshes() {
+                let mesh = cook(&primitives).unwrap();
+                let mut positions = Sha256::new();
+                let mut qtangents = Sha256::new();
+                let mut uvs = Sha256::new();
+                for vertex in &mesh.vertices {
+                    positions.update(bytemuck::bytes_of(&vertex.position));
+                    qtangents.update(bytemuck::bytes_of(&vertex.qtangent));
+                    uvs.update(bytemuck::bytes_of(&vertex.uv));
+                }
+                let mut indices = Sha256::new();
+                indices.update(bytemuck::cast_slice::<u32, u8>(&mesh.indices));
+                let mut coarser = Sha256::new();
+                for lod in &mesh.coarser_lods {
+                    coarser.update(bytemuck::cast_slice::<u32, u8>(&lod.indices));
+                }
+                lines.push(format!(
+                    "GLTF scalar_normal={scalar_normal} {path} vertices {} positions {} qtangents {} uvs {} indices {} coarser {}",
+                    mesh.vertices.len(),
+                    short_hex(positions),
+                    short_hex(qtangents),
+                    short_hex(uvs),
+                    short_hex(indices),
+                    short_hex(coarser)
+                ));
             }
-            lines.push(format!(
-                "GLTF {path} lod0 {} coarser {}",
-                short_hex(vertices),
-                short_hex(coarser)
-            ));
         }
+        PROBE_SCALAR_NORMAL.set(false);
         panic!("\n{}\n", lines.join("\n"));
     }
 
