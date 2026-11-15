@@ -624,7 +624,14 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
         .try_normalize()
         .unwrap_or_else(|| normal.any_orthonormal_vector());
     let frame = Mat3::from_cols(tangent, normal.cross(tangent), normal);
-    let mut rotation = Quat::from_mat3(&frame).normalize();
+    let mut rotation = Quat::from_mat3(&frame);
+    rotation = if PROBE_SCALAR_NORMAL.get() {
+        let [x, y, z, w] = rotation.to_array();
+        let length = (x * x + y * y + z * z + w * w).sqrt();
+        Quat::from_xyzw(x / length, y / length, z / length, w / length)
+    } else {
+        rotation.normalize()
+    };
     // A quaternion and its negation are the same rotation.
     if rotation.w < 0.0 {
         rotation = -rotation;
@@ -1115,7 +1122,33 @@ pub(crate) mod tests {
                         .into_iter()
                         .map(|(geometry, _)| (geometry, Some(AssetId(1))))
                         .collect();
+                    let mut source = Sha256::new();
+                    for (geometry, _) in &primitives {
+                        source.update(bytemuck::cast_slice::<[f32; 3], u8>(&geometry.positions));
+                        source.update(bytemuck::cast_slice::<[f32; 3], u8>(&geometry.normals));
+                        source.update(bytemuck::cast_slice::<[f32; 2], u8>(&geometry.uvs));
+                        source.update(bytemuck::cast_slice::<u32, u8>(&geometry.indices));
+                    }
                     let mesh = cook(&primitives).unwrap();
+                    let mut positions = Sha256::new();
+                    let mut qtangents = Sha256::new();
+                    let mut uvs = Sha256::new();
+                    for vertex in &mesh.vertices {
+                        positions.update(bytemuck::bytes_of(&vertex.position));
+                        qtangents.update(bytemuck::bytes_of(&vertex.qtangent));
+                        uvs.update(bytemuck::bytes_of(&vertex.uv));
+                    }
+                    let mut indices = Sha256::new();
+                    indices.update(bytemuck::cast_slice::<u32, u8>(&mesh.indices));
+                    lines.push(format!(
+                        "FIELDS scalar_normal={scalar_normal} {}/{name} source {} positions {} qtangents {} uvs {} indices {}",
+                        scene.name(),
+                        short_hex(source),
+                        short_hex(positions),
+                        short_hex(qtangents),
+                        short_hex(uvs),
+                        short_hex(indices),
+                    ));
                     let mut finest = Sha256::new();
                     finest.update(bytemuck::cast_slice::<CookedVertex, u8>(&mesh.vertices));
                     finest.update(bytemuck::cast_slice::<u32, u8>(&mesh.indices));
