@@ -1400,7 +1400,7 @@ pub(crate) fn uv_sphere(radius: f32, longitude_segments: u32, latitude_segments:
         for longitude in 0..=longitude_segments {
             let u = longitude as f32 / longitude_segments as f32;
             let azimuth = TAU * u;
-            // In f64, then rounded: the platform's f32 sine and cosine differ by machine.
+            // In f64: a platform's f32 sine and cosine round by machine, and a Blob's bytes must not.
             let (polar_sine, polar_cosine) = f64::from(polar_angle).sin_cos();
             let (azimuth_sine, azimuth_cosine) = f64::from(azimuth).sin_cos();
             let normal = [

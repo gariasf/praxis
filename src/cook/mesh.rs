@@ -394,7 +394,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
 }
 
 fn qtangent_normal(qtangent: [i16; 4]) -> [f32; 3] {
-    // Scalar arithmetic only: glam's SIMD rounds differently on NEON and SSE2, and a Blob is the same bytes on every machine.
+    // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
     let [x, y, z, w] = qtangent.map(f32::from);
     let length_squared = x * x + y * y + z * z + w * w;
     [
@@ -621,7 +621,7 @@ pub(crate) fn qtangent(normal: [f32; 3], tangent: [f32; 4]) -> [i16; 4] {
         .try_normalize()
         .unwrap_or_else(|| normal.any_orthonormal_vector());
     let frame = Mat3::from_cols(tangent, normal.cross(tangent), normal);
-    // Scalar arithmetic only, as in `qtangent_normal`.
+    // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
     let [x, y, z, w] = Quat::from_mat3(&frame).to_array();
     let length = (x * x + y * y + z * z + w * w).sqrt();
     let mut rotation = Quat::from_xyzw(x / length, y / length, z / length, w / length);

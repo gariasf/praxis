@@ -291,11 +291,11 @@ When reviewing changes, check for:
       it asserts (ADRs 0003, 0017)
 - [ ] The runtime loads cooked Blobs only and references Assets by
       Asset ID, never by source path (ADR 0018)
-- [ ] A cooked Mesh Blob is the same bytes on every machine (hashes
-      tested): where a cook's or a generator's result reaches a Blob
-      unrounded, it is scalar arithmetic, not glam's SIMD types (`Quat`,
-      `Vec4`, `Vec3A`), a sine or cosine is taken in f64, and
-      meshoptimizer is built without floating-point contraction
+- [ ] A cooked Mesh Blob is the same bytes on every machine: the two
+      hash tests (`src/cook/mesh.rs`, `src/cook/far_proxy.rs`) pass on
+      each. A hash that moves on one machine alone has met glam's SIMD
+      rounding (`Quat`, `Vec4`, `Vec3A`), a platform's f32 sine or
+      cosine, or a C++ build that fuses a multiply and an add
       (`.cargo/config.toml`)
 - [ ] The main pass reads no screen-space history, and no change rules
       out its 4x MSAA (ADRs 0008, 0019, 0020)
