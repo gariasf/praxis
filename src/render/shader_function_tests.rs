@@ -2460,6 +2460,47 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
     check(SHEARED, PIXEL_SIZE_PER_METRE, &[sheared_box]);
 }
 
+/// Each case's mask is a literal: the classes' upper bounds are 6.25, 12.5,
+/// 25, 50, 100, 200 and 400 mm, bits 1 to 7.
+#[test]
+fn a_shadow_ray_includes_the_width_classes_whose_upper_bound_its_receivers_pixel_is_within() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let cases: [(f32, u32); 17] = [
+        (0.0005, 0b1111_1111),
+        (0.003125, 0b1111_1111),
+        (0.004, 0b1111_1111),
+        (0.00625, 0b1111_1111),
+        (0.007, 0b1111_1101),
+        (0.0125, 0b1111_1101),
+        (0.025, 0b1111_1001),
+        (0.03, 0b1111_0001),
+        (0.05, 0b1111_0001),
+        (0.0501, 0b1110_0001),
+        (0.1, 0b1110_0001),
+        (0.147, 0b1100_0001),
+        (0.2, 0b1100_0001),
+        (0.21, 0b1000_0001),
+        (0.4, 0b1000_0001),
+        (0.41, 0b0000_0001),
+        (5.0, 0b0000_0001),
+    ];
+    let inputs = cases.map(|(pixel_metres, _)| [pixel_metres, 0.0, 0.0, 0.0]);
+    let results = evaluate(
+        &context,
+        "vec4<f32>(f32(shadow_ray_mask(input.x)))",
+        &inputs,
+    );
+    for ((pixel_metres, expected), result) in cases.into_iter().zip(results) {
+        assert_eq!(
+            result[0] as u32, expected,
+            "a pixel of {pixel_metres} m traces mask {:08b}, not {expected:08b}",
+            result[0] as u32
+        );
+    }
+}
+
 /// The culling pass draws the coarsest LOD whose LOD error, times its
 /// Instance's scale, is under the threshold times the distance: each case
 /// holds its LOD as a literal, over a chain whose errors double from 1 cm,

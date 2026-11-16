@@ -3233,6 +3233,160 @@ pub(crate) mod tests {
         frame_of(vec![instance(mesh, red.index(), [0.0, 0.0])])
     }
 
+    /// A tube 19.5 cm wide, in the width class that ends at 20 cm, out of
+    /// view between the floor and a sun 60° off the floor's normal, whose
+    /// shadow crosses the floor's middle 29 cm wide at least: three quarters
+    /// of the tube's width, its narrowest view, over cos 60°. A pixel at the
+    /// floor spans 2 tan(π/8) / 16 of its distance: 11.6 cm at 2.25 m, within
+    /// the class, and 25.9 cm at 5 m, past it and narrower than the shadow.
+    #[test]
+    fn a_thin_primitive_shadows_only_a_receiver_whose_pixel_its_width_class_reaches() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let pixels_hidden =
+            |floor_distance_metres: f32, thin_radius_metres: Option<f32>, moving: bool| {
+                let mut renderer = Renderer::new(
+                    &context,
+                    TARGET_FORMAT,
+                    SIZE,
+                    SIZE,
+                    RenderSwitches::default(),
+                );
+                let floor = load_quad(&mut renderer);
+                let tube = renderer
+                    .mesh_pool
+                    .load(
+                        &mut renderer.load_staging,
+                        &tube_mesh(0.0975, thin_radius_metres, 0.0),
+                        &[None],
+                    )
+                    .expect("the tube fits");
+                let lift_metres = 0.5 * floor_distance_metres;
+                let sun_angle_radians = 60.0_f32.to_radians();
+                let mut frame = FrameData {
+                    camera: CameraUniform {
+                        view_proj: (projection_matrix(1.0) * Camera::new().view_matrix())
+                            .to_cols_array_2d(),
+                        exposure: 1.0,
+                        ..CameraUniform::default()
+                    },
+                    light: LightUniform {
+                        directional_light_count: 1,
+                        ..LightUniform::default()
+                    },
+                    lights: vec![LightData {
+                        offset: [0.0, -sun_angle_radians.sin(), -sun_angle_radians.cos()],
+                        ..SUN
+                    }],
+                    ..frame_of(vec![
+                        InstanceData {
+                            rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                                2.0 * floor_distance_metres,
+                                2.0 * floor_distance_metres,
+                                1.0,
+                            ))),
+                            offset: [0.0, 0.0, -floor_distance_metres],
+                            ..instance(floor, NO_MATERIAL, [0.0, 0.0])
+                        },
+                        InstanceData {
+                            offset: [
+                                0.0,
+                                lift_metres * sun_angle_radians.tan(),
+                                lift_metres - floor_distance_metres,
+                            ],
+                            ..instance(tube, NO_MATERIAL, [0.0, 0.0])
+                        },
+                    ])
+                };
+                if moving {
+                    frame.instance_writes = [(0, false), (1, true)]
+                        .map(|(slot, moving)| InstanceWrite {
+                            first_slot: slot as u32,
+                            instances: slot..slot + 1,
+                            moving,
+                        })
+                        .into();
+                    frame.moving_instances = vec![MovingInstance {
+                        slot: 1,
+                        instance: 1,
+                    }];
+                }
+                render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE);
+                read_back(&context, renderer.shadow_mask())
+                    .expect("the shadow mask read back")
+                    .as_chunks::<8>()
+                    .0
+                    .iter()
+                    .filter(|word| word[0] & 1 == 1)
+                    .count() as u32
+            };
+        for moving in [false, true] {
+            assert!(pixels_hidden(2.25, Some(0.0975), moving) >= SIZE);
+            assert_eq!(pixels_hidden(5.0, Some(0.0975), moving), 0);
+            // The same tube, not declared thin, shadows a row at least.
+            assert!(pixels_hidden(5.0, None, moving) >= SIZE);
+        }
+    }
+
+    /// A tube of three faces, 6 m long about the X axis, of `radius_metres`,
+    /// its faces turned `roll_degrees` about it.
+    fn tube_mesh(
+        radius_metres: f32,
+        thin_radius_metres: Option<f32>,
+        roll_degrees: f32,
+    ) -> CookedMesh {
+        // Each vertex's normal is radial: the QTangent turns +Z about X onto it.
+        let ring = [90.0_f32, -30.0, -150.0].map(|degrees| {
+            let angle = (degrees + roll_degrees).to_radians();
+            let qtangent = [-(0.5 * angle).sin(), 0.0, 0.0, (0.5 * angle).cos()]
+                .map(|part| (part * f32::from(i16::MAX)).round() as i16);
+            ([angle.sin(), angle.cos()], qtangent)
+        });
+        let vertices = [-3.0, 3.0]
+            .into_iter()
+            .flat_map(|x| {
+                ring.map(|([y, z], qtangent)| CookedVertex {
+                    position: [x, y * radius_metres, z * radius_metres],
+                    uv: [0.0, 0.0],
+                    qtangent,
+                })
+            })
+            .collect();
+        let triangles = vec![
+            [0, 1, 4],
+            [0, 4, 3],
+            [1, 2, 5],
+            [1, 5, 4],
+            [2, 0, 3],
+            [2, 3, 5],
+        ];
+        CookedMesh {
+            vertices,
+            indices: triangles
+                .iter()
+                .flatten()
+                .map(|&corner| u32::from(corner))
+                .collect(),
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 18,
+                material: None,
+                texel_density: 0.0,
+                thin_radius_metres,
+                meshlets: vec![CookedMeshlet {
+                    vertices: (0..6).collect(),
+                    triangles,
+                }],
+            }],
+            coarser_lods: Vec::new(),
+            bounds: [
+                [-3.0, -radius_metres, -radius_metres],
+                [3.0, radius_metres, radius_metres],
+            ],
+        }
+    }
+
     /// A Thin Primitive a quarter of a pixel wide draws a pixel wide and
     /// keeps one sample of four along its length: in every column of pixels
     /// it crosses, depth is written at a pixel's first sample and at no
@@ -3284,56 +3438,7 @@ pub(crate) mod tests {
         let mut renderer = Renderer::new(context, TARGET_FORMAT, SIDE, SIDE, switches);
         let pixel_metres = pixel_size_per_metre(SIDE) * DISTANCE_METRES;
         let radius_metres = 0.5 * width_pixels * pixel_metres;
-        // A tube of three faces along X, each vertex's normal radial: the
-        // QTangent turns +Z about X onto it.
-        let ring = [90.0_f32, -30.0, -150.0].map(|degrees| {
-            let angle = (degrees + roll_degrees).to_radians();
-            let qtangent = [-(0.5 * angle).sin(), 0.0, 0.0, (0.5 * angle).cos()]
-                .map(|part| (part * f32::from(i16::MAX)).round() as i16);
-            ([angle.sin(), angle.cos()], qtangent)
-        });
-        let vertices = [-3.0, 3.0]
-            .into_iter()
-            .flat_map(|x| {
-                ring.map(|([y, z], qtangent)| CookedVertex {
-                    position: [x, y * radius_metres, z * radius_metres],
-                    uv: [0.0, 0.0],
-                    qtangent,
-                })
-            })
-            .collect();
-        let triangles = vec![
-            [0, 1, 4],
-            [0, 4, 3],
-            [1, 2, 5],
-            [1, 5, 4],
-            [2, 0, 3],
-            [2, 3, 5],
-        ];
-        let mesh = CookedMesh {
-            vertices,
-            indices: triangles
-                .iter()
-                .flatten()
-                .map(|&corner| u32::from(corner))
-                .collect(),
-            primitives: vec![CookedPrimitive {
-                first_index: 0,
-                index_count: 18,
-                material: None,
-                texel_density: 0.0,
-                thin_radius_metres: Some(radius_metres),
-                meshlets: vec![CookedMeshlet {
-                    vertices: (0..6).collect(),
-                    triangles,
-                }],
-            }],
-            coarser_lods: Vec::new(),
-            bounds: [
-                [-3.0, -radius_metres, -radius_metres],
-                [3.0, radius_metres, radius_metres],
-            ],
-        };
+        let mesh = tube_mesh(radius_metres, Some(radius_metres), roll_degrees);
         let tube = renderer
             .mesh_pool
             .load(&mut renderer.load_staging, &mesh, &[None])

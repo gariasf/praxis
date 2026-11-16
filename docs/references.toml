@@ -487,8 +487,8 @@ checked = 2026-10-26
 ["wgpu-30-tlas-instance-fields"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L56-L67"
 section = "wgpu 30.0.1, api/blas.rs, struct TlasInstance"
-quote = '''/// Affine transform matrix 3x4 (rows x columns, row major order). pub transform: [f32; 12], [...] /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes [...] pub custom_data: u32, [...] pub mask: u8,'''
-checked = 2026-10-26
+quote = '''/// Affine transform matrix 3x4 (rows x columns, row major order). pub transform: [f32; 12], [...] /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes [...] pub custom_data: u32, /// Mask for the instance used inside the shader to filter instances. /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`. pub mask: u8,'''
+checked = 2026-11-16
 
 ["wgpu-30-blas-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs#L11-L24"

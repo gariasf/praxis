@@ -433,10 +433,13 @@ impl StaticTlas {
                             mesh_pool.blas_ready(handle),
                             "a static Instance placed before its Mesh's BLAS is ready"
                         );
-                        mesh_pool.blas(handle)
+                        Some((
+                            mesh_pool.blas(handle)?,
+                            mesh_pool.thin_radius_metres(handle),
+                        ))
                     })
                     .flatten();
-                let Some(blas) = blas else {
+                let Some((blas, thin_radius_metres)) = blas else {
                     if let Some(entry) = self.release(slot) {
                         changes.push(EntryChange {
                             entry,
@@ -446,7 +449,12 @@ impl StaticTlas {
                     continue;
                 };
                 let instance = StaticInstance {
-                    tlas_instance: tlas_instance(blas, unplaced_transform(instance), slot),
+                    tlas_instance: tlas_instance(
+                        blas,
+                        unplaced_transform(instance),
+                        slot,
+                        thin_radius_metres,
+                    ),
                     position: InstancePosition::of(instance),
                 };
                 match self.entry_of(slot) {
@@ -807,10 +815,15 @@ impl DynamicTlas {
         let mut bounds: Option<[glam::Vec3; 2]> = None;
         for (index, moving) in listed.enumerate() {
             let instance = &frame.instances[moving.instance];
-            let mesh = mesh_pool
-                .handle_at(instance.mesh)
-                .and_then(|handle| mesh_pool.blas(handle).zip(mesh_pool.get(handle)));
-            self.tlas[index] = mesh.map(|(blas, mesh)| {
+            let mesh = mesh_pool.handle_at(instance.mesh).and_then(|handle| {
+                let thin_radius_metres = mesh_pool.thin_radius_metres(handle);
+                Some((
+                    mesh_pool.blas(handle)?,
+                    mesh_pool.get(handle)?,
+                    thin_radius_metres,
+                ))
+            });
+            self.tlas[index] = mesh.map(|(blas, mesh, thin_radius_metres)| {
                 let transform = anchored_transform(instance, anchor);
                 let [lowest, highest] = placed_bounds(&transform, mesh.bounds);
                 bounds = Some(
@@ -819,7 +832,7 @@ impl DynamicTlas {
                     }),
                 );
                 uploaded_entries += 1;
-                tlas_instance(blas, transform, moving.slot)
+                tlas_instance(blas, transform, moving.slot, thin_radius_metres)
             });
         }
         for index in filled..previously_filled {
@@ -910,11 +923,45 @@ impl DynamicTlas {
     }
 }
 
+/// How many of the narrowest width class's lower bound, 3.125 mm, a metre
+/// holds; each class's bound is twice the one before.
+pub(crate) const NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE: f32 = 320.0;
+
+/// The width classes, an instance-mask bit each above the ordinary bit.
+pub(crate) const SHADOW_WIDTH_CLASSES: u32 = 7;
+
 /// An Instance's entry in a TLAS: `blas`, placed by `transform`
 /// (`anchored_transform`) and tagged with its `slot`.
-fn tlas_instance(blas: &wgpu::Blas, transform: [f32; 12], slot: u32) -> wgpu::TlasInstance {
-    // Every ray's cull mask.
-    wgpu::TlasInstance::new(blas, transform, slot, 0xff)
+fn tlas_instance(
+    blas: &wgpu::Blas,
+    transform: [f32; 12],
+    slot: u32,
+    thin_radius_metres: Option<f32>,
+) -> wgpu::TlasInstance {
+    let mask = instance_mask(thin_radius_metres, &transform);
+    wgpu::TlasInstance::new(blas, transform, slot, mask)
+}
+
+/// A ray meets an entry whose mask shares a bit with its own
+/// [ref:wgpu-30-tlas-instance-fields], so `shadow_ray_mask` reads these bits.
+fn instance_mask(thin_radius_metres: Option<f32>, transform: &[f32; 12]) -> u8 {
+    const ORDINARY_MASK: u8 = 1;
+    let Some(radius_metres) = thin_radius_metres else {
+        return ORDINARY_MASK;
+    };
+    let rows: [[f32; 4]; 3] = bytemuck::cast(*transform);
+    let mut axis_scales = [0, 1, 2]
+        .map(|column| glam::vec3(rows[0][column], rows[1][column], rows[2][column]).length());
+    axis_scales.sort_by(f32::total_cmp);
+    // The middle scale is the tube's radial one, whichever axis it runs along.
+    let width_metres = 2.0 * radius_metres * axis_scales[1];
+    let narrowest_bounds = (width_metres * NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE).max(1.0);
+    let class = (narrowest_bounds as u32).ilog2();
+    if class < SHADOW_WIDTH_CLASSES {
+        2 << class
+    } else {
+        ORDINARY_MASK
+    }
 }
 
 /// The share of a Mesh's largest coordinate its box grows by before it is
@@ -1343,6 +1390,40 @@ mod tests {
             &[[5.8, 0.0, 0.0], [-3.2, 0.0, 0.0]],
         );
         assert_eq!(traced, [Some(0), Some(1)]);
+    }
+
+    /// Each case's mask is a literal: the classes' lower bounds are 3.125,
+    /// 6.25, 12.5, 25, 50, 100 and 200 mm, bits 1 to 7.
+    #[test]
+    fn an_entry_takes_the_bit_of_the_width_class_its_thin_mesh_falls_in() {
+        let scaled = |x: f32, y: f32, z: f32| glam::Mat3::from_diagonal(glam::vec3(x, y, z));
+        let turned = glam::Mat3::from_rotation_z(0.7);
+        let cases: [(Option<f32>, glam::Mat3, u8); 15] = [
+            (None, scaled(1.0, 1.0, 1.0), 0b0000_0001),
+            (Some(0.001), scaled(1.0, 1.0, 1.0), 0b0000_0010),
+            (Some(0.0015625), scaled(1.0, 1.0, 1.0), 0b0000_0010),
+            (Some(0.004), scaled(1.0, 1.0, 1.0), 0b0000_0100),
+            (Some(0.015), scaled(1.0, 1.0, 1.0), 0b0001_0000),
+            (Some(0.025), scaled(1.0, 1.0, 1.0), 0b0010_0000),
+            (Some(0.075), scaled(1.0, 1.0, 1.0), 0b0100_0000),
+            (Some(0.1), scaled(1.0, 1.0, 1.0), 0b1000_0000),
+            (Some(0.195), scaled(1.0, 1.0, 1.0), 0b1000_0000),
+            (Some(0.2), scaled(1.0, 1.0, 1.0), 0b0000_0001),
+            (Some(0.015), scaled(2.0, 2.0, 2.0), 0b0010_0000),
+            (Some(0.015), scaled(0.5, 0.5, 0.5), 0b0000_1000),
+            (Some(0.015), turned * scaled(10.0, 1.0, 1.0), 0b0001_0000),
+            (Some(0.015), turned * scaled(0.5, 1.0, 1.0), 0b0001_0000),
+            (Some(0.015), turned * scaled(1.0, 2.0, 2.0), 0b0010_0000),
+        ];
+        for (thin_radius_metres, matrix, expected) in cases {
+            let rows = matrix.transpose().to_cols_array_2d();
+            let transform: [f32; 12] = bytemuck::cast(rows.map(|[x, y, z]| [x, y, z, 0.0]));
+            let mask = instance_mask(thin_radius_metres, &transform);
+            assert_eq!(
+                mask, expected,
+                "a thin radius of {thin_radius_metres:?} m placed by {matrix} takes {mask:08b}, not {expected:08b}"
+            );
+        }
     }
 
     /// The dynamic TLAS's fill returns the box that holds each Moving
