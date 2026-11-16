@@ -19,7 +19,7 @@ One contiguous range of a Mesh's vertices and, in each LOD, of its indices.
 _Avoid_: Submesh, surface
 
 **Thin Primitive**:
-A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower.
+A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide.
 _Avoid_: Wire, strand, thin feature
 
 **LOD**:

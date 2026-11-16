@@ -619,6 +619,12 @@ impl MeshPool {
             ],
             blas_bytes: built_bytes,
             blas_compacted: false,
+            thin_radius_metres: mesh
+                .primitives
+                .iter()
+                .map(|primitive| primitive.thin_radius_metres.filter(|&radius| radius > 0.0))
+                .reduce(|widest, radius| Some(widest?.max(radius?)))
+                .flatten(),
         };
         let index = handle.index as usize;
         if index == self.allocations.len() {
@@ -836,6 +842,15 @@ impl MeshPool {
     pub fn blas(&self, handle: MeshHandle) -> Option<&wgpu::Blas> {
         self.get(handle)?;
         self.blases[handle.index as usize].as_ref()
+    }
+
+    /// The radius of `handle`'s widest Primitive, where every Primitive of
+    /// the LOD 0 its BLAS holds is a Thin Primitive.
+    pub fn thin_radius_metres(&self, handle: MeshHandle) -> Option<f32> {
+        self.get(handle)?;
+        self.allocations[handle.index as usize]
+            .as_ref()?
+            .thin_radius_metres
     }
 
     /// The Handle of the Mesh loaded at `index` of the Mesh table, which an
@@ -1152,6 +1167,8 @@ struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
     blas_bytes: u64,
     blas_compacted: bool,
+    /// Its widest Primitive's radius, where every Primitive of its LOD 0 is thin.
+    thin_radius_metres: Option<f32>,
 }
 
 /// The indices of a pool's table, each with the generation its Handles
@@ -1512,6 +1529,7 @@ pub(crate) mod tests {
             .expect("the Mesh fits");
         staging.submit(&context.queue);
         assert_eq!(pool.get(handle).unwrap().texel_densities, [0.0, 3.0]);
+        assert_eq!(pool.thin_radius_metres(handle), None);
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];

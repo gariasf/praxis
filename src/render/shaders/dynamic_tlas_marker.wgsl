@@ -9,7 +9,7 @@ fn mark_dynamic_tlas() {
     rayQueryInitialize(
         &query,
         dynamic_tlas,
-        // Every instance's cull mask, and a ray too short to reach far.
+        // A mask that meets every Instance's, and a ray too short to reach far.
         RayDesc(RAY_FLAG_NONE, 0xffu, 0.0, 1e-6, vec3<f32>(0.0), vec3<f32>(0.0, 1.0, 0.0))
     );
     rayQueryProceed(&query);

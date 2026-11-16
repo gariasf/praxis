@@ -279,6 +279,14 @@ fn small_instance_scale(coverage: f32) -> f32 {
     return inverseSqrt(clamp(coverage, 0.125, 1.0));
 }
 
+// The ordinary bit and each width class's whose upper bound, twice its lower, is no narrower than the pixel: `instance_mask` sets these bits.
+fn shadow_ray_mask(pixel_metres: f32) -> u32 {
+    let pixel_bits = bitcast<u32>(max(0.5 * pixel_metres * NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE, 1.0));
+    // A float of 1 or more holds the floor of its base-2 logarithm in its exponent.
+    let narrower_classes = min((pixel_bits >> 23u) - 127u + u32((pixel_bits & 0x7fffffu) != 0u), SHADOW_WIDTH_CLASSES);
+    return 1u | ((0xfeu << narrower_classes) & 0xffu);
+}
+
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
 // the Meshlet vertex Arena, each an index into the vertex Arena; its first
 // triangle in the Meshlet triangle Arena, each three corners indexing those

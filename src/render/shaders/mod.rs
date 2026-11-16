@@ -10,6 +10,9 @@ use crate::assets::material::SLICES_PER_CLASS;
 use crate::cooked::{
     MESH_MAX_LODS, MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES, QTANGENT_SMALLEST_W,
 };
+use crate::render::acceleration_structures::{
+    NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE, SHADOW_WIDTH_CLASSES,
+};
 use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 #[cfg(any(test, target_vendor = "apple"))]
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
@@ -276,7 +279,9 @@ impl ShaderModule {
              const SHADOW_EDGE_LIGHTS: u32 = {SHADOW_EDGE_LIGHTS}u;\n\
              const SAMPLE_COUNT: u32 = {SAMPLE_COUNT}u;\n\
              const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n\
-             const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n",
+             const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n\
+             const NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE: f32 = {NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE:?};\n\
+             const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],

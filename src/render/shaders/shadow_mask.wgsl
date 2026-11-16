@@ -96,10 +96,10 @@ const NORMALS_AGREE: f32 = 0.9986295347545738;
 // only at run time, which costs a scene of few, short rays a little more
 // than constant flags would, and saves scenes of many rays more
 // (docs/performance.md).
-fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
+fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32) -> RayIntersection {
     // Opaque, so one rayQueryProceed completes a traversal.
     var query: ray_query;
-    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, end_distance, origin, direction));
+    rayQueryInitialize(&query, static_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, mask, start_distance, end_distance, origin, direction));
     rayQueryProceed(&query);
     let static_hit = rayQueryGetCommittedIntersection(&query);
     let found = static_hit.kind != RAY_QUERY_INTERSECTION_NONE;
@@ -115,7 +115,7 @@ fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start
     if !segment_meets_box(origin, direction, start_distance, dynamic_end_distance, bounds_min - margin, bounds_max + margin) {
         return static_hit;
     }
-    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, 0xffu, start_distance, dynamic_end_distance, origin, direction));
+    rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, mask, start_distance, dynamic_end_distance, origin, direction));
     rayQueryProceed(&query);
     let dynamic_hit = rayQueryGetCommittedIntersection(&query);
     if dynamic_hit.kind == RAY_QUERY_INTERSECTION_NONE {
@@ -138,7 +138,8 @@ fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start
 // shadows the point. A ray that leaves the surface passes a back face too,
 // one it meets within the LOD error the culling pass allows at `position`:
 // every BLAS holds its Mesh's LOD 0 (ADR 0020), and the LOD drawn can lie
-// that far inside it. `pixel_width` is a pixel's width at `position`.
+// that far inside it. `pixel_width` is a pixel's width at `position`, and
+// the ray passes a Thin Primitive whose width class ends under it.
 fn shadowed(
     position: vec3<f32>,
     pixel_width: f32,
@@ -176,11 +177,12 @@ fn shadowed(
     // The nearest triangle shadows the ray unless it is a back face within
     // that distance; the ray traces on from such a one, and any triangle past
     // it shadows it: two turns at most, through the one call.
+    let mask = shadow_ray_mask(pixel_width);
     var flags = 0u;
     var start_distance = 0.0;
     var hidden = false;
     loop {
-        let hit = first_intersection(flags, origin, direction, start_distance, distance);
+        let hit = first_intersection(flags, mask, origin, direction, start_distance, distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
         let shadows = any_hit || hit.front_face || hit.t > pass_distance;
